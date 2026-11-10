@@ -22,7 +22,7 @@
 use std::ffi::CString;
 
 use crate::MlxRuntimeError;
-use mlx_c_rust::{MlxArray, raw};
+use mlx_bridge::{MlxArray, raw};
 
 /// Owner of one MLX string-to-array map (the tensor map).
 ///

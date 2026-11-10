@@ -11,7 +11,7 @@ use crate::flux2_klein::tensor_store::{
 use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 enum TransformerTensorSource {
     Descriptor {

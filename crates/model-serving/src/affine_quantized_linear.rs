@@ -9,7 +9,7 @@
 //! offsets, not layer biases.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use thiserror::Error;
 
 pub(crate) use crate::affine_quantization_scheme::{
@@ -38,8 +38,8 @@ pub enum AffineQuantizedLinearError {
     Mlx(#[from] MlxRuntimeError),
 }
 
-impl From<mlx_c_rust::MlxCError> for AffineQuantizedLinearError {
-    fn from(captured_error: mlx_c_rust::MlxCError) -> Self {
+impl From<mlx_bridge::MlxCError> for AffineQuantizedLinearError {
+    fn from(captured_error: mlx_bridge::MlxCError) -> Self {
         Self::Mlx(MlxRuntimeError::from(captured_error))
     }
 }

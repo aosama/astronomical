@@ -1,6 +1,6 @@
 //! Resident Qwen3.5 model: shared state and complete sparse-expert arrays.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use std::cell::Cell;
 

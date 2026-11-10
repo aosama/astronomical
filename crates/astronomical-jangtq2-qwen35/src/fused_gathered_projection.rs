@@ -34,7 +34,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
-use mlx_c_rust::{
+use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
 

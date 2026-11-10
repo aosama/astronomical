@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 use crate::decoder_cache::DecoderCacheTensorDtype;
 use crate::qwen3_5_core::artifacts::{

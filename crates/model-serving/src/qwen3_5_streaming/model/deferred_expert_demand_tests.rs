@@ -4,7 +4,7 @@
 
 use super::DeferredExpertDemandCollector;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 const EXPERT_CAPACITY: usize = 256;

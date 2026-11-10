@@ -8,7 +8,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::error::SparseExpertError;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use mlx_c_rust::{
+use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
 

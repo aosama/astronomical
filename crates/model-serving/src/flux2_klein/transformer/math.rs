@@ -4,7 +4,7 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
 use crate::flux2_klein::tensor_store::Flux2KleinWeight;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 /// `input @ weightᵀ`, dense or on 4-bit packed weights depending on how the
 /// artifact stores the projection.

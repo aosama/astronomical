@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::Write;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 use serde_json::{Map, json};
 use serial_test::serial;
 

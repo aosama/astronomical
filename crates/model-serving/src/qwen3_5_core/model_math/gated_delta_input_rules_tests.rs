@@ -1,4 +1,4 @@
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 use super::{
     GatedDeltaDtypeViolation, GatedDeltaHeadGeometry, GatedDeltaHeadGeometryViolation,

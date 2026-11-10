@@ -30,7 +30,7 @@ use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 /// decoder layer, which every later layer's input inherits.
 pub(crate) fn embedded_hidden_state_dtype(
     weights: &Qwen3_5Weights,
-) -> Result<mlx_c_rust::MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<mlx_bridge::MlxDtype, Qwen3_5ExecutionError> {
     embedding_output_dtype(&affine_contract(&weights.embedding_weights))
 }
 
@@ -83,9 +83,9 @@ pub(crate) fn derive_decoder_layer_cache_dtypes(
 
 /// The cache dtypes one attention layer stores and the dtype it outputs.
 fn attention_dtypes(
-    normalized_input_dtype: mlx_c_rust::MlxDtype,
+    normalized_input_dtype: mlx_bridge::MlxDtype,
     attention_weights: &Qwen3_5AttentionWeights,
-) -> Result<(Qwen3_5DecoderLayerCacheDtypes, mlx_c_rust::MlxDtype), Qwen3_5ExecutionError> {
+) -> Result<(Qwen3_5DecoderLayerCacheDtypes, mlx_bridge::MlxDtype), Qwen3_5ExecutionError> {
     Ok(match attention_weights {
         Qwen3_5AttentionWeights::Linear(linear_attention_weights) => {
             linear_attention_dtypes(&LinearAttentionDtypeFlow {
@@ -122,10 +122,10 @@ fn attention_dtypes(
 /// The dtype one feed-forward block outputs. A sparse block needs its expert
 /// plan; the caller passes `None` when the plan list does not cover it.
 fn feed_forward_output_dtype(
-    normalized_attention_dtype: mlx_c_rust::MlxDtype,
+    normalized_attention_dtype: mlx_bridge::MlxDtype,
     mlp_weights: &Qwen3_5DecoderFeedForwardWeights,
     expert_layer_plan: Option<&QuantizedExpertLayerPlan>,
-) -> Result<mlx_c_rust::MlxDtype, Qwen3_5ExecutionError> {
+) -> Result<mlx_bridge::MlxDtype, Qwen3_5ExecutionError> {
     Ok(match mlp_weights {
         Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
             dense_mlp_output_dtype(&DenseMlpDtypeFlow {

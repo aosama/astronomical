@@ -17,7 +17,7 @@ use astronomical_quantization::requantize::bit_policy::BitPolicy;
 use astronomical_quantization::requantize::driver::run_requantize;
 use astronomical_quantization::requantize::tensor_plan::RequantizeTensorPlan;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::parallel;
 
 use super::support::{contract_runtime, outlier_heavy_weights};

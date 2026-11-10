@@ -21,7 +21,7 @@ use super::{
     Qwen3_5ExecutionError, Qwen3_5ProcessedImage, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan,
     Qwen3_5VisionWeights, ValidatedQwen3_5Artifact,
 };
-use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
+use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 #[cfg(test)]
 #[path = "vision_model_tests.rs"]

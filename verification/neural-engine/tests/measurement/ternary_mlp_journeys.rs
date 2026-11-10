@@ -38,7 +38,7 @@ use astronomical_neural_engine_research::process_memory::{
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
 use astronomical_runtime_integration::MlxRuntime;
 use astronomical_test_harness::deterministic_values::bell_shaped_values;
-use mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
+use mlx_bridge::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 use serial_test::serial;
 
 use crate::support::engine_split::milliseconds;

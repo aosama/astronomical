@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use astronomical_test_harness::test_run::TestRunContext;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 /// The plateau the incident session sat at through both degraded decodes.

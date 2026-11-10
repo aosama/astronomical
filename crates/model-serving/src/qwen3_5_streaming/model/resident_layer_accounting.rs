@@ -16,7 +16,7 @@
 //! (or measured directly from a routed-union page) so the page can be trusted
 //! as a measuring instrument.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::memory::{RouteCoverageClass, no_cache_route_source_bytes};
 use crate::qwen3_5_streaming::model::Qwen3_5Model;

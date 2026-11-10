@@ -17,4 +17,4 @@ unused_must_use = "deny"
 all = { level = "warn", priority = -1 }
 
 [dependencies]
-mlx-c-rust.workspace = true
+mlx-bridge.workspace = true

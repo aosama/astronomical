@@ -30,7 +30,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 
 use crate::MlxMemoryLimits;
-use mlx_c_rust::MlxBindingsContext;
+use mlx_bridge::MlxBindingsContext;
 
 pub use error_classification::classify_mlx_error;
 pub use metallib::{compiled_metallib_path, validate_metallib_path};

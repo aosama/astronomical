@@ -17,7 +17,7 @@
 //! batching. Only a batch that carries padding adds the padding masks.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
-use mlx_c_rust::{MlxArray, MlxCError, MlxDtype};
+use mlx_bridge::{MlxArray, MlxCError, MlxDtype};
 use thiserror::Error;
 
 use crate::modernbert::attention_mask::{

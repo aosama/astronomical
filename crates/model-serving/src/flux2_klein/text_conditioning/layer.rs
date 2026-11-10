@@ -7,7 +7,7 @@ use super::weights::{
     Flux2KleinDecoderLayerWeights, HEAD_WIDTH, KEY_VALUE_HEAD_COUNT, QUERY_HEAD_COUNT,
 };
 use crate::flux2_klein::tensor_store::Flux2KleinWeight;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 const RMS_NORM_EPSILON: f32 = 0.000_001;
 const ROPE_THETA: f32 = 1_000_000.0;

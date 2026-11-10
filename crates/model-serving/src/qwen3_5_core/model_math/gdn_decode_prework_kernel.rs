@@ -30,7 +30,7 @@
 //! so float16 falls back to the composed path rather than risk diverging bits.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
-use mlx_c_rust::{
+use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
 

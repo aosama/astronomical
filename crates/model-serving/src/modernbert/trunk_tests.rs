@@ -12,7 +12,7 @@
 use std::fs::File;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 use super::{ModernBertTrunk, ModernBertTrunkError};

@@ -37,7 +37,7 @@ use std::{
 };
 
 use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use mlx_c_rust::{MlxArray, raw};
+use mlx_bridge::{MlxArray, raw};
 
 use super::name_maps::{OwnedMetadataMap, OwnedTensorMap};
 

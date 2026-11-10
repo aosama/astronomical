@@ -8,7 +8,7 @@
 //! from the draft's own tokens — the core of the conditioning contract.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::draft_configuration::DFlashDraftConfiguration;
 use super::draft_key_value_state::DFlashDraftKeyValueStates;

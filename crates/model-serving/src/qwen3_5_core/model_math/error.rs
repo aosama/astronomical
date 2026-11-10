@@ -170,8 +170,8 @@ impl From<Qwen3_5ExecutionError> for InferenceEngineError {
 }
 
 #[cfg(feature = "direct-mlx")]
-impl From<mlx_c_rust::MlxCError> for Qwen3_5ExecutionError {
-    fn from(captured_error: mlx_c_rust::MlxCError) -> Self {
+impl From<mlx_bridge::MlxCError> for Qwen3_5ExecutionError {
+    fn from(captured_error: mlx_bridge::MlxCError) -> Self {
         MlxRuntimeError::from(captured_error).into()
     }
 }

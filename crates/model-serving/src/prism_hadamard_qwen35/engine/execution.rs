@@ -11,7 +11,7 @@ mod prefill_chunk;
 mod sampling;
 
 use astronomical_ipc_protocol::RequestId;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::PersistentPromptCacheBlockKey;
 use crate::PersistentPromptCacheDiskStore;

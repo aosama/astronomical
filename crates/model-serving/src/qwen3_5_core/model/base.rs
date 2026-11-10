@@ -7,7 +7,7 @@
 //! deref to this base for every shared field and method.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
+use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 
 use std::cell::RefCell;
 

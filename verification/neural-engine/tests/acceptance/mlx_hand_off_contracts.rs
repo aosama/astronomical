@@ -18,7 +18,7 @@ use astronomical_neural_engine::mlx_hand_off::{
 use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_neural_engine::weights::half_precision::f32_to_f16_bits;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 use crate::support::mlx_projection::{initialize_runtime, upload};

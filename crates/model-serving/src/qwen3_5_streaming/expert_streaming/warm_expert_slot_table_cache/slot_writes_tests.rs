@@ -8,7 +8,7 @@ use super::warm_expert_slot_table_cache_tests::test_runtime;
 use super::*;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 const OUTPUT_ROWS: usize = 2;

@@ -11,7 +11,7 @@
 
 use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
 

@@ -4,7 +4,7 @@
 //! `speculation_round` only by the source-size gate; the round's flow is
 //! still draft (in `speculation_round`) then finish (here).
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use std::time::Instant;
 

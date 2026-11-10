@@ -61,7 +61,7 @@ dependencies = [
  "futures-util",
  "image",
  "libc",
- "mlx-c-rust",
+ "mlx-bridge",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -190,7 +190,7 @@ dependencies = [
  "astronomical-model-serving",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
- "mlx-c-rust",
+ "mlx-bridge",
  "serde_json",
  "serial_test",
  "tempfile",
@@ -225,7 +225,7 @@ version = "0.2.99"
 dependencies = [
  "astronomical-mlx-c-fork",
  "astronomical-runtime-integration",
- "mlx-c-rust",
+ "mlx-bridge",
  "serde",
  "serde_json",
  "serial_test",
@@ -250,7 +250,7 @@ dependencies = [
 name = "astronomical-mlx-c-fork"
 version = "0.2.99"
 dependencies = [
- "mlx-c-rust",
+ "mlx-bridge",
 ]
 
 [[package]]
@@ -270,7 +270,7 @@ dependencies = [
  "astronomical-test-harness",
  "image",
  "libc",
- "mlx-c-rust",
+ "mlx-bridge",
  "regex-automata",
  "safetensors",
  "serde",
@@ -314,7 +314,7 @@ version = "0.2.99"
 dependencies = [
  "astronomical-test-harness",
  "cc",
- "mlx-c-rust",
+ "mlx-bridge",
  "tempfile",
  "thiserror",
 ]
@@ -327,7 +327,7 @@ dependencies = [
  "astronomical-runtime-integration",
  "astronomical-test-harness",
  "cc",
- "mlx-c-rust",
+ "mlx-bridge",
  "serde_json",
  "serial_test",
  "tempfile",
@@ -339,7 +339,7 @@ name = "astronomical-quantization"
 version = "0.2.99"
 dependencies = [
  "astronomical-runtime-integration",
- "mlx-c-rust",
+ "mlx-bridge",
  "safetensors",
  "serde",
  "serde_json",
@@ -371,7 +371,7 @@ dependencies = [
  "astronomical-native-identity",
  "astronomical-test-harness",
  "libc",
- "mlx-c-rust",
+ "mlx-bridge",
  "sha2",
  "tempfile",
  "thiserror",
@@ -1423,10 +1423,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "mlx-c-rust"
-version = "0.32.4-alpha.4"
+name = "mlx-bridge"
+version = "0.32.4-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad1d0c639f4dbefe22dece80ea803570d98ed66211b9b743d6a9187206953cfd"
+checksum = "19e60444c40dd39b8e5acf2ec89c42491d47a5c968940efbd54903f112752aa0"
 dependencies = [
  "bindgen",
  "pkg-config",

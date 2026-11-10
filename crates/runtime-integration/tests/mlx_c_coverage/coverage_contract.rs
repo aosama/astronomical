@@ -24,7 +24,7 @@ const COVERAGE_EXCLUSIONS: Exclusions = &[(
 )];
 
 /// Resolves the provisioned bindgen header extraction directory exactly the
-/// way the mlx-c-rust build script does.
+/// way the mlx-bridge build script does.
 fn resolve_header_directory() -> Result<PathBuf, String> {
     let repository_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -93,13 +93,13 @@ fn parse_pinned_surface(header_directory: &std::path::Path) -> Result<HeaderSurf
 /// fork additions, so the completeness proof must span both crates.
 fn compiled_bridge_inventory() -> BridgeInventory {
     BridgeInventory {
-        functions: mlx_c_rust::raw::BRIDGED_FUNCTIONS
+        functions: mlx_bridge::raw::BRIDGED_FUNCTIONS
             .iter()
             .copied()
             .chain(astronomical_mlx_c_fork::FORK_BRIDGED_FUNCTIONS)
             .map(str::to_owned)
             .collect(),
-        types: mlx_c_rust::raw::BRIDGED_TYPES
+        types: mlx_bridge::raw::BRIDGED_TYPES
             .iter()
             .map(|name| (*name).to_owned())
             .collect(),

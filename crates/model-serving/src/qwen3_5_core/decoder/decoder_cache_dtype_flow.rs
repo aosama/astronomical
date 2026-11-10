@@ -14,7 +14,7 @@
 //! per-crate weight types to the small dtype contracts below and share this
 //! single replay.
 
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 use crate::decoder_cache::DecoderCacheTensorDtype;
 use crate::qwen3_5_core::artifacts::{

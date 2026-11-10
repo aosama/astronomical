@@ -1,6 +1,6 @@
 //! Typed MLX runtime error classification for Astronomical policy.
 //!
-//! The captured-error machinery lives in the published `mlx-c-rust` crate; this
+//! The captured-error machinery lives in the published `mlx-bridge` crate; this
 //! module adds what only Astronomical knows: which descriptions name the
 //! active memory ceiling enforced by the allocator patch, and how they become
 //! typed capacity errors that the worker can recover from.
@@ -40,7 +40,7 @@ pub fn classify_mlx_error(operation: &'static str, description: String) -> MlxRu
 /// error channel installed at initialization) and funnels the result through
 /// the `From` conversion so the classifier above sees every failure.
 pub(crate) fn check_status(status: i32, operation: &'static str) -> Result<(), MlxRuntimeError> {
-    mlx_c_rust::check_status(status, operation).map_err(MlxRuntimeError::from)
+    mlx_bridge::check_status(status, operation).map_err(MlxRuntimeError::from)
 }
 
 /// Extracts the typed active-memory-ceiling error from a native description.

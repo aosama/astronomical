@@ -1,4 +1,4 @@
-use mlx_c_rust::{
+use mlx_bridge::{
     MlxCompiledMultiOutputGraph, MlxStream, array_from_vector, graph_output_array, raw,
     set_graph_output_vector,
 };

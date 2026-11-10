@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use astronomical_model_serving::Qwen3_5VisionPaddingZeroCache;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use tokio::time::timeout;
 
 const HEAD_COUNT: i32 = 16;

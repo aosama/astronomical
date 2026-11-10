@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5PagedExpertWeights};
 use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan};

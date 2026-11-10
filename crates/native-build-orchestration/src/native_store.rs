@@ -3,7 +3,7 @@
 //! # Why a store outside Cargo's `target/`
 //!
 //! Cargo package versions intentionally do not own this store. The
-//! `mlx-c-rust` build script regenerates Rust bindings in its own `OUT_DIR`,
+//! `mlx-bridge` build script regenerates Rust bindings in its own `OUT_DIR`,
 //! while expensive native products remain reusable until an actual native
 //! toolchain input changes — a Rust-only edit must never rebuild MLX, and a
 //! new checkout or worktree on the same machine must reuse the same warm

@@ -20,7 +20,7 @@ const ARCHIVE_VARIABLES: [&str; 5] = [
 const PINNED_ARCHIVE_CONTENTS: &[u8] = b"verified source archive";
 
 // The bindgen-allowlist completeness contract that lived here moved with the
-// bridge into the published mlx-c-rust crate; the live coverage contract
+// bridge into the published mlx-bridge crate; the live coverage contract
 // (mlx_c_coverage_contract_tests, mlx feature) is the authoritative proof —
 // any narrowing of the published surface fails it as unbridged symbols.
 

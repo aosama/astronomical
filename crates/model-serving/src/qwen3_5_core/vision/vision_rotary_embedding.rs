@@ -8,7 +8,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::{Qwen3_5ExecutionError, Qwen3_5VisionConfig, Qwen3_5VisionInputPlan};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 const VISION_ROTARY_FREQUENCY_BASE: f32 = 10_000.0;
 

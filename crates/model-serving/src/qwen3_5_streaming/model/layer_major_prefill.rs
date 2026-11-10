@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
 use super::forward_layer_weights::ForwardLayerWeights;

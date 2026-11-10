@@ -23,7 +23,7 @@
 use std::path::Path;
 
 use crate::{MlxMemoryLimits, MlxRuntimeError};
-use mlx_c_rust::MlxBindingsContext;
+use mlx_bridge::MlxBindingsContext;
 
 use super::{MlxRuntime, memory_policy, metallib};
 
@@ -38,7 +38,7 @@ impl MlxRuntime {
     /// is already active in this process), or when the bindings context
     /// cannot be created.
     pub fn initialize(memory_limits: MlxMemoryLimits) -> Result<Self, MlxRuntimeError> {
-        mlx_c_rust::install_non_terminating_error_handler();
+        mlx_bridge::install_non_terminating_error_handler();
         let metallib_path = metallib::configured_metallib_path()?;
         metallib::configure_metallib_path(&metallib_path)?;
         memory_policy::configure_runtime_memory_limits(memory_limits)?;
@@ -83,7 +83,7 @@ fn create_bindings_context_for_admitted_limits() -> Result<MlxBindingsContext, M
     MlxBindingsContext::new().map_err(release_admitted_limits_on_failure)
 }
 
-fn release_admitted_limits_on_failure(context_error: mlx_c_rust::MlxCError) -> MlxRuntimeError {
+fn release_admitted_limits_on_failure(context_error: mlx_bridge::MlxCError) -> MlxRuntimeError {
     memory_policy::release_runtime_memory_limits();
     MlxRuntimeError::from(context_error)
 }

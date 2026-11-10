@@ -154,7 +154,7 @@ fn load_page_tensors_for_hold(
     fixture: &StreamingProbeFixture,
     layer_index: usize,
     expert_ids: &[usize],
-) -> HashMap<String, mlx_c_rust::MlxArray> {
+) -> HashMap<String, mlx_bridge::MlxArray> {
     let layer_prefix = format!("language_model.model.layers.{layer_index}.mlp");
     let layer_plan = build_quantized_expert_layer_plan(
         &fixture.model_directory,
@@ -200,7 +200,7 @@ fn should_attribute_complete_layer_streaming_rate() {
     // Holding a comparable materialized allocation isolates whether the
     // reader's per-call latency collapses under active-memory pressure.
     let held_layer_count = (PRESSURE_HOLD_TARGET_BYTES / unpressured.payload_bytes.max(1)) as usize;
-    let mut pressure_hold: Vec<HashMap<String, mlx_c_rust::MlxArray>> = Vec::new();
+    let mut pressure_hold: Vec<HashMap<String, mlx_bridge::MlxArray>> = Vec::new();
     for held_layer_index in 1..=held_layer_count {
         pressure_hold.push(load_page_tensors_for_hold(
             &runtime,

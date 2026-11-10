@@ -39,7 +39,7 @@ use std::{
 };
 
 use crate::{MlxRuntimeError, safetensors::read_metrics::PositionalFileReadMetrics};
-use mlx_c_rust::raw;
+use mlx_bridge::raw;
 
 use super::bounded_range_read_concurrency::{SourcePiece, read_source_pieces};
 use super::lazy_map::BoundedReadInterval;

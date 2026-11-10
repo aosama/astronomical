@@ -1,6 +1,6 @@
 //! The Astronomical fork surface of MLX-C: the patched native image declares
 //! exactly one C symbol beyond the stock MLX-C release, and this crate owns
-//! it. The public `mlx-c-rust` crate binds the complete stock surface; this
+//! it. The public `mlx-bridge` crate binds the complete stock surface; this
 //! extension layers the fork delta on top so the stock crate stays
 //! publishable and vanilla.
 //!
@@ -8,7 +8,7 @@
 //! bridge inventory before comparing against the provisioned patched
 //! headers, keeping the completeness proof exact across the fork boundary.
 
-use mlx_c_rust::{MlxArray, MlxCError, error::check_status};
+use mlx_bridge::{MlxArray, MlxCError, error::check_status};
 
 /// Every fork-added C function bridged here. The coverage contract appends
 /// these to the stock bridge inventory so the patched header surface stays
@@ -18,7 +18,7 @@ pub const FORK_BRIDGED_FUNCTIONS: [&str; 1] = ["mlx_array_detach"];
 // Added by the local patch `mlx-c-0.8.0-expose-array-detach.patch`: strips an
 // array's lazy graph while keeping the realized buffer.
 unsafe extern "C" {
-    fn mlx_array_detach(arr: mlx_c_rust::raw::mlx_array) -> i32;
+    fn mlx_array_detach(arr: mlx_bridge::raw::mlx_array) -> i32;
 }
 
 /// Strips the lazy graph (primitive, inputs, siblings) while keeping the

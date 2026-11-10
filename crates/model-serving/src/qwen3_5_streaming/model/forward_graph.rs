@@ -7,7 +7,7 @@ use super::Qwen3_5Model;
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 /// Target-model graph outputs retained for specialized consumers.
 pub struct Qwen3_5TargetForwardOutput {

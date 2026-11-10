@@ -60,7 +60,7 @@ impl DecoderCacheState {
     /// branches from the layer's input, so the layer output never reaches it
     /// and evaluating it is the only way to release that input.
     #[must_use]
-    pub fn convolution_state_array(&self) -> Option<&mlx_c_rust::MlxArray> {
+    pub fn convolution_state_array(&self) -> Option<&mlx_bridge::MlxArray> {
         match self {
             Self::AppendOnlyAttention { .. } => None,
             Self::Composite { convolution, .. } => convolution.state(),

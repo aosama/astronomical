@@ -15,7 +15,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::error::QuantizationError;
 use crate::module_inventory::{ModuleWeightSource, QuantizableModuleDescriptor, SourceTensorDtype};

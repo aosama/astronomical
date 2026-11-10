@@ -4,7 +4,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use mlx_c_rust::MlxCompiledElementwiseGraphs;
+use mlx_bridge::MlxCompiledElementwiseGraphs;
 
 #[tokio::test]
 async fn should_apply_one_cached_grouped_query_attention_step_with_output_gating() {

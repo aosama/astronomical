@@ -2,7 +2,7 @@ use astronomical_model_serving::{
     qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence, qwen3_5_gated_delta_step,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
+use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
@@ -224,7 +224,7 @@ async fn should_apply_fused_gated_delta_tail_after_full_persistent_prompt_cache_
     let initial_recurrent_state = runtime
         .zeros(
             &[1, VALUE_HEAD_COUNT, HEAD_DIMENSION, HEAD_DIMENSION],
-            mlx_c_rust::MlxDtype::Float32,
+            mlx_bridge::MlxDtype::Float32,
         )
         .expect("the initial recurrent state should be valid");
 
@@ -365,7 +365,7 @@ fn slice_rank_three_token(
 fn apply_fused_gated_delta_chunk(
     runtime: &MlxRuntime,
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
-    gated_delta_kernel: &mlx_c_rust::MlxMetalKernel,
+    gated_delta_kernel: &mlx_bridge::MlxMetalKernel,
     decay_rate_logarithm: &MlxArray,
     decay_interval_bias: &MlxArray,
     token_count: i32,

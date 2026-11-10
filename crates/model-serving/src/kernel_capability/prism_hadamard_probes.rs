@@ -9,7 +9,7 @@
 //! to change a bit, and the upstream parity journey depends on that.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxCError, MlxDtype};
+use mlx_bridge::{MlxArray, MlxCError, MlxDtype};
 
 use super::{CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError};
 use crate::prism_hadamard_qwen35::model::signed_rotation_kernel::{

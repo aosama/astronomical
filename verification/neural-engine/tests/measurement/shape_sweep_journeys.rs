@@ -7,7 +7,7 @@
 //! so the ideal is an upper bound, not a forecast.
 
 use astronomical_neural_engine::core_ml::CoreMlComputeUnits;
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 use serial_test::serial;
 
 use crate::support::measured_projection::{measure_projection, print_evidence};

@@ -123,8 +123,8 @@ pub enum QuantizationError {
 /// MLX-C already names the operation that failed, so the conversion keeps it
 /// verbatim; this lets every GPU stage use `?` on binding calls directly.
 #[cfg(feature = "direct-mlx")]
-impl From<mlx_c_rust::MlxCError> for QuantizationError {
-    fn from(binding_error: mlx_c_rust::MlxCError) -> Self {
+impl From<mlx_bridge::MlxCError> for QuantizationError {
+    fn from(binding_error: mlx_bridge::MlxCError) -> Self {
         Self::MlxRuntimeFailure {
             operation: binding_error.operation,
             description: binding_error.description,

@@ -45,7 +45,7 @@
 //! `..._throughput` names).
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernel};
+use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernel};
 use serial_test::serial;
 
 use astronomical_jangtq2_qwen35::codebook;
