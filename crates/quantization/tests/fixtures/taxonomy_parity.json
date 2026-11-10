@@ -165,7 +165,7 @@
     "model.layers.9.mlp.router",
     "model.layers.9.mlp.router.proj"
   ],
-  "optiq_version": "0.6.5",
+  "optiq_version": "0.8.2",
   "output_layers": [
     "lm_head",
     "model.embed_tokens",

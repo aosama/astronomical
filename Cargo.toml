@@ -109,6 +109,10 @@ libc = "0.2"
 # 2026-10-31). The daemon installs ring — rustls's original, CMake-free
 # provider — process-wide before building its HTTPS clients; see
 # ReqwestHubTransport::production.
+# Renders a model's own Jinja chat template for quantization calibration.
+# `preserve_order` keeps a tool definition's keys in file order, which the
+# template's `tojson` then writes in that order, as the Python reference does.
+minijinja = { version = "=2.24.0", features = ["preserve_order", "loop_controls"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "stream"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 safetensors = { version = "=0.8.0", default-features = false, features = ["alloc"] }

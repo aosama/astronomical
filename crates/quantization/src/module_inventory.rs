@@ -17,11 +17,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::bit_width::GroupSize;
 use crate::error::QuantizationError;
-use crate::module_taxonomy::ModuleRole;
+use crate::module_taxonomy::{ModuleRole, is_embedding_table_module};
+
+use output_layout::OutputValueTransform;
 
 mod expert_naming;
 pub(crate) mod inventory_builder;
+pub mod output_layout;
 pub(crate) mod safetensors_header;
+pub mod traversal_order;
 
 #[cfg(test)]
 #[path = "module_inventory_tests.rs"]
@@ -102,8 +106,30 @@ pub struct QuantizableModuleDescriptor {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PassThroughTensor {
     pub shard_file_name: String,
+    /// The name the source stores the tensor under.
     pub tensor_name: String,
+    /// The stored shape, before any axis reorder.
     pub shape: Vec<usize>,
+    /// The name it is written under (mlx-lm's spelling for the family).
+    pub output_name: String,
+    pub value_transform: OutputValueTransform,
+    /// Written at its stored float width rather than bfloat16.
+    pub keeps_stored_dtype: bool,
+}
+
+impl PassThroughTensor {
+    /// A tensor copied under its own name with its values untouched.
+    #[must_use]
+    pub fn unchanged(shard_file_name: String, tensor_name: String, shape: Vec<usize>) -> Self {
+        Self {
+            shard_file_name,
+            output_name: tensor_name.clone(),
+            tensor_name,
+            shape,
+            value_transform: OutputValueTransform::Unchanged,
+            keeps_stored_dtype: false,
+        }
+    }
 }
 
 /// The complete inventory of one source directory.
@@ -119,6 +145,17 @@ pub struct ModuleInventory {
     /// and pass through the requantizer untouched. Kept so the requantizer's
     /// tensor plan is complete without a second header walk.
     pass_through_tensors: Vec<PassThroughTensor>,
+    /// Vision and audio tower tensors, written at bfloat16 to the
+    /// `optiq_vision.safetensors` sidecar under their sidecar names.
+    #[serde(default)]
+    vision_sidecar_tensors: Vec<PassThroughTensor>,
+    /// The multi-token-prediction head's tensors, written to
+    /// `optiq/mtp.safetensors` under the names the release gives them.
+    #[serde(default)]
+    mtp_sidecar_tensors: Vec<PassThroughTensor>,
+    /// Whether the source config declares a vision or audio tower.
+    #[serde(default)]
+    declares_multimodal_towers: bool,
     /// Aliases from the alternate spellings mlx-lm uses for the same module
     /// (`model.` stripped, `model.language_model.` reordered or flattened) to
     /// the canonical name, so a probe model's own module names resolve.
@@ -134,13 +171,18 @@ impl ModuleInventory {
     ///    projection renames), reading the text tower's `model_type` as well
     ///    as the top level, and the group sizes of an already-quantized source.
     /// 2. Every top-level `*.safetensors` header is read; no tensor data is.
-    /// 3. 2-D `.weight` tensors are linears; 3-D tensors follow the fused
+    /// 3. The output layout decides each tensor's place first: tower tensors
+    ///    go to the vision sidecar list, and tensors mlx-lm drops (the
+    ///    multi-token-prediction head, a tied output head) are left out.
+    /// 4. 2-D `.weight` tensors are modules; 3-D tensors follow the fused
     ///    expert layouts (`experts.gate_up_proj` splits into two halves);
-    ///    unfused `experts.N.*` tensors are stacked in expert order. Routers,
-    ///    norms, integer buffers, and anything whose last dimension does not
-    ///    divide the group size pass through.
-    /// 4. Each module gets its taxonomy role and block index, and the
-    ///    alternate mlx-lm spellings of its name are registered as aliases.
+    ///    unfused `experts.N.*` tensors are stacked in expert order. Norms,
+    ///    integer buffers, routers of families whose router is not a plain
+    ///    linear layer, and anything whose last dimension does not divide
+    ///    the group size pass through.
+    /// 5. Each module is named the way mlx-lm names it, gets its taxonomy
+    ///    role and block index, and the source's spelling and the other
+    ///    mlx-lm spellings of its name are registered as aliases.
     pub fn from_source_directory(
         source_directory: &Path,
         group_size: GroupSize,
@@ -151,6 +193,9 @@ impl ModuleInventory {
             group_size,
             modules: contents.modules,
             pass_through_tensors: contents.pass_through_tensors,
+            vision_sidecar_tensors: contents.vision_sidecar_tensors,
+            mtp_sidecar_tensors: contents.mtp_sidecar_tensors,
+            declares_multimodal_towers: contents.declares_multimodal_towers,
             aliases: contents.aliases,
         })
     }
@@ -172,6 +217,9 @@ impl ModuleInventory {
             group_size,
             modules,
             pass_through_tensors: Vec::new(),
+            vision_sidecar_tensors: Vec::new(),
+            mtp_sidecar_tensors: Vec::new(),
+            declares_multimodal_towers: false,
             aliases: BTreeMap::new(),
         }
     }
@@ -193,6 +241,62 @@ impl ModuleInventory {
     #[must_use]
     pub fn module_count(&self) -> usize {
         self.modules.len()
+    }
+
+    /// The modules a sensitivity method scores and the allocator spends
+    /// bits on: every module except the token embedding table. OptiQ scores
+    /// linear layers only, so an embedding table never enters the allocation
+    /// and is written at the allocation's highest width instead; scoring it
+    /// here would change both the bit map and the achieved bits per weight.
+    ///
+    /// The order is mlx-lm's module traversal order, not name order: the
+    /// allocator breaks ties by table order, and OptiQ's table is in
+    /// traversal order.
+    #[must_use]
+    pub fn allocation_modules(&self) -> Vec<&QuantizableModuleDescriptor> {
+        let mut allocation_modules = Vec::with_capacity(self.modules.len());
+        for descriptor in self.modules.values() {
+            if !is_embedding_table_module(&descriptor.module_name) {
+                allocation_modules.push(descriptor);
+            }
+        }
+        allocation_modules.sort_by(compare_descriptors_in_traversal_order);
+        allocation_modules
+    }
+
+    /// Whether any module's weight has to be assembled from the source:
+    /// split out of a fused tensor, stacked from per-expert tensors, or read
+    /// from a tensor that is not its own `<name>.weight`. A serving engine
+    /// reads mlx-lm's layout, where every module is one such tensor, so a
+    /// source like this cannot be loaded for probing as it stands.
+    #[must_use]
+    pub fn has_assembled_modules(&self) -> bool {
+        for descriptor in self.modules.values() {
+            let is_stored_as_its_own_weight = match &descriptor.weight_source {
+                ModuleWeightSource::Whole { tensor_name, .. } => tensor_name.ends_with(".weight"),
+                ModuleWeightSource::FusedGateUpHalf { .. }
+                | ModuleWeightSource::StackedPerExpert { .. } => false,
+            };
+            if !is_stored_as_its_own_weight {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[must_use]
+    pub fn vision_sidecar_tensors(&self) -> &[PassThroughTensor] {
+        &self.vision_sidecar_tensors
+    }
+
+    #[must_use]
+    pub fn mtp_sidecar_tensors(&self) -> &[PassThroughTensor] {
+        &self.mtp_sidecar_tensors
+    }
+
+    #[must_use]
+    pub const fn declares_multimodal_towers(&self) -> bool {
+        self.declares_multimodal_towers
     }
 
     #[must_use]
@@ -242,4 +346,12 @@ impl ModuleInventory {
         }
         transformer_block_count
     }
+}
+
+/// Sort comparator for [`ModuleInventory::allocation_modules`].
+fn compare_descriptors_in_traversal_order(
+    left: &&QuantizableModuleDescriptor,
+    right: &&QuantizableModuleDescriptor,
+) -> std::cmp::Ordering {
+    traversal_order::compare_in_mlx_lm_traversal_order(&left.module_name, &right.module_name)
 }

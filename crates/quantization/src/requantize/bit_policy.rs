@@ -90,23 +90,39 @@ pub enum BitPolicy {
     },
     /// Name-based structural rules for a large sparse model.
     Structural(StructuralMixtureOfExpertsPolicy),
+    /// Nothing is encoded: every module is written at bfloat16 in the
+    /// output layout. This turns a source in an original release's layout
+    /// into the bfloat16 model the sensitivity probe's engine can load.
+    KeepEverythingBfloat16,
 }
 
 impl BitPolicy {
+    /// Whether a conversion under this policy writes the source's
+    /// multi-token-prediction head as a sidecar. Only the final conversion
+    /// does: a uniform baseline or a bfloat16 copy exists to be probed, and
+    /// a probe never runs the head.
+    #[must_use]
+    pub const fn writes_mtp_sidecar(&self) -> bool {
+        matches!(self, Self::FromPredicate(_) | Self::Structural(_))
+    }
+
     /// Decides for one `.weight` tensor key.
     ///
-    /// Routers are always `PassThrough` regardless of policy: the router
-    /// selects experts, and packing its input dimension breaks the
-    /// `x @ weight.T` shape. Otherwise the variant decides: the allocation's
-    /// predicate looks the module (the key without `.weight`) up, the uniform
-    /// policy applies its one width, and the structural policy applies
-    /// OptiQ's `moe_bit_policy` name rules.
+    /// The allocation's predicate looks the module (the key without
+    /// `.weight`) up, routers included: where a router reaches the plan as a
+    /// module it is a plain linear layer, and OptiQ quantizes it at the
+    /// width its measured sensitivity earned. The uniform policy applies its
+    /// one width, except to the two gates mlx-lm's Qwen mixture-of-experts
+    /// class pins (the router and the shared expert's output gate: 8 bits,
+    /// group size 64), so a uniform baseline is the stock conversion it
+    /// stands in for and a sweep over it starts from the same widths. The structural
+    /// policy applies OptiQ's `moe_bit_policy` name rules and never encodes
+    /// a router: it serves sources whose router is a raw parameter, where
+    /// packing the input dimension breaks the `x @ weight.T` shape.
     #[must_use]
     pub fn decide(&self, tensor_key: &str) -> TensorEncodingDecision {
-        if is_router_tensor_key(tensor_key) {
-            return TensorEncodingDecision::PassThrough;
-        }
         match self {
+            Self::KeepEverythingBfloat16 => TensorEncodingDecision::PassThrough,
             Self::FromPredicate(predicate) => {
                 let module_name = tensor_key.strip_suffix(".weight").unwrap_or(tensor_key);
                 decision_from_predicate(predicate.decision_for(module_name))
@@ -114,19 +130,19 @@ impl BitPolicy {
             Self::Uniform {
                 bit_width,
                 group_size,
-            } => TensorEncodingDecision::Encode {
-                bit_width: *bit_width,
-                group_size: *group_size,
-            },
-            Self::Structural(structural_policy) => structural_policy.decide(tensor_key),
+            } => uniform_decision(tensor_key, *bit_width, *group_size),
+            Self::Structural(structural_policy) => {
+                structural_decision(structural_policy, tensor_key)
+            }
         }
     }
 
     /// The dimensional check applied after the name-based decision: only
     /// 2-D and 3-D tensors are group-quantizable and the last dimension has
     /// to divide the group. A tensor that fails at the planned group size
-    /// but divides 32 is encoded at group size 32 instead (Qwen3.8-Flash-Next
-    /// n-gram shards are 160 wide); anything else passes through.
+    /// takes the largest supported group not above it that does divide
+    /// (Qwen3.8-Flash-Next n-gram shards are 160 wide and land on 32);
+    /// anything else passes through.
     #[must_use]
     pub fn adjust_for_shape(
         decision: TensorEncodingDecision,
@@ -145,18 +161,57 @@ impl BitPolicy {
         if !matches!(shape.len(), 2 | 3) {
             return TensorEncodingDecision::PassThrough;
         }
-        if last_dimension % group_size.elements() as usize == 0 {
-            return decision;
-        }
-        if last_dimension % SMALLEST_GROUP_SIZE_ELEMENTS as usize == 0 {
-            return TensorEncodingDecision::Encode {
+        match fitting_group_size(last_dimension, group_size) {
+            Some(fitting_group_size) => TensorEncodingDecision::Encode {
                 bit_width,
-                group_size: GroupSize::new(SMALLEST_GROUP_SIZE_ELEMENTS)
-                    .expect("32 is a supported group size"),
-            };
+                group_size: fitting_group_size,
+            },
+            None => TensorEncodingDecision::PassThrough,
         }
-        TensorEncodingDecision::PassThrough
     }
+}
+
+/// The uniform policy's decision: its one width, except for the two gates
+/// mlx-lm pins.
+fn uniform_decision(
+    tensor_key: &str,
+    bit_width: BitWidth,
+    group_size: GroupSize,
+) -> TensorEncodingDecision {
+    if is_gate_pinned_by_mlx_lm(tensor_key) {
+        return TensorEncodingDecision::Encode {
+            bit_width: BitWidth::new(UNIFORM_ROUTER_BITS).expect("8 is a valid width"),
+            group_size: GroupSize::new(UNIFORM_ROUTER_GROUP_SIZE_ELEMENTS)
+                .expect("64 is a supported group size"),
+        };
+    }
+    TensorEncodingDecision::Encode {
+        bit_width,
+        group_size,
+    }
+}
+
+/// The structural policy's decision; a router is never encoded under it.
+fn structural_decision(
+    structural_policy: &StructuralMixtureOfExpertsPolicy,
+    tensor_key: &str,
+) -> TensorEncodingDecision {
+    if is_router_tensor_key(tensor_key) {
+        return TensorEncodingDecision::PassThrough;
+    }
+    structural_policy.decide(tensor_key)
+}
+
+/// The largest fallback group size not above the planned one that divides
+/// `last_dimension`, or `None` when none does.
+fn fitting_group_size(last_dimension: usize, planned_group_size: GroupSize) -> Option<GroupSize> {
+    for fallback_group_elements in FALLBACK_GROUP_SIZES_ELEMENTS {
+        let fits_planned_group = fallback_group_elements <= planned_group_size.elements();
+        if fits_planned_group && last_dimension.is_multiple_of(fallback_group_elements as usize) {
+            return GroupSize::new(fallback_group_elements).ok();
+        }
+    }
+    None
 }
 
 /// OptiQ's `is_router`, kept beside the policy because the requantizer's
@@ -169,6 +224,15 @@ pub fn is_router_tensor_key(tensor_key: &str) -> bool {
         || tensor_key.contains(".ffn.gate.")
         || tensor_key.contains("expert_bias")
         || tensor_key.contains(".router.")
+}
+
+/// mlx-lm's Qwen3.5 `quant_predicate`: a module path ending in `mlp.gate`
+/// (the router) or `shared_expert_gate` is quantized at 8 bits whatever the
+/// conversion's width. Both are tiny and decide which experts run and how
+/// much the shared expert contributes.
+fn is_gate_pinned_by_mlx_lm(tensor_key: &str) -> bool {
+    let module_path = tensor_key.strip_suffix(".weight").unwrap_or(tensor_key);
+    module_path.ends_with("mlp.gate") || module_path.ends_with("shared_expert_gate")
 }
 
 /// OptiQ's shardwise `is_expert`: a routed-expert weight, fused or not,
@@ -189,10 +253,14 @@ pub fn policy_from_predicate(predicate: QuantizationPredicate) -> BitPolicy {
     BitPolicy::FromPredicate(predicate)
 }
 
-/// The smallest MLX affine group, the fallback for a tensor whose last
-/// dimension does not divide the planned group (Qwen3.8-Flash-Next n-gram
-/// shards are 160 wide).
-const SMALLEST_GROUP_SIZE_ELEMENTS: u32 = 32;
+/// The group sizes tried, largest first, for a tensor whose last dimension
+/// does not divide the planned group: OptiQ's streaming convert order.
+const FALLBACK_GROUP_SIZES_ELEMENTS: [u32; 3] = [128, 64, 32];
+
+/// The width and group size mlx-lm's Qwen mixture-of-experts
+/// `quant_predicate` pins its two gates at, whatever the uniform width is.
+const UNIFORM_ROUTER_BITS: u32 = 8;
+const UNIFORM_ROUTER_GROUP_SIZE_ELEMENTS: u32 = 64;
 
 /// Maps an allocation decision onto the requantizer's: the keep-bfloat16
 /// tier is written as-is.

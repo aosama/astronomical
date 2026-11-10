@@ -98,6 +98,39 @@ pub(crate) fn mean_kl_divergence(
     reference_logits: &MlxArray,
     probe_logits: &MlxArray,
 ) -> Result<f64, QuantizationError> {
+    let per_position_kl = per_position_kl_array(runtime, reference_logits, probe_logits)?;
+    let mean_kl = mlx_step(
+        runtime.mean(&per_position_kl, false),
+        "average over positions",
+    )?;
+    let mean_kl_values = mlx_step(mean_kl.to_vec_f32(), "read the KL back")?;
+    Ok(f64::from(
+        mean_kl_values.first().copied().unwrap_or(f32::NAN),
+    ))
+}
+
+/// The same divergence at every position, read back to the host: what a
+/// whole-artifact evaluation takes its median and tail from.
+pub(crate) fn per_position_kl_divergences(
+    runtime: &MlxRuntime,
+    reference_logits: &MlxArray,
+    probe_logits: &MlxArray,
+) -> Result<Vec<f64>, QuantizationError> {
+    let per_position_kl = per_position_kl_array(runtime, reference_logits, probe_logits)?;
+    let per_position_values = mlx_step(per_position_kl.to_vec_f32(), "read the KL back")?;
+    let mut divergences = Vec::with_capacity(per_position_values.len());
+    for per_position_value in per_position_values {
+        divergences.push(f64::from(per_position_value));
+    }
+    Ok(divergences)
+}
+
+/// `sum_v p_ref * (log p_ref - log p_probe)` at every position, on device.
+fn per_position_kl_array(
+    runtime: &MlxRuntime,
+    reference_logits: &MlxArray,
+    probe_logits: &MlxArray,
+) -> Result<MlxArray, QuantizationError> {
     let reference_log_probabilities = float32_log_softmax(runtime, reference_logits)?;
     let probe_log_probabilities = float32_log_softmax(runtime, probe_logits)?;
     let reference_probabilities = mlx_step(
@@ -108,7 +141,7 @@ pub(crate) fn mean_kl_divergence(
         runtime.subtract(&reference_log_probabilities, &probe_log_probabilities),
         "subtract log probabilities",
     )?;
-    let per_position_kl = mlx_step(
+    mlx_step(
         runtime.sum_axis(
             &mlx_step(
                 runtime.multiply(&reference_probabilities, &log_ratio),
@@ -118,15 +151,7 @@ pub(crate) fn mean_kl_divergence(
             false,
         ),
         "sum over the vocabulary",
-    )?;
-    let mean_kl = mlx_step(
-        runtime.mean(&per_position_kl, false),
-        "average over positions",
-    )?;
-    let mean_kl_values = mlx_step(mean_kl.to_vec_f32(), "read the KL back")?;
-    Ok(f64::from(
-        mean_kl_values.first().copied().unwrap_or(f32::NAN),
-    ))
+    )
 }
 
 fn float32_log_softmax(

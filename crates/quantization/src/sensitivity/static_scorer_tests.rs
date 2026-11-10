@@ -70,18 +70,56 @@ fn inventory_of(module_names: &[&str]) -> ModuleInventory {
 
 #[test]
 fn should_encode_the_priority_as_a_curve_falling_to_zero_at_the_highest_width() {
+    let inventory = inventory_of(&["model.lm_head", "model.layers.0.mlp.up_proj"]);
+    let ladder = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
+
+    let table = score_static_structural(&inventory, &ladder);
+
+    let output_head = table.result_for("model.lm_head").expect("scored");
+    let four_bits = BitWidth::new(4).expect("valid");
+    let eight_bits = BitWidth::new(8).expect("valid");
+    assert_eq!(output_head.kl_divergence_at(four_bits), Some(1.0));
+    assert_eq!(output_head.kl_divergence_at(eight_bits), Some(0.0));
+    assert_eq!(output_head.logical_parameter_count, 4096);
+    assert_eq!(table.method, SensitivityMethod::StaticStructuralRules);
+}
+
+#[test]
+fn should_leave_the_embedding_table_out_of_the_scored_table() {
+    // OptiQ scores linear layers only; the table is written at the
+    // allocation's highest width without ever entering the allocation.
     let inventory = inventory_of(&["model.embed_tokens", "model.layers.0.mlp.up_proj"]);
     let ladder = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
 
     let table = score_static_structural(&inventory, &ladder);
 
-    let embedding = table.result_for("model.embed_tokens").expect("scored");
-    let four_bits = BitWidth::new(4).expect("valid");
-    let eight_bits = BitWidth::new(8).expect("valid");
-    assert_eq!(embedding.kl_divergence_at(four_bits), Some(1.0));
-    assert_eq!(embedding.kl_divergence_at(eight_bits), Some(0.0));
-    assert_eq!(embedding.logical_parameter_count, 4096);
-    assert_eq!(table.method, SensitivityMethod::StaticStructuralRules);
+    assert!(table.result_for("model.embed_tokens").is_none());
+    assert_eq!(table.results.len(), 1);
+}
+
+#[test]
+fn should_score_modules_in_mlx_lm_traversal_order() {
+    let inventory = inventory_of(&[
+        "language_model.model.layers.0.mlp.gate_proj",
+        "language_model.model.layers.0.mlp.up_proj",
+        "language_model.model.layers.1.self_attn.q_proj",
+    ]);
+    let ladder = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
+
+    let table = score_static_structural(&inventory, &ladder);
+
+    let mut scored_names = Vec::new();
+    for result in &table.results {
+        scored_names.push(result.module_name.as_str());
+    }
+    assert_eq!(
+        scored_names,
+        vec![
+            "language_model.model.layers.1.self_attn.q_proj",
+            "language_model.model.layers.0.mlp.up_proj",
+            "language_model.model.layers.0.mlp.gate_proj",
+        ]
+    );
 }
 
 #[test]

@@ -437,6 +437,15 @@ fn squared_error_per_group(
     let codes = clipped_codes(runtime, grouped_weights, scale, bias, levels)?;
     let reconstruction = runtime.add(&runtime.multiply(&codes, scale)?, bias)?;
     let residual = runtime.subtract(grouped_weights, &reconstruction)?;
+    // An exact square, where the Python encoder writes `residual ** 2`. On
+    // Metal that is the `pow` kernel, which is not exact and does not round
+    // the same way in every MLX build (the Python wheel's Metal library and
+    // one compiled locally disagree in the last bit). The search keeps a
+    // candidate only when it is strictly better, so that last bit decides
+    // every near-tie: measured on Qwen3.5 0.8B, 480 of 5.87 million groups
+    // at 2 and 3 bits. A square is the same on every build and device, so
+    // this encoder is reproducible with itself; against OptiQ it differs in
+    // those near-tie groups only, each time by an equal-error choice.
     Ok(runtime.sum_axis(&runtime.square(&residual)?, -1, true)?)
 }
 

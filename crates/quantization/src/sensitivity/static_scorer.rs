@@ -54,7 +54,8 @@ pub fn structural_priority(module_name: &str, transformer_block_count: usize) ->
     priority.clamp(MINIMUM_STRUCTURAL_PRIORITY, 1.0)
 }
 
-/// Scores every module in the inventory.
+/// Scores every module the allocator spends bits on (the inventory minus
+/// embedding tables, which OptiQ's static method never scores).
 ///
 /// The priority is encoded as a sensitivity curve the allocator reads: KL
 /// falls linearly from `priority` at the lowest candidate width to 0 at the
@@ -67,13 +68,14 @@ pub fn score_static_structural(
     candidate_bit_widths: &CandidateBitWidths,
 ) -> SensitivityTable {
     let mut block_count = 1_usize;
-    for descriptor in inventory.modules() {
+    let allocation_modules = inventory.allocation_modules();
+    for descriptor in &allocation_modules {
         if let Some(block_index) = optiq_block_index(&descriptor.module_name.to_lowercase()) {
             block_count = block_count.max(block_index + 1);
         }
     }
-    let mut results = Vec::with_capacity(inventory.module_count());
-    for descriptor in inventory.modules() {
+    let mut results = Vec::with_capacity(allocation_modules.len());
+    for descriptor in allocation_modules {
         let priority = structural_priority(&descriptor.module_name, block_count);
         results.push(SensitivityResult {
             module_name: descriptor.module_name.clone(),

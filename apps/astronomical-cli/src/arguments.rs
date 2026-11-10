@@ -52,6 +52,8 @@ const HELP_TEXT: &str = concat!(
     "                                     [--calibration-mix FILE] [--floor-components-per-block N]\n",
     "                                     [--base-model NAME] [--range-search-maximum-bits N]\n",
     "                                     [--no-range-search] [--overwrite]\n",
+    "       astronomical quantize evaluate ARTIFACT_DIR --reference DIR [--prompts N]\n",
+    "                                      [--sequence-length N] [--json]\n",
     "       astronomical --help\n",
     "       astronomical --version\n\n",
     "Launch a coding harness against the models installed in local Astronomical,\n",

@@ -4,6 +4,7 @@
 //! enough to run in seconds. No real model artifacts.
 
 mod encoder_contracts;
+mod output_layout_contracts;
 mod pipeline_contracts;
 mod requantize_contracts;
 mod requantize_layout_contracts;

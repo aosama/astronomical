@@ -149,3 +149,101 @@ fn should_reject_a_missing_quantize_sub_verb() {
         Err(UsageError::MissingCommand)
     ));
 }
+
+#[test]
+fn should_parse_an_evaluate_invocation_with_optiq_defaults() {
+    let parsed = parse(&["quantize", "evaluate", "artifact", "--reference", "base"])
+        .expect("the evaluate invocation should parse");
+
+    match parsed {
+        CliCommand::Quantize(QuantizeCommand::Evaluate(evaluate_arguments)) => {
+            assert_eq!(
+                evaluate_arguments.artifact_directory,
+                std::path::PathBuf::from("artifact")
+            );
+            assert_eq!(
+                evaluate_arguments.reference_directory,
+                std::path::PathBuf::from("base")
+            );
+            assert_eq!(evaluate_arguments.prompt_count, 64);
+            assert_eq!(evaluate_arguments.sequence_length_tokens, 256);
+            assert!(!evaluate_arguments.render_json);
+        }
+        other => panic!("expected an evaluate command, got {other:?}"),
+    }
+}
+
+#[test]
+fn should_parse_explicit_evaluate_sizes_and_the_json_switch() {
+    let parsed = parse(&[
+        "quantize",
+        "evaluate",
+        "artifact",
+        "--reference",
+        "base",
+        "--prompts",
+        "8",
+        "--sequence-length",
+        "128",
+        "--json",
+    ])
+    .expect("the evaluate invocation should parse");
+
+    match parsed {
+        CliCommand::Quantize(QuantizeCommand::Evaluate(evaluate_arguments)) => {
+            assert_eq!(evaluate_arguments.prompt_count, 8);
+            assert_eq!(evaluate_arguments.sequence_length_tokens, 128);
+            assert!(evaluate_arguments.render_json);
+        }
+        other => panic!("expected an evaluate command, got {other:?}"),
+    }
+}
+
+#[test]
+fn should_reject_an_evaluate_invocation_without_a_reference() {
+    let parse_outcome = parse(&["quantize", "evaluate", "artifact"]);
+
+    assert!(matches!(
+        parse_outcome,
+        Err(UsageError::MissingValue("--reference"))
+    ));
+}
+
+#[test]
+fn should_reject_an_evaluation_of_zero_prompts() {
+    let parse_outcome = parse(&[
+        "quantize",
+        "evaluate",
+        "artifact",
+        "--reference",
+        "base",
+        "--prompts",
+        "0",
+    ]);
+
+    assert!(matches!(
+        parse_outcome,
+        Err(UsageError::InvalidQuantizeValue {
+            flag: "--prompts",
+            ..
+        })
+    ));
+}
+
+#[test]
+fn should_reject_an_evaluate_invocation_naming_the_reference_twice() {
+    let parse_outcome = parse(&[
+        "quantize",
+        "evaluate",
+        "artifact",
+        "--reference",
+        "base",
+        "--reference",
+        "other",
+    ]);
+
+    assert!(matches!(
+        parse_outcome,
+        Err(UsageError::RepeatedArgument("--reference"))
+    ));
+}

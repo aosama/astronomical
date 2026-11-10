@@ -14,9 +14,14 @@
 //! ecosystem reads (`config.json`, `generation_config.json`, the chat
 //! template, the tokenizer, the weights).
 
+pub mod converted_config;
+pub mod generation_config;
 pub mod json_file;
 pub mod layout;
 pub mod metadata;
+pub mod model_card;
+pub mod mtp_config;
+pub mod multimodal_config;
 pub mod quantization_config;
 pub mod sensitivity_document;
 

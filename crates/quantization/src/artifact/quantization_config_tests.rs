@@ -16,7 +16,12 @@ fn should_serialize_defaults_and_flattened_module_entries() {
     assert_eq!(serialized["bits"], 4);
     assert_eq!(serialized["mode"], "affine");
     assert_eq!(serialized["model.layers.0.mlp.up_proj"]["bits"], 8);
-    assert_eq!(serialized["model.layers.0.mlp.up_proj"]["mode"], "affine");
+    // A module entry inherits the document's mode, as mlx-lm writes it.
+    assert!(
+        serialized["model.layers.0.mlp.up_proj"]
+            .get("mode")
+            .is_none()
+    );
 }
 
 #[test]
@@ -59,7 +64,7 @@ fn should_resolve_per_module_source_parameters_over_the_defaults() {
             ModuleQuantizationEntry {
                 group_size: 128,
                 bits: 8,
-                mode: "affine".to_owned(),
+                mode: Some("affine".to_owned()),
             },
         )]),
     };

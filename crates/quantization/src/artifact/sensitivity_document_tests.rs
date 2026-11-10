@@ -46,6 +46,7 @@ fn should_reject_a_document_with_an_unsupported_bit_key() {
         layers: vec![SensitivityLayerEntry {
             layer_name: "m".to_owned(),
             sensitivities: BTreeMap::from([("7".to_owned(), 0.1)]),
+            metadata: None,
             logical_parameter_count: 1,
         }],
     };
@@ -66,6 +67,7 @@ fn should_reject_a_bit_key_that_is_not_a_number() {
         layers: vec![SensitivityLayerEntry {
             layer_name: "m".to_owned(),
             sensitivities: BTreeMap::from([("four".to_owned(), 0.1)]),
+            metadata: None,
             logical_parameter_count: 1,
         }],
     };

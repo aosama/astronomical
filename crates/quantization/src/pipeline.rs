@@ -21,6 +21,7 @@ use crate::sensitivity::{SensitivityMethod, SensitivityTable};
 pub mod artifact_files;
 #[cfg(feature = "direct-mlx")]
 mod conversion;
+pub mod probe_source_view;
 
 #[cfg(test)]
 #[path = "pipeline_tests.rs"]
@@ -187,21 +188,24 @@ pub fn plan_from_sensitivity_table(
 ///    (or reuse, when present) `_uniform_4bit_baseline/` under the output
 ///    directory with the requantizer at uniform 4 bits, and load the probe
 ///    model from it with the bf16 source directory for streaming; for
-///    `Bfloat16`, load the probe model from the source. Load the calibration
+///    `Bfloat16`, load the probe model from the source (through an indexed
+///    view when the source has no shard index). Load the calibration
 ///    mix with `max(2 * sequence_count, 16)` sequences, then take the first
 ///    `sequence_count` for the sweep. Run the sweep with a checkpoint at
 ///    `<output>/sensitivity_checkpoint.json`. Drop the probe model and
 ///    delete the baseline directory.
 /// 5. Allocate; print the summary and the overshoot note.
 /// 6. Requantize the source with the predicate into `<output>/optiq_mixed/`
-///    (or `static_mixed/`), which is the artifact directory. Every tensor passes through the requantizer, so
-///    multi-token-prediction heads and vision towers ride along in place;
-///    the sidecar-reattachment step OptiQ needs after mlx-lm's convert does
-///    not exist here.
-/// 7. Write `config.json` with both quantization documents, the metadata
-///    reconciled against what was written, and the sensitivity document
-///    (never fatal).
-/// 8. Copy the tokenizer and template files.
+///    (or `static_mixed/`), which is the artifact directory. The language
+///    model is written under mlx-lm's names and layout, the vision and audio
+///    towers go to the bfloat16 sidecar in the same walk, and what mlx-lm
+///    drops (the multi-token-prediction head, a tied output head) is not
+///    written.
+/// 7. Write `config.json` with both quantization documents and the tower
+///    registration, the metadata reconciled against what was written, and
+///    the sensitivity document (never fatal).
+/// 8. Copy the tokenizer, template and processor files, fill in the
+///    family's recommended sampling, and write the model card.
 ///
 /// Peak memory for the sweep is one model plus one tensor's float32 working
 /// copy; for the requantizer, one tensor plus its working copy.

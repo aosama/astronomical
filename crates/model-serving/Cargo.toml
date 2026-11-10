@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-jangtq2-qwen35/direct-mlx"]
+direct-mlx = ["dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
 
 [dependencies]
 astronomical-expert-atlas = { path = "../expert-atlas" }

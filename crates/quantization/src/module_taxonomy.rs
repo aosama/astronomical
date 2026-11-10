@@ -61,8 +61,9 @@ pub enum ModuleRole {
     LinearAttentionProjection,
     /// The mixture-of-experts router: `*.mlp.gate` (Qwen3, where the SwiGLU
     /// gate is `gate_proj` and bare `gate` is the router), `*.router`,
-    /// `*.router.proj` (Gemma-4), `*.ffn.gate.*`, `expert_bias`. Never
-    /// quantized by the requantizer; protected by the allocator.
+    /// `*.router.proj` (Gemma-4), `*.ffn.gate.*`, `expert_bias`. Protected
+    /// by the allocator. Quantized like any other module where it is a
+    /// plain linear layer (Qwen's `mlp.gate`); copied unencoded elsewhere.
     MixtureOfExpertsRouter,
     /// A shared-expert dense sub-MLP that fires for every token
     /// (`.shared_experts.` or `.shared_expert.` segment). Protected.
@@ -92,6 +93,16 @@ pub const LINEAR_ATTENTION_PROJECTION_SUFFIXES: &[&str] = &[
     "in_proj_z",
     "out_proj",
 ];
+
+/// Whether a module is a token or position embedding table rather than a
+/// linear layer. mlx-lm quantizes an embedding table like any other module,
+/// but OptiQ's sensitivity methods walk linear layers only, so a table is
+/// never scored or allocated: it takes the allocation's highest width.
+#[must_use]
+pub fn is_embedding_table_module(module_name: &str) -> bool {
+    let last_segment = module_name.rsplit('.').next().unwrap_or(module_name);
+    matches!(last_segment, "embed_tokens" | "wte" | "wpe")
+}
 
 /// Whether a tensor belongs to a vision or audio tower rather than the
 /// language model. OptiQ never quantizes the towers: mlx-lm's convert drops

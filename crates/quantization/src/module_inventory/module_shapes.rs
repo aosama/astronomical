@@ -154,10 +154,16 @@ impl InventoryWalk {
                 && have_one_shape(&per_expert_tensors, &first_shape);
             if !is_stackable {
                 for per_expert_tensor in per_expert_tensors {
+                    let layout = self
+                        .layout_rules
+                        .layout_for(&per_expert_tensor.tensor_name, &per_expert_tensor.shape);
                     self.pass_through_tensors.push(PassThroughTensor {
                         shard_file_name: per_expert_tensor.shard_file_name,
                         tensor_name: per_expert_tensor.tensor_name,
                         shape: per_expert_tensor.shape,
+                        output_name: layout.output_name,
+                        value_transform: layout.value_transform,
+                        keeps_stored_dtype: layout.keeps_stored_dtype,
                     });
                 }
                 continue;
@@ -231,20 +237,25 @@ impl InventoryWalk {
         source_dtype: SourceTensorDtype,
         weight_source: ModuleWeightSource,
     ) {
+        // The source config keys its per-module widths by the source's own
+        // spelling, so that lookup happens before the output rename.
         let source_quantization = if source_dtype == SourceTensorDtype::MlxAffinePacked {
             self.source_quantization_parameters
                 .parameters_for(&module_name)
         } else {
             None
         };
+        let output_module_name = self.layout_rules.output_module_name(&module_name);
         let descriptor = descriptor_for(
-            module_name.clone(),
+            output_module_name.clone(),
             logical_shape,
             source_dtype,
             weight_source,
             source_quantization,
         );
-        self.modules.insert(module_name, descriptor);
+        self.source_spelling_by_module_name
+            .insert(output_module_name.clone(), module_name);
+        self.modules.insert(output_module_name, descriptor);
     }
 }
 

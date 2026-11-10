@@ -40,6 +40,14 @@ pub struct ShardWriter<Tensor> {
     weight_map: BTreeMap<String, String>,
     temporary_shard_names: Vec<String>,
     total_bytes_written: u64,
+    /// Sum of the buffered tensors' own byte counts, the `total_size` mlx-lm
+    /// records: file bytes would add each shard's header to it.
+    total_tensor_bytes: u64,
+    /// Tensor key → a file written outside the shards (the vision sidecar),
+    /// listed in the index so index-driven loaders find the towers.
+    externally_stored_tensors: BTreeMap<String, String>,
+    /// mlx-lm's `total_parameters` for the index metadata, when known.
+    total_parameter_count: Option<u64>,
 }
 
 impl<Tensor> ShardWriter<Tensor> {
@@ -52,7 +60,24 @@ impl<Tensor> ShardWriter<Tensor> {
             weight_map: BTreeMap::new(),
             temporary_shard_names: Vec::new(),
             total_bytes_written: 0,
+            total_tensor_bytes: 0,
+            externally_stored_tensors: BTreeMap::new(),
+            total_parameter_count: None,
         }
+    }
+
+    /// Lists a tensor stored in `file_name`, a file this writer did not
+    /// write, in the index. OptiQ points the index at the vision sidecar so
+    /// mlx-vlm and the apps built on it load the towers; mlx-lm globs
+    /// `model*.safetensors` and never opens it.
+    pub fn register_externally_stored_tensor(&mut self, tensor_key: String, file_name: &str) {
+        self.externally_stored_tensors
+            .insert(tensor_key, file_name.to_owned());
+    }
+
+    /// Records mlx-lm's `total_parameters` figure for the index metadata.
+    pub const fn set_total_parameter_count(&mut self, total_parameter_count: u64) {
+        self.total_parameter_count = Some(total_parameter_count);
     }
 
     /// Buffers one tensor and flushes when the buffer reaches the limit.
@@ -65,6 +90,7 @@ impl<Tensor> ShardWriter<Tensor> {
     ) -> Result<(), QuantizationError> {
         self.buffered.push((tensor_key, tensor));
         self.buffered_bytes += tensor_bytes;
+        self.total_tensor_bytes += tensor_bytes;
         if self.buffered_bytes >= self.shard_bytes_limit {
             self.flush(flush)?;
         }
@@ -121,13 +147,25 @@ impl<Tensor> ShardWriter<Tensor> {
             }
             final_name_by_temporary_name.insert(temporary_shard_name.clone(), final_shard_name);
         }
+        self.write_index(self.final_weight_map(&final_name_by_temporary_name))?;
+        Ok(shard_count)
+    }
+
+    /// Every tensor key against the file a loader finds it in: a renamed
+    /// shard, or a file written outside the shards.
+    fn final_weight_map(
+        &self,
+        final_name_by_temporary_name: &BTreeMap<String, String>,
+    ) -> BTreeMap<String, String> {
         let mut final_weight_map = BTreeMap::new();
         for (tensor_key, temporary_shard_name) in &self.weight_map {
             let final_shard_name = final_name_by_temporary_name[temporary_shard_name].clone();
             final_weight_map.insert(tensor_key.clone(), final_shard_name);
         }
-        self.write_index(final_weight_map)?;
-        Ok(shard_count)
+        for (tensor_key, file_name) in &self.externally_stored_tensors {
+            final_weight_map.insert(tensor_key.clone(), file_name.clone());
+        }
+        final_weight_map
     }
 
     /// Final shard file name for a temporary name given the total count.
@@ -186,7 +224,8 @@ impl<Tensor> ShardWriter<Tensor> {
     ) -> Result<(), QuantizationError> {
         let shard_index = ShardIndexDocument {
             metadata: ShardIndexMetadata {
-                total_size: self.total_bytes_written,
+                total_size: self.total_tensor_bytes,
+                total_parameters: self.total_parameter_count,
             },
             weight_map: final_weight_map,
         };
@@ -220,4 +259,6 @@ struct ShardIndexDocument {
 #[derive(Serialize)]
 struct ShardIndexMetadata {
     total_size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total_parameters: Option<u64>,
 }

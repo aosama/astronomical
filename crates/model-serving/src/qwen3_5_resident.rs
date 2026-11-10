@@ -2,7 +2,9 @@
 #![allow(unused_imports)]
 
 pub mod dflash_draft;
-mod experts;
+// Crate-visible so the sensitivity probe can swap one routed-expert
+// projection for a re-encoded copy and put the original back.
+pub(crate) mod experts;
 mod host_description;
 mod inference_execution;
 mod model;

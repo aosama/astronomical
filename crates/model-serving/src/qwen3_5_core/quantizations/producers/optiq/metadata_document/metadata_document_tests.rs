@@ -125,8 +125,38 @@ fn should_reject_a_document_without_a_method() {
 }
 
 #[test]
-fn should_recognize_only_the_exact_mixed_precision_method() {
-    assert!(is_mixed_precision_method("optiq_mixed_precision"));
-    assert!(!is_mixed_precision_method("static_mixed_precision"));
-    assert!(!is_mixed_precision_method(""));
+fn should_accept_the_pipeline_layout_under_the_measured_method_name() {
+    // What mlx-optiq's conversion pipeline writes for a measured conversion.
+    let mut document = static_document();
+    document["method"] = json!("optiq_mixed_precision");
+    document["reference"] = json!("bf16");
+
+    assert!(matches!(
+        decode(&document),
+        Ok(OptiQMetadataDocument::Static(_))
+    ));
+}
+
+#[test]
+fn should_accept_a_bfloat16_entry_without_a_group_size() {
+    let mut document = static_document();
+    document["per_layer"]["language_model.model.layers.0.mlp.gate"] =
+        json!({"bits": 16, "group_size": null});
+
+    let per_layer = decode(&document)
+        .expect("the lossless tier should decode")
+        .into_per_layer();
+
+    assert_eq!(
+        per_layer["language_model.model.layers.0.mlp.gate"].group_size,
+        None
+    );
+}
+
+#[test]
+fn should_reject_a_document_whose_default_bits_marks_a_layout_it_does_not_follow() {
+    let mut document = static_document();
+    document["default_bits"] = json!(null);
+
+    assert!(decode(&document).is_err());
 }

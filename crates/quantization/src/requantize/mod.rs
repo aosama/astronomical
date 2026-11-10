@@ -28,6 +28,7 @@
 
 pub mod bit_policy;
 pub mod copied_source_files;
+pub mod mtp_sidecar;
 pub mod requantize_outcome;
 pub mod shard_writer;
 pub mod tensor_plan;
@@ -35,10 +36,13 @@ pub mod tensor_plan;
 #[cfg(feature = "direct-mlx")]
 pub mod driver;
 #[cfg(feature = "direct-mlx")]
+pub mod mtp_sidecar_writer;
+#[cfg(feature = "direct-mlx")]
 pub mod source_tensor_reader;
 
 pub use bit_policy::{BitPolicy, TensorEncodingDecision, policy_from_predicate};
 pub use copied_source_files::DEFAULT_COPY_PATTERNS;
+pub use mtp_sidecar::{MTP_SIDECAR_RELATIVE_PATH, MtpSidecarSummary};
 pub use requantize_outcome::RequantizeOutcome;
 pub use shard_writer::DEFAULT_SHARD_BYTES;
 pub use tensor_plan::{RequantizeTensorPlan, TensorPlanEntry};

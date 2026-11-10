@@ -1,6 +1,6 @@
 {
   "n_layers": 5,
-  "optiq_version": "0.6.5",
+  "optiq_version": "0.8.2",
   "structural_priority": {
     "lm_head": 1.0,
     "model.embed_tokens": 1.0,

@@ -212,6 +212,26 @@ test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization
 # reference_artifact_path.
 test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --ignored"
 
+# Parity with OptiQ on a real base: the structural conversion byte for byte,
+# the calibration sequences token for token, the bit map from OptiQ's own
+# sweep, and the Rust sweep's module ranking. Append --configuration PATH
+# with model_directory (a bfloat16 source) and reference_artifact_path (what
+# crates/quantization/tests/fixtures/build_optiq_reference_artifacts.py wrote
+# from that source; build_optiq_parity_sources.py makes the source from an
+# installed quantized model). The measured sweep takes about three minutes
+# on Qwen3.5 0.8B, hence the fifteen-minute case budget and the optimized
+# build.
+test-quantization-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --release --ignored --case-budget-seconds 900 --filter python_parity"
+
+# Mixture-of-experts probing on a synthetic model: the router and each
+# routed-expert projection are swapped and exactly restored, and the measured
+# sweep ranks modules like OptiQ's. Append --configuration PATH with
+# model_directory (what build_optiq_synthetic_moe_source.py wrote with
+# --tie-word-embeddings) and reference_artifact_path (what
+# build_optiq_reference_artifacts.py --reference uniform_4bit --methods optiq
+# --skip-low-bit wrote from it). Seconds, not minutes: the model is tiny.
+test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --release --ignored --case-budget-seconds 900 --filter mixture_of_experts_sweep"
+
 # Repository tooling as typed Rust; the subcommand catalog lives in the
 # xtask sources. `cargo xtask app dev` rebuilds the Development app
 # (incremental `app-dev` profile, cached icon and npm install, ad-hoc

@@ -74,6 +74,9 @@ fn should_describe_what_was_written_rather_than_the_plan() {
         candidate_bits: &[4, 8],
         group_size: GroupSize::new(64).expect("valid"),
         default_bits: 4,
+        vision_sidecar: None,
+        declares_multimodal_towers: false,
+        mtp_sidecar: None,
         written_quantization_by_module: &written,
     })
     .expect("the documents should be written");
@@ -91,7 +94,8 @@ fn should_describe_what_was_written_rather_than_the_plan() {
         &std::fs::read_to_string(artifact.path().join("optiq/metadata.json")).expect("metadata"),
     )
     .expect("metadata parses");
-    assert!(metadata["per_layer"].get(DOWN_PROJECTION).is_none());
+    assert_eq!(metadata["per_layer"][UP_PROJECTION]["bits"], 4);
+    assert_eq!(metadata["per_layer"][DOWN_PROJECTION]["bits"], 16);
     assert!(artifact.path().join("optiq/sensitivity.json").is_file());
 }
 
@@ -112,6 +116,9 @@ fn should_refuse_when_the_source_config_is_missing() {
         candidate_bits: &[4, 8],
         group_size: GroupSize::new(64).expect("valid"),
         default_bits: 4,
+        vision_sidecar: None,
+        declares_multimodal_towers: false,
+        mtp_sidecar: None,
         written_quantization_by_module: &BTreeMap::new(),
     });
 

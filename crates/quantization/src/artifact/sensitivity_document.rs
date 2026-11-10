@@ -40,6 +40,11 @@ pub struct SensitivityLayerEntry {
     /// Serialized as OptiQ's `param_count`.
     #[serde(rename = "param_count")]
     pub logical_parameter_count: u64,
+    /// OptiQ's free-form per-layer map. A measured sweep's document is its
+    /// checkpoint, which carries the (empty) map; the static scorer's
+    /// document is built without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<BTreeMap<String, serde_json::Value>>,
 }
 
 /// The document.
@@ -62,8 +67,11 @@ impl OptiQSensitivityDocument {
         group_size: GroupSize,
     ) -> Self {
         let mut layers = Vec::with_capacity(table.results.len());
+        let is_measured = table.method != SensitivityMethod::StaticStructuralRules;
         for result in &table.results {
-            layers.push(Self::layer_entry(result));
+            let mut layer_entry = Self::layer_entry(result);
+            layer_entry.metadata = is_measured.then_some(BTreeMap::new());
+            layers.push(layer_entry);
         }
         Self {
             base_model: base_model.to_owned(),
@@ -123,6 +131,7 @@ impl OptiQSensitivityDocument {
             layer_name: result.module_name.clone(),
             sensitivities,
             logical_parameter_count: result.logical_parameter_count,
+            metadata: None,
         }
     }
 }

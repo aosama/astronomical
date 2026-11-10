@@ -1,15 +1,20 @@
 //! `optiq/metadata.json`: the provenance and the final per-module bit map.
 //!
-//! Published OptiQ artifacts carry one of two layouts, chosen by `method`:
-//! the sensitivity-driven `optiq_mixed_precision` layout (default bits, the
-//! widths used and how many modules sit at each) and the static allocator's
-//! layout (reference, target and achieved bits per weight). Astronomical's
-//! strict `OptiQMetadata` reader accepts exactly these two shapes, rejects
-//! any other key, and requires every `per_layer` entry to match the
-//! `config.json` override for the same module. So `per_layer` lists only the
-//! modules that were quantized, with the parameters they were written at,
-//! never the plan: the requantizer can drop a module to group size 32 or
-//! pass a router through.
+//! OptiQ's pipeline writes one layout for every method: the method and its
+//! reference, the target and achieved bits per weight, how many modules sit
+//! at the ladder's ends, and `per_layer` for every module the allocator
+//! decided. Older published artifacts carry a second, summary-style
+//! `optiq_mixed_precision` layout (default bits, the widths used and how
+//! many modules sit at each); it is still read, and never written.
+//!
+//! `per_layer` describes the weights that were written, never the plan: the
+//! requantizer can drop a module to a smaller group size or leave one at
+//! bfloat16, and Astronomical's strict reader requires every quantized
+//! entry to match the `config.json` override for the same module. A module
+//! the allocator decided that was left at bfloat16 is recorded at 16 bits,
+//! OptiQ's lossless tier. Modules the allocator never saw (the embedding
+//! table, written at the allocation's highest width) appear in
+//! `config.json` only, as in OptiQ's own artifacts.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -36,8 +41,8 @@ pub struct PerLayerEntry {
     pub group_size: u32,
 }
 
-/// The `optiq_mixed_precision` layout, written by sensitivity-driven
-/// conversions.
+/// The summary-style layout older published artifacts carry; read, never
+/// written.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MixedPrecisionMetadata {
@@ -61,8 +66,7 @@ pub struct MixedPrecisionMetadata {
     pub per_layer: BTreeMap<String, PerLayerEntry>,
 }
 
-/// The static allocator's layout, also written by OptiQ's measured pipeline
-/// before `method` carried a version.
+/// The layout OptiQ's pipeline writes for every method.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StaticAllocationMetadata {
@@ -92,92 +96,70 @@ pub enum OptiQArtifactMetadata {
 }
 
 impl OptiQArtifactMetadata {
-    /// An empty document in the layout `method` writes; `per_layer` is filled
-    /// by [`Self::describe_written_artifact`] once the weights exist.
+    /// An empty document for `method`; `per_layer` is filled by
+    /// [`Self::describe_written_artifact`] once the weights exist.
     #[must_use]
-    pub fn for_method(method: SensitivityMethod, base_model: &str, group_size: u32) -> Self {
-        let method_name = Self::method_name(method).to_owned();
-        if method == SensitivityMethod::StaticStructuralRules {
-            return Self::StaticAllocation(StaticAllocationMetadata {
-                method: method_name,
-                base_model: base_model.to_owned(),
-                reference: Self::reference_name(method).to_owned(),
-                sensitivity_measured_on: None,
-                target_bpw: 0.0,
-                achieved_bpw: 0.0,
-                n_high_bits: 0,
-                n_low_bits: 0,
-                threshold: 0.0,
-                per_layer: BTreeMap::new(),
-            });
-        }
-        Self::MixedPrecision(MixedPrecisionMetadata {
-            method: method_name,
+    pub fn for_method(method: SensitivityMethod, base_model: &str) -> Self {
+        Self::StaticAllocation(StaticAllocationMetadata {
+            method: Self::method_name(method).to_owned(),
             base_model: base_model.to_owned(),
-            default_bits: 0,
-            group_size,
-            bit_widths_used: Vec::new(),
-            layers_per_bit_width: BTreeMap::new(),
-            n_quantized_layers: 0,
-            recipe_reused_from: None,
-            recipe_note: None,
+            reference: Self::reference_name(method).to_owned(),
             sensitivity_measured_on: None,
+            target_bpw: 0.0,
+            achieved_bpw: 0.0,
+            n_high_bits: 0,
+            n_low_bits: 0,
+            threshold: 0.0,
             per_layer: BTreeMap::new(),
         })
     }
 
-    /// The planned document from an allocation: the allocation's figures and
-    /// its quantized decisions (keep-bfloat16 modules are not listed).
+    /// The planned document from an allocation: its figures and every
+    /// decision, the keep-bfloat16 tier recorded at 16 bits.
     #[must_use]
     pub fn from_allocation(
         allocation: &AllocationResult,
         base_model: &str,
         method: SensitivityMethod,
     ) -> Self {
-        let mut planned_quantization_by_module = BTreeMap::new();
-        let mut group_size = DEFAULT_GROUP_SIZE;
+        let mut per_layer = BTreeMap::new();
         for decision in &allocation.decisions {
-            if !decision.bit_width.keeps_bfloat16() {
-                group_size = decision.group_size.elements();
-                let planned_parameters = (decision.bit_width.bits(), group_size);
-                planned_quantization_by_module
-                    .insert(decision.module_name.clone(), planned_parameters);
-            }
+            per_layer.insert(
+                decision.module_name.clone(),
+                PerLayerEntry {
+                    bits: decision.bit_width.bits(),
+                    group_size: decision.group_size.elements(),
+                },
+            );
         }
-        let mut metadata = Self::for_method(method, base_model, group_size);
+        let mut metadata = Self::for_method(method, base_model);
         if let Self::StaticAllocation(static_metadata) = &mut metadata {
             static_metadata.target_bpw = allocation.target_bits_per_weight;
             static_metadata.achieved_bpw = allocation.achieved_bits_per_weight;
             static_metadata.n_high_bits = allocation.module_count_at_highest_width;
             static_metadata.n_low_bits = allocation.module_count_at_lowest_width;
+            static_metadata.per_layer = per_layer;
         }
-        metadata.describe_written_artifact(&planned_quantization_by_module);
         metadata
     }
 
-    /// Makes `per_layer` describe exactly the weights that were written,
-    /// `(bits, group_size)` per quantized module, and recomputes the mixed
-    /// layout's summary from it. A planned module that was not written
-    /// (passed through at bfloat16) leaves the map.
+    /// Makes `per_layer` describe the weights that were written. A planned
+    /// module takes the `(bits, group_size)` it was written at, or 16 bits
+    /// when it was left at bfloat16. A document with no plan (built by
+    /// [`Self::for_method`]) lists every written module. The older summary
+    /// layout lists every written module and recomputes its summary.
     pub fn describe_written_artifact(
         &mut self,
         written_quantization_by_module: &BTreeMap<String, (u32, u32)>,
     ) {
-        let mut per_layer = BTreeMap::new();
-        for (module_name, (bits, group_size)) in written_quantization_by_module {
-            per_layer.insert(
-                module_name.clone(),
-                PerLayerEntry {
-                    bits: *bits,
-                    group_size: *group_size,
-                },
-            );
-        }
         match self {
             Self::MixedPrecision(mixed_metadata) => {
-                summarize_mixed_precision(mixed_metadata, per_layer);
+                let written_per_layer = per_layer_from_written(written_quantization_by_module);
+                summarize_mixed_precision(mixed_metadata, written_per_layer);
             }
-            Self::StaticAllocation(static_metadata) => static_metadata.per_layer = per_layer,
+            Self::StaticAllocation(static_metadata) => {
+                describe_written_static_allocation(static_metadata, written_quantization_by_module);
+            }
         }
     }
 
@@ -216,8 +198,47 @@ impl OptiQArtifactMetadata {
     }
 }
 
-/// OptiQ's default group size, recorded when an allocation quantizes nothing.
-const DEFAULT_GROUP_SIZE: u32 = 64;
+/// OptiQ's lossless tier: a module left at bfloat16 is recorded at 16 bits.
+const KEEP_BFLOAT16_BITS: u32 = 16;
+
+/// The pipeline layout's `per_layer`: every written module when there was
+/// no plan, otherwise each planned module at the width it was written at,
+/// or 16 bits when it was left at bfloat16.
+fn describe_written_static_allocation(
+    static_metadata: &mut StaticAllocationMetadata,
+    written_quantization_by_module: &BTreeMap<String, (u32, u32)>,
+) {
+    if static_metadata.per_layer.is_empty() {
+        static_metadata.per_layer = per_layer_from_written(written_quantization_by_module);
+        return;
+    }
+    for (module_name, per_layer_entry) in &mut static_metadata.per_layer {
+        match written_quantization_by_module.get(module_name) {
+            Some((bits, group_size)) => {
+                per_layer_entry.bits = *bits;
+                per_layer_entry.group_size = *group_size;
+            }
+            None => per_layer_entry.bits = KEEP_BFLOAT16_BITS,
+        }
+    }
+}
+
+/// Every written module as a `per_layer` map.
+fn per_layer_from_written(
+    written_quantization_by_module: &BTreeMap<String, (u32, u32)>,
+) -> BTreeMap<String, PerLayerEntry> {
+    let mut per_layer = BTreeMap::new();
+    for (module_name, (bits, group_size)) in written_quantization_by_module {
+        per_layer.insert(
+            module_name.clone(),
+            PerLayerEntry {
+                bits: *bits,
+                group_size: *group_size,
+            },
+        );
+    }
+    per_layer
+}
 
 /// Sets the per-layer map and the summary the mixed layout derives from it:
 /// the lowest width as the default, the sorted widths used, and the count at

@@ -9,9 +9,12 @@ use crate::qwen3_5_core::quantizations::mlx_quantization::document::{
     is_mlx_affine_quantization_group_size_supported,
 };
 
-use super::metadata_document::OptiQMetadataDocument;
+use super::metadata_document::{OptiQMetadataDocument, OptiQPerLayerOverride};
 
 const MAXIMUM_OPTIQ_METADATA_BYTES: usize = 128 * 1024;
+
+/// The width OptiQ records for a module kept at bfloat16.
+const KEEP_BFLOAT16_BITS: u32 = 16;
 /// Strict metadata for the measured portion of the pinned OptiQ bit map.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OptiQMetadata {
@@ -22,8 +25,8 @@ impl OptiQMetadata {
     /// Parses and validates the complete bounded OptiQ metadata document.
     ///
     /// Three document shapes are accepted. A document carrying `per_layer` is a
-    /// measured bit-map in either the `optiq_mixed_precision` or the static
-    /// allocator layout and keeps the exact strict contract: unknown fields are
+    /// measured bit-map in either the summary layout or the pipeline layout
+    /// and keeps the exact strict contract: unknown fields are
     /// rejected and every measured profile must match the config. A document
     /// without `per_layer` is provenance-only (expert-compressed variants such
     /// as REAP-pruned or merged artifacts publish compression-run evidence
@@ -38,37 +41,11 @@ impl OptiQMetadata {
             });
         }
         match OptiQMetadataDocument::from_json_bytes(metadata_bytes) {
-            Ok(metadata_document) => {
-                let mut measured_module_profiles = BTreeMap::new();
-                for (module_name, quantization_override) in metadata_document.into_per_layer() {
-                    if !is_mlx_affine_quantization_group_size_supported(
-                        quantization_override.group_size,
-                    ) {
-                        return Err(OptiQMetadataError::UnsupportedGroupSize {
-                            module_name,
-                            actual_group_size: quantization_override.group_size,
-                        });
-                    }
-                    if !is_mlx_affine_quantization_bit_width_supported(quantization_override.bits) {
-                        return Err(OptiQMetadataError::UnsupportedBits {
-                            module_name,
-                            actual_bits: quantization_override.bits,
-                        });
-                    }
-                    measured_module_profiles.insert(
-                        module_name,
-                        // Measured metadata describes affine OptiQ runs;
-                        // codebook storage never carries measured metadata.
-                        ModuleQuantizationProfile::affine(
-                            quantization_override.bits,
-                            quantization_override.group_size,
-                        ),
-                    );
-                }
-                Ok(Self {
-                    measured_module_profiles,
-                })
-            }
+            Ok(metadata_document) => Ok(Self {
+                measured_module_profiles: measured_module_profiles_of(
+                    metadata_document.into_per_layer(),
+                )?,
+            }),
             Err(deserialization_error) => {
                 Self::provenance_only_from_json_bytes(metadata_bytes, deserialization_error)
             }
@@ -145,6 +122,52 @@ impl OptiQMetadata {
         }
         Ok(())
     }
+}
+
+/// The quantized modules a `per_layer` map claims, each checked against the
+/// MLX affine grid.
+fn measured_module_profiles_of(
+    per_layer: BTreeMap<String, OptiQPerLayerOverride>,
+) -> Result<BTreeMap<String, ModuleQuantizationProfile>, OptiQMetadataError> {
+    let mut measured_module_profiles = BTreeMap::new();
+    for (module_name, quantization_override) in per_layer {
+        // OptiQ's lossless tier: the allocator decided the module and the
+        // conversion left it at bfloat16. There is no packed weight and no
+        // config override to hold it to, so it is not a measured quantized
+        // module.
+        if quantization_override.bits == KEEP_BFLOAT16_BITS {
+            continue;
+        }
+        let measured_profile = measured_profile_of(&module_name, &quantization_override)?;
+        measured_module_profiles.insert(module_name, measured_profile);
+    }
+    Ok(measured_module_profiles)
+}
+
+/// One quantized entry as an affine profile, refused off the MLX grid.
+/// Measured metadata describes affine OptiQ runs; codebook storage never
+/// carries measured metadata.
+fn measured_profile_of(
+    module_name: &str,
+    quantization_override: &OptiQPerLayerOverride,
+) -> Result<ModuleQuantizationProfile, OptiQMetadataError> {
+    let declared_group_size = quantization_override.group_size.unwrap_or(0);
+    if !is_mlx_affine_quantization_group_size_supported(declared_group_size) {
+        return Err(OptiQMetadataError::UnsupportedGroupSize {
+            module_name: module_name.to_owned(),
+            actual_group_size: declared_group_size,
+        });
+    }
+    if !is_mlx_affine_quantization_bit_width_supported(quantization_override.bits) {
+        return Err(OptiQMetadataError::UnsupportedBits {
+            module_name: module_name.to_owned(),
+            actual_bits: quantization_override.bits,
+        });
+    }
+    Ok(ModuleQuantizationProfile::affine(
+        quantization_override.bits,
+        declared_group_size,
+    ))
 }
 
 /// A strict mismatch in the pinned OptiQ sensitivity metadata.

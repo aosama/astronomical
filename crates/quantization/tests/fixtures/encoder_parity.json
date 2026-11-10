@@ -2888,7 +2888,7 @@
     ]
   },
   "mlx_version": "0.32.4",
-  "optiq_version": "0.6.5",
+  "optiq_version": "0.8.2",
   "rows": 8,
   "weights_row_major": [
     -0.0057781836949288845,

@@ -31,6 +31,7 @@ direct-mlx = ["dep:mlx-bridge", "dep:astronomical-runtime-integration"]
 [dependencies]
 mlx-bridge = { workspace = true, optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+minijinja.workspace = true
 safetensors.workspace = true
 serde.workspace = true
 serde_json.workspace = true

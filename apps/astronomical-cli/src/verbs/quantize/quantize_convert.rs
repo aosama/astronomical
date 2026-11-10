@@ -127,7 +127,7 @@ fn pipeline_request_from(
 }
 
 /// `hw.memsize`, the one input the machine ceiling is computed from.
-fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
+pub(super) fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
     let sysctl_output = match Command::new(SYSCTL_EXECUTABLE_PATH)
         .arg("-n")
         .arg(PHYSICAL_MEMORY_SIZE_SYSCTL_KEY)
@@ -152,7 +152,9 @@ fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
 
 /// The ceiling as both the active limit and the allocator-cache limit, the
 /// conversion being the only MLX tenant of this process.
-fn memory_limits_for(machine_ceiling_bytes: u64) -> Result<MlxMemoryLimits, QuantizeError> {
+pub(super) fn memory_limits_for(
+    machine_ceiling_bytes: u64,
+) -> Result<MlxMemoryLimits, QuantizeError> {
     let ceiling_bytes = usize::try_from(machine_ceiling_bytes).unwrap_or(usize::MAX);
     match MlxMemoryLimits::new(ceiling_bytes, ceiling_bytes) {
         Ok(memory_limits) => Ok(memory_limits),
