@@ -27,6 +27,7 @@ final class NeuralEngineStatusTests: XCTestCase {
   }
 
   private func after(_ seconds: TimeInterval) -> Date { startedAt.addingTimeInterval(seconds) }
+  private let announcementDelay = NeuralEngineBannerPolicy.preparationAnnouncementDelay
 
   func test_should_count_programs_in_the_menu_bar_while_idle() throws {
     let statusDocument = try statusDocument(prefillJSON: preparingJSON)
@@ -90,10 +91,37 @@ final class NeuralEngineStatusTests: XCTestCase {
     let preparing = try statusDocument(prefillJSON: preparingJSON)
 
     XCTAssertNil(policy.banner(for: preparing, at: startedAt))
-    XCTAssertNil(policy.banner(for: preparing, at: after(4.9)))
+    XCTAssertNil(policy.banner(for: preparing, at: after(announcementDelay - 0.1)))
     XCTAssertEqual(
-      policy.banner(for: preparing, at: after(5))?.title, "Prepping Apple Neural Engine")
-    XCTAssertNil(policy.banner(for: preparing, at: after(30)))
+      policy.banner(for: preparing, at: after(announcementDelay))?.title,
+      "Prepping Apple Neural Engine")
+    XCTAssertNil(policy.banner(for: preparing, at: after(announcementDelay + 30)))
+  }
+
+  // macOS prepares kept programs again after it drops its own copies, in 16 to 37 seconds for a 9B
+  // model (issue #2064). That wait is not worth a banner promising another banner.
+  func test_should_stay_quiet_through_a_half_minute_re_preparation() throws {
+    var policy = NeuralEngineBannerPolicy()
+    let preparing = try statusDocument(prefillJSON: preparingJSON)
+
+    for elapsedSeconds in stride(from: 0.0, through: 37.0, by: 1.0) {
+      XCTAssertNil(policy.banner(for: preparing, at: after(elapsedSeconds)))
+    }
+
+    let banner = policy.banner(for: try statusDocument(prefillJSON: activeJSON), at: after(38))
+    XCTAssertEqual(banner?.title, "Apple Neural Engine ready and engaged")
+  }
+
+  func test_should_not_announce_a_preparation_that_ends_just_before_the_delay() throws {
+    var policy = NeuralEngineBannerPolicy()
+    _ = policy.banner(for: try statusDocument(prefillJSON: preparingJSON), at: startedAt)
+
+    let banner = policy.banner(
+      for: try statusDocument(prefillJSON: activeJSON), at: after(announcementDelay - 0.1))
+
+    XCTAssertEqual(banner?.title, "Apple Neural Engine ready and engaged")
+    XCTAssertNil(
+      policy.banner(for: try statusDocument(prefillJSON: activeJSON), at: after(announcementDelay)))
   }
 
   func test_should_promise_the_second_banner_in_the_first() throws {
@@ -101,7 +129,7 @@ final class NeuralEngineStatusTests: XCTestCase {
     let preparing = try statusDocument(prefillJSON: preparingJSON)
     _ = policy.banner(for: preparing, at: startedAt)
 
-    let body = try XCTUnwrap(policy.banner(for: preparing, at: after(5))?.body)
+    let body = try XCTUnwrap(policy.banner(for: preparing, at: after(announcementDelay))?.body)
 
     XCTAssertTrue(body.contains("Will notify you when engaged"), body)
   }
@@ -110,7 +138,8 @@ final class NeuralEngineStatusTests: XCTestCase {
     var policy = NeuralEngineBannerPolicy()
     _ = policy.banner(for: try statusDocument(prefillJSON: preparingJSON), at: startedAt)
 
-    let banner = policy.banner(for: try statusDocument(prefillJSON: activeJSON), at: after(60))
+    let banner = policy.banner(
+      for: try statusDocument(prefillJSON: activeJSON), at: after(announcementDelay + 60))
 
     XCTAssertEqual(banner?.title, "Apple Neural Engine ready and engaged")
     XCTAssertEqual(
@@ -175,7 +204,8 @@ final class NeuralEngineStatusTests: XCTestCase {
     XCTAssertNil(policy.banner(for: DaemonStatusDocument.unavailable, at: after(2)))
 
     XCTAssertEqual(
-      policy.banner(for: try statusDocument(prefillJSON: preparingJSON), at: after(5))?.title,
+      policy.banner(
+        for: try statusDocument(prefillJSON: preparingJSON), at: after(announcementDelay))?.title,
       "Prepping Apple Neural Engine")
   }
 
@@ -185,9 +215,10 @@ final class NeuralEngineStatusTests: XCTestCase {
 
     let secondModel = try statusDocument(prefillJSON: preparingJSON, modelIdentifier: "second-model")
 
-    XCTAssertNil(policy.banner(for: secondModel, at: after(5)))
+    XCTAssertNil(policy.banner(for: secondModel, at: after(announcementDelay)))
     XCTAssertEqual(
-      policy.banner(for: secondModel, at: after(10))?.title, "Prepping Apple Neural Engine")
+      policy.banner(for: secondModel, at: after(2 * announcementDelay))?.title,
+      "Prepping Apple Neural Engine")
   }
 
   func test_should_hide_the_estimate_while_a_request_runs() throws {
@@ -210,7 +241,9 @@ final class NeuralEngineStatusTests: XCTestCase {
         "total_program_count":2,"elapsed_ms":1,"estimated_remaining_ms":null}}
         """#.utf8))
 
-    XCTAssertNil(policy.banner(for: swapping, at: after(5)))
-    XCTAssertNil(policy.banner(for: try statusDocument(prefillJSON: preparingJSON), at: after(6)))
+    XCTAssertNil(policy.banner(for: swapping, at: after(announcementDelay)))
+    XCTAssertNil(
+      policy.banner(
+        for: try statusDocument(prefillJSON: preparingJSON), at: after(announcementDelay + 1)))
   }
 }

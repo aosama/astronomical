@@ -8,10 +8,17 @@
 //! the slow first load, which is why these are built where they will stay and are not
 //! shipped.
 //!
-//! macOS keeps its copies per app and drops them when the app's binary changes: a 9B
-//! model's 56 programs took 94 s to load after a rebuild, then 43 s, 13 s and 2.5 s
-//! over the next three loads of the same build, with nothing else changed. Writing a
-//! program to its kept path is not the slow part, at about 0.02 s each.
+//! What macOS keeps is its own chip-format copy of each program, in a system store an
+//! app cannot read, about as large as the program's weights. When that copy is gone,
+//! the next load compiles the program again even though the kept `.mlmodelc` is
+//! reused: about 0.75 s per 151-million-weight MLP program, whatever the weights'
+//! encoding, so a 9B model's 32 MLP programs take about half a minute where a load
+//! with the copies present takes about 2 s (issue #2064). A macOS update removes
+//! the copies, and some have also gone between app updates on one macOS version for
+//! a reason not yet found. A rebuilt binary is not that reason: one with a new code
+//! hash and the same name loaded a kept program with no compilation, while a renamed
+//! one compiled it again, which points to the copies following the process identity.
+//! Writing a program to its kept path is not the slow part, at about 0.02 s each.
 
 use std::fs;
 use std::path::{Path, PathBuf};
