@@ -235,7 +235,7 @@ impl ProgressReporter for RecordingProgressReporter {
 }
 
 /// Deterministic bf16 weights of the given shape.
-fn bfloat16_weight(runtime: &MlxRuntime, shape: &[usize]) -> MlxArray {
+pub(super) fn bfloat16_weight(runtime: &MlxRuntime, shape: &[usize]) -> MlxArray {
     let element_count: usize = shape.iter().product();
     let mut signed_shape = Vec::with_capacity(shape.len());
     for extent in shape {
@@ -250,7 +250,7 @@ fn bfloat16_weight(runtime: &MlxRuntime, shape: &[usize]) -> MlxArray {
 }
 
 /// One-shard source written through MLX's own safetensors writer.
-fn save_source(
+pub(super) fn save_source(
     runtime: &MlxRuntime,
     directory: &Path,
     named_arrays: &[(&str, &MlxArray)],

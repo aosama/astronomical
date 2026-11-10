@@ -176,3 +176,56 @@ fn should_reject_measured_optiq_metadata_with_unknown_fields() {
         OptiQMetadataError::DeserializeMetadata(_)
     ));
 }
+
+#[test]
+fn should_accept_the_measured_pipeline_layout_and_not_count_modules_kept_at_bfloat16() {
+    // What mlx-optiq's pipeline writes for a measured conversion: the
+    // pipeline layout under the measured method name, with a module the
+    // conversion left at bfloat16 recorded at 16 bits.
+    let optiq_metadata_bytes = serde_json::to_vec(&json!({
+        "method": "optiq_mixed_precision",
+        "base_model": "example/base",
+        "reference": "bf16",
+        "target_bpw": 5.0,
+        "achieved_bpw": 5.6,
+        "n_high_bits": 1,
+        "n_low_bits": 1,
+        "threshold": 0.0,
+        "per_layer": {
+            "language_model.model.layers.0.mlp.up_proj": {"bits": 8, "group_size": 64},
+            "language_model.model.layers.0.mlp.gate": {"bits": 16, "group_size": null},
+            "language_model.model.layers.0.mlp.down_proj": {"bits": 16, "group_size": 64}
+        }
+    }))
+    .expect("the measured OptiQ metadata fixture should serialize");
+
+    let optiq_metadata = OptiQMetadata::from_json_bytes(&optiq_metadata_bytes)
+        .expect("the measured pipeline layout should be accepted");
+
+    assert_eq!(optiq_metadata.measured_module_count(), 1);
+}
+
+#[test]
+fn should_reject_a_quantized_optiq_entry_without_a_group_size() {
+    let optiq_metadata_bytes = serde_json::to_vec(&json!({
+        "method": "optiq_mixed_precision",
+        "base_model": "example/base",
+        "reference": "bf16",
+        "target_bpw": 5.0,
+        "achieved_bpw": 5.6,
+        "n_high_bits": 1,
+        "n_low_bits": 0,
+        "threshold": 0.0,
+        "per_layer": {
+            "language_model.model.layers.0.mlp.up_proj": {"bits": 8, "group_size": null}
+        }
+    }))
+    .expect("the fixture should serialize");
+
+    let rejection = OptiQMetadata::from_json_bytes(&optiq_metadata_bytes);
+
+    assert!(matches!(
+        rejection,
+        Err(OptiQMetadataError::UnsupportedGroupSize { .. })
+    ));
+}

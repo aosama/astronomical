@@ -26,17 +26,21 @@ use astronomical_quantization::progress::{EtaEstimate, ProgressReporter, StagePr
 mod quantize_arguments;
 #[cfg(feature = "quantize-convert")]
 mod quantize_convert;
+#[cfg(feature = "quantize-convert")]
+mod quantize_evaluate;
 mod quantize_reports;
 
 pub use quantize_arguments::{
     DEFAULT_CALIBRATION_SEQUENCE_COUNT, DEFAULT_CANDIDATE_BITS, DEFAULT_FLOOR_COMPONENTS_PER_BLOCK,
     DEFAULT_GROUP_SIZE, DEFAULT_MAXIMUM_LOW_BIT_BLOCK_RUN, DEFAULT_RANGE_SEARCH_MAXIMUM_BITS,
     DEFAULT_TARGET_BITS_PER_WEIGHT, QuantizeCommand, QuantizeConvertArguments,
-    QuantizeInspectArguments, QuantizeMethodArgument, QuantizePlanArguments,
-    QuantizeReferenceArgument, parse_candidate_bits, parse_quantize_command,
+    QuantizeEvaluateArguments, QuantizeInspectArguments, QuantizeMethodArgument,
+    QuantizePlanArguments, QuantizeReferenceArgument, parse_candidate_bits, parse_quantize_command,
 };
 #[cfg(feature = "quantize-convert")]
 pub use quantize_convert::run_quantize_convert;
+#[cfg(feature = "quantize-convert")]
+pub use quantize_evaluate::run_quantize_evaluate;
 
 /// Failures of the quantize verb.
 #[derive(Debug, thiserror::Error)]
@@ -49,6 +53,10 @@ pub enum QuantizeError {
         "astronomical quantize convert is not compiled into this binary; build the CLI with the quantize-convert feature (cargo build -p astronomical-cli --features quantize-convert) to run conversions in-process"
     )]
     ConvertNotCompiledIn,
+    #[error(
+        "astronomical quantize evaluate is not compiled into this binary; build the CLI with the quantize-convert feature (cargo build -p astronomical-cli --features quantize-convert) to run evaluations in-process"
+    )]
+    EvaluateNotCompiledIn,
     #[error("the artifact metadata at {metadata_path} could not be read: {description}")]
     MetadataUnreadable {
         metadata_path: std::path::PathBuf,
@@ -128,6 +136,25 @@ pub fn run_quantize_plan(
     render_outcome.map_err(QuantizeError::stdout_unwritable)
 }
 
+/// Runs whichever quantize sub-verb was parsed.
+pub fn run_quantize_command(
+    quantize_command: &QuantizeCommand,
+    dependencies: &mut QuantizeDependencies<'_>,
+) -> Result<(), QuantizeError> {
+    match quantize_command {
+        QuantizeCommand::Plan(plan_arguments) => run_quantize_plan(plan_arguments, dependencies),
+        QuantizeCommand::Inspect(inspect_arguments) => {
+            run_quantize_inspect(inspect_arguments, dependencies)
+        }
+        QuantizeCommand::Convert(convert_arguments) => {
+            run_quantize_convert(convert_arguments, dependencies)
+        }
+        QuantizeCommand::Evaluate(evaluate_arguments) => {
+            run_quantize_evaluate(evaluate_arguments, dependencies)
+        }
+    }
+}
+
 /// `quantize inspect`: print an artifact's quantization provenance. A
 /// directory with no metadata is reported as "not an OptiQ-format
 /// artifact" and succeeds, because inspecting a plain model is a valid
@@ -169,6 +196,16 @@ pub fn run_quantize_convert(
 ) -> Result<(), QuantizeError> {
     let _ = (convert_arguments, dependencies);
     Err(QuantizeError::ConvertNotCompiledIn)
+}
+
+/// Without the feature the verb explains how to get a build that has it.
+#[cfg(not(feature = "quantize-convert"))]
+pub fn run_quantize_evaluate(
+    evaluate_arguments: &QuantizeEvaluateArguments,
+    dependencies: &mut QuantizeDependencies<'_>,
+) -> Result<(), QuantizeError> {
+    let _ = (evaluate_arguments, dependencies);
+    Err(QuantizeError::EvaluateNotCompiledIn)
 }
 
 impl QuantizeError {

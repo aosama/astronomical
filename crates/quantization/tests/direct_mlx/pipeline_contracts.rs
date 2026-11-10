@@ -127,6 +127,14 @@ fn should_sweep_against_the_bfloat16_source_when_it_fits() {
         outcome.artifact_directory,
         request.output_directory.join("optiq_mixed")
     );
+    // The single-file source has no shard index, so the probe was handed an
+    // indexed view of it, and the view is gone once the sweep ends.
+    assert!(
+        !request
+            .output_directory
+            .join("_indexed_source_view")
+            .exists()
+    );
 }
 
 #[test]
@@ -206,7 +214,13 @@ impl ProbeModelLoader for Bfloat16ReferenceLoader {
         probe_directory: &Path,
         streaming_source_directory: Option<&Path>,
     ) -> Result<Box<dyn ProbeModelHandle>, QuantizationError> {
-        assert!(probe_directory.ends_with("source"));
+        assert!(probe_directory.ends_with("_indexed_source_view"));
+        assert!(
+            probe_directory
+                .join("model.safetensors.index.json")
+                .is_file()
+        );
+        assert!(probe_directory.join("model.safetensors").is_file());
         assert!(streaming_source_directory.is_none());
         Ok(Box::new(FixedTableProbe))
     }

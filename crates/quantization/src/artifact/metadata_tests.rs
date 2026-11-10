@@ -29,15 +29,13 @@ fn should_name_methods_and_references_the_way_optiq_does() {
 }
 
 #[test]
-fn should_list_only_the_written_modules_at_their_written_parameters() {
+fn should_list_only_the_written_modules_when_there_is_no_plan() {
     let mut metadata = OptiQArtifactMetadata::for_method(
         SensitivityMethod::ExactBfloat16Reference,
         "example/base",
-        64,
     );
-    metadata.describe_written_artifact(&written(&[("model.layers.0.mlp.gate", 4, 64)]));
 
-    // The router was passed through and the up projection dropped to group 32.
+    // The up projection dropped to group 32 on the way out.
     metadata.describe_written_artifact(&written(&[("model.layers.0.mlp.up_proj", 4, 32)]));
 
     assert_eq!(metadata.per_layer().len(), 1);
@@ -51,12 +49,32 @@ fn should_list_only_the_written_modules_at_their_written_parameters() {
 }
 
 #[test]
-fn should_summarize_the_mixed_layout_the_way_published_quants_do() {
-    let mut metadata = OptiQArtifactMetadata::for_method(
+fn should_write_one_layout_for_measured_and_structural_methods() {
+    let measured = OptiQArtifactMetadata::for_method(
         SensitivityMethod::ExactBfloat16Reference,
         "example/base",
-        64,
     );
+    let structural =
+        OptiQArtifactMetadata::for_method(SensitivityMethod::StaticStructuralRules, "example/base");
+
+    let measured_document = serde_json::to_value(&measured).expect("the document serializes");
+    let structural_document = serde_json::to_value(&structural).expect("the document serializes");
+
+    assert_eq!(measured_document["method"], "optiq_mixed_precision");
+    assert_eq!(measured_document["reference"], "bf16");
+    assert_eq!(measured_document["threshold"], 0.0);
+    assert!(measured_document.get("default_bits").is_none());
+    assert_eq!(structural_document["method"], "static_mixed_precision");
+    assert_eq!(structural_document["reference"], "structural_rules");
+}
+
+#[test]
+fn should_resummarize_a_published_summary_layout_document() {
+    let published = r#"{"method": "optiq_mixed_precision", "base_model": "b", "default_bits": 4,
+        "group_size": 64, "bit_widths_used": [4], "layers_per_bit_width": {"4": 1},
+        "n_quantized_layers": 1, "per_layer": {"m": {"bits": 4, "group_size": 64}}}"#;
+    let mut metadata: OptiQArtifactMetadata =
+        serde_json::from_str(published).expect("a published document should parse");
 
     metadata.describe_written_artifact(&written(&[
         ("model.embed_tokens", 8, 64),
@@ -65,29 +83,10 @@ fn should_summarize_the_mixed_layout_the_way_published_quants_do() {
     ]));
 
     let serialized = serde_json::to_value(&metadata).expect("the document should serialize");
-    assert_eq!(serialized["method"], "optiq_mixed_precision");
     assert_eq!(serialized["default_bits"], 4);
     assert_eq!(serialized["bit_widths_used"], serde_json::json!([4, 8]));
     assert_eq!(serialized["layers_per_bit_width"]["4"], 2);
     assert_eq!(serialized["n_quantized_layers"], 3);
-    assert!(serialized.get("reference").is_none());
-    assert!(serialized.get("recipe_note").is_none());
-}
-
-#[test]
-fn should_write_the_static_layout_for_the_structural_method() {
-    let metadata = OptiQArtifactMetadata::for_method(
-        SensitivityMethod::StaticStructuralRules,
-        "example/base",
-        64,
-    );
-
-    let serialized = serde_json::to_value(&metadata).expect("the document should serialize");
-
-    assert_eq!(serialized["method"], "static_mixed_precision");
-    assert_eq!(serialized["reference"], "structural_rules");
-    assert_eq!(serialized["threshold"], 0.0);
-    assert!(serialized.get("default_bits").is_none());
 }
 
 #[test]
@@ -108,7 +107,7 @@ fn should_read_back_a_published_mixed_document_and_refuse_unknown_keys() {
 }
 
 #[test]
-fn should_leave_keep_bfloat16_decisions_out_of_the_planned_document() {
+fn should_record_the_plan_then_describe_what_was_written() {
     let allocation = AllocationResult {
         decisions: vec![
             crate::allocation::ModuleQuantizationDecision {
@@ -135,15 +134,34 @@ fn should_leave_keep_bfloat16_decisions_out_of_the_planned_document() {
         non_finite_module_names: Vec::new(),
     };
 
-    let metadata = OptiQArtifactMetadata::from_allocation(
+    let mut metadata = OptiQArtifactMetadata::from_allocation(
         &allocation,
         "example/base",
         SensitivityMethod::StaticStructuralRules,
     );
 
-    assert_eq!(metadata.per_layer().len(), 1);
+    // The plan records the keep-bfloat16 tier at 16 bits, as OptiQ does.
+    assert_eq!(metadata.per_layer().len(), 2);
+    assert_eq!(metadata.per_layer()["lm_head"].bits, 16);
+
+    // The up projection was written at group 32; the embedding table was
+    // written too but was never planned, so it stays out of the map.
+    metadata.describe_written_artifact(&written(&[
+        ("model.layers.0.mlp.up_proj", 4, 32),
+        ("model.embed_tokens", 8, 64),
+    ]));
+
+    assert_eq!(metadata.per_layer().len(), 2);
+    assert_eq!(metadata.per_layer()["lm_head"].bits, 16);
+    assert_eq!(
+        metadata.per_layer()["model.layers.0.mlp.up_proj"],
+        PerLayerEntry {
+            bits: 4,
+            group_size: 32
+        }
+    );
     let OptiQArtifactMetadata::StaticAllocation(static_metadata) = metadata else {
-        panic!("the structural method writes the static layout");
+        panic!("the pipeline writes the static layout");
     };
     assert_eq!(static_metadata.achieved_bpw, 10.0);
     assert_eq!(static_metadata.n_high_bits, 1);

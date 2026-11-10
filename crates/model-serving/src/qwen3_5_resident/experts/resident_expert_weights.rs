@@ -30,6 +30,15 @@ impl Qwen3_5ResidentExpertWeights {
         self.layers.get(layer_index)
     }
 
+    /// One layer's arrays, mutably: the sensitivity probe swaps a single
+    /// projection for a re-encoded copy and restores it after its forwards.
+    pub(crate) fn layer_mut(
+        &mut self,
+        layer_index: usize,
+    ) -> Option<&mut Qwen3_5ResidentExpertLayerWeights> {
+        self.layers.get_mut(layer_index)
+    }
+
     pub(crate) const fn expert_entry_count(&self) -> usize {
         self.expert_entry_count
     }

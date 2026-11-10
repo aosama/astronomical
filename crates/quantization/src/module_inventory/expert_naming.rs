@@ -61,24 +61,33 @@ impl SourceQuantizationParameters {
     }
 }
 
-/// Both readings of `config.json`. A source without a config gets the
+/// Everything the inventory reads from `config.json`.
+pub struct ModelConfigReading {
+    pub naming_rules: ExpertNamingRules,
+    pub source_quantization_parameters: SourceQuantizationParameters,
+    /// The parsed document, for the output layout rules; `None` when the
+    /// source has no config.
+    pub config_value: Option<serde_json::Value>,
+}
+
+/// The readings of `config.json`. A source without a config gets the
 /// Gemma-style defaults and no source quantization, which is what OptiQ does.
-pub fn read_model_config(
-    source_directory: &Path,
-) -> Result<(ExpertNamingRules, SourceQuantizationParameters), QuantizationError> {
+pub fn read_model_config(source_directory: &Path) -> Result<ModelConfigReading, QuantizationError> {
     let config_path = source_directory.join("config.json");
     if !config_path.is_file() {
-        return Ok((
-            rules_for_family(""),
-            SourceQuantizationParameters::default(),
-        ));
+        return Ok(ModelConfigReading {
+            naming_rules: rules_for_family(""),
+            source_quantization_parameters: SourceQuantizationParameters::default(),
+            config_value: None,
+        });
     }
     let config_value = parse_config(&config_path)?;
     let family_text = family_text(&config_value);
-    Ok((
-        rules_for_family(&family_text),
-        source_quantization_parameters(&config_value),
-    ))
+    Ok(ModelConfigReading {
+        naming_rules: rules_for_family(&family_text),
+        source_quantization_parameters: source_quantization_parameters(&config_value),
+        config_value: Some(config_value),
+    })
 }
 
 /// The lower-cased `architectures[0]` plus the top-level and text-tower

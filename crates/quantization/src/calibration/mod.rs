@@ -13,19 +13,20 @@
 //! - `{"domain": "tool", "messages": [...], "tools": [...]}`, a chat with
 //!   tool definitions.
 //!
-//! OptiQ renders chat samples through the tokenizer's Jinja chat template.
-//! The Rust `tokenizers` crate has no template engine, so this port renders
-//! every chat sample with OptiQ's own fallback, role-prefixed concatenation
-//! (`[role]: content` joined by blank lines), the path OptiQ takes whenever a
-//! template rejects a sample. The consequence is that calibration never sees
-//! a model's exact chat-control tokens; the sweep still sees the domain mix.
-//! A caller who needs template-exact sequences supplies pre-tokenized samples.
+//! OptiQ renders chat samples through the tokenizer's Jinja chat template,
+//! and so does this port ([`chat_template`]), so calibration sees the
+//! model's own role markers, tool preamble and reasoning tags. A sample the
+//! template refuses, or any chat sample of a model without a template, is
+//! rendered by role-prefixed concatenation (`[role]: content` joined by
+//! blank lines), which is OptiQ's fallback too.
 //!
 //! Every sample is encoded, the token streams are concatenated, and the
 //! stream is cut into fixed-length sequences whose starting offsets are
 //! shuffled by a seeded generator and truncated to the requested count.
 
+pub mod chat_template;
 pub mod mix;
+pub mod python_json;
 pub mod sample;
 pub mod seeded_shuffle;
 pub mod tokenizer;

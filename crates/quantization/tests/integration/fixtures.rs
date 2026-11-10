@@ -132,11 +132,11 @@ pub fn fixture_kl_value(value: &serde_json::Value) -> f64 {
 
 #[test]
 fn should_parse_every_parity_fixture_and_record_the_pinned_optiq_version() {
-    assert_eq!(allocation_parity().optiq_version, "0.6.5");
-    assert_eq!(taxonomy_parity().optiq_version, "0.6.5");
-    assert_eq!(static_scorer_parity().optiq_version, "0.6.5");
+    assert_eq!(allocation_parity().optiq_version, "0.8.2");
+    assert_eq!(taxonomy_parity().optiq_version, "0.8.2");
+    assert_eq!(static_scorer_parity().optiq_version, "0.8.2");
     let encoder = encoder_parity();
-    assert_eq!(encoder.optiq_version, "0.6.5");
+    assert_eq!(encoder.optiq_version, "0.8.2");
     assert!(!encoder.mlx_version.is_empty());
     assert_eq!(
         encoder.weights_row_major.len(),

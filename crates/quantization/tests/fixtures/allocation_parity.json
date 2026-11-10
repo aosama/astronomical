@@ -275,7 +275,7 @@
       "n_low_bits": 14
     }
   ],
-  "optiq_version": "0.6.5",
+  "optiq_version": "0.8.2",
   "sensitivity_table": [
     {
       "layer_name": "model.embed_tokens",

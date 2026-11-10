@@ -3,28 +3,33 @@
 //! The swap-forward-restore cycle is ported from OptiQ's `_exact_with_bf16_reference` (`optiq/core/sensitivity.py`); the model side is Astronomical's own Qwen3.5 engine.
 
 use std::collections::BTreeMap;
-use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use astronomical_quantization::bit_width::{BitWidth, GroupSize};
 use astronomical_quantization::error::QuantizationError;
-use astronomical_quantization::module_inventory::{
-    ModuleInventory, ModuleWeightSource, QuantizableModuleDescriptor,
+use astronomical_quantization::module_inventory::{ModuleInventory, QuantizableModuleDescriptor};
+use astronomical_quantization::requantize::source_tensor_reader::{
+    SourceShardMaps, read_module_weight,
 };
 use astronomical_quantization::sensitivity::{
     CalibrationForwardSample, ModuleRestoreToken, SensitivityProbeModel,
 };
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_resident::Qwen3_5ResidentModel;
 use crate::{Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration};
 
-use super::module_locations::{ModuleLocation, affine_weights_at_mut, module_location_for};
+use super::expert_swaps::SwappedOutWeights;
+use super::module_locations::{FeedForwardProjection, ModuleLocation, module_location_for};
 use super::simulated_quantization::{
-    encoded_from_source, mean_kl_divergence, mlx_step, quantize_dequantized_bfloat16,
+    encoded_from_source, mean_kl_divergence, mlx_step, per_position_kl_divergences,
+    quantize_dequantized_bfloat16,
 };
+
+#[path = "module_swaps.rs"]
+mod module_swaps;
 
 /// The production standard chunking tuple the daemon resolves for the
 /// resident engine, so probes run the shapes a served request runs.
@@ -58,14 +63,17 @@ pub struct Qwen3_5SensitivityProbe {
     /// The arrays a probe swapped out, keyed by module name, until restore.
     /// They live here rather than in the restore token because the token's
     /// state must be `Send` and MLX arrays are not.
-    swapped_out_weights: BTreeMap<String, Qwen3_5AffineWeights>,
+    swapped_out_weights: BTreeMap<String, SwappedOutWeights>,
 }
 
-/// The bf16 source a uniform-baseline probe re-encodes modules from.
+/// The bf16 source a uniform-baseline probe re-encodes modules from, read
+/// through the requantizer's own reader so a probe sees exactly the weight
+/// the final conversion will encode: whole tensors, the halves of a fused
+/// gate-up expert tensor, and per-expert tensors stacked in expert order.
 struct Bfloat16Source {
     directory: PathBuf,
     inventory: ModuleInventory,
-    open_shards: BTreeMap<String, MlxSafetensors>,
+    shard_maps: SourceShardMaps,
 }
 
 /// Loads a resident model from `model_directory` for probing: validated by
@@ -91,14 +99,17 @@ pub fn load_qwen3_5_probe_model(
                 source_directory,
                 inventory_group_size,
             )?,
-            open_shards: BTreeMap::new(),
+            shard_maps: SourceShardMaps::new(source_directory),
         }),
         None => None,
     };
     let model = load_resident_model(model_directory, memory_limits)?;
     let mut module_descriptors = Vec::new();
     let mut module_locations = BTreeMap::new();
-    for descriptor in inventory.modules() {
+    // The allocation set, not every module: OptiQ's sweep walks linear
+    // layers only, so the embedding table is never probed and takes the
+    // allocation's highest width when the artifact is written.
+    for descriptor in inventory.allocation_modules() {
         if let Some(location) = module_location_for(&descriptor.module_name) {
             module_locations.insert(descriptor.module_name.clone(), location);
         }
@@ -118,9 +129,9 @@ fn load_resident_model(
     model_directory: &Path,
     memory_limits: MlxMemoryLimits,
 ) -> Result<Qwen3_5ResidentModel, QuantizationError> {
-    let validated_artifact = probe_step(
-        Qwen3_5ArtifactValidator::new().validate(model_directory, PROBE_MAXIMUM_OUTPUT_TOKENS),
-    )?;
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(model_directory, PROBE_MAXIMUM_OUTPUT_TOKENS)
+        .map_err(probe_validation_failure)?;
     let chunking = probe_step(Qwen3_5ModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
@@ -147,6 +158,18 @@ impl Qwen3_5SensitivityProbe {
         self.module_descriptors.len()
     }
 
+    /// KL(reference ‖ this model) at every position of one forward. The
+    /// reference logits may come from another model loaded earlier in the
+    /// same process: the runtime is process-global, so its arrays outlive
+    /// the model that produced them.
+    pub fn per_position_kl_divergences(
+        &self,
+        reference_logits: &MlxArray,
+        candidate_logits: &MlxArray,
+    ) -> Result<Vec<f64>, QuantizationError> {
+        per_position_kl_divergences(self.model.runtime(), reference_logits, candidate_logits)
+    }
+
     #[must_use]
     pub const fn prefill_chunk_tokens(&self) -> usize {
         self.prefill_chunk_tokens
@@ -157,26 +180,6 @@ impl Qwen3_5SensitivityProbe {
         match &self.bfloat16_source {
             Some(bfloat16_source) => Some(&bfloat16_source.directory),
             None => None,
-        }
-    }
-
-    /// The affine weights a module name resolves to, mutably.
-    fn affine_weights_mut(
-        &mut self,
-        module_name: &str,
-    ) -> Result<&mut Qwen3_5AffineWeights, QuantizationError> {
-        let Some(location) = self.module_locations.get(module_name).copied() else {
-            return Err(unresolvable(
-                module_name,
-                "it has no location in the Qwen3.5 weights",
-            ));
-        };
-        match affine_weights_at_mut(&mut self.model.base.weights, location) {
-            Some(affine_weights) => Ok(affine_weights),
-            None => Err(unresolvable(
-                module_name,
-                "routed-expert swaps are not supported by this probe yet",
-            )),
         }
     }
 
@@ -247,43 +250,19 @@ impl Qwen3_5SensitivityProbe {
 }
 
 impl Bfloat16Source {
-    /// The module's bf16 source tensor, lazily from its shard. Only whole
-    /// tensors are streamed; fused halves and per-expert stacks belong to
-    /// routed experts, which this probe does not swap.
+    /// The module's bf16 source weight in its logical shape, lazily.
     fn read_module_weight(
         &mut self,
         runtime: &MlxRuntime,
         module_name: &str,
     ) -> Result<MlxArray, QuantizationError> {
-        let Some(descriptor) = self.inventory.resolve(module_name) else {
+        let Some(descriptor) = self.inventory.resolve(module_name).cloned() else {
             return Err(unresolvable(
                 module_name,
                 "the bf16 source has no such module",
             ));
         };
-        let ModuleWeightSource::Whole {
-            shard_file_name,
-            tensor_name,
-        } = descriptor.weight_source.clone()
-        else {
-            return Err(unresolvable(
-                module_name,
-                "its bf16 source is not one whole tensor",
-            ));
-        };
-        if !self.open_shards.contains_key(&shard_file_name) {
-            let shard_path = self.directory.join(&shard_file_name);
-            let shard_file = mlx_step(File::open(&shard_path), "open a bf16 source shard")?;
-            let shard_map = mlx_step(
-                runtime.load_safetensors(shard_file, None),
-                "map a bf16 source shard",
-            )?;
-            self.open_shards.insert(shard_file_name.clone(), shard_map);
-        }
-        mlx_step(
-            self.open_shards[&shard_file_name].tensor(&tensor_name),
-            "read a bf16 source tensor",
-        )
+        read_module_weight(runtime, &mut self.shard_maps, &descriptor)
     }
 }
 
@@ -319,35 +298,30 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
         self.forward_logits(&sample.token_ids)
     }
 
-    /// Swaps the module's affine weights for the probed width, keeping the
-    /// previous arrays in the token. A module the probe cannot reach fails
-    /// with `ProbeModelFailure`, which the sweep counts as skipped.
+    /// Swaps the module's weights for the probed width, keeping what was
+    /// there until the restore. A module the probe cannot reach fails with
+    /// `ProbeModelFailure`, which the sweep counts as skipped.
     fn simulate_quantize_module(
         &mut self,
         module_name: &str,
         bit_width: BitWidth,
         group_size: GroupSize,
     ) -> Result<ModuleRestoreToken, QuantizationError> {
-        let current_weights = mlx_step(
-            self.affine_weights_mut(module_name)?.retained_reference(),
-            "retain the module",
-        )?;
-        let replacement =
-            self.replacement_weights(module_name, &current_weights, bit_width, group_size)?;
-        let previous = std::mem::replace(self.affine_weights_mut(module_name)?, replacement);
-        self.swapped_out_weights
-            .insert(module_name.to_owned(), previous);
-        if self.ties_head_to(module_name) {
-            let head_replacement = mlx_step(
-                self.affine_weights_mut(module_name)?.retained_reference(),
-                "retain the tied head",
-            )?;
-            let previous_head = std::mem::replace(
-                &mut self.model.base.weights.language_model_head_weights,
-                head_replacement,
-            );
-            self.swapped_out_weights
-                .insert(tied_head_key(module_name), previous_head);
+        match self.location_of(module_name)? {
+            ModuleLocation::DecoderLayerRouter {
+                decoder_layer_index,
+            } => self.swap_router(module_name, decoder_layer_index, bit_width, group_size)?,
+            ModuleLocation::DecoderLayerRoutedExperts {
+                decoder_layer_index,
+                projection: projection @ (FeedForwardProjection::Gate | FeedForwardProjection::Up),
+            } => self.swap_expert_gate_or_up(
+                module_name,
+                decoder_layer_index,
+                projection,
+                bit_width,
+                group_size,
+            )?,
+            _ => self.swap_affine_module(module_name, bit_width, group_size)?,
         }
         Ok(ModuleRestoreToken {
             module_name: module_name.to_owned(),
@@ -370,8 +344,8 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
                 ),
             });
         };
-        *self.affine_weights_mut(&restore_token.module_name)? = previous;
-        if let Some(previous_head) = self
+        self.restore_swapped_out(&restore_token.module_name, previous)?;
+        if let Some(SwappedOutWeights::Affine(previous_head)) = self
             .swapped_out_weights
             .remove(&tied_head_key(&restore_token.module_name))
         {
@@ -401,6 +375,17 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
 }
 
 /// Any engine failure, as the sweep's typed probe failure.
+/// The validation error's own text names only the stage that failed; the
+/// public reason carries the config field or file behind it, which is what
+/// someone converting a new base needs to see.
+fn probe_validation_failure(
+    validation_error: crate::Qwen3_5ArtifactValidationError,
+) -> QuantizationError {
+    QuantizationError::ProbeModelFailure {
+        description: validation_error.public_failure_reason(),
+    }
+}
+
 fn probe_step<Value, Failure: std::fmt::Display>(
     outcome: Result<Value, Failure>,
 ) -> Result<Value, QuantizationError> {

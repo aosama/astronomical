@@ -214,7 +214,7 @@ fn tokenize_samples(
         } else {
             sample.domain.as_str()
         };
-        if let Some(rendered_text) = sample.render_text() {
+        if let Some(rendered_text) = rendered_sample_text(tokenizer, sample) {
             let sample_tokens = tokenizer.encode(&rendered_text)?;
             *token_count_by_domain.entry(domain.to_owned()).or_insert(0) += sample_tokens.len();
             token_stream.extend(sample_tokens);
@@ -226,6 +226,17 @@ fn tokenize_samples(
 }
 
 /// `0, L, 2L, ...` strictly below `total - L`, OptiQ's chunk starts.
+/// The sample through the model's chat template, else as flat text.
+fn rendered_sample_text(
+    tokenizer: &dyn CalibrationTokenizer,
+    sample: &CalibrationSample,
+) -> Option<String> {
+    match tokenizer.render_chat(sample) {
+        Some(templated_text) => Some(templated_text),
+        None => sample.render_text(),
+    }
+}
+
 fn sequence_offsets(
     available_token_count: usize,
     sequence_length_tokens: usize,

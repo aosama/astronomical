@@ -8,11 +8,15 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::allocation::AllocationResult;
+use crate::artifact::converted_config::normalize_converted_config;
+use crate::artifact::mtp_config::register_mtp_sidecar;
+use crate::artifact::multimodal_config::{register_vision_sidecar, strip_multimodal_claims};
 use crate::artifact::{
     OptiQArtifactMetadata, OptiQSensitivityDocument, QuantizationConfigDocument,
 };
 use crate::bit_width::GroupSize;
 use crate::error::QuantizationError;
+use crate::requantize::MtpSidecarSummary;
 use crate::sensitivity::{SensitivityMethod, SensitivityTable};
 
 #[cfg(test)]
@@ -29,9 +33,14 @@ pub struct ArtifactDocumentsRequest<'request> {
     pub sensitivity_table: &'request SensitivityTable,
     pub candidate_bits: &'request [u32],
     pub group_size: GroupSize,
-    /// The `bits` default of the quantization document, OptiQ's `q_bits`
-    /// (the ladder's lowest width).
+    /// The `bits` default of the quantization document, OptiQ's `q_bits`.
     pub default_bits: u32,
+    /// The tower sidecar's file name and tensor count when one was written.
+    pub vision_sidecar: Option<(&'request str, usize)>,
+    /// Whether the source config declares a vision or audio tower.
+    pub declares_multimodal_towers: bool,
+    /// The multi-token-prediction head, when one was written.
+    pub mtp_sidecar: Option<&'request MtpSidecarSummary>,
     /// What the requantizer wrote, which the documents describe rather than
     /// the plan.
     pub written_quantization_by_module: &'request BTreeMap<String, (u32, u32)>,
@@ -46,15 +55,7 @@ pub struct ArtifactDocumentsRequest<'request> {
 pub fn write_artifact_documents(
     request: &ArtifactDocumentsRequest<'_>,
 ) -> Result<bool, QuantizationError> {
-    QuantizationConfigDocument::from_written_modules(
-        request.group_size.elements(),
-        request.default_bits,
-        request.written_quantization_by_module,
-    )
-    .write_into_config(
-        &request.source_directory.join("config.json"),
-        &request.artifact_directory.join("config.json"),
-    )?;
+    write_artifact_config(request)?;
     let mut metadata = OptiQArtifactMetadata::from_allocation(
         request.allocation,
         request.base_model_name,
@@ -74,6 +75,53 @@ pub fn write_artifact_documents(
             tracing::warn!(%write_error, "the sensitivity document was not written; the artifact is complete without it");
             Ok(false)
         }
+    }
+}
+
+/// `config.json`: the source's config with both quantization documents,
+/// normalized the way mlx-lm saves it, with the sidecars registered.
+fn write_artifact_config(request: &ArtifactDocumentsRequest<'_>) -> Result<(), QuantizationError> {
+    let artifact_config_path = request.artifact_directory.join("config.json");
+    QuantizationConfigDocument::from_written_modules(
+        request.group_size.elements(),
+        request.default_bits,
+        request.written_quantization_by_module,
+    )
+    .write_into_config(
+        &request.source_directory.join("config.json"),
+        &artifact_config_path,
+    )?;
+    normalize_converted_config(&artifact_config_path)?;
+    describe_multimodal_towers(request)?;
+    if let Some(mtp_sidecar) = request.mtp_sidecar {
+        register_mtp_sidecar(&artifact_config_path, mtp_sidecar)?;
+    }
+    Ok(())
+}
+
+/// Registers the written tower sidecar in `config.json`, or removes the
+/// config's multimodal claims when it declares a tower the source never
+/// shipped, so the artifact does not advertise images it cannot see.
+fn describe_multimodal_towers(
+    request: &ArtifactDocumentsRequest<'_>,
+) -> Result<(), QuantizationError> {
+    let config_path = request.artifact_directory.join("config.json");
+    match request.vision_sidecar {
+        Some((sidecar_file_name, sidecar_tensor_count)) => register_vision_sidecar(
+            &config_path,
+            sidecar_file_name,
+            sidecar_tensor_count,
+            request.base_model_name,
+        ),
+        None if request.declares_multimodal_towers => {
+            let removed_field_count = strip_multimodal_claims(&config_path)?;
+            tracing::info!(
+                removed_field_count,
+                "the config declares a tower but the source ships none; the artifact is text-only"
+            );
+            Ok(())
+        }
+        None => Ok(()),
     }
 }
 

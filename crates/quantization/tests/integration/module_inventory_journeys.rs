@@ -497,35 +497,171 @@ fn should_pass_a_packed_weight_through_with_its_scales_when_it_becomes_no_module
     );
 }
 
-#[test]
-fn should_pass_vision_tower_linears_through_unquantized() {
+/// One tower linear beside one language linear, under `config_text`.
+fn inventory_with_a_tower(config_text: &str) -> (tempfile::TempDir, ModuleInventory) {
     let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
     write_typed_source(
         directory.path(),
         &[
             (
-                "vision_tower.blocks.0.attn.qkv.weight",
+                "model.visual.blocks.0.attn.qkv.weight",
                 safetensors::Dtype::BF16,
                 &[192, 64],
             ),
             (
-                "language_model.model.layers.0.mlp.up_proj.weight",
+                "model.language_model.layers.0.mlp.up_proj.weight",
+                safetensors::Dtype::BF16,
+                &[128, 64],
+            ),
+        ],
+        config_text,
+    );
+    let inventory = ModuleInventory::from_source_directory(
+        directory.path(),
+        GroupSize::new(64).expect("valid"),
+    )
+    .expect("the inventory should build");
+    (directory, inventory)
+}
+
+#[test]
+fn should_send_a_declared_tower_to_the_vision_sidecar_unquantized() {
+    let (_directory, inventory) =
+        inventory_with_a_tower(r#"{"model_type": "qwen3_5", "vision_config": {"depth": 1}}"#);
+
+    assert_eq!(inventory.module_count(), 1);
+    assert!(inventory.declares_multimodal_towers());
+    assert!(inventory.pass_through_tensor_names().is_empty());
+    let sidecar_tensors = inventory.vision_sidecar_tensors();
+    assert_eq!(sidecar_tensors.len(), 1);
+    assert_eq!(
+        sidecar_tensors[0].tensor_name,
+        "model.visual.blocks.0.attn.qkv.weight"
+    );
+    assert_eq!(
+        sidecar_tensors[0].output_name,
+        "vision_tower.blocks.0.attn.qkv.weight"
+    );
+}
+
+#[test]
+fn should_drop_a_tower_the_qwen_config_does_not_declare() {
+    let (_directory, inventory) = inventory_with_a_tower(r#"{"model_type": "qwen3_5"}"#);
+
+    assert_eq!(inventory.module_count(), 1);
+    assert!(inventory.pass_through_tensor_names().is_empty());
+    assert!(inventory.vision_sidecar_tensors().is_empty());
+}
+
+#[test]
+fn should_copy_an_undeclared_tower_unquantized_for_a_family_without_layout_rules() {
+    let (_directory, inventory) = inventory_with_a_tower(r#"{"model_type": "gemma4"}"#);
+
+    assert_eq!(
+        inventory.pass_through_tensor_names(),
+        vec!["model.visual.blocks.0.attn.qkv.weight".to_owned()]
+    );
+    assert!(inventory.vision_sidecar_tensors().is_empty());
+}
+
+#[test]
+fn should_name_modules_the_way_mlx_lm_does_and_still_resolve_the_source_spelling() {
+    let (_directory, inventory) =
+        inventory_with_a_tower(r#"{"model_type": "qwen3_5", "vision_config": {"depth": 1}}"#);
+
+    let canonical = inventory
+        .resolve("language_model.model.layers.0.mlp.up_proj")
+        .expect("the mlx-lm name resolves");
+    let from_source_spelling = inventory
+        .resolve("model.language_model.layers.0.mlp.up_proj")
+        .expect("the source spelling resolves");
+
+    assert_eq!(
+        canonical.module_name,
+        "language_model.model.layers.0.mlp.up_proj"
+    );
+    assert_eq!(from_source_spelling.module_name, canonical.module_name);
+}
+
+#[test]
+fn should_keep_the_embedding_table_out_of_the_allocation_set() {
+    let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+    write_typed_source(
+        directory.path(),
+        &[
+            (
+                "language_model.model.embed_tokens.weight",
+                safetensors::Dtype::BF16,
+                &[512, 64],
+            ),
+            (
+                "language_model.model.layers.0.mlp.gate_proj.weight",
+                safetensors::Dtype::BF16,
+                &[128, 64],
+            ),
+            (
+                "language_model.model.layers.1.mlp.gate_proj.weight",
                 safetensors::Dtype::BF16,
                 &[128, 64],
             ),
         ],
         r#"{"model_type": "qwen3_5"}"#,
     );
-
     let inventory = ModuleInventory::from_source_directory(
         directory.path(),
         GroupSize::new(64).expect("valid"),
     )
     .expect("the inventory should build");
 
-    assert_eq!(inventory.module_count(), 1);
+    let mut allocation_module_names = Vec::new();
+    for descriptor in inventory.allocation_modules() {
+        allocation_module_names.push(descriptor.module_name.as_str());
+    }
+
+    // The table is still a module (it is quantized), but never allocated,
+    // and the rest come in mlx-lm traversal order, highest block first.
+    assert_eq!(inventory.module_count(), 3);
     assert_eq!(
-        inventory.pass_through_tensor_names(),
-        vec!["vision_tower.blocks.0.attn.qkv.weight".to_owned()]
+        allocation_module_names,
+        vec![
+            "language_model.model.layers.1.mlp.gate_proj",
+            "language_model.model.layers.0.mlp.gate_proj",
+        ]
     );
+}
+
+#[test]
+fn should_report_assembled_modules_for_fused_experts_and_none_for_plain_weights() {
+    let fused_source = tempfile::tempdir().expect("a temporary directory should be creatable");
+    let plain_source = tempfile::tempdir().expect("a temporary directory should be creatable");
+    write_typed_source(
+        fused_source.path(),
+        &[(
+            "model.language_model.layers.0.mlp.experts.gate_up_proj",
+            safetensors::Dtype::BF16,
+            &[2, 128, 64],
+        )],
+        r#"{"model_type": "qwen3_5_moe"}"#,
+    );
+    write_typed_source(
+        plain_source.path(),
+        &[(
+            "model.language_model.layers.0.mlp.up_proj.weight",
+            safetensors::Dtype::BF16,
+            &[128, 64],
+        )],
+        r#"{"model_type": "qwen3_5"}"#,
+    );
+    let group_size = GroupSize::new(64).expect("valid");
+
+    let fused_inventory = ModuleInventory::from_source_directory(fused_source.path(), group_size)
+        .expect("the fused inventory should build");
+    let plain_inventory = ModuleInventory::from_source_directory(plain_source.path(), group_size)
+        .expect("the plain inventory should build");
+    let empty_inventory =
+        ModuleInventory::from_descriptors(std::path::PathBuf::from("none"), group_size, Vec::new());
+
+    assert!(fused_inventory.has_assembled_modules());
+    assert!(!plain_inventory.has_assembled_modules());
+    assert!(!empty_inventory.has_assembled_modules());
 }

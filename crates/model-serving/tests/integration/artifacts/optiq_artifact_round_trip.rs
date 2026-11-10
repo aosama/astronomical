@@ -30,7 +30,6 @@ fn should_produce_metadata_the_strict_optiq_reader_accepts_and_validates_against
     let mut metadata = OptiQArtifactMetadata::for_method(
         SensitivityMethod::ExactBfloat16Reference,
         "example/base",
-        64,
     );
     metadata.describe_written_artifact(&written);
     let metadata_bytes = serde_json::to_vec(&metadata).expect("the metadata should serialize");

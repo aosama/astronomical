@@ -38,6 +38,11 @@ pub enum ModuleLocation {
     DecoderLayerSharedExpertOutputGate {
         decoder_layer_index: usize,
     },
+    /// The mixture-of-experts router (`mlp.gate`), which picks the experts
+    /// each token visits.
+    DecoderLayerRouter {
+        decoder_layer_index: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -84,7 +89,8 @@ pub fn module_location_for(module_name: &str) -> Option<ModuleLocation> {
 
 /// The affine weights at a location, or `None` where the layer has another
 /// shape (a full-attention location on a linear-attention layer) or the
-/// location is a routed expert, whose arrays the resident expert owner holds.
+/// location is a routed expert or the router, whose arrays live in their own
+/// owners and are swapped by the probe's expert swaps.
 pub(crate) fn affine_weights_at_mut(
     weights: &mut Qwen3_5Weights,
     location: ModuleLocation,
@@ -99,7 +105,8 @@ pub(crate) fn affine_weights_at_mut(
             let layer_weights = weights.decoder_layer_weights.get_mut(decoder_layer_index)?;
             attention_weights_mut(&mut layer_weights.attention_weights, projection)
         }
-        ModuleLocation::DecoderLayerRoutedExperts { .. } => None,
+        ModuleLocation::DecoderLayerRoutedExperts { .. }
+        | ModuleLocation::DecoderLayerRouter { .. } => None,
         feed_forward_location => feed_forward_weights_mut(weights, feed_forward_location),
     }
 }
@@ -204,14 +211,26 @@ fn attention_projection_for(layer_suffix: &str) -> Option<AttentionProjection> {
     })
 }
 
+/// The two one-matrix gates of a mixture-of-experts layer: the router that
+/// picks the experts, and the shared expert's output gate.
+fn gate_location_for(decoder_layer_index: usize, layer_suffix: &str) -> Option<ModuleLocation> {
+    match layer_suffix {
+        "mlp.gate" => Some(ModuleLocation::DecoderLayerRouter {
+            decoder_layer_index,
+        }),
+        "mlp.shared_expert_gate" => Some(ModuleLocation::DecoderLayerSharedExpertOutputGate {
+            decoder_layer_index,
+        }),
+        _ => None,
+    }
+}
+
 fn feed_forward_location_for(
     decoder_layer_index: usize,
     layer_suffix: &str,
 ) -> Option<ModuleLocation> {
-    if layer_suffix == "mlp.shared_expert_gate" {
-        return Some(ModuleLocation::DecoderLayerSharedExpertOutputGate {
-            decoder_layer_index,
-        });
+    if let Some(gate_location) = gate_location_for(decoder_layer_index, layer_suffix) {
+        return Some(gate_location);
     }
     let (container, projection_name) = layer_suffix.rsplit_once('.')?;
     let projection = match projection_name {

@@ -9,13 +9,18 @@
 //! - `exact_sweep`: the exact KL sweep through the model-serving probe on
 //!   the installed source with two calibration sequences, checkpoint resume
 //!   after a simulated interruption, then allocation and conversion.
-//! - `python_parity`: an artifact the Python tool produced from the same
-//!   source with the same flags, compared tensor by tensor: identical packed
-//!   words at 4 bits and above (stock min/max on both sides), and squared
-//!   error no worse at 2 and 3 bits; identical `per_layer` bit maps when the
-//!   Python sweep's `optiq/sensitivity.json` is fed to the Rust allocator.
+//! - `python_parity`: against the artifacts OptiQ itself built from the same
+//!   bfloat16 source: the structural conversion byte for byte, the
+//!   calibration sequences token for token, the bit map the Rust allocator
+//!   derives from OptiQ's own sweep, and the Rust sweep's module ranking.
+//! - `mixture_of_experts_sweep`: on a synthetic mixture-of-experts model,
+//!   the router and each routed-expert projection are swapped and exactly
+//!   restored, and the measured sweep ranks modules like OptiQ's.
 
+mod artifact_comparison;
 mod exact_sweep;
+mod mixture_of_experts_sweep;
+mod parity_support;
 mod python_parity;
 mod requantize_throughput;
 mod served_generation;

@@ -77,3 +77,20 @@ fn should_not_resolve_names_outside_the_language_model() {
     );
     assert_eq!(module_location_for(""), None);
 }
+
+#[test]
+fn should_resolve_the_router_apart_from_the_swiglu_gate_projection() {
+    assert_eq!(
+        module_location_for("language_model.model.layers.5.mlp.gate"),
+        Some(ModuleLocation::DecoderLayerRouter {
+            decoder_layer_index: 5,
+        })
+    );
+    assert_eq!(
+        module_location_for("language_model.model.layers.5.mlp.gate_proj"),
+        Some(ModuleLocation::DecoderLayerDenseFeedForward {
+            decoder_layer_index: 5,
+            projection: FeedForwardProjection::Gate,
+        })
+    );
+}

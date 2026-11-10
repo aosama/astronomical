@@ -4,22 +4,25 @@
 //! already quantized in MLX layout are inventoried with their logical shape
 //! rebuilt from the scales, and any 3-D `.weight` under an mlx-lm expert
 //! wrapper is accepted, so an mlx-lm-format bf16 checkpoint inventories as
-//! completely as a Hugging Face one.
+//! completely as a Hugging Face one. Every tensor's output name, axis order
+//! and destination file come from the output layout rules, so the two
+//! spellings of one checkpoint inventory to the same output.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::bit_width::GroupSize;
 use crate::error::QuantizationError;
-use crate::module_taxonomy::{
-    classify_module, is_non_language_tower_tensor, transformer_block_index,
-};
+use crate::module_taxonomy::{classify_module, transformer_block_index};
 // The requantizer's router rule, not the allocator taxonomy's tighter one:
 // the inventory's pass-through list is exactly what the requantizer copies
 // unencoded, so both must agree on what a router is.
 use crate::requantize::bit_policy::is_router_tensor_key;
 
 use super::expert_naming::{ExpertNamingRules, SourceQuantizationParameters, read_model_config};
+use super::output_layout::{
+    OutputDestination, OutputLayoutRules, OutputTensorLayout, is_multimodal_tensor,
+};
 use super::safetensors_header::{HeaderTensor, read_header_tensors};
 use super::{
     ModuleWeightSource, PassThroughTensor, QuantizableModuleDescriptor, SourceTensorDtype,
@@ -29,6 +32,9 @@ use super::{
 pub struct InventoryContents {
     pub modules: BTreeMap<String, QuantizableModuleDescriptor>,
     pub pass_through_tensors: Vec<PassThroughTensor>,
+    pub vision_sidecar_tensors: Vec<PassThroughTensor>,
+    pub mtp_sidecar_tensors: Vec<PassThroughTensor>,
+    pub declares_multimodal_towers: bool,
     pub aliases: BTreeMap<String, String>,
 }
 
@@ -50,11 +56,17 @@ struct PerExpertTensor {
 /// The walk's state across every shard.
 struct InventoryWalk {
     naming_rules: ExpertNamingRules,
+    layout_rules: OutputLayoutRules,
     source_quantization_parameters: SourceQuantizationParameters,
     group_elements: usize,
     shape_by_tensor_name: BTreeMap<String, Vec<usize>>,
     modules: BTreeMap<String, QuantizableModuleDescriptor>,
     pass_through_tensors: Vec<PassThroughTensor>,
+    vision_sidecar_tensors: Vec<PassThroughTensor>,
+    mtp_sidecar_tensors: Vec<PassThroughTensor>,
+    /// Output module name to the name the source spells it by, which is
+    /// what a probe model built from the source may still ask for.
+    source_spelling_by_module_name: BTreeMap<String, String>,
     unfused_experts: BTreeMap<(String, String), Vec<PerExpertTensor>>,
 }
 
@@ -64,33 +76,59 @@ pub fn build_inventory_contents(
     group_size: GroupSize,
 ) -> Result<InventoryContents, QuantizationError> {
     let shard_paths = list_shard_paths(source_directory)?;
-    let (naming_rules, source_quantization_parameters) = read_model_config(source_directory)?;
+    let model_config = read_model_config(source_directory)?;
     let located_tensors = read_every_header(&shard_paths)?;
+    let shape_by_tensor_name = shape_by_tensor_name_of(&located_tensors);
+    let layout_rules = layout_rules_for(model_config.config_value.as_ref(), &shape_by_tensor_name);
     let mut walk = InventoryWalk {
-        naming_rules,
-        source_quantization_parameters,
+        naming_rules: model_config.naming_rules,
+        layout_rules,
+        source_quantization_parameters: model_config.source_quantization_parameters,
         group_elements: group_size.elements() as usize,
-        shape_by_tensor_name: BTreeMap::new(),
+        shape_by_tensor_name,
         modules: BTreeMap::new(),
         pass_through_tensors: Vec::new(),
+        vision_sidecar_tensors: Vec::new(),
+        mtp_sidecar_tensors: Vec::new(),
+        source_spelling_by_module_name: BTreeMap::new(),
         unfused_experts: BTreeMap::new(),
     };
-    for located_tensor in &located_tensors {
-        let tensor_name = located_tensor.header_tensor.tensor_name.clone();
-        walk.shape_by_tensor_name
-            .insert(tensor_name, located_tensor.header_tensor.shape.clone());
-    }
     for located_tensor in &located_tensors {
         walk.visit(located_tensor);
     }
     walk.stack_unfused_experts();
     walk.keep_siblings_of_passed_through_weights(&located_tensors);
-    let aliases = aliases_for(&walk.modules);
+    let aliases = aliases_for(&walk.modules, &walk.source_spelling_by_module_name);
     Ok(InventoryContents {
         modules: walk.modules,
         pass_through_tensors: walk.pass_through_tensors,
+        vision_sidecar_tensors: walk.vision_sidecar_tensors,
+        mtp_sidecar_tensors: walk.mtp_sidecar_tensors,
+        declares_multimodal_towers: walk.layout_rules.declares_multimodal_towers(),
         aliases,
     })
+}
+
+/// Every tensor's header shape by name, for rules that look at a sibling.
+fn shape_by_tensor_name_of(located_tensors: &[LocatedTensor]) -> BTreeMap<String, Vec<usize>> {
+    let mut shape_by_tensor_name = BTreeMap::new();
+    for located_tensor in located_tensors {
+        let tensor_name = located_tensor.header_tensor.tensor_name.clone();
+        shape_by_tensor_name.insert(tensor_name, located_tensor.header_tensor.shape.clone());
+    }
+    shape_by_tensor_name
+}
+
+/// The output layout the config implies; names and values are left as
+/// stored for a source without a config.
+fn layout_rules_for(
+    config_value: Option<&serde_json::Value>,
+    shape_by_tensor_name: &BTreeMap<String, Vec<usize>>,
+) -> OutputLayoutRules {
+    match config_value {
+        Some(config_value) => OutputLayoutRules::from_config(config_value, shape_by_tensor_name),
+        None => OutputLayoutRules::unchanged(),
+    }
 }
 
 /// Every `*.safetensors` directly under the directory, sorted by name. The
@@ -139,38 +177,91 @@ fn read_every_header(shard_paths: &[PathBuf]) -> Result<Vec<LocatedTensor>, Quan
 
 impl InventoryWalk {
     /// Routes one tensor to a module, to the unfused-expert collection, to
-    /// nowhere (a sibling another module consumes), or to pass-through.
+    /// nowhere (a sibling another module consumes, or a tensor the output
+    /// layout drops), to the vision sidecar, or to pass-through.
     fn visit(&mut self, located_tensor: &LocatedTensor) {
         let tensor_name = located_tensor.header_tensor.tensor_name.as_str();
-        if self.is_consumed_sibling(tensor_name) {
+        if self.is_consumed_sibling(tensor_name) || self.is_routed_out_of_the_shards(located_tensor)
+        {
             return;
         }
-        let Some(source_dtype) = self.source_dtype_of(&located_tensor.header_tensor) else {
-            self.pass_through(located_tensor);
+        let Some(source_dtype) = self.encodable_dtype(located_tensor) else {
             return;
         };
-        if is_router_tensor_key(tensor_name) || is_non_language_tower_tensor(tensor_name) {
-            self.pass_through(located_tensor);
-            return;
-        }
         if let Some((base_name, expert_index, projection)) = parse_unfused_expert(tensor_name) {
-            let projection = self.renamed_projection(projection);
-            let per_expert_tensor = PerExpertTensor {
-                expert_index,
-                shard_file_name: located_tensor.shard_file_name.clone(),
-                tensor_name: tensor_name.to_owned(),
-                shape: located_tensor.header_tensor.shape.clone(),
+            self.collect_unfused_expert(
+                located_tensor,
+                (base_name, expert_index, projection),
                 source_dtype,
-            };
-            self.unfused_experts
-                .entry((base_name, projection))
-                .or_default()
-                .push(per_expert_tensor);
+            );
             return;
         }
         if !self.add_modules_for(located_tensor, source_dtype) {
             self.pass_through(located_tensor);
         }
+    }
+
+    /// Sends a tensor the output layout places outside the model shards to
+    /// its sidecar list, or drops it; true when the tensor was handled.
+    fn is_routed_out_of_the_shards(&mut self, located_tensor: &LocatedTensor) -> bool {
+        let layout = self.layout_rules.layout_for(
+            &located_tensor.header_tensor.tensor_name,
+            &located_tensor.header_tensor.shape,
+        );
+        match layout.destination {
+            OutputDestination::Dropped => true,
+            OutputDestination::VisionSidecar => {
+                self.vision_sidecar_tensors
+                    .push(pass_through_tensor(located_tensor, layout));
+                true
+            }
+            OutputDestination::MtpSidecar => {
+                self.mtp_sidecar_tensors
+                    .push(pass_through_tensor(located_tensor, layout));
+                true
+            }
+            OutputDestination::ModelShards => false,
+        }
+    }
+
+    /// The dtype the requantizer reads the tensor at, or `None` after
+    /// passing it through: it is not a float or packed weight, or it is a
+    /// router of a family whose router is not a plain linear layer (packing
+    /// its input dimension breaks the `x @ weight.T` shape), or a tower.
+    fn encodable_dtype(&mut self, located_tensor: &LocatedTensor) -> Option<SourceTensorDtype> {
+        let tensor_name = located_tensor.header_tensor.tensor_name.as_str();
+        let source_dtype = self.source_dtype_of(&located_tensor.header_tensor);
+        let is_unencodable_router =
+            is_router_tensor_key(tensor_name) && !self.layout_rules.quantizes_router_linears();
+        let is_copied_as_stored =
+            source_dtype.is_none() || is_unencodable_router || is_multimodal_tensor(tensor_name);
+        if is_copied_as_stored {
+            self.pass_through(located_tensor);
+            return None;
+        }
+        source_dtype
+    }
+
+    /// Files one per-expert tensor under its `(base, projection)` group for
+    /// stacking once every shard has been read.
+    fn collect_unfused_expert(
+        &mut self,
+        located_tensor: &LocatedTensor,
+        (base_name, expert_index, projection): (String, usize, String),
+        source_dtype: SourceTensorDtype,
+    ) {
+        let projection = self.renamed_projection(projection);
+        let per_expert_tensor = PerExpertTensor {
+            expert_index,
+            shard_file_name: located_tensor.shard_file_name.clone(),
+            tensor_name: located_tensor.header_tensor.tensor_name.clone(),
+            shape: located_tensor.header_tensor.shape.clone(),
+            source_dtype,
+        };
+        self.unfused_experts
+            .entry((base_name, projection))
+            .or_default()
+            .push(per_expert_tensor);
     }
 
     /// `.scales`/`.biases` of a packed weight and the `_scale_inv` of an FP8
@@ -256,11 +347,27 @@ impl InventoryWalk {
     }
 
     fn pass_through(&mut self, located_tensor: &LocatedTensor) {
-        self.pass_through_tensors.push(PassThroughTensor {
-            shard_file_name: located_tensor.shard_file_name.clone(),
-            tensor_name: located_tensor.header_tensor.tensor_name.clone(),
-            shape: located_tensor.header_tensor.shape.clone(),
-        });
+        let layout = self.layout_rules.layout_for(
+            &located_tensor.header_tensor.tensor_name,
+            &located_tensor.header_tensor.shape,
+        );
+        self.pass_through_tensors
+            .push(pass_through_tensor(located_tensor, layout));
+    }
+}
+
+/// A copied tensor with its place in the output.
+fn pass_through_tensor(
+    located_tensor: &LocatedTensor,
+    layout: OutputTensorLayout,
+) -> PassThroughTensor {
+    PassThroughTensor {
+        shard_file_name: located_tensor.shard_file_name.clone(),
+        tensor_name: located_tensor.header_tensor.tensor_name.clone(),
+        shape: located_tensor.header_tensor.shape.clone(),
+        output_name: layout.output_name,
+        value_transform: layout.value_transform,
+        keeps_stored_dtype: layout.keeps_stored_dtype,
     }
 }
 
@@ -304,35 +411,49 @@ fn is_ascii_digits(segment: &str) -> bool {
     true
 }
 
-/// The alternate spellings mlx-lm uses for each canonical module, mapped
-/// back to it: `model.` stripped; `model.language_model.` reordered to
-/// `language_model.model.`; and flattened to `model.` for adapters whose
-/// sanitize flattens the tower (muse_glimmer matched 1 of 417 modules
-/// without it). A spelling that is itself a canonical name is never aliased.
+/// The alternate spellings of each module, mapped back to its output name:
+/// the name the source spells it by, and for either spelling `model.`
+/// stripped, `model.language_model.` reordered to `language_model.model.`,
+/// and flattened to `model.` for adapters whose sanitize flattens the tower
+/// (muse_glimmer matched 1 of 417 modules without it). A spelling that is
+/// itself a module name is never aliased.
 fn aliases_for(
     modules: &BTreeMap<String, QuantizableModuleDescriptor>,
+    source_spelling_by_module_name: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
     let mut aliases = BTreeMap::new();
-    for canonical_name in modules.keys() {
-        let mut spellings = BTreeSet::new();
-        if let Some(stripped_name) = canonical_name.strip_prefix("model.") {
-            spellings.insert(stripped_name.to_owned());
-        }
-        if canonical_name.contains("model.language_model.") {
-            spellings.insert(canonical_name.replacen(
-                "model.language_model.",
-                "language_model.model.",
-                1,
-            ));
-            spellings.insert(canonical_name.replacen("model.language_model.", "model.", 1));
-        }
-        for spelling in spellings {
+    for module_name in modules.keys() {
+        let source_spelling = source_spelling_by_module_name
+            .get(module_name)
+            .unwrap_or(module_name);
+        for spelling in alternate_spellings(module_name, source_spelling) {
             if !modules.contains_key(&spelling) {
-                aliases.insert(spelling, canonical_name.clone());
+                aliases.insert(spelling, module_name.clone());
             }
         }
     }
     aliases
+}
+
+/// The source spelling of a module and, for it and the output name, each
+/// container variant mlx-lm adapters use.
+fn alternate_spellings(module_name: &str, source_spelling: &str) -> BTreeSet<String> {
+    let mut spellings = BTreeSet::new();
+    spellings.insert(source_spelling.to_owned());
+    for known_spelling in [module_name, source_spelling] {
+        if let Some(stripped_name) = known_spelling.strip_prefix("model.") {
+            spellings.insert(stripped_name.to_owned());
+        }
+        if known_spelling.contains("model.language_model.") {
+            spellings.insert(known_spelling.replacen(
+                "model.language_model.",
+                "language_model.model.",
+                1,
+            ));
+            spellings.insert(known_spelling.replacen("model.language_model.", "model.", 1));
+        }
+    }
+    spellings
 }
 
 /// Builds a descriptor with its role and block index from the taxonomy.

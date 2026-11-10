@@ -195,17 +195,8 @@ fn run_quantize_verb(quantize_command: astronomical_cli::QuantizeCommand) -> Exi
         stderr: &mut stderr,
         progress_interval: std::time::Duration::from_secs(5),
     };
-    let outcome = match &quantize_command {
-        astronomical_cli::QuantizeCommand::Plan(plan_arguments) => {
-            astronomical_cli::run_quantize_plan(plan_arguments, &mut quantize_dependencies)
-        }
-        astronomical_cli::QuantizeCommand::Inspect(inspect_arguments) => {
-            astronomical_cli::run_quantize_inspect(inspect_arguments, &mut quantize_dependencies)
-        }
-        astronomical_cli::QuantizeCommand::Convert(convert_arguments) => {
-            astronomical_cli::run_quantize_convert(convert_arguments, &mut quantize_dependencies)
-        }
-    };
+    let outcome =
+        astronomical_cli::run_quantize_command(&quantize_command, &mut quantize_dependencies);
     match outcome {
         Ok(()) => ExitCode::SUCCESS,
         Err(quantize_error) => {

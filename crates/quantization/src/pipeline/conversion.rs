@@ -11,6 +11,9 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use crate::allocation::{AllocationResult, QuantizationPredicate, optimize_mixed_precision};
 use crate::artifact::QuantizationConfigDocument;
+use crate::artifact::converted_config::normalize_converted_config;
+use crate::artifact::generation_config::write_recommended_generation_config;
+use crate::artifact::model_card::write_model_card;
 use crate::bit_width::{BitWidth, CandidateBitWidths};
 use crate::calibration::{
     CalibrationMix, HuggingFaceCalibrationTokenizer, mix::DEFAULT_SHUFFLE_SEED,
@@ -18,7 +21,7 @@ use crate::calibration::{
 use crate::error::QuantizationError;
 use crate::module_inventory::ModuleInventory;
 use crate::progress::ProgressReporter;
-use crate::requantize::driver::run_requantize;
+use crate::requantize::driver::{VISION_SIDECAR_FILE_NAME, run_requantize};
 use crate::requantize::{
     BitPolicy, DEFAULT_COPY_PATTERNS, DEFAULT_SHARD_BYTES, RequantizeOutcome, RequantizeTensorPlan,
     policy_from_predicate,
@@ -30,6 +33,7 @@ use crate::sensitivity::{CalibrationForwardSample, SensitivityMethod, Sensitivit
 use super::artifact_files::{
     ArtifactDocumentsRequest, copy_source_files, write_artifact_documents,
 };
+use super::probe_source_view::loadable_model_directory;
 use super::{
     PipelineMethod, ProbeModelLoader, QuantizationPipelineOutcome, QuantizationPipelineRequest,
     ReferenceMode, allocation_constraints_for, estimate_bfloat16_weight_bytes,
@@ -76,7 +80,6 @@ pub fn run_conversion(
             progress_reporter,
         )?,
     };
-    let lowest_bits = candidate_bit_widths.lowest().bits();
     let constraints = allocation_constraints_for(request, candidate_bit_widths);
     let allocation = optimize_mixed_precision(&sensitivity_table, &constraints)?;
     log_allocation_summary(&allocation, request.floor_components_per_block);
@@ -93,10 +96,16 @@ pub fn run_conversion(
         &artifact_directory,
         sensitivity_table,
         allocation,
-        lowest_bits,
+        inventory.declares_multimodal_towers(),
         requantize_outcome,
     )
 }
+
+/// The `bits` default OptiQ records in the quantization document: its
+/// pipeline passes `q_bits = 4` whatever the candidate ladder is. Every
+/// quantized module carries its own entry, so the default only describes
+/// modules a loader finds packed without one.
+const QUANTIZATION_DOCUMENT_DEFAULT_BITS: u32 = 4;
 
 /// `optiq_mixed` for a measured conversion, `static_mixed` for a structural
 /// one, OptiQ's directory names.
@@ -160,32 +169,120 @@ fn measure_exact_sensitivity(
             SensitivityMethod::ExactUniform4BitReference,
         )
     } else {
-        let probe_directory = request.source_directory.clone();
+        let probe_directory = bfloat16_probe_directory(runtime, request, progress_reporter)?;
         (
             probe_directory,
             None,
             SensitivityMethod::ExactBfloat16Reference,
         )
     };
-    let mut probe_model =
-        probe_model_loader.load_probe_model(&probe_directory, streaming_source_directory)?;
     let checkpoint_path = request
         .output_directory
         .join(SENSITIVITY_CHECKPOINT_FILE_NAME);
-    let sensitivity_table = probe_model.run_sweep(ExactSweepRequest {
-        calibration_samples: &calibration_samples,
-        candidate_bit_widths,
-        group_size: request.group_size,
-        method,
-        checkpoint_path: Some(&checkpoint_path),
-        progress_reporter,
-    })?;
-    drop(probe_model);
-    if is_uniform_reference && let Err(remove_error) = std::fs::remove_dir_all(&probe_directory) {
-        tracing::warn!(%remove_error, baseline = %probe_directory.display(), "the uniform baseline was not removed");
-    }
-    Ok(sensitivity_table)
+    let sweep_outcome = sweep_with_probe(
+        probe_model_loader,
+        &probe_directory,
+        streaming_source_directory,
+        ExactSweepRequest {
+            calibration_samples: &calibration_samples,
+            candidate_bit_widths,
+            group_size: request.group_size,
+            method,
+            checkpoint_path: Some(&checkpoint_path),
+            progress_reporter,
+        },
+    );
+    let keeps_baseline_for_a_rerun = is_uniform_reference && sweep_outcome.is_err();
+    remove_scratch_probe_directory(request, &probe_directory, keeps_baseline_for_a_rerun);
+    sweep_outcome
 }
+
+/// The probe directory is scratch whenever it is not the source itself.
+/// The indexed view and the bfloat16 copy are rebuilt by every run, so they
+/// go whether or not the sweep succeeded. The uniform baseline is the
+/// expensive one to build and a rerun resumes from it, so the caller keeps
+/// it after a failure and it goes only once the sweep is complete.
+fn remove_scratch_probe_directory(
+    request: &QuantizationPipelineRequest,
+    probe_directory: &Path,
+    keeps_baseline_for_a_rerun: bool,
+) {
+    let is_scratch_probe_directory = probe_directory != request.source_directory;
+    if is_scratch_probe_directory
+        && !keeps_baseline_for_a_rerun
+        && let Err(remove_error) = std::fs::remove_dir_all(probe_directory)
+    {
+        tracing::warn!(%remove_error, probe_directory = %probe_directory.display(), "the probe's scratch directory was not removed");
+    }
+}
+
+/// Loads the probe model and sweeps it; the model is released on return.
+fn sweep_with_probe(
+    probe_model_loader: &mut dyn ProbeModelLoader,
+    probe_directory: &Path,
+    streaming_source_directory: Option<&Path>,
+    sweep_request: ExactSweepRequest<'_>,
+) -> Result<SensitivityTable, QuantizationError> {
+    let mut probe_model =
+        probe_model_loader.load_probe_model(probe_directory, streaming_source_directory)?;
+    probe_model.run_sweep(sweep_request)
+}
+
+/// The directory the bf16 reference probe loads: the source itself (through
+/// an indexed view when it has no shard index), or, when the source stores
+/// modules in a layout only a converter understands (fused or per-expert
+/// routed experts in an original release), a bfloat16 copy written in the
+/// output layout. The copy costs the model's size on disk for the length of
+/// the sweep; a bf16 reference already needs that much memory, and a model
+/// too large for either takes the uniform reference instead.
+fn bfloat16_probe_directory(
+    runtime: &MlxRuntime,
+    request: &QuantizationPipelineRequest,
+    progress_reporter: &mut dyn ProgressReporter,
+) -> Result<PathBuf, QuantizationError> {
+    let inventory =
+        ModuleInventory::from_source_directory(&request.source_directory, request.group_size)?;
+    if !inventory.has_assembled_modules() {
+        let (probe_directory, _) =
+            loadable_model_directory(&request.source_directory, &request.output_directory)?;
+        return Ok(probe_directory);
+    }
+    let copy_directory = request
+        .output_directory
+        .join(BFLOAT16_PROBE_COPY_DIRECTORY_NAME);
+    if copy_directory.exists()
+        && let Err(remove_error) = std::fs::remove_dir_all(&copy_directory)
+    {
+        return Err(artifact_write_failure(&copy_directory, &remove_error));
+    }
+    let plan = RequantizeTensorPlan::from_inventory(&inventory, &BitPolicy::KeepEverythingBfloat16);
+    run_requantize(
+        runtime,
+        &request.source_directory,
+        &copy_directory,
+        &plan,
+        range_search_policy_for(request),
+        DEFAULT_SHARD_BYTES,
+        progress_reporter,
+    )?;
+    let copied_config_path = copy_directory.join("config.json");
+    if let Err(copy_error) = std::fs::copy(
+        request.source_directory.join("config.json"),
+        &copied_config_path,
+    ) {
+        return Err(artifact_write_failure(&copy_directory, &copy_error));
+    }
+    normalize_converted_config(&copied_config_path)?;
+    copy_source_files(
+        &request.source_directory,
+        &copy_directory,
+        DEFAULT_COPY_PATTERNS,
+    )?;
+    Ok(copy_directory)
+}
+
+/// Where the bfloat16 copy for the probe is written; removed after the sweep.
+const BFLOAT16_PROBE_COPY_DIRECTORY_NAME: &str = "_bfloat16_probe_source";
 
 /// Tokenizes the mix with the source's own tokenizer and keeps the first
 /// `calibration_sequence_count` of a wider draw.
@@ -193,9 +290,8 @@ fn load_calibration_samples(
     request: &QuantizationPipelineRequest,
     progress_reporter: &mut dyn ProgressReporter,
 ) -> Result<Vec<CalibrationForwardSample>, QuantizationError> {
-    let tokenizer = HuggingFaceCalibrationTokenizer::from_tokenizer_file(
-        &request.source_directory.join("tokenizer.json"),
-    )?;
+    let tokenizer =
+        HuggingFaceCalibrationTokenizer::from_model_directory(&request.source_directory)?;
     let drawn_sequence_count =
         (2 * request.calibration_sequence_count).max(MINIMUM_CALIBRATION_DRAW);
     let calibration_mix = match &request.calibration_mix_path {
@@ -261,7 +357,7 @@ fn ensure_uniform_baseline(
     )?;
     QuantizationConfigDocument::from_written_modules(
         request.group_size.elements(),
-        4,
+        QUANTIZATION_DOCUMENT_DEFAULT_BITS,
         &outcome.written_quantization_by_module,
     )
     .write_into_config(
@@ -310,9 +406,10 @@ fn finish_artifact(
     artifact_directory: &Path,
     sensitivity_table: SensitivityTable,
     allocation: AllocationResult,
-    default_bits: u32,
+    declares_multimodal_towers: bool,
     requantize_outcome: RequantizeOutcome,
 ) -> Result<QuantizationPipelineOutcome, QuantizationError> {
+    let vision_sidecar = written_vision_sidecar(&requantize_outcome);
     let written_quantization_by_module: &BTreeMap<String, (u32, u32)> =
         &requantize_outcome.written_quantization_by_module;
     let sensitivity_document_written = write_artifact_documents(&ArtifactDocumentsRequest {
@@ -324,14 +421,13 @@ fn finish_artifact(
         sensitivity_table: &sensitivity_table,
         candidate_bits: &request.candidate_bits,
         group_size: request.group_size,
-        default_bits,
+        default_bits: QUANTIZATION_DOCUMENT_DEFAULT_BITS,
+        vision_sidecar,
+        declares_multimodal_towers,
+        mtp_sidecar: requantize_outcome.mtp_sidecar.as_ref(),
         written_quantization_by_module,
     })?;
-    copy_source_files(
-        &request.source_directory,
-        artifact_directory,
-        DEFAULT_COPY_PATTERNS,
-    )?;
+    write_companion_files(request, artifact_directory)?;
     Ok(QuantizationPipelineOutcome {
         artifact_directory: artifact_directory.to_path_buf(),
         method: sensitivity_table.method,
@@ -340,6 +436,29 @@ fn finish_artifact(
         total_output_bytes: requantize_outcome.total_output_bytes,
         sensitivity_document_written,
     })
+}
+
+/// The tower sidecar's file name and tensor count, when one was written.
+fn written_vision_sidecar(requantize_outcome: &RequantizeOutcome) -> Option<(&'static str, usize)> {
+    let tensor_count = requantize_outcome.vision_sidecar_tensor_count;
+    (tensor_count > 0).then_some((VISION_SIDECAR_FILE_NAME, tensor_count))
+}
+
+/// The files beside the weights and documents: the tokenizer, template and
+/// processor files copied from the source, the family's recommended
+/// sampling, and the model card.
+fn write_companion_files(
+    request: &QuantizationPipelineRequest,
+    artifact_directory: &Path,
+) -> Result<(), QuantizationError> {
+    copy_source_files(
+        &request.source_directory,
+        artifact_directory,
+        DEFAULT_COPY_PATTERNS,
+    )?;
+    write_recommended_generation_config(artifact_directory, &request.base_model_name)?;
+    write_model_card(artifact_directory)?;
+    Ok(())
 }
 
 /// The allocation's headline figures and, when the floor or the run guard

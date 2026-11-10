@@ -9,7 +9,7 @@ use astronomical_quantization::requantize::tensor_plan::{RequantizeTensorPlan, T
 use super::module_inventory_journeys::write_bf16_source;
 
 #[test]
-fn should_plan_uniform_four_bit_for_linears_and_pass_through_for_norms_and_routers() {
+fn should_plan_uniform_four_bit_for_linears_eight_for_the_router_and_pass_norms_through() {
     let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
     write_bf16_source(
         directory.path(),
@@ -35,15 +35,33 @@ fn should_plan_uniform_four_bit_for_linears_and_pass_through_for_norms_and_route
     );
 
     assert_eq!(plan.tensor_count(), 3);
-    assert_eq!(plan.quantized_tensor_count(), 1);
-    let router =
-        planned_entry(&plan, "model.layers.0.mlp.gate.weight").expect("the router is planned");
-    assert_eq!(router.decision, TensorEncodingDecision::PassThrough);
-    // 256*128 at 4 bits plus 512 groups of scale and bias, plus the two
-    // pass-through tensors at bfloat16.
+    assert_eq!(plan.quantized_tensor_count(), 2);
+    // Qwen's router is a plain linear layer, written under mlx-lm's name at
+    // mlx-lm's own width for a mixture-of-experts gate.
+    let router = planned_entry(&plan, "language_model.model.layers.0.mlp.gate.weight")
+        .expect("the router is planned");
+    assert_eq!(
+        router.decision,
+        TensorEncodingDecision::Encode {
+            bit_width: BitWidth::new(8).expect("valid"),
+            group_size: GroupSize::new(64).expect("valid"),
+        }
+    );
+    let norm = planned_entry(
+        &plan,
+        "language_model.model.layers.0.input_layernorm.weight",
+    )
+    .expect("the norm is planned");
+    assert_eq!(norm.decision, TensorEncodingDecision::PassThrough);
+    assert_eq!(
+        norm.source_tensor_name,
+        "model.layers.0.input_layernorm.weight"
+    );
+    // 256*128 at 4 bits plus 512 groups of scale and bias; the router's
+    // 8*128 at 8 bits plus 16 groups; the norm at bfloat16.
     assert_eq!(
         plan.estimated_output_bytes(),
-        16_384 + 2_048 + (8 * 128 * 2) + (128 * 2)
+        16_384 + 2_048 + (8 * 128) + (16 * 4) + (128 * 2)
     );
 }
 
@@ -94,10 +112,13 @@ fn should_carry_each_packed_module_s_own_source_parameters_into_the_plan() {
         },
     );
 
-    let up_projection = planned_entry(&plan, "model.layers.0.mlp.up_proj.weight")
+    // The source config keys its widths by the source's spelling; the plan
+    // writes under mlx-lm's.
+    let up_projection = planned_entry(&plan, "language_model.model.layers.0.mlp.up_proj.weight")
         .expect("the up projection is planned");
-    let down_projection = planned_entry(&plan, "model.layers.0.mlp.down_proj.weight")
-        .expect("the down projection is planned");
+    let down_projection =
+        planned_entry(&plan, "language_model.model.layers.0.mlp.down_proj.weight")
+            .expect("the down projection is planned");
     assert_eq!(up_projection.source_quantization, Some((8, 64)));
     assert_eq!(down_projection.source_quantization, Some((4, 64)));
     assert_eq!(down_projection.shape, vec![128, 256]);

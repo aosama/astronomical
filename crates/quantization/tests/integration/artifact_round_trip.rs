@@ -43,7 +43,6 @@ fn should_write_config_metadata_and_sensitivity_where_optiq_and_astronomical_rea
     let mut metadata = OptiQArtifactMetadata::for_method(
         SensitivityMethod::ExactBfloat16Reference,
         "example/base",
-        64,
     );
     metadata.describe_written_artifact(&written);
     metadata

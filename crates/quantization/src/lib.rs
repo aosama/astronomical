@@ -68,6 +68,7 @@ pub mod artifact;
 pub mod bit_width;
 pub mod calibration;
 pub mod error;
+pub mod evaluation;
 pub mod kv_cache;
 pub mod latency;
 pub mod module_inventory;

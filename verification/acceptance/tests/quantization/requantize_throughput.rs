@@ -30,6 +30,7 @@ fn should_requantize_the_installed_source_at_uniform_four_bits_and_report_throug
     let plan = uniform_four_bit_plan(&source);
     let warmup_plan = RequantizeTensorPlan {
         entries: vec![plan.entries[0].clone()],
+        conversion_group_size: plan.conversion_group_size,
     };
     let mut warmup_reporter = TimedProgressReporter::default();
     run_requantize(

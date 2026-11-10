@@ -9,6 +9,7 @@ use astronomical_model_serving::quantization_probe::{
 use astronomical_quantization::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
 use astronomical_quantization::error::QuantizationError;
 use astronomical_quantization::module_inventory::QuantizableModuleDescriptor;
+use astronomical_quantization::pipeline::probe_source_view::loadable_model_directory;
 use astronomical_quantization::pipeline::{
     PipelineMethod, ProbeModelHandle, ProbeModelLoader, ProbeModelSweeper,
     QuantizationPipelineRequest, ReferenceMode, run_quantization_pipeline,
@@ -87,9 +88,15 @@ fn should_measure_sensitivity_with_the_bfloat16_reference_and_resume_from_a_chec
     let _ = std::fs::remove_dir_all(&output_directory);
 }
 
+/// A single-file bf16 source has no shard index for the engine to read, so
+/// the probe loads through the same indexed view the pipeline builds. The
+/// view is hard links in a temporary directory and costs no disk.
 fn load_probe(model_directory: &Path) -> Qwen3_5SensitivityProbe {
+    let view_parent = fresh_output_directory("probe-view");
+    let (probe_directory, _) = loadable_model_directory(model_directory, &view_parent)
+        .expect("the probe directory should be available");
     load_qwen3_5_probe_model(
-        model_directory,
+        &probe_directory,
         None,
         journey_memory_limits(),
         PREFILL_CHUNK_TOKENS,
@@ -199,7 +206,7 @@ impl ProbeModelLoader for JourneyProbeLoader {
 }
 
 /// Fixed-length Romeo and Juliet sequences through the source's tokenizer.
-fn romeo_and_juliet_samples(model_directory: &Path) -> Vec<CalibrationForwardSample> {
+pub(super) fn romeo_and_juliet_samples(model_directory: &Path) -> Vec<CalibrationForwardSample> {
     let tokenizer = tokenizers::Tokenizer::from_file(model_directory.join("tokenizer.json"))
         .expect("the tokenizer should load");
     let mut prompt_text = String::new();
@@ -400,7 +407,7 @@ fn should_reproduce_its_own_reference_forward() {
 
 /// KL against `reference_logits` with one module probed at `bits`, restored
 /// afterwards.
-fn probed_kl(
+pub(super) fn probed_kl(
     probe_model: &mut Qwen3_5SensitivityProbe,
     module_name: &str,
     bits: u32,

@@ -11,19 +11,68 @@ fn group(value: u32) -> GroupSize {
 }
 
 #[test]
-fn should_never_quantize_the_router_under_any_policy() {
+fn should_never_quantize_the_router_under_the_structural_policy() {
     let structural = BitPolicy::Structural(StructuralMixtureOfExpertsPolicy::optiq_defaults());
-    let uniform = BitPolicy::Uniform {
-        bit_width: bits(4),
-        group_size: group(64),
-    };
 
     assert_eq!(
         structural.decide("model.layers.3.mlp.gate.weight"),
         TensorEncodingDecision::PassThrough
     );
+}
+
+#[test]
+fn should_pin_the_router_and_the_shared_expert_gate_at_eight_bits_under_the_uniform_policy() {
+    let uniform = BitPolicy::Uniform {
+        bit_width: bits(4),
+        group_size: group(128),
+    };
+
     assert_eq!(
         uniform.decide("model.layers.3.mlp.gate.weight"),
+        TensorEncodingDecision::Encode {
+            bit_width: bits(8),
+            group_size: group(64),
+        }
+    );
+    assert_eq!(
+        uniform.decide("model.layers.3.mlp.shared_expert_gate.weight"),
+        TensorEncodingDecision::Encode {
+            bit_width: bits(8),
+            group_size: group(64),
+        }
+    );
+    assert_eq!(
+        uniform.decide("model.layers.3.mlp.gate_proj.weight"),
+        TensorEncodingDecision::Encode {
+            bit_width: bits(4),
+            group_size: group(128),
+        }
+    );
+}
+
+#[test]
+fn should_fall_back_to_the_largest_group_that_divides_the_last_dimension() {
+    let planned = TensorEncodingDecision::Encode {
+        bit_width: bits(4),
+        group_size: group(128),
+    };
+
+    assert_eq!(
+        BitPolicy::adjust_for_shape(planned, &[8, 192]),
+        TensorEncodingDecision::Encode {
+            bit_width: bits(4),
+            group_size: group(64),
+        }
+    );
+    assert_eq!(
+        BitPolicy::adjust_for_shape(planned, &[8, 160]),
+        TensorEncodingDecision::Encode {
+            bit_width: bits(4),
+            group_size: group(32),
+        }
+    );
+    assert_eq!(
+        BitPolicy::adjust_for_shape(planned, &[8, 100]),
         TensorEncodingDecision::PassThrough
     );
 }
@@ -145,4 +194,18 @@ fn should_exclude_the_shared_expert_from_routed_experts() {
     assert!(!is_routed_expert_tensor_key(
         "model.layers.1.mlp.shared_experts.up_proj.weight"
     ));
+}
+
+#[test]
+fn should_encode_nothing_under_the_keep_everything_policy() {
+    let keep_everything = BitPolicy::KeepEverythingBfloat16;
+
+    assert_eq!(
+        keep_everything.decide("model.layers.3.mlp.up_proj.weight"),
+        TensorEncodingDecision::PassThrough
+    );
+    assert_eq!(
+        keep_everything.decide("model.layers.3.mlp.gate.weight"),
+        TensorEncodingDecision::PassThrough
+    );
 }

@@ -2,21 +2,19 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-/// The `method` value current mlx-optiq releases write for sensitivity-driven
-/// mixed precision. Every other value routes to the static-allocation shape,
-/// which is also what documents written before `method` was versioned carry.
-const MIXED_PRECISION_METHOD: &str = "optiq_mixed_precision";
-
-/// One per-module override as OptiQ restates it: bits and group size only,
-/// with no `mode` key (affine is implied by the producer).
+/// One per-module entry as OptiQ restates it: bits and group size only,
+/// with no `mode` key (affine is implied by the producer). The group size is
+/// absent (`null`) for a module OptiQ's streaming convert left at bfloat16.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct OptiQPerLayerOverride {
     pub(super) bits: u32,
-    pub(super) group_size: u32,
+    pub(super) group_size: Option<u32>,
 }
 
-/// Document written by the sensitivity-driven `optiq_mixed_precision` method.
+/// The summary layout: default bits, the widths used and how many modules
+/// sit at each. Carried by published `optiq_mixed_precision` artifacts that
+/// predate the pipeline layout or were assembled from a sibling's recipe.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[allow(dead_code)]
@@ -40,8 +38,10 @@ pub(super) struct MixedPrecisionMetadataDocument {
     per_layer: BTreeMap<String, OptiQPerLayerOverride>,
 }
 
-/// Document written by the static (structure-rule) allocator, and by the
-/// original sensitivity pipeline before `method` carried a version.
+/// The pipeline layout: the reference, the target and achieved bits per
+/// weight and the counts at the ladder's ends. mlx-optiq's conversion
+/// pipeline writes it for every method, the measured `optiq_mixed_precision`
+/// as well as the structural `static_mixed_precision`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[allow(dead_code)]
@@ -60,29 +60,31 @@ pub(super) struct StaticMetadataDocument {
 }
 
 /// The measured-bit-map documents the strict reader understands, one variant
-/// per producer method so each keeps its own unknown-field rejection.
+/// per layout so each keeps its own unknown-field rejection.
 #[derive(Debug)]
 pub(super) enum OptiQMetadataDocument {
     Mixed(MixedPrecisionMetadataDocument),
     Static(StaticMetadataDocument),
 }
 
+/// The two fields that decide the layout. `method` must be present in
+/// both. `default_bits` exists only in the summary layout, so its presence
+/// selects it: the method name cannot, because `optiq_mixed_precision`
+/// labels documents in both layouts.
 #[derive(Deserialize)]
-struct MethodProbe {
+struct LayoutProbe {
+    #[allow(dead_code)]
     method: String,
-}
-
-/// Decides whether a `method` value names the sensitivity-driven shape.
-pub(super) fn is_mixed_precision_method(method: &str) -> bool {
-    method == MIXED_PRECISION_METHOD
+    #[serde(default)]
+    default_bits: Option<serde_json::Value>,
 }
 
 impl OptiQMetadataDocument {
-    /// Decodes the document by dispatching on `method`; a missing `method`
+    /// Decodes the document by dispatching on its layout; a missing `method`
     /// or any shape violation is a strict decode error.
     pub(super) fn from_json_bytes(metadata_bytes: &[u8]) -> Result<Self, serde_json::Error> {
-        let method_probe: MethodProbe = serde_json::from_slice(metadata_bytes)?;
-        if is_mixed_precision_method(&method_probe.method) {
+        let layout_probe: LayoutProbe = serde_json::from_slice(metadata_bytes)?;
+        if layout_probe.default_bits.is_some() {
             serde_json::from_slice(metadata_bytes).map(Self::Mixed)
         } else {
             serde_json::from_slice(metadata_bytes).map(Self::Static)

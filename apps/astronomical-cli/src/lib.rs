@@ -30,7 +30,8 @@ pub use verbs::model_programs::{ModelProgramsReport, render_model_programs};
 pub use verbs::models::{ModelsCommand, ModelsDependencies, ModelsError, run_models};
 pub use verbs::quantize::{
     QuantizeCommand, QuantizeConvertArguments, QuantizeDependencies, QuantizeError,
-    QuantizeInspectArguments, QuantizePlanArguments, run_quantize_convert, run_quantize_inspect,
+    QuantizeEvaluateArguments, QuantizeInspectArguments, QuantizePlanArguments,
+    run_quantize_command, run_quantize_convert, run_quantize_evaluate, run_quantize_inspect,
     run_quantize_plan,
 };
 pub use verbs::respond::{RespondArguments, RespondDependencies, RespondError, run_respond};

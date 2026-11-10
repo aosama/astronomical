@@ -11,10 +11,13 @@
 //! sweep inside Astronomical: the allocation is calibrated on the kernels
 //! the artifact will actually run through.
 
+mod expert_swaps;
+mod kl_evaluation_engine;
 mod module_locations;
 mod qwen3_5_probe;
 mod simulated_quantization;
 
+pub use kl_evaluation_engine::Qwen3_5KlDivergenceEngine;
 pub use module_locations::{
     AttentionProjection, FeedForwardProjection, ModuleLocation, module_location_for,
 };

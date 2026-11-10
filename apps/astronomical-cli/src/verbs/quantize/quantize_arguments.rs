@@ -1,5 +1,5 @@
 //! Arguments for `astronomical quantize`, an ephemeral in-process verb with
-//! three sub-verbs.
+//! four sub-verbs.
 //!
 //! - `quantize plan --sensitivity FILE --target-bits-per-weight N [...]`:
 //!   allocate from an existing `optiq/sensitivity.json` and print the bit
@@ -9,6 +9,9 @@
 //!   provenance (method, reference, target and achieved bits per weight,
 //!   per-width module counts). Pure.
 //! - `quantize convert SOURCE_DIR --output DIR [...]`: the full pipeline.
+//!   Needs the `quantize-convert` build feature.
+//! - `quantize evaluate ARTIFACT_DIR --reference DIR [...]`: how far the
+//!   artifact's next-token distribution drifts from a reference model's.
 //!   Needs the `quantize-convert` build feature.
 //!
 //! Flag names spell every word out, per the repository's naming rule:
@@ -20,6 +23,9 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use astronomical_quantization::bit_width::{BitWidth, GroupSize};
+use astronomical_quantization::evaluation::{
+    DEFAULT_EVALUATION_PROMPT_COUNT, DEFAULT_EVALUATION_SEQUENCE_LENGTH_TOKENS,
+};
 
 use crate::arguments::UsageError;
 
@@ -29,6 +35,18 @@ pub enum QuantizeCommand {
     Plan(QuantizePlanArguments),
     Inspect(QuantizeInspectArguments),
     Convert(QuantizeConvertArguments),
+    Evaluate(QuantizeEvaluateArguments),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QuantizeEvaluateArguments {
+    /// The quant being evaluated.
+    pub artifact_directory: PathBuf,
+    /// The model whose distribution is the truth, usually the bfloat16 base.
+    pub reference_directory: PathBuf,
+    pub prompt_count: usize,
+    pub sequence_length_tokens: usize,
+    pub render_json: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -104,11 +122,19 @@ pub fn parse_quantize_command(
     let Some(sub_verb) = remaining_arguments.first() else {
         return Err(UsageError::MissingCommand);
     };
-    let flag_arguments = &remaining_arguments[1..];
-    match sub_verb.to_string_lossy().as_ref() {
+    parse_quantize_sub_verb(&sub_verb.to_string_lossy(), &remaining_arguments[1..])
+}
+
+/// One sub-verb's arguments, by the sub-verb's name.
+fn parse_quantize_sub_verb(
+    sub_verb: &str,
+    flag_arguments: &[OsString],
+) -> Result<QuantizeCommand, UsageError> {
+    match sub_verb {
         "plan" => parse_plan_arguments(flag_arguments).map(QuantizeCommand::Plan),
         "inspect" => parse_inspect_arguments(flag_arguments).map(QuantizeCommand::Inspect),
         "convert" => parse_convert_arguments(flag_arguments).map(QuantizeCommand::Convert),
+        "evaluate" => parse_evaluate_arguments(flag_arguments).map(QuantizeCommand::Evaluate),
         unknown_target => Err(UsageError::UnknownQuantizeTarget(unknown_target.to_owned())),
     }
 }
@@ -262,6 +288,90 @@ fn parse_inspect_arguments(arguments: &[OsString]) -> Result<QuantizeInspectArgu
         artifact_directory: required(artifact_directory, "ARTIFACT_DIR")?,
         render_json,
     })
+}
+
+/// `quantize evaluate ARTIFACT_DIR --reference DIR [--prompts N]
+/// [--sequence-length N] [--json]`, with OptiQ's defaults of 64 prompts of
+/// at most 256 tokens.
+fn parse_evaluate_arguments(
+    arguments: &[OsString],
+) -> Result<QuantizeEvaluateArguments, UsageError> {
+    let mut cursor = QuantizeArgumentCursor::new(arguments);
+    let mut flag_values = EvaluateFlagValues::default();
+    while let Some(argument) = cursor.next_argument() {
+        apply_evaluate_argument(&mut flag_values, &mut cursor, argument)?;
+    }
+    Ok(QuantizeEvaluateArguments {
+        artifact_directory: required(flag_values.artifact_directory, "ARTIFACT_DIR")?,
+        reference_directory: required(flag_values.reference_directory, "--reference")?,
+        prompt_count: flag_values
+            .prompt_count
+            .unwrap_or(DEFAULT_EVALUATION_PROMPT_COUNT),
+        sequence_length_tokens: flag_values
+            .sequence_length_tokens
+            .unwrap_or(DEFAULT_EVALUATION_SEQUENCE_LENGTH_TOKENS),
+        render_json: flag_values.render_json,
+    })
+}
+
+/// The evaluate sub-verb's flags, accumulated before defaults are applied.
+#[derive(Default)]
+struct EvaluateFlagValues {
+    artifact_directory: Option<PathBuf>,
+    reference_directory: Option<PathBuf>,
+    prompt_count: Option<usize>,
+    sequence_length_tokens: Option<usize>,
+    render_json: bool,
+}
+
+/// Applies one evaluate argument: a flag with its value, the switch, or the
+/// positional artifact directory.
+fn apply_evaluate_argument(
+    flag_values: &mut EvaluateFlagValues,
+    cursor: &mut QuantizeArgumentCursor<'_>,
+    argument: String,
+) -> Result<(), UsageError> {
+    match argument.as_str() {
+        "--reference" => {
+            let reference = PathBuf::from(cursor.flag_value("--reference")?);
+            set_once(
+                &mut flag_values.reference_directory,
+                reference,
+                "--reference",
+            )
+        }
+        "--prompts" => {
+            let parsed_count = parse_positive("--prompts", &cursor.flag_value("--prompts")?)?;
+            set_once(&mut flag_values.prompt_count, parsed_count, "--prompts")
+        }
+        "--sequence-length" => {
+            let sequence_length_text = cursor.flag_value("--sequence-length")?;
+            let parsed_length = parse_positive("--sequence-length", &sequence_length_text)?;
+            set_once(
+                &mut flag_values.sequence_length_tokens,
+                parsed_length,
+                "--sequence-length",
+            )
+        }
+        "--json" => set_switch(&mut flag_values.render_json, "--json"),
+        _ if argument.starts_with('-') || flag_values.artifact_directory.is_some() => {
+            Err(UsageError::UnknownArgument(argument))
+        }
+        _ => {
+            flag_values.artifact_directory = Some(PathBuf::from(argument));
+            Ok(())
+        }
+    }
+}
+
+/// A whole number above zero: an evaluation of no prompts or no tokens
+/// measures nothing.
+fn parse_positive(flag: &'static str, unsigned_text: &str) -> Result<usize, UsageError> {
+    let parsed_value = parse_unsigned::<usize>(flag, unsigned_text)?;
+    if parsed_value == 0 {
+        return Err(invalid_value(flag, "must be at least 1".to_owned()));
+    }
+    Ok(parsed_value)
 }
 
 /// The convert sub-verb's flags, accumulated before defaults are applied.

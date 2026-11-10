@@ -78,6 +78,9 @@ pub enum QuantizationError {
     )]
     KeepBfloat16TierNeedsBfloat16Reference,
 
+    #[error("the evaluation has no prompt with at least one token to measure")]
+    EvaluationHasNoPrompts,
+
     #[error("the sensitivity probe model failed: {description}")]
     ProbeModelFailure { description: String },
 

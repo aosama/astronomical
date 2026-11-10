@@ -24,7 +24,10 @@ mod quantization_config_tests;
 pub struct ModuleQuantizationEntry {
     pub group_size: u32,
     pub bits: u32,
-    pub mode: String,
+    /// Absent in documents mlx-lm's convert writes: a module entry inherits
+    /// the document's top-level mode. Present where a producer restates it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
 }
 
 /// The document as serialized: defaults plus flattened per-module entries.
@@ -56,7 +59,7 @@ impl QuantizationConfigDocument {
                 ModuleQuantizationEntry {
                     group_size: *group_size,
                     bits: *bits,
-                    mode: AFFINE_MODE.to_owned(),
+                    mode: None,
                 },
             );
         }

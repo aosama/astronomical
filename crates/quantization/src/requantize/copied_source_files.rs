@@ -9,5 +9,9 @@ pub const DEFAULT_COPY_PATTERNS: &[&str] = &[
     "generation_config.json",
     "chat_template*",
     "preprocessor_config.json",
+    // mlx-vlm and the apps built on it construct their image and video
+    // processors from these; without them a tower sidecar is unusable.
+    "processor_config.json",
+    "video_preprocessor_config.json",
     "special_tokens_map.json",
 ];
