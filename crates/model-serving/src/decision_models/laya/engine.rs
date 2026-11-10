@@ -15,20 +15,19 @@ use astronomical_decision_contract::laya_sequence::{
     LayaQuestionSequence, LayaSequenceError, build_laya_question_sequence, encode_laya_state,
 };
 use astronomical_decision_contract::{
-    DecisionFailure, DecisionQuestion, OrderedJsonValue, answer_from_probabilities,
-    calibrated_probabilities,
+    DecisionFailure, DecisionQuestion, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
+    answer_from_probabilities, calibrated_probabilities,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 
-use crate::decision_engine::{
-    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, QuestionInputCoverage,
-    QuestionOutcome,
-};
+use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::laya::artifact::LayaArtifact;
 use crate::decision_models::laya::batching::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
 use crate::decision_models::laya::configuration::LayaConfiguration;
 use crate::decision_models::laya::head::{HeadPassRows, LayaDecisionHead};
+use crate::decision_models::laya::memory_telemetry::laya_memory_telemetry;
 use crate::decision_models::laya::tokenizer::LayaTokenizer;
+use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::{ModernBertTrunk, ModernBertTrunkError};
 use crate::modernbert::weight_layout::{ModernBertWeightLayout, TokenEmbeddingStorage};
@@ -43,8 +42,10 @@ pub struct LayaDecisionEngine {
     model_id: String,
     effective_mlx_memory_ceiling_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
+    resident_weight_bytes: u64,
     preloaded_artifact: Option<LayaArtifact>,
     loaded_state: Option<LoadedLayaState>,
+    post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
 }
 
 struct LoadedLayaState {
@@ -75,8 +76,10 @@ impl LayaDecisionEngine {
             model_id: model_id.into(),
             effective_mlx_memory_ceiling_bytes,
             allocator_cache_memory_limit_bytes,
+            resident_weight_bytes: artifact.weights_file_bytes,
             preloaded_artifact: Some(artifact),
             loaded_state: None,
+            post_cleanup_memory_telemetry: None,
         })
     }
 
@@ -283,29 +286,73 @@ impl DecisionEngine for LayaDecisionEngine {
         let _cleanup_result = loaded_state
             .runtime
             .synchronize_gpu_stream_and_clear_allocator_cache();
-        let option_logits_by_question = forward_result?;
-        let mut question_outcomes = Vec::with_capacity(questions.len());
-        let mut input_token_count = 0_u32;
-        for ((question, question_sequence), option_logits) in questions
-            .iter()
-            .zip(&question_sequences)
-            .zip(option_logits_by_question)
-        {
-            input_token_count =
-                input_token_count.saturating_add(question_sequence.token_ids.len() as u32);
-            question_outcomes.push(question_outcome(
+        // Taken after the cleanup, so it holds no reusable-cache bytes and is
+        // the state the next request starts from.
+        let post_cleanup_memory_telemetry = match loaded_state.runtime.memory_snapshot() {
+            Ok(memory_snapshot) => Some(laya_memory_telemetry(
+                &memory_snapshot,
+                self.effective_mlx_memory_ceiling_bytes as u64,
+                self.resident_weight_bytes,
+            )),
+            Err(_) => None,
+        };
+        let decision_outcome = match forward_result {
+            Ok(option_logits_by_question) => answered_questions(
                 &loaded_state.configuration,
-                question,
-                question_sequence,
-                option_logits,
-            )?);
-        }
+                questions,
+                &question_sequences,
+                option_logits_by_question,
+            ),
+            Err(forward_failure) => Err(forward_failure),
+        };
+        self.post_cleanup_memory_telemetry = post_cleanup_memory_telemetry;
+        let (question_outcomes, input_token_count) = decision_outcome?;
         Ok(DecisionEngineOutput {
             question_outcomes,
             input_token_count,
             elapsed_millis: u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
         })
     }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.post_cleanup_memory_telemetry.take()
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        let loaded_state = self.loaded_state.as_ref()?;
+        let memory_snapshot = loaded_state.runtime.memory_snapshot().ok()?;
+        Some(laya_memory_telemetry(
+            &memory_snapshot,
+            self.effective_mlx_memory_ceiling_bytes as u64,
+            self.resident_weight_bytes,
+        ))
+    }
+}
+
+/// Turns every question's logits into its answer, and counts the tokens read.
+fn answered_questions(
+    configuration: &LayaConfiguration,
+    questions: &[DecisionQuestion],
+    question_sequences: &[LayaQuestionSequence],
+    option_logits_by_question: Vec<Vec<f32>>,
+) -> Result<(Vec<QuestionOutcome>, u32), DecisionFailure> {
+    let mut question_outcomes = Vec::with_capacity(questions.len());
+    let mut input_token_count = 0_u32;
+    for ((question, question_sequence), option_logits) in questions
+        .iter()
+        .zip(question_sequences)
+        .zip(option_logits_by_question)
+    {
+        input_token_count =
+            input_token_count.saturating_add(question_sequence.token_ids.len() as u32);
+        question_outcomes.push(question_outcome(
+            configuration,
+            question,
+            question_sequence,
+            option_logits,
+        )?);
+    }
+    Ok((question_outcomes, input_token_count))
 }
 
 /// Calibrates one question's logits and builds its typed answer.

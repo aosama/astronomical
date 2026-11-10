@@ -496,12 +496,27 @@ pub(in crate::worker) fn fail_active_generation(
                 .image_result_sender
                 .try_send(Err(crate::ImageGenerationExecutionError::WorkerUnavailable));
         }
-        Some(ActiveWorkerRequest::Embeddings(failed_embeddings)) => {
-            let _send_outcome = failed_embeddings
-                .embeddings_result_sender
-                .try_send(Err(crate::EmbeddingsExecutionError::WorkerUnavailable));
-        }
+        Some(
+            failed_single_shot_request @ (ActiveWorkerRequest::Embeddings(_)
+            | ActiveWorkerRequest::Decisions(_)),
+        ) => fail_active_single_shot_request(failed_single_shot_request),
         None => {}
+    }
+}
+
+/// Tells the caller of a failed embeddings or decisions request that the
+/// worker is gone. Chat and image requests are answered by their own arms
+/// above, so they are left alone here.
+fn fail_active_single_shot_request(failed_request: ActiveWorkerRequest) {
+    if let ActiveWorkerRequest::Embeddings(failed_embeddings) = &failed_request {
+        let _send_outcome = failed_embeddings
+            .embeddings_result_sender
+            .try_send(Err(crate::EmbeddingsExecutionError::WorkerUnavailable));
+    }
+    if let ActiveWorkerRequest::Decisions(failed_decisions) = &failed_request {
+        let _send_outcome = failed_decisions
+            .decisions_result_sender
+            .try_send(Err(crate::DecisionsExecutionError::WorkerUnavailable));
     }
 }
 

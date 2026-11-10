@@ -28,6 +28,7 @@ const CONNECTION_ENDPOINT_PATHS = [
     "/v1/responses",
     "/v1/models",
     "/v1/embeddings",
+    "/v1/systemone",
     "/v1/images/generations"
 ];
 

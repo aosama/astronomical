@@ -22,6 +22,8 @@ pub(crate) struct LayaArtifact {
     pub(crate) tokenizer_json_bytes: Vec<u8>,
     pub(crate) tokenizer_settings_bytes: Vec<u8>,
     pub(crate) weights_file: File,
+    /// The weight file's size, reported as the model's resident memory.
+    pub(crate) weights_file_bytes: u64,
 }
 
 /// Why a directory is not a servable Laya artifact.
@@ -71,11 +73,21 @@ impl LayaArtifact {
                 });
             }
         };
+        let weights_file_bytes = match weights_file.metadata() {
+            Ok(weights_metadata) => weights_metadata.len(),
+            Err(source) => {
+                return Err(LayaArtifactError::UnreadableFile {
+                    file_name: "model.safetensors",
+                    source,
+                });
+            }
+        };
         Ok(Self {
             configuration,
             tokenizer_json_bytes,
             tokenizer_settings_bytes,
             weights_file,
+            weights_file_bytes,
         })
     }
 }

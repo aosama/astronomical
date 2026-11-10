@@ -1,5 +1,6 @@
 //! Payload-safe summaries for logging worker events without generated text or image bytes.
 
+use crate::exhaustive_table::exhaustive_table;
 use crate::{RequestId, WorkerEvent};
 
 impl WorkerEvent {
@@ -29,42 +30,43 @@ impl WorkerEvent {
     /// The event's snake-case name. Exhaustive on purpose: a new variant
     /// must be named here rather than fall into another event's label.
     fn diagnostic_event_name(&self) -> &'static str {
-        match self {
-            Self::RuntimeFeatureConfigurationApplied { .. } => {
-                "runtime_feature_configuration_applied"
-            }
-            Self::Idle { .. } => "idle",
-            Self::MlxMemorySample { .. } => "mlx_memory_sample",
-            Self::MlxMemoryLimitChanged { .. } => "mlx_memory_limit_changed",
-            Self::MlxMemoryLimitRejected { .. } => "mlx_memory_limit_rejected",
-            Self::MlxMemoryLimitRestartRequired { .. } => "mlx_memory_limit_restart_required",
-            Self::ExpertMemoryModeChanged { .. } => "expert_memory_mode_changed",
-            Self::NeuralEnginePrefillChanged { .. } => "neural_engine_prefill_changed",
-            Self::NeuralEngineChunkFinished { .. } => "neural_engine_chunk_finished",
-            Self::ModelLoadInFlight { .. } => "model_load_in_flight",
-            Self::GenerationFinalized { .. } => "generation_finalized",
-            Self::ExpertStreamingStats { .. } => "expert_streaming_stats",
-            Self::PersistentPromptCacheStats { .. } => "persistent_prompt_cache_stats",
-            Self::ImageGenerationProgress { .. } => "image_generation_progress",
-            Self::ImageGenerationCompleted { .. } => "image_generation_completed",
-            Self::ImageGenerationFailed { .. } => "image_generation_failed",
-            Self::ImageGenerationFinalized { .. } => "image_generation_finalized",
-            Self::EmbeddingsCompleted { .. } => "embeddings_completed",
-            Self::EmbeddingsFailed { .. } => "embeddings_failed",
-            Self::EmbeddingsFinalized { .. } => "embeddings_finalized",
-            Self::Ready { .. } => "ready",
-            Self::Output { .. } => "output",
-            Self::PrefillProgress { .. } => "prefill_progress",
-            Self::GenerationPreparationStarted { .. } => "generation_preparation_started",
-            Self::GenerationProgress { .. } => "generation_progress",
-            Self::FirstDecodeCompleted { .. } => "first_decode_completed",
-            Self::PromptWorkReuse { .. } => "prompt_work_reuse",
-            Self::Completed { .. } => "completed",
-            Self::Failed { .. } => "failed",
-            Self::ModelSwapped { .. } => "model_swapped",
-            Self::ModelSwapFailed { .. } => "model_swap_failed",
-            Self::PromptCacheCleared { .. } => "prompt_cache_cleared",
-        }
+        exhaustive_table!(self, {
+            Self::RuntimeFeatureConfigurationApplied => "runtime_feature_configuration_applied",
+            Self::Idle => "idle",
+            Self::MlxMemorySample => "mlx_memory_sample",
+            Self::MlxMemoryLimitChanged => "mlx_memory_limit_changed",
+            Self::MlxMemoryLimitRejected => "mlx_memory_limit_rejected",
+            Self::MlxMemoryLimitRestartRequired => "mlx_memory_limit_restart_required",
+            Self::ExpertMemoryModeChanged => "expert_memory_mode_changed",
+            Self::NeuralEnginePrefillChanged => "neural_engine_prefill_changed",
+            Self::NeuralEngineChunkFinished => "neural_engine_chunk_finished",
+            Self::ModelLoadInFlight => "model_load_in_flight",
+            Self::GenerationFinalized => "generation_finalized",
+            Self::ExpertStreamingStats => "expert_streaming_stats",
+            Self::PersistentPromptCacheStats => "persistent_prompt_cache_stats",
+            Self::ImageGenerationProgress => "image_generation_progress",
+            Self::ImageGenerationCompleted => "image_generation_completed",
+            Self::ImageGenerationFailed => "image_generation_failed",
+            Self::ImageGenerationFinalized => "image_generation_finalized",
+            Self::EmbeddingsCompleted => "embeddings_completed",
+            Self::EmbeddingsFailed => "embeddings_failed",
+            Self::EmbeddingsFinalized => "embeddings_finalized",
+            Self::DecisionsCompleted => "decisions_completed",
+            Self::DecisionsFailed => "decisions_failed",
+            Self::DecisionsFinalized => "decisions_finalized",
+            Self::Ready => "ready",
+            Self::Output => "output",
+            Self::PrefillProgress => "prefill_progress",
+            Self::GenerationPreparationStarted => "generation_preparation_started",
+            Self::GenerationProgress => "generation_progress",
+            Self::FirstDecodeCompleted => "first_decode_completed",
+            Self::PromptWorkReuse => "prompt_work_reuse",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::ModelSwapped => "model_swapped",
+            Self::ModelSwapFailed => "model_swap_failed",
+            Self::PromptCacheCleared => "prompt_cache_cleared",
+        })
     }
 
     /// The request a request-scoped event belongs to. Exhaustive for the
@@ -79,6 +81,9 @@ impl WorkerEvent {
             | Self::EmbeddingsCompleted { request_id, .. }
             | Self::EmbeddingsFailed { request_id, .. }
             | Self::EmbeddingsFinalized { request_id, .. }
+            | Self::DecisionsCompleted { request_id, .. }
+            | Self::DecisionsFailed { request_id, .. }
+            | Self::DecisionsFinalized { request_id, .. }
             | Self::Output { request_id, .. }
             | Self::PrefillProgress { request_id, .. }
             | Self::GenerationPreparationStarted { request_id, .. }

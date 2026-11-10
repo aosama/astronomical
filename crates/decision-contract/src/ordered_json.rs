@@ -11,6 +11,7 @@
 use std::fmt;
 
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 
 /// One JSON value whose objects keep their members in arrival order.
 #[derive(Clone, Debug, PartialEq)]
@@ -85,6 +86,37 @@ impl OrderedJsonValue {
             Self::Text(_) => "string",
             Self::Array(_) => "array",
             Self::Object(_) => "object",
+        }
+    }
+}
+
+/// Writes the value back as JSON with every object's members in their kept order.
+///
+/// This is what lets a request cross a process boundary and still be read by
+/// the model as the caller wrote it.
+impl Serialize for OrderedJsonValue {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Null => serializer.serialize_unit(),
+            Self::Boolean(boolean) => serializer.serialize_bool(*boolean),
+            Self::SignedInteger(integer) => serializer.serialize_i64(*integer),
+            Self::UnsignedInteger(integer) => serializer.serialize_u64(*integer),
+            Self::Float(float) => serializer.serialize_f64(*float),
+            Self::Text(text) => serializer.serialize_str(text),
+            Self::Array(elements) => {
+                let mut sequence = serializer.serialize_seq(Some(elements.len()))?;
+                for element in elements {
+                    sequence.serialize_element(element)?;
+                }
+                sequence.end()
+            }
+            Self::Object(members) => {
+                let mut map = serializer.serialize_map(Some(members.len()))?;
+                for object_member in members {
+                    map.serialize_entry(&object_member.key, &object_member.value)?;
+                }
+                map.end()
+            }
         }
     }
 }

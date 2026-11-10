@@ -11,6 +11,7 @@ mod config_file;
 mod configuration_generation;
 mod default_model;
 mod duplicate_key_json;
+mod exhaustive_table;
 mod legacy_config_migration;
 mod logging_config;
 mod maximum_mlx_memory;
@@ -44,8 +45,9 @@ pub use config_document_edit::{
 };
 pub use config_error::AstronomicalConfigError;
 pub use default_model::{
-    BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID, DefaultModelConfigUpdate,
-    commit_default_model_update, prepare_default_model_update, write_default_model,
+    BUILTIN_DEFAULT_DECISION_MODEL_ID, BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID,
+    DefaultModelConfigUpdate, commit_default_model_update, prepare_default_model_update,
+    write_default_model,
 };
 pub use logging_config::{LogLevel, LoggingConfig};
 pub use maximum_mlx_memory::{
@@ -57,10 +59,10 @@ pub use model_config_entries::{
     ModelConfigEntryOutcome, ModelConfigEntryReport, SettingsFreeModelKind,
 };
 pub use model_discovery::{
-    ChatModelCapabilities, ClassifiedModelArtifact, DiscoveredModel, DiscoveredModelError,
-    EffectiveModelDiscovery, EffectiveModelDiscoveryError, EmbeddingModelCapabilities,
-    FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, Flux2KleinDirectoryEvidence,
-    Flux2KleinDirectoryVerificationError, ImageGenerationCapabilities,
+    ChatModelCapabilities, ClassifiedModelArtifact, DecisionModelCapabilities, DiscoveredModel,
+    DiscoveredModelError, EffectiveModelDiscovery, EffectiveModelDiscoveryError,
+    EmbeddingModelCapabilities, FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME,
+    Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError, ImageGenerationCapabilities,
     MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, ModelCapabilities, ModelDiscoveryDiagnostic,
     ModelDiscoveryDiagnosticCode, ModelDiscoveryDirectoryScan, ModelDiscoveryReport, ModelFamily,
     ModelFamilyClassificationError, ModelLicense, QwenImage21DirectoryEvidence,

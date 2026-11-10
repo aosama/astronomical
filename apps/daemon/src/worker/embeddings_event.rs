@@ -66,18 +66,19 @@ pub(super) fn handle_worker_embeddings_event(
                 .try_send(terminal_outcome.map_err(crate::EmbeddingsExecutionError::WorkerFailure));
             publish_activity(health_snapshot, crate::WorkerActivity::Idle);
             clear_active_request_progress(health_snapshot);
-            publish_embeddings_finalized_memory_snapshot(health_snapshot, mlx_memory_snapshot)?;
+            publish_single_shot_finalized_memory_snapshot(health_snapshot, mlx_memory_snapshot)?;
             Ok(())
         }
         _ => Ok(()),
     }
 }
 
-/// Publishes the cleanup observation the embeddings engine captured, so the
-/// status the menu paints carries the same unused-headroom split the journeys
-/// assert (issue #510). The embeddings engine owns no experts, context
-/// state, so any nonzero owner there is a protocol violation.
-pub(super) fn publish_embeddings_finalized_memory_snapshot(
+/// Publishes the cleanup observation an embedding or decision engine
+/// captured, so the status the menu paints carries the same unused-headroom
+/// split the journeys assert (issue #510). Neither kind of engine owns
+/// experts or context state, so any nonzero owner there is a protocol
+/// violation.
+pub(super) fn publish_single_shot_finalized_memory_snapshot(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     mlx_memory_snapshot: Option<astronomical_ipc_protocol::WorkerMlxMemorySnapshot>,
 ) -> Result<(), WorkerControlError> {

@@ -12,6 +12,8 @@ pub(crate) mod process;
 
 pub(crate) mod cache_clear;
 pub(crate) mod control_error;
+pub(crate) mod decisions_event;
+pub(crate) mod decisions_request;
 pub(crate) mod embeddings_event;
 pub(crate) mod embeddings_request;
 pub(crate) mod event_handler;
@@ -22,6 +24,8 @@ pub(crate) mod idle_model_unload;
 pub(crate) mod image_event;
 pub(crate) mod image_request;
 pub(crate) mod loop_types;
+mod single_shot_admission;
+mod single_shot_command_arms;
 
 pub(crate) mod command_arms;
 pub(crate) mod event_reaction;

@@ -135,8 +135,7 @@ pub use decoder_cache::{
 };
 
 pub use decision_engine::{
-    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, QuestionInputCoverage,
-    QuestionOutcome,
+    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionUnavailableEngine,
 };
 
 #[cfg(feature = "direct-mlx")]

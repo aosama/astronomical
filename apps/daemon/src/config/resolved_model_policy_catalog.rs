@@ -11,9 +11,9 @@ use astronomical_config::{
     ModelCapabilities, ModelFamily, ResolvedModelConfig,
 };
 use astronomical_ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerEmbeddingModelConfiguration,
-    WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
+    WorkerDecisionModelFamily, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
+    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
     WorkerQwenImage21ModelConfiguration,
 };
 
@@ -44,6 +44,9 @@ impl ResolvedModelPolicyCatalog {
                     ModelCapabilities::ImageGeneration(_) => Self::image_policy(discovered_model),
                     ModelCapabilities::Embeddings(embedding_capabilities) => {
                         Self::embeddings_policy(discovered_model, embedding_capabilities)
+                    }
+                    ModelCapabilities::Decisions(decision_capabilities) => {
+                        Self::decisions_policy(discovered_model, decision_capabilities)
                     }
                 };
                 Ok((discovered_model.model_id.clone(), runtime_model_policy))
@@ -116,7 +119,10 @@ impl ResolvedModelPolicyCatalog {
             // An image capability requires one of the image families above; a discovered
             // directory that classifies otherwise fails at worker selection instead of
             // silently receiving a Flux identity it never verified.
-            ModelFamily::Qwen3_5 | ModelFamily::PrismHadamardQwen35 | ModelFamily::ModernBert => {
+            ModelFamily::Qwen3_5
+            | ModelFamily::PrismHadamardQwen35
+            | ModelFamily::ModernBert
+            | ModelFamily::Laya => {
                 WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
                     model_family: WorkerImageGenerationModelFamily::Flux2Klein,
@@ -165,6 +171,35 @@ impl ResolvedModelPolicyCatalog {
                     artifact_revision: discovered_model.revision.clone(),
                     vector_width: embedding_capabilities.vector_width,
                     maximum_input_tokens: embedding_capabilities.max_input_tokens,
+                },
+            ),
+        }
+    }
+
+    fn decisions_policy(
+        discovered_model: &DiscoveredModel,
+        decision_capabilities: &astronomical_config::DecisionModelCapabilities,
+    ) -> RuntimeModelPolicy {
+        RuntimeModelPolicy {
+            model_directory: discovered_model.model_directory.clone(),
+            // Chat request defaults remain inert for a typed decision worker policy.
+            generation_defaults: RuntimeModelGenerationDefaults {
+                maximum_output_tokens: 0,
+                configured_maximum_output_tokens: None,
+                temperature_thousandths: None,
+                top_p_thousandths: None,
+                repetition_penalty_thousandths: None,
+            },
+            configured_maximum_context_tokens: None,
+            default_maximum_context_tokens: 0,
+            configured_chunking_fields: Default::default(),
+            worker_model_configuration: WorkerModelConfiguration::Decisions(
+                WorkerDecisionModelConfiguration {
+                    model_id: discovered_model.model_id.clone(),
+                    // Laya is the only decision family discovery reports.
+                    model_family: WorkerDecisionModelFamily::Laya,
+                    artifact_revision: discovered_model.revision.clone(),
+                    maximum_tokens_per_question: decision_capabilities.maximum_tokens_per_question,
                 },
             ),
         }

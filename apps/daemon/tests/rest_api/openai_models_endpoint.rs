@@ -255,6 +255,30 @@ async fn should_list_image_model_metadata_without_autoregressive_token_limits() 
 }
 
 #[tokio::test]
+async fn should_list_decision_model_metadata_with_its_per_question_token_limit() {
+    let application = astronomical_daemon::build_application_with_discovered_models(
+        ScriptedExecutor::ready(Vec::new()),
+        vec![discovered_decision_model()],
+    );
+
+    let model_list_document = get_json_document(application, "/v1/models").await;
+    let advertised_model = &model_list_document["data"][0];
+
+    assert_eq!(advertised_model["id"], "laya-MLX-8bit");
+    assert_eq!(
+        advertised_model["output_modalities"],
+        serde_json::json!(["decision"])
+    );
+    assert_eq!(
+        advertised_model["supported_endpoints"],
+        serde_json::json!(["/v1/systemone"])
+    );
+    assert_eq!(advertised_model["max_input_tokens"], 512);
+    assert!(advertised_model.get("context_window").is_none());
+    assert!(advertised_model.get("max_output_tokens").is_none());
+}
+
+#[tokio::test]
 async fn should_project_family_derived_reasoning_and_tool_capabilities() {
     let mut discovered_model = discovered_model_with_vision_support(false);
     let ModelCapabilities::Chat(capabilities) = &mut discovered_model.capabilities else {
@@ -449,6 +473,23 @@ fn discovered_model_with_vision_support(has_vision: bool) -> DiscoveredModel {
             supports_tool_calls: true,
         }),
         license: None,
+        model_size_bytes: 0,
+    }
+}
+
+fn discovered_decision_model() -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: "laya-MLX-8bit".to_owned(),
+        provider_model_id: Some("cavi-ai/laya-MLX-8bit".to_owned()),
+        model_family: astronomical_config::ModelFamily::Laya,
+        revision: "reviewed-revision".to_owned(),
+        model_directory: PathBuf::from("/tmp/fictional-laya-model"),
+        capabilities: ModelCapabilities::Decisions(
+            astronomical_config::DecisionModelCapabilities {
+                maximum_tokens_per_question: 512,
+            },
+        ),
+        license: Some(astronomical_config::ModelLicense::Apache20),
         model_size_bytes: 0,
     }
 }

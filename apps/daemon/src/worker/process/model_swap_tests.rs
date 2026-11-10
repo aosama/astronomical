@@ -59,6 +59,7 @@ fn matching_autoregressive_capabilities() -> WorkerModelCapabilities {
         }),
         image_generation: None,
         embeddings: None,
+        decisions: None,
     }
 }
 
@@ -186,6 +187,7 @@ fn should_reject_a_model_swapped_event_without_the_expected_chat_capabilities() 
         chat: None,
         image_generation: None,
         embeddings: None,
+        decisions: None,
     };
 
     let stage_outcome = stage_model_swap_acknowledgement(

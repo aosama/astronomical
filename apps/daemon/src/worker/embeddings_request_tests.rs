@@ -74,6 +74,7 @@ fn should_reject_a_model_without_embedding_capabilities() {
             chat: None,
             image_generation: None,
             embeddings: None,
+            decisions: None,
         },
     )));
 

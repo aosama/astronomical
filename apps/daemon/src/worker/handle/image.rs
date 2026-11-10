@@ -3,13 +3,13 @@
 //! Queue ownership remains in `WorkerHandle` so chat and image requests share
 //! one bounded FIFO admission path rather than drifting into modality-specific queues.
 
-use astronomical_ipc_protocol::{EmbeddingsCommand, ImageGenerationCommand};
+use astronomical_ipc_protocol::{DecisionsCommand, EmbeddingsCommand, ImageGenerationCommand};
 use tokio::sync::oneshot;
 
 use crate::serving::GenerationOutcomeStartFuture;
 use crate::{
-    EmbeddingsExecutionError, EmbeddingsOutput, ImageGenerationExecutionError,
-    ImageGenerationExecutor, ImageGenerationOutput, WorkerHandle,
+    DecisionsExecutionError, DecisionsOutput, EmbeddingsExecutionError, EmbeddingsOutput,
+    ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput, WorkerHandle,
 };
 
 impl ImageGenerationExecutor for WorkerHandle {
@@ -47,6 +47,24 @@ impl ImageGenerationExecutor for WorkerHandle {
     ) -> GenerationOutcomeStartFuture<'_, EmbeddingsOutput, EmbeddingsExecutionError> {
         self.start_embeddings_generation_with_queue_admission(
             embeddings_command,
+            Some(admission_sender),
+        )
+    }
+
+    fn start_decisions_generation(
+        &self,
+        decisions_command: DecisionsCommand,
+    ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
+        self.start_decisions_generation_with_queue_admission(decisions_command, None)
+    }
+
+    fn start_decisions_generation_with_admission_signal(
+        &self,
+        decisions_command: DecisionsCommand,
+        admission_sender: oneshot::Sender<()>,
+    ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
+        self.start_decisions_generation_with_queue_admission(
+            decisions_command,
             Some(admission_sender),
         )
     }

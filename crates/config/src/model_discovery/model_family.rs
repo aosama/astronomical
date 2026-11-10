@@ -5,7 +5,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::flux2_klein_mlx_4bit;
-use super::{flux2_klein, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5};
+use super::{flux2_klein, laya, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -18,6 +18,8 @@ pub enum ModelFamily {
     Flux2Klein,
     QwenImage21,
     ModernBert,
+    /// A decision model: a ModernBERT encoder scoring one marker per option.
+    Laya,
 }
 
 impl ModelFamily {
@@ -28,8 +30,18 @@ impl ModelFamily {
             Some(Self::Qwen3_5)
         } else if prism_hadamard_qwen35::recognizes_model_type(model_type) {
             Some(Self::PrismHadamardQwen35)
-        } else if modernbert::recognizes_model_type(model_type) {
+        } else {
+            Self::encoder_family_from_model_type(model_type)
+        }
+    }
+
+    /// The families built on a ModernBERT encoder: the embedding model
+    /// itself, and the decision model that adds a head to it.
+    fn encoder_family_from_model_type(model_type: Option<&str>) -> Option<Self> {
+        if modernbert::recognizes_model_type(model_type) {
             Some(Self::ModernBert)
+        } else if laya::recognizes_model_type(model_type) {
+            Some(Self::Laya)
         } else {
             None
         }
@@ -38,13 +50,14 @@ impl ModelFamily {
     /// Wire label matching the model_type spelling the discovery layer recognizes.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        match self {
+        crate::exhaustive_table!(self, {
             Self::Qwen3_5 => "qwen3_5",
             Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
             Self::Flux2Klein => "flux2_klein",
             Self::QwenImage21 => "qwen_image_21",
             Self::ModernBert => "modernbert",
-        }
+            Self::Laya => "laya",
+        })
     }
 }
 

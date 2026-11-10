@@ -8,14 +8,15 @@ use std::{
 };
 
 use astronomical_daemon::{
-    ChatGenerationExecutor, ChatGenerationStreamEvent, EmbeddingsExecutionError, EmbeddingsOutput,
-    GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput, WorkerActivity,
-    WorkerHealthSnapshot, WorkerHealthStatus,
+    ChatGenerationExecutor, ChatGenerationStreamEvent, DecisionsExecutionError, DecisionsOutput,
+    EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
+    ImageGenerationExecutionError, ImageGenerationOutput, WorkerActivity, WorkerHealthSnapshot,
+    WorkerHealthStatus,
 };
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatModelCapabilities, EmbeddingsCommand, GeneratedImage,
-    ImageGenerationCapabilities, ImageGenerationCommand, ImageGenerationResultMetadata,
-    WorkerModelCapabilities,
+    ChatGenerationCommand, ChatModelCapabilities, DecisionsCommand, EmbeddingsCommand,
+    GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
+    ImageGenerationResultMetadata, WorkerModelCapabilities,
 };
 use image::{
     ExtendedColorType, ImageEncoder,
@@ -35,6 +36,8 @@ pub struct ScriptedExecutor {
     received_embeddings_commands: Arc<Mutex<Vec<EmbeddingsCommand>>>,
     pub image_generation_outcome: Result<ImageGenerationOutput, ImageGenerationExecutionError>,
     pub embeddings_outcome: Result<EmbeddingsOutput, EmbeddingsExecutionError>,
+    received_decisions_commands: Arc<Mutex<Vec<DecisionsCommand>>>,
+    pub decisions_outcome: Result<DecisionsOutput, DecisionsExecutionError>,
     /// Test override: when true, the executor reports a busy worker so the
     /// config-reload endpoint returns HTTP 409.
     pub is_busy_override: bool,
@@ -85,12 +88,22 @@ impl ScriptedExecutor {
                 },
             }),
             is_busy_override: false,
+            received_decisions_commands: Arc::new(Mutex::new(Vec::new())),
+            decisions_outcome: Ok(DecisionsOutput {
+                question_outcomes: Vec::new(),
+                input_token_count: 0,
+                elapsed_millis: 4,
+            }),
             embeddings_outcome: Ok(EmbeddingsOutput {
                 embeddings: vec![unit_embedding_fixture()],
                 input_token_counts: vec![8],
                 elapsed_millis: 12,
             }),
         }
+    }
+
+    pub fn received_decisions_commands(&self) -> Arc<Mutex<Vec<DecisionsCommand>>> {
+        Arc::clone(&self.received_decisions_commands)
     }
 
     pub fn received_embeddings_commands(&self) -> Arc<Mutex<Vec<EmbeddingsCommand>>> {
@@ -234,6 +247,34 @@ impl astronomical_daemon::ImageGenerationExecutor for ScriptedExecutor {
                 .await
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;
             Ok(embeddings_result_receiver)
+        })
+    }
+
+    fn start_decisions_generation(
+        &self,
+        decisions_command: DecisionsCommand,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<DecisionsOutput, DecisionsExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.received_decisions_commands
+                .lock()
+                .expect("the scripted decisions command log should not be poisoned")
+                .push(decisions_command);
+            let (decisions_result_sender, decisions_result_receiver) = mpsc::channel(1);
+            decisions_result_sender
+                .send(self.decisions_outcome.clone())
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            Ok(decisions_result_receiver)
         })
     }
 }

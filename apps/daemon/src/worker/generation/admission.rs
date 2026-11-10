@@ -5,15 +5,17 @@
 
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, DecisionsCommand, EmbeddingsCommand, ImageGenerationCommand,
+};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::serving::{ChatGenerationStartFuture, GenerationOutcomeStartFuture};
 use crate::worker::loop_types::{ChatWork, QueuedChatRequest, WorkerLoopCommand};
 use crate::{
-    EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
-    ImageGenerationExecutionError, ImageGenerationOutput, WorkerHandle,
+    DecisionsExecutionError, DecisionsOutput, EmbeddingsExecutionError, EmbeddingsOutput,
+    GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput, WorkerHandle,
 };
 
 // One slot for every possible 128-token prefill progress boundary plus the
@@ -173,6 +175,53 @@ impl WorkerHandle {
             start_acknowledgement_outcome?;
 
             Ok(embeddings_result_receiver)
+        })
+    }
+
+    /// Queues one decisions request behind whatever already waits for the
+    /// worker, and resolves once the worker has accepted it.
+    pub(in crate::worker) fn start_decisions_generation_with_queue_admission(
+        &self,
+        decisions_command: DecisionsCommand,
+        admission_sender: Option<oneshot::Sender<()>>,
+    ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
+        Box::pin(async move {
+            let command_sender = self
+                .command_sender
+                .as_ref()
+                .ok_or(GenerationStartError::WorkerUnavailable)?;
+            let generation_queue_permit = Arc::clone(&self.generation_queue_permits)
+                .try_acquire_owned()
+                .map_err(|_| GenerationStartError::CapacityUnavailable)?;
+            if let Some(admission_sender) = admission_sender {
+                let _admission_signal_result = admission_sender.send(());
+            }
+            let active_generation_permit = Arc::clone(&self.active_generation_permits)
+                .acquire_owned()
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            drop(generation_queue_permit);
+
+            let (decisions_result_sender, decisions_result_receiver) = mpsc::channel(1);
+            let (start_sender, start_receiver) = oneshot::channel();
+            command_sender
+                .send(WorkerLoopCommand::GenerateDecisions {
+                    active_generation_permit,
+                    decisions_command,
+                    start_sender,
+                    decisions_result_sender,
+                })
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            // Two failure layers: a closed channel means the worker loop died;
+            // the inner Result is the generation admission outcome.
+            let start_acknowledgement_outcome = match start_receiver.await {
+                Ok(acknowledgement_outcome) => acknowledgement_outcome,
+                Err(_channel_closed) => return Err(GenerationStartError::WorkerUnavailable),
+            };
+            start_acknowledgement_outcome?;
+
+            Ok(decisions_result_receiver)
         })
     }
 }

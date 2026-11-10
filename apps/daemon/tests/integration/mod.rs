@@ -1,5 +1,6 @@
 mod chat_generation_executor;
 mod daemon_ipc;
+mod daemon_ipc_decisions;
 mod daemon_ipc_embeddings;
 mod daemon_ipc_images;
 mod daemon_ipc_lifecycle;

@@ -87,8 +87,9 @@ pub use openai_image_generation_response::{
     OpenAiGeneratedImageParts, OpenAiImageGenerationResponse,
 };
 pub use openai_models_and_errors::{
-    OpenAiEmbeddingModelParts, OpenAiError, OpenAiErrorResponse, OpenAiImageModelParts,
-    OpenAiModel, OpenAiModelList, OpenAiModelParts, OpenAiModelValidationError,
+    DECISION_OUTPUT_MODALITY, OpenAiDecisionModelParts, OpenAiEmbeddingModelParts, OpenAiError,
+    OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
+    OpenAiModelValidationError, SYSTEM_ONE_ENDPOINT_PATH,
 };
 pub use openai_response_format::{
     MAX_STRUCTURED_OUTPUT_SCHEMA_BYTES, OpenAiJsonSchemaSpec, OpenAiResponseFormat,

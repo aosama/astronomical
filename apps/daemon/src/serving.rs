@@ -1,6 +1,8 @@
 //! Generation serving: request executors and their shared output contracts.
 
 pub(crate) mod chat_generation_executor;
+pub(crate) mod decisions_executor;
+pub(crate) mod decisions_service;
 pub(crate) mod embeddings_executor;
 pub(crate) mod image_generation_executor;
 pub(crate) mod image_seed;

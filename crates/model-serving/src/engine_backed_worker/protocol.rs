@@ -3,7 +3,8 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, EmbeddingsFailureReason,
     ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
-    WorkerCommand, WorkerEvent, WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
+    WorkerCommand, WorkerDecisionCapabilities, WorkerEvent, WorkerModelCapabilities,
+    WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -40,14 +41,17 @@ fn initialization_failure(engine_error: crate::InferenceEngineError) -> WorkerRu
     }
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+        + Send
+        + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
+    DecisionsEngine: crate::DecisionEngine,
 {
     /// Loads the engine, reports readiness, and serves commands until stdin closes.
     pub async fn run<ReadTransport, WriteTransport>(
@@ -88,8 +92,10 @@ where
                 self.announce_image_readiness(image_engine, &mut event_writer)
                     .await?;
             }
-            Some(LoadedRuntime::Embeddings(embedding_engine)) => {
-                self.announce_embeddings_readiness(embedding_engine, &mut event_writer)
+            Some(
+                single_shot_runtime @ (LoadedRuntime::Embeddings(_) | LoadedRuntime::Decisions(_)),
+            ) => {
+                self.announce_single_shot_readiness(single_shot_runtime, &mut event_writer)
                     .await?;
             }
             None => self.announce_idle_readiness(&mut event_writer).await?,
@@ -194,6 +200,67 @@ where
                 capabilities: WorkerModelCapabilities::embeddings(
                     *embedding_load_result.capabilities(),
                 ),
+            })
+            .await?;
+        self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
+            .await
+    }
+
+    /// Loads and announces a runtime that answers in one forward pass: an
+    /// embedding engine or a decision engine. Other runtimes are announced
+    /// by their own arms, so they are left alone here.
+    async fn announce_single_shot_readiness<WriteTransport>(
+        &mut self,
+        single_shot_runtime: &mut LoadedRuntime<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+        >,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        match single_shot_runtime {
+            LoadedRuntime::Embeddings(embedding_engine) => {
+                self.announce_embeddings_readiness(embedding_engine, event_writer)
+                    .await
+            }
+            LoadedRuntime::Decisions(decision_engine) => {
+                self.announce_decisions_readiness(decision_engine, event_writer)
+                    .await
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Loads the decision engine and announces its readiness event and the
+    /// first memory sample.
+    async fn announce_decisions_readiness<WriteTransport>(
+        &mut self,
+        decision_engine: &mut DecisionsEngine,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        let decision_load_result = match decision_engine.load() {
+            Ok(decision_load_result) => decision_load_result,
+            Err(load_failure) => {
+                return Err(WorkerRuntimeError::InferenceEngineInitializationFailed {
+                    reason: format!("decision engine initialization failed: {load_failure}"),
+                });
+            }
+        };
+        self.minimum_mlx_memory_ceiling_bytes = decision_engine.minimum_mlx_memory_ceiling_bytes();
+        event_writer
+            .send_event(&WorkerEvent::Ready {
+                model_id: decision_load_result.model_id,
+                capabilities: WorkerModelCapabilities::decisions(WorkerDecisionCapabilities {
+                    maximum_tokens_per_question: decision_load_result.maximum_tokens_per_question,
+                }),
             })
             .await?;
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
@@ -333,6 +400,10 @@ where
                         event_writer.send_event(&WorkerEvent::EmbeddingsFinalized { request_id: embeddings_command.request_id, elapsed_millis: 0, mlx_memory_snapshot: None }).await?;
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
+                    WorkerCommand::GenerateDecisions(decisions_command) => {
+                        self.refuse_decisions_while_busy(decisions_command.request_id, event_writer).await?;
+                        Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
+                    }
                     WorkerCommand::SwapModel { .. } => {
                         tracing::warn!(request_id = current_generation.request_id.value(), "received SwapModel command while generation is active; ignoring");
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
@@ -413,6 +484,10 @@ where
                     WorkerCommand::GenerateEmbeddings(embeddings_command) => {
                         event_writer.send_event(&WorkerEvent::EmbeddingsFailed { request_id: embeddings_command.request_id, reason: EmbeddingsFailureReason::EngineBusy }).await?;
                         event_writer.send_event(&WorkerEvent::EmbeddingsFinalized { request_id: embeddings_command.request_id, elapsed_millis: 0, mlx_memory_snapshot: None }).await?;
+                        Ok(Some(ActiveWorkerRequest::Image(current_generation)))
+                    }
+                    WorkerCommand::GenerateDecisions(decisions_command) => {
+                        self.refuse_decisions_while_busy(decisions_command.request_id, event_writer).await?;
                         Ok(Some(ActiveWorkerRequest::Image(current_generation)))
                     }
                     WorkerCommand::UpdateMlxMemoryLimit { effective_mlx_memory_ceiling_bytes, configuration_generation: _ } => {

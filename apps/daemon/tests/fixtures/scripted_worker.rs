@@ -9,7 +9,9 @@ use astronomical_ipc_protocol::{
 
 mod scripted_worker_cancellation;
 mod scripted_worker_chat;
+mod scripted_worker_decisions;
 mod scripted_worker_image;
+mod scripted_worker_single_shot;
 
 use scripted_worker_cancellation::{
     CancellationMlxTelemetry, EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID,
@@ -67,22 +69,13 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     while let Some(worker_command) = command_reader.next_command().await? {
         match worker_command {
             WorkerCommand::InitializeWorker(_) => {}
-            WorkerCommand::GenerateEmbeddings(embeddings_command) => {
-                event_writer
-                    .send_event(&WorkerEvent::EmbeddingsCompleted {
-                        request_id: embeddings_command.request_id,
-                        embeddings: vec![vec![1.0, 0.0]; embeddings_command.inputs.len()],
-                        input_token_counts: vec![1; embeddings_command.inputs.len()],
-                        elapsed_millis: 1,
-                    })
-                    .await?;
-                event_writer
-                    .send_event(&WorkerEvent::EmbeddingsFinalized {
-                        request_id: embeddings_command.request_id,
-                        elapsed_millis: 2,
-                        mlx_memory_snapshot: None,
-                    })
-                    .await?;
+            single_shot_command @ (WorkerCommand::GenerateDecisions(_)
+            | WorkerCommand::GenerateEmbeddings(_)) => {
+                scripted_worker_single_shot::answer_single_shot_command(
+                    &mut event_writer,
+                    single_shot_command,
+                )
+                .await?;
             }
             WorkerCommand::CountChatTokens(count_command) => {
                 // Seven tokens per message: distinct from every `Generate`

@@ -15,6 +15,7 @@ mod effective_models;
 mod flux2_klein;
 mod flux2_klein_documents;
 mod flux2_klein_mlx_4bit;
+mod laya;
 mod model_card_front_matter;
 mod model_family;
 mod modernbert;
@@ -53,6 +54,16 @@ pub enum ModelCapabilities {
     Chat(ChatModelCapabilities),
     ImageGeneration(ImageGenerationCapabilities),
     Embeddings(EmbeddingModelCapabilities),
+    Decisions(DecisionModelCapabilities),
+}
+
+/// What a decision model can be asked: typed questions about a state,
+/// answered with a probability per allowed answer and no generated text.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DecisionModelCapabilities {
+    /// The longest sequence one question may occupy: its instructions, its
+    /// options and as much of the state as still fits.
+    pub maximum_tokens_per_question: u32,
 }
 
 /// Token-streaming capabilities advertised by a chat model.
@@ -408,6 +419,9 @@ fn scan_directory_recursive(
             &huggingface_cache_entry.snapshot_directory,
             &huggingface_cache_entry.model_id,
         ) {
+            discovered_models.extend(artifact_discovery::discover_bundled_checkpoints(
+                &discovered_model,
+            ));
             discovered_models.push(discovered_model);
         }
         return Ok(());
@@ -417,8 +431,12 @@ fn scan_directory_recursive(
     if model_family::has_model_root_marker(current_directory)
         && let Some(discovered_model) = try_discover_model(current_directory)
     {
+        discovered_models.extend(artifact_discovery::discover_bundled_checkpoints(
+            &discovered_model,
+        ));
         discovered_models.push(discovered_model);
-        // Don't recurse into a model directory — it won't contain nested models.
+        // Don't recurse into a model directory. A family that bundles more
+        // checkpoints in subfolders has just reported them itself.
         return Ok(());
     }
     // A Diffusers pipeline root is terminal even when unsupported or incomplete;

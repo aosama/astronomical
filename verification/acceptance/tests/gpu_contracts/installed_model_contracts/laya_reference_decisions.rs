@@ -21,9 +21,9 @@
 use std::path::Path;
 
 use astronomical_decision_contract::{
-    DecisionAnswer, OrderedJsonValue, parse_system_one_questions,
+    DecisionAnswer, OrderedJsonValue, QuestionOutcome, parse_system_one_questions,
 };
-use astronomical_model_serving::{DecisionEngine, LayaDecisionEngine, QuestionOutcome};
+use astronomical_model_serving::{DecisionEngine, LayaDecisionEngine};
 use astronomical_test_harness::test_run::TestRunContext;
 
 /// The whole Laya repository is under 2 GB; this leaves ample forward workspace.

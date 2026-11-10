@@ -29,6 +29,16 @@ pub const BUILTIN_DEFAULT_MODEL_ID: &str = "Qwen3.5-2B-4bit";
 /// `--model Qwen-Image-2.1-MLX-4bit`.
 pub const BUILTIN_DEFAULT_IMAGE_MODEL_ID: &str = "FLUX.2-klein-4B";
 
+/// The decision model used when a request names none.
+///
+/// The persisted default model is a chat model and answers no decision
+/// requests, so decisions have their own default, as images do. Laya is the
+/// smallest and fastest decision model in the catalog: about half a
+/// gigabyte, and one question answered in tens of milliseconds. This is its
+/// English checkpoint; the same download also installs
+/// `laya-MLX-8bit-multilingual` for text in other languages.
+pub const BUILTIN_DEFAULT_DECISION_MODEL_ID: &str = "laya-MLX-8bit";
+
 /// Rejects ids that cannot resolve to a catalog entry or discovered model.
 fn validate_default_model_id(model_id: &str) -> Result<(), AstronomicalConfigError> {
     if model_id.is_empty() || model_id.trim() != model_id {

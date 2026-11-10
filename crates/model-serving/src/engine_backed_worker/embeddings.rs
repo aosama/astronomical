@@ -14,14 +14,17 @@ use crate::InferenceEngine;
 use crate::engine_backed_worker::support::ModelFactory;
 use crate::model_generation_processor::ModelGenerationProcessor;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+        + Send
+        + 'static,
     ImageEngine: crate::ImageGenerationEngine,
     EmbeddingsEngine: EmbeddingEngine,
+    DecisionsEngine: crate::DecisionEngine,
 {
     pub(crate) async fn start_embeddings<WriteTransport>(
         &mut self,
@@ -47,11 +50,12 @@ where
             Some(LoadedRuntime::Embeddings(embedding_engine)) => {
                 embedding_engine.embed(&embeddings_command)
             }
-            Some(LoadedRuntime::Autoregressive(_)) | Some(LoadedRuntime::Image(_)) | None => {
-                Err(EmbeddingsFailureReason::FatalExecution {
-                    reason: "the loaded model does not support embeddings".to_owned(),
-                })
-            }
+            Some(LoadedRuntime::Autoregressive(_))
+            | Some(LoadedRuntime::Image(_))
+            | Some(LoadedRuntime::Decisions(_))
+            | None => Err(EmbeddingsFailureReason::FatalExecution {
+                reason: "the loaded model does not support embeddings".to_owned(),
+            }),
         };
         match embed_outcome {
             Ok(engine_output) => {

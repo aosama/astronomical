@@ -165,10 +165,19 @@ fn outcome_sentence(outcome: &ModelConfigEntryOutcome) -> String {
 }
 
 fn settings_free_model_description(model_kind: SettingsFreeModelKind) -> &'static str {
-    match model_kind {
-        SettingsFreeModelKind::ImageGeneration => "makes pictures",
-        SettingsFreeModelKind::Embeddings => "turns text into numbers for search",
+    if model_kind == SettingsFreeModelKind::ImageGeneration {
+        return "makes pictures";
     }
+    helper_model_description(model_kind)
+}
+
+/// What a helper model does: a decision model answers typed questions, and
+/// the other helper, an embedding model, turns text into numbers.
+fn helper_model_description(helper_model_kind: SettingsFreeModelKind) -> &'static str {
+    if helper_model_kind == SettingsFreeModelKind::Decisions {
+        return "answers typed questions with probabilities";
+    }
+    "turns text into numbers for search"
 }
 
 pub(super) fn json_document(model_entries_check: &ModelEntriesCheck) -> serde_json::Value {
@@ -218,6 +227,7 @@ fn entry_json_document(entry_report: &ModelConfigEntryReport) -> serde_json::Val
             "model_kind": match model_kind {
                 SettingsFreeModelKind::ImageGeneration => "image_generation",
                 SettingsFreeModelKind::Embeddings => "embeddings",
+                SettingsFreeModelKind::Decisions => "decisions",
             },
         }),
         ModelConfigEntryOutcome::DifferentOrganisation {

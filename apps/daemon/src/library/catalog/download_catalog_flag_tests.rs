@@ -122,7 +122,7 @@ fn should_reject_two_get_started_picks_for_one_role() {
 }
 
 #[test]
-fn should_reject_an_experimental_or_helper_get_started_pick() {
+fn should_reject_an_experimental_helper_or_decision_get_started_pick() {
     let mut get_started_role_names = empty_get_started_role_names();
     let experimental_pick = entry_document_with(&[
         ("role", json!("chat")),
@@ -139,5 +139,11 @@ fn should_reject_an_experimental_or_helper_get_started_pick() {
     assert!(matches!(
         validate_get_started_pick(&helper_pick, 5, &mut get_started_role_names),
         Err(DownloadCatalogError::InvalidGetStartedPick { entry_index: 5 })
+    ));
+    let decision_pick =
+        entry_document_with(&[("role", json!("decision")), ("get_started", json!(true))]);
+    assert!(matches!(
+        validate_get_started_pick(&decision_pick, 6, &mut get_started_role_names),
+        Err(DownloadCatalogError::InvalidGetStartedPick { entry_index: 6 })
     ));
 }

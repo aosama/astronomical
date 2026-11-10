@@ -25,7 +25,10 @@ const DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE = {
     chat: "chat",
     coding: "chat",
     image_generation: "pictures",
-    helper: "helpers"
+    helper: "helpers",
+    // A decision model answers typed questions for other programs; nobody
+    // chats with it, so it sits with the other background helpers.
+    decision: "helpers"
 };
 // How a build runs here, worded as speed because that is what the person
 // feels. No outcome ever blocks a download: the Mac's size never stops a model
@@ -58,7 +61,8 @@ const DOWNLOAD_MODELS_ABILITIES = [
     { text: "Thinks before answering", isSupported: (catalogRow) => catalogRow.supportsReasoning },
     { text: "Uses tools", isSupported: (catalogRow) => catalogRow.supportsToolCalls },
     { text: "Makes pictures", isSupported: (catalogRow) => catalogRow.supportsImageGeneration },
-    { text: "Text search", isSupported: (catalogRow) => catalogRow.supportsEmbeddings }
+    { text: "Text search", isSupported: (catalogRow) => catalogRow.supportsEmbeddings },
+    { text: "Answers set questions", isSupported: (catalogRow) => catalogRow.supportsDecisions }
 ];
 // English prose averages about three words for every four tokens; the figure
 // is rounded hard because it is a feel for size, not a promise.

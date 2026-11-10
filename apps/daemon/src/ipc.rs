@@ -2,6 +2,7 @@
 
 pub(crate) mod chat;
 pub mod chat_schema;
+pub(crate) mod decisions;
 pub(crate) mod embeddings;
 pub(crate) mod images;
 pub(crate) mod models;

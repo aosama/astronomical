@@ -213,6 +213,7 @@ function overviewModelKind(modelListing) {
     const supportedEndpoints = modelListing?.supported_endpoints || [];
     if (supportedEndpoints.includes("/v1/images/generations")) return "Image generation";
     if (supportedEndpoints.includes("/v1/embeddings")) return "Embeddings";
+    if (supportedEndpoints.includes("/v1/systemone")) return "Decisions";
     return supportedEndpoints.length > 0 ? "Chat" : null;
 }
 

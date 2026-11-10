@@ -153,6 +153,9 @@ pub enum OpenAiModelValidationError {
     /// A loaded embedding artifact must report a positive vector width.
     #[error("embedding vector width must be positive")]
     EmbeddingVectorWidthMustBePositive,
+    /// A decision model must report how many tokens one question may occupy.
+    #[error("decision model token limit per question must be positive")]
+    DecisionTokenLimitMustBePositive,
     /// A loaded embedding artifact must report a positive input budget.
     #[error("embedding input token budget must be positive")]
     EmbeddingInputBudgetMustBePositive,
@@ -380,6 +383,59 @@ impl OpenAiModel {
             anthropic_identity,
         })
     }
+
+    /// Builds one decision model: it answers typed questions and generates
+    /// no text, so it carries no context window or output limit. Its
+    /// per-question token limit is reported as `max_input_tokens`.
+    pub fn from_decision_parts(
+        decision_model_parts: OpenAiDecisionModelParts,
+    ) -> Result<Self, OpenAiModelValidationError> {
+        if decision_model_parts.maximum_tokens_per_question == 0 {
+            return Err(OpenAiModelValidationError::DecisionTokenLimitMustBePositive);
+        }
+        let anthropic_identity = AnthropicModelIdentity::for_model(
+            &decision_model_parts.model_id,
+            decision_model_parts.created,
+        );
+        Ok(Self {
+            id: decision_model_parts.model_id,
+            object_kind: "model",
+            created: decision_model_parts.created,
+            owned_by: decision_model_parts.owned_by,
+            context_window: None,
+            max_input_tokens: Some(decision_model_parts.maximum_tokens_per_question),
+            max_output_tokens: None,
+            input_modalities: Some(vec!["text".to_owned()]),
+            output_modalities: Some(vec![DECISION_OUTPUT_MODALITY.to_owned()]),
+            supports_streaming: Some(false),
+            supports_reasoning: Some(false),
+            reasoning_format: None,
+            supports_tool_calls: Some(false),
+            tool_call_format: None,
+            supported_endpoints: Some(vec![SYSTEM_ONE_ENDPOINT_PATH.to_owned()]),
+            supports_structured_outputs: Some(false),
+            structured_output_enforcement: None,
+            anthropic_identity,
+        })
+    }
+}
+
+/// The path of the decisions endpoint, in the System One request shape.
+pub const SYSTEM_ONE_ENDPOINT_PATH: &str = "/v1/systemone";
+/// What a decision model produces: typed answers with probabilities.
+pub const DECISION_OUTPUT_MODALITY: &str = "decision";
+
+/// Capability metadata for a decision model.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpenAiDecisionModelParts {
+    /// Model identifier advertised by the local server.
+    pub model_id: String,
+    /// Unix timestamp associated with this server's model advertisement.
+    pub created: u64,
+    /// Local owner label for the advertised model.
+    pub owned_by: String,
+    /// The longest sequence one question may occupy.
+    pub maximum_tokens_per_question: u32,
 }
 
 /// Capability metadata for an embedding model without autoregressive token limits.

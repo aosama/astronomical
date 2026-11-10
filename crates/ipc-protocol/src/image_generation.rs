@@ -329,6 +329,7 @@ pub struct WorkerModelCapabilities {
     pub chat: Option<ChatModelCapabilities>,
     pub image_generation: Option<ImageGenerationCapabilities>,
     pub embeddings: Option<WorkerEmbeddingCapabilities>,
+    pub decisions: Option<crate::WorkerDecisionCapabilities>,
 }
 
 impl WorkerModelCapabilities {
@@ -338,6 +339,17 @@ impl WorkerModelCapabilities {
             chat: None,
             image_generation: None,
             embeddings: Some(embedding),
+            decisions: None,
+        }
+    }
+
+    #[must_use]
+    pub fn decisions(decisions: crate::WorkerDecisionCapabilities) -> Self {
+        Self {
+            chat: None,
+            image_generation: None,
+            embeddings: None,
+            decisions: Some(decisions),
         }
     }
 
@@ -347,6 +359,7 @@ impl WorkerModelCapabilities {
             chat: None,
             image_generation: Some(image_generation),
             embeddings: None,
+            decisions: None,
         }
     }
 
@@ -359,12 +372,13 @@ impl WorkerModelCapabilities {
             chat: Some(chat),
             image_generation: Some(image_generation),
             embeddings: None,
+            decisions: None,
         }
     }
 
     /// A loaded model must advertise at least one usable operation surface.
     pub fn validate(&self) -> Result<(), WorkerModelCapabilitiesValidationError> {
-        if self.chat.is_none() && self.image_generation.is_none() && self.embeddings.is_none() {
+        if self.advertises_no_surface() {
             return Err(WorkerModelCapabilitiesValidationError::NoCapabilities);
         }
         if let Some(image_generation) = &self.image_generation {
@@ -373,7 +387,30 @@ impl WorkerModelCapabilities {
         if let Some(embeddings) = &self.embeddings {
             embeddings.validate()?;
         }
-        Ok(())
+        self.validate_decisions()
+    }
+
+    /// Whether the model offers nothing a request could use.
+    fn advertises_no_surface(&self) -> bool {
+        self.chat.is_none()
+            && self.image_generation.is_none()
+            && self.embeddings.is_none()
+            && self.decisions.is_none()
+    }
+
+    /// A decisions surface must be able to hold at least one question.
+    fn validate_decisions(&self) -> Result<(), WorkerModelCapabilitiesValidationError> {
+        let Some(decisions) = &self.decisions else {
+            return Ok(());
+        };
+        if decisions.is_usable() {
+            return Ok(());
+        }
+        Err(
+            WorkerModelCapabilitiesValidationError::DecisionTokenLimitTooSmall {
+                actual_tokens_per_question: decisions.maximum_tokens_per_question,
+            },
+        )
     }
 }
 
@@ -383,6 +420,7 @@ impl From<ChatModelCapabilities> for WorkerModelCapabilities {
             chat: Some(chat),
             image_generation: None,
             embeddings: None,
+            decisions: None,
         }
     }
 }
@@ -472,6 +510,11 @@ pub enum WorkerModelCapabilitiesValidationError {
     ZeroEmbeddingVectorWidth,
     #[error("embedding context must hold at least two positions, got {actual_context_tokens}")]
     EmbeddingContextTooSmall { actual_context_tokens: u32 },
+    #[error(
+        "a decision model must read at least {} tokens per question, got {actual_tokens_per_question}",
+        crate::MINIMUM_DECISION_TOKENS_PER_QUESTION
+    )]
+    DecisionTokenLimitTooSmall { actual_tokens_per_question: u32 },
     #[error("image dimension alignment must be positive")]
     ZeroImageDimensionAlignment,
     #[error(

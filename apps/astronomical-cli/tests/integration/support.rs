@@ -4,4 +4,5 @@
 
 pub mod environment;
 pub mod stub_daemon;
+pub mod stub_inventory;
 pub mod stub_loopback_http;

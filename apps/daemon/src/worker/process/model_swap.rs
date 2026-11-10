@@ -348,7 +348,24 @@ fn validate_model_swap_event(
             description: "model swap identity acknowledgement mismatch",
         });
     }
-    let capabilities_match_policy = match expected_runtime_configuration {
+    let capabilities_match_policy =
+        capabilities_match_runtime_configuration(capabilities, expected_runtime_configuration);
+    if !capabilities_match_policy {
+        return Err(WorkerControlError::WorkerProtocolViolation {
+            description: "model swap capabilities acknowledgement mismatch",
+        });
+    }
+    Ok(())
+}
+
+/// Whether the capabilities a worker announced for a swapped-in model are
+/// the ones its runtime configuration promised: the right surface, no other
+/// surface beside it, and the limits the policy set.
+fn capabilities_match_runtime_configuration(
+    capabilities: &astronomical_ipc_protocol::WorkerModelCapabilities,
+    expected_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
+) -> bool {
+    match expected_runtime_configuration {
         WorkerLoadedModelRuntimeConfiguration::Autoregressive(configuration) => {
             capabilities.chat.as_ref().is_some_and(|chat_capabilities| {
                 chat_capabilities.context_window == configuration.maximum_context_tokens
@@ -368,13 +385,16 @@ fn validate_model_swap_event(
                 && capabilities.image_generation.is_none()
                 && capabilities.embeddings.is_some()
         }
-    };
-    if !capabilities_match_policy {
-        return Err(WorkerControlError::WorkerProtocolViolation {
-            description: "model swap capabilities acknowledgement mismatch",
-        });
+        WorkerLoadedModelRuntimeConfiguration::Decisions(configuration) => {
+            capabilities.chat.is_none()
+                && capabilities.image_generation.is_none()
+                && capabilities.embeddings.is_none()
+                && capabilities.decisions.is_some_and(|decision_capabilities| {
+                    decision_capabilities.maximum_tokens_per_question
+                        == configuration.maximum_tokens_per_question
+                })
+        }
     }
-    Ok(())
 }
 
 fn publish_staged_model_swap(

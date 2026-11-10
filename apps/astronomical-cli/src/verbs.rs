@@ -5,6 +5,7 @@
 //! them over the real IPC boundary live in `tests/integration/`.
 
 pub mod convert_atlas;
+pub mod decide;
 pub mod doctor;
 pub mod embed;
 pub mod image;

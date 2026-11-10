@@ -16,6 +16,9 @@ use astronomical_ipc_protocol::{
 #[allow(dead_code)]
 mod scripted_worker_image;
 
+mod scripted_worker_decisions;
+mod scripted_worker_single_shot;
+
 const DELAYED_COMPLETION_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
     "astronomical/generation-event-before-swap-model";
@@ -205,22 +208,13 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .await?;
                 }
             }
-            WorkerCommand::GenerateEmbeddings(embeddings_command) => {
-                event_writer
-                    .send_event(&WorkerEvent::EmbeddingsCompleted {
-                        request_id: embeddings_command.request_id,
-                        embeddings: vec![vec![1.0, 0.0]; embeddings_command.inputs.len()],
-                        input_token_counts: vec![1; embeddings_command.inputs.len()],
-                        elapsed_millis: 1,
-                    })
-                    .await?;
-                event_writer
-                    .send_event(&WorkerEvent::EmbeddingsFinalized {
-                        request_id: embeddings_command.request_id,
-                        elapsed_millis: 2,
-                        mlx_memory_snapshot: None,
-                    })
-                    .await?;
+            single_shot_command @ (WorkerCommand::GenerateDecisions(_)
+            | WorkerCommand::GenerateEmbeddings(_)) => {
+                scripted_worker_single_shot::answer_single_shot_command(
+                    &mut event_writer,
+                    single_shot_command,
+                )
+                .await?;
             }
             WorkerCommand::GenerateImage(generation_command) => {
                 if generation_command.prompt == "must-not-dispatch-after-disconnect" {

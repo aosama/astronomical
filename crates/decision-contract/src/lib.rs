@@ -35,9 +35,11 @@ pub mod failure;
 pub mod laya_rendering;
 pub mod laya_sequence;
 pub mod ordered_json;
+pub mod outcome;
 pub mod python_json_text;
 pub mod question;
 pub mod system_one_questions;
+pub mod system_one_response;
 pub mod token_encoder;
 
 pub use answer::{
@@ -50,6 +52,7 @@ pub use calibration::{
 };
 pub use failure::DecisionFailure;
 pub use ordered_json::{OrderedJsonMember, OrderedJsonValue};
+pub use outcome::{QuestionInputCoverage, QuestionOutcome};
 pub use python_json_text::{JsonKeyOrder, JsonTextStyle, python_float_repr, python_json_text};
 pub use question::{
     ChoiceOption, DecisionQuestion, DecisionQuestionBody, DecisionQuestionKind, NoulLabels,
@@ -58,6 +61,7 @@ pub use system_one_questions::{
     MAXIMUM_OPTIONS_PER_QUESTION, MAXIMUM_QUESTIONS_PER_REQUEST, QuestionDefinitionError,
     parse_system_one_questions,
 };
+pub use system_one_response::{system_one_answer, system_one_response};
 pub use token_encoder::{DecisionTokenEncoder, TokenEncodingError};
 
 #[cfg(test)]

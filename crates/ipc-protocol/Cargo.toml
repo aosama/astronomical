@@ -11,6 +11,11 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+# The decision-model contract: the question and answer types a decisions
+# request and its outcome are made of. It is pure Rust with no
+# graphics-processor dependency, so carrying its types here costs the daemon
+# and the command-line tool nothing extra to build.
+astronomical-decision-contract = { path = "../decision-contract" }
 astronomical-lowercase-hex = { path = "../lowercase-hex" }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
 base64.workspace = true

@@ -39,7 +39,9 @@ fn main() -> ExitCode {
             run_validate_config_verb(validate_arguments)
         }
         Ok(CliCommand::Respond(respond_arguments)) => run_respond_verb(respond_arguments),
-        Ok(CliCommand::Embed(embed_arguments)) => run_embed_verb(embed_arguments),
+        Ok(helper_model_command @ (CliCommand::Embed(_) | CliCommand::Decide(_))) => {
+            run_helper_model_verb(helper_model_command)
+        }
         Ok(CliCommand::Image(image_arguments)) => run_image_verb(image_arguments),
         Ok(CliCommand::Models(models_command)) => run_models_verb(models_command),
         Ok(CliCommand::Status) => run_status_verb(),
@@ -410,6 +412,60 @@ fn run_respond_verb(respond_arguments: astronomical_cli::RespondArguments) -> Ex
         Err(respond_error) => {
             let _ = writeln!(stderr, "astronomical: {respond_error}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+/// Runs a verb served by a helper model that answers in one step: `decide`
+/// for a decision model, `embed` for an embedding model.
+fn run_helper_model_verb(helper_model_command: CliCommand) -> ExitCode {
+    match helper_model_command {
+        CliCommand::Decide(decide_arguments) => run_decide_verb(decide_arguments),
+        CliCommand::Embed(embed_arguments) => run_embed_verb(embed_arguments),
+        // `main` routes only those two verbs here.
+        _ => ExitCode::FAILURE,
+    }
+}
+
+fn run_decide_verb(decide_arguments: astronomical_cli::DecideArguments) -> ExitCode {
+    let decide_runtime = match build_current_thread_runtime() {
+        Ok(decide_runtime) => decide_runtime,
+        Err(runtime_error) => {
+            eprintln!("astronomical: {runtime_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut stdin = io::stdin();
+    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
+    let (decide_runtime_instance, decide_candidate_socket_paths) =
+        own_runtime_instance_and_ipc_socket_paths();
+    let mut decide_dependencies = astronomical_cli::DecideDependencies {
+        candidate_socket_paths: decide_candidate_socket_paths,
+        runtime_instance: decide_runtime_instance,
+        stdin: &mut stdin,
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+        download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
+        download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
+        daemon_work_poll_interval: DAEMON_WORK_POLL_INTERVAL,
+        model_load_stall_bound: MODEL_LOAD_STALL_BOUND,
+    };
+    match decide_runtime.block_on(astronomical_cli::run_decide(
+        &decide_arguments,
+        &mut decide_dependencies,
+    )) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(decide_error) => {
+            let _ = writeln!(stderr, "astronomical: {decide_error}");
+            // A bad state, bad questions or a model that cannot decide is the
+            // invocation's fault, so it exits 2 like a bad flag.
+            if decide_error.is_usage_error() {
+                ExitCode::from(2)
+            } else {
+                ExitCode::FAILURE
+            }
         }
     }
 }

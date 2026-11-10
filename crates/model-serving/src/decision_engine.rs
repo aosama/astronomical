@@ -4,8 +4,9 @@
 //! pass, so like the embedding runtime there is no step loop and no
 //! mid-request cancellation: one call returns every answer or one failure.
 
+use crate::memory::telemetry::MlxMemoryTelemetry;
 use astronomical_decision_contract::{
-    DecisionAnswer, DecisionFailure, DecisionQuestion, OrderedJsonValue,
+    DecisionFailure, DecisionQuestion, OrderedJsonValue, QuestionOutcome,
 };
 
 /// A loaded decision runtime that answers typed questions about a state.
@@ -19,6 +20,21 @@ pub trait DecisionEngine: 'static {
         state: &OrderedJsonValue,
         questions: &[DecisionQuestion],
     ) -> Result<DecisionEngineOutput, DecisionFailure>;
+
+    /// The smallest MLX memory ceiling this model can be served under.
+    fn minimum_mlx_memory_ceiling_bytes(&self) -> u64 {
+        1
+    }
+
+    /// Returns the final MLX observation captured after request cleanup, when available.
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        None
+    }
+
+    /// Collects an idle memory observation without adding decision methods.
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        None
+    }
 }
 
 /// Loaded decision-model identity and its per-question token limits.
@@ -40,33 +56,52 @@ pub struct DecisionEngineOutput {
     pub elapsed_millis: u64,
 }
 
-/// One question's answer and what the model actually read to produce it.
-#[derive(Clone, Debug, PartialEq)]
-pub struct QuestionOutcome {
-    pub question_name: String,
-    pub answer: DecisionAnswer,
-    /// The uncalibrated logit of each option, in canonical option order.
-    pub option_logits: Vec<f32>,
-    /// The temperature the logits were divided by before the softmax.
-    pub applied_temperature: f64,
-    pub input_coverage: QuestionInputCoverage,
+/// Default decision slot used by workers whose models answer no decision requests.
+#[doc(hidden)]
+pub struct DecisionUnavailableEngine;
+
+impl DecisionEngine for DecisionUnavailableEngine {
+    fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure> {
+        Err(DecisionFailure::fatal_execution(
+            "the selected model does not answer decision requests",
+        ))
+    }
+
+    fn decide(
+        &mut self,
+        _state: &OrderedJsonValue,
+        _questions: &[DecisionQuestion],
+    ) -> Result<DecisionEngineOutput, DecisionFailure> {
+        Err(DecisionFailure::fatal_execution(
+            "the selected model does not answer decision requests",
+        ))
+    }
 }
 
-/// How much of a question's input fit the model's token limits.
-///
-/// A model reads a bounded sequence, so a long state or many long options are
-/// cut. The answer is still returned; these numbers let a caller see that it
-/// was made from partial input.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct QuestionInputCoverage {
-    /// How many tokens the whole state encodes to.
-    pub state_token_count: u32,
-    /// How many of them the model read for this question.
-    pub state_tokens_read: u32,
-    /// The token cap applied to every option when the options overran their
-    /// budget; `None` when no option was cut for that reason.
-    pub option_token_cap: Option<u32>,
-    /// How many options still read differently from every other option.
-    /// Fewer than the option count means the cut made options indistinguishable.
-    pub distinguishable_option_count: u32,
+/// A boxed engine is an engine, so a worker can hold whichever decision
+/// family its factory built without naming each family in its type.
+impl DecisionEngine for Box<dyn DecisionEngine> {
+    fn load(&mut self) -> Result<DecisionEngineLoadResult, DecisionFailure> {
+        self.as_mut().load()
+    }
+
+    fn decide(
+        &mut self,
+        state: &OrderedJsonValue,
+        questions: &[DecisionQuestion],
+    ) -> Result<DecisionEngineOutput, DecisionFailure> {
+        self.as_mut().decide(state, questions)
+    }
+
+    fn minimum_mlx_memory_ceiling_bytes(&self) -> u64 {
+        self.as_ref().minimum_mlx_memory_ceiling_bytes()
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.as_mut().take_post_cleanup_memory_telemetry()
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        self.as_ref().collect_mlx_memory_telemetry()
+    }
 }

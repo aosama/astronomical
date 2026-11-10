@@ -78,6 +78,7 @@ test("should_place_retiring_before_experimental_before_role_when_choosing_a_sect
     assert.equal(sectionKeyOf({ role: "coding" }), "chat", "coding models chat too, so they share the Chat section");
     assert.equal(sectionKeyOf({ role: "image_generation" }), "pictures");
     assert.equal(sectionKeyOf({ role: "helper" }), "helpers");
+    assert.equal(sectionKeyOf({ role: "decision" }), "helpers", "nobody chats with a decision model");
     assert.equal(sectionKeyOf({ role: "chat" }), "chat");
 });
 
@@ -201,6 +202,7 @@ test("should_list_abilities_in_one_fixed_order_and_nothing_for_a_model_without_a
         "Sees images · Thinks before answering · Uses tools"
     );
     assert.equal(abilitiesText({ supportsImageGeneration: true }), "Makes pictures");
+    assert.equal(abilitiesText({ supportsDecisions: true }), "Answers set questions");
     assert.equal(
         abilitiesText({ role: "coding", supportsToolCalls: true }),
         "Tuned for coding · Uses tools",

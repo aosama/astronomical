@@ -2,6 +2,7 @@
 //! grammar lives in the child modules; this root holds the shared parse
 //! entry point and the global-flag behavior.
 
+mod decide_tests;
 mod embed_tests;
 mod launch_tests;
 mod models_tests;

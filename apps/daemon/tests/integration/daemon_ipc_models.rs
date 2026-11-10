@@ -12,8 +12,8 @@ use tokio::time::timeout;
 
 use crate::support::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, fresh_instance_state_directory, ipc_chat_discovered_model,
-    ipc_runtime_config, ready_stub_executor, start_stub_daemon_ipc_service,
-    start_stub_daemon_ipc_service_with_runtime_config,
+    ipc_decision_discovered_model, ipc_runtime_config, ready_stub_executor,
+    start_stub_daemon_ipc_service, start_stub_daemon_ipc_service_with_runtime_config,
 };
 
 #[tokio::test]
@@ -58,6 +58,7 @@ async fn should_list_discovered_models_over_daemon_ipc() {
                 family: "qwen3_5".to_owned(),
                 context_window: Some(2_048),
                 supports_embeddings: false,
+                supports_decisions: false,
                 supports_image_generation: false,
                 is_resident: true,
                 size_bytes: 1_000_000_000,
@@ -65,6 +66,56 @@ async fn should_list_discovered_models_over_daemon_ipc() {
         }
     );
 
+    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
+        .await
+        .expect("the daemon IPC service shutdown should finish inside the test timeout")
+        .expect("the daemon IPC service should shut down cleanly");
+    let _ = std::fs::remove_dir_all(&state_directory);
+}
+
+#[tokio::test]
+async fn should_list_a_decision_model_with_its_capability_and_no_context_window() {
+    let state_directory = fresh_instance_state_directory("models-decider");
+    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
+        vec![ipc_decision_discovered_model("test-local-decider")],
+        &[],
+    )));
+    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+        &state_directory,
+        ready_stub_executor("test/local-chatter"),
+        Some(reloadable_config),
+    )
+    .await;
+    let mut daemon_client =
+        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
+            .await
+            .expect("the client should connect to the running daemon IPC service");
+
+    daemon_client
+        .send_request(&DaemonRequest::ModelsList)
+        .await
+        .expect("the models list request should transmit");
+    let list_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
+        .await
+        .expect("the models list response should arrive inside the test timeout")
+        .expect("the models list read should not fail at the transport layer")
+        .expect("the daemon should answer the models list request");
+
+    assert_eq!(
+        list_response,
+        DaemonResponse::ModelsList {
+            models: vec![astronomical_ipc_protocol::DaemonListedModel {
+                model_id: "test-local-decider".to_owned(),
+                family: "laya".to_owned(),
+                context_window: None,
+                supports_embeddings: false,
+                supports_decisions: true,
+                supports_image_generation: false,
+                is_resident: false,
+                size_bytes: 500_000_000,
+            }],
+        }
+    );
     timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
         .await
         .expect("the daemon IPC service shutdown should finish inside the test timeout")

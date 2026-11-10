@@ -419,7 +419,7 @@ test("boots the shipped console shell into a readable connection view", ASYNC_TE
     assert.match(elementFor("connect-verification-command").textContent, /example-selected-model/);
     assert.equal(
         elementFor("connect-endpoint-list").children.length,
-        5,
+        6,
         "the served endpoint list must be published on boot"
     );
     assert.notEqual(elementFor("connect-credential-placeholder").textContent, "");

@@ -106,6 +106,7 @@ pub use serving::chat_generation_executor::{
     ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
     GenerationStartError,
 };
+pub use serving::decisions_executor::{DecisionsExecutionError, DecisionsOutput};
 pub use serving::embeddings_executor::{EmbeddingsExecutionError, EmbeddingsOutput};
 pub use serving::image_generation_executor::{
     ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,

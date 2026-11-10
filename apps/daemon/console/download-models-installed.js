@@ -143,13 +143,14 @@ function createDownloadModelsProgressBar(activeDownloadRow, downloadState) {
 }
 
 // Thin Talk can only hold a conversation with a chat model: an image model
-// draws through a chat model's tool and an embedding model only turns text
-// into numbers, so offering either for a chat would promise something that
-// cannot happen.
+// draws through a chat model's tool, an embedding model only turns text into
+// numbers and a decision model only picks among set answers, so offering any
+// of them for a chat would promise something that cannot happen.
 function canChatWithCatalogModel(catalogRow) {
     return Boolean(catalogRow.readyOnThisMac)
         && !catalogRow.supportsImageGeneration
-        && !catalogRow.supportsEmbeddings;
+        && !catalogRow.supportsEmbeddings
+        && !catalogRow.supportsDecisions;
 }
 
 function createDownloadModelsOpenInChatButton() {

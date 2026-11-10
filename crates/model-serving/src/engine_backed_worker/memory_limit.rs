@@ -30,14 +30,17 @@ enum FactoryMemoryLimitOutcome {
     LimitAdopted(Box<WorkerEvent>),
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+        + Send
+        + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
+    DecisionsEngine: crate::DecisionEngine,
 {
     pub(crate) async fn update_mlx_memory_limit<WriteTransport>(
         &mut self,
@@ -272,7 +275,13 @@ where
 
     /// Dispatches the live memory-limit change to whichever runtime is loaded.
     async fn adjust_loaded_runtime_mlx_memory_limit(
-        loaded_runtime: &mut LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+        loaded_runtime: &mut LoadedRuntime<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+        >,
         effective_requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         match loaded_runtime {
@@ -285,9 +294,14 @@ where
             LoadedRuntime::Image(image_engine) => image_engine
                 .update_mlx_memory_limit(effective_requested_mlx_memory_ceiling_bytes)
                 .map_err(map_image_memory_limit_failure_to_engine_error),
-            LoadedRuntime::Embeddings(_embedding_engine) => Err(InferenceEngineError::Fatal {
-                reason: "this embedding engine does not support live MLX memory limits".to_owned(),
-            }),
+            // Both answer in one forward pass and hold no state between
+            // requests, so neither has a live limit to move.
+            LoadedRuntime::Embeddings(_) | LoadedRuntime::Decisions(_) => {
+                Err(InferenceEngineError::Fatal {
+                    reason: "embedding and decision engines do not support live MLX memory limits"
+                        .to_owned(),
+                })
+            }
         }
     }
 

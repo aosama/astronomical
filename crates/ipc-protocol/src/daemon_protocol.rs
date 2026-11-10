@@ -1,3 +1,4 @@
+use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue, QuestionOutcome};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -26,7 +27,9 @@ pub enum DaemonWorkerStatus {
 }
 
 /// One request an ephemeral CLI process sends to the local daemon.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+// Not `Eq`: a decide request carries the caller's JSON, whose floats
+// have no total equality.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DaemonRequest {
     Handshake,
@@ -60,6 +63,17 @@ pub enum DaemonRequest {
         inputs: Vec<String>,
         /// Optional Matryoshka dimension truncation requested by the caller.
         dimensions: Option<u32>,
+    },
+    /// Answers typed questions about a state with one decision model. A
+    /// `None` model means "use whatever is resident"; the daemon swaps models
+    /// itself when the requested model differs from the loaded one.
+    DecideGenerate {
+        /// Exact worker-advertised model ID, or the resident model when absent.
+        model: Option<String>,
+        /// What to decide about: text, or any JSON value.
+        state: OrderedJsonValue,
+        /// The System One `questions` object, exactly as the caller wrote it.
+        questions: OrderedJsonValue,
     },
     /// Generates one image from a text prompt. The daemon owns everything
     /// model-specific (the capability envelope, the diffusion step count,
@@ -120,7 +134,8 @@ pub enum DaemonResponse {
         /// Lets a waiting caller tell a slow load from a stuck daemon.
         model_load_in_flight: Option<crate::ModelLoadInFlight>,
         /// Changes each time a chat or image request makes progress, this caller's or
-        /// another's. Embeddings report no progress, so they do not move it.
+        /// another's. Embeddings and decisions answer in one step and report no
+        /// progress, so they do not move it.
         /// Lets a waiting caller tell a long prefill or a queue from a stuck worker.
         /// Only a change means anything; the value itself can restart.
         request_progress_count: u64,
@@ -173,6 +188,18 @@ pub enum DaemonResponse {
     },
     /// Terminal frame for a failed embedding batch.
     EmbeddingsFailed { reason: EmbeddingsFailureReason },
+    /// Terminal frame for an answered decision request.
+    DecisionsCompleted {
+        /// Worker-advertised model ID that answered.
+        model: String,
+        /// One outcome per question, in request order.
+        question_outcomes: Vec<QuestionOutcome>,
+        /// The tokens the model read across all questions.
+        input_token_count: u32,
+        elapsed_millis: u64,
+    },
+    /// Terminal frame for a failed decision request.
+    DecisionsFailed { reason: DecisionFailure },
     /// Terminal frame for a finished image. The PNG travels as base64 in the
     /// frame, well inside the 32 MB frame ceiling for any supported size.
     ImageGenerationCompleted {
@@ -201,6 +228,8 @@ pub struct DaemonListedModel {
     pub context_window: Option<u32>,
     /// True when this model can produce embeddings for `embed`.
     pub supports_embeddings: bool,
+    /// True when this model answers typed questions for `decide`.
+    pub supports_decisions: bool,
     /// True when this model can draw an image from text for `image`.
     pub supports_image_generation: bool,
     /// True when this model is currently resident in the worker.
@@ -230,6 +259,7 @@ pub struct DaemonCatalogEntry {
     pub supports_tool_calls: bool,
     pub supports_image_generation: bool,
     pub supports_embeddings: bool,
+    pub supports_decisions: bool,
 }
 
 /// The active library download job, if any.

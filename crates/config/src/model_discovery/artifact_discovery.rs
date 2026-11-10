@@ -8,9 +8,10 @@ use std::fs;
 use std::path::Path;
 
 use crate::model_discovery::{
-    ChatModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities,
-    ModelFamily, ModelLicense, classified_artifacts, derive_revision_from_config_bytes,
-    flux2_klein, model_family, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
+    ChatModelCapabilities, DecisionModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities,
+    ModelCapabilities, ModelFamily, ModelLicense, classified_artifacts,
+    derive_revision_from_config_bytes, flux2_klein, laya, model_family, modernbert,
+    prism_hadamard_qwen35, qwen_image_21, qwen3_5,
 };
 
 pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
@@ -38,8 +39,8 @@ pub fn try_discover_model_with_id(
     match model_family {
         ModelFamily::Qwen3_5 => discover_qwen3_5_model(model_directory, model_id, model_family),
         ModelFamily::Flux2Klein => discover_flux2_klein_model(model_directory, model_family),
-        ModelFamily::ModernBert => {
-            discover_modernbert_model(model_directory, model_id, model_family)
+        ModelFamily::ModernBert | ModelFamily::Laya => {
+            discover_encoder_model(model_directory, model_id, model_family)
         }
         ModelFamily::PrismHadamardQwen35 => {
             discover_prism_hadamard_qwen35_model(model_directory, model_id, model_family)
@@ -49,6 +50,19 @@ pub fn try_discover_model_with_id(
         // with the same evidence shape as FLUX.2 Klein.
         ModelFamily::QwenImage21 => discover_qwen_image21_model(model_directory, model_family),
     }
+}
+
+/// Discovers a model built on a ModernBERT encoder: the decision model when
+/// the family says so, and the embedding model otherwise.
+fn discover_encoder_model(
+    model_directory: &Path,
+    model_id: &str,
+    encoder_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    if encoder_family == ModelFamily::Laya {
+        return discover_laya_model(model_directory, model_id, encoder_family);
+    }
+    discover_modernbert_model(model_directory, model_id, encoder_family)
 }
 
 /// Derives the provider model id and revision for a config-document family:
@@ -143,6 +157,56 @@ fn discover_modernbert_model(
         license: None,
         model_size_bytes: family_metadata.model_size_bytes,
     })
+}
+
+/// Projects a Laya decision-model directory into the neutral discovery contract.
+fn discover_laya_model(
+    model_directory: &Path,
+    model_id: &str,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
+    let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
+    let family_metadata = laya::discover_model_metadata(model_directory, &config_value)?;
+    let (provider_model_id, revision) =
+        provenance_or_config_revision(model_directory, &config_bytes);
+    Some(DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id,
+        model_family,
+        revision,
+        model_directory: model_directory.to_path_buf(),
+        capabilities: ModelCapabilities::Decisions(DecisionModelCapabilities {
+            maximum_tokens_per_question: family_metadata.maximum_tokens_per_question,
+        }),
+        license: None,
+        model_size_bytes: family_metadata.model_size_bytes,
+    })
+}
+
+/// Discovers the checkpoints a Laya repository bundles in its subfolders.
+///
+/// Each becomes a model of its own, named after the repository and the
+/// subfolder. Other families bundle nothing, so they yield no models here.
+pub(super) fn discover_bundled_checkpoints(
+    repository_model: &DiscoveredModel,
+) -> Vec<DiscoveredModel> {
+    if repository_model.model_family != ModelFamily::Laya {
+        return Vec::new();
+    }
+    let mut bundled_models = Vec::new();
+    for bundled_checkpoint in laya::bundled_checkpoints(&repository_model.model_directory) {
+        let bundled_model_id = laya::bundled_checkpoint_model_id(
+            &repository_model.model_id,
+            &bundled_checkpoint.checkpoint_name,
+        );
+        if let Some(bundled_model) =
+            try_discover_model_with_id(&bundled_checkpoint.checkpoint_directory, &bundled_model_id)
+        {
+            bundled_models.push(bundled_model);
+        }
+    }
+    bundled_models
 }
 
 /// Projects a prism-hadamard Qwen3.5 pack directory into the neutral discovery

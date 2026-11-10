@@ -8,9 +8,10 @@ pub struct EngineBackedWorker<
     Factory = (),
     ImageEngine = ImageGenerationUnavailableEngine,
     EmbeddingEngine = EmbeddingUnavailableEngine,
+    DecisionsEngine = crate::DecisionUnavailableEngine,
 > {
     pub(crate) loaded_runtime:
-        Option<LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine>>,
+        Option<LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine, DecisionsEngine>>,
     pub(crate) model_factory: Option<Factory>,
     pub(crate) machine_mlx_memory_ceiling_bytes: u64,
     pub(crate) effective_mlx_memory_ceiling_bytes: u64,
@@ -51,10 +52,11 @@ pub struct EngineBackedWorker<
     pub(crate) unsent_neural_engine_prefill_event: Option<WorkerEvent>,
 }
 
-pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine> {
+pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine, DecisionsEngine> {
     Autoregressive(LoadedModel<Processor, Engine>),
     Image(ImageEngine),
     Embeddings(EmbeddingEngine),
+    Decisions(DecisionsEngine),
 }
 
 pub(crate) struct LoadedModel<Processor, Engine> {
@@ -63,6 +65,7 @@ pub(crate) struct LoadedModel<Processor, Engine> {
 }
 
 mod construction;
+mod decisions;
 mod embeddings;
 mod fatal;
 mod generation_advance;
