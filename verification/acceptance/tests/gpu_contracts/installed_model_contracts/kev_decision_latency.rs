@@ -27,8 +27,10 @@ const TEST_MLX_MEMORY_CEILING_BYTES: usize = 36 * 1024 * 1024 * 1024;
 const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const QUESTION_COUNTS: [usize; 3] = [1, 5, 10];
 /// Timed requests per question count; the median is reported. Each one
-/// prefills a full 65,536-token state, so a few already take minutes on 9B.
-const TIMED_REQUESTS_PER_QUESTION_COUNT: usize = 3;
+/// prefills a full 65,536-token state, which dominates the request: three
+/// requests on Kev-0.8B agreed within 0.6%, so one is enough, and keeps the
+/// 9B run within its budget.
+const TIMED_REQUESTS_PER_QUESTION_COUNT: usize = 1;
 /// Kev's serving limit on a state, its state token included.
 const KEV_MAXIMUM_STATE_TOKENS: usize = 65_536;
 const PROGRESS_INTERVAL_SECONDS: f64 = 5.0;

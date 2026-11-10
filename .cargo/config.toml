@@ -144,11 +144,13 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 # measurement for them. It prints numbers and asserts no threshold; a few
 # seconds after the build.
 measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_measure_laya_decision_latency_at_the_token_limit"
-# Kev latency on an optimized build: after one warmup request, the median of 3
-# requests with 1, 5 and 10 questions on a Romeo and Juliet state at Kev's
+# Kev latency on an optimized build: after one warmup request, one request
+# each with 1, 5 and 10 questions on a Romeo and Juliet state at Kev's
 # 65,536-token state limit, with the state's prefill rate. It prints numbers,
-# with progress and an ETA every 5 seconds, and asserts no threshold.
-measure-kev-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_measure_kev_decision_latency_at_the_state_limit"
+# with progress and an ETA every 5 seconds, and asserts no threshold. Every
+# request prefills the whole state, so the case budget is an hour, not the
+# default two minutes.
+measure-kev-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 3600 --filter should_measure_kev_decision_latency_at_the_state_limit"
 # The reads a Qwen3.5-based decision model (Kev, Clef) makes from the backbone
 # (issue #2032 phase 6): final hidden states, output-projection rows, and
 # question rows continued from a checkpointed state, each checked against the
