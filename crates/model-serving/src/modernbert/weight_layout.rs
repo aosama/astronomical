@@ -12,11 +12,6 @@ pub(crate) enum TokenEmbeddingStorage {
     /// Affine-quantized `weight`, `scales` and `biases`, dequantized per looked-up row.
     AffineQuantized,
     /// One dense `weight` table, looked up as stored.
-    ///
-    /// No artifact served today stores its table this way; decision-model
-    /// checkpoints (issue #2032) do, and the trunk tests cover this path
-    /// until that backend loads one.
-    #[cfg_attr(not(test), expect(dead_code))]
     Dense,
 }
 

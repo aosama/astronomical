@@ -44,6 +44,7 @@ dependencies = [
  "astronomical-cli",
  "astronomical-config",
  "astronomical-daemon",
+ "astronomical-decision-contract",
  "astronomical-inference-worker",
  "astronomical-ipc-protocol",
  "astronomical-lowercase-hex",
@@ -258,6 +259,7 @@ name = "astronomical-model-serving"
 version = "0.2.99"
 dependencies = [
  "astronomical-config",
+ "astronomical-decision-contract",
  "astronomical-expert-atlas",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",

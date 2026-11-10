@@ -41,6 +41,14 @@ mod model_family_runtime;
 
 pub(crate) mod model_generation_processor;
 
+pub(crate) mod decision_engine;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+pub(crate) mod synthetic_weights_test_support;
+
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod decision_models;
+
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod modernbert;
 
@@ -125,6 +133,14 @@ pub use decoder_cache::{
     DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError,
     DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
 };
+
+pub use decision_engine::{
+    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, QuestionInputCoverage,
+    QuestionOutcome,
+};
+
+#[cfg(feature = "direct-mlx")]
+pub use decision_models::laya::LayaDecisionEngine;
 
 pub use embedding_engine::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,

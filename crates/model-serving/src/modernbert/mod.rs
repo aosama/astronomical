@@ -8,15 +8,15 @@
 //! third-party embedding package is linked.
 
 mod artifact;
-mod attention_mask;
+pub(crate) mod attention_mask;
 pub(crate) mod configuration;
 mod embedding_pooling;
 mod engine;
 mod memory_utilization;
-mod token_batch;
+pub(crate) mod token_batch;
 mod tokenizer;
-mod trunk;
-mod weight_layout;
+pub(crate) mod trunk;
+pub(crate) mod weight_layout;
 
 pub use engine::ModernBertEmbeddingEngine;
 pub use tokenizer::{EncodedEmbeddingInput, encode_embedding_input};

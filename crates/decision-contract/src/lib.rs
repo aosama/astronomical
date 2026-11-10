@@ -31,6 +31,7 @@
 pub mod answer;
 pub mod calibration;
 pub mod criterion_text;
+pub mod failure;
 pub mod laya_rendering;
 pub mod laya_sequence;
 pub mod ordered_json;
@@ -47,6 +48,7 @@ pub use calibration::{
     BucketTemperature, KindTemperatures, TemperatureTable, calibrated_probabilities,
     clamp_temperature, temperature_bucket_key,
 };
+pub use failure::DecisionFailure;
 pub use ordered_json::{OrderedJsonMember, OrderedJsonValue};
 pub use python_json_text::{JsonKeyOrder, JsonTextStyle, python_float_repr, python_json_text};
 pub use question::{

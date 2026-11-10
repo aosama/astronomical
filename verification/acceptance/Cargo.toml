@@ -112,6 +112,7 @@ too_many_lines = "deny"
 [dev-dependencies]
 astronomical-cli = { path = "../../apps/astronomical-cli" }
 astronomical-config = { path = "../../crates/config" }
+astronomical-decision-contract = { path = "../../crates/decision-contract" }
 astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }

@@ -123,6 +123,28 @@ test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomi
 test-modernbert = "test -p astronomical-model-serving --features direct-mlx --lib modernbert"
 test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_reproduce_the_embedding_vectors_recorded_before_the_trunk_was_restructured"
 
+# The Laya decision-model backend (issue #2032). `test-laya` runs its lib
+# tests: artifact, configuration, tokenizer and batching checks, plus the
+# decision head on small synthetic weights built on the graphics processor;
+# about a second, no installed model. The two journeys below load the real
+# 8-bit MLX checkpoints; pass `--configuration PATH` naming a JSON file whose
+# `model_directory` is the MLX Laya repository folder (English checkpoint at
+# its root, `multilingual/` beside it). `test-laya-reference-decisions`
+# compares token sequences exactly and probabilities within 0.05 against the
+# float32 reference recorded in tests/fixtures/laya_reference_decisions.json
+# (regenerate with the script beside it). `test-laya-engine-requests` covers
+# refusals and a request that spans several forward passes. A few seconds each.
+test-laya = "test -p astronomical-model-serving --features direct-mlx --lib decision_models"
+test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
+test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
+# Laya latency on an optimized build: after one warmup request, the median of
+# 20 requests with 1, 5 and 10 questions, each question filled to the
+# checkpoint's own token limit (512 English, 1,024 multilingual). Decision
+# models generate nothing, so this replaces the usual 10,000-in / 500-out
+# measurement for them. It prints numbers and asserts no threshold; a few
+# seconds after the build.
+measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_measure_laya_decision_latency_at_the_token_limit"
+
 # Dense streaming speed ladder (issue #1985), on an optimized build with the
 # weight files kept out of the macOS file cache: the raw layer read rate, one
 # streamed layer, then 10,000 Shakespeare tokens in and 500 out at 0, 8, 16

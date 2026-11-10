@@ -17,6 +17,10 @@ direct-mlx = ["dep:astronomical-neural-engine", "dep:astronomical-runtime-integr
 [dependencies]
 astronomical-expert-atlas = { path = "../expert-atlas" }
 astronomical-config = { path = "../config" }
+# The decision-model contract: typed questions, calibration, typed answers and
+# each family's prompt layout. It has no graphics-processor dependency; the
+# decision backends in this crate add the forward pass.
+astronomical-decision-contract = { path = "../decision-contract" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 # Pure memory policy and expert-paging arithmetic (budget composition, page
 # admission peaks, residency planning, reclamation/recovery, serving ceiling).

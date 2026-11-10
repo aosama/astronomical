@@ -32,7 +32,10 @@ const QUANTIZED_WEIGHTS_TAIL: &str = ".weight";
 const QUANTIZED_SCALES_TAIL: &str = ".scales";
 const QUANTIZED_BIASES_TAIL: &str = ".biases";
 
-/// Why a trunk forward pass could not be built.
+/// Why a forward pass over an artifact's tensors could not be built.
+///
+/// Heads that run on the trunk's hidden states read the same weight file
+/// through the same runtime, so they report their failures with this type too.
 #[derive(Debug, Error)]
 pub(crate) enum ModernBertTrunkError {
     #[error("{0}")]
@@ -400,26 +403,12 @@ impl ModernBertTrunk<'_> {
         )?)
     }
 
-    /// One of the query, key or value projections out of `[batch, heads, 3, length, width]`.
     fn slice_projection(
         &self,
         reordered_qkv: &MlxArray,
         projection_index: i32,
     ) -> Result<MlxArray, ModernBertTrunkError> {
-        let qkv_shape = reordered_qkv.shape();
-        let one_projection = self.runtime.slice(
-            reordered_qkv,
-            &[0, 0, projection_index, 0, 0],
-            &[
-                qkv_shape[0],
-                qkv_shape[1],
-                projection_index + 1,
-                qkv_shape[3],
-                qkv_shape[4],
-            ],
-            &[1, 1, 1, 1, 1],
-        )?;
-        Ok(self.runtime.squeeze_axis(&one_projection, 2)?)
+        slice_stacked_projection(self.runtime, reordered_qkv, projection_index)
     }
 
     /// The `[start, stop)` range of the last axis of a `[batch, length, width]` array.
@@ -452,6 +441,31 @@ impl ModernBertTrunk<'_> {
             }),
         }
     }
+}
+
+/// One of the query, key or value projections out of `[batch, heads, 3, length, width]`.
+///
+/// Shared with decision heads, whose attention stacks its three projections
+/// the same way.
+pub(crate) fn slice_stacked_projection(
+    runtime: &MlxRuntime,
+    reordered_qkv: &MlxArray,
+    projection_index: i32,
+) -> Result<MlxArray, ModernBertTrunkError> {
+    let qkv_shape = reordered_qkv.shape();
+    let one_projection = runtime.slice(
+        reordered_qkv,
+        &[0, 0, projection_index, 0, 0],
+        &[
+            qkv_shape[0],
+            qkv_shape[1],
+            projection_index + 1,
+            qkv_shape[3],
+            qkv_shape[4],
+        ],
+        &[1, 1, 1, 1, 1],
+    )?;
+    Ok(runtime.squeeze_axis(&one_projection, 2)?)
 }
 
 #[cfg(test)]
