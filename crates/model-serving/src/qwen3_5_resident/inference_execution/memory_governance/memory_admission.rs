@@ -1,7 +1,7 @@
 //! Fixed-shape admission for one resident Qwen3.5 forward.
 
+use crate::memory::log_adaptive_ram_growth_admission_decision;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_resident::model::adaptive_ram_growth_logging;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthProjection, InferenceEngineError, MemoryPhase,
     PerformanceAttribution, PerformanceCounter, PerformanceOperation,
@@ -177,7 +177,7 @@ impl Qwen3_5EngineState {
             .then_some(adaptive_ram_growth_context.forward_token_count()),
         );
         if should_log_memory_decision {
-            adaptive_ram_growth_logging::log_adaptive_ram_growth_admission_decision(
+            log_adaptive_ram_growth_admission_decision(
                 adaptive_ram_growth_context,
                 &forward_projection,
                 forward_admission_decision.resident_log_label(),

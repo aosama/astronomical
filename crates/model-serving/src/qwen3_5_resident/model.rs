@@ -1,5 +1,4 @@
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod adaptive_ram_growth_logging;
 #[cfg(feature = "direct-mlx")]
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
