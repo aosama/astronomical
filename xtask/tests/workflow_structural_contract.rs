@@ -13,10 +13,10 @@ mod contract_support;
 
 use contract_support::{
     EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP, EXPECTED_OBSERVATORY_COMMAND,
-    EXPECTED_SWIFT_CONCURRENCY_GROUP, EXPECTED_SWIFT_NODE_AUTHORITY, find_step_by_id,
-    find_step_by_name, is_pinned_action_reference, notices_freshness_workflow_contract,
-    required_bool, required_field, required_job, required_text, required_u64, run_text_of,
-    steps_of, triggers_of, workflow_contract,
+    EXPECTED_SWIFT_CONCURRENCY_GROUP, EXPECTED_SWIFT_NODE_AUTHORITY, MACOS_RUNNER_LABEL,
+    find_step_by_id, find_step_by_name, is_pinned_action_reference,
+    notices_freshness_workflow_contract, required_bool, required_field, required_job,
+    required_text, required_u64, run_text_of, steps_of, triggers_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -429,7 +429,7 @@ fn packaging_contracts_run_on_required_checks() {
     let neural_engine_job = required_job(&workflow, "neural-engine");
     assert_eq!(
         required_text(neural_engine_job, "runs-on", "job neural-engine"),
-        "macos-26",
+        MACOS_RUNNER_LABEL,
         "the packaging contracts exercise macOS tooling, so they must run on macOS"
     );
     assert_eq!(

@@ -16,6 +16,12 @@ pub(crate) const EXPECTED_SWIFT_CONCURRENCY_GROUP: &str =
     "macos-swift-node-${{ github.event_name }}-${{ github.ref }}";
 pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str = "node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/memory-control.test.js apps/daemon/console/overview.test.js apps/daemon/console/download-models.test.js apps/daemon/console/download-models-fetch.test.js apps/daemon/console/download-models-pages.test.js apps/daemon/console/download-models-removal.test.js apps/daemon/console/download-models-groups.test.js apps/daemon/console/download-models-installed.test.js apps/daemon/console/appearance.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js apps/daemon/console/neural-engine-panel.test.js";
 
+/// The one runner image every macOS job uses. Xcode 27, the major version
+/// that builds releases, ships only on this image; a job left on another
+/// label would compile with a different Xcode, so its results would say
+/// nothing about the app that ships and its caches would never be shared.
+pub(crate) const MACOS_RUNNER_LABEL: &str = "xcode-27";
+
 pub(crate) fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -40,6 +46,36 @@ pub(crate) fn notices_freshness_workflow_contract() -> Value {
 
 pub(crate) fn macos_packaging_workflow_contract() -> Value {
     parse_yaml_file(&repository_root().join(".github/workflows/macos-packaging.yml"))
+}
+
+/// Every workflow in the repository, by file name, for contracts that must
+/// hold across all of them rather than in one named workflow.
+pub(crate) fn every_workflow_contract() -> Vec<(String, Value)> {
+    let workflows_directory = repository_root().join(".github/workflows");
+    let directory_entries =
+        std::fs::read_dir(&workflows_directory).expect("the workflows directory must be listable");
+    let mut workflow_paths = Vec::new();
+    for directory_entry in directory_entries {
+        let workflow_path = directory_entry
+            .expect("a workflow directory entry must be readable")
+            .path();
+        if workflow_path.extension() == Some(std::ffi::OsStr::new("yml")) {
+            workflow_paths.push(workflow_path);
+        }
+    }
+    // Directory order is not stable, and a failure should name the same
+    // workflow first on every run.
+    workflow_paths.sort();
+    let mut workflow_contracts = Vec::new();
+    for workflow_path in workflow_paths {
+        let workflow_file_name = workflow_path
+            .file_name()
+            .expect("a workflow file has a name")
+            .to_string_lossy()
+            .into_owned();
+        workflow_contracts.push((workflow_file_name, parse_yaml_file(&workflow_path)));
+    }
+    workflow_contracts
 }
 
 pub(crate) fn composite_action_contract() -> Value {

@@ -50,12 +50,12 @@ env:
   # Must equal ci.yml's pin: the native-build identity hashes toolchain
   # outputs, so one Xcode version serves every macOS workflow. The
   # workflow_xcode_pin_contract test fails when the two drift apart.
-  ASTRONOMICAL_PINNED_XCODE_VERSION: "26.6"
+  ASTRONOMICAL_PINNED_XCODE_VERSION: "27.2"
 
 jobs:
   package-stable:
     name: Package and smoke-test the Stable bundle
-    runs-on: macos-26
+    runs-on: xcode-27
     # A fully cold run (native MLX build, cold sccache) took up to 17 minutes;
     # the limit leaves room for a slow runner on a double miss.
     timeout-minutes: 60

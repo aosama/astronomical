@@ -9,7 +9,7 @@ description: 'Resolves the pinned Xcode version to an installed Xcode on the mac
 
 inputs:
   xcode-version:
-    description: 'Bare Xcode version to resolve, e.g. 26.6; callers pass the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION.'
+    description: 'Bare Xcode version to resolve, e.g. 27.2; callers pass the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION.'
     required: true
 
 runs:
