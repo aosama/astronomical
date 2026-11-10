@@ -9,9 +9,13 @@ struct NeuralEngineBanner: Equatable {
 }
 
 struct NeuralEngineBannerPolicy {
-  // A set that loads in a few seconds should not raise a banner saying to expect another one, which
-  // would then arrive on top of it.
-  static let preparationAnnouncementDelay: TimeInterval = 5
+  // The preparation banner promises a second one and tells the person to expect a wait, so it is
+  // kept for waits long enough to matter. When macOS has dropped its own copies of kept programs,
+  // as it always does after a macOS update, it prepares them again while the model already answers
+  // on the GPU: 16 to 37 seconds for a 9B model's 56 programs (issue #2064). Building a set for the
+  // first time takes minutes. Sixty seconds lets the first pass with only the banner that says the
+  // Neural Engine is engaged, and still announces the second, or a re-preparation that runs long.
+  static let preparationAnnouncementDelay: TimeInterval = 60
 
   private var preparationStartedAt: Date?
   private var preparingModelIdentifier: String?

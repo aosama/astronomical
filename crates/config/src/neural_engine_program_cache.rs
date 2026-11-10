@@ -2,9 +2,10 @@
 //!
 //! The folder is one declared home, `runtime.neural_engine_program_directory`, in the
 //! instance's own folder by default. A set is about 10 GB for a dense 9B model, so it
-//! should be easy to find. It sits apart from the prompt cache, because that cache trims
-//! everything under its root against the user's size limit, and compiled programs are not
-//! prompt state.
+//! should be easy to find. macOS keeps its own copies of about the same size outside
+//! this folder, which nothing here manages or reports (issue #1878). The folder sits
+//! apart from the prompt cache, because that cache trims everything under its root
+//! against the user's size limit, and compiled programs are not prompt state.
 //!
 //! Layout: `<directory>/<model id>/<revision>-<weights fingerprint>/<set name>/layer-N.mlmodelc`,
 //! with a `programs.json` manifest beside the programs once a set is complete.
