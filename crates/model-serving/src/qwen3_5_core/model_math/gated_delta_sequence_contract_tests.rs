@@ -152,3 +152,18 @@ fn should_refuse_a_narrow_state_or_an_unsupported_activation_dtype() {
             .contains("float16, bfloat16, or float32")
     );
 }
+
+#[test]
+fn should_name_a_non_positive_head_dimension_before_uneven_heads() {
+    let mut no_value_heads = SequenceShapes::qwen3_5_prompt_chunk();
+    no_value_heads.value_shape[2] = 0;
+    no_value_heads.decay_shape = vec![1, 512, 0];
+    no_value_heads.update_rate_shape = vec![1, 512, 0];
+    assert!(refusal_of(&no_value_heads).contains("must be positive"));
+
+    let mut empty_prompt_and_uneven_heads = SequenceShapes::qwen3_5_prompt_chunk();
+    empty_prompt_and_uneven_heads.query_shape[1] = 0;
+    empty_prompt_and_uneven_heads.key_shape[1] = 0;
+    empty_prompt_and_uneven_heads.value_shape[2] = 24;
+    assert!(refusal_of(&empty_prompt_and_uneven_heads).contains("must be positive"));
+}
