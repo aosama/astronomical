@@ -1,0 +1,26 @@
+[package]
+name = "astronomical-decision-contract"
+description = "The contract every decision model shares: typed questions, their validation, per-family prompt rendering, temperature calibration and typed answers, with no graphics-processor dependency."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# Unit tests live beside their source as `*_tests.rs` modules inside `src/`,
+# and the golden vectors that pin this crate to the reference implementations
+# are checked in under `src/`. `autotests = false` keeps stray .rs files under
+# tests/ from auto-discovering as extra binaries; tests/fixtures/ holds only
+# the script that regenerates the golden vectors.
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

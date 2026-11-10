@@ -142,6 +142,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-decision-contract"
+version = "0.2.99"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "astronomical-e2e"
 version = "0.2.99"
 dependencies = [
