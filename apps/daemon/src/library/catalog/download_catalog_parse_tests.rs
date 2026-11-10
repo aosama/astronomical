@@ -62,7 +62,7 @@ pub(super) fn empty_get_started_role_names() -> BTreeSet<&'static str> {
 /// Trailing JSON whitespace is legal, so a document padded with spaces to an
 /// exact byte size still parses — making the byte bound directly testable.
 fn catalog_document_padded_to_byte_size(total_byte_size: usize) -> String {
-    let unpadded_catalog_document = r#"{"schema_version":3,"entries":[]}"#;
+    let unpadded_catalog_document = r#"{"schema_version":4,"entries":[]}"#;
     let padding_byte_count = total_byte_size - unpadded_catalog_document.len();
     format!(
         "{unpadded_catalog_document}{}",
@@ -84,7 +84,7 @@ fn catalog_document_with_entry_count(entry_count: usize) -> String {
             "public": true,
         }));
     }
-    json!({"schema_version": 3, "entries": entry_values}).to_string()
+    json!({"schema_version": 4, "entries": entry_values}).to_string()
 }
 
 #[test]

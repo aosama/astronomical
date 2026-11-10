@@ -5,12 +5,19 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use thiserror::Error;
 
+pub use super::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
+use super::catalog_presentation::{
+    AuthoredEntryPresentation, CatalogEntryPresentation, parse_entry_presentation,
+    validate_unique_model_versions,
+};
 use crate::library::DownloadPathSelection;
 
-// Version 3 adds per-entry memory footprint and measured streaming floor,
-// catalog role, the Get started pick, and the experimental and retiring flags. There are no downstream catalog
-// consumers, so the schema moves forward without compatibility shims.
-const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 3;
+// Version 4 adds the plain-language presentation texts (short name, version
+// label, summary) the Models page groups and labels rows with. Version 3 added
+// the memory footprint, streaming floor, role, Get started pick, and the
+// experimental and retiring flags. There are no downstream catalog consumers,
+// so the schema moves forward without compatibility shims.
+const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 4;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
 const MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT: usize = 1_024;
 const MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH: usize = 96;
@@ -48,6 +55,7 @@ pub struct DownloadCatalogEntry {
     capabilities: DownloadCatalogCapabilities,
     quantization_label: Option<String>,
     upstream_license: Option<String>,
+    presentation: CatalogEntryPresentation,
     download_path_selection: DownloadPathSelection,
 }
 
@@ -61,58 +69,6 @@ pub struct DownloadCatalogCapabilities {
     pub max_output_tokens: Option<u32>,
     pub supports_image_generation: bool,
     pub supports_embeddings: bool,
-}
-
-/// Executable model families intentionally supported by catalog version 2.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum DownloadCatalogFamily {
-    Qwen3_5,
-    Flux2Klein,
-    /// The wire name matches the discovery family, including its underscore before 21.
-    #[serde(rename = "qwen_image_21")]
-    QwenImage21,
-    /// The wire name matches the discovery model_type, which has no underscore.
-    #[serde(rename = "modernbert")]
-    ModernBert,
-    /// Wire name matches the folded ternary pack's `model_type`.
-    #[serde(rename = "prism_hadamard_qwen35")]
-    PrismHadamardQwen35,
-}
-
-impl DownloadCatalogFamily {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Qwen3_5 => "qwen3_5",
-            Self::Flux2Klein => "flux2_klein",
-            Self::QwenImage21 => "qwen_image_21",
-            Self::ModernBert => "modernbert",
-            Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
-        }
-    }
-}
-
-/// The job a catalog model is offered for; each role has at most one Get started pick.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum DownloadCatalogRole {
-    Chat,
-    Coding,
-    ImageGeneration,
-    Helper,
-}
-
-impl DownloadCatalogRole {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Chat => "chat",
-            Self::Coding => "coding",
-            Self::ImageGeneration => "image_generation",
-            Self::Helper => "helper",
-        }
-    }
 }
 
 /// Catalog syntax or semantic validation failure.
@@ -140,6 +96,18 @@ pub enum DownloadCatalogError {
     InvalidQuantizationLabel { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid upstream license")]
     InvalidUpstreamLicense { entry_index: usize },
+    #[error("download catalog entry {entry_index} has an invalid short name")]
+    InvalidShortName { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} has an invalid version label, or one without a short name"
+    )]
+    InvalidVersionLabel { entry_index: usize },
+    #[error("download catalog entry {entry_index} has an invalid summary")]
+    InvalidSummary { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} repeats the short name and version label of an earlier entry"
+    )]
+    DuplicateModelVersion { entry_index: usize },
     #[error(
         "download catalog entry {entry_index} must declare approximate_size_bytes between 1 and 9007199254740991"
     )]
@@ -198,6 +166,9 @@ struct DownloadCatalogEntryDocument {
     capabilities: Option<DownloadCatalogCapabilitiesDocument>,
     quantization_label: Option<String>,
     upstream_license: Option<String>,
+    short_name: Option<String>,
+    version_label: Option<String>,
+    summary: Option<String>,
     included_paths: Option<Vec<String>>,
 }
 
@@ -222,20 +193,10 @@ impl DownloadCatalog {
     /// Parses and validates one complete catalog document.
     pub fn parse_json(catalog_json: &str) -> Result<Self, DownloadCatalogError> {
         let catalog_document = parse_and_shape_check_document(catalog_json)?;
-        let mut normalized_huggingface_ids = BTreeSet::new();
-        let mut get_started_role_names = BTreeSet::new();
-        let mut entries = Vec::with_capacity(catalog_document.entries.len());
-        for (entry_index, entry_document) in catalog_document.entries.into_iter().enumerate() {
-            entries.push(parse_catalog_entry(
-                entry_document,
-                entry_index,
-                &mut normalized_huggingface_ids,
-                &mut get_started_role_names,
-            )?);
-        }
-
+        let schema_version = catalog_document.schema_version;
+        let entries = parse_catalog_entries(catalog_document.entries)?;
         Ok(Self {
-            schema_version: catalog_document.schema_version,
+            schema_version,
             entries,
         })
     }
@@ -293,9 +254,60 @@ fn parse_and_shape_check_document(
     Ok(catalog_document)
 }
 
+/// Parses every entry in authored order, then applies the one rule that spans
+/// entries: no two builds may share a short name and a version label.
+fn parse_catalog_entries(
+    entry_documents: Vec<DownloadCatalogEntryDocument>,
+) -> Result<Vec<DownloadCatalogEntry>, DownloadCatalogError> {
+    let mut normalized_huggingface_ids = BTreeSet::new();
+    let mut get_started_role_names = BTreeSet::new();
+    let mut entries = Vec::with_capacity(entry_documents.len());
+    for (entry_index, entry_document) in entry_documents.into_iter().enumerate() {
+        entries.push(parse_catalog_entry(
+            entry_document,
+            entry_index,
+            &mut normalized_huggingface_ids,
+            &mut get_started_role_names,
+        )?);
+    }
+    validate_unique_model_versions(&entries)?;
+    Ok(entries)
+}
+
+/// The labels of one entry that are checked after its capabilities, in the
+/// authored order: quantization label, upstream license, then the
+/// presentation texts. The order decides which failure a multi-invalid entry
+/// reports.
+struct EntryTexts {
+    quantization_label: Option<String>,
+    upstream_license: Option<String>,
+    presentation: CatalogEntryPresentation,
+}
+
+fn parse_entry_texts(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+) -> Result<EntryTexts, DownloadCatalogError> {
+    let quantization_label = parse_optional_entry_quantization_label(entry_document, entry_index)?;
+    let upstream_license = parse_optional_entry_upstream_license(entry_document, entry_index)?;
+    let presentation = parse_entry_presentation(
+        &AuthoredEntryPresentation {
+            short_name: entry_document.short_name.as_deref(),
+            version_label: entry_document.version_label.as_deref(),
+            summary: entry_document.summary.as_deref(),
+        },
+        entry_index,
+    )?;
+    Ok(EntryTexts {
+        quantization_label,
+        upstream_license,
+        presentation,
+    })
+}
+
 /// Validates one entry in the authored check order — identity, display
 /// metadata, description, capabilities, quantization label, upstream license,
-/// then included paths — and converts it into the public entry type. The
+/// presentation texts, then included paths — and converts it into the public entry type. The
 /// order decides which failure a multi-invalid entry reports.
 fn parse_catalog_entry(
     entry_document: DownloadCatalogEntryDocument,
@@ -311,8 +323,7 @@ fn parse_catalog_entry(
     )?;
     let description = parse_optional_entry_description(&entry_document, entry_index)?;
     let capabilities = parse_entry_capabilities(entry_document.capabilities.as_ref(), entry_index)?;
-    let quantization_label = parse_optional_entry_quantization_label(&entry_document, entry_index)?;
-    let upstream_license = parse_optional_entry_upstream_license(&entry_document, entry_index)?;
+    let entry_texts = parse_entry_texts(&entry_document, entry_index)?;
     let download_path_selection = DownloadPathSelection::try_new(entry_document.included_paths)
         .map_err(|()| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
     Ok(DownloadCatalogEntry {
@@ -329,8 +340,9 @@ fn parse_catalog_entry(
         minimum_memory_bytes: entry_document.minimum_memory_bytes,
         description,
         capabilities,
-        quantization_label,
-        upstream_license,
+        quantization_label: entry_texts.quantization_label,
+        upstream_license: entry_texts.upstream_license,
+        presentation: entry_texts.presentation,
         download_path_selection,
     })
 }
@@ -610,6 +622,24 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub fn upstream_license(&self) -> Option<&str> {
         self.upstream_license.as_deref()
+    }
+
+    /// The name people read on the Models page; builds of one model share it.
+    #[must_use]
+    pub fn short_name(&self) -> Option<&str> {
+        self.presentation.short_name.as_deref()
+    }
+
+    /// Tells this build apart from other builds sharing its short name.
+    #[must_use]
+    pub fn version_label(&self) -> Option<&str> {
+        self.presentation.version_label.as_deref()
+    }
+
+    /// One line saying what the model is for, shown on its row.
+    #[must_use]
+    pub fn summary(&self) -> Option<&str> {
+        self.presentation.summary.as_deref()
     }
 
     #[must_use]

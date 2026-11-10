@@ -119,7 +119,7 @@ fn removal_failure_response(removal_error: &InstalledModelRemovalError) -> Respo
         InstalledModelRemovalError::NotOnThisMac => (
             StatusCode::NOT_FOUND,
             "not_on_this_mac",
-            "This model is not in the Download Models folder, so there is nothing to remove.",
+            "This model is not in the Models download folder, so there is nothing to remove.",
         ),
         InstalledModelRemovalError::NotInstalledByDownloadModels => (
             StatusCode::CONFLICT,

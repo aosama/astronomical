@@ -33,7 +33,7 @@ export interface ModelDownloadDependencies {
   schedule(callback: () => void, delayMilliseconds: number): void;
 }
 
-/** Observatory's Download Models page polls once a second too; faster would only
+/** Observatory's Models page polls once a second too; faster would only
  * add load while the bar cannot visibly move any quicker. */
 export const DOWNLOAD_POLL_MILLISECONDS = 1_000;
 /** After the job disappears, the model may take a moment to show as installed;

@@ -51,7 +51,7 @@ async fn should_download_publish_and_report_ready_through_the_library_rest_journ
         let test_directory = tempfile::tempdir().expect("temporary directory should be available");
         let download_catalog = Arc::new(
             DownloadCatalog::parse_json(&format!(
-                "{{\"schema_version\":3,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
+                "{{\"schema_version\":4,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
                 repository_bytes()
             ))
             .expect("fictional catalog should parse"),
@@ -494,7 +494,7 @@ fn test_catalog() -> Arc<DownloadCatalog> {
 fn catalog_of(entry_documents: &[String]) -> Arc<DownloadCatalog> {
     Arc::new(
         DownloadCatalog::parse_json(&format!(
-            "{{\"schema_version\":3,\"entries\":[{}]}}",
+            "{{\"schema_version\":4,\"entries\":[{}]}}",
             entry_documents.join(",")
         ))
         .expect("fictional catalog should parse"),

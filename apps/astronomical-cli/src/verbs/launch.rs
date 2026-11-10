@@ -169,7 +169,7 @@ pub enum LaunchError {
     AstronomicalUnavailable,
     #[error("Astronomical is running but did not return a model list.")]
     ModelListUnavailable,
-    #[error("No models installed yet. Open Observatory's Download Models page and download one.")]
+    #[error("No models installed yet. Open Observatory's Models page and download one.")]
     NoChatModels,
     #[error("Install OpenCode: curl -fsSL https://opencode.ai/install | bash")]
     OpenCodeMissing,

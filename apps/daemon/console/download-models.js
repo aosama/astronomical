@@ -1,4 +1,5 @@
-// Astronomical Observatory Download Models catalog coordinator.
+// Astronomical Observatory Models page coordinator (the page's route and files
+// keep their earlier name, download-models).
 // Owns the one-shot catalog fetch, download state polling, search/filter state,
 // and the rendering call into download-models-render.js. Catalog values enter the
 // document only through textContent and created elements.
@@ -11,9 +12,9 @@ const LIBRARY_DOWNLOAD_URL = "/v1/library/download";
 const LIBRARY_CATALOG_TIMEOUT_MILLIS = 10_000;
 const DOWNLOAD_MODELS_STATUS_URL = "/v1/status";
 const LIBRARY_REVEAL_URL = "/v1/library/reveal";
-// Schema 3 adds the role, get-started, experimental, and memory fields that
-// the Get started and More models pages are built from.
-const LIBRARY_CATALOG_SCHEMA_VERSION = 3;
+// Schema 4 adds the short name, version label and summary the Models page
+// groups builds into one row per model with.
+const LIBRARY_CATALOG_SCHEMA_VERSION = 4;
 const DOWNLOAD_MODELS_ROLES = ["chat", "coding", "image_generation", "helper"];
 
 let downloadModelsCatalogLoadPromise = null;
@@ -27,11 +28,15 @@ let downloadModelsPollingTimer = null;
 let downloadModelsRefreshPromise = null;
 let downloadModelsProgressSample = null;
 let downloadModelsMeasuredBytesPerSecond = null;
-// Active filter state: search query, family filter, and readiness filter.
+// What the Add a model list shows: the lowercase search query and the section
+// filter ("all", a section key, or "more").
 let downloadModelsSearchQuery = "";
-let downloadModelsFamilyFilter = "all";
-let downloadModelsReadinessFilter = "all";
-let downloadModelsExpandedModelId = null;
+let downloadModelsActiveFilter = "all";
+// The model whose details are open, by its grouping key, or null.
+let downloadModelsExpandedModelKey = null;
+// The build the person picked in a row's version picker, by model key. A model
+// without an entry shows its default version (see downloadModelsDefaultVersion).
+let downloadModelsSelectedVersionIdByModelKey = {};
 // Serving memory ceiling from /v1/status: the limit the engine loads models
 // within, which can sit below the machine's RAM when the user configured a lower
 // maximum. Null means unknown, and the cards then show no fit label rather than a guess.
@@ -42,8 +47,6 @@ let downloadModelsServingCeilingBytes = null;
 let downloadModelsCeilingIsUserLimit = false;
 let downloadModelsServingCeilingReadAtMillis = 0;
 const DOWNLOAD_MODELS_CEILING_REFRESH_MILLIS = 30_000;
-// Which Download Models page is showing: "get-started" (default) or "more-models".
-let downloadModelsActiveTab = "get-started";
 
 function wireDownloadModelsCatalog() {
     if (downloadModelsCatalogLoadPromise !== null) {
@@ -66,20 +69,6 @@ function wireDownloadModelsControls() {
     if (searchInput) {
         searchInput.addEventListener("input", () => {
             downloadModelsSearchQuery = searchInput.value.trim().toLowerCase();
-            renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
-        });
-    }
-    const familyFilterSelect = document.getElementById("download-models-family-filter");
-    if (familyFilterSelect) {
-        familyFilterSelect.addEventListener("change", () => {
-            downloadModelsFamilyFilter = familyFilterSelect.value;
-            renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
-        });
-    }
-    const readinessFilterSelect = document.getElementById("download-models-readiness-filter");
-    if (readinessFilterSelect) {
-        readinessFilterSelect.addEventListener("change", () => {
-            downloadModelsReadinessFilter = readinessFilterSelect.value;
             renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
         });
     }
@@ -127,10 +116,10 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         catalogDocument,
         downloadModelsCurrentDownload,
         downloadModelsSearchQuery,
-        downloadModelsFamilyFilter,
-        downloadModelsReadinessFilter,
-        downloadModelsExpandedModelId,
-        downloadModelsActiveTab,
+        downloadModelsActiveFilter,
+        downloadModelsExpandedModelKey,
+        downloadModelsSelectedVersionIdByModelKey,
+        downloadModelsMeasuredBytesPerSecond,
         downloadModelsServingCeilingBytes,
         downloadModelsCeilingIsUserLimit,
         ...downloadModelsRemovalRenderState(), // changes no catalog field, so it counts here
@@ -162,8 +151,7 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
     const searchSnapshot = captureDownloadModelsSearchSnapshot();
     resolvedCatalogContainer.replaceChildren(
         statusMessage,
-        createDownloadModelsTabBar(),
-        createDownloadModelsActivePage(catalogRows, catalogDocument)
+        ...createDownloadModelsPageSections(catalogRows)
     );
     // Restore focus and caret only after the replacement bar is connected to
     // the container, so the id lookup resolves the fresh input the user is
@@ -171,17 +159,6 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
     restoreDownloadModelsSearchSnapshot(searchSnapshot);
     downloadModelsRenderedStateOutcome = "ready";
     return "ready";
-}
-
-// Switching pages re-renders at once and moves focus to the newly selected tab,
-// because the rebuild replaces the tab the keyboard user was on.
-function selectDownloadModelsTab(tabName) {
-    downloadModelsActiveTab = tabName;
-    renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
-    const selectedTabButton = document.getElementById("download-models-tab-" + tabName);
-    if (selectedTabButton) {
-        selectedTabButton.focus({ preventScroll: true });
-    }
 }
 
 function captureDownloadModelsSearchSnapshot() {
@@ -225,25 +202,6 @@ function restoreDownloadModelsSearchSnapshot(searchSnapshot) {
     }
 }
 
-function filterDownloadModelsRows(catalogRows) {
-    return catalogRows.filter((catalogRow) => {
-        if (downloadModelsReadinessFilter === "ready" && !catalogRow.readyOnThisMac) return false;
-        if (downloadModelsReadinessFilter === "downloadable" && catalogRow.readyOnThisMac) return false;
-        if (downloadModelsFamilyFilter !== "all" && catalogRow.family !== downloadModelsFamilyFilter) return false;
-        if (downloadModelsSearchQuery) {
-            const haystack = [
-                catalogRow.displayName,
-                catalogRow.huggingfaceId,
-                catalogRow.family,
-                catalogRow.description || "",
-                catalogRow.quantizationLabel || ""
-            ].join(" ").toLowerCase();
-            if (!haystack.includes(downloadModelsSearchQuery)) return false;
-        }
-        return true;
-    });
-}
-
 function downloadModelsCatalogRowsFromDocument(catalogDocument) {
     if (!catalogDocument
         || catalogDocument.schema_version !== LIBRARY_CATALOG_SCHEMA_VERSION
@@ -265,8 +223,10 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
     return {
         huggingfaceId: catalogEntry.huggingface_id,
         displayName: catalogEntry.display_name,
+        shortName: downloadModelsOptionalText(catalogEntry.short_name),
+        versionLabel: downloadModelsOptionalText(catalogEntry.version_label),
+        summary: downloadModelsOptionalText(catalogEntry.summary),
         family: catalogEntry.family,
-        approximateSize: formatDownloadModelsSizeGigabytes(catalogEntry.approximate_size_bytes),
         approximateSizeBytes: catalogEntry.approximate_size_bytes,
         approximateMemoryBytes: catalogEntry.approximate_memory_bytes,
         role: catalogEntry.role,
@@ -306,6 +266,10 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
             ? capabilities.max_output_tokens
             : null
     };
+}
+
+function downloadModelsOptionalText(catalogText) {
+    return typeof catalogText === "string" && catalogText.trim().length > 0 ? catalogText : null;
 }
 
 function isRenderableDownloadModelsCatalogEntry(catalogEntry) {
@@ -387,11 +351,6 @@ function isPositiveFiniteByteCount(byteCount) {
     return Number.isFinite(byteCount) && byteCount > 0;
 }
 
-function formatDownloadModelsSizeGigabytes(approximateSizeBytes) {
-    // The user-facing gigabyte is the one Apple prints on the box: 2³⁰ bytes.
-    return (approximateSizeBytes / 1073741824).toFixed(2) + " GB";
-}
-
 function downloadModelsDestinationPath(catalogRow) {
     const activeDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId
         ? downloadModelsCurrentDownload : null;
@@ -416,51 +375,15 @@ function downloadModelsRowDownloadState(catalogRow) {
     return currentModelId ? null : catalogRow.downloadState;
 }
 
-function downloadModelsStateTitle(catalogRow) {
-    if (catalogRow.readyOnThisMac) return "Ready to use";
-    const activeDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId
-        ? downloadModelsCurrentDownload : null;
-    const downloadState = downloadModelsRowDownloadState(catalogRow);
-    if (!downloadState) return "Available to download";
-    if ((downloadState === "downloading" || downloadState === "paused")
-        && activeDownload?.bytes_total > 0) {
-        const percent = downloadModelsProgressPercent(activeDownload);
-        const completedSize = formatDownloadModelsSizeGigabytes(activeDownload.bytes_completed);
-        const totalSize = formatDownloadModelsSizeGigabytes(activeDownload.bytes_total);
-        const prefix = downloadState === "paused" ? "Paused at " : "Downloading ";
-        return prefix + percent + "% · " + completedSize + " of " + totalSize;
-    }
-    const stateTitles = {
-        checking_disk: "Checking disk space",
-        fetching_manifest: "Preparing download",
-        downloading: "Downloading",
-        paused: "Paused",
-        verifying: "Download complete. Checking the files…",
-        publishing: "Download complete. Adding it to your models…",
-        failed: downloadModelsFailureTitle(activeDownload?.error_code)
-    };
-    return stateTitles[downloadState] || "Preparing download";
-}
-
-function downloadModelsProgressDetail(catalogRow) {
-    const activeDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId
-        ? downloadModelsCurrentDownload : null;
-    if (!activeDownload || activeDownload.state !== "downloading"
-        || !(activeDownload.bytes_total > 0)) {
-        return "";
-    }
-    const currentFile = activeDownload.current_file_relative_path
-        ? "Now saving " + activeDownload.current_file_relative_path
-        : "";
+// "9.2 of 21.9 GB · about 12 minutes left" for a running download; the time
+// is left out until the transfer rate has been measured, rather than guessed.
+function downloadModelsTransferProgressText(activeDownload) {
+    const transferredText = formatDownloadModelsGigabyteCount(activeDownload.bytes_completed)
+        + " of " + formatDownloadModelsCardSize(activeDownload.bytes_total);
     const bytesPerSecond = downloadModelsMeasuredBytesPerSecond;
-    if (!(bytesPerSecond > 0)) {
-        return currentFile || "Measuring transfer rate…";
-    }
+    if (activeDownload.state !== "downloading" || !(bytesPerSecond > 0)) return transferredText;
     const remainingBytes = activeDownload.bytes_total - activeDownload.bytes_completed;
-    const rateDetail = formatDownloadModelsRate(bytesPerSecond)
-        + " · "
-        + formatDownloadModelsRemainingTime(remainingBytes / bytesPerSecond);
-    return currentFile ? currentFile + " · " + rateDetail : rateDetail;
+    return transferredText + " · " + formatDownloadModelsRemainingTime(remainingBytes / bytesPerSecond);
 }
 
 function smoothDownloadModelsTransferRate(previousBytesPerSecond, measuredBytesPerSecond) {
@@ -500,70 +423,64 @@ function recordDownloadModelsProgressMeasurement(activeDownload, sampledAtMillis
         : null;
 }
 
-function formatDownloadModelsRate(bytesPerSecond) {
-    if (bytesPerSecond >= 1073741824) {
-        return (bytesPerSecond / 1073741824).toFixed(1) + " GB/s";
-    }
-    if (bytesPerSecond >= 1_000_000) {
-        return (bytesPerSecond / 1_000_000).toFixed(1) + " MB/s";
-    }
-    return Math.max(1, Math.round(bytesPerSecond / 1_000)) + " KB/s";
-}
-
 function formatDownloadModelsRemainingTime(remainingSeconds) {
     if (!(remainingSeconds > 0) || !Number.isFinite(remainingSeconds)) {
-        return "Calculating time remaining";
+        return "working out the time left";
     }
-    if (remainingSeconds < 60) return "Less than a minute left";
+    if (remainingSeconds < 60) return "less than a minute left";
     const remainingMinutes = Math.round(remainingSeconds / 60);
     if (remainingMinutes < 60) {
         return remainingMinutes === 1
-            ? "About 1 minute left"
-            : "About " + remainingMinutes + " minutes left";
+            ? "about 1 minute left"
+            : "about " + remainingMinutes + " minutes left";
     }
     const remainingHours = Math.round(remainingMinutes / 60);
     return remainingHours === 1
-        ? "About 1 hour left"
-        : "About " + remainingHours + " hours left";
+        ? "about 1 hour left"
+        : "about " + remainingHours + " hours left";
 }
 
-function downloadModelsFailureTitle(errorCode) {
-    const messages = {
-        insufficient_disk: "Not enough disk space",
-        download_gated: "This model requires Hugging Face access",
-        checksum_mismatch: "Downloaded files did not pass verification",
+// What stopped a download, in a sentence the person can act on.
+function downloadModelsFailureExplanation(errorCode) {
+    const explanations = {
+        insufficient_disk: "This Mac does not have enough free space for it. Remove a model below or free up space, then try again.",
+        download_gated: "Hugging Face asks for permission before sharing this model, so it cannot be downloaded from here.",
+        checksum_mismatch: "The files that arrived did not pass their check. Trying again downloads the damaged parts.",
         model_already_present: "Another model already uses this download location. Move it elsewhere, then cancel this download and try again."
     };
-    return messages[errorCode] || "Download failed. You can resume it.";
+    return explanations[errorCode] || "The connection dropped. What arrived is saved, so it picks up where it left off.";
 }
 
+// The controls for the one download in flight: what the person can do next and
+// nothing else. A finished transfer that is being checked offers no control.
 function downloadModelsActionButtons(catalogRow) {
     if (catalogRow.readyOnThisMac) return [];
     const isCurrentDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
     const state = downloadModelsRowDownloadState(catalogRow);
-    if (state === "verifying" || state === "publishing") return [];
+    if (!state || state === "idle" || state === "verifying" || state === "publishing") return [];
     if (isCurrentDownload && state === "failed"
         && downloadModelsCurrentDownload.error_code === "model_already_present") {
         return [downloadModelsActionButton("Cancel", "cancel")];
     }
-    if (state === "paused" || state === "failed") {
+    if (state === "paused") {
         return [downloadModelsActionButton("Resume", "resume"), downloadModelsActionButton("Cancel", "cancel")];
     }
-    if (isCurrentDownload && state !== "idle") {
-        return [downloadModelsActionButton("Pause", "pause"), downloadModelsActionButton("Cancel", "cancel")];
+    if (state === "failed") {
+        return [downloadModelsActionButton("Try again", "resume"), downloadModelsActionButton("Cancel", "cancel")];
     }
-    const downloadButton = downloadModelsActionButton(
-        "Download", "start", catalogRow.huggingfaceId, "download-models-download-button");
-    // A failed download of another model does not hold the download slot: the daemon discards it when
-    // this download starts, so the button stays usable and nobody has to cancel it first.
-    downloadButton.disabled = downloadModelsCurrentDownload.state !== "idle"
+    return [downloadModelsActionButton("Pause", "pause"), downloadModelsActionButton("Cancel", "cancel")];
+}
+
+// True while a download holds the single download slot. A failed download does
+// not: the daemon discards it when another starts, so Get stays usable.
+function isDownloadModelsDownloadSlotBusy() {
+    return downloadModelsCurrentDownload.state !== "idle"
         && downloadModelsCurrentDownload.state !== "failed";
-    return [downloadButton];
 }
 
 function downloadModelsActionButton(label, action, huggingfaceId = null, extraClassName = "") {
     const button = document.createElement("button");
-    const buttonStyle = action === "cancel" ? "button button-danger" : "button button-primary";
+    const buttonStyle = action === "cancel" ? "button button-quiet" : "button button-secondary";
     button.className = extraClassName ? buttonStyle + " " + extraClassName : buttonStyle;
     button.type = "button";
     button.textContent = label;

@@ -49,7 +49,7 @@
 .overview-memory-pressure { padding: 2px 9px; border-radius: 6px; background: var(--panel-2); color: var(--text-dim); font-size: var(--text-sm); }
 .overview-memory-pressure[data-pressure-state="normal"] { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
 .overview-memory-pressure[data-pressure-state="warning"] { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
-.overview-memory-pressure[data-pressure-state="critical"] { background: var(--button-danger-fill); color: var(--button-danger-ink); }
+.overview-memory-pressure[data-pressure-state="critical"] { background: var(--danger-soft); color: var(--danger); }
 
 .overview-model-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: var(--text-md); }
 .overview-model-facts dt { color: var(--text-dim); }

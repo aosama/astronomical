@@ -11,10 +11,13 @@ use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
 const INDEX_HTML: &str = include_str!("../../console/index.html");
 const CONSOLE_JS: &str = include_str!("../../console/console.js");
+const APPEARANCE_JS: &str = include_str!("../../console/appearance.js");
 const DOWNLOAD_MODELS_JS: &str = include_str!("../../console/download-models.js");
 const DOWNLOAD_MODELS_RENDER_JS: &str = include_str!("../../console/download-models-render.js");
-const DOWNLOAD_MODELS_CARD_FOOTER_JS: &str =
-    include_str!("../../console/download-models-card-footer.js");
+const DOWNLOAD_MODELS_GROUPS_JS: &str = include_str!("../../console/download-models-groups.js");
+const DOWNLOAD_MODELS_ROW_JS: &str = include_str!("../../console/download-models-row.js");
+const DOWNLOAD_MODELS_INSTALLED_JS: &str =
+    include_str!("../../console/download-models-installed.js");
 const DOWNLOAD_MODELS_REMOVAL_JS: &str = include_str!("../../console/download-models-removal.js");
 const OVERVIEW_JS: &str = include_str!("../../console/overview.js");
 const OVERVIEW_CSS: &str = include_str!("../../console/overview.css");
@@ -61,14 +64,20 @@ where
         .route("/configuration.js", get(configuration_script))
         .route("/configuration.css", get(configuration_stylesheet))
         .route("/console.js", get(console_script))
+        .route("/appearance.js", get(appearance_script))
         .route("/download-models.js", get(download_models_script))
         .route(
             "/download-models-render.js",
             get(download_models_render_script),
         )
         .route(
-            "/download-models-card-footer.js",
-            get(download_models_card_footer_script),
+            "/download-models-groups.js",
+            get(download_models_groups_script),
+        )
+        .route("/download-models-row.js", get(download_models_row_script))
+        .route(
+            "/download-models-installed.js",
+            get(download_models_installed_script),
         )
         .route(
             "/download-models-removal.js",
@@ -99,6 +108,11 @@ pub(crate) async fn console_script() -> Response {
     embedded_text_response(CONSOLE_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
+/// `GET /appearance.js` — the light, dark or follow-the-Mac palette choice.
+pub(crate) async fn appearance_script() -> Response {
+    embedded_text_response(APPEARANCE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
 pub(crate) async fn download_models_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_JS, JAVASCRIPT_CONTENT_TYPE)
 }
@@ -107,8 +121,16 @@ pub(crate) async fn download_models_render_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_RENDER_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-pub(crate) async fn download_models_card_footer_script() -> Response {
-    embedded_text_response(DOWNLOAD_MODELS_CARD_FOOTER_JS, JAVASCRIPT_CONTENT_TYPE)
+pub(crate) async fn download_models_groups_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_GROUPS_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn download_models_row_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_ROW_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn download_models_installed_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_INSTALLED_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn download_models_removal_script() -> Response {

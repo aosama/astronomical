@@ -127,15 +127,11 @@ fn should_point_the_cli_at_the_library_and_not_ask_it_to_wait_on_a_paused_downlo
     let paused_reason = busy_refusal_reason(OTHER_MODEL, true, MODEL);
     let running_reason = busy_refusal_reason(OTHER_MODEL, false, MODEL);
 
-    assert!(
-        paused_reason
-            .contains("is paused; resume or cancel it on Observatory's Download Models page")
-    );
+    assert!(paused_reason.contains("is paused; resume or cancel it on Observatory's Models page"));
     assert!(!paused_reason.contains("wait"));
-    assert!(
-        running_reason
-            .contains("is already active; wait for it to finish, or cancel it on Observatory's Download Models page")
-    );
+    assert!(running_reason.contains(
+        "is already active; wait for it to finish, or cancel it on Observatory's Models page"
+    ));
     for refusal_reason in [paused_reason, running_reason] {
         assert!(refusal_reason.contains(OTHER_MODEL) && refusal_reason.contains(MODEL));
     }

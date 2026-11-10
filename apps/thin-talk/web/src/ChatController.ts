@@ -608,7 +608,7 @@ export class ChatController {
   private noticeText(): string | null {
     switch (this.loadPhase) {
       case "empty":
-        return "No chat model is available yet. Add one from Download Models in the Observatory.";
+        return "No chat model is available yet. Add one from the Models page in the Observatory.";
       case "idle":
       case "loading":
         return "Looking for a chat model on this Mac.";

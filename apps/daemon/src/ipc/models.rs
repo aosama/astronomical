@@ -377,7 +377,7 @@ async fn execute_download_start(
     }
 }
 
-/// The CLI cannot cancel a download, so the refusal points at Observatory's Download Models page; a
+/// The CLI cannot cancel a download, so the refusal points at Observatory's Models page; a
 /// paused download never finishes on its own, so it is not told to wait.
 fn busy_refusal_reason(
     other_huggingface_id: &str,
@@ -386,11 +386,11 @@ fn busy_refusal_reason(
 ) -> String {
     if is_paused {
         format!(
-            "a download of {other_huggingface_id} is paused; resume or cancel it on Observatory's Download Models page before downloading {requested_huggingface_id}"
+            "a download of {other_huggingface_id} is paused; resume or cancel it on Observatory's Models page before downloading {requested_huggingface_id}"
         )
     } else {
         format!(
-            "a download of {other_huggingface_id} is already active; wait for it to finish, or cancel it on Observatory's Download Models page, before downloading {requested_huggingface_id}"
+            "a download of {other_huggingface_id} is already active; wait for it to finish, or cancel it on Observatory's Models page, before downloading {requested_huggingface_id}"
         )
     }
 }

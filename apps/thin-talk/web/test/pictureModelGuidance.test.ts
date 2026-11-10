@@ -4,7 +4,7 @@ import { PictureModelGuidance } from "../src/PictureModelGuidance";
 
 test("should_start_in_classic_thin_talk_and_point_to_the_library", () => {
   const guidance = new PictureModelGuidance();
-  assert.match(guidance.noPictureModelResult(), /Download Models in the Observatory/);
+  assert.match(guidance.noPictureModelResult(), /the Models page in the Observatory/);
 });
 
 test("should_follow_the_focus_switch_both_ways", () => {
