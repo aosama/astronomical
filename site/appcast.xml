@@ -4,30 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.99</title>
-            <pubDate>Tue, 10 Nov 2026 05:51:50 -0500</pubDate>
-            <sparkle:version>2213</sparkle:version>
-            <sparkle:shortVersionString>0.2.99</sparkle:shortVersionString>
+            <title>0.2.101</title>
+            <pubDate>Tue, 10 Nov 2026 15:38:06 -0500</pubDate>
+            <sparkle:version>2233</sparkle:version>
+            <sparkle:shortVersionString>0.2.101</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.99
+            <description sparkle:format="markdown"><![CDATA[## What's fixed
 
-### Fixed
-- The chat window finds its engine by itself. After an update or a fresh launch the window could open a moment before the engine and stay on "Load failed" with no model selector; it now says it is waiting and fills in its models and conversations as soon as the engine answers.
-- "Check for Updates…" is back in the menu-bar popover's menu.
-- The menu-bar companion comes back when you return to the chat app if it stopped unexpectedly.
-- A Neural Engine preparation that stops making progress no longer keeps a model in memory.
+- **The engine starts after a restart or login.** With Launch at Login on, Astronomical could come back from a restart with its menu-bar icon showing but the engine stopped, so chat, the terminal command and the local endpoint all reported that Astronomical was not running. The menu-bar agent now finds the engine however macOS starts it.
 
-### Compatibility
+## Maintenance
+
+- The acceptance tests compile again after the addition of decision models.
+- The README has a Download for Mac button and a quick start.
+
+## Compatibility
+
 - macOS 14.0 or later on Apple silicon.
-- Installed models, chats and settings are preserved. The configuration format is unchanged.
+- Your installed models, chats and settings are preserved; the configuration format is unchanged.
 
-The disk image is signed with a Developer ID, notarized by Apple and stapled.
+This release is signed with a Developer ID, notarized by Apple, and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.99/Astronomical-0.2.99-macOS-arm64.dmg" length="20953152" type="application/octet-stream" sparkle:edSignature="0ZLl9XIbEtu293CEiUuwbhq8Z7X2c/TCqPspE9Ib9LeASAeuSLlPAc9kM6W9/lE+/JtlEMYDDhCLy8XrvVMXCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.101/Astronomical-0.2.101-macOS-arm64.dmg" length="21521515" type="application/octet-stream" sparkle:edSignature="xwjODpEB5KsX8UKOymHq1Z21bQ0S/EJd1gD/O74/JMLOJcwph9uEjhQrM+9m0z4FJ06x4pv4KS7I3PVNmmWLAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: EEftk2YcmrjBiIrxRlu35ID8wBUeopihMs6VBw1UqA6f8NkFADn0BuRLB2WRzsOp8tTfSm6Xdvr03FswSLcFDQ==
-length: 2024
+edSignature: VFH/LB3haKPUQHOCdXuAttdnSR1ySb7pzEROMgVV/JVZUnKBO5MTCbvPzDpFtZ/Fkl2NjvIUunKA0OG0HIbmDw==
+length: 2020
 -->

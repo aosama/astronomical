@@ -1,10 +1,16 @@
 # Astronomical
 
-<a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
+<a href="https://github.com/aosama/astronomical/releases/latest"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
 
-**Run bigger local language and vision models on Apple Silicon without requiring every sparse expert to live in RAM.**
+**Astronomical is a local model runner for Apple silicon. You set one RAM ceiling; when a mixture-of-experts model does not fit, selected experts stream from SSD, and declared precision is preserved.**
 
-You set the model RAM your laptop can spare. Astronomical is a local model runner for Mac users who want serious models, private inference, and direct control over memory: it automatically balances hot expert weights, live context, runtime work, and solid-state-drive streaming under that ceiling.
+## Quick start
+
+1. **Download for Mac.** Install the signed, notarized disk image from the [latest release](https://github.com/aosama/astronomical/releases/latest). Astronomical runs on any Apple silicon M-series Mac with macOS 14 (Sonoma) or later.
+2. **Set your RAM ceiling and pick a model.** In Observatory, set **Maximum model RAM** on the Configuration page, then install a model from Models. The ceiling is the model memory this Mac can spare. On a 32 GB Mac, for example, a lower ceiling such as 16 GB can leave room for macOS and everyday applications.
+3. **Chat, or point a tool at the local API.** Talk in Thin Talk, the chat window, or send a chat from Observatory. The menu-bar companion stays up while you work. Stable serves OpenAI-compatible and Anthropic-compatible APIs at [http://127.0.0.1:6732/](http://127.0.0.1:6732/). `astronomical launch claude`, `astronomical launch codex`, or `astronomical launch opencode` starts that agent pointed at this Mac for one session. Client settings are on the [local API page](https://aosama.github.io/astronomical/local-api.html).
+
+Run bigger local language and vision models on Apple Silicon without requiring every sparse expert to live in RAM. You set the model RAM your laptop can spare. Astronomical is a local model runner for Mac users who want serious models, private inference, and direct control over memory: it automatically balances hot expert weights, live context, runtime work, and solid-state-drive streaming under that ceiling.
 
 Read the product story and public engineering reports at [aosama.github.io/astronomical](https://aosama.github.io/astronomical/).
 
@@ -72,7 +78,7 @@ Astronomical is experimental and deliberately focused:
 - macOS 14 (Sonoma) and later on any Apple silicon M-series Mac, declared best-effort. Capability probes and public MLX fallbacks protect correctness across the range; combinations outside the tested set are supported best-effort.
 - Validated Qwen3.5/Qwen3.6, Laguna, FLUX.2 Klein, and ModernBERT embedding artifacts supported by the repository.
 - One local user and one active generation at a time.
-- OpenAI-compatible chat completions, responses, embeddings, image generation, model discovery, and server-sent event streaming over loopback only.
+- OpenAI-compatible chat completions, responses, embeddings, image generation, and model discovery, Anthropic-compatible Messages, and server-sent event streaming over loopback only.
 
 A supported model runs on every Apple silicon M-series Mac that meets the operating-system floor. Measured custom Metal kernels keep capable GPUs on their fastest path; where a GPU cannot run one, the same request completes through public MLX APIs with the output precision the model artifact specifies. Throughput still depends on the GPU generation, the memory ceiling, the model, and storage speed.
 
@@ -177,9 +183,9 @@ To build only the optimized daemon and worker:
 
 ## Connect locally
 
-The daemon exposes its OpenAI-compatible API and embedded Observatory at the same loopback address. Stable uses [http://127.0.0.1:6732/](http://127.0.0.1:6732/) and Development uses [http://127.0.0.1:6733/](http://127.0.0.1:6733/). Astronomical refuses non-loopback bind addresses.
+The daemon exposes its OpenAI-compatible and Anthropic-compatible APIs and embedded Observatory at the same loopback address. Stable uses [http://127.0.0.1:6732/](http://127.0.0.1:6732/) and Development uses [http://127.0.0.1:6733/](http://127.0.0.1:6733/). Astronomical refuses non-loopback bind addresses.
 
-Point an OpenAI-compatible local client at that address, select a discovered model, and Astronomical loads or swaps the worker on demand.
+Point an OpenAI-compatible or Anthropic-compatible local client at that address, select a discovered model, and Astronomical loads or swaps the worker on demand. `astronomical launch claude`, `astronomical launch codex`, or `astronomical launch opencode` starts that agent pointed at the running app for one session. The manual settings for other clients are on the [local API page](https://aosama.github.io/astronomical/local-api.html).
 
 ## Verification
 

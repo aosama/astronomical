@@ -278,26 +278,40 @@ impl Qwen3_5ShardIndex {
     }
 }
 
+/// How unified Hugging Face checkpoints spell the prefixes the canonical
+/// executable layout spells differently, unified first.
+///
+/// The output head of a checkpoint whose embeddings are not tied sits at the
+/// top level in the unified layout (`lm_head.*`, as in Qwen3.5-9B-Base),
+/// beside `model.language_model.*`; canonically it belongs to the language
+/// model.
+const UNIFIED_TO_CANONICAL_PREFIXES: [(&str, &str); 3] = [
+    ("model.language_model.", "language_model.model."),
+    ("model.visual.", "vision_tower."),
+    ("lm_head.", "language_model.lm_head."),
+];
+
 /// Returns the canonical executable tensor name for a shard-index tensor name.
 ///
 /// Newer unified Hugging Face checkpoints name the language tower
-/// `model.language_model.*` and the vision tower `model.visual.*`, while the
-/// canonical executable layout is `language_model.model.*` and
-/// `vision_tower.*`. Both spellings describe byte-identical tensors, so the
-/// shard index normalizes to canonical names at parse time and
+/// `model.language_model.*`, the vision tower `model.visual.*` and an untied
+/// output head `lm_head.*`, while the canonical executable layout is
+/// `language_model.model.*`, `vision_tower.*` and `language_model.lm_head.*`.
+/// Both spellings describe byte-identical tensors, so the shard index
+/// normalizes to canonical names at parse time and
 /// [`Qwen3_5ShardIndex::stored_tensor_name_for`] recovers the stored spelling
 /// for physical shard reads. `None` marks a tensor name outside the
 /// executable model prefixes (`language_model.*`, `vision_tower.*`, `mtp.*`),
 /// which the index silently skips.
 ///
-/// The two prefix swaps are length-neutral, which keeps every downstream
-/// tensor-name length bound intact.
+/// The tower prefix swaps are length-neutral; the head's adds 15 bytes to
+/// names of at most a few dozen, far inside every downstream tensor-name
+/// length bound.
 fn canonical_model_tensor_name(index_tensor_name: &str) -> Option<String> {
-    if let Some(tower_suffix) = index_tensor_name.strip_prefix("model.language_model.") {
-        return Some(format!("language_model.model.{tower_suffix}"));
-    }
-    if let Some(tower_suffix) = index_tensor_name.strip_prefix("model.visual.") {
-        return Some(format!("vision_tower.{tower_suffix}"));
+    for (unified_prefix, canonical_prefix) in UNIFIED_TO_CANONICAL_PREFIXES {
+        if let Some(tower_suffix) = index_tensor_name.strip_prefix(unified_prefix) {
+            return Some(format!("{canonical_prefix}{tower_suffix}"));
+        }
     }
     let uses_canonical_prefix = index_tensor_name.starts_with("language_model.")
         || index_tensor_name.starts_with("vision_tower.")
