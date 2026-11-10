@@ -139,6 +139,8 @@ pub use decision_engine::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use decision_models::clef::ClefDecisionEngine;
+#[cfg(feature = "direct-mlx")]
 pub use decision_models::kev::{KevDecisionEngine, KevRowLayout};
 #[cfg(feature = "direct-mlx")]
 pub use decision_models::laya::LayaDecisionEngine;

@@ -30,6 +30,8 @@
 
 pub mod answer;
 pub mod calibration;
+pub mod clef_answers;
+pub mod clef_rendering;
 pub mod criterion_text;
 pub mod failure;
 pub mod kev_answers;
