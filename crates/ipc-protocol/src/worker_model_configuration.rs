@@ -63,6 +63,9 @@ pub struct WorkerEmbeddingModelConfiguration {
 pub enum WorkerDecisionModelFamily {
     /// A ModernBERT encoder that scores one marker token per option.
     Laya,
+    /// A Qwen3.5 backbone whose pointer head scores each option's closing
+    /// token against its question's decision token.
+    Kev,
 }
 
 /// Exact decision artifact identity required by the selected profile.

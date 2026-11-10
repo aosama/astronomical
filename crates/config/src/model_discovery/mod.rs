@@ -15,6 +15,7 @@ mod effective_models;
 mod flux2_klein;
 mod flux2_klein_documents;
 mod flux2_klein_mlx_4bit;
+mod kev;
 mod laya;
 mod model_card_front_matter;
 mod model_family;

@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 
 pub(crate) struct ConversionProgress {
+    /// The command the lines belong to, such as `convert-laya`.
+    command_label: &'static str,
     total_source_bytes: u64,
     converted_source_bytes: u64,
     started_at: Instant,
@@ -14,9 +16,10 @@ pub(crate) struct ConversionProgress {
 }
 
 impl ConversionProgress {
-    pub(crate) fn start(total_source_bytes: u64) -> Self {
+    pub(crate) fn start(command_label: &'static str, total_source_bytes: u64) -> Self {
         let started_at = Instant::now();
         Self {
+            command_label,
             total_source_bytes,
             converted_source_bytes: 0,
             started_at,
@@ -35,6 +38,7 @@ impl ConversionProgress {
         println!(
             "{}",
             progress_line(
+                self.command_label,
                 self.converted_source_bytes,
                 self.total_source_bytes,
                 self.started_at.elapsed()
@@ -44,7 +48,8 @@ impl ConversionProgress {
 
     pub(crate) fn finish(&self) {
         println!(
-            "[convert-laya] status=converted percentage=100 ETA_seconds=0 elapsed_seconds={}",
+            "[{}] status=converted percentage=100 ETA_seconds=0 elapsed_seconds={}",
+            self.command_label,
             self.started_at.elapsed().as_secs()
         );
     }
@@ -53,6 +58,7 @@ impl ConversionProgress {
 /// One progress line. The time left assumes the rest converts at the rate
 /// seen so far, which holds because every byte costs about the same.
 pub(crate) fn progress_line(
+    command_label: &str,
     converted_source_bytes: u64,
     total_source_bytes: u64,
     elapsed: Duration,
@@ -69,12 +75,12 @@ pub(crate) fn progress_line(
             .round() as u64
     };
     format!(
-        "[convert-laya] status=progress percentage={percentage} ETA_seconds={eta_seconds} \
+        "[{command_label}] status=progress percentage={percentage} ETA_seconds={eta_seconds} \
          elapsed_seconds={}",
         elapsed.as_secs()
     )
 }
 
 #[cfg(test)]
-#[path = "progress_tests.rs"]
+#[path = "conversion_progress_tests.rs"]
 mod tests;

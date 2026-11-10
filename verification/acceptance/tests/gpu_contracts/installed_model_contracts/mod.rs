@@ -1,5 +1,7 @@
 mod config;
 #[cfg(feature = "direct-mlx")]
+mod decision_reference_fixture;
+#[cfg(feature = "direct-mlx")]
 mod dense_layer_major_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_prompt_forward_memory;
@@ -7,6 +9,12 @@ mod dense_prompt_forward_memory;
 mod dense_streaming_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_streaming_speed_ladder;
+#[cfg(feature = "direct-mlx")]
+mod kev_decision_latency;
+#[cfg(feature = "direct-mlx")]
+mod kev_engine_requests;
+#[cfg(feature = "direct-mlx")]
+mod kev_reference_decisions;
 #[cfg(feature = "direct-mlx")]
 mod laya_decision_latency;
 #[cfg(feature = "direct-mlx")]

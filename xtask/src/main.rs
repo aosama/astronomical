@@ -24,6 +24,7 @@ mod classify_scope_tests;
 mod commit_identity;
 #[cfg(test)]
 mod commit_identity_tests;
+mod convert_kev;
 mod convert_laya;
 mod coverage_floor;
 #[cfg(test)]
@@ -40,6 +41,7 @@ mod install_verification_tools_tests;
 mod menu_contracts;
 #[cfg(test)]
 mod menu_contracts_tests;
+mod model_files;
 mod native_dependency_manifest;
 #[cfg(test)]
 mod native_dependency_manifest_tests;
@@ -145,7 +147,7 @@ fn main() -> ExitCode {
     }
 }
 
-const USAGE: &str = "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release <step> (see scripts/release/README.md) | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--cache-environment] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | check-test-channel-isolation | menu-contracts | vendor-thin-talk-assets [--verify-only] | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify] | convert-laya --checkpoint DIRECTORY --output DIRECTORY";
+const USAGE: &str = "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release <step> (see scripts/release/README.md) | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--cache-environment] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | check-test-channel-isolation | menu-contracts | vendor-thin-talk-assets [--verify-only] | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify] | convert-laya --checkpoint DIRECTORY --output DIRECTORY | convert-kev --adapter DIRECTORY --base DIRECTORY --output DIRECTORY";
 
 /// The commands that convert a model checkpoint into the layout Astronomical
 /// serves, dispatched apart from `main` so its match stays within the
@@ -153,6 +155,7 @@ const USAGE: &str = "usage: cargo xtask [--repository-root PATH] app dev | app i
 fn run_model_conversion_command(arguments: &[String]) -> ExitCode {
     match arguments.first().map(String::as_str) {
         Some("convert-laya") => run_command(convert_laya::run(&arguments[1..])),
+        Some("convert-kev") => run_command(convert_kev::run(&arguments[1..])),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)

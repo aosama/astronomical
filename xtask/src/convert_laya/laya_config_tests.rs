@@ -3,7 +3,7 @@
 
 use serde_json::json;
 
-use super::{mlx_laya_config, without_local_paths};
+use super::mlx_laya_config;
 
 fn checkpoint_settings() -> serde_json::Value {
     json!({
@@ -93,38 +93,4 @@ fn should_refuse_a_checkpoint_without_three_numeric_temperatures() {
 #[test]
 fn should_refuse_an_encoder_config_that_is_not_an_object() {
     assert!(mlx_laya_config(&checkpoint_settings(), &json!("modernbert")).is_err());
-}
-
-#[test]
-fn should_remove_path_like_text_at_any_depth_and_keep_everything_else() {
-    let scrubbed_document = without_local_paths(json!({
-        "cls_token": "[CLS]",
-        "model_max_length": 8192,
-        "nested": {
-            "cache_dir": "~/fictional-cache",
-            "kept": "plain text",
-            "windows": "C:\\fictional\\models"
-        },
-        "files": ["./vocabulary.txt", "../other.txt", "kept.txt", "file:///fictional/x"]
-    }));
-
-    assert_eq!(
-        scrubbed_document,
-        json!({
-            "cls_token": "[CLS]",
-            "model_max_length": 8192,
-            "nested": {"kept": "plain text"},
-            "files": ["kept.txt"]
-        })
-    );
-}
-
-#[test]
-fn should_keep_text_that_only_contains_a_slash() {
-    let scrubbed_document = without_local_paths(json!({"encoder": "example-org/example-encoder"}));
-
-    assert_eq!(
-        scrubbed_document,
-        json!({"encoder": "example-org/example-encoder"})
-    );
 }

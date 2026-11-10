@@ -144,6 +144,13 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 # measurement for them. It prints numbers and asserts no threshold; a few
 # seconds after the build.
 measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_measure_laya_decision_latency_at_the_token_limit"
+# Kev latency on an optimized build: after one warmup request, one request
+# each with 1, 5 and 10 questions on a Romeo and Juliet state at Kev's
+# 65,536-token state limit, with the state's prefill rate. It prints numbers,
+# with progress and an ETA every 5 seconds, and asserts no threshold. Every
+# request prefills the whole state, so the case budget is an hour, not the
+# default two minutes.
+measure-kev-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 3600 --filter should_measure_kev_decision_latency_at_the_state_limit"
 # The reads a Qwen3.5-based decision model (Kev, Clef) makes from the backbone
 # (issue #2032 phase 6): final hidden states, output-projection rows, and
 # question rows continued from a checkpointed state, each checked against the
@@ -151,6 +158,16 @@ measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical
 # an MLX Qwen3.5 model; run it with a quantized and a bfloat16 build, whose
 # output projections are read along different paths.
 test-qwen-decision-readout = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter qwen_decision_readout"
+# The Kev decision engine (issue #2032 phase 7) on a `cargo xtask convert-kev`
+# output folder given as `model_directory`: an unambiguous question answered
+# correctly, every question independent of the others, and the reference's
+# state limit enforced.
+test-kev-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kev_engine_requests"
+# Kev parity with Kev's reference scoring (issue #2032 phase 7) on a
+# `cargo xtask convert-kev` output folder given as `model_directory`: every
+# row's tokens identical, probabilities within 0.05 of the float32 reference.
+# Regenerate a fixture with tests/fixtures/generate_kev_reference_decisions.py.
+test-kev-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kev_reference_decisions"
 # The decisions lane from the outside in (issue #2032): the `astronomical
 # decide` verb against a stub daemon, POST /v1/systemone and the daemon IPC
 # frame against scripted workers, the worker's decisions slot, and discovery
@@ -228,6 +245,13 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # Convert a bundled checkpoint such as `multilingual/` into a matching
 # subfolder of the output, then run `cargo test-laya-reference-decisions` with
 # the output folder as `model_directory` to compare it with the reference.
+# `cargo xtask convert-kev --adapter DIRECTORY --base DIRECTORY --output DIRECTORY`
+# folds a Kev LoRA adapter (adapter_model.safetensors, adapter_config.json,
+# head.pt) into the Qwen3.5 base it names and writes the merged backbone in the
+# base's own layout, the pointer head as kev_head.safetensors and its settings
+# as kev_decision.json. It refuses a base snapshot whose revision differs from
+# the one head.pt was trained on; run `cargo test-kev-engine-requests` with the
+# output folder as `model_directory` to check it answers.
 # `cargo xtask vendor-thin-talk-assets [--verify-only]` vendors and verifies the
 # Thin Talk canvas's pinned offline web assets.
 # `cargo xtask provision-bindgen-headers [--verify-headers]` extracts the

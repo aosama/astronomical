@@ -2,11 +2,12 @@
 //! safetensors file stores, read into `f32` for arithmetic and written out
 //! in half precision.
 
+use super::bfloat16::bfloat16_bits_to_f32;
 use super::half_float::{f32_to_half_bits, half_bits_to_f32};
 use super::safetensors_file::TensorElementType;
 
 /// The tensor's values as `f32`.
-pub(crate) fn decoded_weights(
+pub(crate) fn float32_values(
     source_bytes: &[u8],
     element_type: TensorElementType,
 ) -> Result<Vec<f32>, String> {
@@ -27,9 +28,15 @@ pub(crate) fn decoded_weights(
             }
             Ok(weights)
         }
-        TensorElementType::Unsigned32 => {
-            Err("a PyTorch Laya checkpoint holds no integer tensors".to_owned())
+        TensorElementType::BFloat16 => {
+            let (whole_values, _) = source_bytes.as_chunks::<2>();
+            let mut weights = Vec::with_capacity(whole_values.len());
+            for bfloat16_bytes in whole_values {
+                weights.push(bfloat16_bits_to_f32(u16::from_le_bytes(*bfloat16_bytes)));
+            }
+            Ok(weights)
         }
+        TensorElementType::Unsigned32 => Err("an integer tensor holds no weights".to_owned()),
     }
 }
 
@@ -41,7 +48,7 @@ pub(crate) fn half_precision_bytes(
     if element_type == TensorElementType::Float16 {
         return Ok(source_bytes);
     }
-    let weights = decoded_weights(&source_bytes, element_type)?;
+    let weights = float32_values(&source_bytes, element_type)?;
     let mut half_bits = Vec::with_capacity(weights.len());
     for weight in weights {
         half_bits.push(f32_to_half_bits(weight));
@@ -59,5 +66,5 @@ pub(crate) fn half_bits_bytes(half_bits: &[u16]) -> Vec<u8> {
 }
 
 #[cfg(test)]
-#[path = "tensor_bytes_tests.rs"]
+#[path = "tensor_values_tests.rs"]
 mod tests;

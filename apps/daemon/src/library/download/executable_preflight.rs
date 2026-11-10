@@ -170,6 +170,7 @@ impl DownloadExecutablePreflight {
             // Families whose shallow rules need files on disk keep publication as their backstop.
             ModelFamily::ModernBert
             | ModelFamily::Laya
+            | ModelFamily::Kev
             | ModelFamily::Flux2Klein
             | ModelFamily::QwenImage21 => Ok(()),
             ModelFamily::Qwen3_5 => {

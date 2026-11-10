@@ -23,6 +23,7 @@ const HEADER_ALIGNMENT_BYTES: usize = 8;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TensorElementType {
     Float16,
+    BFloat16,
     Float32,
     Unsigned32,
 }
@@ -31,6 +32,7 @@ impl TensorElementType {
     pub(crate) const fn safetensors_name(self) -> &'static str {
         match self {
             Self::Float16 => "F16",
+            Self::BFloat16 => "BF16",
             Self::Float32 => "F32",
             Self::Unsigned32 => "U32",
         }
@@ -38,7 +40,7 @@ impl TensorElementType {
 
     pub(crate) const fn bytes_per_element(self) -> u64 {
         match self {
-            Self::Float16 => 2,
+            Self::Float16 | Self::BFloat16 => 2,
             Self::Float32 | Self::Unsigned32 => 4,
         }
     }
@@ -46,6 +48,7 @@ impl TensorElementType {
     fn from_safetensors_name(type_name: &str) -> Option<Self> {
         match type_name {
             "F16" => Some(Self::Float16),
+            "BF16" => Some(Self::BFloat16),
             "F32" => Some(Self::Float32),
             "U32" => Some(Self::Unsigned32),
             _ => None,
@@ -187,7 +190,7 @@ fn tensor_record_from_description(
         .ok_or_else(malformed)?;
     let Some(element_type) = TensorElementType::from_safetensors_name(type_name) else {
         return Err(format!(
-            "tensor {tensor_name} has element type {type_name}; a Laya checkpoint holds F16 or F32"
+            "tensor {tensor_name} has element type {type_name}; a converter reads F16, BF16, F32 or U32"
         ));
     };
     let shape_values = tensor_description
