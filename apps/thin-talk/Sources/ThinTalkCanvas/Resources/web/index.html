@@ -58,25 +58,6 @@
           </div>
           <button type="button" class="failure-banner__retry" id="composer-retry" data-testid="composer-retry">Retry</button>
         </aside>
-        <!--
-          Astro's skill buttons. Each one only fills the message field with a
-          starter question (src/astro/AstroComposerChrome.ts); the person still
-          presses send. Shown while Astro is shown.
-        -->
-        <div id="skill-launchers" class="skill-launchers" role="group" aria-label="Skills" data-testid="skill-launchers" hidden>
-          <button type="button" class="skill-launcher skill-launcher--pictures" id="composer-skill-pictures" data-testid="composer-skill-pictures" data-skill="pictures" title="Draw">
-            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM3 18l6-5 4 3 3-2 5 4"/></svg></span><span class="skill-launcher__name">Draw</span>
-          </button>
-          <button type="button" class="skill-launcher skill-launcher--look" id="composer-skill-look" data-testid="composer-skill-look" data-skill="look" title="Look at a photo">
-            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></svg></span><span class="skill-launcher__name">Look at a photo</span>
-          </button>
-          <button type="button" class="skill-launcher skill-launcher--read" id="composer-skill-read" data-testid="composer-skill-read" data-skill="read" title="Read a file">
-            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM9 13h7M9 17h5"/></svg></span><span class="skill-launcher__name">Read a file</span>
-          </button>
-          <button type="button" class="skill-launcher skill-launcher--voice" id="composer-skill-voice" data-testid="composer-skill-voice" data-skill="voice" title="Talking to Astro is coming soon" aria-disabled="true">
-            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 8v6M16 8v6"/></svg></span><span class="skill-launcher__name">Talk (soon)</span>
-          </button>
-        </div>
         <footer id="composer" class="composer">
           <img id="composer-astro" class="composer__astro" src="astro/astro-look-4.webp" alt="" data-testid="composer-astro">
           <textarea
@@ -88,23 +69,41 @@
           ></textarea>
           <div class="composer__actions">
             <div class="composer__group">
-              <div class="composer__menu-anchor">
-                <button type="button" class="composer__pill" id="composer-model" data-testid="composer-model" aria-label="Chat model" aria-haspopup="menu" aria-expanded="false" hidden>
-                  <span data-testid="composer-model-label">Model</span>
-                  <svg class="composer__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+              <!--
+                Astro's skill buttons. Each one only fills the message field with
+                a starter question (src/astro/AstroComposerChrome.ts); the person
+                still presses send. They sit inside the field as quiet icons, the
+                place a Mac app keeps its attach controls, so Send stays the one
+                coloured control; the title names each on hover. Shown while
+                Astro is shown.
+              -->
+              <div id="skill-launchers" class="skill-launchers" role="group" aria-label="Skills" data-testid="skill-launchers" hidden>
+                <button type="button" class="composer__icon skill-launcher" id="composer-skill-look" data-testid="composer-skill-look" data-skill="look" title="Look at a photo" aria-label="Look at a photo">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM3 16l5-4 4 3 3-2 6 4"/><circle cx="8.5" cy="9.5" r="1.3"/></svg>
                 </button>
-                <ul class="composer__menu" id="composer-model-menu" data-testid="composer-model-menu" role="menu" hidden></ul>
-              </div>
-              <div class="composer__menu-anchor composer__menu-anchor--image-model">
-                <button type="button" class="composer__pill" id="composer-image-model" data-testid="composer-image-model" aria-label="Image model" aria-haspopup="menu" aria-expanded="false" hidden>
-                  <svg class="composer__pill-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="1.6" stroke="currentColor" stroke-width="1.4" fill="none"/><circle cx="6" cy="6.6" r="1.2" fill="currentColor"/><path d="M2.8 12l3.6-3.6 2.4 2.4 1.6-1.6 2.8 2.8" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/></svg>
-                  <span data-testid="composer-image-model-label">Pictures</span>
-                  <svg class="composer__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                <button type="button" class="composer__icon skill-launcher" id="composer-skill-read" data-testid="composer-skill-read" data-skill="read" title="Read a file" aria-label="Read a file">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM9 13h7M9 17h5"/></svg>
                 </button>
-                <ul class="composer__menu" id="composer-image-model-menu" data-testid="composer-image-model-menu" role="menu" hidden></ul>
+                <button type="button" class="composer__icon skill-launcher" id="composer-skill-pictures" data-testid="composer-skill-pictures" data-skill="pictures" title="Draw" aria-label="Draw">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4l6 6-9 9H5v-6zM12 6l6 6"/></svg>
+                </button>
               </div>
             </div>
             <div class="composer__group">
+              <!--
+                The brain control: which model answers, and behind it one panel
+                with every installed chat and picture model, the Tools switch and
+                a way to the Models page (src/ModelPanelView.ts). It sits beside
+                Send because it is a setting of the message, not a starter.
+              -->
+              <div class="composer__menu-anchor composer__menu-anchor--brain">
+                <button type="button" class="composer__brain" id="composer-model" data-testid="composer-model" aria-label="Brain" aria-haspopup="menu" aria-expanded="false" hidden>
+                  <svg class="composer__brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5a3 3 0 0 0-5.6-1.3 3.2 3.2 0 0 0-2.2 5.3 3.4 3.4 0 0 0 1.3 5.7A3.3 3.3 0 0 0 12 17.5z"/><path d="M12 6.5a3 3 0 0 1 5.6-1.3 3.2 3.2 0 0 1 2.2 5.3 3.4 3.4 0 0 1-1.3 5.7A3.3 3.3 0 0 1 12 17.5z"/></svg>
+                  <span class="composer__brain-label" data-testid="composer-model-label">Model</span>
+                  <svg class="composer__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                </button>
+                <ul class="composer__menu composer__menu--brains" id="composer-model-menu" data-testid="composer-model-menu" role="menu" aria-label="Brains" hidden></ul>
+              </div>
               <button type="button" class="composer__send" id="composer-send" data-testid="composer-send" aria-label="Send message" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13L13 3M13 3H6M13 3v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
               </button>

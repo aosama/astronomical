@@ -3,7 +3,7 @@ import { ImageModel } from "./ImageModel";
 /**
  * Which image model makes the next picture, over the image models installed
  * as last listed. The controller sets the person's choice and the image tool
- * refreshes the installed list each time it draws, so the composer's pill and
+ * refreshes the installed list each time it draws, so the composer's panel and
  * the tool always read the same answer; listeners hear every change.
  *
  * One rule decides: the person's saved choice while it is installed, otherwise

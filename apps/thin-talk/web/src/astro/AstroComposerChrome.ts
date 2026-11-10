@@ -15,7 +15,7 @@ const LOOK_AT_SEND_FRAME = LOOK_FRAME_COUNT - 1;
 const RESTING_FRAME = Math.floor(LOOK_FRAME_COUNT / 2);
 
 /**
- * Astro's part of the message field: the skill buttons above it and the small
+ * Astro's part of the message field: the skill buttons inside it and the small
  * Astro beside it, which watches the pointer and turns toward Send once there
  * is something to send. The buttons fill the field with the same starter
  * questions as the skill cards; nothing is sent until the person presses Send.

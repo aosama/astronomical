@@ -61,7 +61,6 @@
 }
 
 .composer__icon,
-.composer__pill,
 .composer__send {
   display: inline-flex;
   align-items: center;
@@ -84,46 +83,102 @@
   color: var(--ink-2);
 }
 
-.composer__icon:disabled,
-.composer__pill:disabled {
+.composer__icon:disabled {
   opacity: 0.45;
 }
 
 .composer__icon svg,
-.composer__pill svg,
 .composer__send svg {
   width: 14px;
   height: 14px;
 }
 
-.composer__chevron,
-.composer__pill-icon {
+.composer__chevron {
   color: var(--ink-2);
 }
 
-/* The model names are shown in full. Only when the window is too narrow for
- * the whole row does a name give way, with an ellipsis, so the pills never
- * push the send button out of the composer. The chain of min-width: 0 lets
- * the flex row shrink the names instead of overflowing. */
-[data-testid="composer-model-label"],
-[data-testid="composer-image-model-label"] {
+/*
+ * The brain control: an icon and the chat model's plain name, drawn as text
+ * rather than a filled capsule so Send stays the one strong shape in the row.
+ * It only gets a fill on hover or while its panel is open. The name gives way
+ * with an ellipsis before it pushes Send out; in a narrow composer it goes
+ * altogether and the brain icon alone remains, named by its tooltip.
+ */
+.composer {
+  container-type: inline-size;
+}
+
+.composer__actions > .composer__group:last-child,
+.composer__menu-anchor--brain {
+  min-width: 0;
+}
+
+.composer__brain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 16px;
+  cursor: default;
+}
+
+.composer__brain:hover,
+.composer__brain[aria-expanded="true"] {
+  background: var(--active);
+  color: var(--ink);
+}
+
+.composer__brain[hidden] {
+  display: none;
+}
+
+.composer__brain-icon {
+  flex: none;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.composer__brain-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.composer__actions > .composer__group:first-child,
-.composer__actions > .composer__group:first-child > .composer__menu-anchor:first-child,
-.composer__menu-anchor--image-model,
-#composer-model,
-#composer-image-model {
-  min-width: 0;
+.composer__brain .composer__chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
 }
 
-#composer-model,
-#composer-image-model {
-  max-width: 100%;
+@container (max-width: 520px) {
+  .composer__brain-label,
+  .composer__brain .composer__chevron {
+    display: none;
+  }
+
+  /* The icon alone must keep its size: flex would otherwise squeeze it
+     into Send when the composer is very narrow. */
+  .composer__brain {
+    flex: none;
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+    background: var(--fill);
+  }
 }
 
 .composer__menu-anchor {
@@ -147,6 +202,66 @@
 
 .composer__menu[hidden] {
   display: none;
+}
+
+/* The brain panel opens from the right, above Send, and is wide enough for a
+   plain name over its details on two lines. */
+.composer__menu--brains {
+  left: auto;
+  right: 0;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+
+.composer__menu-heading {
+  padding: 7px 10px 3px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.composer__menu .composer__model-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  column-gap: 8px;
+  white-space: normal;
+}
+
+.composer__model-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__model-detail {
+  grid-column: 1;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+
+/* The tick sits in its own column so a chosen row's name never shifts. */
+.composer__menu .composer__model-choice[aria-checked="true"] {
+  background: var(--fill);
+  color: var(--ink);
+}
+
+.composer__menu .composer__model-choice[aria-checked="true"]::after {
+  content: "✓";
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.composer__menu .composer__models-page {
+  color: var(--accent-text);
+  font-weight: 600;
 }
 
 .composer__menu button {
@@ -213,10 +328,8 @@
 
 /* These classes set display: inline-flex, which beats the browser's own
    [hidden] style. Without this rule a hidden control is still painted: the idle
-   stop showed as a phantom circle, and the picture pill showed with a single
-   image model, where clicking it opened a menu the next render closed again. */
+   stop showed as a phantom circle. */
 .composer__icon[hidden],
-.composer__pill[hidden],
 .composer__send[hidden] {
   display: none;
 }

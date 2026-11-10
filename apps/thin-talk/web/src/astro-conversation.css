@@ -198,11 +198,15 @@
 
 /* ---------- The message field ---------- */
 
+/* The skill buttons sit in the composer's own row and borrow its icon-button
+   look (.composer__icon), so they need only their group layout and a line
+   icon. The group never shrinks: when the window is narrow the brain
+   control's name gives way instead. */
 .skill-launchers {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 24px 8px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
 }
 
 .skill-launchers[hidden] {
@@ -210,49 +214,26 @@
 }
 
 .skill-launcher {
-  --skill-colour: var(--astro-chat);
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 0;
-  border-radius: 999px;
-  padding: 7px 14px 7px 8px;
-  color: #fff;
-  font: 700 14px/1 var(--astro-display);
   cursor: pointer;
-  background: color-mix(in srgb, var(--skill-colour) 82%, #000);
 }
 
-.skill-launcher:hover { background: var(--skill-colour); }
+.skill-launcher:hover {
+  background: var(--active);
+  color: var(--ink);
+}
+
 .skill-launcher:focus-visible { outline: 3px solid var(--astro-focus); outline-offset: 2px; }
-.skill-launcher--pictures { --skill-colour: var(--astro-pictures); }
-.skill-launcher--look { --skill-colour: var(--astro-look); }
-.skill-launcher--read { --skill-colour: var(--astro-read); }
-.skill-launcher--voice { --skill-colour: var(--astro-voice); opacity: 0.55; cursor: default; }
-.skill-launcher--voice:hover { background: color-mix(in srgb, var(--skill-colour) 82%, #000); }
 
-.skill-launcher__icon {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgb(255 255 255 / 22%);
-}
-
-.skill-launcher__icon svg {
-  width: 13px;
-  height: 13px;
+/* Beats .composer__icon svg, which sizes the smaller 16-unit icons. */
+.skill-launchers .skill-launcher svg {
+  width: 16px;
+  height: 16px;
   fill: none;
-  stroke: #fff;
-  stroke-width: 2.4;
+  stroke: currentColor;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-
-/* Pilot keeps the buttons as icons only, with their names as tooltips. */
-#app.app--astro-pilot .skill-launcher__name { display: none; }
-#app.app--astro-pilot .skill-launcher { padding: 7px; }
 
 /* Astro listening beside the field. */
 .composer__astro {
