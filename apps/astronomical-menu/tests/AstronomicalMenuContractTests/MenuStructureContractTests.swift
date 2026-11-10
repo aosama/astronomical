@@ -55,9 +55,10 @@ final class MenuStructureContractTests: XCTestCase {
     XCTAssertLessThan(downloadActionStart.lowerBound, overflowMenuStart.lowerBound)
   }
 
-  /// The main app owns the updater and registers the agent at login, so the
-  /// popover offers neither: a control here could only ask another process.
-  func test_should_leave_updates_and_launch_at_login_to_the_main_app_menu() throws {
+  /// The main app owns the updater and registers the agent at login, so their
+  /// settings stay in its menu. The popover keeps the one-shot update check
+  /// people reach for in the menu bar, which it hands to the main app.
+  func test_should_keep_the_update_check_in_the_popover_and_leave_settings_to_the_main_app() throws {
     let packageDirectoryURL = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let popoverSource = try String(
@@ -69,9 +70,10 @@ final class MenuStructureContractTests: XCTestCase {
         "Sources/AstronomicalAppCore/ApplicationSettingsMenu.swift"),
       encoding: .utf8)
 
-    for mainApplicationControl in ["Launch at Login", "Check for Updates", "Update Channel"] {
-      XCTAssertFalse(popoverSource.contains("\"\(mainApplicationControl)"), mainApplicationControl)
+    for mainApplicationSetting in ["Launch at Login", "Check automatically", "Update Channel"] {
+      XCTAssertFalse(popoverSource.contains("\"\(mainApplicationSetting)"), mainApplicationSetting)
     }
+    XCTAssertTrue(popoverSource.contains("\"Check for Updates…\""))
     XCTAssertTrue(settingsMenuSource.contains("\"Launch at Login\""))
     XCTAssertTrue(settingsMenuSource.contains("\"Update Channel\""))
   }

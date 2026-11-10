@@ -7,7 +7,7 @@ import { ImageModel } from "./ImageModel";
  * the tool always read the same answer; listeners hear every change.
  *
  * One rule decides: the person's saved choice while it is installed, otherwise
- * the Download Models Image Generation pick, otherwise the first installed image model. The
+ * the Models page Image Generation pick, otherwise the first installed image model. The
  * order of the folders a model was downloaded into never decides.
  */
 export class ImageModelSelection {

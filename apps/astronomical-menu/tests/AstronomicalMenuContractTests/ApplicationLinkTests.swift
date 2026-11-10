@@ -23,6 +23,19 @@ final class ApplicationLinkTests: XCTestCase {
     XCTAssertFalse(isThinTalkChatOpenRequest(yourAstroURL, channel: .development))
   }
 
+  func test_should_ask_for_an_update_check_from_its_own_link_and_not_as_a_window() throws {
+    let updateCheckURL = try XCTUnwrap(URL(string: "astronomical://check-for-updates"))
+
+    XCTAssertEqual(ApplicationLink.parse(updateCheckURL, channel: .stable), .checkForUpdates)
+    XCTAssertFalse(isThinTalkChatOpenRequest(updateCheckURL, channel: .stable))
+  }
+
+  func test_should_refuse_an_update_check_link_of_another_channel() throws {
+    let developmentUpdateCheckURL = try XCTUnwrap(ApplicationLink.checkForUpdates.url(channel: .development))
+
+    XCTAssertNil(ApplicationLink.parse(developmentUpdateCheckURL, channel: .stable))
+  }
+
   func test_should_refuse_a_link_of_another_channel() throws {
     let stableYourAstroURL = try XCTUnwrap(ApplicationLink.yourAstro.url(channel: .stable))
 

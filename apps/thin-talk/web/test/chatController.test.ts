@@ -3,7 +3,7 @@ import { ImageModelSelection } from "../src/ImageModelSelection";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AppConfig } from "../src/AppConfig";
-import { ChatController } from "../src/ChatController";
+import { ChatController, ENGINE_START_PATIENCE, WAITING_FOR_ENGINE_NOTICE } from "../src/ChatController";
 import { ChatMessageState } from "../src/ChatMessageState";
 import type { ChatStreamer, ChatStreamRequest } from "../src/ChatStreamer";
 import { DaemonClient } from "../src/DaemonClient";
@@ -197,3 +197,150 @@ test("should_ignore_an_image_model_that_is_not_installed_without_saving", async 
 
   assert.equal(host.receivedRequests.filter((request) => request.op === "savePrefs").length, savesBefore);
 });
+
+/** Boots a controller against an engine the test can silence and wake, with
+ * retries short enough to watch several of them within a test. */
+function bootControllerWithEngine(engineChannel = "development"): { controller: ChatController; daemon: FakeDaemon } {
+  installDom();
+  new FakeSessionHost(
+    (callId, payload) => window.__thintalkBridge?.resolve(callId, payload),
+    (callId, message) => window.__thintalkBridge?.reject(callId, message),
+  ).install();
+  const daemon = new FakeDaemon({ daemonBaseURL: DAEMON_BASE_URL, channel: engineChannel, stateDirectory: "~/.astronomical-dev" });
+  daemon.install();
+  const config = new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" });
+  const channel = new HostChannel();
+  const bridge = new SessionBridge((request) => channel.postSessionCall(request));
+  const client = new DaemonClient(config);
+  const controller = new ChatController({
+    client,
+    streamer: new SlowToolStreamer(),
+    bridge,
+    store: new SessionStore(bridge),
+    imageModelDirectory: new ImageModelDirectory(client),
+    imageModelSelection: new ImageModelSelection(),
+  });
+  return { controller, daemon };
+}
+
+/** Start-up attempts the engine has seen. The handshake is counted because
+ * only a start-up makes one; the model list is also read for the picture pill. */
+function startUpAttemptCount(daemon: FakeDaemon): number {
+  return daemon.requests.filter((request) => request.url.endsWith("/v1/status")).length;
+}
+
+async function withQuickEngineRetries(journey: () => Promise<void>): Promise<void> {
+  const realPatience = { ...ENGINE_START_PATIENCE };
+  Object.assign(ENGINE_START_PATIENCE, { quickRetryMilliseconds: 10, slowRetryMilliseconds: 10 });
+  try {
+    await journey();
+  } finally {
+    Object.assign(ENGINE_START_PATIENCE, realPatience);
+  }
+}
+
+test("should_list_the_models_by_itself_once_a_silent_engine_starts_answering", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller, daemon } = bootControllerWithEngine();
+    let listedModelCount = 0;
+    let notice: string | null = null;
+    controller.subscribe((state) => {
+      listedModelCount = state.composer.models.length;
+      notice = state.transcript.notice;
+    });
+    daemon.modelsUnreachable = true;
+    await controller.load();
+    assert.equal(listedModelCount, 0, "a silent engine lists no model");
+    assert.equal(notice, WAITING_FOR_ENGINE_NOTICE, "the window says it is waiting, not the browser's error text");
+
+    daemon.modelsUnreachable = false;
+
+    await waitFor(() => listedModelCount > 0, "the models to appear without a relaunch");
+    assert.equal(notice, null, "the failure notice goes once the engine answers");
+  });
+}, { timeout: 30_000 });
+
+test("should_keep_asking_while_the_engine_stays_silent", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller, daemon } = bootControllerWithEngine();
+    let listedModelCount = 0;
+    controller.subscribe((state) => {
+      listedModelCount = state.composer.models.length;
+    });
+    daemon.modelsUnreachable = true;
+    await controller.load();
+
+    await waitFor(() => startUpAttemptCount(daemon) >= 4, "several more asks of a silent engine");
+
+    assert.equal(listedModelCount, 0, "no model is listed while the engine stays silent");
+    daemon.modelsUnreachable = false;
+    await waitFor(() => listedModelCount > 0, "the retries to end with the engine's answer");
+  });
+}, { timeout: 30_000 });
+
+test("should_stop_asking_once_the_engine_has_answered", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller, daemon } = bootControllerWithEngine();
+    let listedModelCount = 0;
+    controller.subscribe((state) => {
+      listedModelCount = state.composer.models.length;
+    });
+    daemon.modelsUnreachable = true;
+    await controller.load();
+    daemon.modelsUnreachable = false;
+    await waitFor(() => listedModelCount > 0, "the engine's answer");
+    const attemptCountWhenAnswered = startUpAttemptCount(daemon);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.equal(startUpAttemptCount(daemon), attemptCountWhenAnswered, "an answered window asks no more");
+  });
+}, { timeout: 30_000 });
+
+test("should_run_one_start_up_when_a_model_lands_while_a_retry_is_due", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller, daemon } = bootControllerWithEngine();
+    let listedModelCount = 0;
+    controller.subscribe((state) => {
+      listedModelCount = state.composer.models.length;
+    });
+    daemon.modelsUnreachable = true;
+    await controller.load();
+    const attemptCountWhileSilent = startUpAttemptCount(daemon);
+    daemon.modelsUnreachable = false;
+
+    await Promise.all([controller.refreshChatModels(), controller.refreshChatModels()]);
+
+    assert.ok(listedModelCount > 0, "the landed model is listed");
+    assert.equal(startUpAttemptCount(daemon), attemptCountWhileSilent + 1, "the two callers shared one start-up");
+  });
+}, { timeout: 30_000 });
+
+test("should_not_retry_a_start_up_that_succeeded_first_time", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller, daemon } = bootControllerWithEngine();
+    await controller.load();
+    const attemptCountAfterLoad = startUpAttemptCount(daemon);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.equal(startUpAttemptCount(daemon), attemptCountAfterLoad);
+  });
+}, { timeout: 30_000 });
+
+test("should_not_keep_asking_an_engine_that_belongs_to_another_channel", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller, daemon } = bootControllerWithEngine("stable");
+    let notice: string | null = null;
+    controller.subscribe((state) => {
+      notice = state.transcript.notice;
+    });
+    await controller.load();
+    const attemptCountAfterLoad = startUpAttemptCount(daemon);
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    assert.equal(startUpAttemptCount(daemon), attemptCountAfterLoad, "a wrong engine answers the same every time");
+    assert.match(notice ?? "", /runtime channel/, "the engine's own explanation is shown as it is");
+  });
+}, { timeout: 30_000 });

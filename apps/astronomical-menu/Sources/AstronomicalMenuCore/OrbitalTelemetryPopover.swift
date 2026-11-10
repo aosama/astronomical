@@ -29,6 +29,8 @@ struct OrbitalTelemetryPopover: View {
   let openChat: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
+  let updateCheckSupported: Bool
+  let checkForUpdates: () -> Void
   let terminalCommandSupported: Bool
   let installTerminalCommand: () -> Void
   let removeTerminalCommand: () -> Void
@@ -183,13 +185,20 @@ struct OrbitalTelemetryPopover: View {
         Button("Restart server", action: restartServer)
         Spacer()
         Menu {
+          // The main app owns the updater; this asks it for a check, so the
+          // menu bar keeps the one update control people reach for here.
+          if updateCheckSupported {
+            Button("Check for Updates…", action: checkForUpdates)
+            Divider()
+          }
           if terminalCommandSupported {
             Button("Install “astronomical” command in terminal…", action: installTerminalCommand)
             Button("Remove “astronomical” terminal command…", action: removeTerminalCommand)
             Divider()
           }
-          // Updates and Launch at Login live in the main app's menu: the
-          // main app owns the updater and registers this agent at login.
+          // Automatic checks, the update channel and Launch at Login live
+          // in the main app's menu: they are settings of the main app, which
+          // owns the updater and registers this agent at login.
           Button("Your Astro…", action: showYourAstro)
           Button("Reveal config", action: revealConfiguration)
           Button("Quit Astronomical", action: quitApplication)

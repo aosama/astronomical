@@ -4,8 +4,11 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
+use astronomical_ipc_protocol::NeuralEnginePrefillStatus;
+
 use super::{
-    IdleModelUnloadClock, WorkerIdleness, idle_clock_millis, idle_unload_remaining_seconds,
+    IdleModelUnloadClock, NeuralEnginePreparationProgress, STALLED_PREPARATION_HOLD,
+    WorkerIdleness, idle_clock_millis, idle_unload_remaining_seconds,
 };
 use crate::worker::handle::GENERATION_QUEUE_DEPTH;
 
@@ -236,11 +239,31 @@ fn should_saturate_rather_than_overflow_for_the_largest_span() {
     );
 }
 
+fn preparing(completed_program_count: u32) -> Option<NeuralEnginePreparationProgress> {
+    Some(NeuralEnginePreparationProgress {
+        completed_program_count,
+        is_waiting_to_measure: false,
+    })
+}
+
+fn preparing_status(
+    completed_program_count: u32,
+    is_waiting_to_measure: bool,
+) -> NeuralEnginePrefillStatus {
+    NeuralEnginePrefillStatus::Preparing {
+        completed_program_count,
+        total_program_count: 56,
+        elapsed_ms: 1_000,
+        estimated_remaining_ms: None,
+        is_waiting_to_measure,
+    }
+}
+
 #[test]
 fn should_not_be_due_while_neural_engine_programs_are_preparing() {
     let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
 
-    idle_clock.observe_background_preparation(true, started_at + Duration::from_secs(58));
+    idle_clock.observe_background_preparation(preparing(10), started_at + Duration::from_secs(58));
 
     assert!(!idle_clock.is_unload_due(started_at + Duration::from_secs(61)));
 }
@@ -249,8 +272,8 @@ fn should_not_be_due_while_neural_engine_programs_are_preparing() {
 fn should_count_the_span_from_the_end_of_preparation() {
     let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
     let preparation_ended_at = started_at + Duration::from_secs(58);
-    idle_clock.observe_background_preparation(true, preparation_ended_at);
-    idle_clock.observe_background_preparation(false, started_at + Duration::from_secs(59));
+    idle_clock.observe_background_preparation(preparing(56), preparation_ended_at);
+    idle_clock.observe_background_preparation(None, started_at + Duration::from_secs(59));
 
     assert!(!idle_clock.is_unload_due(preparation_ended_at + Duration::from_secs(59)));
     assert!(idle_clock.is_unload_due(preparation_ended_at + Duration::from_secs(60)));
@@ -260,7 +283,7 @@ fn should_count_the_span_from_the_end_of_preparation() {
 fn should_leave_the_clock_alone_when_nothing_is_preparing() {
     let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
 
-    idle_clock.observe_background_preparation(false, started_at + Duration::from_secs(58));
+    idle_clock.observe_background_preparation(None, started_at + Duration::from_secs(58));
 
     assert!(idle_clock.is_unload_due(started_at + Duration::from_secs(60)));
 }
@@ -269,7 +292,85 @@ fn should_leave_the_clock_alone_when_nothing_is_preparing() {
 fn should_still_never_be_due_with_a_zero_span_after_preparation() {
     let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(0);
 
-    idle_clock.observe_background_preparation(true, started_at + Duration::from_secs(58));
+    idle_clock.observe_background_preparation(preparing(10), started_at + Duration::from_secs(58));
 
     assert!(!idle_clock.is_unload_due(started_at + Duration::from_secs(7 * 24 * 60 * 60)));
+}
+
+#[test]
+fn should_keep_holding_while_the_preparation_advances_past_the_stall_bound() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
+    let half_the_stall_bound = STALLED_PREPARATION_HOLD / 2;
+
+    idle_clock.observe_background_preparation(preparing(1), started_at);
+    idle_clock.observe_background_preparation(preparing(2), started_at + half_the_stall_bound);
+    let long_after_the_first_check = started_at + half_the_stall_bound * 3 - Duration::from_secs(1);
+    idle_clock.observe_background_preparation(preparing(2), long_after_the_first_check);
+
+    assert!(!idle_clock.is_unload_due(long_after_the_first_check + Duration::from_secs(59)));
+}
+
+#[test]
+fn should_stop_holding_a_preparation_that_has_made_no_progress_for_the_stall_bound() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
+    idle_clock.observe_background_preparation(preparing(10), started_at);
+    let just_inside_the_bound = started_at + STALLED_PREPARATION_HOLD - Duration::from_secs(1);
+    idle_clock.observe_background_preparation(preparing(10), just_inside_the_bound);
+
+    let at_the_bound = started_at + STALLED_PREPARATION_HOLD;
+    idle_clock.observe_background_preparation(preparing(10), at_the_bound);
+    let well_past_the_bound = at_the_bound + Duration::from_secs(120);
+    idle_clock.observe_background_preparation(preparing(10), well_past_the_bound);
+
+    assert!(
+        idle_clock.is_unload_due(well_past_the_bound),
+        "a stuck preparation must not keep the model loaded"
+    );
+}
+
+#[test]
+fn should_hold_again_when_a_stalled_preparation_resumes() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
+    idle_clock.observe_background_preparation(preparing(10), started_at);
+    let past_the_bound = started_at + STALLED_PREPARATION_HOLD + Duration::from_secs(120);
+    idle_clock.observe_background_preparation(preparing(10), past_the_bound);
+
+    idle_clock.observe_background_preparation(preparing(11), past_the_bound);
+
+    assert!(!idle_clock.is_unload_due(past_the_bound + Duration::from_secs(59)));
+}
+
+#[test]
+fn should_count_waiting_to_measure_as_progress() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
+    idle_clock.observe_background_preparation(preparing(56), started_at);
+    let at_the_bound = started_at + STALLED_PREPARATION_HOLD;
+
+    idle_clock.observe_background_preparation(
+        NeuralEnginePreparationProgress::from_status(Some(&preparing_status(56, true))),
+        at_the_bound,
+    );
+
+    assert!(!idle_clock.is_unload_due(at_the_bound + Duration::from_secs(59)));
+}
+
+#[test]
+fn should_read_progress_only_from_a_preparing_status() {
+    assert_eq!(
+        NeuralEnginePreparationProgress::from_status(Some(&preparing_status(7, false))),
+        preparing(7)
+    );
+    assert_eq!(NeuralEnginePreparationProgress::from_status(None), None);
+    assert_eq!(
+        NeuralEnginePreparationProgress::from_status(Some(&NeuralEnginePrefillStatus::Off)),
+        None
+    );
+    assert_eq!(
+        NeuralEnginePreparationProgress::from_status(Some(
+            &NeuralEnginePrefillStatus::Unavailable {
+                reason: "only dense models are supported".to_owned(),
+            }
+        )),
+        None
+    );
 }

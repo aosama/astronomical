@@ -89,9 +89,24 @@ cargo test --release -p astronomical-acceptance --features serving-acceptance --
 
 Every chat-capable model the Development daemon would serve (its own Library models folder plus the configured model directories) must load and stream a non-empty sampled reply (roughly one hundred tokens in at temperature 1.0, one-hundred-token budget, 120-second budget per model). The Development instance is the single source of the variant inventory. A variant that fails to load or replies empty blocks the release; fix forward before tagging. This journey needs a real graphics processor and installed model inventory — it never runs in continuous integration. A model installed only in the Stable instance's Library is outside this inventory and is not exercised; when the developer uses such a model, name it as not covered in the section 4 report. When the round trip passes, start Development again with `cargo xtask app instance start`. A stop also quits Development's chat app and its menu-bar agent; open the Development app bundle to bring both back (opening it shows the chat window and starts the agent), or leave it headless.
 
-3. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe.
-4. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
-5. Prepare the release:
+3. Run the cold-start window check when the release changes either app. Decide from the diff:
+
+```sh
+git diff --quiet "$PREVIOUS_TAG"..HEAD -- apps/astronomical-menu apps/thin-talk; echo APPS_UNCHANGED=$?
+```
+
+`APPS_UNCHANGED=0` skips it; say so in the section 4 report. `1` means run it, on the Development build only. Read `cargo xtask app instance status` first and ask before stopping an instance that holds a model, then:
+
+```sh
+cargo xtask app instance stop
+cargo xtask app dev
+```
+
+`cargo xtask app dev` starts the chat app, the menu-bar agent and the engine in the same second, which is how every person's launch after an update goes. Take a screenshot of the Development chat window within a few seconds: the composer must show the chat model selector, the sidebar must list earlier conversations, and the window must show no failure text. Then open the app menu and confirm it lists "Check for Updates…". A window that fails this check blocks the release. Every automated test starts with an engine already running, so this is the only gate that sees a window that opened before its engine; 0.2.97 and 0.2.98 shipped with an empty model list for exactly that reason.
+
+4. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe.
+5. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
+6. Prepare the release:
 
 ```sh
 cargo xtask release prepare-signed \

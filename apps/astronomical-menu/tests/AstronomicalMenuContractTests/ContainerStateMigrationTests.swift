@@ -148,6 +148,59 @@ final class ContainerStateMigrationTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: legacyStateDirectoryURL.path))
   }
 
+  /// An agent that started before the move leaves a state directory holding
+  /// only its lock file. That is not state: the old state must still move in,
+  /// beside the lock the running agent keeps open.
+  func test_should_move_state_into_a_group_directory_that_holds_only_the_agent_lock() throws {
+    let legacyStateDirectoryURL = try writeLegacyState()
+    let groupStateDirectoryURL = groupContainerURL.appendingPathComponent("Astronomical")
+    try FileManager.default.createDirectory(at: groupStateDirectoryURL, withIntermediateDirectories: true)
+    let agentLockFileURL = groupStateDirectoryURL.appendingPathComponent(
+      ApplicationIdentity.agentInstanceLockFileName)
+    try Data().write(to: agentLockFileURL)
+
+    let outcome = moveContainerStateIntoGroupContainerIfNeeded(
+      applicationIdentity: storeIdentity(applicationGroupIdentifier: "TEAM123456.astronomical"),
+      groupContainerURL: resolver(), homeDirectoryURL: homeDirectoryURL)
+
+    XCTAssertEqual(outcome, .moved)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: groupStateDirectoryURL.appendingPathComponent("config.json").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: groupStateDirectoryURL.appendingPathComponent("models").path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: agentLockFileURL.path), "the agent's lock stays in place")
+    XCTAssertFalse(FileManager.default.fileExists(atPath: legacyStateDirectoryURL.path))
+  }
+
+  /// One file beside the lock is state the engine wrote, and is never merged.
+  func test_should_treat_any_file_beside_the_agent_lock_as_existing_state() throws {
+    let legacyStateDirectoryURL = try writeLegacyState()
+    let groupStateDirectoryURL = groupContainerURL.appendingPathComponent("Astronomical")
+    try FileManager.default.createDirectory(at: groupStateDirectoryURL, withIntermediateDirectories: true)
+    try Data().write(
+      to: groupStateDirectoryURL.appendingPathComponent(ApplicationIdentity.agentInstanceLockFileName))
+    try FileManager.default.createDirectory(
+      at: groupStateDirectoryURL.appendingPathComponent("logs"), withIntermediateDirectories: true)
+
+    let outcome = moveContainerStateIntoGroupContainerIfNeeded(
+      applicationIdentity: storeIdentity(applicationGroupIdentifier: "TEAM123456.astronomical"),
+      groupContainerURL: resolver(), homeDirectoryURL: homeDirectoryURL)
+
+    XCTAssertEqual(outcome, .alreadyInGroupContainer)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: legacyStateDirectoryURL.path))
+  }
+
+  func test_should_move_state_into_an_empty_group_directory() throws {
+    _ = try writeLegacyState()
+    let groupStateDirectoryURL = groupContainerURL.appendingPathComponent("Astronomical")
+    try FileManager.default.createDirectory(at: groupStateDirectoryURL, withIntermediateDirectories: true)
+
+    let outcome = moveContainerStateIntoGroupContainerIfNeeded(
+      applicationIdentity: storeIdentity(applicationGroupIdentifier: "TEAM123456.astronomical"),
+      groupContainerURL: resolver(), homeDirectoryURL: homeDirectoryURL)
+
+    XCTAssertEqual(outcome, .moved)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: groupStateDirectoryURL.appendingPathComponent("config.json").path))
+  }
+
   func test_should_move_nothing_for_a_build_without_a_group() throws {
     let legacyStateDirectoryURL = try writeLegacyState()
 
@@ -160,7 +213,7 @@ final class ContainerStateMigrationTests: XCTestCase {
   }
 
   /// A move that cannot happen is reported, never thrown: launch carries on
-  /// and the old state stays for the next launch to try again.
+  /// and the old state stays where it was.
   func test_should_report_a_move_that_fails_and_leave_the_old_state_in_place() throws {
     let legacyStateDirectoryURL = try writeLegacyState()
     let blockedParentURL = scratchDirectoryURL.appendingPathComponent("blocked")

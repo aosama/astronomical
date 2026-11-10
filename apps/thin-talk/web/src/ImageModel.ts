@@ -7,7 +7,7 @@ export class ImageModel {
   public readonly id: string;
   /** The Library's display name, or the id when the Library does not list it. */
   public readonly name: string;
-  /** Whether Download Models recommends it for Image Generation on its Get started page. */
+  /** Whether the Models page recommends it for Image Generation on its Get started page. */
   public readonly isImageGenerationPick: boolean;
 
   public constructor(init: { id: string; name: string; isImageGenerationPick?: boolean }) {

@@ -39,6 +39,17 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
     restartEngine: { [weak self] in self?.restartEngine() })
   private var quitCommandObservation: NSObjectProtocol?
   private var agentReplacementTask: Task<Void, Never>?
+  /// Set once the agent is meant to stay stopped: this app told it to quit
+  /// for an update or for "Quit and Stop Engine", or the agent's own Quit
+  /// told this app to follow. Nothing may start the agent again after that;
+  /// during an update it would be the build being replaced.
+  private var isAgentStopIntended = false
+  private var hasFinishedLaunching = false
+  private lazy var updateCheckFromLink = LaunchDeferredAction { [weak self] in
+    guard let self else { return }
+    NSApp.activate(ignoringOtherApps: true)
+    requestManualApplicationUpdateCheck(using: applicationUpdateController)
+  }
 
   private var launchAtLoginSupported: Bool {
     launchAtLoginControlsSupported(
@@ -66,13 +77,20 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
       in: NSApp)
     applicationUpdateController.prepareForRelaunch = { [weak self] in self?.stopAgentBeforeUpdate() }
     applicationUpdateController.start()
-    if launchAtLoginSupported { moveWholeApplicationLoginItemToAgent(using: loginItemRegistrar) }
-    quitCommandObservation = commandChannel.observe(.quitApplication) { _ in NSApp.terminate(nil) }
-    // Before the agent starts: its engine must find the state an earlier
-    // store build left in this app's own container, which the agent cannot open.
+    updateCheckFromLink.becomeReady()
+    quitCommandObservation = commandChannel.observe(.quitApplication) { [weak self] _ in
+      self?.isAgentStopIntended = true
+      NSApp.terminate(nil)
+    }
+    // Before anything can start the agent: its engine must find the state an
+    // earlier store build left in this app's own container, which the agent
+    // cannot open. Registering the agent at login is such a start, because
+    // macOS launches a login item the moment it is registered.
     _ = moveContainerStateIntoGroupContainerIfNeeded(applicationIdentity: applicationIdentity)
+    if launchAtLoginSupported { moveWholeApplicationLoginItemToAgent(using: loginItemRegistrar) }
     startAgentOfThisBuild()
     chatWindowController.showChatWindow()
+    hasFinishedLaunching = true
   }
 
   public func applicationWillTerminate(_ notification: Notification) {
@@ -91,6 +109,15 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
     false
   }
 
+  /// The agent owns the engine, and nothing else restarts an agent that
+  /// crashed or was quit from Activity Monitor. Coming back to the chat app
+  /// is when its absence matters, so that is when it is started again; the
+  /// chat page then finds the engine by itself.
+  public func applicationDidBecomeActive(_ notification: Notification) {
+    guard hasFinishedLaunching else { return }
+    ensureAgentOfThisBuild()
+  }
+
   public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
     chatWindowController.showChatWindow()
     return false
@@ -104,6 +131,7 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
     switch applicationLink {
     case .chat: chatWindowController.showChatWindow()
     case .yourAstro: chatWindowController.showYourAstro()
+    case .checkForUpdates: updateCheckFromLink.request()
     }
   }
 
@@ -131,19 +159,26 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
   }
 
   /// Starts the agent, and replaces one left running by another build: the
-  /// build check makes such an agent quit, and the delayed launches start
-  /// this build's agent once it has gone. A launch while the right agent
-  /// runs does nothing.
+  /// build check makes such an agent quit, and the delayed passes start this
+  /// build's agent once it has gone. Each pass asks again, because an agent
+  /// that was still launching at the first ask had no observer to hear it and
+  /// would otherwise keep serving the old engine. A pass while the right
+  /// agent runs does nothing.
   private func startAgentOfThisBuild() {
-    agentLauncher.launchAgentIfNeeded()
-    commandChannel.post(.checkAgentBuild, detail: applicationIdentity.buildFingerprint)
+    ensureAgentOfThisBuild()
     agentReplacementTask = Task { [weak self] in
       for replacementCheckDelay in Self.agentReplacementCheckDelays {
         try? await Task.sleep(for: replacementCheckDelay)
         guard !Task.isCancelled, let self else { return }
-        agentLauncher.launchAgentIfNeeded()
+        ensureAgentOfThisBuild()
       }
     }
+  }
+
+  private func ensureAgentOfThisBuild() {
+    guard !isAgentStopIntended else { return }
+    agentLauncher.launchAgentIfNeeded()
+    commandChannel.post(.checkAgentBuild, detail: applicationIdentity.buildFingerprint)
   }
 
   /// Astro's welcome asks for this when the engine never answers. An agent
@@ -161,11 +196,13 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
   /// must stop first, or they would carry on running the old build; the
   /// relaunched app then starts the new agent.
   private func stopAgentBeforeUpdate() {
+    isAgentStopIntended = true
     commandChannel.post(.quitAgent)
     _ = agentLauncher.waitForAgentExit()
   }
 
   private func quitAndStopEngine() {
+    isAgentStopIntended = true
     commandChannel.post(.quitAgent)
     NSApp.terminate(nil)
   }
