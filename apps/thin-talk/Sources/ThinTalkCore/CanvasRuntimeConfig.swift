@@ -10,6 +10,7 @@ public struct CanvasRuntimeConfig: Equatable, Sendable, Encodable {
     case expectedChannel
     case expectedStateDirectory
     case titlebarInset
+    case canRestartEngine
   }
 
   public let daemonBaseURL: String
@@ -20,32 +21,39 @@ public struct CanvasRuntimeConfig: Equatable, Sendable, Encodable {
   /// below this strip because the strip takes the clicks there (it drags the
   /// window). Encoded only when present, so the key stays optional for the page.
   public let titlebarInset: Int?
+  /// Whether the host can restart the local engine when the page asks
+  /// (the menu application can; the standalone development app cannot), so
+  /// the page offers a restart only where pressing it does something.
+  public let canRestartEngine: Bool
 
   public init(
     daemonBaseURL: String,
     expectedChannel: String,
     expectedStateDirectory: String,
-    titlebarInset: Int? = nil
+    titlebarInset: Int? = nil,
+    canRestartEngine: Bool = false
   ) {
     self.daemonBaseURL = daemonBaseURL
     self.expectedChannel = expectedChannel
     self.expectedStateDirectory = expectedStateDirectory
     self.titlebarInset = titlebarInset
+    self.canRestartEngine = canRestartEngine
   }
 
   /// Builds the configuration for one application identity.
-  public init(applicationIdentity: ThinTalkApplicationIdentity, titlebarInset: Int? = nil) {
+  public init(applicationIdentity: ThinTalkApplicationIdentity, titlebarInset: Int? = nil, canRestartEngine: Bool = false) {
     self.init(
       daemonBaseURL: "http://127.0.0.1:\(applicationIdentity.daemonPort)",
       expectedChannel: applicationIdentity.channel.rawValue,
       expectedStateDirectory: applicationIdentity.expectedServerStateDirectory,
-      titlebarInset: titlebarInset
+      titlebarInset: titlebarInset,
+      canRestartEngine: canRestartEngine
     )
   }
 
   /// The document-start user script that installs the configuration. The page's
   /// AppConfig requires the first three keys and refuses to boot without them;
-  /// `titlebarInset` is optional.
+  /// `titlebarInset` and `canRestartEngine` are optional.
   public func userScriptSource() throws -> String {
     let encoded = try JSONEncoder().encode(self)
     guard let json = String(data: encoded, encoding: .utf8) else {

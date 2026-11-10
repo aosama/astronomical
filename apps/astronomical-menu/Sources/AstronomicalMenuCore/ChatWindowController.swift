@@ -9,8 +9,7 @@ import ThinTalkUI
 /// will not reliably key or focus a window for an accessory application.
 /// Opening chat therefore switches the policy to `.regular`, activates the
 /// application, and orders the window front; closing it restores `.accessory`
-/// through the application-provided handler. This mirrors the first-run
-/// welcome window so both hosted windows behave identically.
+/// through the application-provided handler.
 ///
 /// While chat is open the application is a regular app with a menu bar, so the
 /// conversation's menu bar (`ThinTalkMainMenu`) is installed on show. Without
@@ -21,18 +20,29 @@ final class ChatWindowController: NSObject, NSWindowDelegate {
   private var conversationWindow: ThinTalkConversationWindow?
   private let thinTalkIdentity: ThinTalkCore.ThinTalkApplicationIdentity
   private let hostMenuActions: ThinTalkHostMenuActions
+  private let restartEngine: (@MainActor () -> Void)?
   private var handleClose: (() -> Void)?
-  /// The menu bar from before chat opened, put back on close so another window
-  /// (the welcome window) never shows the conversation's menus.
+  /// The menu bar from before chat opened, put back on close so the menu
+  /// application never keeps the conversation's menus without its window.
   private var menuBeforeChat: NSMenu?
 
   init(
     thinTalkIdentity: ThinTalkCore.ThinTalkApplicationIdentity,
-    hostMenuActions: ThinTalkHostMenuActions = ThinTalkHostMenuActions(applicationName: "Astronomical")
+    hostMenuActions: ThinTalkHostMenuActions = ThinTalkHostMenuActions(applicationName: "Astronomical"),
+    restartEngine: (@MainActor () -> Void)? = nil
   ) {
     self.thinTalkIdentity = thinTalkIdentity
     self.hostMenuActions = hostMenuActions
+    self.restartEngine = restartEngine
     super.init()
+  }
+
+  /// Opens the chat window on Your Astro, the page that holds every answer
+  /// from Astro's welcome. The command waits for a newly made window's page
+  /// to load (see ConversationCanvasView.runPageCommand).
+  func showYourAstro(handleClose: @escaping () -> Void) {
+    showChatWindow(handleClose: handleClose)
+    conversationWindow?.conversationActions.openYourAstro(nil)
   }
 
   func showChatWindow(handleClose: @escaping () -> Void) {
@@ -41,7 +51,8 @@ final class ChatWindowController: NSObject, NSWindowDelegate {
     if let conversationWindow {
       shownConversationWindow = conversationWindow
     } else {
-      shownConversationWindow = ThinTalkConversationWindow(applicationIdentity: thinTalkIdentity)
+      shownConversationWindow = ThinTalkConversationWindow(
+        applicationIdentity: thinTalkIdentity, restartEngine: restartEngine)
       shownConversationWindow.window.delegate = self
     }
     conversationWindow = shownConversationWindow

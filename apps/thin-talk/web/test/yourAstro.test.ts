@@ -202,13 +202,20 @@ test("should_say_the_engine_is_silent_instead_of_offering_downloads", async () =
   assert.equal(astroSays(), "Here's everything I remember about you, Maya. Change anything you like!", "the engine line does not linger");
 });
 
-test("should_ignore_settings_until_the_saved_profile_is_read", async () => {
-  const journey = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
+test("should_open_settings_asked_for_before_the_profile_is_read_once_it_is", async () => {
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   window.__thintalkCommands?.run({ name: "openYourAstro" });
   assert.equal(page().hidden, true, "a page drawn now would show a newcomer's blank answers");
-  await waitFor(() => journey.host.receivedRequests.some((request) => request.op === "loadAstroProfile") && isPresent("astro-home"), "the profile to load");
-  window.__thintalkCommands?.run({ name: "openYourAstro" });
   await waitForStep("page");
+  assert.equal(element("your-astro-nickname-shown").textContent, "Maya", "it opens with the saved answers");
+});
+
+test("should_drop_settings_asked_for_early_when_a_newcomer_flight_opens_instead", async () => {
+  bootJourney(undefined, { astroProfile: null });
+  window.__thintalkCommands?.run({ name: "openYourAstro" });
+  await waitFor(() => !element("first-flight").hidden, "the first flight");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(page().hidden, true, "the flight already asks every question");
 });
 
 test("should_open_the_grown_up_note_from_the_page_and_come_back", async () => {

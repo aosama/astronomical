@@ -6,6 +6,7 @@ import { FirstFlightView } from "./FirstFlightView";
 import type { AstroStyle } from "./AstroStyle";
 import { applyAstroTrail } from "./AstroTrail";
 import type { AstroTrail } from "./AstroTrail";
+import { EngineWatch } from "./EngineWatch";
 import { YourAstroView } from "./YourAstroView";
 import { SkillCardKind, skillCard, starterPromptFor } from "./SkillCard";
 import { AstroComposerChrome } from "./AstroComposerChrome";
@@ -32,11 +33,15 @@ export class AstroCompanion {
   private readonly firstFlight: FirstFlightView;
   private readonly home: AstroHomeView;
   private readonly yourAstro: YourAstroView;
+  private readonly engineWatch: EngineWatch;
   /** The window's root, which carries the trail class for every Astro figure. */
   private readonly trailOwner: HTMLElement;
   private profile = AstroProfile.newcomer();
   /** False until start() has read the saved profile; see openYourAstro. */
   private hasLoadedProfile = false;
+  /** Your Astro was asked for before the profile was read, as when the menu
+   * bar's "Your Astro…" opens a new chat window; start() opens it then. */
+  private opensYourAstroAfterLoad = false;
 
   public constructor(init: {
     bridge: SessionBridge;
@@ -55,12 +60,15 @@ export class AstroCompanion {
     startNewChat: () => Promise<void>;
     /** A model Astro downloaded has landed: the chat window re-reads its models. */
     onModelInstalled: () => void;
+    /** Asks the host to restart the engine; null where the host cannot. */
+    restartEngine: (() => void) | null;
   }) {
     this.bridge = init.bridge;
     this.library = init.library;
     this.composerField = init.composerField;
     this.applyPresentation = init.applyPresentation;
     this.trailOwner = init.trailOwner;
+    this.engineWatch = new EngineWatch(init.library);
     this.composerChrome = new AstroComposerChrome({
       launchers: init.skillLaunchers,
       listeningAstroImage: init.composerAstro,
@@ -73,6 +81,8 @@ export class AstroCompanion {
     this.firstFlight = new FirstFlightView({
       overlay: init.firstFlightOverlay,
       library: init.library,
+      engineWatch: this.engineWatch,
+      restartEngine: init.restartEngine,
       callbacks: {
         onNicknameChosen: (typedNickname) => void this.remember(this.profile.withNickname(typedNickname)),
         onStyleChosen: (style: AstroStyle) => void this.remember(this.profile.withStyle(style)),
@@ -110,19 +120,28 @@ export class AstroCompanion {
       this.profile = AstroProfile.newcomer();
     }
     this.presentProfile();
+    void this.followEngineStart();
     if (!this.profile.hasFinishedFirstFlight) {
       await this.openFirstFlight();
     }
     // Only now: a newcomer's flight is open, so Settings stays ignored.
     this.hasLoadedProfile = true;
+    if (this.opensYourAstroAfterLoad) {
+      this.opensYourAstroAfterLoad = false;
+      this.openYourAstro();
+    }
   }
 
   /** Settings (⌘,). Ignored while the first flight is open, since the flight
-   * already asks every question the page would show, and before the saved
-   * profile is read, when the page would show a newcomer's blank answers and
-   * a newcomer's flight could then open underneath it. */
+   * already asks every question the page would show. Before the saved
+   * profile is read it waits, because the page would show a newcomer's blank
+   * answers and a newcomer's flight could then open underneath it. */
   public openYourAstro(): void {
-    if (!this.hasLoadedProfile || this.firstFlight.isOpen || this.yourAstro.isOpen) {
+    if (!this.hasLoadedProfile) {
+      this.opensYourAstroAfterLoad = true;
+      return;
+    }
+    if (this.firstFlight.isOpen || this.yourAstro.isOpen) {
       return;
     }
     this.yourAstro.open();
@@ -172,10 +191,23 @@ export class AstroCompanion {
   }
 
   private async openFirstFlight(): Promise<void> {
-    const hasChatModel = await this.library.hasChatModel();
-    // An unreachable daemon (null) skips the wake-up screen: a download could
-    // not start anyway, and the window's own notice explains the daemon.
-    this.firstFlight.open(this.profile, hasChatModel !== false);
+    this.firstFlight.open(this.profile, await this.engineWatch.ask());
+  }
+
+  /** A window opened while the engine is still starting drew home and Your
+   * Astro without knowing whether a brain is installed. When the engine
+   * first answers they are drawn again, so a Mac without a brain gets its
+   * offer instead of silence. */
+  private async followEngineStart(): Promise<void> {
+    if ((await this.engineWatch.ask()) !== null) {
+      return;
+    }
+    this.engineWatch.onceAnswered(() => {
+      if (this.profile.isAstroShown) {
+        this.home.show(this.profile);
+      }
+      this.yourAstro.refreshGifts();
+    });
   }
 
   private finishFirstFlight(chosenSkill: SkillCardKind | null): void {

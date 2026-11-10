@@ -16,13 +16,13 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       applicationChannel: applicationIdentity.channel)
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     daemonClient: daemonClient, applicationIdentity: applicationIdentity)
-  private lazy var firstRunWelcomeWindowController = FirstRunWelcomeWindowController()
   private let neuralEngineBannerPresenter = NeuralEngineBannerPresenter()
   private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
   private lazy var loginItemRegistrar: any LoginItemRegistering = SystemLoginItemRegistrar()
   private lazy var chatWindowController = ChatWindowController(
     thinTalkIdentity: ChatLaunchIdentity.chatIdentity(from: applicationIdentity),
-    hostMenuActions: chatMenuActions())
+    hostMenuActions: chatMenuActions(),
+    restartEngine: { [weak self] in self?.restartServer() })
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
@@ -95,7 +95,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
           }
         ),
         revealConfiguration: revealConfiguration,
-        showWelcome: { [weak self] in self?.showWelcomeWindow() },
+        showYourAstro: { [weak self] in self?.showYourAstro() },
         quitApplication: { NSApp.terminate(nil) }
       )
     )
@@ -134,9 +134,13 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     telemetryStore.startPolling()
     // The welcome decision runs before daemon maintenance so a brand-new
     // install is judged on its empty state directory, not on files the just
-    // started daemon creates during this same launch.
-    if shouldShowFirstRunWelcome() {
-      showWelcomeWindow()
+    // started daemon creates during this same launch. The welcome itself is
+    // Astro's first flight in the chat window, which waits for the engine
+    // that daemon maintenance is starting.
+    if isFirstLaunch() {
+      FirstRunWelcomeAcknowledgmentStore(stateDirectoryURL: applicationIdentity.stateDirectoryURL())
+        .acknowledgeWelcome()
+      showChatWindow()
     } else {
       DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
     }
@@ -171,8 +175,8 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     // Without this the very first click dismisses the transient popover before
     // it is visible: macOS treats the click gesture as outside the popover the
     // moment this app is not the active app, which it is when you click the
-    // menu-bar icon from another foreground app. The welcome and chat windows
-    // both activate first; this keeps the tap-to-dismiss behaviour intact while
+    // menu-bar icon from another foreground app. The chat window
+    // activates first too; this keeps the tap-to-dismiss behaviour intact while
     // making the first click reliably stick (issue: menu vanishes on first open).
     NSApp.activate(ignoringOtherApps: true)
     statusItem?.length = menuBarStatusItemLength(
@@ -236,8 +240,8 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       helpURL: URL(string: "https://aosama.github.io/astronomical/"))
   }
 
-  // Reopening chat after a close restores the accessory posture the menu
-  // application normally keeps, exactly like the welcome window does.
+  // Closing chat restores the accessory (no Dock icon) posture the menu
+  // application normally keeps.
   private func showChatWindow() {
     chatWindowController.showChatWindow(handleClose: { _ = NSApp.setActivationPolicy(.accessory) })
   }
@@ -263,29 +267,15 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     showChatWindow()
   }
 
-  private func shouldShowFirstRunWelcome() -> Bool {
+  private func isFirstLaunch() -> Bool {
     FirstRunWelcomeAcknowledgmentStore(stateDirectoryURL: applicationIdentity.stateDirectoryURL())
       .welcomeDecision() == .showWelcome
   }
 
-  private func showWelcomeWindow() {
-    firstRunWelcomeWindowController.showWelcomeWindow(
-      telemetryStore: telemetryStore,
-      applicationIdentity: applicationIdentity,
-      openObservatory: { [weak self] in self?.openObservatory() },
-      openDownloadModels: { [weak self] in self?.openDownloadModels() },
-      restartServer: { [weak self] in self?.restartServer() },
-      handleClose: { [weak self] in self?.welcomeWindowDidClose() }
-    )
-  }
-
-  // Closing the welcome by any path — primary action, skip link, or the close
-  // button — is the acknowledgment, and the application returns to its normal
-  // accessory (no Dock icon) posture only after the window is gone.
-  private func welcomeWindowDidClose() {
-    FirstRunWelcomeAcknowledgmentStore(stateDirectoryURL: applicationIdentity.stateDirectoryURL())
-      .acknowledgeWelcome()
-    NSApp.setActivationPolicy(.accessory)
+  // The popover's "Your Astro…" opens chat on the page with every welcome
+  // answer, so the welcome is always one click from the menu bar.
+  private func showYourAstro() {
+    chatWindowController.showYourAstro(handleClose: { _ = NSApp.setActivationPolicy(.accessory) })
   }
 
   private func openObservatory() {

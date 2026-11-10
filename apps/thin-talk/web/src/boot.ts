@@ -180,6 +180,7 @@ export function bootChatClient(): AppShell {
       void controller.refreshChatModels();
       void controller.refreshImageModels();
     },
+    restartEngine: config.canRestartEngine ? () => host.requestEngineRestart() : null,
   });
   new HostCommandRouter(
     hostCommandHandlers({ controller, transcript, composerField, host, windowChrome, astro }),

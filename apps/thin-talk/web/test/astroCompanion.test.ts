@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { waitFor } from "./support/dom";
+import { ENGINE_PATIENCE } from "../src/astro/EngineWatch";
 import { bootJourney, MET_ASTRO_PROFILE } from "./support/journey";
 import type { Journey } from "./support/journey";
 
@@ -261,4 +262,75 @@ test("should_hide_the_library_notice_while_home_offers_a_brain_itself", async ()
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: [], libraryCatalog: STARTER_CATALOG });
   await waitFor(() => isPresent("astro-home-wake"), "home's brain offer");
   assert.ok(document.getElementById("empty-state")?.classList.contains("empty-state--astro-offers-brain"));
+});
+
+test("should_wait_for_an_engine_still_starting_and_then_offer_the_brain", async () => {
+  const savedAskEvery = ENGINE_PATIENCE.askEveryMilliseconds;
+  ENGINE_PATIENCE.askEveryMilliseconds = 10;
+  try {
+    const { daemon } = bootNewcomer({ models: [] });
+    daemon.modelsUnreachable = true;
+    await introduceSelf("", "astro-style-explorer");
+    await waitForStep("engineStarting");
+    assert.equal(astroSays(), "Hang on… I'm just waking up!");
+    daemon.modelsUnreachable = false;
+    await waitForStep("wake");
+    await waitFor(() => isPresent("astro-wake"), "the brain offer");
+  } finally {
+    ENGINE_PATIENCE.askEveryMilliseconds = savedAskEvery;
+  }
+});
+
+test("should_offer_a_restart_when_the_engine_never_wakes_and_wait_again", async () => {
+  const savedPatience = { ...ENGINE_PATIENCE };
+  ENGINE_PATIENCE.askEveryMilliseconds = 10;
+  ENGINE_PATIENCE.silentAfterMilliseconds = 40;
+  try {
+    const { daemon, host } = bootNewcomer({ models: [], canRestartEngine: true });
+    daemon.modelsUnreachable = true;
+    await introduceSelf("", "astro-style-explorer");
+    await waitForStep("engineSilent");
+    assert.equal(astroSays(), "I can't wake up right now. A restart usually fixes it!");
+    assert.equal(element("astro-engine-retry").textContent, "Restart Astro's engine");
+    element<HTMLButtonElement>("astro-engine-retry").click();
+    assert.ok(host.receivedActions.some((action) => action["action"] === "restartEngine"), "the host is asked to restart");
+    await waitForStep("engineStarting");
+    daemon.modelsUnreachable = false;
+    await waitForStep("wake");
+  } finally {
+    Object.assign(ENGINE_PATIENCE, savedPatience);
+  }
+});
+
+test("should_offer_try_again_instead_of_restart_where_the_host_cannot_restart", async () => {
+  const savedPatience = { ...ENGINE_PATIENCE };
+  ENGINE_PATIENCE.askEveryMilliseconds = 10;
+  ENGINE_PATIENCE.silentAfterMilliseconds = 40;
+  try {
+    const { daemon, host } = bootNewcomer({ models: [] });
+    daemon.modelsUnreachable = true;
+    await introduceSelf("", "astro-style-explorer");
+    await waitForStep("engineSilent");
+    assert.equal(element("astro-engine-retry").textContent, "Try again");
+    element<HTMLButtonElement>("astro-engine-retry").click();
+    assert.equal(host.receivedActions.some((action) => action["action"] === "restartEngine"), false, "nothing is asked of a host that cannot restart");
+    await waitForStep("engineStarting");
+  } finally {
+    Object.assign(ENGINE_PATIENCE, savedPatience);
+  }
+});
+
+test("should_offer_a_brain_on_home_once_an_engine_that_was_starting_answers", async () => {
+  const savedAskEvery = ENGINE_PATIENCE.askEveryMilliseconds;
+  ENGINE_PATIENCE.askEveryMilliseconds = 10;
+  try {
+    const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: [], libraryCatalog: STARTER_CATALOG });
+    daemon.modelsUnreachable = true;
+    await waitFor(() => isPresent("astro-home"), "Astro's home");
+    assert.equal(isPresent("astro-home-wake"), false, "nothing to offer while the engine is silent");
+    daemon.modelsUnreachable = false;
+    await waitFor(() => isPresent("astro-home-wake"), "home's brain offer");
+  } finally {
+    ENGINE_PATIENCE.askEveryMilliseconds = savedAskEvery;
+  }
 });

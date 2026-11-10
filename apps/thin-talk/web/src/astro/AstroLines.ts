@@ -25,6 +25,8 @@ export enum AstroMoment {
   STYLE_PREVIEW = "stylePreview",
   SAVE_FAILED = "saveFailed",
   ENGINE_SILENT = "engineSilent",
+  ENGINE_STARTING = "engineStarting",
+  ENGINE_WONT_WAKE = "engineWontWake",
 }
 
 /** "Hi, Maya!" with a name, "Hi!" without one: a nickname is optional, and
@@ -71,6 +73,8 @@ const LINES: Record<AstroMoment, LinesForNickname> = {
   // will sound before anything is saved.
   [AstroMoment.STYLE_PREVIEW]: () => ({ explorer: "Ooh, Explorer! Big buttons and lots of help. Is this the one?", pilot: "Pilot mode. Sleek and quick. Save it?" }),
   [AstroMoment.SAVE_FAILED]: () => ({ explorer: "Uh-oh, I couldn't remember that. Let's try again!", pilot: "That didn't save. Try again?" }),
+  [AstroMoment.ENGINE_STARTING]: () => ({ explorer: "Hang on… I'm just waking up!", pilot: "One moment. Starting up." }),
+  [AstroMoment.ENGINE_WONT_WAKE]: () => ({ explorer: "I can't wake up right now. A restart usually fixes it!", pilot: "I can't start right now. A restart usually fixes it." }),
   [AstroMoment.ENGINE_SILENT]: () => ({ explorer: "I can't hear my engine right now. Let's check again in a moment.", pilot: "My engine isn't answering. Check again in a moment." }),
 };
 

@@ -5,6 +5,11 @@ export enum FirstFlightStep {
   STYLE = "style",
   /** A side trip from STYLE for a parent setting the Mac up. */
   GROWN_UP = "grownUp",
+  /** Only when the engine has not answered by the time the style is picked:
+   * Astro waits for it, since the next screen depends on the answer. */
+  ENGINE_STARTING = "engineStarting",
+  /** The engine stayed silent too long: Astro says so and offers a restart. */
+  ENGINE_SILENT = "engineSilent",
   /** Only when no chat model is installed: Astro needs a brain first. */
   WAKE = "wake",
   SKILLS = "skills",
@@ -22,9 +27,10 @@ export enum FirstFlightStep {
  */
 export class FirstFlightJourney {
   private currentStep: FirstFlightStep = FirstFlightStep.HELLO;
-  private hasBrain: boolean;
+  /** Null while the engine has not said whether a chat model is installed. */
+  private hasBrain: boolean | null;
 
-  public constructor(init: { hasBrain: boolean }) {
+  public constructor(init: { hasBrain: boolean | null }) {
     this.hasBrain = init.hasBrain;
   }
 
@@ -41,9 +47,34 @@ export class FirstFlightJourney {
   }
 
   /** After a style is picked the brain decides the route: a Mac that already
-   * has a chat model goes straight to the skills. */
+   * has a chat model goes straight to the skills, one without goes to the
+   * brain download, and one whose engine has not answered yet waits for it.
+   * Hello, name and style need no engine, so on a first launch the engine's
+   * start-up time is usually spent before anyone has to wait. */
   public chooseStyle(): void {
-    this.moveFrom(FirstFlightStep.STYLE, this.hasBrain ? FirstFlightStep.SKILLS : FirstFlightStep.WAKE);
+    this.moveFrom(FirstFlightStep.STYLE, this.hasBrain === null ? FirstFlightStep.ENGINE_STARTING : this.stepAfterEngineAnswer(this.hasBrain));
+  }
+
+  /** The engine answered. Recorded on any step; a flight waiting on the
+   * answer moves on at once. */
+  public engineAnswered(hasBrain: boolean): void {
+    this.hasBrain = hasBrain;
+    if (this.currentStep === FirstFlightStep.ENGINE_STARTING || this.currentStep === FirstFlightStep.ENGINE_SILENT) {
+      this.currentStep = this.stepAfterEngineAnswer(hasBrain);
+    }
+  }
+
+  public engineStayedSilent(): void {
+    this.moveFrom(FirstFlightStep.ENGINE_STARTING, FirstFlightStep.ENGINE_SILENT);
+  }
+
+  /** After a restart Astro waits again. */
+  public retryEngine(): void {
+    this.moveFrom(FirstFlightStep.ENGINE_SILENT, FirstFlightStep.ENGINE_STARTING);
+  }
+
+  private stepAfterEngineAnswer(hasBrain: boolean): FirstFlightStep {
+    return hasBrain ? FirstFlightStep.SKILLS : FirstFlightStep.WAKE;
   }
 
   public visitGrownUpNote(): void {

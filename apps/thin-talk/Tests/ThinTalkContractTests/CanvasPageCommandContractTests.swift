@@ -69,4 +69,14 @@ final class CanvasPageCommandContractTests: XCTestCase {
     let plainScript = try CanvasRuntimeConfig(applicationIdentity: identity).userScriptSource()
     XCTAssertFalse(plainScript.contains("titlebarInset"), plainScript)
   }
+
+  func test_should_tell_the_page_whether_the_host_can_restart_the_engine() throws {
+    let identity = ThinTalkApplicationIdentity(channel: .development, daemonPort: 6733)
+    let restartingScript = try CanvasRuntimeConfig(applicationIdentity: identity, canRestartEngine: true)
+      .userScriptSource()
+    XCTAssertTrue(restartingScript.contains("\"canRestartEngine\":true"), restartingScript)
+    let plainScript = try CanvasRuntimeConfig(applicationIdentity: identity).userScriptSource()
+    XCTAssertTrue(
+      plainScript.contains("\"canRestartEngine\":false"), "a host without a restart says so: \(plainScript)")
+  }
 }

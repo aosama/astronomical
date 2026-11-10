@@ -6,7 +6,8 @@ interface ThintalkMessageHandlers {
 
 /**
  * The one place the page talks to its Swift host: session bridge calls, user
- * actions that must leave the page (copy, open a link), and error reports.
+ * actions that must leave the page (copy, open a link, restart the local
+ * engine), and error reports.
  * Everything else — chat traffic — goes straight to the daemon over REST.
  */
 export class HostChannel {
@@ -24,6 +25,12 @@ export class HostChannel {
 
   public postAction(action: string, messageID: string, detail: string): void {
     this.deliver({ kind: "action", action, messageId: messageID, detail });
+  }
+
+  /** Asks the host to restart the local engine. Sent only when the host's
+   * configuration says it can (AppConfig.canRestartEngine). */
+  public requestEngineRestart(): void {
+    this.deliver({ kind: "action", action: "restartEngine", messageId: "", detail: "" });
   }
 
   public postError(detail: string): void {

@@ -42,12 +42,13 @@ export function installDom(): Window {
 }
 
 /** The config the Swift host would inject at document start. */
-export function installConfig(daemonBaseURL: string, titlebarInset?: number): void {
+export function installConfig(daemonBaseURL: string, titlebarInset?: number, canRestartEngine?: boolean): void {
   window.__thintalkConfig = {
     daemonBaseURL,
     expectedChannel: "development",
     expectedStateDirectory: "~/.astronomical-dev",
     ...(titlebarInset === undefined ? {} : { titlebarInset }),
+    ...(canRestartEngine === undefined ? {} : { canRestartEngine }),
   };
 }
 

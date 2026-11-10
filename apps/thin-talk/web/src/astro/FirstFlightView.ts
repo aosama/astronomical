@@ -5,6 +5,8 @@ import { AstroMoment, astroLine } from "./AstroLines";
 import { AstroProfile } from "./AstroProfile";
 import { AstroStyle } from "./AstroStyle";
 import type { AstroTrail } from "./AstroTrail";
+import { ENGINE_PATIENCE } from "./EngineWatch";
+import type { EngineWatch } from "./EngineWatch";
 import { FirstFlightJourney, FirstFlightStep } from "./FirstFlightJourney";
 import { buildGrownUpNotePanel } from "./GrownUpNote";
 import { buildNameForm } from "./NameForm";
@@ -48,21 +50,34 @@ export class FirstFlightView {
   private readonly document: Document;
   private readonly library: AstroLibrary;
   private readonly callbacks: FirstFlightCallbacks;
+  private readonly engineWatch: EngineWatch;
+  /** Asks the host to restart the engine; null where the host cannot. */
+  private readonly restartEngine: (() => void) | null;
+  /** Stops listening for the engine's first answer. */
+  private stopAwaitingEngine: (() => void) | null = null;
   private readonly figure: AstroFigure;
   private readonly bubble: HTMLElement;
   private readonly controls: HTMLElement;
-  private journey = new FirstFlightJourney({ hasBrain: true });
+  private journey = new FirstFlightJourney({ hasBrain: null });
   /** The name and style as the flight shows them in Astro's words; the saved
    * profile belongs to AstroCompanion. */
   private shownProfile = AstroProfile.newcomer();
   private chosenSkill: SkillCardKind | null = null;
   private openPanels: DisposablePanel[] = [];
 
-  public constructor(init: { overlay: HTMLElement; library: AstroLibrary; callbacks: FirstFlightCallbacks }) {
+  public constructor(init: {
+    overlay: HTMLElement;
+    library: AstroLibrary;
+    engineWatch: EngineWatch;
+    restartEngine: (() => void) | null;
+    callbacks: FirstFlightCallbacks;
+  }) {
     this.overlay = init.overlay;
     this.document = init.overlay.ownerDocument;
     this.library = init.library;
     this.callbacks = init.callbacks;
+    this.engineWatch = init.engineWatch;
+    this.restartEngine = init.restartEngine;
     this.figure = new AstroFigure(this.document, "first-flight__astro");
     this.bubble = makeElement(this.document, "p", "first-flight__bubble");
     this.bubble.setAttribute("role", "status");
@@ -86,9 +101,14 @@ export class FirstFlightView {
     return !this.overlay.hidden;
   }
 
-  public open(profile: AstroProfile, hasBrain: boolean): void {
+  /** `hasBrain` is null while the engine has not answered. The flight starts
+   * anyway, because hello, name and style need no engine; the answer is
+   * handed to the journey whenever it arrives. */
+  public open(profile: AstroProfile, hasBrain: boolean | null): void {
     this.shownProfile = profile;
     this.journey = new FirstFlightJourney({ hasBrain });
+    this.stopAwaitingEngine?.();
+    this.stopAwaitingEngine = hasBrain === null ? this.engineWatch.onceAnswered((answeredHasBrain) => this.engineAnswered(answeredHasBrain)) : null;
     this.chosenSkill = null;
     this.overlay.hidden = false;
     setSiblingsInert(this.overlay, true);
@@ -125,6 +145,12 @@ export class FirstFlightView {
         break;
       case FirstFlightStep.GROWN_UP:
         this.renderGrownUp();
+        break;
+      case FirstFlightStep.ENGINE_STARTING:
+        this.renderEngineStarting();
+        break;
+      case FirstFlightStep.ENGINE_SILENT:
+        this.renderEngineSilent();
         break;
       case FirstFlightStep.WAKE:
         this.renderWake();
@@ -198,6 +224,41 @@ export class FirstFlightView {
     const backButton = makeButton(this.document, "astro-grown-up-back", "Back to choosing a style", false);
     backButton.addEventListener("click", () => this.advance(() => this.journey.leaveGrownUpNote()));
     this.controls.append(notePanel, this.actionRow(backButton));
+  }
+
+  /** Redraws only when the answer moved a waiting flight on; an answer that
+   * arrives during hello, name or style changes nothing on screen. */
+  private engineAnswered(hasBrain: boolean): void {
+    const stepBeforeAnswer = this.journey.step;
+    this.journey.engineAnswered(hasBrain);
+    if (this.isOpen && this.journey.step !== stepBeforeAnswer) {
+      this.render();
+    }
+  }
+
+  private renderEngineStarting(): void {
+    this.say(AstroMoment.ENGINE_STARTING);
+    const waitingDots = makeElement(this.document, "div", "first-flight__waiting");
+    waitingDots.setAttribute("aria-hidden", "true");
+    waitingDots.append(makeElement(this.document, "span", ""), makeElement(this.document, "span", ""), makeElement(this.document, "span", ""));
+    const note = makeElement(this.document, "p", "first-flight__note", "Astro's engine is starting on this Mac. The first time takes a few seconds.");
+    this.controls.append(waitingDots, note);
+    const silenceTimer = setTimeout(() => this.advance(() => this.journey.engineStayedSilent()), ENGINE_PATIENCE.silentAfterMilliseconds);
+    this.openPanels.push({ dispose: () => clearTimeout(silenceTimer) });
+    void this.engineWatch.ask();
+  }
+
+  private renderEngineSilent(): void {
+    this.say(AstroMoment.ENGINE_WONT_WAKE);
+    const restartEngine = this.restartEngine;
+    const retryButton = makeButton(this.document, "astro-engine-retry", restartEngine !== null ? "Restart Astro's engine" : "Try again", false);
+    retryButton.addEventListener("click", () => {
+      restartEngine?.();
+      this.advance(() => this.journey.retryEngine());
+    });
+    const grownUpNote = makeElement(this.document, "div", "first-flight__panel");
+    grownUpNote.append(makeElement(this.document, "p", "", "For grown-ups: the local server on this Mac didn't answer. The Astronomical icon in the menu bar shows its status."));
+    this.controls.append(this.actionRow(retryButton), grownUpNote);
   }
 
   private renderWake(): void {
@@ -287,6 +348,8 @@ export class FirstFlightView {
 
   private close(): void {
     this.disposeOpenPanels();
+    this.stopAwaitingEngine?.();
+    this.stopAwaitingEngine = null;
     this.overlay.hidden = true;
     setSiblingsInert(this.overlay, false);
     this.figure.setCharging(false);
