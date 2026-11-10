@@ -28,11 +28,8 @@ pub(crate) mod serving_rest;
 #[allow(dead_code)]
 pub(crate) mod worker_process_observation;
 
-#[path = "../gpu_contracts/common/e2e_test_model_names.rs"]
-#[allow(dead_code)]
-mod e2e_test_model_names;
 #[allow(unused_imports)]
-pub(crate) use e2e_test_model_names::{
+pub(crate) use astronomical_test_harness::fixtures::{
     e2e_test_model_ids, flux2_klein_4bit_model_id, flux2_klein_model_id,
     large_sparse_moe_streaming_model_id, largest_sparse_moe_streaming_model_id,
     ornith_dflash_draft_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
