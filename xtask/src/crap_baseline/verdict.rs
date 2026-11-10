@@ -38,6 +38,17 @@ pub(crate) struct CrapBaselineVerdict {
 }
 
 impl CrapBaselineVerdict {
+    /// The closing line of a failed run, one count per violation kind.
+    pub(crate) fn failure_summary(&self) -> String {
+        format!(
+            "[crap-baseline] status=failed grown={} over_cap_new={} stale_admissions={} ambiguous_admissions={}",
+            self.grown_functions.len(),
+            self.over_cap_new_functions.len(),
+            self.stale_admissions.len(),
+            self.ambiguous_admissions.len()
+        )
+    }
+
     pub(crate) fn passes(&self) -> bool {
         self.grown_functions.is_empty()
             && self.over_cap_new_functions.is_empty()

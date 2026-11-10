@@ -27,8 +27,9 @@
 # sources without compiling, scores every function — tests included, #[test]
 # functions excepted by the tool — and fails when any function's cyclomatic
 # complexity grows against the committed baseline, or when a function the
-# baseline does not list yet exceeds complexity 15. When cargo-crap's structural-signals release ships,
-# gating lines there restores an explicit line-count ratchet.
+# baseline does not list yet exceeds complexity 15. When cargo-crap's
+# structural-signals release ships, gating lines there restores an explicit
+# line-count ratchet.
 #
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
 # repository denies warnings via [build] warnings, which turns this lint into

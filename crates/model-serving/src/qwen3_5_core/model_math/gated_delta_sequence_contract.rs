@@ -166,8 +166,8 @@ impl GatedDeltaSequenceShape {
     /// blocked kernel's own limits, each reported on its own so a model that
     /// breaks one learns which.
     fn validate_kernel_geometry(&self) -> Result<(), MlxRuntimeError> {
-        self.head_geometry_violation()
-            .map_or(Ok(()), head_geometry_violation_error)?;
+        self.check_head_geometry()
+            .map_err(head_geometry_violation_error)?;
         if self.key_head_dimension != PIPELINED_KEY_HEAD_DIMENSION {
             return Err(gated_delta_sequence_error(
                 "pipelined gated-delta key dimension must be 128",
@@ -193,14 +193,14 @@ impl GatedDeltaSequenceShape {
             && input_shapes.recurrent_state_shape == recurrent_state_shape
     }
 
-    /// The first broken head-geometry rule, the token axis included: a
+    /// Checks the head-geometry rules with the token axis included: a
     /// non-positive token count reads as a non-positive dimension, which is
     /// what the shared rules report for every other axis.
-    fn head_geometry_violation(&self) -> Option<GatedDeltaHeadGeometryViolation> {
+    fn check_head_geometry(&self) -> Result<(), GatedDeltaHeadGeometryViolation> {
         if self.token_count <= 0 {
-            return Some(GatedDeltaHeadGeometryViolation::NonPositiveDimension);
+            return Err(GatedDeltaHeadGeometryViolation::NonPositiveDimension);
         }
-        self.head_geometry().check().err()
+        self.head_geometry().check()
     }
 
     /// The token-free part of the geometry, which the step path shares.
@@ -227,13 +227,13 @@ fn validate_sequence_dtypes(
 /// The fused kernels' error text for a broken head-geometry rule.
 fn head_geometry_violation_error(
     geometry_violation: GatedDeltaHeadGeometryViolation,
-) -> Result<(), MlxRuntimeError> {
-    Err(gated_delta_sequence_error(match geometry_violation {
+) -> MlxRuntimeError {
+    gated_delta_sequence_error(match geometry_violation {
         GatedDeltaHeadGeometryViolation::NonPositiveDimension => NON_POSITIVE_DIMENSION_DESCRIPTION,
         GatedDeltaHeadGeometryViolation::ValueHeadsNotMultipleOfKeyHeads => {
             "pipelined gated-delta value heads must be a multiple of key heads"
         }
-    }))
+    })
 }
 
 /// The fused kernels' error text for a broken dtype rule.

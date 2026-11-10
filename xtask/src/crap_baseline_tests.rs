@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 
 use serde_json::json;
@@ -82,32 +82,42 @@ fn no_admissions() -> BTreeSet<String> {
 }
 
 /// Canned scans; counts the fresh-baseline scans so a test can prove a check
-/// never pays for one.
+/// never pays for one, and records which ref the delta was judged against.
 struct CannedReportSource {
     delta_report_text: String,
-    fresh_baseline_text: String,
+    fresh_baseline_outcome: Result<String, String>,
     fresh_baseline_scan_count: Cell<usize>,
+    judged_baseline_ref: RefCell<Option<String>>,
 }
 
 impl CannedReportSource {
     fn new(delta_report_text: String, fresh_baseline_text: String) -> Self {
+        Self::with_fresh_outcome(delta_report_text, Ok(fresh_baseline_text))
+    }
+
+    fn with_fresh_outcome(
+        delta_report_text: String,
+        fresh_baseline_outcome: Result<String, String>,
+    ) -> Self {
         Self {
             delta_report_text,
-            fresh_baseline_text,
+            fresh_baseline_outcome,
             fresh_baseline_scan_count: Cell::new(0),
+            judged_baseline_ref: RefCell::new(None),
         }
     }
 }
 
 impl CrapReportSource for CannedReportSource {
-    fn delta_against_committed_baseline(&self) -> Result<String, String> {
+    fn delta_against_committed_baseline(&self, baseline_ref: &str) -> Result<String, String> {
+        *self.judged_baseline_ref.borrow_mut() = Some(baseline_ref.to_owned());
         Ok(self.delta_report_text.clone())
     }
 
     fn fresh_baseline_report(&self) -> Result<String, String> {
         self.fresh_baseline_scan_count
             .set(self.fresh_baseline_scan_count.get() + 1);
-        Ok(self.fresh_baseline_text.clone())
+        self.fresh_baseline_outcome.clone()
     }
 }
 
@@ -126,9 +136,25 @@ fn baseline_text(repository_root: &tempfile::TempDir) -> String {
         .expect("the baseline reads")
 }
 
-const WRITE_INVOCATION: CrapBaselineInvocation = CrapBaselineInvocation {
-    should_write_baseline: true,
-};
+fn write_invocation() -> CrapBaselineInvocation {
+    CrapBaselineInvocation {
+        should_write_baseline: true,
+        ..CrapBaselineInvocation::default()
+    }
+}
+
+/// Runs a write against a repository holding the committed baseline and
+/// returns the outcome with the baseline text afterwards.
+fn write_with(report_source: &CannedReportSource) -> (Result<(), String>, String) {
+    let repository_root = repository_with_committed_baseline();
+    let outcome = run_with_source(
+        repository_root.path(),
+        &write_invocation(),
+        &admissions_document(&[]),
+        report_source,
+    );
+    (outcome, baseline_text(&repository_root))
+}
 
 #[test]
 fn should_refuse_a_baseline_function_that_grew() {
@@ -363,7 +389,7 @@ fn should_leave_the_baseline_untouched_when_a_function_grew() {
     );
     let outcome = run_with_source(
         repository_root.path(),
-        &WRITE_INVOCATION,
+        &write_invocation(),
         &admissions_document(&[]),
         &report_source,
     );
@@ -388,7 +414,7 @@ fn should_write_the_fresh_report_byte_for_byte_when_the_check_passes() {
     );
     run_with_source(
         repository_root.path(),
-        &WRITE_INVOCATION,
+        &write_invocation(),
         &admissions_document(&[&lookup_table_label()]),
         &report_source,
     )
@@ -403,7 +429,7 @@ fn should_refuse_to_write_a_fresh_scan_that_is_not_a_baseline_report() {
         CannedReportSource::new(delta_report(Vec::new(), 0), delta_report(Vec::new(), 0));
     let outcome = run_with_source(
         repository_root.path(),
-        &WRITE_INVOCATION,
+        &write_invocation(),
         &admissions_document(&[]),
         &report_source,
     );
@@ -425,4 +451,135 @@ fn should_check_without_scanning_for_or_writing_a_fresh_baseline() {
     .expect("an empty report passes");
     assert_eq!(report_source.fresh_baseline_scan_count.get(), 0);
     assert_eq!(baseline_text(&repository_root), COMMITTED_BASELINE_TEXT);
+}
+
+#[test]
+fn should_judge_against_head_unless_another_ref_is_named() {
+    assert_eq!(
+        CrapBaselineInvocation::parse(&[])
+            .expect("no arguments parse")
+            .baseline_ref,
+        "HEAD"
+    );
+    let against_main =
+        CrapBaselineInvocation::parse(&["--against".to_owned(), "origin/main".to_owned()])
+            .expect("--against parses");
+    assert_eq!(against_main.baseline_ref, "origin/main");
+    assert!(!against_main.should_write_baseline);
+    let report_source =
+        CannedReportSource::new(delta_report(Vec::new(), 0), fresh_baseline_report());
+    run_with_source(
+        repository_with_committed_baseline().path(),
+        &against_main,
+        &admissions_document(&[]),
+        &report_source,
+    )
+    .expect("an empty report passes");
+    assert_eq!(
+        report_source.judged_baseline_ref.borrow().as_deref(),
+        Some("origin/main")
+    );
+}
+
+#[test]
+fn should_refuse_against_without_a_ref() {
+    assert!(CrapBaselineInvocation::parse(&["--against".to_owned()]).is_err());
+    assert!(
+        CrapBaselineInvocation::parse(&["--against".to_owned(), "--write".to_owned()]).is_err()
+    );
+}
+
+#[test]
+fn should_refuse_to_write_a_fresh_scan_without_a_report_schema_or_entries() {
+    let wrong_schema = json!({
+        "$schema": "https://example.invalid/schemas/delta-v2.json",
+        "entries": [],
+    })
+    .to_string();
+    let without_entries = json!({
+        "$schema": "https://raw.githubusercontent.com/minikin/cargo-crap/main/schemas/report-v1.json",
+    })
+    .to_string();
+    for fresh_baseline_text in [wrong_schema, without_entries] {
+        let (outcome, baseline_after) = write_with(&CannedReportSource::new(
+            delta_report(Vec::new(), 0),
+            fresh_baseline_text,
+        ));
+        assert!(outcome.is_err());
+        assert_eq!(baseline_after, COMMITTED_BASELINE_TEXT);
+    }
+}
+
+#[test]
+fn should_leave_the_baseline_untouched_when_the_fresh_scan_fails() {
+    let (outcome, baseline_after) = write_with(&CannedReportSource::with_fresh_outcome(
+        delta_report(Vec::new(), 0),
+        Err("cargo-crap exited".to_owned()),
+    ));
+    assert!(outcome.is_err());
+    assert_eq!(baseline_after, COMMITTED_BASELINE_TEXT);
+}
+
+#[test]
+fn should_fail_a_check_with_growth_without_a_fresh_scan() {
+    let report_source = CannedReportSource::new(
+        delta_report(
+            vec![delta_entry(
+                "src/parse.rs",
+                "parse_command",
+                "regressed",
+                19.0,
+            )],
+            0,
+        ),
+        fresh_baseline_report(),
+    );
+    let outcome = run_with_source(
+        repository_with_committed_baseline().path(),
+        &CrapBaselineInvocation::default(),
+        &admissions_document(&[]),
+        &report_source,
+    );
+    assert!(outcome.is_err_and(|failure_line| failure_line.contains("grown=1")));
+    assert_eq!(report_source.fresh_baseline_scan_count.get(), 0);
+}
+
+#[test]
+fn should_refuse_an_admission_matching_a_baseline_and_a_new_function_of_one_name() {
+    let report = delta_report(
+        vec![
+            delta_entry(LOOKUP_TABLE_FILE, LOOKUP_TABLE_FUNCTION, "unchanged", 33.0),
+            delta_entry(LOOKUP_TABLE_FILE, LOOKUP_TABLE_FUNCTION, "new", 20.0),
+        ],
+        0,
+    );
+    let admissions = BTreeSet::from([lookup_table_label()]);
+    let verdict = judge_delta_report(&report, &admissions).expect("the report parses");
+    assert!(!verdict.passes());
+    assert_eq!(verdict.ambiguous_admissions, vec![lookup_table_label()]);
+}
+
+#[test]
+fn should_refuse_a_fractional_complexity_just_over_the_cap() {
+    let report = delta_report(
+        vec![delta_entry(
+            "src/route.rs",
+            "route_request",
+            "new",
+            MAXIMUM_NEW_FUNCTION_CYCLOMATIC_COMPLEXITY + 0.5,
+        )],
+        0,
+    );
+    let verdict = judge_delta_report(&report, &no_admissions()).expect("the report parses");
+    assert_eq!(verdict.over_cap_new_functions.len(), 1);
+}
+
+#[test]
+fn should_fail_closed_on_a_removed_function_without_a_baseline_score() {
+    let removed_without_score = json!({
+        "entries": [],
+        "removed": [{"file": "src/gone.rs", "function": "gone"}],
+    })
+    .to_string();
+    assert!(judge_delta_report(&removed_without_score, &no_admissions()).is_err());
 }

@@ -58720,20 +58720,20 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
+      "function": "GatedDeltaSequenceShape::check_head_geometry",
+      "line": 199,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "GatedDeltaSequenceShape::head_geometry",
       "line": 207,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
-      "function": "GatedDeltaSequenceShape::head_geometry_violation",
-      "line": 199,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -111020,7 +111020,7 @@
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "CargoCrapReportSource::copy_committed_baseline",
-      "line": 244,
+      "line": 300,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -111029,7 +111029,7 @@
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "CargoCrapReportSource::delta_against_committed_baseline",
-      "line": 232,
+      "line": 288,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -111038,7 +111038,7 @@
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "CargoCrapReportSource::fresh_baseline_report",
-      "line": 238,
+      "line": 294,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111047,7 +111047,7 @@
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "CargoCrapReportSource::run_cargo_crap",
-      "line": 276,
+      "line": 332,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -111055,26 +111055,53 @@
     },
     {
       "file": "xtask/src/crap_baseline.rs",
-      "function": "CrapBaselineInvocation::parse",
-      "line": 62,
-      "cyclomatic": 4.0,
+      "function": "CrapBaselineInvocation::apply_argument",
+      "line": 95,
+      "cyclomatic": 5.0,
       "coverage": null,
-      "crap": 20.0,
+      "crap": 30.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline.rs",
+      "function": "CrapBaselineInvocation::default",
+      "line": 75,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline.rs",
+      "function": "CrapBaselineInvocation::parse",
+      "line": 84,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline.rs",
+      "function": "discard_staging_file",
+      "line": 277,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
       "crate": "xtask"
     },
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "print_verdict",
-      "line": 163,
-      "cyclomatic": 8.0,
+      "line": 214,
+      "cyclomatic": 7.0,
       "coverage": null,
-      "crap": 72.0,
+      "crap": 56.0,
       "crate": "xtask"
     },
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "read_admissions_text",
-      "line": 153,
+      "line": 204,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111083,7 +111110,7 @@
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "run",
-      "line": 88,
+      "line": 132,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -111092,16 +111119,25 @@
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "run_with_source",
-      "line": 105,
-      "cyclomatic": 11.0,
+      "line": 149,
+      "cyclomatic": 9.0,
       "coverage": null,
-      "crap": 132.0,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline.rs",
+      "function": "take_validated_fresh_baseline",
+      "line": 191,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
       "crate": "xtask"
     },
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "validate_fresh_baseline_report",
-      "line": 197,
+      "line": 246,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -111110,7 +111146,7 @@
     {
       "file": "xtask/src/crap_baseline.rs",
       "function": "write_baseline_atomically",
-      "line": 215,
+      "line": 264,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111127,8 +111163,17 @@
     },
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
+      "function": "CrapBaselineVerdict::failure_summary",
+      "line": 42,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "CrapBaselineVerdict::passes",
-      "line": 41,
+      "line": 52,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -111137,7 +111182,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "ScoredFunction::from_report_entry",
-      "line": 127,
+      "line": 138,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -111146,7 +111191,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "entry_number",
-      "line": 193,
+      "line": 204,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111155,7 +111200,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "entry_text",
-      "line": 183,
+      "line": 194,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111164,7 +111209,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "function_label",
-      "line": 162,
+      "line": 173,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111173,7 +111218,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "judge_delta_report",
-      "line": 51,
+      "line": 62,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
@@ -111182,7 +111227,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "judge_scored_function",
-      "line": 85,
+      "line": 96,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -111191,7 +111236,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "missing_field_error",
-      "line": 200,
+      "line": 211,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111200,7 +111245,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "removed_function_labels",
-      "line": 149,
+      "line": 160,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -111209,7 +111254,7 @@
     {
       "file": "xtask/src/crap_baseline/verdict.rs",
       "function": "required_array",
-      "line": 170,
+      "line": 181,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111218,7 +111263,7 @@
     {
       "file": "xtask/src/crap_baseline_tests.rs",
       "function": "CannedReportSource::delta_against_committed_baseline",
-      "line": 103,
+      "line": 112,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111227,7 +111272,7 @@
     {
       "file": "xtask/src/crap_baseline_tests.rs",
       "function": "CannedReportSource::fresh_baseline_report",
-      "line": 107,
+      "line": 117,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111236,7 +111281,16 @@
     {
       "file": "xtask/src/crap_baseline_tests.rs",
       "function": "CannedReportSource::new",
-      "line": 93,
+      "line": 94,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline_tests.rs",
+      "function": "CannedReportSource::with_fresh_outcome",
+      "line": 98,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111254,7 +111308,7 @@
     {
       "file": "xtask/src/crap_baseline_tests.rs",
       "function": "baseline_text",
-      "line": 124,
+      "line": 134,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -111308,7 +111362,25 @@
     {
       "file": "xtask/src/crap_baseline_tests.rs",
       "function": "repository_with_committed_baseline",
-      "line": 114,
+      "line": 124,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline_tests.rs",
+      "function": "write_invocation",
+      "line": 139,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/crap_baseline_tests.rs",
+      "function": "write_with",
+      "line": 148,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
