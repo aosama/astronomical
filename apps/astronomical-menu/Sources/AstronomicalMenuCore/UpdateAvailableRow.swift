@@ -27,7 +27,9 @@ struct UpdateAvailableRow: View {
     .accessibilityLabel(Self.title(for: availableUpdate))
   }
 
-  static func title(for availableUpdate: AvailableUpdate) -> String {
+  /// Plain text with no view state behind it, so it is callable from any
+  /// context; a view's members are otherwise tied to the main actor.
+  nonisolated static func title(for availableUpdate: AvailableUpdate) -> String {
     "Version \(availableUpdate.displayVersion) is available"
   }
 }
