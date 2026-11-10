@@ -175,7 +175,29 @@ final class ContainerStateMigrationTests: XCTestCase {
     XCTAssertTrue(FileManager.default.fileExists(atPath: legacyStateDirectoryURL.path))
   }
 
-  func test_should_read_the_group_identifier_from_the_bundle_and_report_none_when_absent() {
+  func test_should_report_no_group_for_a_bundle_whose_plist_names_none() {
     XCTAssertNil(ApplicationIdentity.current(bundle: Bundle(for: Self.self)).applicationGroupIdentifier)
+  }
+
+  /// The packager writes the group into each application's plist; this is the
+  /// only way either process learns which container they share.
+  func test_should_read_the_group_identifier_the_packager_wrote_into_the_plist() throws {
+    let bundleURL = scratchDirectoryURL.appendingPathComponent("Store.app", isDirectory: true)
+    let contentsURL = bundleURL.appendingPathComponent("Contents", isDirectory: true)
+    try FileManager.default.createDirectory(at: contentsURL, withIntermediateDirectories: true)
+    let storePlist: [String: Any] = [
+      "CFBundleIdentifier": "app.astronomical.appstore",
+      "AstronomicalChannel": "app-store",
+      "AstronomicalApplicationGroupIdentifier": "TEAM123456.astronomical",
+    ]
+    try PropertyListSerialization.data(fromPropertyList: storePlist, format: .xml, options: 0)
+      .write(to: contentsURL.appendingPathComponent("Info.plist"))
+    let storeBundle = try XCTUnwrap(Bundle(url: bundleURL))
+
+    let storeIdentity = ApplicationIdentity.current(bundle: storeBundle)
+
+    XCTAssertEqual(storeIdentity.channel, .appStore)
+    XCTAssertEqual(storeIdentity.applicationGroupIdentifier, "TEAM123456.astronomical")
+    XCTAssertNil(storeIdentity.stateDirectoryName, "a store build names no home dot-folder")
   }
 }

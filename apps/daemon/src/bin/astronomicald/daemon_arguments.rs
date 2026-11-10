@@ -157,7 +157,10 @@ fn parse_absolute_directory(
     let directory =
         PathBuf::from(argument_value.ok_or(DaemonArgumentError::MissingValue(directory_flag))?);
     if !directory.is_absolute() || directory.parent().is_none() {
-        return Err(DaemonArgumentError::InvalidStateDirectory(directory));
+        return Err(DaemonArgumentError::InvalidDirectory {
+            directory_flag,
+            directory,
+        });
     }
     Ok(directory)
 }
@@ -176,8 +179,11 @@ pub(crate) enum DaemonArgumentError {
     InvalidInstance(String),
     #[error("argument may be supplied only once: {0}")]
     RepeatedArgument(&'static str),
-    #[error("state directory must be an absolute non-root path, got {0:?}")]
-    InvalidStateDirectory(PathBuf),
+    #[error("{directory_flag} must be an absolute non-root path, got {directory:?}")]
+    InvalidDirectory {
+        directory_flag: &'static str,
+        directory: PathBuf,
+    },
     #[error(
         "--state-directory and --application-group-container name two state locations; supply one"
     )]

@@ -142,12 +142,23 @@ fn should_refuse_a_group_container_that_is_missing_relative_or_the_root() {
         "missing value for --application-group-container"
     );
     for unusable_container in ["relative/container", "/"] {
-        assert!(
-            parse_error_text(&["--application-group-container", unusable_container])
-                .starts_with("state directory must be an absolute non-root path"),
-            "{unusable_container}"
+        assert_eq!(
+            parse_error_text(&["--application-group-container", unusable_container]),
+            format!(
+                "--application-group-container must be an absolute non-root path, got {unusable_container:?}"
+            )
         );
     }
+}
+
+/// Each flag's refusal names that flag, so the message points at the argument
+/// the caller actually got wrong.
+#[test]
+fn should_name_the_state_directory_flag_when_its_value_is_relative() {
+    assert_eq!(
+        parse_error_text(&["--state-directory", "relative/state"]),
+        "--state-directory must be an absolute non-root path, got \"relative/state\""
+    );
 }
 
 #[test]
