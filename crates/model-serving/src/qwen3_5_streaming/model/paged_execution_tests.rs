@@ -5,7 +5,7 @@
 
 use super::paged_execution::decode_token_activation_rows;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 const INPUT_WIDTH: usize = 64;

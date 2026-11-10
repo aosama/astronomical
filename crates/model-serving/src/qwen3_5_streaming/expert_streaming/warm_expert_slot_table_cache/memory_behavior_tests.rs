@@ -165,7 +165,7 @@ fn wide_native_program(
     runtime: &MlxRuntime,
     expert_count: usize,
     fill: f32,
-) -> mlx_c_rust::MlxArray {
+) -> mlx_bridge::MlxArray {
     runtime
         .array_from_f32(
             &vec![fill; expert_count * 2048],

@@ -20,7 +20,7 @@ use super::{
     error::Qwen3_5ExecutionError,
     feed_forward_weights,
 };
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 /// Whether a model keeps its embedding table resident or reads its rows from
 /// the SSD per forward.

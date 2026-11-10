@@ -8,7 +8,7 @@
 use std::fs::File;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"

@@ -6,7 +6,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 const TOKEN_AXIS: usize = 2;
 const OPERATION: &str = "update the in-memory rotating key/value state";

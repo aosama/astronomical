@@ -5,7 +5,7 @@
 use std::io::Write;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 use super::disk_embedding_rows::{

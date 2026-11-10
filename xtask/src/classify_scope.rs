@@ -18,8 +18,9 @@ const ZERO_GIT_SHA: &str = "0000000000000000000000000000000000000000";
 const NATIVE_INPUT_PATHSPECS: &[&str] = &[
     "crates/runtime-integration/build.rs",
     // Kept for transition classification: the path matches the bridge
-    // deletion itself; the live build script now lives in the published
-    // mlx-c-rust crate outside this repository.
+    // deletion itself, so it keeps the crate's former in-repo name
+    // (mlx-c-rust); the live build script now lives in the published
+    // mlx-bridge crate outside this repository.
     "crates/mlx-c-rust/build.rs",
     "crates/native-build-orchestration/src/native_linking.rs",
     "crates/native-build-orchestration/src/native_store.rs",

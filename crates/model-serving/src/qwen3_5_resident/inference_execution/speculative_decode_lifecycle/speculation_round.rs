@@ -22,7 +22,7 @@
 //! for later.
 
 use astronomical_ipc_protocol::RequestId;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use std::time::Instant;
 
@@ -444,7 +444,7 @@ fn draft_proposals(
     )?;
     let block_logits = target_model
         .runtime
-        .astype(&block_logits, mlx_c_rust::MlxDtype::Float32)?;
+        .astype(&block_logits, mlx_bridge::MlxDtype::Float32)?;
     // Row zero is the bonus position; the proposals live in rows one onward.
     let proposal_logits = target_model.runtime.slice(
         &block_logits,

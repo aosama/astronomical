@@ -15,7 +15,7 @@ use crate::performance_attribution::PerformanceAttribution;
 use crate::sparse_experts::{
     sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
 };
-use mlx_c_rust::MlxMetalKernel;
+use mlx_bridge::MlxMetalKernel;
 
 impl CustomMetalKernelFamily {
     /// Registry identifier of the sorted expert weighted-sum family. The

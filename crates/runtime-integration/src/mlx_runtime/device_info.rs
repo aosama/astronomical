@@ -32,7 +32,7 @@ use crate::{
     MlxRuntimeError,
     mlx_runtime::{check_status, configure_metallib_path, configured_metallib_path},
 };
-use mlx_c_rust::raw;
+use mlx_bridge::raw;
 
 /// The Metal device-info key for the recommended working-set size, as a
 /// NUL-terminated byte string ready for the C boundary.
@@ -48,7 +48,7 @@ const MAXIMUM_RECOMMENDED_WORKING_SET_SIZE_DEVICE_INFO_KEY: &[u8] =
 /// - [`MlxRuntimeError::RuntimeOperation`] when the device does not expose
 ///   the key (status 2), reports a zero working set, or the query fails.
 pub fn maximum_recommended_gpu_working_set_size_bytes() -> Result<usize, MlxRuntimeError> {
-    mlx_c_rust::install_non_terminating_error_handler();
+    mlx_bridge::install_non_terminating_error_handler();
     let metallib_path = configured_metallib_path()?;
     configure_metallib_path(&metallib_path)?;
     // SAFETY: `MLX_GPU` with index 0 is the same default GPU target used by the

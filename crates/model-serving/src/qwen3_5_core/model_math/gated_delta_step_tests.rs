@@ -1,4 +1,4 @@
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 use super::{
     GatedDeltaStepInputShapes, repeat_factor_from_step_input_shapes, validate_step_dtypes,

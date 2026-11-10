@@ -9,7 +9,7 @@ use astronomical_model_serving::{
     QuantizedExpertPageManifest, SafetensorsDtype, load_quantized_expert_page,
 };
 use astronomical_runtime_integration::{BoundedReadInterval, MlxRuntime};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::atlas_conversion::{AtlasTestFile, tensor_name_suffix};
 use super::uncached_file_io::{DIRECT_READ_ALIGNMENT_BYTES, open_uncached, scatter_read_record};

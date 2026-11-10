@@ -29,7 +29,7 @@ use astronomical_test_harness::flux_reference_oracle::{
     BFL_SOURCE_REVISION, DIFFUSERS_SOURCE_REVISION, ExpectedFluxReference, FluxReferenceOracle,
     sha256_hex,
 };
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);

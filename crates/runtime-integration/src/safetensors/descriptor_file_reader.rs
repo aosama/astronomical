@@ -32,7 +32,7 @@ use std::{
 };
 
 use crate::{MlxRuntimeError, safetensors::read_metrics::PositionalFileReadMetrics};
-use mlx_c_rust::raw;
+use mlx_bridge::raw;
 
 /// Label MLX-C can surface for this reader in diagnostics.
 const READER_LABEL: &[u8] = b"validated descriptor-backed weights\0";

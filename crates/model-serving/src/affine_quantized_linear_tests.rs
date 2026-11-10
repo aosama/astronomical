@@ -3,7 +3,7 @@
 //! the rows it needs. Values come from the Romeo and Juliet fixture.
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 use super::{

@@ -7,7 +7,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use astronomical_test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::journey_constants::PREFILL_CHUNK_TOKEN_COUNT;
 use super::mlx_projection::{

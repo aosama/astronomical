@@ -11,7 +11,7 @@
 //! signal, so it is neither loaded nor reported.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::decision_models::laya::configuration::LayaConfiguration;
 use crate::modernbert::attention_mask::key_padding_mask_values;

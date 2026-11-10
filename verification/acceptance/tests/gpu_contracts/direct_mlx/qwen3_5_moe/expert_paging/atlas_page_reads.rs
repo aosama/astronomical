@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use astronomical_model_serving::{QuantizedExpertLayerPlan, build_quantized_expert_layer_plan};
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::large_sparse_moe_fixture::{

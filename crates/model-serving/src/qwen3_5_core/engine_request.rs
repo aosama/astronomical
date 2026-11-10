@@ -9,7 +9,7 @@
 use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;

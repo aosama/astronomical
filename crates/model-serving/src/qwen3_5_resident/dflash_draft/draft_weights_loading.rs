@@ -12,7 +12,7 @@ use std::fs::File;
 use std::path::Path;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use thiserror::Error;
 
 use super::draft_configuration::DFlashDraftConfiguration;

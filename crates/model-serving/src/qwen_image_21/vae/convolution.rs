@@ -8,7 +8,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::tensor_shape;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 /// A spatial (or pointwise) convolution over `NHWC` activations with `OHWI` weights.
 #[derive(Debug)]

@@ -12,7 +12,7 @@
 use astronomical_quantization::bit_width::{BitWidth, GroupSize};
 use astronomical_quantization::error::QuantizationError;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 

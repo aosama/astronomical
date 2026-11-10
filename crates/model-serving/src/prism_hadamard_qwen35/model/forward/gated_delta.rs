@@ -6,7 +6,7 @@
 //! fused matmul too. The arithmetic mirrors the qwen3_5 core's validated GDN
 //! composition exactly.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
 

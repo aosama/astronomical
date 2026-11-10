@@ -6,7 +6,7 @@ use super::Qwen3_5PagedExpertWeights;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 const SINGLE_DECODE_TOKEN_COUNT: i32 = 1;

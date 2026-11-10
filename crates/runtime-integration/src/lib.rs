@@ -57,7 +57,7 @@
 //!
 //! # Relationship to the bridge crates
 //!
-//! The stock MLX-C surface is bound by the published `mlx-c-rust` crate. The
+//! The stock MLX-C surface is bound by the published `mlx-bridge` crate. The
 //! handful of Astronomical-specific native symbols added by the patch set
 //! under `third-party/patches` are bound by `astronomical-mlx-c-fork`. This
 //! crate composes both: operations come through `MlxRuntime`'s dereference to

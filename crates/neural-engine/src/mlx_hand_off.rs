@@ -7,7 +7,7 @@
 
 use std::ffi::c_void;
 
-use mlx_c_rust::{MlxArray, MlxBindingsContext, MlxCError, MlxDtype, raw};
+use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError, MlxDtype, raw};
 use thiserror::Error;
 
 use crate::core_ml::{CoreMlProgram, CoreMlProgramError, LockedOutputSurface};

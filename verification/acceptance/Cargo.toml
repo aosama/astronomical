@@ -121,7 +121,7 @@ astronomical-memory-policy = { path = "../../crates/astronomical-memory-policy" 
 astronomical-neural-engine-research = { path = "../neural-engine" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
 astronomical-mlx-c-fork = { path = "../../crates/mlx-c-fork" }
-mlx-c-rust.workspace = true
+mlx-bridge.workspace = true
 astronomical-native-identity = { path = "../../crates/native-identity" }
 astronomical-quantization = { path = "../../crates/quantization", features = ["direct-mlx"] }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }

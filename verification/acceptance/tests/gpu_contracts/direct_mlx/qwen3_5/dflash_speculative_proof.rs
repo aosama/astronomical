@@ -36,7 +36,7 @@ use astronomical_model_serving::{
     append_conditioned_context_key_values, condition_target_hidden_states, run_speculative_round,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 use tokio::time::timeout;
 

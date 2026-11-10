@@ -10,7 +10,7 @@
 //! parallel on small synthetic tensors.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use astronomical_jangtq2_qwen35::codebook;
 use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;

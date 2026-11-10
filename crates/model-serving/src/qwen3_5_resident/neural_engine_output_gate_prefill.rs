@@ -20,7 +20,7 @@ use astronomical_neural_engine::mlx_hand_off::{
 };
 use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_mlp_prefill::{
@@ -153,7 +153,7 @@ impl LinearAttentionOutputGateEngine for NeuralEngineOutputGatePrefill {
 /// hand-off, and every other error does.
 fn is_about_the_programs(program_error: &(dyn std::error::Error + 'static)) -> bool {
     if program_error
-        .downcast_ref::<mlx_c_rust::MlxCError>()
+        .downcast_ref::<mlx_bridge::MlxCError>()
         .is_some()
     {
         return false;

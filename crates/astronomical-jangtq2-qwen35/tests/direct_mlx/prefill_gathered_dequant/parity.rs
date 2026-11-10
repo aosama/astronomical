@@ -4,7 +4,7 @@
 //! concern stays small enough for the source-size budget.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxMetalKernel};
+use mlx_bridge::{MlxArray, MlxMetalKernel};
 
 use astronomical_jangtq2_qwen35::codebook;
 use astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows;

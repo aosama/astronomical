@@ -105,7 +105,7 @@ fn validated_feedback_token_count(
 /// its own attribution span in the original order.
 fn run_feedback_forward_and_sample(
     execution: &mut PrismHadamardQwen35InferenceExecution,
-    token_indices: &mlx_c_rust::MlxArray,
+    token_indices: &mlx_bridge::MlxArray,
 ) -> Result<(), InferenceEngineError> {
     let model = execution
         .model

@@ -5,7 +5,7 @@
 //! A dense model's layers submit one at a time instead, so a forward holds no
 //! more than the dense layer plan reserved (issue #1985).
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
 use super::forward_layer_weights::ForwardLayerWeights;

@@ -6,7 +6,7 @@
 //! accept a graph that ordinary prompt processing rejects, or vice versa.
 
 use astronomical_runtime_integration::MlxRuntimeError;
-use mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
+use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
 
 use super::gated_delta_input_rules::{
     GatedDeltaDtypeViolation, GatedDeltaHeadGeometry, GatedDeltaHeadGeometryViolation,

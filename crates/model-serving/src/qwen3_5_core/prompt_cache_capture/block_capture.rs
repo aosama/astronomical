@@ -15,7 +15,7 @@ use crate::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
 };
 use astronomical_runtime_integration::MlxMemorySnapshot;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use std::collections::HashMap;
 
 use super::capture_hook::Qwen3_5PromptCacheCapture;

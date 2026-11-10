@@ -4,7 +4,7 @@ use astronomical_neural_engine::mlx_hand_off::{
     MlxHandOffError, OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     write_prepared_input,
 };
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use thiserror::Error;
 
 use super::{NEURAL_ENGINE_FINISH_TIMEOUT, NeuralEngineMlpPrefill};
@@ -19,7 +19,7 @@ enum TokenSplitForwardError {
     #[error(transparent)]
     Gpu(#[from] Qwen3_5ExecutionError),
     #[error(transparent)]
-    Mlx(#[from] mlx_c_rust::MlxCError),
+    Mlx(#[from] mlx_bridge::MlxCError),
     #[error(transparent)]
     Program(#[from] astronomical_neural_engine::core_ml::CoreMlProgramError),
     #[error("no Neural Engine program exists for decoder layer {layer_index}")]

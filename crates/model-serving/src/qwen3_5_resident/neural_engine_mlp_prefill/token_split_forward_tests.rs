@@ -11,8 +11,8 @@ fn should_blame_the_programs_for_a_program_failure() {
     assert!(missing_program.is_about_the_programs());
 }
 
-fn mlx_error() -> mlx_c_rust::MlxCError {
-    mlx_c_rust::MlxCError {
+fn mlx_error() -> mlx_bridge::MlxCError {
+    mlx_bridge::MlxCError {
         operation: "evaluate",
         description: "out of memory".to_owned(),
     }

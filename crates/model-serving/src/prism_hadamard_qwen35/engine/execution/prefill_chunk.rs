@@ -6,7 +6,7 @@
 
 use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerPromptWorkReuse};
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::GeneratedToken;
 use crate::InferenceEngineError;

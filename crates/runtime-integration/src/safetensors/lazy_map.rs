@@ -31,7 +31,7 @@ use crate::{
     safetensors::name_maps::{OwnedMetadataMap, OwnedTensorMap},
     safetensors::read_metrics::PositionalFileReadMetrics,
 };
-use mlx_c_rust::{MlxArray, MlxStream, raw};
+use mlx_bridge::{MlxArray, MlxStream, raw};
 
 /// One virtual interval mapping payload offsets to source file reads.
 ///

@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::Qwen3_5Model;
 use super::layer_major_prefill::{

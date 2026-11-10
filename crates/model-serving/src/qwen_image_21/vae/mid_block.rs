@@ -7,7 +7,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use super::QwenImage21VaeError;
 use super::attention::QwenImage21VaeAttentionBlock;
 use super::resnet::QwenImage21VaeResnetBlock;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct QwenImage21VaeMidBlock {

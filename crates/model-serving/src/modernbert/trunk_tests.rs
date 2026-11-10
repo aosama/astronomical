@@ -10,7 +10,7 @@
 //! batch gets the hidden states it gets when it is encoded alone.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 use super::{ModernBertTrunk, ModernBertTrunkError};

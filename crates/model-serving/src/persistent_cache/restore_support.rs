@@ -18,7 +18,7 @@ use astronomical_ipc_protocol::{
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::persistent_cache::block_key::PersistentPromptCacheBlockKey;

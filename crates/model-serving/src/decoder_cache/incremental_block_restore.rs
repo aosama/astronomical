@@ -13,7 +13,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::{FullAttentionKeyValueState, STATE_DIMENSION_TOKEN_AXIS};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 const RESTORE_OPERATION: &str =
     "restore the in-memory KV state from persistent prompt-cache blocks";

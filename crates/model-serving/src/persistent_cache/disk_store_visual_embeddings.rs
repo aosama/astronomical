@@ -17,7 +17,7 @@ use super::{
     PersistentVisualEmbeddingFileHeader, PersistentVisualEmbeddingKey,
     PersistentVisualEmbeddingModelContract,
 };
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 impl PersistentPromptCacheDiskStore {
     pub fn save_visual_embedding(

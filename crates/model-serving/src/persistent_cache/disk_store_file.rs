@@ -19,7 +19,7 @@ use super::block_format::PersistentPromptCacheBlockHeader;
 use super::block_format_error::PersistentPromptCacheBlockError;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::model_contract::PersistentPromptCacheModelContract;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 #[derive(Clone, Copy)]
 pub(crate) enum PersistentPromptCacheFileKind {

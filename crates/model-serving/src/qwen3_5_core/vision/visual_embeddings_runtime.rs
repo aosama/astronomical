@@ -19,7 +19,7 @@ use crate::{
 };
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
+use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 
 /// The loaded-model facts one engine contributes to visual-embedding resolution.
 pub(crate) struct VisualEmbeddingEngineContext<'context> {

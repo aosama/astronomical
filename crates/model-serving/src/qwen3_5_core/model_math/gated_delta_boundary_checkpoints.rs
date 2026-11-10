@@ -7,7 +7,7 @@ use super::gated_delta_sequence_contract::{
     GatedDeltaSequenceShape, gated_delta_sequence_error, template_arguments,
     validate_gated_delta_sequence_shapes,
 };
-use mlx_c_rust::{
+use mlx_bridge::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
 
@@ -430,7 +430,7 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
     let mut recurrent_boundary_states = Vec::with_capacity(completed_prefill_chunk_tokens.len());
     let mut next_checkpoint_position_index = 0_usize;
     let mut current_recurrent_state =
-        runtime.astype(recurrent_state, mlx_c_rust::MlxDtype::Float32)?;
+        runtime.astype(recurrent_state, mlx_bridge::MlxDtype::Float32)?;
     for token_index in 0..sequence_shape.token_count {
         let token_queries = runtime
             .slice(
@@ -492,7 +492,7 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
             // The fused kernel publishes float32 boundary states; the aliasing
             // float32 cast yields an owned handle without a data copy.
             recurrent_boundary_states
-                .push(runtime.astype(&current_recurrent_state, mlx_c_rust::MlxDtype::Float32)?);
+                .push(runtime.astype(&current_recurrent_state, mlx_bridge::MlxDtype::Float32)?);
             next_checkpoint_position_index += 1;
         }
     }

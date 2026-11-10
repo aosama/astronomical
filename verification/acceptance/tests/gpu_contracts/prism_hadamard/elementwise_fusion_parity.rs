@@ -17,7 +17,7 @@
 //! replay remains the deciding gate.
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::{
+use mlx_bridge::{
     MlxArray, MlxCompiledDualHeadNorm, MlxCompiledElementwiseGraphs,
     MlxCompiledGatedDeltaRateActivation, MlxDtype,
 };

@@ -7,7 +7,7 @@ use std::fs::File;
 use std::path::Path;
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::encoder::RangeSearchPolicy;
 use crate::encoder::mlx::quantize_best;

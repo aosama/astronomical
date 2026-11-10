@@ -10,7 +10,7 @@ use crate::{TensorDtype, TensorProfile};
 
 use super::vision_tensor_source::Qwen3_5VisionTensorSource;
 use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 #[cfg(test)]
 pub(crate) mod tests;

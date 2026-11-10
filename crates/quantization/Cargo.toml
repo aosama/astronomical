@@ -26,10 +26,10 @@ default = []
 # cache allocator, and the sensitivity sweep driver) is pure Rust so it
 # compiles, unit-tests, and runs on any host, including the CLI's `plan`
 # sub-verb.
-direct-mlx = ["dep:mlx-c-rust", "dep:astronomical-runtime-integration"]
+direct-mlx = ["dep:mlx-bridge", "dep:astronomical-runtime-integration"]
 
 [dependencies]
-mlx-c-rust = { workspace = true, optional = true }
+mlx-bridge = { workspace = true, optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 safetensors.workspace = true
 serde.workspace = true

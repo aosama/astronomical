@@ -15,7 +15,7 @@ use astronomical_neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_progr
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 use super::{NeuralEngineMlpPrefill, neural_engine_tokens_for_chunk};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
@@ -457,7 +457,7 @@ pub(crate) fn weight_as_fp16_bits(
     half_precision.to_vec_f16_bits().map_err(read_failure)
 }
 
-fn read_failure(_mlx_error: mlx_c_rust::MlxCError) -> &'static str {
+fn read_failure(_mlx_error: mlx_bridge::MlxCError) -> &'static str {
     WEIGHT_READ_FAILURE
 }
 

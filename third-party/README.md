@@ -154,9 +154,9 @@ To bump a pinned dependency:
    wide-head-dimension test there exercises the JIT generator paths in
    seconds.
 4. Reconcile the Rust FFI surface: the bridge is the published
-   `mlx-c-rust` crate (crates.io), which bindgen-generates from its own
+   `mlx-bridge` crate (crates.io), which bindgen-generates from its own
    vendored stock MLX-C headers at build time. Bump the workspace
-   `mlx-c-rust` dependency to the release matching the new pin, reconcile
+   `mlx-bridge` dependency to the release matching the new pin, reconcile
    call sites against its surface, and check the fork delta: the pinned
    patch set adds exactly one C symbol (`mlx_array_detach`, owned by
    `crates/mlx-c-fork`); a new patch that adds more symbols must extend
@@ -173,7 +173,7 @@ To bump a pinned dependency:
    bindings-only (`default-features = false`): the crate emits zero link
    directives and runtime-integration owns the linker end to end. That mode
    arrived in the crate's 0.32.4-alpha.2 release (upstream
-   aosama/mlx-c-rust#19); keep the dependency bindings-only.
+   aosama/mlx-bridge#19); keep the dependency bindings-only.
    One lockfile property rides along with the crate: its build dependency
    bindgen declares a wildcard `syn = ">=2, <4"` range but only compiles
    against the syn 3 line, so the lockfile pairs bindgen with `syn 3.0.3`.
@@ -191,7 +191,7 @@ To bump a pinned dependency:
 
 ## Bindgen headers and the C surface diff
 
-The MLX-C binding surface spans two crates. The published `mlx-c-rust`
+The MLX-C binding surface spans two crates. The published `mlx-bridge`
 crate (crates.io, versioned against the MLX release line its bindings
 target — the 0.32.4 line matches the pinned MLX v0.32.4; the earlier
 0.7.0-alpha spelling tracked the MLX-C release and was yanked upstream)

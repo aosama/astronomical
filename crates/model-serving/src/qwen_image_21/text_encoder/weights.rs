@@ -14,7 +14,7 @@ use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::mlx_math::{
     QUANT_BITS, QUANT_GROUP_SIZE, QUANT_VALUES_PER_WORD, QuantizedLinear, validate_shape,
 };
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 /// The artifact path every embedding tensor hangs off.
 const EMBEDDING_PREFIX: &str = "language_model.model.embed_tokens";

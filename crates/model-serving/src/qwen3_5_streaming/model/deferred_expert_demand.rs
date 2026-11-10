@@ -10,7 +10,7 @@
 //! joins the forward's single completion evaluation as an extra root, and is
 //! recorded afterwards as a plain host copy of already-computed identifiers.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::PerformanceAttribution;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;

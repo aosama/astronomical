@@ -11,7 +11,7 @@
 use astronomical_model_serving::prism_hadamard_qwen35::model::{
     PrismHadamardProbeProjection, PrismHadamardTextModel,
 };
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::support::{
