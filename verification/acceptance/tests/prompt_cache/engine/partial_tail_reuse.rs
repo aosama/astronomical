@@ -11,6 +11,7 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5Tokenizer,
+    persistent_prompt_cache_partial_tail_capture_end,
 };
 
 use super::engine_prompt_cache::{
@@ -35,8 +36,8 @@ async fn should_restore_the_previous_turns_partial_tail_block_on_an_extended_pro
 
 async fn run_partial_tail_reuse_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    // The resident 4bit Ornith-35B artifact is the installed sparse-MoE variant on
-    // development machines; the tail-reuse path is artifact-size independent.
+    // The resident sparse-MoE role names whichever Ornith-35B build is
+    // installed; the tail-reuse path is artifact-size independent.
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let persistent_prompt_cache_directory =
         tempfile::tempdir().expect("the test should create a prompt-cache directory");
@@ -86,7 +87,10 @@ async fn run_partial_tail_reuse_acceptance() {
 
     // Turn 2: extend the same conversation by fewer tokens than one block. The
     // lookup must restore both complete blocks AND the first turn's tail, so
-    // the second turn prefills only the newly added suffix.
+    // the second turn prefills only the newly added suffix. The tail ends one
+    // token short of turn one's prompt (#1319): the final prompt token is
+    // never consumed by a lookup, so a tail saved through it could never be
+    // restored. The expectation follows the engines' own capture-end rule.
     let turn_two_request_id = RequestId::new(TURN_TWO_REQUEST_ID);
     let turn_two_start = qwen3_5_engine
         .start_generation(extended_conversation_request(
@@ -95,7 +99,12 @@ async fn run_partial_tail_reuse_acceptance() {
         ))
         .await
         .expect("the engine should accept the second turn");
-    let expected_restored_token_count = (2 * block_token_count + TURN_ONE_TAIL_TOKEN_COUNT) as u32;
+    let expected_restored_token_count =
+        u32::try_from(persistent_prompt_cache_partial_tail_capture_end(
+            2 * block_token_count + TURN_ONE_TAIL_TOKEN_COUNT,
+            block_token_count,
+        ))
+        .expect("the restored token count should fit u32");
     assert_eq!(
         turn_two_start.cached_token_count(),
         expected_restored_token_count,
