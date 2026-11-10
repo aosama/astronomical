@@ -1,4 +1,5 @@
-use super::{MlpFp16Weights, encode_ml_program_mlp};
+use super::{MlpFp16Weights, encode_ml_program_mlp, encode_ml_program_mlp_with_encoding};
+use crate::documents::mlp_stages::StageWeightEncoding;
 use crate::documents::model_interface::ModelDocumentError;
 use crate::program_shape::ProgramShape;
 
@@ -194,4 +195,127 @@ fn should_refuse_down_weights_of_the_wrong_length() {
             actual: 3,
         })
     );
+}
+
+/// Distinct small values, so a table has something to hold and the two encodings
+/// differ in more than their headers.
+fn varied_weights(weight_count: usize) -> Vec<u16> {
+    let mut fp16_weights = Vec::with_capacity(weight_count);
+    for weight_index in 0..weight_count {
+        fp16_weights.push(0x3c00 + (weight_index % 7) as u16);
+    }
+    fp16_weights
+}
+
+fn encoded_with(weight_encoding: StageWeightEncoding) -> Result<Vec<u8>, ModelDocumentError> {
+    let gate_and_up = varied_weights(2 * INTERMEDIATE_CHANNELS * HIDDEN_CHANNELS);
+    let down = varied_weights(HIDDEN_CHANNELS * INTERMEDIATE_CHANNELS);
+    let package = encode_ml_program_mlp_with_encoding(
+        mlp_shape(),
+        INTERMEDIATE_CHANNELS,
+        MlpFp16Weights {
+            gate_and_up: &gate_and_up,
+            down: &down,
+        },
+        CONTRACTION_PART_WIDTH,
+        weight_encoding,
+    )?;
+    Ok(package.weight_blob_file)
+}
+
+#[test]
+fn should_write_the_same_program_as_the_fp16_entry_point_when_asked_for_fp16() {
+    let gate_and_up = varied_weights(2 * INTERMEDIATE_CHANNELS * HIDDEN_CHANNELS);
+    let down = varied_weights(HIDDEN_CHANNELS * INTERMEDIATE_CHANNELS);
+    let weights = MlpFp16Weights {
+        gate_and_up: &gate_and_up,
+        down: &down,
+    };
+
+    let fp16_package = encode_ml_program_mlp(
+        mlp_shape(),
+        INTERMEDIATE_CHANNELS,
+        weights,
+        CONTRACTION_PART_WIDTH,
+    )
+    .expect("the MLP encodes");
+    let chosen_package = encode_ml_program_mlp_with_encoding(
+        mlp_shape(),
+        INTERMEDIATE_CHANNELS,
+        weights,
+        CONTRACTION_PART_WIDTH,
+        StageWeightEncoding::Fp16,
+    )
+    .expect("the MLP encodes");
+
+    assert_eq!(chosen_package.model_document, fp16_package.model_document);
+    assert_eq!(
+        chosen_package.weight_blob_file,
+        fp16_package.weight_blob_file
+    );
+}
+
+/// A 256-entry table costs 512 bytes, more than the tiny shape's whole fp16 part, so
+/// the byte saving only shows on a part with far more weights than one table holds.
+#[test]
+fn should_store_about_half_the_weight_bytes_as_lookup_tables() {
+    const WIDE_HIDDEN_CHANNELS: usize = 256;
+    const WIDE_INTERMEDIATE_CHANNELS: usize = 512;
+    let gate_and_up = varied_weights(2 * WIDE_INTERMEDIATE_CHANNELS * WIDE_HIDDEN_CHANNELS);
+    let down = varied_weights(WIDE_HIDDEN_CHANNELS * WIDE_INTERMEDIATE_CHANNELS);
+    let wide_shape = ProgramShape::new(WIDE_HIDDEN_CHANNELS, WIDE_HIDDEN_CHANNELS, TOKEN_COUNT)
+        .expect("valid shape");
+    let mut weight_file_byte_counts = Vec::new();
+    for weight_encoding in [
+        StageWeightEncoding::Fp16,
+        StageWeightEncoding::SharedLookupTables {
+            rows_per_table: 256,
+        },
+    ] {
+        let package = encode_ml_program_mlp_with_encoding(
+            wide_shape,
+            WIDE_INTERMEDIATE_CHANNELS,
+            MlpFp16Weights {
+                gate_and_up: &gate_and_up,
+                down: &down,
+            },
+            WIDE_HIDDEN_CHANNELS,
+            weight_encoding,
+        )
+        .expect("the MLP encodes");
+        weight_file_byte_counts.push(package.weight_blob_file.len());
+    }
+
+    let (fp16_bytes, lookup_table_bytes) = (weight_file_byte_counts[0], weight_file_byte_counts[1]);
+    assert!(
+        lookup_table_bytes * 100 < fp16_bytes * 55 && lookup_table_bytes * 100 > fp16_bytes * 45,
+        "{lookup_table_bytes} lookup-table bytes against {fp16_bytes} fp16 bytes"
+    );
+}
+
+#[test]
+fn should_accept_one_table_per_row() {
+    encoded_with(StageWeightEncoding::SharedLookupTables { rows_per_table: 1 })
+        .expect("one table per row encodes");
+}
+
+#[test]
+fn should_refuse_tables_that_do_not_divide_the_output_rows() {
+    let encoding_error =
+        encoded_with(StageWeightEncoding::SharedLookupTables { rows_per_table: 3 })
+            .expect_err("three rows per table cannot tile eight or sixteen output rows");
+
+    assert!(
+        matches!(
+            encoding_error,
+            ModelDocumentError::UnevenLookupTableRows { .. }
+        ),
+        "{encoding_error:?}"
+    );
+}
+
+#[test]
+fn should_refuse_tables_of_no_rows() {
+    encoded_with(StageWeightEncoding::SharedLookupTables { rows_per_table: 0 })
+        .expect_err("a table must span at least one row");
 }
