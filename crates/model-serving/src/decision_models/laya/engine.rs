@@ -25,8 +25,8 @@ use crate::decision_models::laya::artifact::LayaArtifact;
 use crate::decision_models::laya::batching::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
 use crate::decision_models::laya::configuration::LayaConfiguration;
 use crate::decision_models::laya::head::{HeadPassRows, LayaDecisionHead};
-use crate::decision_models::laya::memory_telemetry::laya_memory_telemetry;
 use crate::decision_models::laya::tokenizer::LayaTokenizer;
+use crate::decision_models::memory_telemetry::decision_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::{ModernBertTrunk, ModernBertTrunkError};
@@ -289,7 +289,7 @@ impl DecisionEngine for LayaDecisionEngine {
         // Taken after the cleanup, so it holds no reusable-cache bytes and is
         // the state the next request starts from.
         let post_cleanup_memory_telemetry = match loaded_state.runtime.memory_snapshot() {
-            Ok(memory_snapshot) => Some(laya_memory_telemetry(
+            Ok(memory_snapshot) => Some(decision_memory_telemetry(
                 &memory_snapshot,
                 self.effective_mlx_memory_ceiling_bytes as u64,
                 self.resident_weight_bytes,
@@ -321,7 +321,7 @@ impl DecisionEngine for LayaDecisionEngine {
     fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         let loaded_state = self.loaded_state.as_ref()?;
         let memory_snapshot = loaded_state.runtime.memory_snapshot().ok()?;
-        Some(laya_memory_telemetry(
+        Some(decision_memory_telemetry(
             &memory_snapshot,
             self.effective_mlx_memory_ceiling_bytes as u64,
             self.resident_weight_bytes,

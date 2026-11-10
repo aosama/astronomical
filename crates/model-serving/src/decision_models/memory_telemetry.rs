@@ -1,10 +1,10 @@
-//! What a Laya engine reports about its MLX memory.
+//! What a decision engine reports about its MLX memory.
 //!
-//! A Laya request is one encoder forward pass over a ModernBERT trunk, with
-//! no experts, no context state and nothing kept between requests. That is
-//! the embedding engine's memory shape exactly, so the ceiling is split by
-//! the same owners: the resident weights, the forward workspace the process
-//! has actually been seen to need, and free headroom.
+//! A decision request is a forward pass whose state is dropped when it ends:
+//! no experts, and nothing kept between requests. That is the embedding
+//! engine's memory shape exactly, so the ceiling is split by the same
+//! owners: the resident weights, the forward workspace the process has
+//! actually been seen to need, and free headroom.
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
@@ -16,7 +16,7 @@ use crate::modernbert::memory_utilization::compose_modernbert_memory_ceiling_uti
 /// `resident_weight_bytes` is the size of the weight file. It overstates the
 /// tensors by the file's few-kilobyte header, which is far below what the
 /// allocator itself rounds, and reading it costs no parse of that header.
-pub(super) fn laya_memory_telemetry(
+pub(crate) fn decision_memory_telemetry(
     memory_snapshot: &MlxMemorySnapshot,
     mlx_memory_ceiling_bytes: u64,
     resident_weight_bytes: u64,

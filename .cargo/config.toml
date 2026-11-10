@@ -151,6 +151,11 @@ measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical
 # an MLX Qwen3.5 model; run it with a quantized and a bfloat16 build, whose
 # output projections are read along different paths.
 test-qwen-decision-readout = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter qwen_decision_readout"
+# The Kev decision engine (issue #2032 phase 7) on a `cargo xtask convert-kev`
+# output folder given as `model_directory`: an unambiguous question answered
+# correctly, every question independent of the others, and the reference's
+# state limit enforced.
+test-kev-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kev_engine_requests"
 # The decisions lane from the outside in (issue #2032): the `astronomical
 # decide` verb against a stub daemon, POST /v1/systemone and the daemon IPC
 # frame against scripted workers, the worker's decisions slot, and discovery

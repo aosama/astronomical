@@ -139,6 +139,8 @@ pub use decision_engine::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use decision_models::kev::KevDecisionEngine;
+#[cfg(feature = "direct-mlx")]
 pub use decision_models::laya::LayaDecisionEngine;
 
 pub use embedding_engine::{
