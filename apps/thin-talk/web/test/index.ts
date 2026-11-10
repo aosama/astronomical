@@ -61,6 +61,7 @@ import "./libraryStarterPicks.test";
 import "./libraryDownloadStatus.test";
 import "./astroCompanion.test";
 import "./yourAstroJourney.test";
+import "./engineWatch.test";
 import "./yourAstro.test";
 import "./conversationSkill.test";
 import "./skillMomentWords.test";

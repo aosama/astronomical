@@ -14,17 +14,22 @@ export class AppConfig {
    * page. Content starts below it, because the native strip takes the clicks
    * that land there (it is what drags the window). Zero for a plain title bar. */
   public readonly titlebarInset: number;
+  /** Whether the host restarts the local engine when asked. Only a host that
+   * says so gets a restart button, so the button always does something. */
+  public readonly canRestartEngine: boolean;
 
   public constructor(init: {
     daemonBaseURL: string;
     expectedChannel: string;
     expectedStateDirectory: string;
     titlebarInset?: number;
+    canRestartEngine?: boolean;
   }) {
     this.daemonBaseURL = init.daemonBaseURL;
     this.expectedChannel = init.expectedChannel;
     this.expectedStateDirectory = init.expectedStateDirectory;
     this.titlebarInset = init.titlebarInset ?? 0;
+    this.canRestartEngine = init.canRestartEngine === true;
   }
 
   /** What this window calls itself. Mirrors ThinTalkApplicationIdentity.windowTitle,
@@ -53,7 +58,8 @@ export class AppConfig {
       throw new Error("the injected configuration has no state directory");
     }
     const titlebarInset = AppConfig.titlebarInsetFrom(record["titlebarInset"]);
-    return new AppConfig({ daemonBaseURL, expectedChannel, expectedStateDirectory, titlebarInset });
+    const canRestartEngine = record["canRestartEngine"] === true;
+    return new AppConfig({ daemonBaseURL, expectedChannel, expectedStateDirectory, titlebarInset, canRestartEngine });
   }
 
   /** An absent inset means a plain title bar (zero); a present one must pass

@@ -39,7 +39,7 @@ struct OrbitalTelemetryPopover: View {
   let launchAtLoginSupported: Bool
   @Binding var launchAtLoginIsEnabled: Bool
   let revealConfiguration: () -> Void
-  let showWelcome: () -> Void
+  let showYourAstro: () -> Void
   let quitApplication: () -> Void
 
   var body: some View {
@@ -208,7 +208,7 @@ struct OrbitalTelemetryPopover: View {
             Toggle("Launch at Login", isOn: $launchAtLoginIsEnabled)
             Divider()
           }
-          Button("Welcome…", action: showWelcome)
+          Button("Your Astro…", action: showYourAstro)
           Button("Reveal config", action: revealConfiguration)
           Button("Quit Astronomical", action: quitApplication)
         } label: {

@@ -8,8 +8,8 @@ import WebKit
 /// transcript rendering, and the daemon conversation; Swift owns only what a
 /// web page cannot do for itself: reading and writing session files, keeping
 /// generated images, asking the user's approval for tools and letting them pick
-/// a file, the system pasteboard, opening external links, and injecting the
-/// runtime configuration.
+/// a file, the system pasteboard, opening external links, asking its host to
+/// restart the local engine, and injecting the runtime configuration.
 /// Everything else crosses the bridge as data.
 ///
 /// The bridge contract lives in the web client (`SessionBridge.ts`): the page
@@ -29,7 +29,15 @@ public final class ConversationCanvasView: NSView {
   private let sessionFileStore: SessionFileStore
   private let generatedImageStore: GeneratedImageStore
   private let runtimeConfig: CanvasRuntimeConfig
+  /// Restarts the local engine when the page asks; nil where the host cannot.
+  private let restartEngine: (@MainActor () -> Void)?
   private var webView: WKWebView?
+  /// Commands sent before the page finished loading. A command for a page
+  /// that has not booted is otherwise lost (the page's command router does
+  /// not exist yet), which matters when a host opens the window and asks for
+  /// Your Astro in the same breath.
+  private var commandsAwaitingPageLoad: [CanvasPageCommand] = []
+  private var isPageLoaded = false
   /// The native title bar's reach into the page, in points; nil for a plain
   /// title bar. Kept so every zoom change can re-send it in CSS pixels.
   private var titlebarInsetPoints: Int?
@@ -52,13 +60,15 @@ public final class ConversationCanvasView: NSView {
     webDirectory: URL,
     assetRegistry: TranscriptAssetRegistry,
     sessionFileStore: SessionFileStore,
-    runtimeConfig: CanvasRuntimeConfig
+    runtimeConfig: CanvasRuntimeConfig,
+    restartEngine: (@MainActor () -> Void)? = nil
   ) {
     self.webDirectory = webDirectory
     self.assetRegistry = assetRegistry
     self.sessionFileStore = sessionFileStore
     self.generatedImageStore = GeneratedImageStore(directory: sessionFileStore.generatedImagesDirectory)
     self.runtimeConfig = runtimeConfig
+    self.restartEngine = restartEngine
     self.titlebarInsetPoints = runtimeConfig.titlebarInset
     super.init(frame: NSRect(x: 0, y: 0, width: 1080, height: 720))
   }
@@ -93,7 +103,9 @@ public final class ConversationCanvasView: NSView {
       sessionFileStore: sessionFileStore,
       generatedImageStore: generatedImageStore,
       assetRegistry: assetRegistry,
-      webViewProvider: { [weak self] in self?.webView }
+      restartEngine: restartEngine,
+      webViewProvider: { [weak self] in self?.webView },
+      onPageLoaded: { [weak self] in self?.pageDidLoad() }
     )
     configuration.userContentController.add(coordinator, name: CanvasCoordinator.messageHandlerName)
     do {
@@ -159,10 +171,23 @@ public final class ConversationCanvasView: NSView {
 
   // MARK: - Page commands
 
-  /// Delivers one menu or toolbar command to the page. A page that has not
-  /// booted yet ignores it; see `CanvasPageCommand.scriptSource`.
+  /// Delivers one menu or toolbar command to the page, holding it until the
+  /// page has loaded when it has not yet.
   public func runPageCommand(_ pageCommand: CanvasPageCommand) {
+    guard isPageLoaded else {
+      commandsAwaitingPageLoad.append(pageCommand)
+      return
+    }
     webView?.evaluateJavaScript(pageCommand.scriptSource, completionHandler: nil)
+  }
+
+  private func pageDidLoad() {
+    isPageLoaded = true
+    let heldCommands = commandsAwaitingPageLoad
+    commandsAwaitingPageLoad = []
+    for heldCommand in heldCommands {
+      runPageCommand(heldCommand)
+    }
   }
 
   /// Answers the zoom keys (⌘= and ⌘+, ⌘-, ⌘0) before the menu lookup, so each
@@ -191,7 +216,9 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
   private let sessionFileStore: SessionFileStore
   private let generatedImageStore: GeneratedImageStore
   private let assetRegistry: TranscriptAssetRegistry
+  private let restartEngine: (@MainActor () -> Void)?
   private let webViewProvider: () -> WKWebView?
+  private let onPageLoaded: () -> Void
   private let storeQueue = DispatchQueue(label: "astronomical.thintalk.canvas.store", qos: .userInitiated)
   /// Session ops that show the user a sheet or a panel. They run on the main
   /// thread and may wait minutes for an answer, unlike file ops.
@@ -203,12 +230,16 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     sessionFileStore: SessionFileStore,
     generatedImageStore: GeneratedImageStore,
     assetRegistry: TranscriptAssetRegistry,
-    webViewProvider: @escaping () -> WKWebView?
+    restartEngine: (@MainActor () -> Void)?,
+    webViewProvider: @escaping () -> WKWebView?,
+    onPageLoaded: @escaping () -> Void
   ) {
     self.sessionFileStore = sessionFileStore
     self.generatedImageStore = generatedImageStore
     self.assetRegistry = assetRegistry
+    self.restartEngine = restartEngine
     self.webViewProvider = webViewProvider
+    self.onPageLoaded = onPageLoaded
   }
 
   // MARK: - WKScriptMessageHandler
@@ -451,12 +482,26 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
         return
       }
       NSWorkspace.shared.open(externalURL)
+    case "restartEngine":
+      // Astro's welcome offers this when the engine never answered; a host
+      // without the ability never advertises it, so nil only logs.
+      guard let restartEngine else {
+        NSLog("ThinTalk canvas: this host cannot restart the engine")
+        return
+      }
+      restartEngine()
     default:
       NSLog("ThinTalk canvas: ignoring unknown action: \(action)")
     }
   }
 
   // MARK: - WKNavigationDelegate
+
+  /// The shell's scripts have run by the time the load finishes, so its
+  /// command router is installed and held commands can be delivered.
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    onPageLoaded()
+  }
 
   func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
     guard let requestURL = navigationAction.request.url else { return .cancel }

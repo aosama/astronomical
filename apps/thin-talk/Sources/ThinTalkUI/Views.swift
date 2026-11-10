@@ -11,17 +11,20 @@ public struct RootView: View {
   private let zoomController: CanvasZoomController?
   private let commandController: CanvasCommandController?
   private let titlebarInset: Int?
+  private let restartEngine: (@MainActor () -> Void)?
 
   public init(
     applicationIdentity: ThinTalkApplicationIdentity,
     zoomController: CanvasZoomController? = nil,
     commandController: CanvasCommandController? = nil,
-    titlebarInset: Int? = nil
+    titlebarInset: Int? = nil,
+    restartEngine: (@MainActor () -> Void)? = nil
   ) {
     self.applicationIdentity = applicationIdentity
     self.zoomController = zoomController
     self.commandController = commandController
     self.titlebarInset = titlebarInset
+    self.restartEngine = restartEngine
   }
 
   public var body: some View {
@@ -31,7 +34,8 @@ public struct RootView: View {
         applicationIdentity: applicationIdentity,
         zoomController: zoomController,
         commandController: commandController,
-        titlebarInset: titlebarInset
+        titlebarInset: titlebarInset,
+        restartEngine: restartEngine
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       // The page runs under the transparent title bar and pads itself by
@@ -52,6 +56,7 @@ private struct CanvasWebView: NSViewRepresentable {
   let zoomController: CanvasZoomController?
   let commandController: CanvasCommandController?
   let titlebarInset: Int?
+  let restartEngine: (@MainActor () -> Void)?
 
   func makeNSView(context: Context) -> ConversationCanvasView {
     let canvas = ConversationCanvasView(
@@ -59,7 +64,9 @@ private struct CanvasWebView: NSViewRepresentable {
       assetRegistry: TranscriptAssetRegistry(),
       sessionFileStore: SessionFileStore(directory: Self.stateDirectory(for: applicationIdentity)),
       runtimeConfig: CanvasRuntimeConfig(
-        applicationIdentity: applicationIdentity, titlebarInset: titlebarInset)
+        applicationIdentity: applicationIdentity, titlebarInset: titlebarInset,
+        canRestartEngine: restartEngine != nil),
+      restartEngine: restartEngine
     )
     canvas.zoomController = zoomController
     canvas.commandController = commandController

@@ -8,7 +8,7 @@ import ThinTalkCore
 /// Journey contracts for the Chat menu item's window: opening chat presents a
 /// visible conversation window, closing it restores the accessory posture
 /// through the application handler exactly once, and reopening reuses the
-/// same persistent window. These follow the first-run welcome window contracts.
+/// same persistent window.
 @MainActor
 final class ChatWindowControllerTests: XCTestCase {
   private var controller: ChatWindowController!
@@ -23,6 +23,19 @@ final class ChatWindowControllerTests: XCTestCase {
     let window = try XCTUnwrap(chatWindow(), "the Chat item must present the chat window")
     XCTAssertTrue(window.isVisible, "the chat window must actually be on screen")
     XCTAssertEqual(window.title, "Thin Talk Development")
+  }
+
+  /// The popover's "Your Astro…" opens the same chat window (the page then
+  /// opens Your Astro once it has loaded), with the conversation's menus.
+  func test_show_your_astro_presents_the_chat_window_with_its_menus() throws {
+    try bootstrap()
+    defer { cleanup() }
+
+    controller.showYourAstro(handleClose: { [weak self] in self?.closeCount += 1 })
+
+    let window = try XCTUnwrap(chatWindow(), "Your Astro… must present the chat window")
+    XCTAssertTrue(window.isVisible)
+    XCTAssertNotNil(NSApp.mainMenu?.item(withTitle: "Conversation"), "the conversation's menus are installed")
   }
 
   /// The hosted window has no View menu, so without a zoom controller on its

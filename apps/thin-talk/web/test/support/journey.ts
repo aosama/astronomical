@@ -37,10 +37,12 @@ export function bootJourney(
      * it, so journeys about chat neither click through the welcome nor see
      * Astro's look. */
     astroProfile?: unknown;
+    /** Whether the fake host says it can restart the engine. */
+    canRestartEngine?: boolean;
   },
 ): Journey {
   installDom();
-  installConfig(DAEMON_BASE_URL, options?.titlebarInset);
+  installConfig(DAEMON_BASE_URL, options?.titlebarInset, options?.canRestartEngine);
   const previousHost: FakeSessionHost | undefined = previous?.host;
   const host = previousHost != null
     ? previousHost
