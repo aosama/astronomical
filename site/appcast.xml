@@ -4,30 +4,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.97</title>
-            <pubDate>Mon, 09 Nov 2026 23:49:03 -0500</pubDate>
-            <sparkle:version>2206</sparkle:version>
-            <sparkle:shortVersionString>0.2.97</sparkle:shortVersionString>
+            <title>0.2.98</title>
+            <pubDate>Tue, 10 Nov 2026 00:18:31 -0500</pubDate>
+            <sparkle:version>2210</sparkle:version>
+            <sparkle:shortVersionString>0.2.98</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.97
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.98
 
-### A chat app with a menu-bar companion
-- Astronomical is now a regular Mac app with a Dock icon and a menu bar that is always reachable, plus a small menu-bar companion that runs the engine.
-- Command-Q quits the chat app and leaves the engine serving. Choose **Quit and Stop Engine** in the app menu, or **Quit** in the menu-bar item, to stop everything.
-- Update controls and **Launch at Login** moved from the menu-bar popover to the app menu. An existing Launch at Login setting carries over.
-- Thin Talk opens on first launch and Astro waits for its engine. Any welcome answer can be changed on its own from Your Astro.
-
-### Models page
-- Observatory's model page is rebuilt as **Models**: what is on this Mac first, then one row per model with a 4-bit / 6-bit / 8-bit version picker, a speed meter and a one-line summary.
-- Light and dark themes that follow the Mac, with an Auto / Light / Dark switch.
-- A model this version cannot run now offers only Cancel. The text-only Ornith 35B 8-bit is retired from the catalog.
-
-### Engine
-- Dense models keep the layers that fit in memory and stream the rest from the SSD, so Ornith 9B runs on 8 GB Macs. The menu and Observatory show the streamed layers.
-- New Expert Atlas streaming format with a converter, and faster reads of cached expert pages.
-- The vision tower's weights are released after each image request.
-- Four input-validation defects fixed in model parsers.
+### Fixed
+- Only one Astronomical item shows in the menu bar. After updating to 0.2.97 with Launch at Login on, the menu-bar companion could start twice; a second copy now leaves at once.
+- Neural Engine prefill now engages. A model was unloaded as idle just as its Neural Engine programs finished preparing, so every message prepared them again; the idle timer now starts when preparation ends.
 
 ### Compatibility
 - macOS 14.0 or later on Apple silicon.
@@ -35,10 +22,10 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 
 The disk image is signed with a Developer ID, notarized by Apple and stapled.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.97/Astronomical-0.2.97-macOS-arm64.dmg" length="20957140" type="application/octet-stream" sparkle:edSignature="bkF1v37zSiIJli2NnRRCvSwySviEfd3Qg2cmStRwftZDHxgQYNrzUjKIEiLrWC9XhkA/Rqj95j9roqSsXj1GBw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.98/Astronomical-0.2.98-macOS-arm64.dmg" length="20963478" type="application/octet-stream" sparkle:edSignature="qu9pcaXbRwBOyI0U2np1SqmReFIOdHWoRLoGp165oj50dJ/udgTzqKEEXzTGZUYROp+5DJ0rPgb92wmVg6FYAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Kf1sRbCwRRhscWMVcIwZAwnHiPcvI/6nrgOHaiUllvYiYO3QvCFmH9aPgo8dZXMwNxdtoG37HjWwKPrtqGWuCw==
-length: 2910
+edSignature: fFD3u7IksdWlTjuuyzGVCNJm5+MmlEETo5XS7SHU/IX3ZvYiJ8Npa/eFb218KMNvJmySx3jXgiN+/2X9WnulBQ==
+length: 1879
 -->
