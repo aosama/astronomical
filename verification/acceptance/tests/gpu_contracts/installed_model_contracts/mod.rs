@@ -8,6 +8,12 @@ mod dense_streaming_parity;
 #[cfg(feature = "direct-mlx")]
 mod dense_streaming_speed_ladder;
 #[cfg(feature = "direct-mlx")]
+mod laya_decision_latency;
+#[cfg(feature = "direct-mlx")]
+mod laya_engine_requests;
+#[cfg(feature = "direct-mlx")]
+mod laya_reference_decisions;
+#[cfg(feature = "direct-mlx")]
 mod modernbert_embedding_vectors;
 #[cfg(feature = "direct-mlx")]
 mod neural_engine_answer_tasks;

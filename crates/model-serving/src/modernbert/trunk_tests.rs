@@ -9,9 +9,7 @@
 //! The central contract is that batching is invisible: a row of a padded
 //! batch gets the hidden states it gets when it is encoded alone.
 
-use std::fs::File;
-
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
@@ -19,29 +17,20 @@ use super::{ModernBertTrunk, ModernBertTrunkError};
 use crate::modernbert::configuration::ModernBertConfiguration;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::weight_layout::{ModernBertWeightLayout, TokenEmbeddingStorage};
+use crate::synthetic_weights_test_support::{
+    SYNTHETIC_QUANTIZATION_BITS, SYNTHETIC_QUANTIZATION_GROUP_SIZE, SyntheticWeights,
+    initialize_test_runtime, largest_difference, load_synthetic_weights,
+};
 
-const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
-);
 const HIDDEN_SIZE: i32 = 64;
 const INTERMEDIATE_SIZE: i32 = 64;
 const VOCABULARY_SIZE: i32 = 96;
 const LAYER_COUNT: u32 = 4;
-const QUANTIZATION_GROUP_SIZE: i32 = 32;
-const QUANTIZATION_BITS: i32 = 8;
 const PAD_TOKEN_ID: u32 = 0;
 const TENSOR_PREFIX: &str = "encoder";
 /// Padding changes which additions the fused attention performs, so a padded
 /// row matches its unpadded self to rounding, not bit for bit.
 const HIDDEN_STATE_TOLERANCE: f32 = 1e-4;
-
-fn initialize_test_runtime() -> MlxRuntime {
-    MlxRuntime::initialize(
-        MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
-            .expect("the test memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize")
-}
 
 fn synthetic_configuration() -> ModernBertConfiguration {
     ModernBertConfiguration::from_config_value(&serde_json::json!({
@@ -59,64 +48,12 @@ fn synthetic_configuration() -> ModernBertConfiguration {
         "pad_token_id": PAD_TOKEN_ID,
         "cls_token_id": 1,
         "sep_token_id": 2,
-        "quantization": { "group_size": QUANTIZATION_GROUP_SIZE, "bits": QUANTIZATION_BITS },
+        "quantization": {
+            "group_size": SYNTHETIC_QUANTIZATION_GROUP_SIZE,
+            "bits": SYNTHETIC_QUANTIZATION_BITS,
+        },
     }))
     .expect("the synthetic geometry is supported")
-}
-
-/// Float32 values within about 0.05 of `center_value`, drawn from the play's bytes.
-///
-/// The spread is kept small on purpose. With weights several times larger
-/// the four layers amplify a last-bit difference between two kernel shapes
-/// into the third decimal, which would hide a real masking error behind a
-/// loose tolerance.
-fn shakespeare_weight(
-    runtime: &MlxRuntime,
-    shape: &[i32],
-    byte_offset: usize,
-    center_value: f32,
-) -> MlxArray {
-    let value_count = shape.iter().product::<i32>() as usize;
-    let source_bytes = ROMEO_AND_JULIET_SOURCE.as_bytes();
-    let mut weight_values = Vec::with_capacity(value_count);
-    for value_index in 0..value_count {
-        let source_byte = source_bytes[(byte_offset + value_index) % source_bytes.len()];
-        weight_values.push(center_value + (f32::from(source_byte) - 96.0) / 640.0);
-    }
-    runtime
-        .array_from_f32(&weight_values, shape)
-        .expect("the fixture values should upload")
-}
-
-/// The named tensors of the synthetic model, with every linear layer quantized.
-struct SyntheticModelTensors {
-    named_tensors: Vec<(String, MlxArray)>,
-    next_byte_offset: usize,
-}
-
-impl SyntheticModelTensors {
-    fn push_norm(&mut self, runtime: &MlxRuntime, tensor_suffix: &str) {
-        // LayerNorm weights sit near one in a trained model.
-        let norm_weight = shakespeare_weight(runtime, &[HIDDEN_SIZE], self.next_byte_offset, 1.0);
-        self.next_byte_offset += HIDDEN_SIZE as usize;
-        self.named_tensors
-            .push((format!("{TENSOR_PREFIX}.{tensor_suffix}"), norm_weight));
-    }
-
-    fn push_quantized(&mut self, runtime: &MlxRuntime, tensor_suffix: &str, shape: [i32; 2]) {
-        let dense_weight = shakespeare_weight(runtime, &shape, self.next_byte_offset, 0.0);
-        self.next_byte_offset += (shape[0] * shape[1]) as usize;
-        let (packed_weight, scales, biases) = runtime
-            .quantize_affine(&dense_weight, QUANTIZATION_GROUP_SIZE, QUANTIZATION_BITS)
-            .expect("the fixture weight should quantize");
-        let full_prefix = format!("{TENSOR_PREFIX}.{tensor_suffix}");
-        self.named_tensors
-            .push((format!("{full_prefix}.weight"), packed_weight));
-        self.named_tensors
-            .push((format!("{full_prefix}.scales"), scales));
-        self.named_tensors
-            .push((format!("{full_prefix}.biases"), biases));
-    }
 }
 
 /// Builds the synthetic model's tensors; `token_embedding_storage` picks how
@@ -125,92 +62,85 @@ fn synthetic_model_tensors(
     runtime: &MlxRuntime,
     token_embedding_storage: TokenEmbeddingStorage,
 ) -> Vec<(String, MlxArray)> {
-    let mut model_tensors = SyntheticModelTensors {
-        named_tensors: Vec::new(),
-        next_byte_offset: 0,
-    };
-    model_tensors.push_quantized(
+    let mut model_weights = SyntheticWeights::new();
+    model_weights.push_quantized(
         runtime,
-        "embeddings.tok_embeddings",
+        &trunk_tensor("embeddings.tok_embeddings"),
         [VOCABULARY_SIZE, HIDDEN_SIZE],
     );
     if token_embedding_storage == TokenEmbeddingStorage::Dense {
-        replace_quantized_embeddings_with_their_dense_values(runtime, &mut model_tensors);
+        replace_quantized_embeddings_with_their_dense_values(runtime, &mut model_weights);
     }
-    model_tensors.push_norm(runtime, "embeddings.norm.weight");
+    push_norm(runtime, &mut model_weights, "embeddings.norm.weight");
     for layer_index in 0..LAYER_COUNT {
         if layer_index > 0 {
-            model_tensors.push_norm(runtime, &format!("layers.{layer_index}.attn_norm.weight"));
+            push_norm(
+                runtime,
+                &mut model_weights,
+                &format!("layers.{layer_index}.attn_norm.weight"),
+            );
         }
-        model_tensors.push_quantized(
+        model_weights.push_quantized(
             runtime,
-            &format!("layers.{layer_index}.attn.Wqkv"),
+            &trunk_tensor(&format!("layers.{layer_index}.attn.Wqkv")),
             [3 * HIDDEN_SIZE, HIDDEN_SIZE],
         );
-        model_tensors.push_quantized(
+        model_weights.push_quantized(
             runtime,
-            &format!("layers.{layer_index}.attn.Wo"),
+            &trunk_tensor(&format!("layers.{layer_index}.attn.Wo")),
             [HIDDEN_SIZE, HIDDEN_SIZE],
         );
-        model_tensors.push_norm(runtime, &format!("layers.{layer_index}.mlp_norm.weight"));
-        model_tensors.push_quantized(
+        push_norm(
             runtime,
-            &format!("layers.{layer_index}.mlp.Wi"),
+            &mut model_weights,
+            &format!("layers.{layer_index}.mlp_norm.weight"),
+        );
+        model_weights.push_quantized(
+            runtime,
+            &trunk_tensor(&format!("layers.{layer_index}.mlp.Wi")),
             [2 * INTERMEDIATE_SIZE, HIDDEN_SIZE],
         );
-        model_tensors.push_quantized(
+        model_weights.push_quantized(
             runtime,
-            &format!("layers.{layer_index}.mlp.Wo"),
+            &trunk_tensor(&format!("layers.{layer_index}.mlp.Wo")),
             [HIDDEN_SIZE, INTERMEDIATE_SIZE],
         );
     }
-    model_tensors.push_norm(runtime, "final_norm.weight");
-    model_tensors.named_tensors
+    push_norm(runtime, &mut model_weights, "final_norm.weight");
+    model_weights.named_tensors
+}
+
+fn trunk_tensor(tensor_suffix: &str) -> String {
+    format!("{TENSOR_PREFIX}.{tensor_suffix}")
+}
+
+/// LayerNorm weights sit near one in a trained model.
+fn push_norm(runtime: &MlxRuntime, model_weights: &mut SyntheticWeights, tensor_suffix: &str) {
+    model_weights.push_dense(runtime, &trunk_tensor(tensor_suffix), &[HIDDEN_SIZE], 1.0);
 }
 
 /// Swaps the three quantized embedding tensors for one dense table holding
 /// exactly the values they dequantize to, so both storages mean the same model.
 fn replace_quantized_embeddings_with_their_dense_values(
     runtime: &MlxRuntime,
-    model_tensors: &mut SyntheticModelTensors,
+    model_weights: &mut SyntheticWeights,
 ) {
-    let biases = model_tensors.named_tensors.pop().expect("biases").1;
-    let scales = model_tensors.named_tensors.pop().expect("scales").1;
-    let packed_weight = model_tensors.named_tensors.pop().expect("weight").1;
+    let biases = model_weights.named_tensors.pop().expect("biases").1;
+    let scales = model_weights.named_tensors.pop().expect("scales").1;
+    let packed_weight = model_weights.named_tensors.pop().expect("weight").1;
     let dense_table = runtime
         .dequantize_affine(
             &packed_weight,
             &scales,
             &biases,
-            QUANTIZATION_GROUP_SIZE,
-            QUANTIZATION_BITS,
+            SYNTHETIC_QUANTIZATION_GROUP_SIZE,
+            SYNTHETIC_QUANTIZATION_BITS,
         )
         .expect("the packed table should dequantize");
-    model_tensors.named_tensors.push((
+    model_weights.named_tensors.push((
         format!("{TENSOR_PREFIX}.embeddings.tok_embeddings.weight"),
         dense_table,
     ));
-}
-
-/// Writes the tensors to a temporary file and loads them as a real artifact is loaded.
-fn load_synthetic_model(
-    runtime: &MlxRuntime,
-    named_tensors: &[(String, MlxArray)],
-) -> MlxSafetensors {
-    let mut borrowed_tensors = Vec::with_capacity(named_tensors.len());
-    for (tensor_name, tensor) in named_tensors {
-        borrowed_tensors.push((tensor_name.as_str(), tensor));
-    }
-    let weights_file = tempfile::tempfile().expect("a temporary weights file");
-    let reopened_weights_file: File = weights_file
-        .try_clone()
-        .expect("the temporary file should reopen");
-    runtime
-        .save_safetensors(weights_file, &borrowed_tensors, &[])
-        .expect("the synthetic model should save");
-    runtime
-        .load_safetensors(reopened_weights_file, None)
-        .expect("the synthetic model should load")
 }
 
 /// Hidden states of every row, each cut to its real length: `[row][token * width]`.
@@ -256,15 +186,6 @@ fn encode_rows(
     row_hidden_states
 }
 
-fn largest_difference(left_values: &[f32], right_values: &[f32]) -> f32 {
-    assert_eq!(left_values.len(), right_values.len());
-    let mut largest_difference = 0.0_f32;
-    for (left_value, right_value) in left_values.iter().zip(right_values) {
-        largest_difference = largest_difference.max((left_value - right_value).abs());
-    }
-    largest_difference
-}
-
 /// Token identifiers 3, 4, 5, … of the requested length; none is the padding identifier.
 fn token_sequence(token_count: usize, first_token_id: u32) -> Vec<u32> {
     let mut token_ids = Vec::with_capacity(token_count);
@@ -279,7 +200,7 @@ fn token_sequence(token_count: usize, first_token_id: u32) -> Vec<u32> {
 fn should_give_each_row_of_a_padded_batch_the_hidden_states_it_gets_alone() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
-    let tensors = load_synthetic_model(
+    let tensors = load_synthetic_weights(
         &runtime,
         &synthetic_model_tensors(&runtime, token_embedding_storage),
     );
@@ -323,7 +244,7 @@ fn should_give_each_row_of_a_padded_batch_the_hidden_states_it_gets_alone() {
 fn should_give_rows_of_an_unpadded_batch_the_hidden_states_they_get_alone() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
-    let tensors = load_synthetic_model(
+    let tensors = load_synthetic_weights(
         &runtime,
         &synthetic_model_tensors(&runtime, token_embedding_storage),
     );
@@ -360,7 +281,7 @@ fn should_give_rows_of_an_unpadded_batch_the_hidden_states_they_get_alone() {
 fn should_hide_padding_when_every_row_is_inside_the_local_window() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
-    let tensors = load_synthetic_model(
+    let tensors = load_synthetic_weights(
         &runtime,
         &synthetic_model_tensors(&runtime, token_embedding_storage),
     );
@@ -395,7 +316,7 @@ fn should_hide_padding_when_every_row_is_inside_the_local_window() {
 fn should_encode_a_single_token_sequence() {
     let runtime = initialize_test_runtime();
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
-    let tensors = load_synthetic_model(
+    let tensors = load_synthetic_weights(
         &runtime,
         &synthetic_model_tensors(&runtime, token_embedding_storage),
     );
@@ -412,11 +333,11 @@ fn should_encode_a_single_token_sequence() {
 #[serial]
 fn should_read_a_dense_embedding_table_like_the_quantized_one_it_equals() {
     let runtime = initialize_test_runtime();
-    let quantized_tensors = load_synthetic_model(
+    let quantized_tensors = load_synthetic_weights(
         &runtime,
         &synthetic_model_tensors(&runtime, TokenEmbeddingStorage::AffineQuantized),
     );
-    let dense_tensors = load_synthetic_model(
+    let dense_tensors = load_synthetic_weights(
         &runtime,
         &synthetic_model_tensors(&runtime, TokenEmbeddingStorage::Dense),
     );
@@ -447,7 +368,7 @@ fn should_name_the_tensor_an_artifact_is_missing() {
     let token_embedding_storage = TokenEmbeddingStorage::AffineQuantized;
     let mut named_tensors = synthetic_model_tensors(&runtime, token_embedding_storage);
     named_tensors.retain(|(tensor_name, _)| tensor_name != "encoder.final_norm.weight");
-    let tensors = load_synthetic_model(&runtime, &named_tensors);
+    let tensors = load_synthetic_weights(&runtime, &named_tensors);
     let configuration = synthetic_configuration();
     let weight_layout = ModernBertWeightLayout::new(TENSOR_PREFIX, token_embedding_storage);
     let trunk = ModernBertTrunk {
