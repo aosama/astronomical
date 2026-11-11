@@ -71,21 +71,45 @@ public final class ExportPDFPrinter: NSObject, WKNavigationDelegate {
     guard didPrint else { throw PrintError.printingFailed }
   }
 
+  /// WebKit lays the page out this many CSS pixels wide for each point of
+  /// text column, then draws it shrunk back to fit.
+  static let layoutPixelsPerColumnPoint: CGFloat = 1.25
+  /// Room for the print system's own rounding of the sheet: it re-derives a
+  /// paper size it is given and can hand back a hair under 612 points for
+  /// Letter.
+  static let columnSlackPoints: CGFloat = 0.05
+
+  /// The side margin, close to one inch, that makes the text column a whole
+  /// number of layout pixels wide.
+  ///
+  /// WebKit rounds its layout width down to a whole pixel and scales the
+  /// drawing by column over layout width. A column that falls just short of
+  /// a whole pixel count loses that pixel, and every size on the page grows
+  /// to match: Letter's 468-point column, re-derived a hair narrow, was laid
+  /// out 584 pixels wide for 585 and printed a 22-point title at 22.04. The
+  /// column is widened to the next whole pixel count plus a little slack, at
+  /// most four fifths of a point in all, so the scale is 0.8 to four decimal
+  /// places on any paper.
+  static func trueSizeSideMargin(paperWidthPoints: CGFloat) -> CGFloat {
+    let nominalColumnPoints = paperWidthPoints - 2 * pageMarginPoints
+    guard nominalColumnPoints > 0 else { return pageMarginPoints }
+    let layoutPixels = (nominalColumnPoints * layoutPixelsPerColumnPoint - 0.001).rounded(.up)
+    let columnPoints = layoutPixels / layoutPixelsPerColumnPoint + columnSlackPoints
+    return (paperWidthPoints - columnPoints) / 2
+  }
+
   static func printInfo(savingTo destinationURL: URL, paperSize: NSSize) -> NSPrintInfo {
     let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
-    // Assigned only when it differs: writing back the size the Mac already
-    // has still makes the print system re-derive the sheet, a hair under
-    // 612 points for Letter, and WebKit then lays the text out one pixel
-    // narrower (584 for 585), which printed a 22-point title at 22.04.
-    if printInfo.paperSize != paperSize {
-      printInfo.paperSize = paperSize
-    }
+    printInfo.paperSize = paperSize
     printInfo.jobDisposition = .save
     printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = destinationURL
     printInfo.topMargin = pageMarginPoints
     printInfo.bottomMargin = pageMarginPoints
-    printInfo.leftMargin = pageMarginPoints
-    printInfo.rightMargin = pageMarginPoints
+    // Read back from the job: the print system snaps a size it is given to
+    // the nearest paper it knows (595 by 842 becomes A4's 595.28 by 841.89).
+    let sideMarginPoints = trueSizeSideMargin(paperWidthPoints: printInfo.paperSize.width)
+    printInfo.leftMargin = sideMarginPoints
+    printInfo.rightMargin = sideMarginPoints
     printInfo.horizontalPagination = .fit
     printInfo.verticalPagination = .automatic
     printInfo.isHorizontallyCentered = false

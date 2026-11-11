@@ -211,15 +211,31 @@ final class ExportedFileTests: XCTestCase {
       XCTAssertEqual(firstPage.bounds(for: .mediaBox).size.width, paperSize.width, accuracy: 1, paperName)
       XCTAssertEqual(firstPage.bounds(for: .mediaBox).size.height, paperSize.height, accuracy: 1, paperName)
       let textBounds = try XCTUnwrap(firstPage.selection(for: firstPage.bounds(for: .mediaBox))?.bounds(for: firstPage))
+      // The side margins give up to two fifths of a point each so the
+      // column is a whole number of layout pixels wide.
       XCTAssertGreaterThanOrEqual(textBounds.minX, 71, "\(paperName) left margin")
       XCTAssertLessThanOrEqual(textBounds.maxX, paperSize.width - 71, "\(paperName) right margin")
       XCTAssertGreaterThanOrEqual(textBounds.minY, 71, "\(paperName) bottom margin")
       XCTAssertLessThanOrEqual(textBounds.maxY, paperSize.height - 71, "\(paperName) top margin")
       // The true-size zoom holds on either paper: it corrects the engine's
       // layout ratio, which does not depend on the sheet.
-      // To a hundredth of a point: writing Letter back to a Mac already set
-      // to Letter once cost a pixel of layout width and printed 20.03.
+      // To a hundredth of a point: a column a hair short of a whole number
+      // of layout pixels once lost that pixel and printed 20.03.
       XCTAssertEqual(try printedFontSize(at: pdfURL), 20, accuracy: 0.01, paperName)
     }
+  }
+
+  @MainActor
+  func test_should_choose_side_margins_that_make_the_column_a_whole_number_of_layout_pixels() {
+    for paperWidthPoints in [612.0, 595.0, 595.28, 611.98, 729.0] as [CGFloat] {
+      let sideMarginPoints = ExportPDFPrinter.trueSizeSideMargin(paperWidthPoints: paperWidthPoints)
+      let layoutPixels = (paperWidthPoints - 2 * sideMarginPoints) * 1.25
+
+      XCTAssertEqual(layoutPixels - layoutPixels.rounded(.down), 0.0625, accuracy: 0.001, "\(paperWidthPoints): just past a whole pixel")
+      XCTAssertLessThanOrEqual(sideMarginPoints, 72, "\(paperWidthPoints)")
+      XCTAssertGreaterThan(sideMarginPoints, 71.5, "\(paperWidthPoints): still an inch to the eye")
+    }
+    XCTAssertEqual(ExportPDFPrinter.trueSizeSideMargin(paperWidthPoints: 612), 71.975, accuracy: 0.0001, "Letter keeps its 585 pixels")
+    XCTAssertEqual(ExportPDFPrinter.trueSizeSideMargin(paperWidthPoints: 100), 72, "paper too narrow for a column keeps the plain margin")
   }
 }
