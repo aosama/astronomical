@@ -308,18 +308,49 @@ fn process_states(command_line_pattern: &str) -> String {
 /// `DraftLink` (AstronomicalShared/ApplicationLink.swift), and only its
 /// Development channel answers it.
 pub(crate) fn draft_link(channel_profile: &ChannelProfile, draft_text: &str) -> String {
-    let mut encoded_draft = String::with_capacity(draft_text.len());
-    for draft_byte in draft_text.bytes() {
-        if draft_byte.is_ascii_alphanumeric() || b"-._~".contains(&draft_byte) {
-            encoded_draft.push(char::from(draft_byte));
+    format!(
+        "{}://draft?text={}",
+        channel_profile.chat_url_scheme,
+        percent_encoded(draft_text)
+    )
+}
+
+/// `link_text` with every byte outside the unreserved set percent-encoded.
+fn percent_encoded(link_text: &str) -> String {
+    let mut encoded_text = String::with_capacity(link_text.len());
+    for text_byte in link_text.bytes() {
+        if text_byte.is_ascii_alphanumeric() || b"-._~".contains(&text_byte) {
+            encoded_text.push(char::from(text_byte));
         } else {
-            encoded_draft.push_str(&format!("%{draft_byte:02X}"));
+            encoded_text.push_str(&format!("%{text_byte:02X}"));
         }
     }
+    encoded_text
+}
+
+/// The link that has the Development chat write its next export into
+/// `export_folder` with no save panel. The app reads it in `ExportFolderLink`
+/// (AstronomicalShared/ApplicationLink.swift), and only its Development
+/// channel answers it.
+pub(crate) fn export_folder_link(channel_profile: &ChannelProfile, export_folder: &str) -> String {
     format!(
-        "{}://draft?text={encoded_draft}",
-        channel_profile.chat_url_scheme
+        "{}://export-folder?path={}",
+        channel_profile.chat_url_scheme,
+        percent_encoded(export_folder)
     )
+}
+
+/// Opens the export-folder link in the background. The save panel is a
+/// system window that comes to the front, so without this a live check of
+/// an export took the screen from whoever was using the Mac.
+pub(crate) fn open_export_folder_link(export_folder: &str) -> Result<(), String> {
+    let channel_profile = ChannelProfile::for_channel(super::channel_profile::Channel::Development);
+    run_quiet_tool(
+        Command::new("open")
+            .arg("-g")
+            .arg(export_folder_link(&channel_profile, export_folder)),
+    )
+    .map(drop)
 }
 
 /// Opens the draft link in the background, so typing a question for a live

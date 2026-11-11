@@ -95,4 +95,43 @@ final class ApplicationLinkTests: XCTestCase {
     let draftURL = try XCTUnwrap(DraftLink.url(draftText: "hello", channel: .development))
     XCTAssertNil(ApplicationLink.parse(draftURL, channel: .development))
   }
+
+  func test_should_carry_an_export_folder_through_a_link_and_back() throws {
+    for folderPath in ["/work/exports", "/work/my exports & drafts", "/travail/exposés"] {
+      let folderLink = try XCTUnwrap(ExportFolderLink.url(folderPath: folderPath, channel: .development))
+      XCTAssertEqual(ExportFolderLink.folderURL(from: folderLink, channel: .development)?.path, folderPath)
+    }
+  }
+
+  /// A web page can open a link. Only the Development app may answer this
+  /// one, so in the app people use a file never leaves without a save panel.
+  func test_should_answer_an_export_folder_link_only_in_the_development_channel() throws {
+    let stableLink = try XCTUnwrap(ExportFolderLink.url(folderPath: "/work/exports", channel: .stable))
+    let developmentLink = try XCTUnwrap(ExportFolderLink.url(folderPath: "/work/exports", channel: .development))
+
+    XCTAssertNil(ExportFolderLink.folderURL(from: stableLink, channel: .stable))
+    XCTAssertNil(ExportFolderLink.folderURL(from: stableLink, channel: .appStore))
+    XCTAssertNil(ExportFolderLink.folderURL(from: developmentLink, channel: .stable), "another channel's link")
+    XCTAssertNil(ExportFolderLink.folderURL(from: stableLink, channel: .development), "another channel's scheme")
+  }
+
+  func test_should_refuse_an_export_folder_link_without_an_absolute_path() throws {
+    let refusedLinks = [
+      ExportFolderLink.url(folderPath: "exports", channel: .development),
+      ExportFolderLink.url(folderPath: "/", channel: .development),
+      ExportFolderLink.url(folderPath: "", channel: .development),
+      URL(string: "astronomical-dev://export-folder"),
+      URL(string: "astronomical-dev://export-folder?other=/work"),
+      URL(string: "astronomical-dev://draft?path=/work"),
+    ]
+    for refusedLink in refusedLinks {
+      XCTAssertNil(ExportFolderLink.folderURL(from: try XCTUnwrap(refusedLink), channel: .development), "\(String(describing: refusedLink))")
+    }
+  }
+
+  func test_should_not_mistake_an_export_folder_link_for_a_window_or_draft_link() throws {
+    let folderLink = try XCTUnwrap(ExportFolderLink.url(folderPath: "/work/exports", channel: .development))
+    XCTAssertNil(ApplicationLink.parse(folderLink, channel: .development))
+    XCTAssertNil(DraftLink.draftText(from: folderLink, channel: .development))
+  }
 }

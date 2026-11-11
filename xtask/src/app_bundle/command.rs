@@ -10,7 +10,7 @@ use super::instance_control::{InstanceAction, run_instance_action};
 use super::package_pipeline::{PackageRequest, run_package, validate_package_request};
 use super::smoke_test::{SmokeTestRequest, run_smoke_test};
 
-pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev [--background] | app draft TEXT | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
+pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev [--background] | app draft TEXT | app export-to FOLDER | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
 
 /// `info-plist --channel NAME` prints the main app's plist; a trailing
 /// `--agent` prints the menu-bar agent's instead.
@@ -56,6 +56,9 @@ pub(crate) enum AppCommand {
     /// Put a draft in the running Development chat's message field, without
     /// bringing the app forward or sending it.
     Draft(String),
+    /// Have the running Development chat write its next export into a folder
+    /// with no save panel, which would otherwise come to the front.
+    ExportTo(String),
     /// Print the Info.plist a channel would get from this checkout, so the
     /// channel profiles can be inspected without building anything.
     InfoPlist(Channel, PlistSubject),
@@ -86,13 +89,42 @@ fn parse_draft_command(draft_arguments: &[String]) -> Result<AppCommand, String>
     }
 }
 
+/// `export-to FOLDER` takes exactly one absolute path: the app is a separate
+/// process with its own working directory, so a relative one would name a
+/// different folder there.
+fn parse_export_to_command(export_arguments: &[String]) -> Result<AppCommand, String> {
+    match export_arguments {
+        [export_folder] if export_folder.starts_with('/') && export_folder.len() > 1 => {
+            Ok(AppCommand::ExportTo(export_folder.clone()))
+        }
+        [_relative_folder] => Err(format!(
+            "export-to needs an absolute folder path\n{APP_USAGE}"
+        )),
+        _ => Err(APP_USAGE.to_owned()),
+    }
+}
+
+/// The two commands that open a background link in the Development chat.
+fn parse_background_link_command(
+    subcommand: &str,
+    link_arguments: &[String],
+) -> Result<AppCommand, String> {
+    if subcommand == "draft" {
+        parse_draft_command(link_arguments)
+    } else {
+        parse_export_to_command(link_arguments)
+    }
+}
+
 pub(crate) fn parse_app_command(arguments: &[String]) -> Result<AppCommand, String> {
     let Some((subcommand, subcommand_arguments)) = arguments.split_first() else {
         return Err(APP_USAGE.to_owned());
     };
     match (subcommand.as_str(), subcommand_arguments) {
         ("dev", dev_arguments) => parse_dev_command(dev_arguments),
-        ("draft", draft_arguments) => parse_draft_command(draft_arguments),
+        ("draft" | "export-to", link_arguments) => {
+            parse_background_link_command(subcommand, link_arguments)
+        }
         ("instance", [action_name]) => Ok(AppCommand::Instance(InstanceAction::from_action_name(
             action_name,
         )?)),
@@ -165,12 +197,13 @@ fn parse_flag_values(
     Ok(flag_values)
 }
 
-use super::running_instance::open_draft_link;
+use super::running_instance::{open_draft_link, open_export_folder_link};
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     match parse_app_command(arguments)? {
         AppCommand::Dev(open_placement) => run_dev_pipeline(repository_root, open_placement),
         AppCommand::Draft(draft_text) => open_draft_link(&draft_text),
+        AppCommand::ExportTo(export_folder) => open_export_folder_link(&export_folder),
         AppCommand::Instance(instance_action) => {
             run_instance_action(repository_root, instance_action)
         }

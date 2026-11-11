@@ -80,3 +80,40 @@ public enum DraftLink {
     return hasText && draftText.count <= maximumDraftCharacters ? draftText : nil
   }
 }
+
+/// A link that tells the Development chat where to put its next export, so
+/// that one export is saved without the save panel.
+///
+/// The save panel is a system window that comes to the front, so checking an
+/// export on a live build took the screen from whoever was using the Mac.
+/// `cargo xtask app export-to <folder>` opens this link in the background
+/// before the export is saved from the sheet. Only the Development channel
+/// answers it: in the app people use, the person always chooses where a file
+/// goes, and a web page that opened such a link must not be able to choose
+/// for them.
+public enum ExportFolderLink {
+  public static let destinationName = "export-folder"
+  public static let pathParameterName = "path"
+
+  public static func url(folderPath: String, channel: ApplicationChannel) -> URL? {
+    var linkComponents = URLComponents()
+    linkComponents.scheme = channel.chatURLScheme
+    linkComponents.host = destinationName
+    linkComponents.queryItems = [URLQueryItem(name: pathParameterName, value: folderPath)]
+    return linkComponents.url
+  }
+
+  /// The folder a link names, or nil when the link is not an export-folder
+  /// link for this channel, the channel is not Development, or the path is
+  /// not an absolute one. Whether the folder exists is checked when the
+  /// export is written, since it may be made in between.
+  public static func folderURL(from openedURL: URL, channel: ApplicationChannel) -> URL? {
+    guard channel == .development, openedURL.scheme?.lowercased() == channel.chatURLScheme,
+      openedURL.host?.lowercased() == destinationName,
+      let linkComponents = URLComponents(url: openedURL, resolvingAgainstBaseURL: false),
+      let folderPath = linkComponents.queryItems?.first(where: { $0.name == pathParameterName })?.value,
+      folderPath.hasPrefix("/"), folderPath.count > 1
+    else { return nil }
+    return URL(fileURLWithPath: folderPath, isDirectory: true).standardizedFileURL
+  }
+}
