@@ -244,6 +244,8 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo xtask app export-to <absolute folder>` has that chat write its next
 # export into the folder under its suggested name with no save panel, which
 # would otherwise come to the front; it holds for one export;
+# both link commands refuse when the Development app is not running, since
+# a link would launch it in front;
 # `cargo xtask app instance
 # status|start|stop|restart` controls that instance headless; `stop` quits
 # the chat app and the menu-bar agent, and `restart` reopens the agent (not

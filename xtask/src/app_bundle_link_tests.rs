@@ -3,7 +3,9 @@
 
 use super::channel_profile::{Channel, ChannelProfile};
 use super::command::{AppCommand, parse_app_command};
-use super::running_instance::{draft_link, export_folder_link};
+use super::running_instance::{
+    DEVELOPMENT_APP_NOT_RUNNING, background_link_gate, draft_link, export_folder_link,
+};
 
 fn arguments(argument_words: &[&str]) -> Vec<String> {
     let mut owned_arguments = Vec::new();
@@ -70,4 +72,16 @@ fn should_encode_an_export_folder_so_its_name_cannot_change_the_link() {
         export_folder_link(&development_profile, "/work/my exports&path=x"),
         "astronomical-dev://export-folder?path=%2Fwork%2Fmy%20exports%26path%3Dx"
     );
+}
+
+/// A link opened for an app that is not running launches it in front, so
+/// the commands refuse instead and say how to start it in the background.
+#[test]
+fn should_open_a_background_link_only_when_the_app_is_running() {
+    assert_eq!(background_link_gate(true), Ok(()));
+    assert_eq!(
+        background_link_gate(false),
+        Err(DEVELOPMENT_APP_NOT_RUNNING.to_owned())
+    );
+    assert!(DEVELOPMENT_APP_NOT_RUNNING.contains("cargo xtask app dev --background"));
 }
