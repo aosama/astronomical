@@ -270,6 +270,10 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo xtask check-test-channel-isolation` fails when a package test tree
 # reaches for Stable state, and `cargo xtask menu-contracts` runs the menu
 # app's Swift contract tests with the Git credential helper cleared.
+# `cargo xtask lint-acceptance-features` lints the acceptance crate's tests
+# with every one of its features on; the pre-commit hook runs it on any
+# staged Rust source, because no default-feature pass and no
+# continuous-integration lane compiles those feature-gated journeys.
 # `cargo xtask convert-laya --checkpoint DIRECTORY --output DIRECTORY` converts a
 # PyTorch Laya checkpoint (model.safetensors, rl_agent_config.json,
 # encoder/config.json, tokenizer/) into the MLX layout Astronomical serves:
