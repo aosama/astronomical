@@ -75,6 +75,21 @@ function takeOpeningHeading(entries: readonly ExportEntry[]): string | null {
   return headingText;
 }
 
+/**
+ * Whether the export is one answer standing on its own: exported from the
+ * answer itself, or the only answer among the messages someone picked. One
+ * picked answer was first treated as part of its chat and kept the chat's
+ * name, which read wrongly in the same way: "Explain black holes" above a
+ * report on the water cycle. A whole chat keeps its name even when it holds
+ * a single answer, because that is the thing the person chose to export.
+ */
+function standsAsOneAnswer(scope: ExportScope, entries: readonly ExportEntry[]): boolean {
+  if (scope.kind === "wholeChat") {
+    return false;
+  }
+  return entries.filter((entry) => !entry.isQuestion).length === 1;
+}
+
 type ContentSource = Pick<ExportEnvironment, "conversationTitle" | "assistantName" | "exportableMessages" | "loadPicture" | "drawDiagramForPaper">;
 
 /**
@@ -112,7 +127,7 @@ export class ExportContentBuilder {
       }
     }
     const conversationTitle = this.source.conversationTitle().trim();
-    const title = (options.scope.kind === "oneAnswer" ? takeOpeningHeading(entries) : null) ?? conversationTitle;
+    const title = (standsAsOneAnswer(options.scope, entries) ? takeOpeningHeading(entries) : null) ?? conversationTitle;
     return {
       title: title.length > 0 ? title : UNTITLED_CONVERSATION_TITLE,
       dateText: new Intl.DateTimeFormat(undefined, { dateStyle: "long" }).format(this.currentDate()),
