@@ -1,4 +1,4 @@
-import { CODE_BLOCK_TOOLS_CLASS, COPY_CODE_ACTION, COPY_IMAGE_ACTION, Renderer, SAVE_IMAGE_ACTION } from "./Renderer";
+import { CODE_BLOCK_TOOLS_CLASS, COPY_CODE_ACTION, COPY_IMAGE_ACTION, EXPORT_ANSWER_ACTION, Renderer, SAVE_IMAGE_ACTION } from "./Renderer";
 import { TranscriptMessage } from "./TranscriptMessage";
 import { TranscriptAction } from "./TranscriptAction";
 import { ChatRole } from "./ChatRole";
@@ -200,6 +200,36 @@ export class TranscriptView {
       message.attachments.map((attachment) => [attachment.id, attachment.assetURL, attachment.label]),
       message.toolSteps.map((toolStep) => [toolStep.toolCallID, toolStep.label, toolStep.argumentsJSON, toolStep.resultText, toolStep.state, toolStep.generatedImageName, toolStep.generatedImageModelName]),
     ]);
+  }
+
+  /** Who the conversation is drawn as, so an export can name the assistant
+   * the way the window does. */
+  public get persona(): TranscriptPersona {
+    return this.renderer.currentPersona;
+  }
+
+  /** The messages last drawn, in conversation order. */
+  public latestMessages(): readonly TranscriptMessage[] {
+    return this.latestSnapshot?.messages ?? [];
+  }
+
+  /** A detached copy of one message's rendered answer body, with its code
+   * highlighted, its maths drawn and its diagrams in place, for an export to
+   * reshape without touching the transcript. Null for a message not drawn. */
+  public renderedBodyClone(messageID: string): HTMLElement | null {
+    const answerBody = this.articlesByMessageID.get(messageID)?.querySelector(".markdown-body");
+    return answerBody instanceof HTMLElement ? (answerBody.cloneNode(true) as HTMLElement) : null;
+  }
+
+  /** Draws any messages still waiting for the next frame, so a reader that
+   * runs right after a conversation opens finds them drawn. */
+  public flushPendingRender(): void {
+    this.flushPending();
+  }
+
+  /** The drawn article for a message, for the message picker to mark. */
+  public messageArticle(messageID: string): HTMLElement | null {
+    return this.articlesByMessageID.get(messageID) ?? null;
   }
 
   public messageCount(): number {
@@ -467,6 +497,13 @@ export class TranscriptView {
         if (kind === COPY_IMAGE_ACTION) {
           TranscriptView.confirmCopied(actionButton);
         }
+      }
+      if (kind === EXPORT_ANSWER_ACTION) {
+        let answerMessageID = "";
+        if (article instanceof HTMLElement && article.dataset.messageId != null) {
+          answerMessageID = article.dataset.messageId;
+        }
+        this.onAction(new TranscriptAction({ kind: "exportAnswer", messageID: answerMessageID, detail: "" }));
       }
       if (kind === COPY_CODE_ACTION) {
         const copiedCode = actionButton.closest(".code-block")?.querySelector("pre > code")?.textContent ?? "";

@@ -8,6 +8,7 @@ import { SessionSummary } from "./SessionSummary";
 import { SessionPreferences } from "./SessionPreferences";
 import { parseConversationSkill } from "./ConversationSkill";
 import { isGeneratedImageName } from "./ToolStep";
+import type { ExportSaveOutcome, ExportSaveRequest } from "./export/ExportEnvironment";
 
 interface PendingSessionCall {
   resolve: (payload: unknown) => void;
@@ -161,7 +162,22 @@ export class SessionBridge {
   public async showConversationMenu(conversationID: string): Promise<ConversationMenuChoice> {
     const hostAnswer = await this.call(SessionBridgeOp.SHOW_CONVERSATION_MENU, { conversationID }, USER_CHOICE_TIMEOUT_MILLISECONDS);
     const menuChoice = typeof hostAnswer === "object" && hostAnswer !== null ? (hostAnswer as Record<string, unknown>)["choice"] : null;
-    return menuChoice === "rename" || menuChoice === "delete" ? menuChoice : "dismissed";
+    return menuChoice === "rename" || menuChoice === "export" || menuChoice === "delete" ? menuChoice : "dismissed";
+  }
+
+  /** Hands an exported file to the host, which asks where to save it and,
+   * for a PDF, prints the page there. It waits for a person, so it gets the
+   * user-choice timeout. The answer is the saved file's name, never its path. */
+  public async saveExport(saveRequest: ExportSaveRequest): Promise<ExportSaveOutcome> {
+    const hostAnswer = await this.call(SessionBridgeOp.SAVE_EXPORT, { ...saveRequest }, USER_CHOICE_TIMEOUT_MILLISECONDS);
+    const answerRecord = typeof hostAnswer === "object" && hostAnswer !== null ? (hostAnswer as Record<string, unknown>) : {};
+    if (answerRecord["outcome"] === "saved" && typeof answerRecord["fileName"] === "string") {
+      return { outcome: "saved", fileName: answerRecord["fileName"] };
+    }
+    if (answerRecord["outcome"] === "cancelled") {
+      return { outcome: "cancelled" };
+    }
+    throw new Error("the host returned an unknown save outcome");
   }
 
   /** Reads a generated image back, so a model that can see is shown it again

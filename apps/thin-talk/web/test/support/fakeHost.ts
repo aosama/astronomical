@@ -30,7 +30,12 @@ export class FakeSessionHost {
    * user picks (a "delete" counts as already confirmed). */
   /** Images the host can read back by name, as the app's image store would. */
   public readonly storedImagesByName = new Map<string, { base64: string; mimeType: string }>();
-  public conversationMenuChoice: "rename" | "delete" | "dismissed" = "dismissed";
+  public conversationMenuChoice: "rename" | "export" | "delete" | "dismissed" = "dismissed";
+  /** How the fake save panel answers an export; "fails" is a write that
+   * failed after the person chose where to save. */
+  public exportSaveAnswer: { outcome: "saved"; fileName: string } | { outcome: "cancelled" } | "fails" = { outcome: "saved", fileName: "Exported.pdf" };
+  /** Every file the page asked the host to save, as it sent it. */
+  public readonly receivedExports: Record<string, unknown>[] = [];
   public chosenTextFile: { fileName: string; text: string } | null = null;
   public chosenImageFile: { fileName: string; base64: string; mimeType: string } | null = null;
 
@@ -115,6 +120,12 @@ export class FakeSessionHost {
         return this.useHostTool(payload);
       case "cancelHostToolCall":
         return null;
+      case "saveExport":
+        this.receivedExports.push(payload as Record<string, unknown>);
+        if (this.exportSaveAnswer === "fails") {
+          throw new Error("saveExport failed: the disk is full");
+        }
+        return this.exportSaveAnswer;
       case "showConversationMenu":
         return { choice: this.conversationMenuChoice };
       case "deleteGeneratedImages": {

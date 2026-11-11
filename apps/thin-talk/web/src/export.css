@@ -1,0 +1,289 @@
+/*
+ * Exporting: the export sheet, the message picker that stands in for the
+ * composer while messages are ticked, and the brief notice that a file was
+ * saved or that there is nothing to export yet.
+ * All app chrome, drawn from the shared tokens like the rest of the window.
+ */
+
+.export-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--titlebar-inset, 0px) + 16px) 24px 24px;
+  background: rgb(0 0 0 / 32%);
+}
+
+.export-sheet[hidden] {
+  display: none;
+}
+
+.export-sheet__panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 24px;
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--popover-shadow);
+}
+
+/* The preview is a sheet of paper whatever the Mac's appearance, because the
+   exported file is: white, at a third of its printed size (8.5 by 11 inches),
+   scrolling through every page. */
+.export-sheet__paper {
+  width: 245px;
+  height: 317px;
+  overflow-y: auto;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  background: #ffffff;
+  color-scheme: light;
+}
+
+.export-sheet__pages {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.export-sheet__title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.export-sheet__label {
+  margin: 14px 0 6px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.export-sheet__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.export-sheet__choice,
+.export-sheet__format,
+.export-sheet__cancel,
+.export-sheet__save,
+.pick-bar__cancel,
+.pick-bar__done {
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: default;
+}
+
+.export-sheet__choice {
+  padding: 5px 12px;
+  font-size: 15px;
+}
+
+.export-sheet__choice[hidden] {
+  display: none;
+}
+
+.export-sheet__choice[aria-checked="true"] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.export-sheet__formats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.export-sheet__format {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+}
+
+.export-sheet__format[aria-checked="true"] {
+  border: 2px solid var(--accent);
+  padding: 9px 5px;
+}
+
+.export-sheet__format-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.export-sheet__format-hint {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.export-sheet__toggles {
+  display: grid;
+  gap: 6px;
+}
+
+.export-sheet__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15.5px;
+}
+
+.export-sheet__toggle[hidden] {
+  display: none;
+}
+
+.export-sheet__toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.export-sheet__status {
+  min-height: 1.4em;
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+
+.export-sheet__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.export-sheet__cancel,
+.export-sheet__save,
+.pick-bar__cancel,
+.pick-bar__done {
+  padding: 6px 16px;
+  font-size: 15px;
+}
+
+.export-sheet__save,
+.pick-bar__done {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.export-sheet__save:disabled,
+.pick-bar__done:disabled,
+.export-sheet__cancel:disabled {
+  opacity: 0.5;
+}
+
+/* ---------- Picking messages ---------- */
+
+.app--picking #composer,
+.app--picking #failure-banner {
+  display: none;
+}
+
+.app--picking .message__actions,
+.app--picking .generated-image__actions,
+.app--picking .code-block__tools {
+  visibility: hidden;
+}
+
+.pick-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 24px 14px;
+  padding: 10px 14px;
+  border-radius: 22px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.pick-bar[hidden] {
+  display: none;
+}
+
+.pick-bar__count {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  color: var(--ink-2);
+}
+
+/* A ticked message shows a filled violet circle beside it, and an unticked
+   one an empty circle, so the choice never rests on colour alone. */
+.app--picking .message[role="checkbox"] {
+  position: relative;
+  padding-left: 40px;
+  border-radius: 12px;
+  cursor: default;
+}
+
+.app--picking .message[role="checkbox"]::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 14px;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.app--picking .message[data-picked] {
+  background: var(--accent-soft);
+}
+
+.app--picking .message[data-picked]::before {
+  content: "✓";
+  display: grid;
+  place-items: center;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.app--picking .message[role="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Brief notice ---------- */
+
+.brief-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 110px;
+  z-index: 40;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--popover-shadow);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.brief-notice[hidden] {
+  display: none;
+}

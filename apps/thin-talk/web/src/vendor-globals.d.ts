@@ -2,9 +2,10 @@
  * Ambient declarations for the surfaces this page touches that no npm package
  * types: the vendored KaTeX and mermaid globals, the WKWebView message-handler
  * bridge, the host-injected config, and the session-call resolver the Swift
- * host invokes.
+ * host invokes, and the export feature the separately loaded export script
+ * registers.
  */
-export {};
+import type { ExportFeature } from "./export/ExportEnvironment";
 
 declare global {
   /** The subset of the vendored KaTeX global the maths pipeline uses. */
@@ -75,6 +76,8 @@ declare global {
     __thintalkConfig?: ThintalkConfigGlobal;
     __thintalk?: ThintalkTestEntry;
     __thintalkCommands?: ThintalkCommandEntry;
+    /** The export feature, registered by export.js once the page loads it. */
+    __thintalkExport?: ExportFeature;
     webkit?: {
       messageHandlers?: {
         thintalk?: {

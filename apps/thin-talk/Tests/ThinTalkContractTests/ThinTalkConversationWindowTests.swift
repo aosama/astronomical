@@ -28,7 +28,8 @@ final class ThinTalkConversationWindowTests: XCTestCase {
     let window = conversationWindow().window
     let toolbar = try XCTUnwrap(window.toolbar)
     XCTAssertEqual(window.toolbarStyle, .unified)
-    XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.thinTalkToggleSidebar, .thinTalkNewChat])
+    XCTAssertEqual(
+      toolbar.items.map(\.itemIdentifier), [.thinTalkToggleSidebar, .thinTalkNewChat, .flexibleSpace, .thinTalkExport])
     XCTAssertFalse(toolbar.allowsUserCustomization)
     XCTAssertEqual(window.tabbingMode, .disallowed)
   }
@@ -36,11 +37,20 @@ final class ThinTalkConversationWindowTests: XCTestCase {
   func test_should_aim_the_toolbar_buttons_at_the_conversation_actions() throws {
     let framedWindow = conversationWindow()
     let toolbar = try XCTUnwrap(framedWindow.window.toolbar)
-    for toolbarItem in toolbar.items {
+    for toolbarItem in toolbar.items where toolbarItem.itemIdentifier != .flexibleSpace {
       XCTAssertTrue(toolbarItem.target === framedWindow.conversationActions, toolbarItem.label)
       XCTAssertNotNil(toolbarItem.action, toolbarItem.label)
       XCTAssertNotNil(toolbarItem.image, toolbarItem.label)
     }
+  }
+
+  func test_should_export_from_the_far_end_of_the_toolbar_with_the_share_symbol() throws {
+    let framedWindow = conversationWindow()
+    let toolbar = try XCTUnwrap(framedWindow.window.toolbar)
+    let exportItem = try XCTUnwrap(toolbar.items.last)
+    XCTAssertEqual(exportItem.itemIdentifier, .thinTalkExport)
+    XCTAssertEqual(exportItem.label, "Export")
+    XCTAssertEqual(exportItem.action, #selector(ThinTalkConversationActions.exportConversation(_:)))
   }
 
   func test_should_measure_a_titlebar_inset_that_clears_the_toolbar_but_not_the_page() {

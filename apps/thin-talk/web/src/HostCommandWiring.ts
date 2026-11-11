@@ -6,6 +6,7 @@ import type { HostCommandHandlers } from "./HostCommandRouter";
 import type { TranscriptView } from "./TranscriptView";
 import type { WindowChrome } from "./WindowChrome";
 import type { AstroCompanion } from "./astro/AstroCompanion";
+import type { ExportLauncher } from "./ExportLauncher";
 
 /** Everything the host commands act on, supplied by boot.ts. */
 export interface HostCommandTargets {
@@ -15,6 +16,7 @@ export interface HostCommandTargets {
   host: HostChannel;
   windowChrome: WindowChrome;
   astro: AstroCompanion;
+  exportLauncher: ExportLauncher;
 }
 
 /** The id of the newest assistant message, or null before the first answer. */
@@ -58,6 +60,7 @@ export function hostCommandHandlers(targets: HostCommandTargets): HostCommandHan
         void targets.controller.deleteSession(activeSessionID);
       }
     },
+    exportConversation: () => void targets.exportLauncher.open({ kind: "wholeChat" }),
     focusComposer: () => targets.composerField.focus(),
     openYourAstro: () => targets.astro.openYourAstro(),
     toggleAstro: () => targets.astro.toggleShown(),

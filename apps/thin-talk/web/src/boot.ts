@@ -30,6 +30,9 @@ import { AstroCompanion } from "./astro/AstroCompanion";
 import { AstroLibrary } from "./astro/AstroLibrary";
 import { applyAstroPresentation } from "./astro/AstroPresentation";
 import { PictureModelGuidance } from "./PictureModelGuidance";
+import { ExportLauncher } from "./ExportLauncher";
+import { MessagePicker } from "./MessagePicker";
+import { BriefNotice } from "./BriefNotice";
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -45,6 +48,30 @@ function showApplicationTitle(config: AppConfig): void {
   if (sidebarAppName) {
     sidebarAppName.textContent = config.applicationTitle;
   }
+}
+
+/** Wires exporting: the sheet the export script draws in, the message picker
+ * and the brief notice that says a file was saved. */
+function wireExport(controller: ChatController, transcript: TranscriptView, bridge: SessionBridge): ExportLauncher {
+  const picker = new MessagePicker(
+    {
+      appRoot: requireElement<HTMLElement>("#app"),
+      transcriptElement: requireElement<HTMLElement>("#transcript"),
+      pickBar: requireElement<HTMLElement>("#pick-bar"),
+      pickCount: requireElement<HTMLElement>('[data-testid="pick-count"]'),
+      doneButton: requireElement<HTMLButtonElement>('[data-testid="pick-done"]'),
+      cancelButton: requireElement<HTMLButtonElement>('[data-testid="pick-cancel"]'),
+    },
+    transcript,
+  );
+  return new ExportLauncher({
+    sheetElement: requireElement<HTMLElement>("#export-sheet"),
+    controller,
+    transcript,
+    bridge,
+    picker,
+    notice: new BriefNotice(requireElement<HTMLElement>("#brief-notice")),
+  });
 }
 
 /**
@@ -78,6 +105,10 @@ export function bootChatClient(): AppShell {
         // button asks for the whole rendered answer.
         const copiedText = action.detail.length > 0 ? action.detail : transcript.renderedText(action.messageID);
         host.postAction("copy", action.messageID, copiedText);
+        return;
+      }
+      if (action.kind === "exportAnswer") {
+        void exportLauncher.open({ kind: "oneAnswer", messageID: action.messageID });
         return;
       }
       if (action.kind === "saveImage" || action.kind === "copyImage") {
@@ -143,7 +174,7 @@ export function bootChatClient(): AppShell {
     sessionList: requireElement<HTMLElement>("#session-list"),
     onSelect: (id) => void controller.openSession(id),
     onNewChat: () => void controller.newChat(),
-    onConversationMenu: (id) => void runConversationMenu(id, { bridge, sidebar, controller }),
+    onConversationMenu: (id) => void runConversationMenu(id, { bridge, sidebar, controller, exportLauncher }),
     onRename: (id, title) => void controller.renameSession(id, title),
   });
 
@@ -170,6 +201,7 @@ export function bootChatClient(): AppShell {
     imageModelDirectory,
     imageModelSelection,
   });
+  const exportLauncher = wireExport(controller, transcript, bridge);
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();
   const astro = new AstroCompanion({
@@ -191,7 +223,7 @@ export function bootChatClient(): AppShell {
     restartEngine: config.canRestartEngine ? () => host.requestEngineRestart() : null,
   });
   new HostCommandRouter(
-    hostCommandHandlers({ controller, transcript, composerField, host, windowChrome, astro }),
+    hostCommandHandlers({ controller, transcript, composerField, host, windowChrome, astro, exportLauncher }),
   ).install(window);
   void controller.load();
   void astro.start();

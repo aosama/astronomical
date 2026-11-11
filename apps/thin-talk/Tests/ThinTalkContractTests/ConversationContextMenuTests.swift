@@ -42,8 +42,18 @@ final class ConversationContextMenuTests: XCTestCase {
 
   func test_should_send_each_choice_to_the_page_by_the_name_it_expects() {
     XCTAssertEqual(ConversationMenuChoice.rename.rawValue, "rename")
+    XCTAssertEqual(ConversationMenuChoice.export.rawValue, "export")
     XCTAssertEqual(ConversationMenuChoice.delete.rawValue, "delete")
     XCTAssertEqual(ConversationMenuChoice.dismissed.rawValue, "dismissed")
+  }
+
+  func test_should_report_export_when_export_is_chosen() async {
+    let contextMenu = ConversationContextMenu()
+    let menuChoice = await contextMenu.awaitChoice(trackingMenu: {
+      contextMenu.chooseExport(nil)
+      return true
+    })
+    XCTAssertEqual(menuChoice, .export)
   }
 
   func test_should_ask_before_deleting_with_delete_as_the_destructive_first_button() {

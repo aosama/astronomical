@@ -44,6 +44,12 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
     commandController.run(.copyLastAnswer)
   }
 
+  /// File ▸ Export… and the toolbar's Export button: the page opens its export
+  /// sheet on the whole chat, or does nothing on an empty one.
+  @objc public func exportConversation(_ sender: Any?) {
+    commandController.run(.exportConversation)
+  }
+
   @objc public func focusMessageField(_ sender: Any?) {
     commandController.run(.focusComposer)
   }

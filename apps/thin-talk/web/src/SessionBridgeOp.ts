@@ -20,4 +20,6 @@ export enum SessionBridgeOp {
   USE_HOST_TOOL = "useHostTool",
   CANCEL_HOST_TOOL_CALL = "cancelHostToolCall",
   SHOW_CONVERSATION_MENU = "showConversationMenu",
+  /** Asks where to save an exported file and writes it there. */
+  SAVE_EXPORT = "saveExport",
 }
