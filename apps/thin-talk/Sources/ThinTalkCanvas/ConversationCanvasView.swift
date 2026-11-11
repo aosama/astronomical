@@ -33,6 +33,8 @@ public final class ConversationCanvasView: NSView {
   /// Restarts the local engine when the page asks; nil where the host cannot.
   private let restartEngine: (@MainActor () -> Void)?
   private var webView: WKWebView?
+  /// Takes the clicks in the title bar strip, which the page would otherwise get.
+  private let titlebarStrip = TitlebarStripView()
   /// Commands sent before the page finished loading. A command for a page
   /// that has not booted is otherwise lost (the page's command router does
   /// not exist yet), which matters when a host opens the window and asks for
@@ -137,6 +139,9 @@ public final class ConversationCanvasView: NSView {
     webview.setAccessibilityIdentifier(Self.canvasAccessibilityIdentifier)
     addSubview(webview)
     webView = webview
+    // Above the web view, so clicks in the strip reach it first.
+    addSubview(titlebarStrip, positioned: .above, relativeTo: webview)
+    layoutTitlebarStrip()
 
     let shellURL = CanvasSecurityPolicy.shellDocumentURL()
     guard let shellURL else {
@@ -164,7 +169,23 @@ public final class ConversationCanvasView: NSView {
   /// Records a new title bar height and passes it to the page.
   public func applyTitlebarInset(points insetPoints: Int) {
     titlebarInsetPoints = insetPoints
+    layoutTitlebarStrip()
     resendTitlebarInset()
+  }
+
+  /// Pins the strip to the top edge at the title bar's height in points: the
+  /// native strip is not scaled by page zoom, so neither is this. A plain
+  /// title bar, or full screen without one, leaves it zero high.
+  private func layoutTitlebarStrip() {
+    let stripHeight = CGFloat(titlebarInsetPoints ?? 0)
+    titlebarStrip.frame = Self.titlebarStripFrame(in: bounds, stripHeight: stripHeight, isFlipped: isFlipped)
+    titlebarStrip.autoresizingMask = isFlipped ? [.width, .maxYMargin] : [.width, .minYMargin]
+  }
+
+  nonisolated static func titlebarStripFrame(in canvasBounds: NSRect, stripHeight: CGFloat, isFlipped: Bool) -> NSRect {
+    let clampedHeight = min(max(0, stripHeight), canvasBounds.height)
+    let originY = isFlipped ? canvasBounds.minY : canvasBounds.maxY - clampedHeight
+    return NSRect(x: canvasBounds.minX, y: originY, width: canvasBounds.width, height: clampedHeight)
   }
 
   /// Zoom scales the page's CSS pixels but not the native strip, so the page's
