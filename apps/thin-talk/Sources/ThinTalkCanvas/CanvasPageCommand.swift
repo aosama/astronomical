@@ -5,8 +5,9 @@ import Foundation
 /// The raw values are the page's `HostCommand` names (web/src/HostCommand.ts);
 /// `CanvasPageCommandContractTests` reads that file and requires both sides to
 /// list the same commands, so a rename on either side fails a test instead of
-/// leaving a dead menu item. The page's one further command, `setTitlebarInset`,
-/// carries a number and is built by `titlebarInsetScript` instead.
+/// leaving a dead menu item. The page's two further commands carry a value
+/// and are built by their own scripts: `setTitlebarInset` by
+/// `titlebarInsetScript` and `fillDraft` by `draftScript`.
 public enum CanvasPageCommand: String, CaseIterable, Sendable {
   case newChat
   case toggleSidebar
@@ -29,6 +30,20 @@ public enum CanvasPageCommand: String, CaseIterable, Sendable {
 }
 
 extension CanvasPageCommand {
+  /// The page command that carries a draft for the message field.
+  public static let draftCommandName = "fillDraft"
+
+  /// The script that puts `draftText` in the page's message field. The text
+  /// is encoded as JSON, which is also a valid JavaScript string literal, so
+  /// nothing in it can end the string and run as script. Nil when the text
+  /// cannot be encoded.
+  public static func draftScript(text draftText: String) -> String? {
+    guard let encodedText = try? JSONSerialization.data(withJSONObject: draftText, options: [.fragmentsAllowed]),
+      let textLiteral = String(data: encodedText, encoding: .utf8)
+    else { return nil }
+    return "window.__thintalkCommands?.run({\"name\": \"\(draftCommandName)\", \"text\": \(textLiteral)});"
+  }
+
   /// The page command that carries the title bar inset.
   public static let titlebarInsetCommandName = "setTitlebarInset"
 

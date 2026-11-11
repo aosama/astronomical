@@ -53,4 +53,46 @@ final class ApplicationLinkTests: XCTestCase {
     XCTAssertEqual(ApplicationLink.parse(try XCTUnwrap(URL(string: "astronomical:///chat")), channel: .stable), .chat)
     XCTAssertEqual(ApplicationLink.parse(try XCTUnwrap(URL(string: "ASTRONOMICAL://CHAT")), channel: .stable), .chat)
   }
+
+  func test_should_carry_a_draft_through_a_link_and_back_whatever_it_contains() throws {
+    for draftText in ["What is 15% of 80?", "a&b=c #tag ?x", "Explique la photosynthèse 🌱", "line one\nline two"] {
+      let draftURL = try XCTUnwrap(DraftLink.url(draftText: draftText, channel: .development))
+      XCTAssertEqual(draftURL.scheme, "astronomical-dev")
+      XCTAssertEqual(DraftLink.draftText(from: draftURL, channel: .development), draftText)
+    }
+  }
+
+  /// A web page can open a link. Only the Development app may answer this
+  /// one, so the app people use cannot have text put in its message field.
+  func test_should_answer_a_draft_link_only_in_the_development_channel() throws {
+    let stableURL = try XCTUnwrap(DraftLink.url(draftText: "hello", channel: .stable))
+    let developmentURL = try XCTUnwrap(DraftLink.url(draftText: "hello", channel: .development))
+
+    XCTAssertNil(DraftLink.draftText(from: stableURL, channel: .stable))
+    XCTAssertNil(DraftLink.draftText(from: stableURL, channel: .appStore))
+    XCTAssertNil(DraftLink.draftText(from: developmentURL, channel: .stable), "another channel's link")
+    XCTAssertNil(DraftLink.draftText(from: stableURL, channel: .development), "another channel's scheme")
+  }
+
+  func test_should_refuse_a_draft_link_with_no_text_or_too_much() throws {
+    let longestDraft = String(repeating: "a", count: DraftLink.maximumDraftCharacters)
+    XCTAssertEqual(
+      DraftLink.draftText(from: try XCTUnwrap(DraftLink.url(draftText: longestDraft, channel: .development)), channel: .development),
+      longestDraft)
+    let refusedLinks = [
+      DraftLink.url(draftText: longestDraft + "a", channel: .development),
+      DraftLink.url(draftText: "   ", channel: .development),
+      URL(string: "astronomical-dev://draft"),
+      URL(string: "astronomical-dev://draft?other=hello"),
+      URL(string: "astronomical-dev://chat?text=hello"),
+    ]
+    for refusedLink in refusedLinks {
+      XCTAssertNil(DraftLink.draftText(from: try XCTUnwrap(refusedLink), channel: .development), "\(String(describing: refusedLink))")
+    }
+  }
+
+  func test_should_not_mistake_a_draft_link_for_a_window_link() throws {
+    let draftURL = try XCTUnwrap(DraftLink.url(draftText: "hello", channel: .development))
+    XCTAssertNil(ApplicationLink.parse(draftURL, channel: .development))
+  }
 }

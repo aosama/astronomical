@@ -17,11 +17,25 @@ export enum HostCommand {
   OPEN_YOUR_ASTRO = "openYourAstro",
   /** The Focus switch: hides or shows Astro. */
   TOGGLE_ASTRO = "toggleAstro",
+  /** Carries `text`: a draft to put in the message field, replacing what is
+   * there. A development host sends it so a question can be typed without
+   * taking the keyboard; the person, or a test, still presses Send. */
+  FILL_DRAFT = "fillDraft",
   /** Carries `points`: the title bar height in CSS pixels at the current zoom. */
   SET_TITLEBAR_INSET = "setTitlebarInset",
 }
 
 const KNOWN_HOST_COMMANDS: ReadonlySet<string> = new Set<string>(Object.values(HostCommand));
+
+/** The longest draft a host may send: far more than a question, and small
+ * enough that a mistaken payload cannot fill the field with megabytes. */
+export const MAXIMUM_DRAFT_CHARACTERS = 4000;
+
+/** The draft a `fillDraft` payload carries, or null when it is not text of
+ * a usable length. */
+export function validDraftText(candidate: unknown): string | null {
+  return typeof candidate === "string" && candidate.trim().length > 0 && candidate.length <= MAXIMUM_DRAFT_CHARACTERS ? candidate : null;
+}
 
 /** Reads `{name: "<command>"}`; `null` for anything else, so a malformed or
  * future command from a newer host is a no-op instead of a page error. */

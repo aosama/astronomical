@@ -29,7 +29,7 @@ final class CanvasPageCommandContractTests: XCTestCase {
 
   func test_should_send_only_commands_the_page_understands_and_cover_every_one() throws {
     let nativeCommandNames = Set(CanvasPageCommand.allCases.map(\.rawValue))
-      .union([CanvasPageCommand.titlebarInsetCommandName])
+      .union([CanvasPageCommand.titlebarInsetCommandName, CanvasPageCommand.draftCommandName])
     let pageCommandNames = try pageCommandNames()
     XCTAssertFalse(pageCommandNames.isEmpty, "HostCommand.ts must still declare its commands")
     XCTAssertEqual(nativeCommandNames, pageCommandNames)
@@ -41,6 +41,18 @@ final class CanvasPageCommandContractTests: XCTestCase {
         pageCommand.scriptSource,
         "window.__thintalkCommands?.run({\"name\": \"\(pageCommand.rawValue)\"});")
     }
+  }
+
+  /// A draft is text from outside the app, so it must reach the page as data:
+  /// quotes, backslashes and line ends may not end the string and run.
+  func test_should_send_a_draft_as_an_escaped_string_that_cannot_become_script() throws {
+    XCTAssertEqual(
+      CanvasPageCommand.draftScript(text: "What is 15% of 80?"),
+      "window.__thintalkCommands?.run({\"name\": \"fillDraft\", \"text\": \"What is 15% of 80?\"});")
+    let hostileScript = try XCTUnwrap(CanvasPageCommand.draftScript(text: "\"}); alert(1); ({\"a\":\"\n</script>"))
+    XCTAssertTrue(hostileScript.contains(#"\"}); alert(1); ({\"a\":\"\n"#), hostileScript)
+    XCTAssertFalse(hostileScript.contains("\n"), "a raw line end would end the string literal")
+    XCTAssertNotNil(CanvasPageCommand.draftScript(text: ""), "an empty draft still encodes; the page refuses it")
   }
 
   func test_should_restate_the_titlebar_inset_in_css_pixels_at_the_current_zoom() {

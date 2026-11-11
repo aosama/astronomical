@@ -125,9 +125,15 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
 
   @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent: NSAppleEventDescriptor) {
     guard let openedURLString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
-      let openedURL = URL(string: openedURLString),
-      let applicationLink = ApplicationLink.parse(openedURL, channel: applicationIdentity.channel)
+      let openedURL = URL(string: openedURLString)
     else { return }
+    // A draft link fills the message field and nothing else: the window is
+    // neither shown nor brought forward, which is the point of the link.
+    if let draftText = DraftLink.draftText(from: openedURL, channel: applicationIdentity.channel) {
+      chatWindowController.conversationActions.fillDraft(draftText)
+      return
+    }
+    guard let applicationLink = ApplicationLink.parse(openedURL, channel: applicationIdentity.channel) else { return }
     switch applicationLink {
     case .chat: chatWindowController.showChatWindow()
     case .yourAstro: chatWindowController.showYourAstro()

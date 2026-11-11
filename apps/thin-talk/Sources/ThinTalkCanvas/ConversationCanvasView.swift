@@ -38,6 +38,8 @@ public final class ConversationCanvasView: NSView {
   /// not exist yet), which matters when a host opens the window and asks for
   /// Your Astro in the same breath.
   private var commandsAwaitingPageLoad: [CanvasPageCommand] = []
+  /// A draft sent before the page finished loading; only the latest is kept.
+  private var draftAwaitingPageLoad: String?
   private var isPageLoaded = false
   /// The native title bar's reach into the page, in points; nil for a plain
   /// title bar. Kept so every zoom change can re-send it in CSS pixels.
@@ -182,12 +184,27 @@ public final class ConversationCanvasView: NSView {
     webView?.evaluateJavaScript(pageCommand.scriptSource, completionHandler: nil)
   }
 
+  /// Puts a draft in the page's message field. Kept until the page has loaded
+  /// when it has not yet, so a link that launches the app still fills it.
+  public func fillDraft(_ draftText: String) {
+    guard isPageLoaded else {
+      draftAwaitingPageLoad = draftText
+      return
+    }
+    guard let draftScript = CanvasPageCommand.draftScript(text: draftText) else { return }
+    webView?.evaluateJavaScript(draftScript, completionHandler: nil)
+  }
+
   private func pageDidLoad() {
     isPageLoaded = true
     let heldCommands = commandsAwaitingPageLoad
     commandsAwaitingPageLoad = []
     for heldCommand in heldCommands {
       runPageCommand(heldCommand)
+    }
+    if let heldDraft = draftAwaitingPageLoad {
+      draftAwaitingPageLoad = nil
+      fillDraft(heldDraft)
     }
   }
 

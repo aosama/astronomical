@@ -50,6 +50,11 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
     commandController.run(.exportConversation)
   }
 
+  /// Puts a draft in the message field; the person still presses Send.
+  public func fillDraft(_ draftText: String) {
+    commandController.fillDraft(draftText)
+  }
+
   @objc public func focusMessageField(_ sender: Any?) {
     commandController.run(.focusComposer)
   }
