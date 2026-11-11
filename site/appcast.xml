@@ -4,32 +4,40 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.101</title>
-            <pubDate>Tue, 10 Nov 2026 15:38:06 -0500</pubDate>
-            <sparkle:version>2233</sparkle:version>
-            <sparkle:shortVersionString>0.2.101</sparkle:shortVersionString>
+            <title>0.2.102</title>
+            <pubDate>Wed, 11 Nov 2026 07:01:53 -0500</pubDate>
+            <sparkle:version>2261</sparkle:version>
+            <sparkle:shortVersionString>0.2.102</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's fixed
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.102
 
-- **The engine starts after a restart or login.** With Launch at Login on, Astronomical could come back from a restart with its menu-bar icon showing but the engine stopped, so chat, the terminal command and the local endpoint all reported that Astronomical was not running. The menu-bar agent now finds the engine however macOS starts it.
+### New
+- **Export a chat.** Save a whole chat, one answer, or the messages you pick as a PDF, a Word document or a web page. The export sheet previews the pages and remembers your choices. Tables, formulas, code, checklists, pictures and diagrams carry over, and nothing in the file loads from the network.
+- **Exports fit your paper.** The preview, the PDF and the Word document follow the Mac's paper size (A4 or Letter). Text prints at the sizes shown, a heading stays with what it introduces, short lists stay whole, and a diagram is sized to fit its page.
+- **Clef decision models** are recognised in the Library and run as a text-only backend.
 
-## Maintenance
+### Improved
+- A chat that fails says what went wrong in plain words and what to try next, including when the Mac ran out of graphics memory.
+- While a model is still loading, the chat says it is loading the model.
+- Code blocks have a Copy button, and a generated picture can be saved or copied.
+- Checklists in answers are drawn as checklists.
+- Every model is shown under one name, its model ID.
+- The Neural Engine preparation banner appears only for waits long enough to matter.
 
-- The acceptance tests compile again after the addition of decision models.
-- The README has a Download for Mac button and a quick start.
+### Fixed
+- A fresh install starts with Neural Engine prefill off.
+- Stopping an instance also sees an agent that macOS started at login.
 
-## Compatibility
-
-- macOS 14.0 or later on Apple silicon.
-- Your installed models, chats and settings are preserved; the configuration format is unchanged.
-
-This release is signed with a Developer ID, notarized by Apple, and delivered through the signed Sparkle update feed.
+### Compatibility
+- Requires macOS 14 or later on Apple silicon.
+- Settings, chats, downloaded models and the Library are preserved. No configuration field was removed.
+- The app is signed with a Developer ID, notarized by Apple, and delivered through the signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.101/Astronomical-0.2.101-macOS-arm64.dmg" length="21521515" type="application/octet-stream" sparkle:edSignature="xwjODpEB5KsX8UKOymHq1Z21bQ0S/EJd1gD/O74/JMLOJcwph9uEjhQrM+9m0z4FJ06x4pv4KS7I3PVNmmWLAQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.102/Astronomical-0.2.102-macOS-arm64.dmg" length="21896504" type="application/octet-stream" sparkle:edSignature="Pi8r1Sm6Wo4LA41o7iCSQ/fJP0bnggKF8YYmIRKV3Z2C99oPjgYJQSUNQOsjl6RC0dCCX09WfymjFEVMoWXrCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: VFH/LB3haKPUQHOCdXuAttdnSR1ySb7pzEROMgVV/JVZUnKBO5MTCbvPzDpFtZ/Fkl2NjvIUunKA0OG0HIbmDw==
-length: 2020
+edSignature: g4q00iQGCYP9ovI6rD68618LcP/IwS0wK6GZyDkBXM74HzPO6uXR2sRkMW60pin4IpZcZPKU3FC5ydxzr/2lCQ==
+length: 2809
 -->
