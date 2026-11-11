@@ -1,7 +1,10 @@
 import { makeButton, makeElement } from "./AstroDom";
 
-/** The colours of the space trail behind Astro. Rainbow is the stylesheet's
- * own palette; the others are classes that override it (see astro.css). */
+/** The colours of Astro's constellation lines, the person's "Colours" choice.
+ * Named "trail" because Astro once had a space trail in these colours, and
+ * the choice is still saved under that key, so earlier profiles keep theirs.
+ * Rainbow is the stylesheet's own palette; the others are classes that
+ * override it (see astro.css). */
 export enum AstroTrail {
   RAINBOW = "rainbow",
   AURORA = "aurora",
@@ -21,20 +24,20 @@ export function parseAstroTrail(storedTrail: unknown): AstroTrail {
   return knownChoice !== undefined ? knownChoice.trail : AstroTrail.RAINBOW;
 }
 
-/** Sets the trail class on one ancestor of every Astro figure (the window's
- * root), so the welcome, home and Your Astro always draw the same trail. */
+/** Sets the colours class on one ancestor of every Astro figure (the window's
+ * root), so the welcome, home, Your Astro and each answer draw the same colours. */
 export function applyAstroTrail(trailOwner: HTMLElement, trail: AstroTrail): void {
   for (const trailChoice of TRAIL_CHOICES) {
     trailOwner.classList.toggle(`astro-trail--${trailChoice.trail}`, trailChoice.trail === trail && trail !== AstroTrail.RAINBOW);
   }
 }
 
-/** The trail chips, shared by the brain download's waiting moment and Your
+/** The colour chips, shared by the brain download's waiting moment and Your
  * Astro. The pressed chip follows the click at once; saving is the caller's. */
 export function buildTrailChips(document: Document, idPrefix: string, pickedTrail: AstroTrail, onChoose: (trail: AstroTrail) => void): HTMLElement {
   const chipRow = makeElement(document, "div", "astro-trail-chips");
   chipRow.setAttribute("role", "group");
-  chipRow.setAttribute("aria-label", "Trail");
+  chipRow.setAttribute("aria-label", "Colours");
   for (const trailChoice of TRAIL_CHOICES) {
     const trailChip = makeButton(document, `${idPrefix}-trail-${trailChoice.trail}`, trailChoice.label, true);
     trailChip.classList.add("astro-chip");

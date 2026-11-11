@@ -66,7 +66,6 @@ export class YourAstroView {
       sayPageLine: () => this.say(this.hasFailedSave ? AstroMoment.SAVE_FAILED : AstroMoment.YOUR_ASTRO),
       isShowing: () => this.journey.step === YourAstroStep.PAGE,
     });
-    this.figure.followPointerWithin(this.overlay);
     this.overlay.addEventListener("keydown", (keyEvent) => {
       if (keyEvent.key === "Escape") {
         this.escape();

@@ -25,13 +25,14 @@ function text(selector: string): string {
   return document.querySelector(selector)?.textContent ?? "";
 }
 
-test("should_answer_as_astro_with_a_face_a_name_and_a_skill_tag", async () => {
+test("should_answer_as_astro_with_its_constellation_a_name_and_a_skill_tag", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitUntilReady();
   sendUserMessage("Why is the sky blue?");
   await waitFor(() => assistantArticles().length === 1 && text("article.message--assistant .message__state") === "", "a finished answer");
   const answer = assistantArticles()[0]!;
-  assert.ok(answer.querySelector(".astro-avatar img"), "Astro's face");
+  assert.ok(answer.querySelector(".astro-avatar svg.astro-constellation"), "Astro's constellation");
+  assert.equal(answer.querySelector(".astro-avatar img"), null, "no character picture");
   assert.equal(answer.querySelector(".message__role")?.textContent, "Astro");
   assert.equal(answer.querySelector("[data-testid=astro-skill-tag]")?.textContent, "Chat");
   assert.equal(answer.querySelector(".astro-avatar")?.getAttribute("data-mood"), "done");
