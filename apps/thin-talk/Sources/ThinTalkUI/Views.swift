@@ -58,6 +58,13 @@ private struct CanvasWebView: NSViewRepresentable {
   let titlebarInset: Int?
   let restartEngine: (@MainActor () -> Void)?
 
+  /// The paper the PDF printer will cut pages to, read from the same place
+  /// (`ExportPDFPrinter` defaults to it), so the preview and the print agree.
+  static func macPrintedPaper() -> CanvasRuntimeConfig.PrintedPaper {
+    let paperSize = NSPrintInfo.shared.paperSize
+    return CanvasRuntimeConfig.PrintedPaper(widthPoints: Double(paperSize.width), heightPoints: Double(paperSize.height))
+  }
+
   func makeNSView(context: Context) -> ConversationCanvasView {
     let canvas = ConversationCanvasView(
       webDirectory: webDirectory,
@@ -65,7 +72,7 @@ private struct CanvasWebView: NSViewRepresentable {
       sessionFileStore: SessionFileStore(directory: Self.stateDirectory(for: applicationIdentity)),
       runtimeConfig: CanvasRuntimeConfig(
         applicationIdentity: applicationIdentity, titlebarInset: titlebarInset,
-        canRestartEngine: restartEngine != nil),
+        canRestartEngine: restartEngine != nil, printedPaper: Self.macPrintedPaper()),
       restartEngine: restartEngine
     )
     canvas.zoomController = zoomController

@@ -188,4 +188,30 @@ final class ExportedFileTests: XCTestCase {
       }
     }
   }
+
+  /// Most of the world prints on A4, which is narrower and taller than
+  /// Letter. The page must be cut to the paper it is given, with the same
+  /// one-inch margins, whatever the Mac running the test defaults to.
+  @MainActor
+  func test_should_cut_pages_to_a4_or_letter_as_asked() async throws {
+    let paragraph = "<p>Mitosis divides one cell into two identical cells, phase by phase, so the page keeps filling up.</p>"
+    let html = "<!DOCTYPE html><html><body>\(String(repeating: paragraph, count: 120))</body></html>"
+    let paperSizes = ["A4": NSSize(width: 595, height: 842), "Letter": NSSize(width: 612, height: 792)]
+
+    for (paperName, paperSize) in paperSizes {
+      let pdfURL = scratchDirectory.appendingPathComponent("\(paperName).pdf")
+      try await ExportPDFPrinter(paperSize: paperSize).printPDF(html: html, to: pdfURL)
+
+      let printedDocument = try XCTUnwrap(PDFDocument(url: pdfURL))
+      XCTAssertGreaterThan(printedDocument.pageCount, 1, paperName)
+      let firstPage = try XCTUnwrap(printedDocument.page(at: 0))
+      XCTAssertEqual(firstPage.bounds(for: .mediaBox).size.width, paperSize.width, accuracy: 1, paperName)
+      XCTAssertEqual(firstPage.bounds(for: .mediaBox).size.height, paperSize.height, accuracy: 1, paperName)
+      let textBounds = try XCTUnwrap(firstPage.selection(for: firstPage.bounds(for: .mediaBox))?.bounds(for: firstPage))
+      XCTAssertGreaterThanOrEqual(textBounds.minX, 71, "\(paperName) left margin")
+      XCTAssertLessThanOrEqual(textBounds.maxX, paperSize.width - 71, "\(paperName) right margin")
+      XCTAssertGreaterThanOrEqual(textBounds.minY, 71, "\(paperName) bottom margin")
+      XCTAssertLessThanOrEqual(textBounds.maxY, paperSize.height - 71, "\(paperName) top margin")
+    }
+  }
 }

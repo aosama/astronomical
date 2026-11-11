@@ -1,3 +1,5 @@
+import { LETTER_PAPER, paperSizeFromHost } from "./export/PaperSize";
+import type { PaperSize } from "./export/PaperSize";
 import { validTitlebarInset } from "./WindowChrome";
 
 /**
@@ -17,6 +19,9 @@ export class AppConfig {
   /** Whether the host restarts the local engine when asked. Only a host that
    * says so gets a restart button, so the button always does something. */
   public readonly canRestartEngine: boolean;
+  /** The paper the Mac prints on, which an export is laid out for. Letter
+   * when the host does not say. */
+  public readonly printedPaper: PaperSize;
 
   public constructor(init: {
     daemonBaseURL: string;
@@ -24,12 +29,14 @@ export class AppConfig {
     expectedStateDirectory: string;
     titlebarInset?: number;
     canRestartEngine?: boolean;
+    printedPaper?: PaperSize;
   }) {
     this.daemonBaseURL = init.daemonBaseURL;
     this.expectedChannel = init.expectedChannel;
     this.expectedStateDirectory = init.expectedStateDirectory;
     this.titlebarInset = init.titlebarInset ?? 0;
     this.canRestartEngine = init.canRestartEngine === true;
+    this.printedPaper = init.printedPaper ?? LETTER_PAPER;
   }
 
   /** What this window calls itself. Mirrors ThinTalkApplicationIdentity.windowTitle,
@@ -59,7 +66,8 @@ export class AppConfig {
     }
     const titlebarInset = AppConfig.titlebarInsetFrom(record["titlebarInset"]);
     const canRestartEngine = record["canRestartEngine"] === true;
-    return new AppConfig({ daemonBaseURL, expectedChannel, expectedStateDirectory, titlebarInset, canRestartEngine });
+    const printedPaper = paperSizeFromHost(record["printedPaper"]);
+    return new AppConfig({ daemonBaseURL, expectedChannel, expectedStateDirectory, titlebarInset, canRestartEngine, printedPaper });
   }
 
   /** An absent inset means a plain title bar (zero); a present one must pass

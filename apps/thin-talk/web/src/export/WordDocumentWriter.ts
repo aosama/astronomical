@@ -1,3 +1,5 @@
+import { PRINTED_MARGIN_INCHES } from "./PaperSize";
+import type { PaperSize } from "./PaperSize";
 import { Document, Packer } from "docx";
 import type { IBaseParagraphStyleOptions } from "docx";
 import { htmlToContent } from "docx/html";
@@ -56,7 +58,21 @@ async function replaceDiagramsWithPictures(article: HTMLElement, rasteriseDiagra
   }
 }
 
-export async function writeWordDocument(content: ExportContent, rasteriseDiagram: DiagramRasteriser): Promise<string> {
+/** Word measures a page in twentieths of a point. */
+const TWIPS_PER_INCH = 1440;
+
+/** The page Word lays the document out on. Left unset, the library makes
+ * every document A4, which on a Mac set to Letter printed with the foot of
+ * each page cut off or shrunk to fit. */
+function wordPageSetup(paper: PaperSize) {
+  const marginTwips = PRINTED_MARGIN_INCHES * TWIPS_PER_INCH;
+  return {
+    size: { width: Math.round(paper.widthInches * TWIPS_PER_INCH), height: Math.round(paper.heightInches * TWIPS_PER_INCH) },
+    margin: { top: marginTwips, right: marginTwips, bottom: marginTwips, left: marginTwips },
+  };
+}
+
+export async function writeWordDocument(content: ExportContent, rasteriseDiagram: DiagramRasteriser, paper: PaperSize): Promise<string> {
   const article = document.createElement("div");
   article.innerHTML = exportArticleHtml(content);
   await replaceDiagramsWithPictures(article, rasteriseDiagram);
@@ -77,7 +93,7 @@ export async function writeWordDocument(content: ExportContent, rasteriseDiagram
         heading4: HEADING_STYLE,
       },
     },
-    sections: [{ children: [...wordContent] }],
+    sections: [{ properties: { page: wordPageSetup(paper) }, children: [...wordContent] }],
   });
   return Packer.toBase64String(wordDocument);
 }

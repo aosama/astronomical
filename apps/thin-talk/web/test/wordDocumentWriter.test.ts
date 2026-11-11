@@ -1,3 +1,5 @@
+import { A4_PAPER, LETTER_PAPER } from "../src/export/PaperSize";
+import type { PaperSize } from "../src/export/PaperSize";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { strFromU8, unzipSync } from "fflate";
@@ -15,8 +17,8 @@ function answerContent(answerHtml: string): ExportContent {
   return { title: "Mitosis explained", dateText: "November 10, 2026", entries: [{ isQuestion: false, body: answerBody }], aiNote: "Written with help from Astro, an AI on this Mac." };
 }
 
-async function wordFileParts(content: ExportContent, rasteriseDiagram: DiagramRasteriser): Promise<Record<string, string>> {
-  const base64Document = await writeWordDocument(content, rasteriseDiagram);
+async function wordFileParts(content: ExportContent, rasteriseDiagram: DiagramRasteriser, paper: PaperSize = LETTER_PAPER): Promise<Record<string, string>> {
+  const base64Document = await writeWordDocument(content, rasteriseDiagram, paper);
   const wordFile = unzipSync(new Uint8Array(Buffer.from(base64Document, "base64")));
   return Object.fromEntries(Object.entries(wordFile).map(([partName, partBytes]) => [partName, partName.endsWith(".xml") ? strFromU8(partBytes) : `${partBytes.length} bytes`]));
 }
@@ -117,4 +119,17 @@ test("should_show_a_tall_diagram_in_word_at_its_fitted_size", async () => {
 
   // Word measures in EMU: 9525 to a CSS pixel.
   assert.match(parts["word/document.xml"] ?? "", new RegExp(`<wp:extent cx="${200 * 9525}" cy="${460 * 9525}"/>`));
+});
+
+// The library makes every document A4 unless told the page: on a Mac set to
+// Letter the Word file came out on the wrong paper.
+test("should_set_the_word_page_to_the_macs_paper_with_one_inch_margins", async () => {
+  const letterXml = (await wordFileParts(answerContent("<p>Cell division.</p>"), NEVER_DRAWS, LETTER_PAPER))["word/document.xml"] ?? "";
+  const a4Xml = (await wordFileParts(answerContent("<p>Cell division.</p>"), NEVER_DRAWS, A4_PAPER))["word/document.xml"] ?? "";
+
+  assert.match(letterXml, /<w:pgSz w:w="12240" w:h="15840"/);
+  assert.match(a4Xml, /<w:pgSz w:w="11909" w:h="16834"/);
+  for (const documentXml of [letterXml, a4Xml]) {
+    assert.match(documentXml, /<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/);
+  }
 });

@@ -1,5 +1,6 @@
 import type { ExportFormat } from "./ExportFormat";
 import type { ExportChoices, ExportScope } from "./ExportOptions";
+import type { PaperSize } from "./PaperSize";
 
 /** One finished message as the export feature receives it: the rendered
  * answer body, cloned out of the transcript, and the stored names of the
@@ -46,6 +47,9 @@ export type ExportSaveOutcome =
 export interface ExportEnvironment {
   /** The empty dialog element the sheet draws itself in. */
   readonly sheetElement: HTMLElement;
+  /** The paper the Mac prints on: the preview, the PDF and the Word file are
+   * laid out for it. */
+  readonly printedPaper: PaperSize;
   conversationTitle(): string;
   /** "Astro" while Astro is shown; null for the plain chat. */
   assistantName(): string | null;

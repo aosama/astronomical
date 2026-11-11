@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exportArticleHtml, exportPreviewMarkup, standaloneExportPage } from "../src/export/ExportArticle";
+import { exportArticleHtml, exportPreviewMarkup, hostPrintedExportPage, standaloneExportPage } from "../src/export/ExportArticle";
 import type { ExportContent } from "../src/export/ExportContentBuilder";
+import { A4_PAPER, LETTER_PAPER } from "../src/export/PaperSize";
 
 function contentWithTitle(title: string, aiNote: string | null): ExportContent {
   const answerBody = document.createElement("div");
@@ -43,11 +44,11 @@ test("should_mark_questions_and_answers_apart", () => {
 // The preview wrapped code where the paper did not and guessed 3 pages for a
 // 2-page PDF while its text column was narrower than the printed one.
 test("should_preview_on_the_printed_pages_text_column_and_margins", () => {
-  const previewMarkup = exportPreviewMarkup(contentWithTitle("Mitosis", null));
+  const previewMarkup = exportPreviewMarkup(contentWithTitle("Mitosis", null), LETTER_PAPER);
 
   assert.match(previewMarkup, /\.export-article\{box-sizing:content-box;max-width:none;width:6\.5in;margin:0;padding:1in\}/);
   assert.match(previewMarkup, /\.export-preview-scaler\{width:8\.5in;transform:scale\(0\.3\);transform-origin:0 0\}/);
-  assert.doesNotMatch(previewMarkup.replace(/@media print \{.*?\} \}/s, ""), /zoom:/, "zoomed text is held to WebKit's minimum size and wraps wrongly");
+  assert.doesNotMatch(previewMarkup, /zoom:/, "zoomed text is held to WebKit's minimum size and wraps wrongly");
   assert.ok(previewMarkup.lastIndexOf("width:6.5in") > previewMarkup.lastIndexOf("max-width: 6.5in"), "the page geometry overrides the screen layout");
   assert.match(previewMarkup, /<article class="export-article">/);
 });
@@ -68,7 +69,7 @@ test("should_group_a_heading_with_the_block_it_introduces_on_a_printed_page", ()
 });
 
 test("should_group_headings_that_follow_one_another_with_one_block", () => {
-  const preview = exportPreviewMarkup(contentWithAnswerMarkup(`<h2>Stages</h2><h3>Evaporation</h3><p>Sun heats water.</p><p>More.</p>`));
+  const preview = exportPreviewMarkup(contentWithAnswerMarkup(`<h2>Stages</h2><h3>Evaporation</h3><p>Sun heats water.</p><p>More.</p>`), LETTER_PAPER);
 
   assert.match(preview, /<div class="export-keep"><h2>Stages<\/h2><h3>Evaporation<\/h3><p>Sun heats water\.<\/p><\/div><p>More\.<\/p>/);
 });
@@ -102,10 +103,20 @@ test("should_give_word_the_article_without_page_groups_and_leave_the_body_untouc
 
 // The printed PDF drew a 22-point title at 23.47 points and broke pages
 // before the preview did; the host's print test pins the engine side.
-test("should_zoom_the_printed_body_so_sizes_on_paper_are_the_sizes_asked_for", () => {
-  const page = standaloneExportPage(contentWithTitle("Mitosis", null));
+test("should_zoom_only_the_page_the_host_prints_so_sizes_on_paper_are_the_sizes_asked_for", () => {
+  const content = contentWithTitle("Mitosis", null);
 
-  assert.match(page, /@media print \{[^@]*body \{ zoom: 0\.9375; \} \}/);
-  assert.doesNotMatch(page.replace(/@media print \{.*?\} \}/s, ""), /zoom:/, "the page on screen is not zoomed");
-  assert.doesNotMatch(exportPreviewMarkup(contentWithTitle("Mitosis", null)).replace(/@media print \{.*?\} \}/s, ""), /zoom:/);
+  assert.match(hostPrintedExportPage(content), /@media print \{ body \{ zoom: 0\.9375; \} \}<\/style>/);
+  assert.doesNotMatch(standaloneExportPage(content), /zoom:/, "Chrome prints a saved page at true size already");
+  assert.doesNotMatch(exportPreviewMarkup(content, LETTER_PAPER), /zoom:/);
+  assert.equal(hostPrintedExportPage(content).replace(/@media print \{ body \{ zoom: 0\.9375; \} \}/, ""), standaloneExportPage(content), "nothing else differs");
+});
+
+// On A4 the column is a quarter of an inch narrower, which moves line and
+// page breaks; a Letter preview there showed pages the printer did not make.
+test("should_preview_on_a4_when_the_mac_prints_on_a4", () => {
+  const previewMarkup = exportPreviewMarkup(contentWithTitle("Mitosis", null), A4_PAPER);
+
+  assert.match(previewMarkup, /\.export-preview-scaler\{width:8\.27in;/);
+  assert.match(previewMarkup, /max-width:none;width:6\.27\d*in;margin:0;padding:1in\}/);
 });
