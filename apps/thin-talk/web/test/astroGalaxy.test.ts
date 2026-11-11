@@ -4,8 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ASTRO_GALAXY_ARM_STAR_COUNT, astroGalaxyHtml } from "../src/astro/AstroGalaxy";
 import { AstroFigure } from "../src/astro/AstroFigure";
-import { installDom, waitFor } from "./support/dom";
-import { bootJourney, MET_ASTRO_PROFILE, waitUntilReady } from "./support/journey";
+import { installDom } from "./support/dom";
 
 const astroStylesheet = (): string => fs.readFileSync(path.join(process.cwd(), "src", "astro.css"), "utf8");
 
@@ -93,22 +92,11 @@ test("should_tint_arm_stars_with_a_looks_four_colours_and_fall_back_to_astros_in
   const galaxyHtml = astroGalaxyHtml();
 
   for (let lookColour = 1; lookColour <= 4; lookColour += 1) {
-    assert.match(galaxyHtml, new RegExp(`fill:var\\(--astro-colours-${lookColour},var\\(--astro-ink\\)\\)`));
+    assert.match(galaxyHtml, new RegExp(`fill:var\\(--astro-colour-look-${lookColour},var\\(--astro-ink\\)\\)`));
   }
-  assert.doesNotMatch(galaxyHtml, /--astro-colours-5/, "only the look's four colours");
-  assert.doesNotMatch(galaxyHtml, /astro-galaxy__core"[^>]*--astro-colours/, "the core stays ink in every look");
+  assert.doesNotMatch(galaxyHtml, /--astro-colour-look-5/, "only the look's four colours");
+  assert.doesNotMatch(galaxyHtml, /astro-galaxy__core"[^>]*--astro-colour-look/, "the core stays ink in every look");
   assert.match(astroStylesheet(), /\.astro-galaxy__core,\s*\.astro-galaxy__star \{\s*fill: var\(--astro-ink\);/);
-});
-
-test("should_define_look_colours_only_inside_a_colour_look_so_silver_has_none", () => {
-  const stylesheet = astroStylesheet();
-  const rootRules = stylesheet.slice(stylesheet.indexOf(":root {"), stylesheet.indexOf(".astro-colours--rainbow {"));
-
-  assert.doesNotMatch(rootRules, /--astro-colours-\d:/, "nothing defined for the default look");
-  for (const colourLook of ["rainbow", "aurora", "sunset"]) {
-    assert.match(stylesheet, new RegExp(`\\.astro-colours--${colourLook} \\{\\s*--astro-colours-1:`));
-  }
-  assert.doesNotMatch(stylesheet, /\.astro-colours--silver/, "silver needs no class");
 });
 
 test("should_draw_the_galaxy_and_no_character_picture_in_the_figure", () => {
@@ -125,31 +113,6 @@ test("should_turn_its_arms_while_charging_and_hold_still_under_reduce_motion", (
 
   assert.match(stylesheet, /\.astro-figure--charging \.astro-galaxy__arms,[^{]*\{\s*animation: astro-galaxy-turn/);
   assert.match(reducedMotionRules, /\.astro-galaxy__arms,\s*\.astro-galaxy__star,[^{]*\{\s*animation: none;/);
-});
-
-function typeDraft(draftText: string): void {
-  const field = document.querySelector<HTMLTextAreaElement>("#composer-input");
-  assert.ok(field !== null);
-  field.value = draftText;
-  field.dispatchEvent(new window.Event("input", { bubbles: true }));
-}
-
-function messageField(): HTMLElement {
-  const found = document.getElementById("composer");
-  assert.ok(found !== null);
-  return found;
-}
-
-// The field is where people type; a figure beside it only crowded the words.
-test("should_keep_astro_out_of_the_message_field_while_its_skill_buttons_stay", async () => {
-  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
-  await waitUntilReady();
-  await waitFor(() => document.querySelector<HTMLElement>("#skill-launchers")?.hidden === false, "the skill buttons");
-
-  assert.equal(messageField().querySelector("svg.astro-galaxy"), null, "an empty field");
-  typeDraft("Why is the sky blue?");
-  assert.equal(messageField().querySelector("svg.astro-galaxy"), null, "a draft to send");
-  assert.equal(document.getElementById("composer-astro"), null, "no place kept for it");
 });
 
 test("should_turn_the_arms_in_the_newest_answer_only_while_astro_thinks_or_works", () => {

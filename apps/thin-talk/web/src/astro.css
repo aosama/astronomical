@@ -40,25 +40,25 @@
    falls back to Astro's ink (the galaxy) or Astro's action colour (the
    download meter), read where it is drawn so the dark sky's own ink and
    violet still apply. */
-.astro-colours--rainbow {
-  --astro-colours-1: #4fc3ff;
-  --astro-colours-2: #8c6bff;
-  --astro-colours-3: #ff6fb8;
-  --astro-colours-4: #ffd23f;
+.astro-colour-look--rainbow {
+  --astro-colour-look-1: #4fc3ff;
+  --astro-colour-look-2: #8c6bff;
+  --astro-colour-look-3: #ff6fb8;
+  --astro-colour-look-4: #ffd23f;
 }
 
-.astro-colours--aurora {
-  --astro-colours-1: #3be8b0;
-  --astro-colours-2: #4fc3ff;
-  --astro-colours-3: #8c6bff;
-  --astro-colours-4: #3be8b0;
+.astro-colour-look--aurora {
+  --astro-colour-look-1: #3be8b0;
+  --astro-colour-look-2: #4fc3ff;
+  --astro-colour-look-3: #8c6bff;
+  --astro-colour-look-4: #3be8b0;
 }
 
-.astro-colours--sunset {
-  --astro-colours-1: #ff9a52;
-  --astro-colours-2: #ff6fb8;
-  --astro-colours-3: #ffd23f;
-  --astro-colours-4: #ff6f6f;
+.astro-colour-look--sunset {
+  --astro-colour-look-1: #ff9a52;
+  --astro-colour-look-2: #ff6fb8;
+  --astro-colour-look-3: #ffd23f;
+  --astro-colour-look-4: #ff6f6f;
 }
 
 /* ---------- Astro's figure ---------- */
@@ -84,8 +84,10 @@
 }
 
 /* ---------- Astro's galaxy (src/astro/AstroGalaxy.ts) ----------
-   At rest the figure holds still: a mark that never stops moving beside every
-   answer pulls the eye off the words. While Astro works (charging up a
+   At rest the drawing holds still: a mark that never stops moving beside
+   every answer pulls the eye off the words. (The large figure on the home
+   screen and the welcome keeps its slow float, .astro-figure above; the
+   drawing inside it does not turn.) While Astro works (charging up a
    download, or thinking and working in the newest answer) the arms turn
    around the core and a twinkle runs along them. */
 
@@ -404,7 +406,7 @@
   width: min(560px, 100%);
 }
 
-.wake-up__colours {
+.wake-up__colour-look {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -412,7 +414,7 @@
   justify-content: center;
 }
 
-.wake-up__colours-label {
+.wake-up__colour-look-label {
   color: var(--astro-muted);
   font-size: 13px;
 }
@@ -446,10 +448,10 @@
   border-radius: inherit;
   background: linear-gradient(
     90deg,
-    var(--astro-colours-1, var(--astro-action)),
-    var(--astro-colours-2, var(--astro-action)),
-    var(--astro-colours-3, var(--astro-action)),
-    var(--astro-colours-4, var(--astro-action))
+    var(--astro-colour-look-1, var(--astro-action)),
+    var(--astro-colour-look-2, var(--astro-action)),
+    var(--astro-colour-look-3, var(--astro-action)),
+    var(--astro-colour-look-4, var(--astro-action))
   );
   transition: width 0.4s linear;
 }
@@ -691,7 +693,7 @@
 
 /* ---------- Colour chips (brain download and Your Astro) ---------- */
 
-.astro-colours-chips {
+.astro-colour-look-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

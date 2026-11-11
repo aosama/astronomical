@@ -4,7 +4,7 @@ import type { AstroLibrary } from "./AstroLibrary";
 import { AstroMoment, astroLine } from "./AstroLines";
 import type { AstroProfile } from "./AstroProfile";
 import { AstroStyle } from "./AstroStyle";
-import type { AstroColours } from "./AstroColours";
+import type { AstroColourLook } from "./AstroColourLook";
 import { buildGrownUpNotePanel } from "./GrownUpNote";
 import { buildNameForm } from "./NameForm";
 import { buildStyleChoiceRow } from "./StyleChoices";
@@ -24,7 +24,7 @@ export interface YourAstroCallbacks {
   currentProfile(): AstroProfile;
   saveNickname(typedNickname: string): Promise<boolean>;
   saveStyle(style: AstroStyle): Promise<boolean>;
-  saveColours(colours: AstroColours): Promise<boolean>;
+  saveColourLook(colourLook: AstroColourLook): Promise<boolean>;
   toggleShown(): Promise<boolean>;
   /** Saves the profile as it is now, after an earlier save failed. */
   retrySave(): Promise<boolean>;
@@ -179,7 +179,7 @@ export class YourAstroView {
         this.previewStyle = this.profile().style;
         this.advance(() => this.journey.editStyle());
       },
-      chooseColours: (colours) => void this.showSaveOutcome(this.callbacks.saveColours(colours)),
+      chooseColourLook: (colourLook) => void this.showSaveOutcome(this.callbacks.saveColourLook(colourLook)),
       toggleShown: () => void this.showSaveOutcome(this.callbacks.toggleShown()),
       readGrownUpNote: () => this.advance(() => this.journey.readGrownUpNote()),
       replay: () => {

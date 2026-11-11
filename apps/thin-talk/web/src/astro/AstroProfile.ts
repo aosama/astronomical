@@ -1,5 +1,5 @@
 import { AstroStyle, parseAstroStyle } from "./AstroStyle";
-import { AstroColours, parseAstroColours } from "./AstroColours";
+import { AstroColourLook, parseAstroColourLook } from "./AstroColourLook";
 
 /** Long enough for a first name or a nickname, short enough to fit Astro's
  * speech bubble and the home greeting on one line. */
@@ -7,7 +7,7 @@ export const MAXIMUM_NICKNAME_CHARACTERS = 20;
 
 /**
  * What Astro remembers about the person, kept only on this Mac: the nickname
- * Astro greets them by, the style they picked, the colours of Astro's galaxy,
+ * Astro greets them by, the style they picked, the colour look of Astro's galaxy,
  * whether they have finished the first flight, and whether Astro is shown at
  * all (the Focus switch).
  *
@@ -17,14 +17,14 @@ export const MAXIMUM_NICKNAME_CHARACTERS = 20;
 export class AstroProfile {
   public readonly nickname: string;
   public readonly style: AstroStyle;
-  public readonly colours: AstroColours;
+  public readonly colourLook: AstroColourLook;
   public readonly hasFinishedFirstFlight: boolean;
   public readonly isAstroShown: boolean;
 
-  public constructor(init: { nickname?: string; style?: AstroStyle; colours?: AstroColours; hasFinishedFirstFlight?: boolean; isAstroShown?: boolean }) {
+  public constructor(init: { nickname?: string; style?: AstroStyle; colourLook?: AstroColourLook; hasFinishedFirstFlight?: boolean; isAstroShown?: boolean }) {
     this.nickname = AstroProfile.cleanNickname(init.nickname != null ? init.nickname : "");
     this.style = init.style != null ? init.style : AstroStyle.EXPLORER;
-    this.colours = init.colours != null ? init.colours : AstroColours.SILVER;
+    this.colourLook = init.colourLook != null ? init.colourLook : AstroColourLook.SILVER;
     this.hasFinishedFirstFlight = init.hasFinishedFirstFlight === true;
     this.isAstroShown = init.isAstroShown !== false;
   }
@@ -57,8 +57,8 @@ export class AstroProfile {
     return new AstroProfile({ ...this.fields(), style });
   }
 
-  public withColours(colours: AstroColours): AstroProfile {
-    return new AstroProfile({ ...this.fields(), colours });
+  public withColourLook(colourLook: AstroColourLook): AstroProfile {
+    return new AstroProfile({ ...this.fields(), colourLook });
   }
 
   public withFirstFlightFinished(): AstroProfile {
@@ -69,7 +69,7 @@ export class AstroProfile {
     return new AstroProfile({ ...this.fields(), isAstroShown });
   }
 
-  public toPlain(): { nickname: string; style: string; colours: string; hasFinishedFirstFlight: boolean; isAstroShown: boolean } {
+  public toPlain(): { nickname: string; style: string; colourLook: string; hasFinishedFirstFlight: boolean; isAstroShown: boolean } {
     return this.fields();
   }
 
@@ -85,17 +85,17 @@ export class AstroProfile {
     return new AstroProfile({
       nickname: typeof storedNickname === "string" ? storedNickname : "",
       style: parseAstroStyle(profileRecord["style"]),
-      colours: parseAstroColours(profileRecord["colours"]),
+      colourLook: parseAstroColourLook(profileRecord["colourLook"]),
       hasFinishedFirstFlight: profileRecord["hasFinishedFirstFlight"] === true,
       isAstroShown: profileRecord["isAstroShown"] !== false,
     });
   }
 
-  private fields(): { nickname: string; style: AstroStyle; colours: AstroColours; hasFinishedFirstFlight: boolean; isAstroShown: boolean } {
+  private fields(): { nickname: string; style: AstroStyle; colourLook: AstroColourLook; hasFinishedFirstFlight: boolean; isAstroShown: boolean } {
     return {
       nickname: this.nickname,
       style: this.style,
-      colours: this.colours,
+      colourLook: this.colourLook,
       hasFinishedFirstFlight: this.hasFinishedFirstFlight,
       isAstroShown: this.isAstroShown,
     };

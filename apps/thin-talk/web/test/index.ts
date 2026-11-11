@@ -75,6 +75,7 @@ import "./skillMomentWords.test";
 import "./astroMessageChrome.test";
 import "./astroConversation.test";
 import "./astroGalaxy.test";
+import "./astroColourLook.test";
 import "./pictureModelGuidance.test";
 import "./astroLibrary.test";
 import "./exportBodyCleaner.test";

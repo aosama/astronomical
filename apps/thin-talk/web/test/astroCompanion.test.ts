@@ -72,7 +72,7 @@ test("should_welcome_a_newcomer_and_land_them_home_with_their_first_skill_ready_
   element<HTMLButtonElement>("astro-go-home").click();
   await waitFor(() => overlay().hidden, "the first flight to close");
   assert.equal(composerField().value, "Explain black holes in three sentences.");
-  assert.deepEqual(host.astroProfile, { nickname: "Sam", style: "pilot", colours: "silver", hasFinishedFirstFlight: true, isAstroShown: true });
+  assert.deepEqual(host.astroProfile, { nickname: "Sam", style: "pilot", colourLook: "silver", hasFinishedFirstFlight: true, isAstroShown: true });
   assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, Sam");
   assert.equal(composerField().placeholder, "Ask Astro anything");
 });
@@ -98,7 +98,7 @@ test("should_keep_a_name_and_style_chosen_halfway_through_and_offer_them_on_repl
   const first = bootNewcomer();
   await introduceSelf("Ada", "astro-style-explorer");
   await waitForStep("skills");
-  assert.deepEqual(first.host.astroProfile, { nickname: "Ada", style: "explorer", colours: "silver", hasFinishedFirstFlight: false, isAstroShown: true });
+  assert.deepEqual(first.host.astroProfile, { nickname: "Ada", style: "explorer", colourLook: "silver", hasFinishedFirstFlight: false, isAstroShown: true });
   bootJourney(first);
   await waitForStep("hello");
   element<HTMLButtonElement>("astro-greet").click();
@@ -175,11 +175,11 @@ test("should_save_a_colour_look_picked_while_the_brain_downloads", async () => {
   const { host } = bootNewcomer({ models: [] });
   await introduceSelf("", "astro-style-explorer");
   await waitForStep("wake");
-  await waitFor(() => isPresent("astro-colours-sunset"), "the colour chips");
-  element<HTMLButtonElement>("astro-colours-sunset").click();
-  await waitFor(() => (host.astroProfile as Record<string, unknown>)["colours"] === "sunset", "the colours to save");
-  assert.equal(element("astro-colours-sunset").getAttribute("aria-pressed"), "true");
-  assert.ok(document.getElementById("app")?.classList.contains("astro-colours--sunset"), "every Astro takes the look");
+  await waitFor(() => isPresent("astro-colour-look-sunset"), "the colour chips");
+  element<HTMLButtonElement>("astro-colour-look-sunset").click();
+  await waitFor(() => (host.astroProfile as Record<string, unknown>)["colourLook"] === "sunset", "the colour look to save");
+  assert.equal(element("astro-colour-look-sunset").getAttribute("aria-pressed"), "true");
+  assert.ok(document.getElementById("app")?.classList.contains("astro-colour-look--sunset"), "every Astro takes the look");
 });
 
 test("should_tell_a_newcomer_kindly_when_another_download_holds_the_library", async () => {
@@ -222,7 +222,7 @@ test("should_keep_astro_hidden_when_hidden_during_the_first_flight", async () =>
   window.__thintalkCommands?.run({ name: "toggleAstro" });
   element<HTMLButtonElement>("astro-skip").click();
   await waitFor(() => overlay().hidden, "the first flight to close");
-  assert.deepEqual(host.astroProfile, { nickname: "Kim", style: "explorer", colours: "silver", hasFinishedFirstFlight: true, isAstroShown: false });
+  assert.deepEqual(host.astroProfile, { nickname: "Kim", style: "explorer", colourLook: "silver", hasFinishedFirstFlight: true, isAstroShown: false });
   assert.equal(isPresent("astro-home"), false);
 });
 

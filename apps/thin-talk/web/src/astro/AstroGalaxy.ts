@@ -54,7 +54,7 @@ function armStarHtml(armIndex: number, starIndexInArm: number): string {
   // Brightness is fill-opacity so the twinkle, which animates opacity,
   // multiplies with it instead of flattening the arm's fade.
   return (
-    `<circle class="astro-galaxy__star" style="--star-order:${starIndexInArm};fill:var(--astro-colours-${lookColour},var(--astro-ink))" ` +
+    `<circle class="astro-galaxy__star" style="--star-order:${starIndexInArm};fill:var(--astro-colour-look-${lookColour},var(--astro-ink))" ` +
     `cx="${twoDecimals(GRID_CENTRE + distanceFromCore * Math.cos(angleRadians))}" ` +
     `cy="${twoDecimals(GRID_CENTRE + distanceFromCore * Math.sin(angleRadians))}" ` +
     `r="${twoDecimals(starRadius)}" fill-opacity="${twoDecimals(brightness)}"/>`

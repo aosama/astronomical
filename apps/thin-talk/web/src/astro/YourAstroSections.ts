@@ -1,7 +1,7 @@
 import { makeElement } from "./AstroDom";
 import type { AstroProfile } from "./AstroProfile";
-import { buildColoursChips } from "./AstroColours";
-import type { AstroColours } from "./AstroColours";
+import { buildColourLookChips } from "./AstroColourLook";
+import type { AstroColourLook } from "./AstroColourLook";
 import { makeRow, makeSection, rowButton } from "./YourAstroRows";
 import { styleSummary } from "./StyleChoices";
 
@@ -12,7 +12,7 @@ export const YOUR_ASTRO_ID_PREFIX = "your-astro";
 export interface YourAstroRowActions {
   editName(): void;
   editStyle(): void;
-  chooseColours(colours: AstroColours): void;
+  chooseColourLook(colourLook: AstroColourLook): void;
   toggleShown(): void;
   readGrownUpNote(): void;
   replay(): void;
@@ -32,8 +32,8 @@ export function buildAboutYouSection(document: Document, profile: AstroProfile, 
 
 export function buildLookSection(document: Document, profile: AstroProfile, actions: YourAstroRowActions): HTMLElement {
   const section = makeSection(document, "Look", "your-astro-look");
-  const coloursChips = buildColoursChips(document, YOUR_ASTRO_ID_PREFIX, profile.colours, (colours) => actions.chooseColours(colours));
-  section.append(makeRow(document, "Colours", coloursChips, null), makeRow(document, "Show Astro", shownDetail(document, profile.isAstroShown), shownSwitch(document, profile.isAstroShown, actions)));
+  const colourLookChips = buildColourLookChips(document, YOUR_ASTRO_ID_PREFIX, profile.colourLook, (colourLook) => actions.chooseColourLook(colourLook));
+  section.append(makeRow(document, "Colours", colourLookChips, null), makeRow(document, "Show Astro", shownDetail(document, profile.isAstroShown), shownSwitch(document, profile.isAstroShown, actions)));
   return section;
 }
 
