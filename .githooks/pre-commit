@@ -106,6 +106,30 @@ if git diff --cached --name-only | grep -q '^crates/model-serving/'; then
     fi
 fi
 
+# Acceptance tests with every feature on. Their journeys sit behind features
+# (serving-acceptance, direct-mlx, performance-measurement and others), so
+# the default-world pass above never type-checks them, and no GitHub Actions
+# lane compiles this crate: its journeys need an Apple-silicon graphics
+# processor and installed models. A change elsewhere, such as a new worker
+# event, therefore broke them unseen twice (issues #2052 and #2076). Gated on
+# any staged Rust source, not on acceptance paths, because both breaks came
+# from crates the acceptance tests only consume. Measured on a warm cache:
+# under one second with nothing to recheck, two seconds after an edit to a
+# crate the tests depend on.
+if git diff --cached --name-only | grep -q '\.rs$'; then
+    printf '%s\n' "[pre-commit] status=start check=acceptance-all-features root=${REPOSITORY_ROOT}"
+    acceptance_started_epoch_seconds="$(date +%s)"
+    if cargo clippy -p astronomical-acceptance --tests --all-features; then
+        acceptance_elapsed_seconds=$(( $(date +%s) - acceptance_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=acceptance-all-features elapsed_seconds=${acceptance_elapsed_seconds}"
+    else
+        acceptance_elapsed_seconds=$(( $(date +%s) - acceptance_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=acceptance-all-features elapsed_seconds=${acceptance_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=a feature-gated acceptance test no longer compiles; the staged change may be in a crate it uses rather than in the test itself' >&2
+        exit 1
+    fi
+fi
+
 # Coverage floor for the memory-policy crate (local hook only; deliberately
 # no continuous-integration step). The crate is the admission and eviction
 # brain, so any commit staging changes to its sources — deletions included,
