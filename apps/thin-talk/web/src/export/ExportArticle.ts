@@ -1,12 +1,14 @@
 import type { ExportContent, ExportEntry } from "./ExportContentBuilder";
+import { PRINTED_MARGIN_INCHES, textWidthInches } from "./PaperSize";
+import type { PaperSize } from "./PaperSize";
 import { KEPT_TOGETHER_CLASS, markupKeepingHeadingsWithTheirBlocks } from "./HeadingKeeper";
 
 /**
  * The exported document as HTML, and the one stylesheet that dresses it.
  *
  * All three formats start here. The web page is this markup in a file; the
- * PDF is the same file printed by the host; the Word document is the article
- * and the shared rules read by the Word writer. One source is what keeps the
+ * PDF is that file with one print rule more, printed by the host; the Word
+ * document is the article and the shared rules read by the Word writer. One source is what keeps the
  * preview honest: what the sheet shows is what every format is made from.
  */
 
@@ -47,8 +49,13 @@ p.export-note { color: #6a6761; font-size: 9pt; margin-top: 24pt; }
  * the printed body by fifteen sixteenths makes a point on paper a point.
  * Scaling the host's print job by the same factor was tried first and cut
  * tables and diagrams across pages: the engine and the print system then
- * disagreed on where a page ends. */
+ * disagreed on where a page ends.
+ *
+ * Only the page the host prints as the PDF is zoomed. A saved web page may
+ * be printed from any browser, and Chrome already prints a point as a point:
+ * zoomed, a 20-point line came out of Chrome at 18.75. */
 export const PRINT_TRUE_SIZE_ZOOM = 15 / 16;
+const HOST_PRINTED_PAGE_RULES = `@media print { body { zoom: ${PRINT_TRUE_SIZE_ZOOM}; } }`;
 
 /** What a printed page never cuts in two. The page estimate reads the same
  * list, so the count the sheet shows follows the breaks the printer makes. */
@@ -61,7 +68,7 @@ export const PAGE_ONLY_EXPORT_RULES = `
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body { margin: 0; background: #ffffff; }
 .export-article { max-width: 6.5in; margin: 0 auto; padding: 0.6in 0.5in; font-family: -apple-system, "Helvetica Neue", "Segoe UI", Arial, sans-serif; }
-@media print { .export-article { max-width: none; margin: 0; padding: 0; } body { zoom: ${PRINT_TRUE_SIZE_ZOOM}; } }
+@media print { .export-article { max-width: none; margin: 0; padding: 0; } }
 pre, code { font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace; }
 h1, h2, h3, h4 { break-after: avoid; }
 ${WHOLE_BLOCK_SELECTOR} { break-inside: avoid; }
@@ -127,12 +134,10 @@ function pagedArticleHtml(content: ExportContent): string {
 export const PREVIEW_SCALE = 0.3;
 /** The element whose height the sheet sets to the scaled page's height. */
 export const PREVIEW_FRAME_CLASS = "export-preview-frame";
-/** The printed page's margin, which the host's print setup also uses. */
-export const PRINTED_MARGIN_INCHES = 1;
 
 /**
- * The document as the export sheet previews it: a letter-size sheet with the
- * printed page's one-inch margins and 6.5-inch text column, so code wraps and
+ * The document as the export sheet previews it: a sheet of the Mac's paper
+ * with the printed page's one-inch margins and text column, so code wraps and
  * pages break where they will on paper.
  *
  * The page is laid out at full size and shrunk with a transform. CSS zoom
@@ -143,26 +148,36 @@ export const PRINTED_MARGIN_INCHES = 1;
  * Its layout keeps the full height, so the frame around it is given the
  * scaled height once the page is drawn (`ExportSheetView.fitPreviewFrame`).
  */
-export function exportPreviewMarkup(content: ExportContent): string {
+export function exportPreviewMarkup(content: ExportContent, paper: PaperSize): string {
   const previewPageRules =
     `:host{display:block}` +
     `.${PREVIEW_FRAME_CLASS}{overflow:hidden}` +
-    `.export-preview-scaler{width:8.5in;transform:scale(${PREVIEW_SCALE});transform-origin:0 0}` +
-    `.export-article{box-sizing:content-box;max-width:none;width:6.5in;margin:0;padding:${PRINTED_MARGIN_INCHES}in}`;
+    `.export-preview-scaler{width:${paper.widthInches}in;transform:scale(${PREVIEW_SCALE});transform-origin:0 0}` +
+    `.export-article{box-sizing:content-box;max-width:none;width:${textWidthInches(paper)}in;margin:0;padding:${PRINTED_MARGIN_INCHES}in}`;
   return (
     `<style>${SHARED_EXPORT_RULES}${PAGE_ONLY_EXPORT_RULES}${previewPageRules}</style>` +
     `<div class="${PREVIEW_FRAME_CLASS}"><div class="export-preview-scaler">${pagedArticleHtml(content)}</div></div>`
   );
 }
 
-/** The whole file for a web page, and the page the host prints as a PDF. */
-export function standaloneExportPage(content: ExportContent): string {
+function standalonePage(content: ExportContent, extraRules: string): string {
   return (
     `<!DOCTYPE html><html><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
     `<meta http-equiv="Content-Security-Policy" content="${STANDALONE_PAGE_POLICY}">` +
     `<title>${escapeExportText(content.title)}</title>` +
-    `<style>${SHARED_EXPORT_RULES}${PAGE_ONLY_EXPORT_RULES}</style>` +
+    `<style>${SHARED_EXPORT_RULES}${PAGE_ONLY_EXPORT_RULES}${extraRules}</style>` +
     `</head><body>${pagedArticleHtml(content)}</body></html>`
   );
+}
+
+/** The whole file for a saved web page. */
+export function standaloneExportPage(content: ExportContent): string {
+  return standalonePage(content, "");
+}
+
+/** The page the host prints as the PDF: the saved web page with the one
+ * rule that makes the host's print engine draw sizes as written. */
+export function hostPrintedExportPage(content: ExportContent): string {
+  return standalonePage(content, HOST_PRINTED_PAGE_RULES);
 }

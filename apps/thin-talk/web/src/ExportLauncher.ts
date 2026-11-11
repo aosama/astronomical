@@ -1,3 +1,4 @@
+import type { PaperSize } from "./export/PaperSize";
 import type { ChatController } from "./ChatController";
 import type { ChatSurfaceState } from "./ChatSurfaceState";
 import { exportableMessages } from "./ExportSource";
@@ -19,6 +20,7 @@ const EXPORT_SCRIPT_SOURCE = "thintalk-asset://shell/export.js";
 
 export interface ExportLauncherTargets {
   readonly sheetElement: HTMLElement;
+  readonly printedPaper: PaperSize;
   readonly controller: ChatController;
   readonly transcript: TranscriptView;
   readonly bridge: SessionBridge;
@@ -93,6 +95,7 @@ export class ExportLauncher {
     const { transcript, bridge, picker, notice } = this.targets;
     return {
       sheetElement: this.targets.sheetElement,
+      printedPaper: this.targets.printedPaper,
       conversationTitle: () => this.conversationTitle(),
       assistantName: () => (transcript.persona.isAstroShown ? ASTRO_NAME : null),
       exportableMessages: () => exportableMessages(transcript),

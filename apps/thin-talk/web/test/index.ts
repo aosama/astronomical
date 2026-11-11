@@ -81,6 +81,7 @@ import "./exportBodyCleaner.test";
 import "./exportContentBuilder.test";
 import "./exportArticle.test";
 import "./pageEstimate.test";
+import "./paperSize.test";
 import "./wordDocumentWriter.test";
 import "./exportSheet.test";
 import "./messagePicker.test";

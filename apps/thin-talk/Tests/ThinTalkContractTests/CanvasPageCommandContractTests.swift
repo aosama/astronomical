@@ -91,4 +91,16 @@ final class CanvasPageCommandContractTests: XCTestCase {
     XCTAssertTrue(
       plainScript.contains("\"canRestartEngine\":false"), "a host without a restart says so: \(plainScript)")
   }
+
+  func test_should_tell_the_page_the_paper_only_when_the_host_names_one() throws {
+    let identity = ThinTalkApplicationIdentity(channel: .development, daemonPort: 6733)
+    let a4Script = try CanvasRuntimeConfig(
+      applicationIdentity: identity, printedPaper: .init(widthPoints: 595, heightPoints: 842)
+    ).userScriptSource()
+    XCTAssertTrue(a4Script.contains("\"printedPaper\":{"), a4Script)
+    XCTAssertTrue(a4Script.contains("\"widthPoints\":595"), a4Script)
+    XCTAssertTrue(a4Script.contains("\"heightPoints\":842"), a4Script)
+    let plainScript = try CanvasRuntimeConfig(applicationIdentity: identity).userScriptSource()
+    XCTAssertFalse(plainScript.contains("printedPaper"), plainScript)
+  }
 }

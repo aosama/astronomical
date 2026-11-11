@@ -13,18 +13,21 @@ import WebKit
 public final class ExportPDFPrinter: NSObject, WKNavigationDelegate {
   static let pageMarginPoints: CGFloat = 72
 
+  /// The sheet the PDF is cut into: the Mac's default unless a caller names
+  /// one, which is how A4 is printed on a Mac set to Letter and the reverse.
+  private let paperSize: NSSize
   private let webView: WKWebView
   /// A print operation runs as a sheet on a window; this one is never shown.
   private let offscreenWindow: NSWindow
   private var pageLoaded: CheckedContinuation<Void, Error>?
   private var printFinished: CheckedContinuation<Bool, Never>?
 
-  public override init() {
+  public init(paperSize: NSSize = NSPrintInfo.shared.paperSize) {
+    self.paperSize = paperSize
     let configuration = WKWebViewConfiguration()
     // The page is saved data, not the app: it keeps nothing and runs nothing.
     configuration.websiteDataStore = .nonPersistent()
     configuration.defaultWebpagePreferences.allowsContentJavaScript = false
-    let paperSize = NSPrintInfo.shared.paperSize
     let pageFrame = NSRect(origin: .zero, size: paperSize)
     webView = WKWebView(frame: pageFrame, configuration: configuration)
     // A panel that does not activate its app: the print job runs as a sheet
@@ -53,7 +56,7 @@ public final class ExportPDFPrinter: NSObject, WKNavigationDelegate {
       pageLoaded = continuation
       webView.loadHTMLString(html, baseURL: nil)
     }
-    let printOperation = webView.printOperation(with: Self.printInfo(savingTo: destinationURL))
+    let printOperation = webView.printOperation(with: Self.printInfo(savingTo: destinationURL, paperSize: paperSize))
     printOperation.showsPrintPanel = false
     printOperation.showsProgressPanel = false
     // WebKit's print view starts with no size of its own; without one the
@@ -68,8 +71,9 @@ public final class ExportPDFPrinter: NSObject, WKNavigationDelegate {
     guard didPrint else { throw PrintError.printingFailed }
   }
 
-  static func printInfo(savingTo destinationURL: URL) -> NSPrintInfo {
+  static func printInfo(savingTo destinationURL: URL, paperSize: NSSize) -> NSPrintInfo {
     let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
+    printInfo.paperSize = paperSize
     printInfo.jobDisposition = .save
     printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = destinationURL
     printInfo.topMargin = pageMarginPoints

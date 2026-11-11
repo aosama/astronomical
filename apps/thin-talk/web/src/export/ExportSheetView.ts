@@ -4,6 +4,7 @@ import type { ExportOptions, ExportScope } from "./ExportOptions";
 import { PREVIEW_FRAME_CLASS, PREVIEW_SCALE, WHOLE_BLOCK_SELECTOR } from "./ExportArticle";
 import { wholeBlocksIn } from "./PageEstimate";
 import type { WholeBlock } from "./PageEstimate";
+import type { PaperSize } from "./PaperSize";
 
 /** The scope choices the sheet can show; "oneAnswer" only when it was opened
  * from an answer. */
@@ -89,6 +90,13 @@ function setTabStop(radioButtons: Iterable<HTMLElement>): void {
   }
 }
 
+const CSS_PIXELS_PER_INCH = 96;
+
+/** One side of the paper as the preview draws it, in whole pixels. */
+export function previewSidePixels(sideInches: number): number {
+  return Math.round(sideInches * CSS_PIXELS_PER_INCH * PREVIEW_SCALE);
+}
+
 /**
  * Draws the export sheet: a live preview of the real document on the left,
  * and on the right what to export, as what, and what to include.
@@ -109,19 +117,23 @@ export class ExportSheetView {
   private readonly saveButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
 
-  public constructor(sheetElement: HTMLElement, callbacks: ExportSheetCallbacks) {
+  public constructor(sheetElement: HTMLElement, callbacks: ExportSheetCallbacks, paper: PaperSize) {
     this.sheetElement = sheetElement;
     this.callbacks = callbacks;
     const panel = makeElement("div", "export-sheet__panel");
     const previewColumn = makeElement("div", "export-sheet__preview-column");
-    const paper = makeElement("div", "export-sheet__paper");
-    paper.dataset.testid = "export-preview";
-    paper.setAttribute("role", "img");
-    paper.setAttribute("aria-label", "Preview of the exported file");
-    this.previewRoot = paper.attachShadow({ mode: "open" });
+    const previewPaper = makeElement("div", "export-sheet__paper");
+    previewPaper.dataset.testid = "export-preview";
+    previewPaper.setAttribute("role", "img");
+    previewPaper.setAttribute("aria-label", "Preview of the exported file");
+    // One page of the Mac's paper at the preview's scale: A4 is narrower
+    // and taller than Letter, and the box shows which one the file is for.
+    previewPaper.style.width = `${previewSidePixels(paper.widthInches)}px`;
+    previewPaper.style.height = `${previewSidePixels(paper.heightInches)}px`;
+    this.previewRoot = previewPaper.attachShadow({ mode: "open" });
     this.pageCount = makeElement("p", "export-sheet__pages");
     this.pageCount.dataset.testid = "export-page-count";
-    previewColumn.append(paper, this.pageCount);
+    previewColumn.append(previewPaper, this.pageCount);
     this.status = makeElement("p", "export-sheet__status");
     this.status.setAttribute("role", "status");
     this.status.dataset.testid = "export-status";

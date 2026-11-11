@@ -1,4 +1,4 @@
-import { exportPreviewMarkup, PRINTED_MARGIN_INCHES } from "./ExportArticle";
+import { exportPreviewMarkup } from "./ExportArticle";
 import { ExportContentBuilder, messagesInScope } from "./ExportContentBuilder";
 import type { ExportContent } from "./ExportContentBuilder";
 import type { ExportEnvironment } from "./ExportEnvironment";
@@ -11,27 +11,28 @@ import { exportSaveRequest } from "./ExportWriter";
 import { rasteriseDiagramOnCanvas } from "./DiagramRasteriser";
 import type { DiagramRasteriser } from "./DiagramRasteriser";
 import { pagedTextHeightPixels } from "./PageEstimate";
+import { PRINTED_MARGIN_INCHES, textHeightInches } from "./PaperSize";
+import type { PaperSize } from "./PaperSize";
 
 const CSS_PIXELS_PER_INCH = 96;
-/** The height of text on a printed Letter page: eleven inches less the two
- * margins. A4 is a little taller, so the estimate errs towards one page more,
- * which is why the sheet says "about". */
-const PRINTED_TEXT_HEIGHT_PIXELS = (11 - 2 * PRINTED_MARGIN_INCHES) * CSS_PIXELS_PER_INCH;
 const PRINTED_MARGINS_HEIGHT_PIXELS = 2 * PRINTED_MARGIN_INCHES * CSS_PIXELS_PER_INCH;
-/** The preview page's full width: a Letter sheet, 8.5 inches. */
-const PREVIEW_PAGE_WIDTH_PIXELS = 8.5 * CSS_PIXELS_PER_INCH;
+
+/** The height of the text on one printed page of `paper`. */
+function printedTextHeightPixels(paper: PaperSize): number {
+  return textHeightInches(paper) * CSS_PIXELS_PER_INCH;
+}
 
 /**
  * The text height of the previewed document at full size, from the size its
- * page was laid out at. The page is known to be 8.5 inches wide, so its
+ * page was laid out at. The page is known to be as wide as the paper, so its
  * width gives the scale, which keeps the measure right however the preview
  * is scaled or however the browser reports a scaled size.
  */
-export function previewTextHeightPixels(drawnWidthPixels: number, drawnHeightPixels: number): number {
+export function previewTextHeightPixels(drawnWidthPixels: number, drawnHeightPixels: number, paper: PaperSize): number {
   if (drawnWidthPixels <= 0) {
     return 0;
   }
-  const fullSizeHeightPixels = drawnHeightPixels * (PREVIEW_PAGE_WIDTH_PIXELS / drawnWidthPixels);
+  const fullSizeHeightPixels = drawnHeightPixels * ((paper.widthInches * CSS_PIXELS_PER_INCH) / drawnWidthPixels);
   return Math.max(0, fullSizeHeightPixels - PRINTED_MARGINS_HEIGHT_PIXELS);
 }
 
@@ -39,11 +40,11 @@ const SAVE_FAILED_STATUS = "That file couldn't be saved. Try again.";
 const NOTHING_TO_EXPORT_STATUS = "There's nothing to export with these choices yet.";
 
 /** "About 3 pages", or what a web page is instead. */
-export function pageCountText(format: ExportFormat, measuredHeightPixels: number): string {
+export function pageCountText(format: ExportFormat, measuredHeightPixels: number, paper: PaperSize): string {
   if (format === ExportFormat.WEB_PAGE) {
     return "One page that scrolls";
   }
-  const estimatedPages = Math.max(1, Math.ceil(measuredHeightPixels / PRINTED_TEXT_HEIGHT_PIXELS));
+  const estimatedPages = Math.max(1, Math.ceil(measuredHeightPixels / printedTextHeightPixels(paper)));
   return estimatedPages === 1 ? "1 page" : `About ${estimatedPages} pages`;
 }
 
@@ -74,7 +75,7 @@ export class ExportSheet {
       toggle: (toggle, isOn) => this.toggle(toggle, isOn),
       save: () => void this.save(),
       cancel: () => this.view.hide(),
-    });
+    }, environment.printedPaper);
   }
 
   private freshBuilder(): ExportContentBuilder {
@@ -148,13 +149,13 @@ export class ExportSheet {
       return;
     }
     this.latestContent = content;
-    this.view.showPreview(exportPreviewMarkup(content), "");
+    this.view.showPreview(exportPreviewMarkup(content, this.environment.printedPaper), "");
     this.view.setCanSave(content.entries.length > 0);
     this.view.setStatus(content.entries.length > 0 ? "" : NOTHING_TO_EXPORT_STATUS);
     await this.view.previewPicturesLoaded();
     if (generation === this.previewGeneration) {
       this.view.fitPreviewFrame();
-      this.view.setPageCount(pageCountText(this.options.format, this.measuredTextHeightPixels()));
+      this.view.setPageCount(pageCountText(this.options.format, this.measuredTextHeightPixels(), this.environment.printedPaper));
     }
   }
 
@@ -168,9 +169,9 @@ export class ExportSheet {
     if (previewArticle === null) {
       return 0;
     }
-    const flowingHeightPixels = previewTextHeightPixels(previewArticle.offsetWidth, previewArticle.offsetHeight);
+    const flowingHeightPixels = previewTextHeightPixels(previewArticle.offsetWidth, previewArticle.offsetHeight, this.environment.printedPaper);
     const wholeBlocks = this.view.previewWholeBlocks(PRINTED_MARGIN_INCHES * CSS_PIXELS_PER_INCH);
-    return pagedTextHeightPixels(flowingHeightPixels, wholeBlocks, PRINTED_TEXT_HEIGHT_PIXELS);
+    return pagedTextHeightPixels(flowingHeightPixels, wholeBlocks, printedTextHeightPixels(this.environment.printedPaper));
   }
 
   private async save(): Promise<void> {
@@ -182,7 +183,7 @@ export class ExportSheet {
     this.view.setSaving(true, saveLabel);
     this.view.setStatus("");
     try {
-      const saveRequest = await exportSaveRequest(content, this.options.format, this.rasteriseDiagram);
+      const saveRequest = await exportSaveRequest(content, this.options.format, this.rasteriseDiagram, this.environment.printedPaper);
       const saveOutcome = await this.environment.saveDocument(saveRequest);
       if (saveOutcome.outcome === "saved") {
         // Kept only once a file was really saved: choices tried and

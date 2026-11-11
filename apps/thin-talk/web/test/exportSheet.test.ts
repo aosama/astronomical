@@ -1,3 +1,5 @@
+import { A4_PAPER, LETTER_PAPER } from "../src/export/PaperSize";
+import { previewSidePixels } from "../src/export/ExportSheetView";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { waitFor } from "./support/dom";
@@ -35,6 +37,7 @@ function sheetScene(): SheetScene {
   let keptChoices: ExportChoices | null = null;
   const environment: ExportEnvironment = {
     sheetElement,
+    printedPaper: LETTER_PAPER,
     conversationTitle: () => "Mitosis explained",
     assistantName: () => "Astro",
     exportableMessages: () => [exportableMessage("q1", true, "What is mitosis?"), exportableMessage("a1", false, "Cell division."), exportableMessage("q2", true, "Thanks"), exportableMessage("a2", false, "You're welcome.")],
@@ -177,21 +180,21 @@ test("should_close_on_cancel_and_on_escape", () => {
 });
 
 test("should_estimate_pages_for_paper_formats_and_none_for_a_web_page", () => {
-  assert.equal(pageCountText(ExportFormat.PDF, 0), "1 page");
-  assert.equal(pageCountText(ExportFormat.PDF, 864), "1 page");
-  assert.equal(pageCountText(ExportFormat.PDF, 865), "About 2 pages");
-  assert.equal(pageCountText(ExportFormat.WORD, 864 * 3), "About 3 pages");
-  assert.equal(pageCountText(ExportFormat.WEB_PAGE, 864 * 3), "One page that scrolls");
+  assert.equal(pageCountText(ExportFormat.PDF, 0, LETTER_PAPER), "1 page");
+  assert.equal(pageCountText(ExportFormat.PDF, 864, LETTER_PAPER), "1 page");
+  assert.equal(pageCountText(ExportFormat.PDF, 865, LETTER_PAPER), "About 2 pages");
+  assert.equal(pageCountText(ExportFormat.WORD, 864 * 3, LETTER_PAPER), "About 3 pages");
+  assert.equal(pageCountText(ExportFormat.WEB_PAGE, 864 * 3, LETTER_PAPER), "One page that scrolls");
 });
 
 test("should_measure_the_previewed_text_at_full_size_whatever_scale_the_page_was_drawn_at", () => {
   const fullPageWidth = 8.5 * 96;
   const fiveInchesOfText = 5 * 96;
   const fullPageHeight = fiveInchesOfText + 2 * 96;
-  assert.equal(previewTextHeightPixels(fullPageWidth, fullPageHeight), fiveInchesOfText, "reported unzoomed, as WebKit does");
-  assert.equal(previewTextHeightPixels(fullPageWidth * 0.3, fullPageHeight * 0.3), fiveInchesOfText, "reported zoomed");
-  assert.equal(previewTextHeightPixels(0, 500), 0, "a preview not drawn yet");
-  assert.equal(previewTextHeightPixels(fullPageWidth, 100), 0, "margins alone are no text");
+  assert.equal(previewTextHeightPixels(fullPageWidth, fullPageHeight, LETTER_PAPER), fiveInchesOfText, "reported unzoomed, as WebKit does");
+  assert.equal(previewTextHeightPixels(fullPageWidth * 0.3, fullPageHeight * 0.3, LETTER_PAPER), fiveInchesOfText, "reported zoomed");
+  assert.equal(previewTextHeightPixels(0, 500, LETTER_PAPER), 0, "a preview not drawn yet");
+  assert.equal(previewTextHeightPixels(fullPageWidth, 100, LETTER_PAPER), 0, "margins alone are no text");
 });
 
 function pressKey(target: Element, key: string): void {
@@ -297,4 +300,27 @@ test("should_keep_export_choices_through_a_save_and_reload_of_the_preferences", 
   assert.deepEqual(reloadedPreferences.exportChoices, { format: ExportFormat.WEB_PAGE, includesPictures: false, includesAiNote: true });
   assert.equal(SessionPreferences.fromPlain({ modelID: "m" }).exportChoices, null, "preferences saved before exports existed");
   assert.equal(SessionPreferences.fromPlain({ exportChoices: { format: "rtf" } }).exportChoices, null);
+});
+
+// A4 holds 9.69 inches of text a page where Letter holds 9: the same text
+// that needs a second Letter page can fit on one A4 page.
+test("should_count_pages_by_the_height_of_the_macs_paper", () => {
+  const nineAndAHalfInchesOfText = 9.5 * 96;
+
+  assert.equal(pageCountText(ExportFormat.PDF, nineAndAHalfInchesOfText, LETTER_PAPER), "About 2 pages");
+  assert.equal(pageCountText(ExportFormat.PDF, nineAndAHalfInchesOfText, A4_PAPER), "1 page");
+  assert.equal(previewTextHeightPixels(8.27 * 96, 7 * 96, A4_PAPER), 5 * 96, "the A4 page's own width gives the scale");
+});
+
+test("should_shape_the_preview_box_as_one_page_of_the_macs_paper", () => {
+  assert.equal(previewSidePixels(8.5), 245);
+  assert.equal(previewSidePixels(11), 317);
+  assert.equal(previewSidePixels(8.27), 238);
+  assert.equal(previewSidePixels(11.69), 337);
+
+  const scene = sheetScene();
+  scene.sheet.open({ kind: "wholeChat" });
+  const previewPaper = scene.sheetElement.querySelector<HTMLElement>('[data-testid="export-preview"]');
+  assert.equal(previewPaper?.style.width, "245px");
+  assert.equal(previewPaper?.style.height, "317px");
 });

@@ -1,3 +1,4 @@
+import type { PaperSize } from "./export/PaperSize";
 import { ImageModelDirectory } from "./ImageModelDirectory";
 import { ImageModelSelection } from "./ImageModelSelection";
 import { AppConfig } from "./AppConfig";
@@ -53,7 +54,7 @@ function showApplicationTitle(config: AppConfig): void {
 
 /** Wires exporting: the sheet the export script draws in, the message picker
  * and the brief notice that says a file was saved. */
-function wireExport(controller: ChatController, transcript: TranscriptView, bridge: SessionBridge, diagrams: DiagramPipeline): ExportLauncher {
+function wireExport(controller: ChatController, transcript: TranscriptView, bridge: SessionBridge, diagrams: DiagramPipeline, printedPaper: PaperSize): ExportLauncher {
   const picker = new MessagePicker(
     {
       appRoot: requireElement<HTMLElement>("#app"),
@@ -67,6 +68,7 @@ function wireExport(controller: ChatController, transcript: TranscriptView, brid
   );
   return new ExportLauncher({
     sheetElement: requireElement<HTMLElement>("#export-sheet"),
+    printedPaper,
     controller,
     transcript,
     bridge,
@@ -208,7 +210,7 @@ export function bootChatClient(): AppShell {
     transcriptElement: requireElement<HTMLElement>("#transcript"),
   });
   controller.subscribe((publishedState) => modelLoadNotice.setWaitingForFirstWords(isWaitingForFirstWords(publishedState)));
-  const exportLauncher = wireExport(controller, transcript, bridge, diagrams);
+  const exportLauncher = wireExport(controller, transcript, bridge, diagrams, config.printedPaper);
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();
   const astro = new AstroCompanion({
