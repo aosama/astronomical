@@ -145,6 +145,27 @@ fn should_ship_clef_flash_as_a_decision_model_with_its_head_and_limit() {
     assert!(description.contains("16,384 tokens") && description.contains("Text only"));
 }
 
+/// Clef's memory figure is the peak `cargo measure-clef-decision-latency`
+/// printed after requests at the 16,384-token limit, not an estimate from
+/// the weight files. It is more than the files, which a forward pass works
+/// beside.
+#[test]
+fn should_state_clef_flash_memory_as_the_peak_measured_at_its_token_limit() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let mut clef_memory_bytes = None;
+    let mut clef_size_bytes = None;
+    for catalog_entry in download_catalog.entries() {
+        if catalog_entry.huggingface_id() == "mlx-community/clef-flash-8bit" {
+            clef_memory_bytes = Some(catalog_entry.approximate_memory_bytes());
+            clef_size_bytes = Some(catalog_entry.approximate_size_bytes());
+        }
+    }
+
+    assert_eq!(clef_memory_bytes, Some(12_380_644_404));
+    assert!(clef_memory_bytes > clef_size_bytes);
+}
+
 #[test]
 fn should_accept_bounded_executable_payload_selection_and_reject_unsafe_rules() {
     let selected_entry = entry_with_overrides(serde_json::json!({
