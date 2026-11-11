@@ -241,6 +241,9 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo xtask app draft "<text>"` puts that text in the running Development
 # chat's message field, also in the background and without sending it, so a
 # question can be typed for a live check without taking the keyboard;
+# `cargo xtask app export-to <absolute folder>` has that chat write its next
+# export into the folder under its suggested name with no save panel, which
+# would otherwise come to the front; it holds for one export;
 # `cargo xtask app instance
 # status|start|stop|restart` controls that instance headless; `stop` quits
 # the chat app and the menu-bar agent, and `restart` reopens the agent (not

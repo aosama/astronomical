@@ -26,6 +26,11 @@ public final class CanvasCommandController {
     canvas?.fillDraft(draftText)
   }
 
+  /// Has the next export written into `exportFolder` with no save panel.
+  public func saveNextExportWithoutAsking(into exportFolder: URL) {
+    canvas?.saveNextExportWithoutAsking(into: exportFolder)
+  }
+
   func attach(_ canvas: ConversationCanvasView) {
     self.canvas = canvas
   }

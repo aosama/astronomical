@@ -40,6 +40,9 @@ public final class ConversationCanvasView: NSView {
   private var commandsAwaitingPageLoad: [CanvasPageCommand] = []
   /// A draft sent before the page finished loading; only the latest is kept.
   private var draftAwaitingPageLoad: String?
+  /// Where the next export goes without a save panel, when a Development
+  /// export-folder link set one. Cleared as soon as an export takes it.
+  private var folderForNextExport: URL?
   private var isPageLoaded = false
   /// The native title bar's reach into the page, in points; nil for a plain
   /// title bar. Kept so every zoom change can re-send it in CSS pixels.
@@ -108,6 +111,7 @@ public final class ConversationCanvasView: NSView {
       assetRegistry: assetRegistry,
       restartEngine: restartEngine,
       webViewProvider: { [weak self] in self?.webView },
+      takeFolderForNextExport: { [weak self] in self?.takeFolderForNextExport() },
       onPageLoaded: { [weak self] in self?.pageDidLoad() }
     )
     configuration.userContentController.add(coordinator, name: CanvasCoordinator.messageHandlerName)
@@ -195,6 +199,19 @@ public final class ConversationCanvasView: NSView {
     webView?.evaluateJavaScript(draftScript, completionHandler: nil)
   }
 
+  /// Has the next export written into `exportFolder` under its suggested
+  /// name, with no save panel. It holds for one export only, so a later one
+  /// asks again as usual.
+  public func saveNextExportWithoutAsking(into exportFolder: URL) {
+    folderForNextExport = exportFolder
+  }
+
+  private func takeFolderForNextExport() -> URL? {
+    let unaskedFolder = folderForNextExport
+    folderForNextExport = nil
+    return unaskedFolder
+  }
+
   private func pageDidLoad() {
     isPageLoaded = true
     let heldCommands = commandsAwaitingPageLoad
@@ -236,6 +253,8 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
   private let assetRegistry: TranscriptAssetRegistry
   private let restartEngine: (@MainActor () -> Void)?
   private let webViewProvider: () -> WKWebView?
+  /// Hands over, once, the folder a Development export-folder link named.
+  private let takeFolderForNextExport: () -> URL?
   private let onPageLoaded: () -> Void
   private let storeQueue = DispatchQueue(label: "astronomical.thintalk.canvas.store", qos: .userInitiated)
   /// Session ops that show the user a sheet or a panel. They run on the main
@@ -250,6 +269,7 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     assetRegistry: TranscriptAssetRegistry,
     restartEngine: (@MainActor () -> Void)?,
     webViewProvider: @escaping () -> WKWebView?,
+    takeFolderForNextExport: @escaping () -> URL?,
     onPageLoaded: @escaping () -> Void
   ) {
     self.sessionFileStore = sessionFileStore
@@ -257,6 +277,7 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     self.assetRegistry = assetRegistry
     self.restartEngine = restartEngine
     self.webViewProvider = webViewProvider
+    self.takeFolderForNextExport = takeFolderForNextExport
     self.onPageLoaded = onPageLoaded
   }
 
@@ -473,11 +494,17 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
       settleSessionCall(callID: callID, outcome: .failure(.init(message: "saveExport requires a format and its content")))
       return
     }
+    let unaskedFolder = takeFolderForNextExport()
     Task { @MainActor [weak self] in
       guard let self else { return }
       let encodedOutcome: Result<String?, SessionBridgeFailure>
       do {
-        let saveOutcome = try await ExportedFileSaver.save(exportRequest, from: self.webViewProvider()?.window)
+        let saveOutcome: ExportedFileSaveOutcome
+        if let unaskedFolder {
+          saveOutcome = try await ExportedFileSaver.save(exportRequest, into: unaskedFolder)
+        } else {
+          saveOutcome = try await ExportedFileSaver.save(exportRequest, from: self.webViewProvider()?.window)
+        }
         encodedOutcome = .success(try self.encodedJSONString(saveOutcome.bridgePayload))
       } catch {
         NSLog("ThinTalk canvas: the export could not be saved: \(error)")

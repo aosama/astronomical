@@ -55,6 +55,11 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
     commandController.fillDraft(draftText)
   }
 
+  /// Has the next export written into `exportFolder` with no save panel.
+  public func saveNextExportWithoutAsking(into exportFolder: URL) {
+    commandController.saveNextExportWithoutAsking(into: exportFolder)
+  }
+
   @objc public func focusMessageField(_ sender: Any?) {
     commandController.run(.focusComposer)
   }

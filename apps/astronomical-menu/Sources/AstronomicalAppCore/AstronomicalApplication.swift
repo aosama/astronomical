@@ -133,6 +133,10 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
       chatWindowController.conversationActions.fillDraft(draftText)
       return
     }
+    if let exportFolder = ExportFolderLink.folderURL(from: openedURL, channel: applicationIdentity.channel) {
+      chatWindowController.conversationActions.saveNextExportWithoutAsking(into: exportFolder)
+      return
+    }
     guard let applicationLink = ApplicationLink.parse(openedURL, channel: applicationIdentity.channel) else { return }
     switch applicationLink {
     case .chat: chatWindowController.showChatWindow()

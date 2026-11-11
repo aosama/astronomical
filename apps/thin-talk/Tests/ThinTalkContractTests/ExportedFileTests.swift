@@ -152,4 +152,40 @@ final class ExportedFileTests: XCTestCase {
     let printedFont = try XCTUnwrap(printedText.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
     return printedFont.pointSize
   }
+
+  @MainActor
+  func test_should_write_into_a_given_folder_under_the_suggested_name_without_a_panel() async throws {
+    let webPageRequest = ExportedFileRequest(format: .html, suggestedName: "Mitosis", html: "<p>Hi</p>", documentData: nil)
+
+    let saveOutcome = try await ExportedFileSaver.save(webPageRequest, into: scratchDirectory)
+
+    XCTAssertEqual(saveOutcome, .saved(fileName: "Mitosis.html"))
+    XCTAssertEqual(try String(contentsOf: scratchDirectory.appendingPathComponent("Mitosis.html"), encoding: .utf8), "<p>Hi</p>")
+  }
+
+  @MainActor
+  func test_should_print_a_pdf_into_a_given_folder_without_a_panel() async throws {
+    let pdfRequest = ExportedFileRequest(format: .pdf, suggestedName: "Short", html: "<p>One line.</p>", documentData: nil)
+
+    let saveOutcome = try await ExportedFileSaver.save(pdfRequest, into: scratchDirectory)
+
+    XCTAssertEqual(saveOutcome, .saved(fileName: "Short.pdf"))
+    XCTAssertEqual(PDFDocument(url: scratchDirectory.appendingPathComponent("Short.pdf"))?.pageCount, 1)
+  }
+
+  @MainActor
+  func test_should_refuse_a_folder_that_is_missing_or_is_a_file() async throws {
+    let webPageRequest = ExportedFileRequest(format: .html, suggestedName: "Mitosis", html: "<p>Hi</p>", documentData: nil)
+    let plainFile = scratchDirectory.appendingPathComponent("plain.txt")
+    try Data("x".utf8).write(to: plainFile)
+
+    for unusableFolder in [scratchDirectory.appendingPathComponent("absent"), plainFile] {
+      do {
+        _ = try await ExportedFileSaver.save(webPageRequest, into: unusableFolder)
+        XCTFail("saved into \(unusableFolder.lastPathComponent)")
+      } catch {
+        XCTAssertEqual(error as? ExportedFileSaver.ExportFolderError, .folderMissing)
+      }
+    }
+  }
 }

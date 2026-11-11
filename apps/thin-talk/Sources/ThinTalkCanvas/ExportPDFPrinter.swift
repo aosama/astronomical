@@ -27,9 +27,13 @@ public final class ExportPDFPrinter: NSObject, WKNavigationDelegate {
     let paperSize = NSPrintInfo.shared.paperSize
     let pageFrame = NSRect(origin: .zero, size: paperSize)
     webView = WKWebView(frame: pageFrame, configuration: configuration)
-    offscreenWindow = NSWindow(
+    // A panel that does not activate its app: the print job runs as a sheet
+    // on this window, and on an ordinary window that sheet brought the whole
+    // app to the front, taking the keyboard from whatever the person had
+    // moved on to while a long export was still printing.
+    offscreenWindow = NSPanel(
       contentRect: NSRect(x: -20_000, y: -20_000, width: paperSize.width, height: paperSize.height),
-      styleMask: [.borderless], backing: .buffered, defer: false)
+      styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     super.init()
     offscreenWindow.isReleasedWhenClosed = false
     offscreenWindow.contentView = webView
