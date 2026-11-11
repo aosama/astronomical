@@ -14,11 +14,11 @@ const {
 const GIGABYTE = 1073741824;
 const DOWNLOADING_MODEL_ID = "astronomical-test/example-qwen";
 
-function renderWithDownload(currentDownload, catalogEntries = [validCatalogEntry({ short_name: "Talker" })]) {
+function renderWithDownload(currentDownload, catalogEntries = [validCatalogEntry({ model_id: "Talker" })]) {
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
-    scriptContext.catalogDocument = { schema_version: 4, entries: catalogEntries };
+    scriptContext.catalogDocument = { schema_version: 5, entries: catalogEntries };
     scriptContext.currentDownload = currentDownload;
     vm.runInContext(
         `downloadModelsCatalogDocument = catalogDocument;
@@ -123,7 +123,7 @@ test("should_show_no_banner_when_nothing_is_downloading_or_the_model_is_already_
     const idleContainer = renderWithDownload({ state: "idle" });
     const readyContainer = renderWithDownload(
         { huggingface_id: DOWNLOADING_MODEL_ID, state: "publishing", bytes_completed: 1, bytes_total: 1 },
-        [validCatalogEntry({ short_name: "Talker", ready_on_this_mac: true })]
+        [validCatalogEntry({ model_id: "Talker", ready_on_this_mac: true })]
     );
 
     assert.deepEqual(findRenderedElementsByClass(idleContainer, "download-models-banner"), []);
@@ -134,9 +134,9 @@ test("should_put_the_banner_above_the_models_already_here_and_total_only_those",
     const catalogContainer = renderWithDownload(
         { huggingface_id: DOWNLOADING_MODEL_ID, state: "downloading", bytes_completed: 1, bytes_total: 2 },
         [
-            validCatalogEntry({ short_name: "Talker" }),
+            validCatalogEntry({ model_id: "Talker" }),
             validCatalogEntry({
-                huggingface_id: "astronomical-test/here", short_name: "Here", ready_on_this_mac: true,
+                huggingface_id: "astronomical-test/here", model_id: "Here", ready_on_this_mac: true,
                 approximate_size_bytes: 3 * GIGABYTE
             })
         ]

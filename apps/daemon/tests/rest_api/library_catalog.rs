@@ -13,14 +13,11 @@ use tower::ServiceExt;
 use crate::support::ScriptedExecutor;
 
 const VALID_CATALOG_JSON: &str = r#"{
-    "schema_version": 4,
+    "schema_version": 5,
     "entries": [
         {
             "huggingface_id": "astronomical-test/example-qwen",
             "revision": "0123456789abcdef0123456789abcdef01234567",
-            "display_name": "Example Qwen",
-            "short_name": "Example",
-            "version_label": "Compact",
             "summary": "A quick everyday assistant.",
             "family": "qwen3_5",
             "approximate_size_bytes": 4000000000,
@@ -32,7 +29,6 @@ const VALID_CATALOG_JSON: &str = r#"{
         {
             "huggingface_id": "astronomical-test/example-prism",
             "revision": "89abcdef0123456789abcdef0123456789abcdef",
-            "display_name": "Example Prism",
             "family": "prism_hadamard_qwen35",
             "approximate_size_bytes": 5000000000,
             "approximate_memory_bytes": 25769803680,
@@ -44,7 +40,6 @@ const VALID_CATALOG_JSON: &str = r#"{
         {
             "huggingface_id": "astronomical-test/example-embedder",
             "revision": "fedcba9876543210fedcba9876543210fedcba98",
-            "display_name": "Example Embedder",
             "family": "modernbert",
             "approximate_size_bytes": 200000000,
             "approximate_memory_bytes": 536870910,
@@ -60,14 +55,12 @@ const VALID_CATALOG_JSON: &str = r#"{
 /// presentation texts, which are published only for an entry that declares them.
 fn expected_validated_catalog_document() -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "entries": [
             {
                 "huggingface_id": "astronomical-test/example-qwen",
                 "revision": "0123456789abcdef0123456789abcdef01234567",
-                "display_name": "Example Qwen",
-                "short_name": "Example",
-                "version_label": "Compact",
+                "model_id": "example-qwen",
                 "summary": "A quick everyday assistant.",
                 "family": "qwen3_5",
                 "approximate_size_bytes": 4_000_000_000_u64,
@@ -92,7 +85,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
             {
                 "huggingface_id": "astronomical-test/example-prism",
                 "revision": "89abcdef0123456789abcdef0123456789abcdef",
-                "display_name": "Example Prism",
+                "model_id": "example-prism",
                 "family": "prism_hadamard_qwen35",
                 "approximate_size_bytes": 5_000_000_000_u64,
                 "approximate_memory_bytes": 25_769_803_680_u64,
@@ -117,7 +110,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
             {
                 "huggingface_id": "astronomical-test/example-embedder",
                 "revision": "fedcba9876543210fedcba9876543210fedcba98",
-                "display_name": "Example Embedder",
+                "model_id": "example-embedder",
                 "family": "modernbert",
                 "approximate_size_bytes": 200_000_000_u64,
                 "approximate_memory_bytes": 536_870_910_u64,
@@ -223,6 +216,29 @@ async fn should_reject_catalog_mutation_and_leave_unknown_library_paths_unmatche
 // real shipped registry file through every seam a user-visible entry crosses —
 // bundled parse, endpoint projection, and the browser renderability contract —
 // so a hand-edited catalog entry cannot silently vanish from Download Models.
+/// One published entry carries the leaf of its Hugging Face identity as its
+/// model ID, and none of the names the catalog used to carry beside it.
+fn assert_named_only_by_its_model_id(
+    published_entry: &serde_json::Value,
+    huggingface_id: &str,
+    published_entry_index: usize,
+) {
+    let model_id = published_entry["model_id"].as_str().unwrap_or_else(|| {
+        panic!("published entry {published_entry_index} must carry a string model_id")
+    });
+    assert_eq!(
+        Some(model_id),
+        huggingface_id.rsplit('/').next(),
+        "published entry {published_entry_index} must be named by the leaf of its Hugging Face identity"
+    );
+    for retired_name_field in ["display_name", "short_name", "version_label"] {
+        assert!(
+            published_entry.get(retired_name_field).is_none(),
+            "published entry {published_entry_index} must carry no {retired_name_field}"
+        );
+    }
+}
+
 #[tokio::test]
 #[expect(clippy::too_many_lines)]
 async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpoint() {
@@ -309,13 +325,7 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
                 astronomical_lowercase_hex::is_lowercase_hex_of_length(revision, 40),
                 "published entry {published_entry_index} revision must be 40 lowercase hex digits"
             );
-            let display_name = published_entry["display_name"]
-                .as_str()
-                .unwrap_or_else(|| panic!("published entry {published_entry_index} must carry a string display_name"));
-            assert!(
-                !display_name.trim().is_empty(),
-                "published entry {published_entry_index} must carry a non-empty display_name"
-            );
+            assert_named_only_by_its_model_id(published_entry, huggingface_id, published_entry_index);
             let family = published_entry["family"]
                 .as_str()
                 .unwrap_or_else(|| panic!("published entry {published_entry_index} must carry a string family"));

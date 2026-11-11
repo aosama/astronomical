@@ -29,7 +29,7 @@ export class ComposerState {
   public readonly imageModels: readonly ImageModel[];
   /** The image model that draws the next picture, or null with none installed. */
   public readonly selectedImageModelID: string | null;
-  /** The Library's plain names and details, by model id; empty until read. */
+  /** The Library's details for each installed model, by model id; empty until read. */
   public readonly modelDescriptions: ReadonlyMap<string, ModelDescription>;
 
   public constructor(init: {

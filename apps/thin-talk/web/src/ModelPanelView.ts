@@ -1,12 +1,11 @@
 import { ComposerAction } from "./ComposerAction";
 import type { ComposerState } from "./ComposerState";
-import { displayNameFor } from "./ModelDescription";
 
 /** A picture choice only helps when there is something to pick: with one
  * image model installed the Pictures section stays out and that model is used. */
 const MINIMUM_IMAGE_MODELS_TO_OFFER_A_CHOICE = 2;
 
-/** One row of the panel: a model's plain name, its quieter details, and the
+/** One row of the panel: a model's one name, its quieter details, and the
  * data attribute that says what choosing it means. */
 interface PanelRow {
   readonly testID: string;
@@ -64,7 +63,7 @@ export class ModelPanelView {
       this.close();
     }
     const selectedModel = state.models.find((model) => model.id === state.selectedModelID);
-    const selectedName = selectedModel != null ? displayNameFor(selectedModel.id, state.modelDescriptions) : "Model";
+    const selectedName = selectedModel != null ? selectedModel.id : "Model";
     this.label.textContent = friendlyBrainName !== null && selectedModel != null ? friendlyBrainName : selectedName;
     this.trigger.title = selectedModel != null ? selectedModel.id : "";
     this.trigger.setAttribute("aria-label", selectedModel != null ? `Brain: ${selectedName}` : "Brain");
@@ -108,7 +107,7 @@ export class ModelPanelView {
       testID: `composer-model-${model.id}`,
       choiceAttribute: "modelValue",
       modelID: model.id,
-      name: displayNameFor(model.id, state.modelDescriptions),
+      name: model.id,
       detail: state.modelDescriptions.get(model.id)?.detailLine() ?? "",
       isChosen: model.id === state.selectedModelID,
     }));
@@ -126,7 +125,7 @@ export class ModelPanelView {
       testID: `composer-image-model-${imageModel.id}`,
       choiceAttribute: "imageModelValue",
       modelID: imageModel.id,
-      name: state.modelDescriptions.get(imageModel.id)?.shortName ?? imageModel.name,
+      name: imageModel.id,
       detail: state.modelDescriptions.get(imageModel.id)?.detailLine() ?? "",
       isChosen: imageModel.id === state.selectedImageModelID,
     }));

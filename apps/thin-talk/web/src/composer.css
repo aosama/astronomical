@@ -204,12 +204,16 @@
   display: none;
 }
 
-/* The brain panel opens from the right, above Send, and is wide enough for a
-   plain name over its details on two lines. */
+/* The brain panel opens from the right, above Send, and grows to the longest
+   model ID, because the ID is a model's only name and a cut-off one cannot be
+   told from its siblings ("Ornith-1.5-35B-A3B-MLX-…" covers three models).
+   300px keeps short lists from looking cramped; only a window narrower than
+   the longest ID still shortens it, and each row's tooltip then has it whole. */
 .composer__menu--brains {
   left: auto;
   right: 0;
-  width: 300px;
+  width: max-content;
+  min-width: 300px;
   max-width: calc(100vw - 32px);
   max-height: min(70vh, 520px);
   overflow-y: auto;

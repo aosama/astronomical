@@ -149,7 +149,7 @@ test("should_keep_classic_thin_talk_untouched_for_someone_who_hid_astro", async 
 
 test("should_offer_the_sketchbook_in_a_new_chat_when_draw_is_pressed_without_a_picture_model", async () => {
   const sketchbookCatalog = {
-    entries: [{ huggingface_id: "example-org/starter-image-4bit", display_name: "Starter Image", role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false }],
+    entries: [{ huggingface_id: "example-org/starter-image-4bit", role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false }],
   };
   const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, libraryCatalog: sketchbookCatalog });
   await waitUntilReady();

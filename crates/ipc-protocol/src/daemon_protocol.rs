@@ -243,7 +243,9 @@ pub struct DaemonListedModel {
 #[serde(deny_unknown_fields)]
 pub struct DaemonCatalogEntry {
     pub huggingface_id: String,
-    pub display_name: String,
+    /// The model's one name: the leaf of its Hugging Face identity, which the
+    /// terminal and the API accept whether or not the model is downloaded.
+    pub model_id: String,
     pub family: String,
     /// Approximate download size in bytes; the CLI renders GB of 2³⁰ bytes.
     pub approximate_size_bytes: u64,

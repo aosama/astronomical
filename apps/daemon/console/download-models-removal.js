@@ -36,7 +36,7 @@ function canRemoveDownloadModelsModelFromDisk(catalogRow) {
 // Names the model, how much will move, where it goes, and how to get it back,
 // because the click frees gigabytes and cannot be undone from this page.
 function downloadModelsRemovalConfirmationText(catalogRow) {
-    return "Move " + (catalogRow.shortName || catalogRow.displayName) + " to the Trash? This frees "
+    return "Move " + downloadModelsRowName(catalogRow) + " to the Trash? This frees "
         + formatDownloadModelsCardSize(catalogRow.approximateSizeBytes)
         + ". You can download it again any time.";
 }
@@ -153,7 +153,7 @@ async function removeDownloadModelsModelFromDisk(catalogRow) {
         if (removalResponse.ok) {
             return {
                 huggingfaceId,
-                message: (catalogRow.shortName || catalogRow.displayName) + " was moved to the Trash.",
+                message: downloadModelsRowName(catalogRow) + " was moved to the Trash.",
                 movedToTrash: true
             };
         }

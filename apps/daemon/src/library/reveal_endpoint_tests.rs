@@ -8,11 +8,10 @@ use crate::DownloadCatalog;
 use crate::library::CatalogEntryProjection;
 
 const SINGLE_ENTRY_CATALOG_JSON: &str = r#"{
-    "schema_version": 4,
+    "schema_version": 5,
     "entries": [{
         "huggingface_id": "astronomical-test/example-qwen",
         "revision": "0123456789abcdef0123456789abcdef01234567",
-        "display_name": "Example Qwen",
         "family": "qwen3_5",
         "approximate_size_bytes": 4000000000,
         "approximate_memory_bytes": 5000000000,

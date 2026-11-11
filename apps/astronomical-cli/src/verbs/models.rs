@@ -160,6 +160,17 @@ fn write_installed_models(
         })
 }
 
+/// The name the listing prints: the one discovery gave a downloaded copy, and
+/// otherwise the model ID the catalog declares, which `models download`
+/// accepts. Both are the same leaf name for a catalog model; a copy found under
+/// another folder name keeps the name requests must use.
+fn catalog_entry_name(catalog_entry: &DaemonCatalogEntry) -> &str {
+    catalog_entry
+        .requestable_model_id
+        .as_deref()
+        .unwrap_or(&catalog_entry.model_id)
+}
+
 /// One aligned line per catalog entry; STATE is `ready`, the active download
 /// state, or `not on this Mac`.
 fn write_catalog(
@@ -168,13 +179,7 @@ fn write_catalog(
 ) -> Result<(), ModelsError> {
     let model_width = catalog_entries
         .iter()
-        .map(|catalog_entry| {
-            catalog_entry
-                .requestable_model_id
-                .as_deref()
-                .unwrap_or(&catalog_entry.huggingface_id)
-                .len()
-        })
+        .map(|catalog_entry| catalog_entry_name(catalog_entry).len())
         .max()
         .unwrap_or("MODEL".len());
     let mut report = String::new();
@@ -187,10 +192,7 @@ fn write_catalog(
         model_width = model_width,
     );
     for catalog_entry in catalog_entries {
-        let model_id = catalog_entry
-            .requestable_model_id
-            .as_deref()
-            .unwrap_or(&catalog_entry.huggingface_id);
+        let model_id = catalog_entry_name(catalog_entry);
         let entry_state = if catalog_entry.ready_on_this_mac {
             "ready".to_owned()
         } else if let Some(download_state) = &catalog_entry.download_state {

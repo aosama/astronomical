@@ -48,8 +48,9 @@ export class ToolStep {
   public readonly roundIndex: number;
   /** The stored image the call produced (the image tool), shown in the answer. */
   public readonly generatedImageName: string | null;
-  /** The display name of the model that made the image, shown on the row;
-   * null for other tools and for steps saved before it was recorded. */
+  /** The id of the model that made the image, its one name, shown on the row;
+   * null for other tools and for steps saved before it was recorded. Steps saved
+   * before models had one name may hold an older display name, shown as saved. */
   public readonly generatedImageModelName: string | null;
 
   public constructor(init: {

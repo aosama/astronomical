@@ -81,7 +81,7 @@
 .download-models-chip { min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); cursor: pointer; font-size: var(--text-md); font-weight: var(--weight-label); }
 .download-models-chip:hover { border-color: var(--line-strong); }
 .download-models-chip-pressed { border-color: var(--ink); background: var(--ink); color: var(--ground); }
-.download-models-chip:focus-visible, .download-models-version:focus-visible, .download-models-row-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.download-models-chip:focus-visible, .download-models-row-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .download-models-search { flex: 0 1 280px; min-width: 0; min-height: 44px; padding: 8px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-small); background: var(--surface); color: var(--ink); }
 .download-models-busy-hint { margin: 0; color: var(--ink-2); font-size: var(--text-sm); }
 .download-models-no-matches { margin: 0; padding: 28px; border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--ink-2); text-align: center; }
@@ -108,12 +108,8 @@
 .download-models-row-summary { color: var(--ink-2); font-size: var(--text-md); }
 .download-models-row-abilities { color: var(--ink-3); font-size: var(--text-xs); }
 .download-models-row-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
-.download-models-row-versions { width: 248px; display: flex; }
 .download-models-row-fit { width: 172px; display: flex; }
 .download-models-row-action { width: 168px; display: flex; justify-content: flex-end; }
-.download-models-version-picker { display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-small); background: var(--sunk); }
-.download-models-version { min-height: 36px; padding: 0 11px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-2); cursor: pointer; font-size: var(--text-xs); font-weight: var(--weight-label); }
-.download-models-version-selected { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line-strong); }
 .download-models-row-status { color: var(--accent-text); font-size: var(--text-sm); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; }
 .download-models-row-status-ready { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
 /* The check mark is a CSS mask, so it takes the label's own colour. */

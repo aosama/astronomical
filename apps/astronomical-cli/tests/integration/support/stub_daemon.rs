@@ -325,13 +325,13 @@ pub fn spawn_stub_daemon(
                             let entries: Vec<DaemonCatalogEntry> = catalog_entries
                                 .into_iter()
                                 .map(|catalog_entry| {
-                                    let display_name = catalog_entry
-                                        .requestable_model_id
-                                        .clone()
-                                        .unwrap_or(catalog_entry.huggingface_id.clone());
+                                    let model_id = astronomical_config::leaf_model_id(
+                                        &catalog_entry.huggingface_id,
+                                    )
+                                    .to_owned();
                                     DaemonCatalogEntry {
                                         huggingface_id: catalog_entry.huggingface_id,
-                                        display_name,
+                                        model_id,
                                         family: "stub".to_owned(),
                                         // ~2 GB keeps rendered sizes at two digits so
                                         // list-output assertions stay readable.

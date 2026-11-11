@@ -12,13 +12,12 @@ use serde_json::{Value, json};
 use super::{
     DownloadCatalogCapabilitiesDocument, DownloadCatalogEntryDocument, DownloadCatalogError,
     DownloadCatalogFamily, DownloadCatalogRole, MAXIMUM_DESCRIPTION_BYTES,
-    MAXIMUM_DISPLAY_NAME_BYTES, MAXIMUM_DOWNLOAD_CATALOG_BYTES,
-    MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT, MAXIMUM_JAVASCRIPT_SAFE_INTEGER,
-    MAXIMUM_QUANTIZATION_LABEL_BYTES, MAXIMUM_UPSTREAM_LICENSE_BYTES,
-    parse_and_shape_check_document, parse_catalog_entry, parse_entry_capabilities,
-    parse_optional_entry_description, parse_optional_entry_quantization_label,
-    parse_optional_entry_upstream_license, validate_entry_display_metadata,
-    validate_entry_identity, validate_entry_memory_footprint,
+    MAXIMUM_DOWNLOAD_CATALOG_BYTES, MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT,
+    MAXIMUM_JAVASCRIPT_SAFE_INTEGER, MAXIMUM_QUANTIZATION_LABEL_BYTES,
+    MAXIMUM_UPSTREAM_LICENSE_BYTES, SeenEntryIdentities, parse_and_shape_check_document,
+    parse_catalog_entry, parse_entry_capabilities, parse_optional_entry_description,
+    parse_optional_entry_quantization_label, parse_optional_entry_upstream_license,
+    validate_entry_identity, validate_entry_memory_footprint, validate_entry_size_and_visibility,
 };
 
 pub(super) const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -27,7 +26,6 @@ pub(super) fn baseline_entry_document() -> Value {
     json!({
         "huggingface_id": "astronomical-test/example-qwen",
         "revision": VALID_REVISION,
-        "display_name": "Example model",
         "family": "qwen3_5",
         "approximate_size_bytes": 4_000_000_000_u64,
         "approximate_memory_bytes": 2_000_000_000_u64,
@@ -51,8 +49,8 @@ fn baseline_entry_document_unchanged() -> DownloadCatalogEntryDocument {
         .expect("the baseline entry document should deserialize")
 }
 
-pub(super) fn empty_normalized_huggingface_ids() -> BTreeSet<String> {
-    BTreeSet::new()
+pub(super) fn empty_seen_identities() -> SeenEntryIdentities {
+    SeenEntryIdentities::default()
 }
 
 pub(super) fn empty_get_started_role_names() -> BTreeSet<&'static str> {
@@ -62,7 +60,7 @@ pub(super) fn empty_get_started_role_names() -> BTreeSet<&'static str> {
 /// Trailing JSON whitespace is legal, so a document padded with spaces to an
 /// exact byte size still parses — making the byte bound directly testable.
 fn catalog_document_padded_to_byte_size(total_byte_size: usize) -> String {
-    let unpadded_catalog_document = r#"{"schema_version":4,"entries":[]}"#;
+    let unpadded_catalog_document = r#"{"schema_version":5,"entries":[]}"#;
     let padding_byte_count = total_byte_size - unpadded_catalog_document.len();
     format!(
         "{unpadded_catalog_document}{}",
@@ -76,7 +74,6 @@ fn catalog_document_with_entry_count(entry_count: usize) -> String {
         entry_values.push(json!({
             "huggingface_id": format!("astronomical-test/example-{entry_index}"),
             "revision": VALID_REVISION,
-            "display_name": "Example model",
             "family": "qwen3_5",
             "approximate_size_bytes": 4_000_000_000_u64,
             "approximate_memory_bytes": 2_000_000_000_u64,
@@ -84,7 +81,7 @@ fn catalog_document_with_entry_count(entry_count: usize) -> String {
             "public": true,
         }));
     }
-    json!({"schema_version": 4, "entries": entry_values}).to_string()
+    json!({"schema_version": 5, "entries": entry_values}).to_string()
 }
 
 #[test]
@@ -138,16 +135,21 @@ fn should_report_the_byte_bound_before_any_json_syntax_failure() {
 
 #[test]
 fn should_accept_a_first_seen_identity_and_record_its_normalization() {
-    let mut normalized_huggingface_ids = empty_normalized_huggingface_ids();
+    let mut seen_identities = empty_seen_identities();
 
     let outcome = validate_entry_identity(
         &baseline_entry_document_unchanged(),
         0,
-        &mut normalized_huggingface_ids,
+        &mut seen_identities,
     );
 
     assert!(outcome.is_ok());
-    assert!(normalized_huggingface_ids.contains("astronomical-test/example-qwen"));
+    assert!(
+        seen_identities
+            .huggingface_ids
+            .contains("astronomical-test/example-qwen")
+    );
+    assert!(seen_identities.model_ids.contains("example-qwen"));
 }
 
 #[test]
@@ -156,16 +158,18 @@ fn should_reject_unsafe_ids_moving_revisions_and_duplicate_identities() {
     let moving_revision = entry_document_with(&[("revision", json!("main"))]);
 
     assert!(matches!(
-        validate_entry_identity(&unsafe_identity, 0, &mut empty_normalized_huggingface_ids()),
+        validate_entry_identity(&unsafe_identity, 0, &mut empty_seen_identities()),
         Err(DownloadCatalogError::InvalidHuggingFaceId { entry_index: 0 })
     ));
     assert!(matches!(
-        validate_entry_identity(&moving_revision, 7, &mut empty_normalized_huggingface_ids()),
+        validate_entry_identity(&moving_revision, 7, &mut empty_seen_identities()),
         Err(DownloadCatalogError::InvalidRevision { entry_index: 7 })
     ));
 
-    let mut already_seen = empty_normalized_huggingface_ids();
-    already_seen.insert("astronomical-test/example-qwen".to_owned());
+    let mut already_seen = empty_seen_identities();
+    already_seen
+        .huggingface_ids
+        .insert("astronomical-test/example-qwen".to_owned());
     assert!(matches!(
         validate_entry_identity(&baseline_entry_document_unchanged(), 0, &mut already_seen),
         Err(DownloadCatalogError::DuplicateHuggingFaceId)
@@ -174,8 +178,10 @@ fn should_reject_unsafe_ids_moving_revisions_and_duplicate_identities() {
 
 #[test]
 fn should_report_id_safety_and_duplicates_before_revision_failures() {
-    let mut already_seen = empty_normalized_huggingface_ids();
-    already_seen.insert("astronomical-test/example-qwen".to_owned());
+    let mut already_seen = empty_seen_identities();
+    already_seen
+        .huggingface_ids
+        .insert("astronomical-test/example-qwen".to_owned());
 
     // An unsafe id is reported even though the revision is also invalid, and a
     // case-colliding duplicate is reported before the revision is inspected.
@@ -192,7 +198,7 @@ fn should_report_id_safety_and_duplicates_before_revision_failures() {
         validate_entry_identity(
             &unsafe_identity_with_bad_revision,
             0,
-            &mut empty_normalized_huggingface_ids()
+            &mut empty_seen_identities()
         ),
         Err(DownloadCatalogError::InvalidHuggingFaceId { .. })
     ));
@@ -203,68 +209,73 @@ fn should_report_id_safety_and_duplicates_before_revision_failures() {
 }
 
 #[test]
-fn should_accept_display_metadata_at_the_exact_metadata_boundaries() {
-    let name_at_byte_bound = entry_document_with(&[(
-        "display_name",
-        json!("m".repeat(MAXIMUM_DISPLAY_NAME_BYTES)),
-    )]);
+fn should_accept_a_size_at_the_javascript_safe_integer_bound() {
     let size_at_integer_bound = entry_document_with(&[(
         "approximate_size_bytes",
         json!(MAXIMUM_JAVASCRIPT_SAFE_INTEGER),
     )]);
 
-    assert!(validate_entry_display_metadata(&name_at_byte_bound, 0).is_ok());
-    assert!(validate_entry_display_metadata(&size_at_integer_bound, 0).is_ok());
+    assert!(validate_entry_size_and_visibility(&size_at_integer_bound, 0).is_ok());
 }
 
 #[test]
-fn should_reject_unsafe_display_names_sizes_and_private_models() {
-    let invalid_display_names = [
-        (
-            "beyond the byte bound",
-            json!("m".repeat(MAXIMUM_DISPLAY_NAME_BYTES + 1)),
-        ),
-        ("whitespace only", json!("   ")),
-        ("with a control character", json!("Bad\nName")),
-    ];
-    for (case_description, display_name) in invalid_display_names {
-        let invalid_entry = entry_document_with(&[("display_name", display_name)]);
-        assert!(
-            matches!(
-                validate_entry_display_metadata(&invalid_entry, 3),
-                Err(DownloadCatalogError::InvalidDisplayName { entry_index: 3 })
-            ),
-            "a display name {case_description} must fail closed"
-        );
-    }
-
+fn should_reject_unsafe_sizes_and_private_models() {
     let invalid_sizes = [json!(0), json!(MAXIMUM_JAVASCRIPT_SAFE_INTEGER + 1)];
     for approximate_size_bytes in invalid_sizes {
         let invalid_entry =
             entry_document_with(&[("approximate_size_bytes", approximate_size_bytes)]);
         assert!(matches!(
-            validate_entry_display_metadata(&invalid_entry, 0),
-            Err(DownloadCatalogError::InvalidApproximateSize { .. })
+            validate_entry_size_and_visibility(&invalid_entry, 3),
+            Err(DownloadCatalogError::InvalidApproximateSize { entry_index: 3 })
         ));
     }
 
     let private_model = entry_document_with(&[("public", json!(false))]);
     assert!(matches!(
-        validate_entry_display_metadata(&private_model, 0),
+        validate_entry_size_and_visibility(&private_model, 0),
         Err(DownloadCatalogError::ModelNotPublic { .. })
     ));
 }
 
 #[test]
-fn should_report_display_name_failures_before_visibility_failures() {
-    let whitespace_named_private_model =
-        entry_document_with(&[("display_name", json!("   ")), ("public", json!(false))]);
+fn should_report_size_failures_before_visibility_failures() {
+    let empty_private_model = entry_document_with(&[
+        ("approximate_size_bytes", json!(0)),
+        ("public", json!(false)),
+    ]);
 
-    let outcome = validate_entry_display_metadata(&whitespace_named_private_model, 0);
+    let outcome = validate_entry_size_and_visibility(&empty_private_model, 0);
 
     assert!(matches!(
         outcome,
-        Err(DownloadCatalogError::InvalidDisplayName { .. })
+        Err(DownloadCatalogError::InvalidApproximateSize { .. })
+    ));
+}
+
+/// Two organizations may publish the same repository name; the second is
+/// refused because people would see two models under one name. A case-only
+/// duplicate of a whole identity is still reported as the identity duplicate.
+#[test]
+fn should_reject_a_second_entry_whose_model_id_is_taken_and_report_identity_duplicates_first() {
+    let mut seen_identities = empty_seen_identities();
+    validate_entry_identity(
+        &baseline_entry_document_unchanged(),
+        0,
+        &mut seen_identities,
+    )
+    .expect("the first entry claims its identities");
+    let same_model_id_elsewhere =
+        entry_document_with(&[("huggingface_id", json!("other-organization/Example-Qwen"))]);
+    let same_identity_in_other_case =
+        entry_document_with(&[("huggingface_id", json!("Astronomical-Test/Example-Qwen"))]);
+
+    assert!(matches!(
+        validate_entry_identity(&same_model_id_elsewhere, 4, &mut seen_identities),
+        Err(DownloadCatalogError::DuplicateModelId { entry_index: 4 })
+    ));
+    assert!(matches!(
+        validate_entry_identity(&same_identity_in_other_case, 5, &mut seen_identities),
+        Err(DownloadCatalogError::DuplicateHuggingFaceId)
     ));
 }
 
@@ -459,7 +470,7 @@ fn should_parse_a_complete_entry_into_the_public_entry_type() {
     let outcome = parse_catalog_entry(
         complete_entry,
         0,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     );
 
@@ -469,7 +480,7 @@ fn should_parse_a_complete_entry_into_the_public_entry_type() {
         "astronomical-test/example-qwen"
     );
     assert_eq!(catalog_entry.revision(), VALID_REVISION);
-    assert_eq!(catalog_entry.display_name(), "Example model");
+    assert_eq!(catalog_entry.model_id(), "example-qwen");
     assert_eq!(catalog_entry.family(), DownloadCatalogFamily::Qwen3_5);
     assert_eq!(catalog_entry.approximate_size_bytes(), 4_000_000_000);
     assert_eq!(
@@ -487,10 +498,10 @@ fn should_parse_a_complete_entry_into_the_public_entry_type() {
 }
 
 #[test]
-fn should_report_identity_failures_before_display_description_and_capability_failures() {
+fn should_report_identity_failures_before_size_description_and_capability_failures() {
     let multi_invalid_entry = entry_document_with(&[
         ("huggingface_id", json!("single-component")),
-        ("display_name", json!("   ")),
+        ("approximate_size_bytes", json!(0)),
         ("description", json!("Bad\nDescription")),
         ("capabilities", json!({})),
     ]);
@@ -498,7 +509,7 @@ fn should_report_identity_failures_before_display_description_and_capability_fai
     let outcome = parse_catalog_entry(
         multi_invalid_entry,
         0,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     );
 
@@ -518,7 +529,7 @@ fn should_report_description_failures_before_capability_failures() {
     let outcome = parse_catalog_entry(
         invalid_description_with_badgeless_capabilities,
         0,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     );
 
@@ -538,7 +549,7 @@ fn should_report_quantization_label_failures_before_upstream_license_failures() 
     let outcome = parse_catalog_entry(
         both_labels_invalid,
         0,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     );
 
@@ -555,7 +566,7 @@ fn should_report_included_path_failures_last_in_the_entry_order() {
     let outcome = parse_catalog_entry(
         invalid_included_paths,
         9,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     );
 

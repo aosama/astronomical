@@ -141,19 +141,19 @@ export class GenerateImageTool implements ConversationTool {
     };
     const encodedImage = await this.client.generateImage(requestBody, signal);
     const generatedImageName = await this.bridge.storeGeneratedImage(encodedImage);
-    const generationReport = `Generated a ${imageSize.width}×${imageSize.height} image with ${imageModel.name} and showed it to the user.`;
+    const generationReport = `Generated a ${imageSize.width}×${imageSize.height} image with ${imageModel.id} and showed it to the user.`;
     const visionModelIDs = await this.visionModelIDsOrNone(signal);
     if (visionModelIDs.includes(context.modelID)) {
       return {
         text: `${generationReport} The image is attached right after this result: look at it yourself before you talk about it, `
           + "and check it against what was asked for.",
         generatedImageName,
-        generatedImageModelName: imageModel.name,
+        generatedImageModelName: imageModel.id,
         imageForModel: { base64: encodedImage, mimeType: imageMimeType(encodedImage) },
       };
     }
     const imageAccount = await this.imageReview.accountForTextOnlyModel(prompt, encodedImage, visionModelIDs[0] ?? null, signal);
-    return { text: `${generationReport}\n\n${imageAccount}`, generatedImageName, generatedImageModelName: imageModel.name };
+    return { text: `${generationReport}\n\n${imageAccount}`, generatedImageName, generatedImageModelName: imageModel.id };
   }
 
   /** The installed vision models, or none when the list cannot be read: the

@@ -18,12 +18,12 @@ function createTypingSession() {
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
     scriptContext.catalogDocument = {
-        schema_version: 4,
+        schema_version: 5,
         entries: [
             validCatalogEntry(),
             validCatalogEntry({
                 huggingface_id: "astronomical-test/example-flux",
-                display_name: "Example flux",
+                model_id: "Example flux",
                 family: "flux2_klein"
             })
         ]
@@ -69,7 +69,7 @@ test("renders an empty catalog through the bounded empty state", () => {
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
-    scriptContext.catalogDocument = { schema_version: 4, entries: [] };
+    scriptContext.catalogDocument = { schema_version: 5, entries: [] };
 
     const renderedState = vm.runInContext(
         "renderDownloadModelsCatalogDocument(catalogDocument)",
@@ -85,7 +85,7 @@ test("renders an empty catalog through the bounded empty state", () => {
 test("accepts the largest catalog size that JavaScript can represent exactly", () => {
     const scriptContext = createDownloadModelsContext();
     scriptContext.catalogEntry = validCatalogEntry({
-        display_name: "Largest exact size",
+        model_id: "Largest exact size",
         approximate_size_bytes: Number.MAX_SAFE_INTEGER
     });
 
@@ -103,7 +103,7 @@ test("accepts the largest catalog size that JavaScript can represent exactly", (
 test("rejects an incomplete entry even when its visible fields are renderable", () => {
     const scriptContext = createDownloadModelsContext();
     scriptContext.catalogEntry = {
-        display_name: "Incomplete model",
+        model_id: "Incomplete model",
         family: "qwen3_5",
         approximate_size_bytes: 3_000_000_000
     };
@@ -195,18 +195,34 @@ test("should_word_transfer_progress_with_time_left_only_once_the_rate_is_measure
     assert.equal(measuredText, "2.0 of 10.0 GB · about 10 minutes left");
 });
 
-test("should_read_the_short_name_version_label_and_summary_and_ignore_blank_ones", () => {
+test("should_read_the_model_id_and_summary_and_ignore_a_blank_summary", () => {
     const scriptContext = createDownloadModelsContext();
     scriptContext.catalogEntry = validCatalogEntry({
-        short_name: "Example 9B", version_label: "Compact", summary: "A quick everyday assistant."
+        huggingface_id: "astronomical-test/Example-9B-MLX-6bit", summary: "A quick everyday assistant."
     });
     const presentedRow = vm.runInContext("downloadModelsCatalogRowFromEntry(catalogEntry)", scriptContext);
-    scriptContext.catalogEntry = validCatalogEntry({ short_name: "  ", version_label: 7 });
+    scriptContext.catalogEntry = validCatalogEntry({ summary: "  " });
     const plainRow = vm.runInContext("downloadModelsCatalogRowFromEntry(catalogEntry)", scriptContext);
 
     assert.deepEqual(
-        [presentedRow.shortName, presentedRow.versionLabel, presentedRow.summary],
-        ["Example 9B", "Compact", "A quick everyday assistant."]
+        [presentedRow.modelId, presentedRow.summary], ["Example-9B-MLX-6bit", "A quick everyday assistant."]
     );
-    assert.deepEqual([plainRow.shortName, plainRow.versionLabel, plainRow.summary], [null, null, null]);
+    assert.equal(plainRow.summary, null);
+    for (const retiredField of ["displayName", "shortName", "versionLabel"]) {
+        assert.equal(retiredField in presentedRow, false, retiredField + " must not come back");
+    }
+});
+
+test("should_refuse_a_catalog_entry_without_a_usable_model_id", () => {
+    const scriptContext = createDownloadModelsContext();
+    for (const unusableModelId of [undefined, null, "", "   ", 7]) {
+        scriptContext.catalogEntry = validCatalogEntry({ model_id: unusableModelId });
+        assert.equal(
+            vm.runInContext("isRenderableDownloadModelsCatalogEntry(catalogEntry)", scriptContext),
+            false,
+            `model_id ${JSON.stringify(unusableModelId)} must not render`
+        );
+    }
+    scriptContext.catalogEntry = validCatalogEntry();
+    assert.equal(vm.runInContext("isRenderableDownloadModelsCatalogEntry(catalogEntry)", scriptContext), true);
 });

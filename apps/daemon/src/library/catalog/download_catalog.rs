@@ -8,22 +8,21 @@ use thiserror::Error;
 pub use super::catalog_capabilities::DownloadCatalogCapabilities;
 use super::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
 pub use super::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
-use super::catalog_presentation::{
-    AuthoredEntryPresentation, CatalogEntryPresentation, parse_entry_presentation,
-    validate_unique_model_versions,
-};
+use super::catalog_presentation::{CatalogEntryPresentation, parse_entry_presentation};
 use crate::library::DownloadPathSelection;
 
-// Version 4 adds the plain-language presentation texts (short name, version
-// label, summary) the Models page groups and labels rows with. Version 3 added
-// the memory footprint, streaming floor, role, Get started pick, and the
-// experimental and retiring flags. There are no downstream catalog consumers,
-// so the schema moves forward without compatibility shims.
-const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 4;
+// Version 5 removes every name but the model ID: the display name, short name
+// and version label gave one model up to four names, and people could not tell
+// which one the terminal and the API accept. The model ID is the leaf of the
+// Hugging Face identity, the same name discovery gives the downloaded folder.
+// Version 4 added the summary; version 3 the memory footprint, streaming floor,
+// role, Get started pick, and the experimental and retiring flags. There are no
+// downstream catalog consumers, so the schema moves forward without
+// compatibility shims.
+const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 5;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
 const MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT: usize = 1_024;
 const MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH: usize = 96;
-const MAXIMUM_DISPLAY_NAME_BYTES: usize = 256;
 const MAXIMUM_DESCRIPTION_BYTES: usize = 512;
 const MAXIMUM_QUANTIZATION_LABEL_BYTES: usize = 64;
 const MAXIMUM_UPSTREAM_LICENSE_BYTES: usize = 128;
@@ -44,7 +43,6 @@ pub struct DownloadCatalog {
 pub struct DownloadCatalogEntry {
     huggingface_id: String,
     revision: String,
-    display_name: String,
     family: DownloadCatalogFamily,
     approximate_size_bytes: u64,
     approximate_memory_bytes: u64,
@@ -76,8 +74,6 @@ pub enum DownloadCatalogError {
     InvalidHuggingFaceId { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid immutable revision")]
     InvalidRevision { entry_index: usize },
-    #[error("download catalog entry {entry_index} has an invalid display name")]
-    InvalidDisplayName { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid description")]
     InvalidDescription { entry_index: usize },
     #[error("download catalog entry {entry_index} has invalid capabilities")]
@@ -86,18 +82,12 @@ pub enum DownloadCatalogError {
     InvalidQuantizationLabel { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid upstream license")]
     InvalidUpstreamLicense { entry_index: usize },
-    #[error("download catalog entry {entry_index} has an invalid short name")]
-    InvalidShortName { entry_index: usize },
-    #[error(
-        "download catalog entry {entry_index} has an invalid version label, or one without a short name"
-    )]
-    InvalidVersionLabel { entry_index: usize },
     #[error("download catalog entry {entry_index} has an invalid summary")]
     InvalidSummary { entry_index: usize },
     #[error(
-        "download catalog entry {entry_index} repeats the short name and version label of an earlier entry"
+        "download catalog entry {entry_index} has the same model ID as an earlier entry, ignoring case"
     )]
-    DuplicateModelVersion { entry_index: usize },
+    DuplicateModelId { entry_index: usize },
     #[error(
         "download catalog entry {entry_index} must declare approximate_size_bytes between 1 and 9007199254740991"
     )]
@@ -136,7 +126,6 @@ struct DownloadCatalogDocument {
 struct DownloadCatalogEntryDocument {
     huggingface_id: String,
     revision: String,
-    display_name: String,
     family: DownloadCatalogFamily,
     approximate_size_bytes: u64,
     approximate_memory_bytes: u64,
@@ -156,8 +145,6 @@ struct DownloadCatalogEntryDocument {
     capabilities: Option<DownloadCatalogCapabilitiesDocument>,
     quantization_label: Option<String>,
     upstream_license: Option<String>,
-    short_name: Option<String>,
-    version_label: Option<String>,
     summary: Option<String>,
     included_paths: Option<Vec<String>>,
 }
@@ -227,23 +214,23 @@ fn parse_and_shape_check_document(
     Ok(catalog_document)
 }
 
-/// Parses every entry in authored order, then applies the one rule that spans
-/// entries: no two builds may share a short name and a version label.
+/// Parses every entry in authored order. The rules that span entries, unique
+/// identities and one Get started pick per role, are applied as each entry is
+/// read.
 fn parse_catalog_entries(
     entry_documents: Vec<DownloadCatalogEntryDocument>,
 ) -> Result<Vec<DownloadCatalogEntry>, DownloadCatalogError> {
-    let mut normalized_huggingface_ids = BTreeSet::new();
+    let mut seen_identities = SeenEntryIdentities::default();
     let mut get_started_role_names = BTreeSet::new();
     let mut entries = Vec::with_capacity(entry_documents.len());
     for (entry_index, entry_document) in entry_documents.into_iter().enumerate() {
         entries.push(parse_catalog_entry(
             entry_document,
             entry_index,
-            &mut normalized_huggingface_ids,
+            &mut seen_identities,
             &mut get_started_role_names,
         )?);
     }
-    validate_unique_model_versions(&entries)?;
     Ok(entries)
 }
 
@@ -263,14 +250,7 @@ fn parse_entry_texts(
 ) -> Result<EntryTexts, DownloadCatalogError> {
     let quantization_label = parse_optional_entry_quantization_label(entry_document, entry_index)?;
     let upstream_license = parse_optional_entry_upstream_license(entry_document, entry_index)?;
-    let presentation = parse_entry_presentation(
-        &AuthoredEntryPresentation {
-            short_name: entry_document.short_name.as_deref(),
-            version_label: entry_document.version_label.as_deref(),
-            summary: entry_document.summary.as_deref(),
-        },
-        entry_index,
-    )?;
+    let presentation = parse_entry_presentation(entry_document.summary.as_deref(), entry_index)?;
     Ok(EntryTexts {
         quantization_label,
         upstream_license,
@@ -285,13 +265,13 @@ fn parse_entry_texts(
 fn parse_catalog_entry(
     entry_document: DownloadCatalogEntryDocument,
     entry_index: usize,
-    normalized_huggingface_ids: &mut BTreeSet<String>,
+    seen_identities: &mut SeenEntryIdentities,
     get_started_role_names: &mut BTreeSet<&'static str>,
 ) -> Result<DownloadCatalogEntry, DownloadCatalogError> {
     validate_entry_document(
         &entry_document,
         entry_index,
-        normalized_huggingface_ids,
+        seen_identities,
         get_started_role_names,
     )?;
     let description = parse_optional_entry_description(&entry_document, entry_index)?;
@@ -302,7 +282,6 @@ fn parse_catalog_entry(
     Ok(DownloadCatalogEntry {
         huggingface_id: entry_document.huggingface_id,
         revision: entry_document.revision,
-        display_name: entry_document.display_name,
         family: entry_document.family,
         approximate_size_bytes: entry_document.approximate_size_bytes,
         approximate_memory_bytes: entry_document.approximate_memory_bytes,
@@ -321,53 +300,46 @@ fn parse_catalog_entry(
 }
 
 /// Runs the whole-entry checks that need no conversion, in the authored order
-/// (identity, display metadata, memory, Get started pick), so the first failing
-/// rule decides the reported error exactly as before they were grouped.
+/// (identity, size and visibility, memory, Get started pick), so the first
+/// failing rule decides the reported error exactly as before they were grouped.
 fn validate_entry_document(
     entry_document: &DownloadCatalogEntryDocument,
     entry_index: usize,
-    normalized_huggingface_ids: &mut BTreeSet<String>,
+    seen_identities: &mut SeenEntryIdentities,
     get_started_role_names: &mut BTreeSet<&'static str>,
 ) -> Result<(), DownloadCatalogError> {
-    validate_entry_identity(entry_document, entry_index, normalized_huggingface_ids)?;
-    validate_entry_display_metadata(entry_document, entry_index)?;
+    validate_entry_identity(entry_document, entry_index, seen_identities)?;
+    validate_entry_size_and_visibility(entry_document, entry_index)?;
     validate_entry_memory_footprint(entry_document, entry_index)?;
     validate_get_started_pick(entry_document, entry_index, get_started_role_names)
 }
 
 /// Guards the entry identity: a Hub-safe repository id, first-seen
-/// case-insensitively across the whole catalog, plus an immutable full-length
-/// commit revision instead of a moving ref.
+/// case-insensitively across the whole catalog, a model ID no earlier entry
+/// uses, plus an immutable full-length commit revision instead of a moving ref.
+/// The model ID is the only name people see, so two organizations publishing
+/// the same repository name would show two models no one could tell apart.
 fn validate_entry_identity(
     entry_document: &DownloadCatalogEntryDocument,
     entry_index: usize,
-    normalized_huggingface_ids: &mut BTreeSet<String>,
+    seen_identities: &mut SeenEntryIdentities,
 ) -> Result<(), DownloadCatalogError> {
     if !is_valid_huggingface_id(&entry_document.huggingface_id) {
         return Err(DownloadCatalogError::InvalidHuggingFaceId { entry_index });
     }
-    if !normalized_huggingface_ids.insert(entry_document.huggingface_id.to_ascii_lowercase()) {
-        return Err(DownloadCatalogError::DuplicateHuggingFaceId);
-    }
+    seen_identities.claim(&entry_document.huggingface_id, entry_index)?;
     if !is_valid_immutable_revision(&entry_document.revision) {
         return Err(DownloadCatalogError::InvalidRevision { entry_index });
     }
     Ok(())
 }
 
-/// Guards the human-facing display name, the JavaScript-safe size claim, and
-/// the public-visibility release rule; display-name failures are reported
-/// before size and visibility failures.
-fn validate_entry_display_metadata(
+/// Guards the JavaScript-safe size claim and the public-visibility release
+/// rule; size failures are reported before visibility failures.
+fn validate_entry_size_and_visibility(
     entry_document: &DownloadCatalogEntryDocument,
     entry_index: usize,
 ) -> Result<(), DownloadCatalogError> {
-    if entry_document.display_name.len() > MAXIMUM_DISPLAY_NAME_BYTES
-        || entry_document.display_name.trim().is_empty()
-        || entry_document.display_name.chars().any(char::is_control)
-    {
-        return Err(DownloadCatalogError::InvalidDisplayName { entry_index });
-    }
     if entry_document.approximate_size_bytes == 0
         || entry_document.approximate_size_bytes > MAXIMUM_JAVASCRIPT_SAFE_INTEGER
     {
@@ -497,9 +469,12 @@ impl DownloadCatalogEntry {
         &self.revision
     }
 
+    /// The model's one name, shown everywhere and accepted by the terminal and
+    /// the API: the leaf of its Hugging Face identity, which is also the folder
+    /// discovery publishes a downloaded copy under.
     #[must_use]
-    pub fn display_name(&self) -> &str {
-        &self.display_name
+    pub fn model_id(&self) -> &str {
+        astronomical_config::leaf_model_id(&self.huggingface_id)
     }
 
     #[must_use]
@@ -566,18 +541,6 @@ impl DownloadCatalogEntry {
         self.upstream_license.as_deref()
     }
 
-    /// The name people read on the Models page; builds of one model share it.
-    #[must_use]
-    pub fn short_name(&self) -> Option<&str> {
-        self.presentation.short_name.as_deref()
-    }
-
-    /// Tells this build apart from other builds sharing its short name.
-    #[must_use]
-    pub fn version_label(&self) -> Option<&str> {
-        self.presentation.version_label.as_deref()
-    }
-
     /// One line saying what the model is for, shown on its row.
     #[must_use]
     pub fn summary(&self) -> Option<&str> {
@@ -587,6 +550,35 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub const fn download_path_selection(&self) -> &DownloadPathSelection {
         &self.download_path_selection
+    }
+}
+
+/// The identities every entry read so far has claimed, compared ignoring case.
+#[derive(Default)]
+struct SeenEntryIdentities {
+    huggingface_ids: BTreeSet<String>,
+    model_ids: BTreeSet<String>,
+}
+
+impl SeenEntryIdentities {
+    /// Claims one entry's Hugging Face identity and model ID. A repeated
+    /// identity is reported first, because it also repeats the model ID.
+    fn claim(
+        &mut self,
+        huggingface_id: &str,
+        entry_index: usize,
+    ) -> Result<(), DownloadCatalogError> {
+        if !self
+            .huggingface_ids
+            .insert(huggingface_id.to_ascii_lowercase())
+        {
+            return Err(DownloadCatalogError::DuplicateHuggingFaceId);
+        }
+        let model_id = astronomical_config::leaf_model_id(huggingface_id);
+        if !self.model_ids.insert(model_id.to_ascii_lowercase()) {
+            return Err(DownloadCatalogError::DuplicateModelId { entry_index });
+        }
+        Ok(())
     }
 }
 

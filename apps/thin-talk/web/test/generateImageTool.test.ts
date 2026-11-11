@@ -90,32 +90,32 @@ function imageTool(storedImages: string[] = [], imageModelSelection = new ImageM
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
 const PICTURES_LIBRARY = {
   entries: [
-    { display_name: "FLUX.2 Klein 4B full precision", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
-    { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
+    { role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+    { role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
   ],
 };
 
-test("should_draw_with_the_library_pictures_pick_and_name_it", async () => {
+test("should_draw_with_the_library_pictures_pick_and_name_it_by_its_id", async () => {
   const imageRequestBodies = installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], libraryCatalog: PICTURES_LIBRARY });
 
   const toolOutput = await imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
 
   assert.equal(imageRequestBodies[0]?.["model"], "flux2-klein-4b-4bit");
-  assert.equal(toolOutput.generatedImageModelName, "FLUX.2 Klein 4B 4-bit");
-  assert.match(toolOutput.text, /with FLUX\.2 Klein 4B 4-bit and showed it/);
+  assert.equal(toolOutput.generatedImageModelName, "flux2-klein-4b-4bit");
+  assert.match(toolOutput.text, /with flux2-klein-4b-4bit and showed it/);
 });
 
 test("should_leave_the_shared_selection_naming_the_model_that_drew", async () => {
   installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], libraryCatalog: PICTURES_LIBRARY });
   const imageModelSelection = new ImageModelSelection();
   const notifiedSelections: (string | null)[] = [];
-  imageModelSelection.onChange(() => notifiedSelections.push(imageModelSelection.current()?.name ?? null));
+  imageModelSelection.onChange(() => notifiedSelections.push(imageModelSelection.current()?.id ?? null));
 
   const toolOutput = await imageTool([], imageModelSelection).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
 
   // The composer's pill reads the same selection, so it shows what drew.
-  assert.equal(imageModelSelection.current()?.name, toolOutput.generatedImageModelName);
-  assert.deepEqual(notifiedSelections, ["FLUX.2 Klein 4B 4-bit"]);
+  assert.equal(imageModelSelection.current()?.id, toolOutput.generatedImageModelName);
+  assert.deepEqual(notifiedSelections, ["flux2-klein-4b-4bit"]);
 });
 
 test("should_draw_with_the_model_the_person_chose", async () => {
@@ -125,7 +125,7 @@ test("should_draw_with_the_model_the_person_chose", async () => {
     .execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
 
   assert.equal(imageRequestBodies[0]?.["model"], "FLUX.2-klein-4B");
-  assert.equal(toolOutput.generatedImageModelName, "FLUX.2 Klein 4B full precision");
+  assert.equal(toolOutput.generatedImageModelName, "FLUX.2-klein-4B");
 });
 
 test("should_still_draw_when_the_library_cannot_be_read", async () => {
@@ -134,7 +134,7 @@ test("should_still_draw_when_the_library_cannot_be_read", async () => {
   const toolOutput = await imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
 
   assert.equal(imageRequestBodies[0]?.["model"], "FLUX.2-klein-4B");
-  assert.equal(toolOutput.generatedImageModelName, "FLUX.2-klein-4B", "without the Library the id is the name");
+  assert.equal(toolOutput.generatedImageModelName, "FLUX.2-klein-4B", "the id is the name with or without the Library");
 });
 
 test("should_generate_with_the_only_image_model_store_the_image_and_report_it", async () => {

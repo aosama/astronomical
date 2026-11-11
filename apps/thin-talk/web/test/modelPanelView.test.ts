@@ -5,7 +5,7 @@ import { bootJourney, waitUntilReady } from "./support/journey";
 
 /**
  * The composer's brain control and its one panel: the chat model in use under
- * its plain name, every installed chat and picture model in the panel, the
+ * its one name, its id, every installed chat and picture model in the panel, the
  * picture choice remembered across a relaunch, and the way to the Models page.
  */
 
@@ -16,10 +16,10 @@ const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["te
 const ONE_GIGABYTE = 1024 * 1024 * 1024;
 const LIBRARY_CATALOG = {
   entries: [
-    { short_name: "Ornith 1.5 35B Vision", version_label: "6-bit", approximate_size_bytes: 27.1 * ONE_GIGABYTE, capabilities: { supports_vision: true }, role: "chat", requestable_model_id: CHAT_MODEL.id },
-    { short_name: "Ornith 1.5 9B", version_label: "6-bit", approximate_size_bytes: 7.6 * ONE_GIGABYTE, role: "chat", requestable_model_id: SECOND_CHAT_MODEL.id },
-    { display_name: "FLUX.2 Klein 4B full precision", short_name: "FLUX.2 Klein 4B", version_label: "Full precision", role: "image_generation", get_started: false, requestable_model_id: FULL_PRECISION_IMAGE_MODEL.id },
-    { display_name: "FLUX.2 Klein 4B 4-bit", short_name: "FLUX.2 Klein 4B", version_label: "4-bit", role: "image_generation", get_started: true, requestable_model_id: FOUR_BIT_IMAGE_MODEL.id },
+    { model_id: CHAT_MODEL.id, approximate_size_bytes: 27.1 * ONE_GIGABYTE, capabilities: { supports_vision: true }, role: "chat", requestable_model_id: CHAT_MODEL.id },
+    { model_id: SECOND_CHAT_MODEL.id, approximate_size_bytes: 7.6 * ONE_GIGABYTE, role: "chat", requestable_model_id: SECOND_CHAT_MODEL.id },
+    { model_id: FULL_PRECISION_IMAGE_MODEL.id, role: "image_generation", get_started: false, requestable_model_id: FULL_PRECISION_IMAGE_MODEL.id },
+    { model_id: FOUR_BIT_IMAGE_MODEL.id, role: "image_generation", get_started: true, requestable_model_id: FOUR_BIT_IMAGE_MODEL.id },
   ],
 };
 const EVERY_MODEL = [CHAT_MODEL, SECOND_CHAT_MODEL, FULL_PRECISION_IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL];
@@ -47,14 +47,15 @@ function click(element: Element): void {
 async function bootWithEveryModel(seedPreferences?: Record<string, unknown>): Promise<ReturnType<typeof bootJourney>> {
   const journey = bootJourney(undefined, { models: EVERY_MODEL, libraryCatalog: LIBRARY_CATALOG, seedPreferences });
   await waitUntilReady();
-  await waitFor(() => brainLabel() === "Ornith 1.5 35B Vision", "the plain name on the brain control");
+  await waitFor(() => brainLabel() === CHAT_MODEL.id, "the model id on the brain control");
   return journey;
 }
 
-test("should_name_the_chat_model_by_its_plain_name_and_keep_its_id_in_the_tooltip", async () => {
+test("should_name_the_chat_model_by_its_id_on_the_control_in_the_tooltip_and_for_voiceover", async () => {
   await bootWithEveryModel();
+  assert.equal(brainLabel(), CHAT_MODEL.id);
   assert.equal(brainControl().title, CHAT_MODEL.id);
-  assert.equal(brainControl().getAttribute("aria-label"), "Brain: Ornith 1.5 35B Vision");
+  assert.equal(brainControl().getAttribute("aria-label"), `Brain: ${CHAT_MODEL.id}`);
 }, { timeout: 30_000 });
 
 test("should_list_chat_models_then_picture_models_in_one_panel_with_details", async () => {
@@ -64,7 +65,8 @@ test("should_list_chat_models_then_picture_models_in_one_panel_with_details", as
   const headings = [...brainPanel().querySelectorAll(".composer__menu-heading")].map((heading) => heading.textContent);
   assert.deepEqual(headings, ["Chat", "Pictures"]);
   const chosenChat = panelChoice(`composer-model-${CHAT_MODEL.id}`)!;
-  assert.equal(chosenChat.querySelector(".composer__model-detail")?.textContent, "6-bit · 27.1 GB · sees images");
+  assert.equal(chosenChat.textContent?.includes(CHAT_MODEL.id), true, "the panel row shows the model id");
+  assert.equal(chosenChat.querySelector(".composer__model-detail")?.textContent, "27.1 GB · sees images");
   assert.equal(chosenChat.getAttribute("aria-checked"), "true");
   // The Library's Image Generation pick is chosen until the person picks another.
   assert.equal(panelChoice(`composer-image-model-${FOUR_BIT_IMAGE_MODEL.id}`)?.getAttribute("aria-checked"), "true");
@@ -124,13 +126,13 @@ test("should_close_the_panel_on_escape_and_on_a_click_outside", async () => {
   assert.equal(brainControl().getAttribute("aria-expanded"), "false");
 }, { timeout: 30_000 });
 
-test("should_show_a_model_name_with_markup_as_plain_text", async () => {
-  const markupCatalog = { entries: [{ short_name: "<b>Bold</b> model", role: "chat", requestable_model_id: CHAT_MODEL.id }] };
-  bootJourney(undefined, { models: [CHAT_MODEL], libraryCatalog: markupCatalog });
+test("should_show_a_model_id_with_markup_as_plain_text", async () => {
+  const markupModel = { ...CHAT_MODEL, id: "<b>Bold</b>-model" };
+  bootJourney(undefined, { models: [markupModel] });
   await waitUntilReady();
-  await waitFor(() => brainLabel() === "<b>Bold</b> model", "the escaped name");
+  await waitFor(() => brainLabel() === "<b>Bold</b>-model", "the escaped name");
   click(brainControl());
-  assert.equal(panelChoice(`composer-model-${CHAT_MODEL.id}`)?.querySelector("b"), null, "the name is text, never markup");
+  assert.equal(brainPanel().querySelector("b"), null, "the name is text, never markup");
 }, { timeout: 30_000 });
 
 test("should_fall_back_to_the_model_id_when_the_library_cannot_be_read", async () => {

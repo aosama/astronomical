@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { ImageModel } from "../src/ImageModel";
 import { ImageModelSelection } from "../src/ImageModelSelection";
 
-const IMAGE_GENERATION_PICK = new ImageModel({ id: "flux2-klein-4b-4bit", name: "FLUX.2 Klein 4B 4-bit", isImageGenerationPick: true });
-const FULL_PRECISION = new ImageModel({ id: "FLUX.2-klein-4B", name: "FLUX.2 Klein 4B full precision" });
-const QWEN_IMAGE = new ImageModel({ id: "Qwen-Image-2.1-MLX-4bit", name: "Qwen-Image 2.1 4-bit" });
+const IMAGE_GENERATION_PICK = new ImageModel({ id: "flux2-klein-4b-4bit", isImageGenerationPick: true });
+const FULL_PRECISION = new ImageModel({ id: "FLUX.2-klein-4B" });
+const QWEN_IMAGE = new ImageModel({ id: "Qwen-Image-2.1-MLX-4bit" });
 
 function selectionOver(installedImageModels: ImageModel[], preferredImageModelID: string | null = null): ImageModelSelection {
   const selection = new ImageModelSelection(preferredImageModelID);

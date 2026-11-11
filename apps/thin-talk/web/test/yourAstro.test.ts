@@ -230,7 +230,7 @@ test("should_open_the_grown_up_note_from_the_page_and_come_back", async () => {
 test("should_close_the_sketchbook_offer_on_not_now_and_download_nothing", async () => {
   const sketchbookID = "example-org/starter-image-4bit";
   const journey = await openYourAstro(MET_ASTRO_PROFILE, {
-    libraryCatalog: { entries: [{ huggingface_id: sketchbookID, display_name: "Starter Image", role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false }] },
+    libraryCatalog: { entries: [{ huggingface_id: sketchbookID, role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false }] },
   });
   await waitFor(() => isPresent("your-astro-sketchbook"), "the sketchbook row's offer");
   element<HTMLButtonElement>("your-astro-sketchbook").click();

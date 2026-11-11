@@ -12,9 +12,9 @@ const LIBRARY_DOWNLOAD_URL = "/v1/library/download";
 const LIBRARY_CATALOG_TIMEOUT_MILLIS = 10_000;
 const DOWNLOAD_MODELS_STATUS_URL = "/v1/status";
 const LIBRARY_REVEAL_URL = "/v1/library/reveal";
-// Schema 4 adds the short name, version label and summary the Models page
-// groups builds into one row per model with.
-const LIBRARY_CATALOG_SCHEMA_VERSION = 4;
+// Schema 5 names every model by its model ID alone; the display name, short
+// name and version label are gone, so every catalog row is one model.
+const LIBRARY_CATALOG_SCHEMA_VERSION = 5;
 const DOWNLOAD_MODELS_ROLES = ["chat", "coding", "image_generation", "helper", "decision"];
 
 let downloadModelsCatalogLoadPromise = null;
@@ -32,11 +32,8 @@ let downloadModelsMeasuredBytesPerSecond = null;
 // filter ("all", a section key, or "more").
 let downloadModelsSearchQuery = "";
 let downloadModelsActiveFilter = "all";
-// The model whose details are open, by its grouping key, or null.
-let downloadModelsExpandedModelKey = null;
-// The build the person picked in a row's version picker, by model key. A model
-// without an entry shows its default version (see downloadModelsDefaultVersion).
-let downloadModelsSelectedVersionIdByModelKey = {};
+// The model whose details are open, by its model ID, or null.
+let downloadModelsExpandedModelId = null;
 // Serving memory ceiling from /v1/status: the limit the engine loads models
 // within, which can sit below the machine's RAM when the user configured a lower
 // maximum. Null means unknown, and the cards then show no fit label rather than a guess.
@@ -117,8 +114,7 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         downloadModelsCurrentDownload,
         downloadModelsSearchQuery,
         downloadModelsActiveFilter,
-        downloadModelsExpandedModelKey,
-        downloadModelsSelectedVersionIdByModelKey,
+        downloadModelsExpandedModelId,
         downloadModelsMeasuredBytesPerSecond,
         downloadModelsServingCeilingBytes,
         downloadModelsCeilingIsUserLimit,
@@ -222,9 +218,7 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
     const capabilities = catalogEntry.capabilities || {};
     return {
         huggingfaceId: catalogEntry.huggingface_id,
-        displayName: catalogEntry.display_name,
-        shortName: downloadModelsOptionalText(catalogEntry.short_name),
-        versionLabel: downloadModelsOptionalText(catalogEntry.version_label),
+        modelId: catalogEntry.model_id,
         summary: downloadModelsOptionalText(catalogEntry.summary),
         family: catalogEntry.family,
         approximateSizeBytes: catalogEntry.approximate_size_bytes,
@@ -280,8 +274,8 @@ function isRenderableDownloadModelsCatalogEntry(catalogEntry) {
         && catalogEntry.huggingface_id.trim().length > 0
         && typeof catalogEntry.revision === "string"
         && /^[0-9a-f]{40}$/i.test(catalogEntry.revision)
-        && typeof catalogEntry.display_name === "string"
-        && catalogEntry.display_name.trim().length > 0
+        && typeof catalogEntry.model_id === "string"
+        && catalogEntry.model_id.trim().length > 0
         && typeof catalogEntry.family === "string"
         && catalogEntry.family.trim().length > 0
         && Number.isSafeInteger(catalogEntry.approximate_size_bytes)

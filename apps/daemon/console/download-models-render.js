@@ -31,7 +31,7 @@ function createDownloadModelsPageSections(catalogRows) {
     ];
     const removalNotice = createDownloadModelsRemovalNotice(catalogRows);
     if (removalNotice) pageSections.push(removalNotice);
-    pageSections.push(createDownloadModelsAddSection(downloadModelsModelsFromRows(catalogRows)));
+    pageSections.push(createDownloadModelsAddSection(downloadModelsRowsInPageOrder(catalogRows)));
     return pageSections;
 }
 
@@ -96,7 +96,7 @@ function createDownloadModelsStarterCard(starterCard, starterRow, isRecommended)
     );
     const pick = createDownloadModelsElement("div", "download-models-starter-pick");
     const pickChildren = [
-        createDownloadModelsParagraph("download-models-starter-model", starterRow.shortName || starterRow.displayName)
+        createDownloadModelsParagraph("download-models-starter-model", downloadModelsRowName(starterRow))
     ];
     const fitMeter = createDownloadModelsFitMeter(starterRow, " on this Mac");
     if (fitMeter) pickChildren.push(fitMeter);
@@ -106,12 +106,12 @@ function createDownloadModelsStarterCard(starterCard, starterRow, isRecommended)
     return card;
 }
 
-function createDownloadModelsAddSection(models) {
+function createDownloadModelsAddSection(catalogRows) {
     const section = createDownloadModelsElement("section", "download-models-add");
     const visibleSectionKeys = downloadModelsVisibleSectionKeys(downloadModelsActiveFilter, downloadModelsSearchQuery);
     const sectionElements = DOWNLOAD_MODELS_SECTIONS
         .filter((catalogSection) => visibleSectionKeys.includes(catalogSection.key))
-        .map((catalogSection) => createDownloadModelsCatalogSection(catalogSection, models))
+        .map((catalogSection) => createDownloadModelsCatalogSection(catalogSection, catalogRows))
         .filter((sectionElement) => sectionElement !== null);
     const sectionChildren = [createDownloadModelsAddHeading(), createDownloadModelsFilterBar()];
     if (isDownloadModelsDownloadSlotBusy()) {
@@ -127,7 +127,7 @@ function createDownloadModelsAddSection(models) {
             "No model matches that search. Try a shorter word, or clear it to see everything."
         ));
     }
-    const showMoreButton = createDownloadModelsShowMoreButton(models);
+    const showMoreButton = createDownloadModelsShowMoreButton(catalogRows);
     if (showMoreButton) sectionChildren.push(showMoreButton);
     section.replaceChildren(...sectionChildren);
     return section;
@@ -190,12 +190,12 @@ function selectDownloadModelsFilter(filterKey) {
     renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
 }
 
-function createDownloadModelsCatalogSection(catalogSection, models) {
-    const sectionModels = models.filter(
-        (model) => model.sectionKey === catalogSection.key
-            && downloadModelsModelMatchesQuery(model, downloadModelsSearchQuery)
+function createDownloadModelsCatalogSection(catalogSection, catalogRows) {
+    const sectionRows = catalogRows.filter(
+        (catalogRow) => downloadModelsSectionKey(catalogRow) === catalogSection.key
+            && downloadModelsRowMatchesQuery(catalogRow, downloadModelsSearchQuery)
     );
-    if (sectionModels.length === 0) return null;
+    if (sectionRows.length === 0) return null;
     const section = createDownloadModelsElement("section", "download-models-group");
     const heading = createDownloadModelsElement("div", "download-models-group-heading");
     heading.replaceChildren(
@@ -203,14 +203,14 @@ function createDownloadModelsCatalogSection(catalogSection, models) {
         createDownloadModelsElement("span", "download-models-group-note", catalogSection.note)
     );
     const rowList = createDownloadModelsElement("div", "download-models-list");
-    rowList.replaceChildren(...sectionModels.map(createDownloadModelsModelRow));
+    rowList.replaceChildren(...sectionRows.map(createDownloadModelsModelRow));
     section.replaceChildren(heading, rowList);
     return section;
 }
 
-function createDownloadModelsShowMoreButton(models) {
+function createDownloadModelsShowMoreButton(catalogRows) {
     if (downloadModelsActiveFilter !== "all" || downloadModelsSearchQuery) return null;
-    const hiddenModelCount = downloadModelsHiddenModelCount(models);
+    const hiddenModelCount = downloadModelsHiddenModelCount(catalogRows);
     if (hiddenModelCount === 0) return null;
     const showMoreButton = createDownloadModelsElement(
         "button",
