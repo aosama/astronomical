@@ -176,3 +176,56 @@ test("should_keep_the_screen_drawing_when_it_cannot_be_drawn_again", async () =>
 
   assert.equal(content.entries[0]?.body.querySelector("svg")?.id, "screen");
 });
+
+function headedConversation(): ExportableMessage[] {
+  return [
+    exportableMessage("q1", true, "<p>What is mitosis?</p>"),
+    exportableMessage("a1", false, "<p>Cell division.</p>"),
+    exportableMessage("q2", true, "<p>Explain the water cycle</p>"),
+    exportableMessage("a2", false, "<h1>The Water Cycle</h1><p>Water moves in a loop.</p><h2>Stages</h2>"),
+  ];
+}
+
+// A chat is named after its first question, so a later answer exported alone
+// was titled "What is mitosis?" above a page about the water cycle.
+test("should_title_a_single_answer_with_its_own_opening_heading", async () => {
+  const { builder } = builderFor("Astro", new Map(), "What is mitosis?", headedConversation);
+
+  const content = await builder.build(defaultExportOptions({ kind: "oneAnswer", messageID: "a2" }));
+
+  assert.equal(content.title, "The Water Cycle");
+  assert.equal(content.entries[0]?.body.querySelector("h1"), null, "the heading is not repeated under the title");
+  assert.equal(content.entries[0]?.body.querySelector("h2")?.textContent, "Stages", "later headings stay");
+  assert.match(content.entries[0]?.body.textContent ?? "", /Water moves in a loop\./);
+});
+
+test("should_keep_the_chats_name_for_a_single_answer_that_opens_with_prose", async () => {
+  const { builder } = builderFor("Astro", new Map(), "What is mitosis?", headedConversation);
+
+  const content = await builder.build(defaultExportOptions({ kind: "oneAnswer", messageID: "a1" }));
+
+  assert.equal(content.title, "What is mitosis?");
+  assert.match(content.entries[0]?.body.textContent ?? "", /Cell division\./);
+});
+
+test("should_keep_the_chats_name_and_every_heading_when_exporting_more_than_one_answer", async () => {
+  const { builder } = builderFor("Astro", new Map(), "What is mitosis?", headedConversation);
+
+  const wholeChat = await builder.build(defaultExportOptions({ kind: "wholeChat" }));
+  const picked = await builder.build(defaultExportOptions({ kind: "pickedMessages", messageIDs: ["a2"] }));
+
+  assert.equal(wholeChat.title, "What is mitosis?");
+  assert.equal(wholeChat.entries[3]?.body.querySelector("h1")?.textContent, "The Water Cycle");
+  assert.equal(picked.title, "What is mitosis?", "picked messages are part of a chat, not one answer");
+});
+
+test("should_take_the_heading_from_the_answer_not_from_the_question_before_it", async () => {
+  const { builder } = builderFor("Astro", new Map(), "What is mitosis?", headedConversation);
+  const withQuestion = { ...defaultExportOptions({ kind: "oneAnswer", messageID: "a2" } as const), includesQuestions: true };
+
+  const content = await builder.build(withQuestion);
+
+  assert.equal(content.title, "The Water Cycle");
+  assert.deepEqual(content.entries.map((entry) => entry.isQuestion), [true, false]);
+  assert.match(content.entries[0]?.body.textContent ?? "", /Explain the water cycle/);
+});

@@ -56,6 +56,25 @@ export function messagesInScope(messages: readonly ExportableMessage[], scope: E
   return [...leadingQuestion, messages[answerIndex] as ExportableMessage];
 }
 
+/**
+ * The heading one exported answer opens with, taken out of the answer so it
+ * can be the document's title. A chat is named after its first question, so
+ * an answer exported on its own from a long chat got a title about something
+ * else, with its real heading directly beneath. Null when the answer does
+ * not open with a heading, and the chat's name is used.
+ */
+function takeOpeningHeading(entries: readonly ExportEntry[]): string | null {
+  const answer = entries.find((entry) => !entry.isQuestion);
+  const openingElement = answer?.body.firstElementChild ?? null;
+  const opensWithHeading = openingElement !== null && /^H[1-3]$/.test(openingElement.tagName) && answer?.body.firstChild === openingElement;
+  const headingText = opensWithHeading ? (openingElement.textContent ?? "").trim() : "";
+  if (openingElement === null || headingText.length === 0) {
+    return null;
+  }
+  openingElement.remove();
+  return headingText;
+}
+
 type ContentSource = Pick<ExportEnvironment, "conversationTitle" | "assistantName" | "exportableMessages" | "loadPicture" | "drawDiagramForPaper">;
 
 /**
@@ -92,7 +111,8 @@ export class ExportContentBuilder {
         entries.push({ isQuestion: message.isQuestion, body });
       }
     }
-    const title = this.source.conversationTitle().trim();
+    const conversationTitle = this.source.conversationTitle().trim();
+    const title = (options.scope.kind === "oneAnswer" ? takeOpeningHeading(entries) : null) ?? conversationTitle;
     return {
       title: title.length > 0 ? title : UNTITLED_CONVERSATION_TITLE,
       dateText: new Intl.DateTimeFormat(undefined, { dateStyle: "long" }).format(this.currentDate()),
