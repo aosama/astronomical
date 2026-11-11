@@ -71,8 +71,9 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
     # pass fails when a function crosses the budget without an expect, and
     # an #[expect] self-cleans when its function shrinks below the budget.
     # Default world only: the pass is warm-cache incremental so commits
-    # stay fast, and feature-gated code stays linted by the developer's
-    # own lane runs.
+    # stay fast. Feature-gated acceptance tests get their own pass below;
+    # every other feature-gated path stays linted by the developer's own
+    # lane runs.
     printf '%s\n' "[pre-commit] status=start check=function-length-budget root=${REPOSITORY_ROOT}"
     budget_started_epoch_seconds="$(date +%s)"
     if cargo clippy --workspace --all-targets; then
@@ -102,6 +103,27 @@ if git diff --cached --name-only | grep -q '^crates/model-serving/'; then
         default_features_elapsed_seconds=$(( $(date +%s) - default_features_started_epoch_seconds ))
         printf '%s\n' "[pre-commit] status=failed check=model-serving-default-features elapsed_seconds=${default_features_elapsed_seconds}" >&2
         printf '%s\n' '[pre-commit] hint=code used only with direct-mlx must carry that feature gate (or any(test, feature = "direct-mlx") for pure units with unit tests)' >&2
+        exit 1
+    fi
+fi
+
+# Acceptance tests with every feature on (`cargo xtask
+# lint-acceptance-features`, whose module comment records why and what it
+# costs). Their journeys sit behind features, so the default-world pass above
+# never type-checks them and no GitHub Actions lane compiles the crate.
+# Gated on any staged Rust source, not on acceptance paths, because the
+# breaks it guards against came from crates the acceptance tests only
+# consume (issues #2052 and #2076). Feature-gated acceptance code is thereby
+# held to the same 100-line function budget as the default world.
+if git diff --cached --name-only | grep -q '\.rs$'; then
+    printf '%s\n' "[pre-commit] status=start check=acceptance-all-features root=${REPOSITORY_ROOT}"
+    acceptance_started_epoch_seconds="$(date +%s)"
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- lint-acceptance-features; then
+        acceptance_elapsed_seconds=$(( $(date +%s) - acceptance_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=acceptance-all-features elapsed_seconds=${acceptance_elapsed_seconds}"
+    else
+        acceptance_elapsed_seconds=$(( $(date +%s) - acceptance_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=acceptance-all-features elapsed_seconds=${acceptance_elapsed_seconds}" >&2
         exit 1
     fi
 fi
