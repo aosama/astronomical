@@ -28,11 +28,11 @@ mod step_reporter;
 mod tool_command;
 
 #[cfg(test)]
-#[path = "app_bundle_tests.rs"]
-mod app_bundle_tests;
-#[cfg(test)]
 #[path = "app_bundle_link_tests.rs"]
 mod app_bundle_link_tests;
+#[cfg(test)]
+#[path = "app_bundle_tests.rs"]
+mod app_bundle_tests;
 #[cfg(test)]
 #[path = "app_login_launch_check_tests.rs"]
 mod app_login_launch_check_tests;
