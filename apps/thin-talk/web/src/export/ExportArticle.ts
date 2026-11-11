@@ -7,8 +7,8 @@ import { KEPT_TOGETHER_CLASS, markupKeepingHeadingsWithTheirBlocks } from "./Hea
  * The exported document as HTML, and the one stylesheet that dresses it.
  *
  * All three formats start here. The web page is this markup in a file; the
- * PDF is the same file printed by the host; the Word document is the article
- * and the shared rules read by the Word writer. One source is what keeps the
+ * PDF is that file with one print rule more, printed by the host; the Word
+ * document is the article and the shared rules read by the Word writer. One source is what keeps the
  * preview honest: what the sheet shows is what every format is made from.
  */
 
