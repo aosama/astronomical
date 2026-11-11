@@ -53,6 +53,14 @@ final class ChatWindowControllerTests: XCTestCase {
     XCTAssertFalse(window.ignoresMouseEvents)
   }
 
+  /// A rebuild that finishes on another Space or with the display asleep has
+  /// no screen to draw on; only a window macOS reports as showing may start
+  /// the wait for its first frame.
+  func test_should_wait_for_a_visible_screen_before_counting_the_first_draw() {
+    XCTAssertTrue(ChatWindowController.isOnAVisibleScreen([.visible]))
+    XCTAssertFalse(ChatWindowController.isOnAVisibleScreen([]))
+  }
+
   /// xtask passes the argument and the app reads it; a rename on one side
   /// alone would silently bring every background rebuild to the front again.
   func test_should_read_the_same_launch_argument_xtask_passes() throws {
