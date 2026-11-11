@@ -52,21 +52,32 @@ final class ChatWindowController {
   /// when the person asks for the window first.
   private var sendBehindAfterFirstDraw: Task<Void, Never>?
 
-  /// How long the window stays in front, invisible, before it goes behind:
-  /// long enough for the page to load and draw its first frame.
+  /// How long the window stays in front, invisible, once it is really on
+  /// screen: long enough for the page to draw its first frame.
   static let firstDrawInterval: Duration = .seconds(3)
+  /// How often a window waiting for a visible screen looks again.
+  static let visibilityCheckInterval: Duration = .milliseconds(500)
 
   /// WebKit does not draw a page in a window that has never been visible, so
   /// a window ordered straight to the back stays blank however long it
   /// waits. The window is therefore put in front fully transparent and
   /// ignoring the pointer, which is visible to WebKit and invisible to the
   /// person, and goes behind the others once the page has drawn.
+  ///
+  /// The wait is for visibility, not for a fixed time: a rebuild that
+  /// finishes while the person is on another Space, or with the display
+  /// asleep, has no screen to draw on, and a window sent behind after three
+  /// seconds there stayed blank. Until its screen is showing, the invisible
+  /// window simply stays where it is.
   private func showChatWindowBehindOthers() {
     let window = conversationWindow.window
     window.alphaValue = 0
     window.ignoresMouseEvents = true
     window.orderFrontRegardless()
     sendBehindAfterFirstDraw = Task { @MainActor [weak self] in
+      while !Task.isCancelled, !Self.isOnAVisibleScreen(window.occlusionState) {
+        try? await Task.sleep(for: Self.visibilityCheckInterval)
+      }
       try? await Task.sleep(for: Self.firstDrawInterval)
       guard !Task.isCancelled else { return }
       self?.sendBehindAfterFirstDraw = nil
@@ -74,6 +85,12 @@ final class ChatWindowController {
       window.alphaValue = 1
       window.ignoresMouseEvents = false
     }
+  }
+
+  /// Whether macOS reports the window as showing on a screen, which is when
+  /// WebKit draws into it.
+  nonisolated static func isOnAVisibleScreen(_ occlusionState: NSWindow.OcclusionState) -> Bool {
+    occlusionState.contains(.visible)
   }
 
   /// Opens the window on Your Astro, the page that holds every answer from
