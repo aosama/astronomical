@@ -88,7 +88,11 @@ impl ChatTemplate {
         // Chat templates are written for Python's Jinja with these two on, as
         // the Hugging Face tokenizers render them; minijinja 3 sets them
         // through the syntax configuration.
-        let whitespace_syntax = SyntaxConfig::builder().trim_blocks(true).lstrip_blocks(true).build().ok()?;
+        let whitespace_syntax = SyntaxConfig::builder()
+            .trim_blocks(true)
+            .lstrip_blocks(true)
+            .build()
+            .ok()?;
         environment.set_syntax(whitespace_syntax);
         environment.add_function("raise_exception", raise_exception);
         environment.add_filter("tojson", python_tojson);
