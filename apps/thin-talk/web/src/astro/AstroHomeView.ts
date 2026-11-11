@@ -60,7 +60,6 @@ export class AstroHomeView {
     this.followUp.setAttribute("role", "status");
     this.home.append(this.header(), this.ideas, this.shelf(), this.followUp);
     this.emptyState.prepend(this.home);
-    this.figure.followPointerWithin(this.document.body);
   }
 
   public show(profile: AstroProfile): void {

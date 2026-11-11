@@ -33,7 +33,7 @@ export function buildAboutYouSection(document: Document, profile: AstroProfile, 
 export function buildLookSection(document: Document, profile: AstroProfile, actions: YourAstroRowActions): HTMLElement {
   const section = makeSection(document, "Look", "your-astro-look");
   const trailChips = buildTrailChips(document, YOUR_ASTRO_ID_PREFIX, profile.trail, (trail) => actions.chooseTrail(trail));
-  section.append(makeRow(document, "Trail", trailChips, null), makeRow(document, "Show Astro", shownDetail(document, profile.isAstroShown), shownSwitch(document, profile.isAstroShown, actions)));
+  section.append(makeRow(document, "Colours", trailChips, null), makeRow(document, "Show Astro", shownDetail(document, profile.isAstroShown), shownSwitch(document, profile.isAstroShown, actions)));
   return section;
 }
 

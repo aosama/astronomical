@@ -3,15 +3,15 @@ import type { TranscriptMessage } from "../TranscriptMessage";
 import type { TranscriptPersona } from "../TranscriptPersona";
 import { ToolStepState } from "../ToolStep";
 import type { ToolStep } from "../ToolStep";
-import { lookFrameURL } from "./AstroFigure";
+import { astroConstellationHtml } from "./AstroConstellation";
 import { CONVERSATION_SKILL_LABELS, answerSkill, skillForToolName } from "../ConversationSkill";
 import { stateWordsHtml } from "../MessageChrome";
 import type { EscapeHtml, MessageChrome } from "../MessageChrome";
 import { AstroStyle } from "./AstroStyle";
 import { skillMomentWords } from "./SkillMomentWords";
 
-/** What Astro is doing in one answer, which picks its pose and, on the newest
- * answer only, its animation. */
+/** What Astro is doing in one answer, which picks its status words and, on
+ * the newest answer only, how its constellation moves. */
 export enum AstroMood {
   THINKING = "thinking",
   WORKING = "working",
@@ -19,16 +19,6 @@ export enum AstroMood {
   DONE = "done",
   STOPPED = "stopped",
 }
-
-/** The pre-rendered turn that suits each mood: looking up and away to think,
- * toward the work while a skill runs, and at the reader while talking. */
-const LOOK_FRAME_BY_MOOD: Record<AstroMood, number> = {
-  [AstroMood.THINKING]: 7,
-  [AstroMood.WORKING]: 2,
-  [AstroMood.TALKING]: 4,
-  [AstroMood.DONE]: 4,
-  [AstroMood.STOPPED]: 3,
-};
 
 /** What Astro says in place of "thinking" while the engine loads a model. */
 const MODEL_LOADING_WORDS = { explorer: "is waking up its brain…", pilot: "loading the model…" };
@@ -56,7 +46,7 @@ function byStyle(words: { explorer: string; pilot: string }, persona: Transcript
 }
 
 /**
- * The message chrome while Astro is shown: Astro's face and name with a skill
+ * The message chrome while Astro is shown: Astro's constellation and name with a skill
  * tag and friendly status, the person's nickname, "How I worked it out", and
  * tool steps told as skill moments. Every value that comes from the
  * conversation (the nickname, tool labels) is escaped; the rest is fixed text.
@@ -80,7 +70,7 @@ export class AstroMessageChrome implements MessageChrome {
     return `<span class="message__role message__role--named"><b class="astro-you-badge">${this.escapeHtml(initial.toUpperCase())}</b>${this.escapeHtml(this.persona.nickname)}</span>`;
   }
 
-  /** Astro's face in the pose for its mood, then "Astro", the answer's skill
+  /** Astro's constellation, moving for its mood, then "Astro", the answer's skill
    * tag and what Astro is doing now. A failed answer keeps the plain word,
    * because the failure banner explains it. */
   public assistantHeaderHtml(message: TranscriptMessage): string {
@@ -89,7 +79,7 @@ export class AstroMessageChrome implements MessageChrome {
     const statusText = message.state === ChatMessageState.FAILED ? "failed" : byStyle(STATUS_BY_MOOD[mood], this.persona);
     const caret = message.state === ChatMessageState.STREAMING ? '<span class="message__streaming-caret"></span>' : "";
     return (
-      `<div class="astro-avatar" data-mood="${mood}" aria-hidden="true"><img src="${lookFrameURL(LOOK_FRAME_BY_MOOD[mood])}" alt=""><span class="astro-avatar__stars"><i></i><i></i><i></i></span></div>` +
+      `<div class="astro-avatar" data-mood="${mood}" aria-hidden="true">${astroConstellationHtml()}</div>` +
       `<div class="message__meta message__meta--astro">` +
       `<span class="message__role">Astro</span>` +
       `<span class="astro-skill-tag astro-skill-tag--${skill}" data-testid="astro-skill-tag">${CONVERSATION_SKILL_LABELS[skill]}</span>` +

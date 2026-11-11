@@ -89,7 +89,6 @@ export class FirstFlightView {
     const stage = makeElement(this.document, "div", "first-flight__stage");
     stage.append(this.figure.element, this.bubble);
     this.overlay.replaceChildren(makeElement(this.document, "div", "first-flight__sky"), skipButton, stage, this.controls);
-    this.figure.followPointerWithin(this.overlay);
     this.overlay.addEventListener("keydown", (keyEvent) => {
       if (keyEvent.key === "Escape") {
         this.skip();

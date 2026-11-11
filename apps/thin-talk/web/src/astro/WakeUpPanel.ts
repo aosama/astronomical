@@ -9,7 +9,7 @@ import { DownloadMeter } from "./DownloadMeter";
 import { ModelDownloadPhase } from "./ModelDownload";
 import type { ModelDownloadProgress } from "./ModelDownload";
 
-/** The trail chips shown while the brain downloads: a small, harmless choice
+/** The colour chips shown while the brain downloads: a small, harmless choice
  * that makes the wait feel like the person's own. */
 export interface WakeUpTrailChoice {
   /** The saved trail, shown pressed among the chips. */
@@ -155,7 +155,7 @@ export class WakeUpPanel {
   private trailChips(trailChoice: WakeUpTrailChoice): HTMLElement {
     const trailRow = makeElement(this.document, "div", "wake-up__trails");
     trailRow.append(
-      makeElement(this.document, "span", "wake-up__trails-label", "While you wait, pick a trail:"),
+      makeElement(this.document, "span", "wake-up__trails-label", "While you wait, pick Astro's colours:"),
       buildTrailChips(this.document, this.idPrefix, trailChoice.trail, (trail) => this.chooseTrail(trailChoice, trail)),
     );
     return trailRow;
