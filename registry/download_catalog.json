@@ -47,7 +47,7 @@
             "summary": "Answers many set questions about one text together, in a single pass.",
             "family": "clef",
             "approximate_size_bytes": 10690267497,
-            "approximate_memory_bytes": 13958643712,
+            "approximate_memory_bytes": 12380644404,
             "role": "decision",
             "public": true,
             "description": "Answers set questions about a text - pick an option, rate on a scale, or say yes or no - with a probability for every answer, deciding all of a request's questions together in one pass. It writes no text. Reads up to 16,384 tokens for the whole request, its questions included (about 12,000 words); a longer text is cut to fit and the answer says so. Text only. Based on Cloudflare's Clef Flash, a 9B model.",

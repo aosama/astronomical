@@ -147,14 +147,18 @@ measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical
 # Clef latency on an optimized build: after one warmup request, the median of
 # 3 requests with 1, 5 and 10 questions, each a full 16,384-token sequence (a
 # long Romeo and Juliet state cut to fit). It prints numbers, with progress
-# and an ETA every 5 seconds, and asserts no threshold.
+# and an ETA every 5 seconds, and asserts no threshold. Each line also carries
+# the peak MLX memory the process has needed so far; the last one is what the
+# catalog entry records as `approximate_memory_bytes`.
 measure-clef-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 1800 --filter should_measure_clef_decision_latency_at_the_sequence_limit"
 # Kev latency on an optimized build: after one warmup request, one request
 # each with 1, 5 and 10 questions on a Romeo and Juliet state at Kev's
 # 65,536-token state limit, with the state's prefill rate. It prints numbers,
 # with progress and an ETA every 5 seconds, and asserts no threshold. Every
 # request prefills the whole state, so the case budget is an hour, not the
-# default two minutes.
+# default two minutes. Each line also carries the peak MLX memory the process
+# has needed so far; the last one is what a Kev catalog entry records as
+# `approximate_memory_bytes`.
 measure-kev-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 3600 --filter should_measure_kev_decision_latency_at_the_state_limit"
 # The reads a Qwen3.5-based decision model (Kev, Clef) makes from the backbone
 # (issue #2032 phase 6): final hidden states, output-projection rows, and

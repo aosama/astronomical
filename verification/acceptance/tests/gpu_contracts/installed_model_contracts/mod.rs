@@ -4,6 +4,8 @@ mod clef_decision_latency;
 mod clef_reference_decisions;
 mod config;
 #[cfg(feature = "direct-mlx")]
+mod decision_memory_peak;
+#[cfg(feature = "direct-mlx")]
 mod decision_reference_fixture;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_major_checkpoint_parity;

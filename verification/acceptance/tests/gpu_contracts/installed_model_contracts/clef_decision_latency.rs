@@ -5,7 +5,10 @@
 //! was answered. Clef reads one sequence of at most 16,384 tokens holding
 //! the state and every question, and cuts the state to fit, so a long Romeo
 //! and Juliet state fills every request to the limit, which is the most work
-//! a request can be. One warmup request runs before timing.
+//! a request can be. One warmup request runs before timing. Beside each
+//! timing it prints the peak MLX memory the process has needed so far; the
+//! value after the last request is what the catalog entry records as
+//! `approximate_memory_bytes`.
 //!
 //! Decision models are measured this way and not with the repository's usual
 //! 10,000 tokens in and 500 out: they generate nothing.
@@ -21,6 +24,8 @@ use astronomical_decision_contract::{
 };
 use astronomical_model_serving::{ClefDecisionEngine, DecisionEngine};
 use astronomical_test_harness::test_run::TestRunContext;
+
+use super::decision_memory_peak::{peak_memory_bytes_after_request, peak_memory_report};
 
 /// The 8-bit build is about 11 GB; a 16,384-token forward needs room beside it.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 24 * 1024 * 1024 * 1024;
@@ -97,8 +102,9 @@ async fn should_measure_clef_decision_latency_at_the_sequence_limit() {
     let (_, warmup_input_tokens) = timed_request_milliseconds(&mut decision_engine, &state, 1);
     assert_eq!(warmup_input_tokens, CLEF_MAXIMUM_SEQUENCE_TOKENS);
     eprintln!(
-        "[clef-latency] sequence_tokens={warmup_input_tokens} load_and_warmup_milliseconds={}",
-        load_started_at.elapsed().as_millis()
+        "[clef-latency] sequence_tokens={warmup_input_tokens} load_and_warmup_milliseconds={} {}",
+        load_started_at.elapsed().as_millis(),
+        peak_memory_report(peak_memory_bytes_after_request(&mut decision_engine)),
     );
     let request_total = QUESTION_COUNTS.len() * TIMED_REQUESTS_PER_QUESTION_COUNT;
     let measurement_started_at = Instant::now();
@@ -125,10 +131,11 @@ async fn should_measure_clef_decision_latency_at_the_sequence_limit() {
         request_milliseconds.sort_by(f64::total_cmp);
         let median_milliseconds = request_milliseconds[TIMED_REQUESTS_PER_QUESTION_COUNT / 2];
         eprintln!(
-            "[clef-latency] questions={question_count} sequence_tokens={CLEF_MAXIMUM_SEQUENCE_TOKENS} median_milliseconds={median_milliseconds:.1} fastest_milliseconds={:.1} slowest_milliseconds={:.1} tokens_per_second={:.0}",
+            "[clef-latency] questions={question_count} sequence_tokens={CLEF_MAXIMUM_SEQUENCE_TOKENS} median_milliseconds={median_milliseconds:.1} fastest_milliseconds={:.1} slowest_milliseconds={:.1} tokens_per_second={:.0} {}",
             request_milliseconds[0],
             request_milliseconds[TIMED_REQUESTS_PER_QUESTION_COUNT - 1],
             f64::from(CLEF_MAXIMUM_SEQUENCE_TOKENS) / (median_milliseconds / 1_000.0),
+            peak_memory_report(peak_memory_bytes_after_request(&mut decision_engine)),
         );
     }
 }
