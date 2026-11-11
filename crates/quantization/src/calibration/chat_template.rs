@@ -15,7 +15,8 @@
 
 use std::path::Path;
 
-use minijinja::value::{Kwargs, Value, ValueKind};
+use minijinja::syntax::SyntaxConfig;
+use minijinja::value::{Kwargs, Serde, Value, ValueKind};
 use minijinja::{Environment, Error, ErrorKind, State};
 
 use super::python_json::to_python_json;
@@ -84,8 +85,15 @@ impl ChatTemplate {
         special_tokens: Vec<(String, String)>,
     ) -> Option<Self> {
         let mut environment = Environment::new();
-        environment.set_trim_blocks(true);
-        environment.set_lstrip_blocks(true);
+        // Chat templates are written for Python's Jinja with these two on, as
+        // the Hugging Face tokenizers render them; minijinja 3 sets them
+        // through the syntax configuration.
+        let whitespace_syntax = SyntaxConfig::builder()
+            .trim_blocks(true)
+            .lstrip_blocks(true)
+            .build()
+            .ok()?;
+        environment.set_syntax(whitespace_syntax);
         environment.add_function("raise_exception", raise_exception);
         environment.add_filter("tojson", python_tojson);
         environment.set_unknown_method_callback(python_method);
@@ -109,7 +117,7 @@ impl ChatTemplate {
         tool_definitions: Option<&Value>,
     ) -> Result<String, String> {
         let mut context_entries: Vec<(String, Value)> = Vec::new();
-        context_entries.push(("messages".to_owned(), Value::from_serialize(messages)));
+        context_entries.push(("messages".to_owned(), Value::from(Serde(messages))));
         context_entries.push(("add_generation_prompt".to_owned(), Value::from(false)));
         if let Some(tool_definitions) = tool_definitions {
             context_entries.push(("tools".to_owned(), tool_definitions.clone()));
@@ -122,7 +130,9 @@ impl ChatTemplate {
             Ok(template) => template,
             Err(lookup_error) => return Err(lookup_error.to_string()),
         };
-        match template.render(Value::from_iter(context_entries)) {
+        // A map of the entries: in minijinja 3 collecting pairs into a value
+        // makes a list of them, and the template then sees no variables.
+        match template.render(Value::from_pairs(context_entries)) {
             Ok(rendered_text) => Ok(rendered_text),
             Err(render_error) => Err(render_error.to_string()),
         }
@@ -143,7 +153,7 @@ fn python_tojson(value: Value, _keyword_arguments: Kwargs) -> String {
 /// The Python methods chat templates call on strings and mappings, which
 /// Jinja inherits from Python and this engine does not define.
 fn python_method(
-    _state: &State,
+    _state: &mut State,
     receiver: &Value,
     method_name: &str,
     arguments: &[Value],

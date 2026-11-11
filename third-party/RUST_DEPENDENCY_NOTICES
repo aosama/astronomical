@@ -2233,7 +2233,7 @@ Apache License 2.0
 
 Used by:
 - esaxx-rs 0.1.10
-- minijinja 2.24.0
+- minijinja 3.1.0
 - rustls-platform-verifier 0.7.0
 - safetensors 0.8.0
 - spm_precompiled 0.1.4
@@ -4560,7 +4560,7 @@ Used by:
 - base64 0.23.1
 - bitflags 2.13.1
 - bumpalo 3.20.3
-- cc 1.11.0
+- cc 1.11.1
 - cexpr 0.6.0
 - cfg-if 1.0.4
 - core-foundation-sys 0.8.7
@@ -4593,9 +4593,8 @@ Used by:
 - linux-raw-sys 0.12.1
 - lock_api 0.4.14
 - log 0.4.33
-- memo-map 0.3.4
 - mime 0.3.17
-- minijinja 2.24.0
+- minijinja 3.1.0
 - num-traits 0.2.19
 - once_cell 1.21.4
 - openssl-probe 0.2.1
