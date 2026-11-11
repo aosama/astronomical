@@ -38,7 +38,29 @@ final class ChatWindowController {
   func showChatWindowAtLaunch(_ launchPlacement: ChatLaunchPlacement) {
     switch launchPlacement {
     case .inFront: showChatWindow()
-    case .behindOtherWindows: conversationWindow.window.orderBack(nil)
+    case .behindOtherWindows: showChatWindowBehindOthers()
+    }
+  }
+
+  /// How long the window stays in front, invisible, before it goes behind:
+  /// long enough for the page to load and draw its first frame.
+  static let firstDrawInterval: Duration = .seconds(3)
+
+  /// WebKit does not draw a page in a window that has never been visible, so
+  /// a window ordered straight to the back stays blank however long it
+  /// waits. The window is therefore put in front fully transparent and
+  /// ignoring the pointer, which is visible to WebKit and invisible to the
+  /// person, and goes behind the others once the page has drawn.
+  private func showChatWindowBehindOthers() {
+    let window = conversationWindow.window
+    window.alphaValue = 0
+    window.ignoresMouseEvents = true
+    window.orderFrontRegardless()
+    Task { @MainActor in
+      try? await Task.sleep(for: Self.firstDrawInterval)
+      window.orderBack(nil)
+      window.alphaValue = 1
+      window.ignoresMouseEvents = false
     }
   }
 
