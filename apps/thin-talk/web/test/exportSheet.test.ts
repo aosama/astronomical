@@ -1,4 +1,5 @@
 import { A4_PAPER, LETTER_PAPER } from "../src/export/PaperSize";
+import { previewSidePixels } from "../src/export/ExportSheetView";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { waitFor } from "./support/dom";
@@ -309,4 +310,17 @@ test("should_count_pages_by_the_height_of_the_macs_paper", () => {
   assert.equal(pageCountText(ExportFormat.PDF, nineAndAHalfInchesOfText, LETTER_PAPER), "About 2 pages");
   assert.equal(pageCountText(ExportFormat.PDF, nineAndAHalfInchesOfText, A4_PAPER), "1 page");
   assert.equal(previewTextHeightPixels(8.27 * 96, 7 * 96, A4_PAPER), 5 * 96, "the A4 page's own width gives the scale");
+});
+
+test("should_shape_the_preview_box_as_one_page_of_the_macs_paper", () => {
+  assert.equal(previewSidePixels(8.5), 245);
+  assert.equal(previewSidePixels(11), 317);
+  assert.equal(previewSidePixels(8.27), 238);
+  assert.equal(previewSidePixels(11.69), 337);
+
+  const scene = sheetScene();
+  scene.sheet.open({ kind: "wholeChat" });
+  const previewPaper = scene.sheetElement.querySelector<HTMLElement>('[data-testid="export-preview"]');
+  assert.equal(previewPaper?.style.width, "245px");
+  assert.equal(previewPaper?.style.height, "317px");
 });

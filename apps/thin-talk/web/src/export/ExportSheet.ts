@@ -75,7 +75,7 @@ export class ExportSheet {
       toggle: (toggle, isOn) => this.toggle(toggle, isOn),
       save: () => void this.save(),
       cancel: () => this.view.hide(),
-    });
+    }, environment.printedPaper);
   }
 
   private freshBuilder(): ExportContentBuilder {

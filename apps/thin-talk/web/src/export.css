@@ -34,8 +34,8 @@
 }
 
 /* The preview is a sheet of paper whatever the Mac's appearance, because the
-   exported file is: white, at a third of its printed size (8.5 by 11 inches),
-   scrolling through every page. */
+   exported file is: white, at a third of its printed size, scrolling through
+   every page. The size here is Letter; the sheet sets the Mac's own paper. */
 .export-sheet__paper {
   width: 245px;
   height: 317px;
