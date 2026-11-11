@@ -185,3 +185,55 @@ test("should_measure_the_previewed_text_at_full_size_whatever_scale_the_page_was
   assert.equal(previewTextHeightPixels(0, 500), 0, "a preview not drawn yet");
   assert.equal(previewTextHeightPixels(fullPageWidth, 100), 0, "margins alone are no text");
 });
+
+function pressKey(target: Element, key: string): void {
+  target.dispatchEvent(new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+}
+
+test("should_move_through_a_radio_group_with_the_arrow_keys_without_choosing", async () => {
+  const scene = sheetScene();
+  scene.sheet.open({ kind: "wholeChat" });
+  const pdf = control(scene, "export-format-pdf");
+  const word = control(scene, "export-format-docx");
+  const webPage = control(scene, "export-format-html");
+
+  pdf.focus();
+  pressKey(pdf, "ArrowRight");
+  assert.equal(document.activeElement, word);
+  pressKey(word, "ArrowDown");
+  assert.equal(document.activeElement, webPage);
+  pressKey(webPage, "ArrowRight");
+  assert.equal(document.activeElement, pdf, "the arrows wrap round");
+  pressKey(pdf, "ArrowLeft");
+  assert.equal(document.activeElement, webPage);
+
+  assert.equal(pdf.getAttribute("aria-checked"), "true", "moving the focus chooses nothing");
+  assert.deepEqual([pdf.tabIndex, word.tabIndex, webPage.tabIndex], [0, -1, -1], "Tab stops on the chosen one only");
+});
+
+test("should_skip_a_hidden_choice_and_never_start_picking_from_an_arrow_key", async () => {
+  const scene = sheetScene();
+  scene.sheet.open({ kind: "wholeChat" });
+  const wholeChat = control(scene, "export-scope-wholeChat");
+  const pickMessages = control(scene, "export-scope-pickedMessages");
+
+  wholeChat.focus();
+  pressKey(wholeChat, "ArrowRight");
+
+  assert.equal(document.activeElement, pickMessages, "the hidden 'This answer' is skipped");
+  assert.equal(scene.sheetElement.hidden, false, "arrowing onto Pick messages does not leave the sheet");
+  pressKey(pickMessages, "a");
+  assert.equal(document.activeElement, pickMessages, "other keys are left alone");
+});
+
+test("should_move_the_tab_stop_to_the_newly_chosen_format", () => {
+  const scene = sheetScene();
+  scene.sheet.open({ kind: "wholeChat" });
+
+  click(control(scene, "export-format-docx"));
+
+  assert.deepEqual(
+    [control(scene, "export-format-pdf").tabIndex, control(scene, "export-format-docx").tabIndex],
+    [-1, 0],
+  );
+});

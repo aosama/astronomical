@@ -56,6 +56,37 @@ function makeButton(testID: string, className: string, text: string): HTMLButton
   return createdButton;
 }
 
+const NEXT_RADIO_KEYS = ["ArrowRight", "ArrowDown"];
+const PREVIOUS_RADIO_KEYS = ["ArrowLeft", "ArrowUp"];
+
+/**
+ * Makes a group of radio buttons one stop for the Tab key, moved through
+ * with the arrow keys, as a radio group is everywhere else on the Mac.
+ *
+ * The arrows move the focus without choosing: one choice here ("Pick
+ * messages…") leaves the sheet, and arrowing past it must not. Space or
+ * Return chooses, as on any button.
+ */
+function enableArrowKeys(radioGroup: HTMLElement): void {
+  radioGroup.addEventListener("keydown", (event) => {
+    const step = NEXT_RADIO_KEYS.includes(event.key) ? 1 : PREVIOUS_RADIO_KEYS.includes(event.key) ? -1 : 0;
+    const shownRadios = [...radioGroup.querySelectorAll<HTMLElement>('[role="radio"]')].filter((radio) => !radio.hidden);
+    const focusedPosition = shownRadios.indexOf(event.target as HTMLElement);
+    if (step === 0 || focusedPosition < 0) {
+      return;
+    }
+    event.preventDefault();
+    shownRadios[(focusedPosition + step + shownRadios.length) % shownRadios.length]?.focus();
+  });
+}
+
+/** Leaves only the chosen radio of a group in the Tab order. */
+function setTabStop(radioButtons: Iterable<HTMLElement>): void {
+  for (const radioButton of radioButtons) {
+    radioButton.tabIndex = radioButton.getAttribute("aria-checked") === "true" ? 0 : -1;
+  }
+}
+
 /**
  * Draws the export sheet: a live preview of the real document on the left,
  * and on the right what to export, as what, and what to include.
@@ -133,6 +164,7 @@ export class ExportSheetView {
       this.scopeButtons.set(scopeKind, scopeButton);
       scopeGroup.appendChild(scopeButton);
     }
+    enableArrowKeys(scopeGroup);
     return scopeGroup;
   }
 
@@ -148,6 +180,7 @@ export class ExportSheetView {
       this.formatButtons.set(offer.format, formatButton);
       formatGroup.appendChild(formatButton);
     }
+    enableArrowKeys(formatGroup);
     return formatGroup;
   }
 
@@ -213,6 +246,8 @@ export class ExportSheetView {
     for (const [format, formatButton] of this.formatButtons) {
       formatButton.setAttribute("aria-checked", String(options.format === format));
     }
+    setTabStop(this.scopeButtons.values());
+    setTabStop(this.formatButtons.values());
     this.renderToggle("includesQuestions", options.includesQuestions, facts.hasQuestions);
     this.renderToggle("includesPictures", options.includesPictures, facts.hasPictures);
     this.renderToggle("includesAiNote", options.includesAiNote, true);
