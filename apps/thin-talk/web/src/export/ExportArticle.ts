@@ -32,6 +32,7 @@ pre code { background: none; }
 table { border-collapse: collapse; margin: 8pt 0; }
 th, td { border: 1px solid #a9a69f; padding: 4pt 8pt; text-align: left; vertical-align: top; }
 th { background: #f1f0ec; }
+li.export-task { list-style: none; }
 blockquote { color: #4a4843; border-left: 3px solid #c9c6bf; margin: 8pt 0; padding-left: 10pt; }
 a { color: #5a33b8; }
 p.export-note { color: #6a6761; font-size: 9pt; margin-top: 24pt; }

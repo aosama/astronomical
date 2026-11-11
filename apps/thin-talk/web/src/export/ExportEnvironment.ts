@@ -51,6 +51,9 @@ export interface ExportEnvironment {
   assistantName(): string | null;
   exportableMessages(): readonly ExportableMessage[];
   loadPicture(imageName: string): Promise<ExportPictureData | null>;
+  /** Draws a diagram's source again for a white page, as SVG markup; null
+   * when it cannot, and the drawing on screen is used as it is. */
+  drawDiagramForPaper(diagramSource: string): Promise<string | null>;
   saveDocument(request: ExportSaveRequest): Promise<ExportSaveOutcome>;
   /** Hides the sheet's host and lets the person tick messages; resolves with
    * the ticked ids, or null when they backed out. */

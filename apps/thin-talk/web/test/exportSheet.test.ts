@@ -34,6 +34,7 @@ function sheetScene(): SheetScene {
     assistantName: () => "Astro",
     exportableMessages: () => [exportableMessage("q1", true, "What is mitosis?"), exportableMessage("a1", false, "Cell division."), exportableMessage("q2", true, "Thanks"), exportableMessage("a2", false, "You're welcome.")],
     loadPicture: async () => null,
+    drawDiagramForPaper: async () => null,
     saveDocument: async (saveRequest) => {
       saveRequests.push(saveRequest);
       if (saveAnswer instanceof Error) {

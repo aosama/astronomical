@@ -106,7 +106,8 @@ test("should_cancel_with_the_cancel_button_or_escape_and_return_nothing", async 
   assert.equal(await cancelledByButton, null);
 
   const cancelledByEscape = scene.picker.pick(["q1", "a1"], []);
-  articleOf(scene, "a1").dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  // Pressed with the focus outside the conversation, where it is when picking starts.
+  document.body.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   assert.equal(await cancelledByEscape, null);
 });
 

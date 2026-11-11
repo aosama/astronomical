@@ -18,9 +18,14 @@ import type { DiagramRasteriser } from "./DiagramRasteriser";
  */
 
 const INK_COLOUR = "1C1B19";
+/** The library's default is Times New Roman, which made the Word file look
+ * like a different document from the sans-serif PDF of the same chat. Arial
+ * is on every Mac and Windows machine, so the file looks the same wherever a
+ * teacher opens it. */
+const BODY_FONT = "Arial";
 /** Word's built-in headings are blue; the file keeps the app's ink colour so
  * an exported chat reads like the window it came from. */
-const HEADING_STYLE: IBaseParagraphStyleOptions = { run: { color: INK_COLOUR, bold: true }, paragraph: { spacing: { before: 240, after: 80 } } };
+const HEADING_STYLE: IBaseParagraphStyleOptions = { run: { color: INK_COLOUR, bold: true, font: BODY_FONT }, paragraph: { spacing: { before: 240, after: 80 } } };
 
 /** The ground a diagram drawn in the dark appearance keeps in Word: its lines
  * are light, and on Word's white page they would vanish. */
@@ -59,7 +64,8 @@ export async function writeWordDocument(content: ExportContent, rasteriseDiagram
     description: content.aiNote ?? "",
     styles: {
       default: {
-        document: { run: { color: INK_COLOUR, size: 22 } },
+        document: { run: { color: INK_COLOUR, size: 22, font: BODY_FONT } },
+        title: HEADING_STYLE,
         heading1: HEADING_STYLE,
         heading2: HEADING_STYLE,
         heading3: HEADING_STYLE,

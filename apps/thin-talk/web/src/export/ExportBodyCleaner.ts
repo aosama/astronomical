@@ -15,6 +15,11 @@ export const EXPORT_DIAGRAM_CLASS = "export-diagram";
 /** Added when the diagram was drawn in the dark appearance, so the file can
  * put the same dark ground behind its light lines. */
 export const EXPORT_DARK_DIAGRAM_CLASS = "export-diagram--dark";
+/** Set on a transcript diagram figure once it has been drawn again for
+ * paper, so it is not also given a dark ground. */
+export const PAPER_DRAWN_ATTRIBUTE = "data-paper-drawn";
+/** A checklist item, which shows its own box instead of a bullet. */
+export const EXPORT_TASK_CLASS = "export-task";
 
 /** The attributes an exported element may keep, by tag name. Everything else
  * (classes, ids, test ids, data attributes) served the page, not the reader. */
@@ -24,7 +29,6 @@ const KEPT_ATTRIBUTES_BY_TAG: Readonly<Record<string, readonly string[]>> = {
   TD: ["colspan", "rowspan"],
   TH: ["colspan", "rowspan"],
   OL: ["start"],
-  INPUT: ["type", "checked", "disabled"],
 };
 
 const OPENABLE_LINK = /^(?:https?:|mailto:)/i;
@@ -41,8 +45,9 @@ function replaceCodeBlocks(body: HTMLElement, isDarkAppearance: boolean): void {
   body.querySelectorAll(".code-block").forEach((codeBlockWrapper) => {
     const drawnDiagram = codeBlockWrapper.querySelector("figure.diagram svg");
     if (drawnDiagram !== null) {
+      const isPaperDrawn = codeBlockWrapper.querySelector(`figure.diagram[${PAPER_DRAWN_ATTRIBUTE}]`) !== null;
       const diagramFigure = document.createElement("figure");
-      diagramFigure.className = isDarkAppearance ? `${EXPORT_DIAGRAM_CLASS} ${EXPORT_DARK_DIAGRAM_CLASS}` : EXPORT_DIAGRAM_CLASS;
+      diagramFigure.className = isDarkAppearance && !isPaperDrawn ? `${EXPORT_DIAGRAM_CLASS} ${EXPORT_DARK_DIAGRAM_CLASS}` : EXPORT_DIAGRAM_CLASS;
       diagramFigure.appendChild(drawnDiagram);
       replaceElement(codeBlockWrapper, diagramFigure);
       return;
@@ -89,6 +94,17 @@ function replaceUnembeddableImages(body: HTMLElement): void {
   });
 }
 
+/** A checklist box becomes a character. A form control prints differently in
+ * every reader (the PDF drew an empty text field and lost the tick), while
+ * ☑ and ☐ are text everywhere, Word included. The item drops its bullet, as
+ * the box is its marker. */
+function replaceTaskCheckboxes(body: HTMLElement): void {
+  body.querySelectorAll("input").forEach((checkbox) => {
+    checkbox.closest("li")?.classList.add(EXPORT_TASK_CLASS);
+    replaceElement(checkbox, document.createTextNode(checkbox.hasAttribute("checked") ? "☑ " : "☐ "));
+  });
+}
+
 /** A folded section is opened flat: a printed page cannot unfold anything. */
 function flattenDisclosures(body: HTMLElement): void {
   body.querySelectorAll("details").forEach((disclosure) => {
@@ -114,7 +130,7 @@ function stripPageAttributes(body: HTMLElement): void {
     if (element.closest("math, svg") !== null) {
       return;
     }
-    const isExportFigure = element.classList.contains(EXPORT_DIAGRAM_CLASS);
+    const isExportFigure = element.classList.contains(EXPORT_DIAGRAM_CLASS) || element.classList.contains(EXPORT_TASK_CLASS);
     const keptAttributeNames = KEPT_ATTRIBUTES_BY_TAG[element.tagName] ?? [];
     for (const attributeName of element.getAttributeNames()) {
       const isKept = keptAttributeNames.includes(attributeName) || (isExportFigure && attributeName === "class");
@@ -133,6 +149,7 @@ export function cleanExportBody(renderedBody: HTMLElement, isDarkAppearance: boo
   replaceCodeBlocks(renderedBody, isDarkAppearance);
   replaceMaths(renderedBody);
   replaceUnembeddableImages(renderedBody);
+  replaceTaskCheckboxes(renderedBody);
   flattenDisclosures(renderedBody);
   stripPageAttributes(renderedBody);
   for (const attributeName of renderedBody.getAttributeNames()) {

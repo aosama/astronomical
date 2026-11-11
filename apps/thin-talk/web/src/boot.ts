@@ -52,7 +52,7 @@ function showApplicationTitle(config: AppConfig): void {
 
 /** Wires exporting: the sheet the export script draws in, the message picker
  * and the brief notice that says a file was saved. */
-function wireExport(controller: ChatController, transcript: TranscriptView, bridge: SessionBridge): ExportLauncher {
+function wireExport(controller: ChatController, transcript: TranscriptView, bridge: SessionBridge, diagrams: DiagramPipeline): ExportLauncher {
   const picker = new MessagePicker(
     {
       appRoot: requireElement<HTMLElement>("#app"),
@@ -71,6 +71,7 @@ function wireExport(controller: ChatController, transcript: TranscriptView, brid
     bridge,
     picker,
     notice: new BriefNotice(requireElement<HTMLElement>("#brief-notice")),
+    drawDiagramForPaper: (diagramSource) => diagrams.drawForPaper(diagramSource),
   });
 }
 
@@ -201,7 +202,7 @@ export function bootChatClient(): AppShell {
     imageModelDirectory,
     imageModelSelection,
   });
-  const exportLauncher = wireExport(controller, transcript, bridge);
+  const exportLauncher = wireExport(controller, transcript, bridge, diagrams);
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();
   const astro = new AstroCompanion({

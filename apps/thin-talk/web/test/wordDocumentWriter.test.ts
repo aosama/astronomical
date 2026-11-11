@@ -52,6 +52,8 @@ test("should_keep_headings_in_the_apps_ink_instead_of_words_blue", async () => {
   const stylesXml = parts["word/styles.xml"] ?? "";
   const heading2Style = stylesXml.slice(stylesXml.indexOf('w:styleId="Heading2"'));
   assert.match(heading2Style.slice(0, 800), /<w:color w:val="1C1B19"\/>/);
+  assert.match(heading2Style.slice(0, 800), /w:ascii="Arial"/, "headings match the body, not Word's default serif");
+  assert.match(stylesXml.slice(0, stylesXml.indexOf("<w:style ")), /w:ascii="Arial"/, "the document default is a font every machine has");
 });
 
 test("should_embed_a_picture_and_a_drawn_diagram_as_pictures", async () => {

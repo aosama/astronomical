@@ -36,6 +36,10 @@ export class MessagePicker {
     // click on a message ticks it instead of pressing Copy or opening a link.
     elements.transcriptElement.addEventListener("click", (event) => this.handleClick(event), true);
     elements.transcriptElement.addEventListener("keydown", (event) => this.handleKey(event), true);
+    // Esc is heard on the whole page: when picking starts the keyboard focus
+    // is wherever the export sheet left it, not on a message, and Esc pressed
+    // there did nothing.
+    document.addEventListener("keydown", (event) => this.handleEscape(event), true);
     elements.doneButton.addEventListener("click", () => this.finish([...this.pickedInConversationOrder()]));
     elements.cancelButton.addEventListener("click", () => this.finish(null));
   }
@@ -106,14 +110,17 @@ export class MessagePicker {
     }
   }
 
-  /** Space or Return ticks the focused message; Esc cancels, as on a sheet. */
-  private handleKey(event: KeyboardEvent): void {
-    if (!this.isPicking) {
-      return;
-    }
-    if (event.key === "Escape") {
+  /** Esc cancels, as on a sheet. */
+  private handleEscape(event: KeyboardEvent): void {
+    if (this.isPicking && event.key === "Escape") {
       event.preventDefault();
       this.finish(null);
+    }
+  }
+
+  /** Space or Return ticks the focused message. */
+  private handleKey(event: KeyboardEvent): void {
+    if (!this.isPicking) {
       return;
     }
     const messageID = event.key === " " || event.key === "Enter" ? this.pickableMessageIDAt(event.target) : null;

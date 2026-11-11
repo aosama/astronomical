@@ -30,13 +30,24 @@ function mitosisConversation(): ExportableMessage[] {
   ];
 }
 
-function builderFor(assistantName: string | null, pictureAnswers: Map<string, ExportPictureData | null>, title = "Mitosis explained"): { builder: ExportContentBuilder; pictureLoads: string[] } {
+function builderFor(
+  assistantName: string | null,
+  pictureAnswers: Map<string, ExportPictureData | null>,
+  title = "Mitosis explained",
+  conversation: () => ExportableMessage[] = mitosisConversation,
+  paperDrawing: string | null = null,
+): { builder: ExportContentBuilder; pictureLoads: string[]; redrawnSources: string[] } {
+  const redrawnSources: string[] = [];
   const pictureLoads: string[] = [];
   const builder = new ExportContentBuilder(
     {
       conversationTitle: () => title,
       assistantName: () => assistantName,
-      exportableMessages: mitosisConversation,
+      exportableMessages: conversation,
+      drawDiagramForPaper: async (diagramSource) => {
+        redrawnSources.push(diagramSource);
+        return paperDrawing;
+      },
       loadPicture: async (imageName) => {
         pictureLoads.push(imageName);
         return pictureAnswers.get(imageName) ?? null;
@@ -45,7 +56,7 @@ function builderFor(assistantName: string | null, pictureAnswers: Map<string, Ex
     false,
     () => new Date(Date.UTC(2026, 10, 10, 12)),
   );
-  return { builder, pictureLoads };
+  return { builder, pictureLoads, redrawnSources };
 }
 
 const PICTURE_ANSWERS = new Map([[PICTURE_NAME, { base64: "iVBORw0KGgo=", mimeType: "image/png" }]]);
@@ -136,4 +147,32 @@ test("should_offer_a_file_name_any_computer_can_save", () => {
   assert.equal(suggestedExportName("  \n "), "Conversation");
   assert.equal(suggestedExportName("a".repeat(120)).length, 80);
   assert.equal(suggestedExportName("Café 日本語"), "Café 日本語");
+});
+
+const DARK_SCREEN_DIAGRAM = `<div class="code-block code-block--diagram"><figure class="diagram" data-diagram-source="flowchart LR; A-->B"><svg id="screen"></svg></figure></div>`;
+
+function diagramConversation(): ExportableMessage[] {
+  return [exportableMessage("a1", false, DARK_SCREEN_DIAGRAM)];
+}
+
+// A diagram drawn in the dark appearance printed as a black slab.
+test("should_draw_a_diagram_again_for_paper_once_and_give_it_no_dark_ground", async () => {
+  const { builder, redrawnSources } = builderFor(null, new Map(), "Diagram", diagramConversation, `<svg id="paper"></svg>`);
+  const darkBuilderOptions = defaultExportOptions({ kind: "wholeChat" });
+
+  await builder.build(darkBuilderOptions);
+  const content = await builder.build(darkBuilderOptions);
+
+  const diagramFigure = content.entries[0]?.body.querySelector("figure");
+  assert.equal(diagramFigure?.querySelector("svg")?.id, "paper");
+  assert.equal(diagramFigure?.className, "export-diagram");
+  assert.deepEqual(redrawnSources, ["flowchart LR; A-->B"], "a preview rebuild reuses the drawing");
+});
+
+test("should_keep_the_screen_drawing_when_it_cannot_be_drawn_again", async () => {
+  const { builder } = builderFor(null, new Map(), "Diagram", diagramConversation, null);
+
+  const content = await builder.build(defaultExportOptions({ kind: "wholeChat" }));
+
+  assert.equal(content.entries[0]?.body.querySelector("svg")?.id, "screen");
 });

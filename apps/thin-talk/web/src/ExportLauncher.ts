@@ -24,6 +24,8 @@ export interface ExportLauncherTargets {
   readonly bridge: SessionBridge;
   readonly picker: MessagePicker;
   readonly notice: BriefNotice;
+  /** Draws a diagram's source again in the light theme, for paper. */
+  readonly drawDiagramForPaper: (diagramSource: string) => Promise<string | null>;
   /** Loads the export script; replaced in tests, where it is bundled in. */
   readonly loadExportFeature?: () => Promise<ExportFeature>;
 }
@@ -95,6 +97,7 @@ export class ExportLauncher {
       assistantName: () => (transcript.persona.isAstroShown ? ASTRO_NAME : null),
       exportableMessages: () => exportableMessages(transcript),
       loadPicture: (imageName) => bridge.loadGeneratedImage(imageName),
+      drawDiagramForPaper: this.targets.drawDiagramForPaper,
       saveDocument: (saveRequest) => bridge.saveExport(saveRequest),
       pickMessages: (alreadyPickedIDs) =>
         picker.pick(

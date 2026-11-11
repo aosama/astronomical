@@ -1,4 +1,4 @@
-import { cleanExportBody } from "./ExportBodyCleaner";
+import { cleanExportBody, PAPER_DRAWN_ATTRIBUTE } from "./ExportBodyCleaner";
 import type { ExportEnvironment, ExportableMessage, ExportPictureData } from "./ExportEnvironment";
 import type { ExportOptions, ExportScope } from "./ExportOptions";
 
@@ -56,7 +56,7 @@ export function messagesInScope(messages: readonly ExportableMessage[], scope: E
   return [...leadingQuestion, messages[answerIndex] as ExportableMessage];
 }
 
-type ContentSource = Pick<ExportEnvironment, "conversationTitle" | "assistantName" | "exportableMessages" | "loadPicture">;
+type ContentSource = Pick<ExportEnvironment, "conversationTitle" | "assistantName" | "exportableMessages" | "loadPicture" | "drawDiagramForPaper">;
 
 /**
  * Builds the document a person asked for from the conversation on screen.
@@ -70,6 +70,7 @@ export class ExportContentBuilder {
   private readonly isDarkAppearance: boolean;
   private readonly currentDate: () => Date;
   private readonly picturesByName = new Map<string, Promise<ExportPictureData | null>>();
+  private readonly paperDiagramsBySource = new Map<string, Promise<string | null>>();
 
   public constructor(source: ContentSource, isDarkAppearance: boolean, currentDate: () => Date = () => new Date()) {
     this.source = source;
@@ -82,6 +83,7 @@ export class ExportContentBuilder {
     const includedMessages = scopedMessages.filter((message) => options.includesQuestions || !message.isQuestion);
     const entries: ExportEntry[] = [];
     for (const message of includedMessages) {
+      await this.redrawDiagramsForPaper(message.renderedBody);
       const body = cleanExportBody(message.renderedBody, this.isDarkAppearance);
       if (options.includesPictures) {
         await this.prependPictures(body, message);
@@ -97,6 +99,25 @@ export class ExportContentBuilder {
       entries,
       aiNote: options.includesAiNote ? aiNoteText(this.source.assistantName()) : null,
     };
+  }
+
+  /** Paper is white whatever the Mac's appearance, so each diagram is drawn
+   * again in the light theme. One that cannot be redrawn keeps its screen
+   * drawing, and the cleaner gives a dark one its dark ground. */
+  private async redrawDiagramsForPaper(renderedBody: HTMLElement): Promise<void> {
+    for (const diagramFigure of [...renderedBody.querySelectorAll<HTMLElement>("figure.diagram[data-diagram-source]")]) {
+      const diagramSource = diagramFigure.dataset.diagramSource ?? "";
+      let pendingDrawing = this.paperDiagramsBySource.get(diagramSource);
+      if (pendingDrawing === undefined) {
+        pendingDrawing = this.source.drawDiagramForPaper(diagramSource).catch(() => null);
+        this.paperDiagramsBySource.set(diagramSource, pendingDrawing);
+      }
+      const paperDrawing = await pendingDrawing;
+      if (paperDrawing !== null) {
+        diagramFigure.innerHTML = paperDrawing;
+        diagramFigure.setAttribute(PAPER_DRAWN_ATTRIBUTE, "");
+      }
+    }
   }
 
   /** Pictures go above the text, where the transcript shows them. A picture

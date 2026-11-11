@@ -268,8 +268,14 @@
 
 /* ---------- Brief notice ---------- */
 
+/* Centred on the chat column, not the window: the sidebar is not part of
+   what the notice is about. */
+#main {
+  position: relative;
+}
+
 .brief-notice {
-  position: fixed;
+  position: absolute;
   left: 50%;
   bottom: 110px;
   z-index: 40;

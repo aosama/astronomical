@@ -96,3 +96,22 @@ test("should_leave_an_answer_of_plain_prose_as_it_was", () => {
 test("should_leave_an_empty_body_empty", () => {
   assert.equal(cleanExportBody(renderedBody(""), false).innerHTML, "");
 });
+
+// A form control printed as an empty text field and lost its tick.
+test("should_turn_checklist_boxes_into_characters_and_drop_the_items_bullets", () => {
+  const cleanedBody = cleanExportBody(
+    renderedBody(`<ul><li><input checked="" disabled="" type="checkbox"> Done</li><li><input disabled="" type="checkbox"> Todo</li><li>Plain</li></ul>`),
+    false,
+  );
+
+  assert.equal(cleanedBody.querySelector("input"), null);
+  const items = [...cleanedBody.querySelectorAll("li")];
+  assert.deepEqual(items.map((item) => (item.textContent ?? "").replace(/\s+/g, " ").trim()), ["☑ Done", "☐ Todo", "Plain"]);
+  assert.deepEqual(items.map((item) => item.className), ["export-task", "export-task", ""]);
+});
+
+test("should_give_a_dark_ground_only_to_a_dark_diagram_not_drawn_again_for_paper", () => {
+  const paperDrawn = `<div class="code-block"><figure class="diagram" data-paper-drawn=""><svg></svg></figure></div>`;
+
+  assert.equal(cleanExportBody(renderedBody(paperDrawn), true).querySelector("figure")?.className, "export-diagram");
+});
