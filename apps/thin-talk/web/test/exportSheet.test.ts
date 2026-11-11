@@ -4,6 +4,9 @@ import { waitFor } from "./support/dom";
 import { ExportSheet, pageCountText, previewTextHeightPixels } from "../src/export/ExportSheet";
 import type { ExportEnvironment, ExportSaveOutcome, ExportSaveRequest, ExportableMessage } from "../src/export/ExportEnvironment";
 import { ExportFormat } from "../src/export/ExportFormat";
+import { parseExportChoices } from "../src/export/ExportOptions";
+import type { ExportChoices } from "../src/export/ExportOptions";
+import { SessionPreferences } from "../src/SessionPreferences";
 
 interface SheetScene {
   sheet: ExportSheet;
@@ -12,6 +15,7 @@ interface SheetScene {
   announcedFileNames: string[];
   setSaveAnswer(answer: ExportSaveOutcome | Error): void;
   setPickAnswer(answer: readonly string[] | null): void;
+  rememberedChoices(): ExportChoices | null;
 }
 
 function exportableMessage(messageID: string, isQuestion: boolean, text: string): ExportableMessage {
@@ -28,6 +32,7 @@ function sheetScene(): SheetScene {
   const announcedFileNames: string[] = [];
   let saveAnswer: ExportSaveOutcome | Error = { outcome: "saved", fileName: "Mitosis explained.pdf" };
   let pickAnswer: readonly string[] | null = null;
+  let keptChoices: ExportChoices | null = null;
   const environment: ExportEnvironment = {
     sheetElement,
     conversationTitle: () => "Mitosis explained",
@@ -43,6 +48,8 @@ function sheetScene(): SheetScene {
       return saveAnswer;
     },
     pickMessages: async () => pickAnswer,
+    rememberedChoices: () => keptChoices,
+    rememberChoices: (choices) => { keptChoices = choices; },
     announceSaved: (fileName) => announcedFileNames.push(fileName),
   };
   const sheet = new ExportSheet(environment, async () => null);
@@ -50,6 +57,7 @@ function sheetScene(): SheetScene {
     sheet, sheetElement, saveRequests, announcedFileNames,
     setSaveAnswer: (answer) => { saveAnswer = answer; },
     setPickAnswer: (answer) => { pickAnswer = answer; },
+    rememberedChoices: () => keptChoices,
   };
 }
 
@@ -236,4 +244,57 @@ test("should_move_the_tab_stop_to_the_newly_chosen_format", () => {
     [control(scene, "export-format-pdf").tabIndex, control(scene, "export-format-docx").tabIndex],
     [-1, 0],
   );
+});
+
+function setCheckbox(scene: SheetScene, testID: string, isOn: boolean): void {
+  const checkbox = control<HTMLInputElement>(scene, testID);
+  checkbox.checked = isOn;
+  checkbox.dispatchEvent(new window.Event("change"));
+}
+
+// Someone who hands in Word files without the AI line wants that next time.
+test("should_open_on_the_choices_of_the_last_export_that_was_saved", async () => {
+  const scene = sheetScene();
+  scene.sheet.open({ kind: "wholeChat" });
+  click(control(scene, "export-format-docx"));
+  setCheckbox(scene, "export-include-includesAiNote", false);
+  await waitFor(() => previewText(scene).includes("You're welcome.") && !previewText(scene).includes("Written with help"), "the preview without the note");
+  scene.setSaveAnswer({ outcome: "saved", fileName: "Mitosis explained.docx" });
+  click(control(scene, "export-save"));
+  await waitFor(() => scene.announcedFileNames.length === 1 || control(scene, "export-status").textContent !== "", "the save");
+  assert.equal(control(scene, "export-status").textContent, "");
+
+  assert.deepEqual(scene.rememberedChoices(), { format: ExportFormat.WORD, includesPictures: true, includesAiNote: false });
+  scene.sheet.open({ kind: "wholeChat" });
+  assert.equal(control(scene, "export-format-docx").getAttribute("aria-checked"), "true");
+  assert.equal(control<HTMLInputElement>(scene, "export-include-includesAiNote").checked, false);
+  assert.equal(control<HTMLInputElement>(scene, "export-include-includesQuestions").checked, true, "whose messages follows the scope, not the last export");
+});
+
+test("should_not_keep_choices_that_were_tried_and_cancelled", async () => {
+  const scene = sheetScene();
+  scene.sheet.open({ kind: "wholeChat" });
+  click(control(scene, "export-format-html"));
+  click(control(scene, "export-cancel"));
+  assert.equal(scene.rememberedChoices(), null);
+
+  scene.sheet.open({ kind: "wholeChat" });
+  assert.equal(control(scene, "export-format-pdf").getAttribute("aria-checked"), "true");
+});
+
+test("should_read_saved_choices_and_refuse_ones_this_version_does_not_offer", () => {
+  assert.deepEqual(parseExportChoices({ format: "docx", includesPictures: false, includesAiNote: true }), { format: ExportFormat.WORD, includesPictures: false, includesAiNote: true });
+  for (const unusable of [null, "pdf", {}, { format: "rtf", includesPictures: true, includesAiNote: true }, { format: "pdf", includesPictures: "yes", includesAiNote: true }, { format: "pdf", includesPictures: true }]) {
+    assert.equal(parseExportChoices(unusable), null, JSON.stringify(unusable));
+  }
+});
+
+test("should_keep_export_choices_through_a_save_and_reload_of_the_preferences", () => {
+  const savedPreferences = new SessionPreferences({ exportChoices: { format: ExportFormat.WEB_PAGE, includesPictures: false, includesAiNote: true } });
+
+  const reloadedPreferences = SessionPreferences.fromPlain(JSON.parse(JSON.stringify(savedPreferences.toPlain())));
+
+  assert.deepEqual(reloadedPreferences.exportChoices, { format: ExportFormat.WEB_PAGE, includesPictures: false, includesAiNote: true });
+  assert.equal(SessionPreferences.fromPlain({ modelID: "m" }).exportChoices, null, "preferences saved before exports existed");
+  assert.equal(SessionPreferences.fromPlain({ exportChoices: { format: "rtf" } }).exportChoices, null);
 });

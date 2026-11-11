@@ -4,20 +4,25 @@ import type { Config } from "dompurify";
 const SAFE_LINK_URI = /^(?:https?:|mailto:|thintalk-asset:|#)/i;
 const SAFE_IMAGE_URI = /^(?:thintalk-asset:|data:image\/|#)/i;
 
-const SANITIZE_OPTIONS: Config = {
+/** The markup policy for model text, exported so a test can hold it to its
+ * rules: the test window's DOM cannot run the sanitiser itself. */
+export const SANITIZE_OPTIONS: Config = {
   ALLOWED_TAGS: [
     "p", "br", "hr", "strong", "em", "del", "code", "pre", "span",
     "h1", "h2", "h3", "h4", "h5", "h6",
     "ul", "ol", "li", "blockquote", "a", "img",
-    "table", "thead", "tbody", "tr", "th", "td", "input", "details", "summary", "div",
+    "table", "thead", "tbody", "tr", "th", "td", "details", "summary", "div",
   ],
   ALLOWED_ATTR: [
-    "href", "title", "alt", "src", "class", "type", "checked", "disabled",
+    "href", "title", "alt", "src", "class",
     "colspan", "rowspan", "start",
   ],
   ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|thintalk-asset:|data:image\/|#)/i,
   FORBID_TAGS: [
-    "script", "style", "iframe", "frame", "form", "button", "select", "textarea",
+    // No form control may come from a model: a checklist's boxes are spans
+    // drawn by the stylesheet (Renderer.taskBoxHtml), so an input here could
+    // only be a field the model invented.
+    "script", "style", "iframe", "frame", "form", "button", "select", "textarea", "input",
     "svg", "math", "object", "embed", "link", "meta", "base", "audio", "video",
     "source", "template",
   ],

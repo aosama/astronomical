@@ -1,3 +1,4 @@
+import type { ExportChoices } from "./export/ExportOptions";
 import { ImageModelDirectory } from "./ImageModelDirectory";
 import { ImageModelSelection } from "./ImageModelSelection";
 import { ModelDescriptionDirectory } from "./ModelDescriptionDirectory";
@@ -387,6 +388,18 @@ export class ChatController {
     this.preferences.sidebarWidthPixels = sidebarWidthPixels;
     void this.bridge.savePrefs(this.preferences).catch(() => undefined);
     this.publish();
+  }
+
+  /** The choices of the last export that was saved, or null before the first. */
+  public get exportChoices(): ExportChoices | null {
+    return this.preferences.exportChoices;
+  }
+
+  /** Keeps an export's choices so the sheet opens on them next time, in
+   * this launch and the next. */
+  public setExportChoices(exportChoices: ExportChoices): void {
+    this.preferences.exportChoices = exportChoices;
+    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
   }
 
   /** Renames one conversation. A blank or unchanged title keeps the old one,

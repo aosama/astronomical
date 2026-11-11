@@ -1,5 +1,5 @@
 import type { ExportFormat } from "./ExportFormat";
-import type { ExportScope } from "./ExportOptions";
+import type { ExportChoices, ExportScope } from "./ExportOptions";
 
 /** One finished message as the export feature receives it: the rendered
  * answer body, cloned out of the transcript, and the stored names of the
@@ -58,6 +58,10 @@ export interface ExportEnvironment {
   /** Hides the sheet's host and lets the person tick messages; resolves with
    * the ticked ids, or null when they backed out. */
   pickMessages(alreadyPickedIDs: readonly string[]): Promise<readonly string[] | null>;
+  /** The choices kept from the last export, or null before the first. */
+  rememberedChoices(): ExportChoices | null;
+  /** Keeps the choices of an export that was saved, for the next one. */
+  rememberChoices(choices: ExportChoices): void;
   /** Tells the person the file was saved. */
   announceSaved(fileName: string): void;
 }

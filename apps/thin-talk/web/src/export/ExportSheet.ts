@@ -81,14 +81,14 @@ export class ExportSheet {
     return new ExportContentBuilder(this.environment, isDarkAppearance);
   }
 
-  /** Opens the sheet on a fresh reading of the conversation. The format the
-   * person chose last time is kept: someone who hands in PDFs keeps doing so. */
+  /** Opens the sheet on a fresh reading of the conversation, starting from
+   * the choices of the last export that was saved. */
   public open(scope: ExportScope): void {
     this.builder = this.freshBuilder();
     this.openedAnswerID = scope.kind === "oneAnswer" ? scope.messageID : null;
     this.pickedMessageIDs = scope.kind === "pickedMessages" ? scope.messageIDs : [];
     this.view.setStatus("");
-    this.update({ ...defaultExportOptions(scope), format: this.options.format });
+    this.update(defaultExportOptions(scope, this.environment.rememberedChoices()));
     this.view.show();
   }
 
@@ -178,6 +178,10 @@ export class ExportSheet {
       const saveRequest = await exportSaveRequest(content, this.options.format, this.rasteriseDiagram);
       const saveOutcome = await this.environment.saveDocument(saveRequest);
       if (saveOutcome.outcome === "saved") {
+        // Kept only once a file was really saved: choices tried and
+        // cancelled are not what the person settled on.
+        const { format, includesPictures, includesAiNote } = this.options;
+        this.environment.rememberChoices({ format, includesPictures, includesAiNote });
         this.view.hide();
         this.environment.announceSaved(saveOutcome.fileName);
       }

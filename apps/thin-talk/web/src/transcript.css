@@ -243,6 +243,42 @@
   margin: 5px 0;
 }
 
+/* A checklist item shows its box in place of a bullet. The tick is drawn,
+   not a character, so it is the same size in every font. */
+.markdown-body li:has(> .task-box),
+.markdown-body li:has(> p:first-child > .task-box) {
+  list-style: none;
+  margin-left: -22px;
+}
+
+.task-box {
+  display: inline-block;
+  position: relative;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.45em;
+  vertical-align: -0.12em;
+  border: 1.5px solid var(--ink-3);
+  border-radius: 4px;
+}
+
+.task-box--done {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.task-box--done::after {
+  content: "";
+  position: absolute;
+  left: 28%;
+  top: 8%;
+  width: 28%;
+  height: 56%;
+  border: solid var(--accent-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 .markdown-body li::marker {
   color: var(--ink-2);
 }

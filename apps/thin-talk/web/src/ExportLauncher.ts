@@ -104,6 +104,8 @@ export class ExportLauncher {
           exportableMessages(transcript).map((message) => message.messageID),
           alreadyPickedIDs,
         ),
+      rememberedChoices: () => this.targets.controller.exportChoices,
+      rememberChoices: (choices) => this.targets.controller.setExportChoices(choices),
       announceSaved: (fileName) => notice.show(`Saved “${fileName}”`),
     };
   }

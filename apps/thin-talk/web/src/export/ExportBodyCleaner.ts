@@ -10,6 +10,11 @@
  * way, which is what lets one document feed all three formats.
  */
 
+/** The classes of a checklist box as the transcript draws it; the values are
+ * the Renderer's, repeated because this script shares no code with the page. */
+const TASK_BOX_CLASS = "task-box";
+const DONE_TASK_BOX_CLASS = "task-box--done";
+
 /** The class of an exported diagram's figure. */
 export const EXPORT_DIAGRAM_CLASS = "export-diagram";
 /** Added when the diagram was drawn in the dark appearance, so the file can
@@ -94,14 +99,13 @@ function replaceUnembeddableImages(body: HTMLElement): void {
   });
 }
 
-/** A checklist box becomes a character. A form control prints differently in
- * every reader (the PDF drew an empty text field and lost the tick), while
- * ☑ and ☐ are text everywhere, Word included. The item drops its bullet, as
- * the box is its marker. */
-function replaceTaskCheckboxes(body: HTMLElement): void {
-  body.querySelectorAll("input").forEach((checkbox) => {
-    checkbox.closest("li")?.classList.add(EXPORT_TASK_CLASS);
-    replaceElement(checkbox, document.createTextNode(checkbox.hasAttribute("checked") ? "☑ " : "☐ "));
+/** A checklist box becomes a character. The transcript draws its boxes with
+ * a stylesheet the file does not carry, while ☑ and ☐ are text everywhere,
+ * Word included. The item drops its bullet, as the box is its marker. */
+function replaceTaskBoxes(body: HTMLElement): void {
+  body.querySelectorAll(`.${TASK_BOX_CLASS}`).forEach((taskBox) => {
+    taskBox.closest("li")?.classList.add(EXPORT_TASK_CLASS);
+    replaceElement(taskBox, document.createTextNode(taskBox.classList.contains(DONE_TASK_BOX_CLASS) ? "☑ " : "☐ "));
   });
 }
 
@@ -149,7 +153,7 @@ export function cleanExportBody(renderedBody: HTMLElement, isDarkAppearance: boo
   replaceCodeBlocks(renderedBody, isDarkAppearance);
   replaceMaths(renderedBody);
   replaceUnembeddableImages(renderedBody);
-  replaceTaskCheckboxes(renderedBody);
+  replaceTaskBoxes(renderedBody);
   flattenDisclosures(renderedBody);
   stripPageAttributes(renderedBody);
   for (const attributeName of renderedBody.getAttributeNames()) {

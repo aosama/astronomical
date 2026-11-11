@@ -1,3 +1,6 @@
+import { parseExportChoices } from "./export/ExportOptions";
+import type { ExportChoices } from "./export/ExportOptions";
+
 /** The sidebar's width range while dragging its edge, in CSS pixels: narrow
  * enough to give the conversation room, wide enough for long titles. */
 export const MIN_SIDEBAR_WIDTH_PIXELS = 180;
@@ -24,12 +27,16 @@ export class SessionPreferences {
   /** The width the user dragged the sidebar to, or null for the stylesheet's
    * default width. */
   public sidebarWidthPixels: number | null;
+  /** The file type and Include switches of the last export that was saved,
+   * or null before the first. */
+  public exportChoices: ExportChoices | null;
 
   public constructor(init: {
     modelID?: string | null;
     imageModelID?: string | null;
     toolsEnabled?: boolean;
     sidebarWidthPixels?: number | null;
+    exportChoices?: ExportChoices | null;
   }) {
     const configuredModelID: string | null | undefined = init.modelID;
     this.modelID = configuredModelID != null ? configuredModelID : null;
@@ -38,6 +45,7 @@ export class SessionPreferences {
     this.toolsEnabled = init.toolsEnabled !== false;
     const configuredSidebarWidth: number | null | undefined = init.sidebarWidthPixels;
     this.sidebarWidthPixels = configuredSidebarWidth != null ? SessionPreferences.clampSidebarWidth(configuredSidebarWidth) : null;
+    this.exportChoices = init.exportChoices ?? null;
   }
 
   public static clampSidebarWidth(widthPixels: number): number {
@@ -53,12 +61,14 @@ export class SessionPreferences {
     imageModelID: string | null;
     toolsEnabled: boolean;
     sidebarWidthPixels: number | null;
+    exportChoices: ExportChoices | null;
   } {
     return {
       modelID: this.modelID,
       imageModelID: this.imageModelID,
       toolsEnabled: this.toolsEnabled,
       sidebarWidthPixels: this.sidebarWidthPixels,
+      exportChoices: this.exportChoices,
     };
   }
 
@@ -71,6 +81,7 @@ export class SessionPreferences {
       imageModelID?: unknown;
       toolsEnabled?: unknown;
       sidebarWidthPixels?: unknown;
+      exportChoices?: unknown;
     };
     // A thinkingEffort saved by earlier versions is ignored: the model now
     // thinks as long as it needs.
@@ -81,6 +92,7 @@ export class SessionPreferences {
     const toolsEnabled = record.toolsEnabled !== false;
     const storedSidebarWidth = record.sidebarWidthPixels;
     const sidebarWidthPixels = typeof storedSidebarWidth === "number" && Number.isFinite(storedSidebarWidth) ? storedSidebarWidth : null;
-    return new SessionPreferences({ modelID, imageModelID, toolsEnabled, sidebarWidthPixels });
+    const exportChoices = parseExportChoices(record.exportChoices);
+    return new SessionPreferences({ modelID, imageModelID, toolsEnabled, sidebarWidthPixels, exportChoices });
   }
 }
