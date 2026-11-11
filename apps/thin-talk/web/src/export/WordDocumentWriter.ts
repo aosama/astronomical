@@ -4,6 +4,7 @@ import { htmlToContent } from "docx/html";
 import { exportArticleHtml, SHARED_EXPORT_RULES } from "./ExportArticle";
 import { EXPORT_DIAGRAM_CLASS, EXPORT_DARK_DIAGRAM_CLASS } from "./ExportBodyCleaner";
 import type { ExportContent } from "./ExportContentBuilder";
+import { fittedDiagramSize } from "./DiagramRasteriser";
 import type { DiagramRasteriser } from "./DiagramRasteriser";
 
 /**
@@ -39,14 +40,18 @@ async function replaceDiagramsWithPictures(article: HTMLElement, rasteriseDiagra
   for (const diagramFigure of [...article.querySelectorAll(`figure.${EXPORT_DIAGRAM_CLASS}`)]) {
     const diagram = diagramFigure.querySelector<SVGSVGElement>("svg");
     const groundColour = diagramFigure.classList.contains(EXPORT_DARK_DIAGRAM_CLASS) ? DARK_DIAGRAM_GROUND : LIGHT_DIAGRAM_GROUND;
-    const pictureData = diagram !== null ? await rasteriseDiagram(diagram, groundColour) : null;
-    if (pictureData === null) {
+    const diagramPicture = diagram !== null ? await rasteriseDiagram(diagram, groundColour) : null;
+    if (diagramPicture === null) {
       diagramFigure.remove();
       continue;
     }
     const picture = document.createElement("img");
-    picture.setAttribute("src", pictureData);
+    const shownSize = fittedDiagramSize(diagramPicture.widthPixels, diagramPicture.heightPixels);
+    picture.setAttribute("src", diagramPicture.dataURL);
     picture.setAttribute("alt", "Diagram");
+    // Without a size Word shows every pixel of the sharper drawing.
+    picture.setAttribute("width", String(shownSize.width));
+    picture.setAttribute("height", String(shownSize.height));
     diagramFigure.replaceChildren(picture);
   }
 }
