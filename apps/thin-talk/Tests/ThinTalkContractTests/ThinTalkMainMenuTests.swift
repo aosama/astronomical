@@ -141,6 +141,18 @@ final class ThinTalkMainMenuTests: XCTestCase {
     }
   }
 
+  func test_should_export_from_the_file_menu_with_shift_command_e() throws {
+    let (mainMenu, actions) = menuBar(ThinTalkHostMenuActions(applicationName: "Astronomical"))
+    let fileMenu = try submenu(mainMenu, "File")
+    let exportItem = try XCTUnwrap(fileMenu.item(withTitle: "Export…"))
+    XCTAssertTrue(exportItem.target === actions)
+    XCTAssertEqual(exportItem.action, #selector(ThinTalkConversationActions.exportConversation(_:)))
+    XCTAssertEqual(exportItem.keyEquivalent, "e")
+    XCTAssertEqual(exportItem.keyEquivalentModifierMask, [.command, .shift], "⌘E alone is Use Selection for Find")
+    XCTAssertEqual(
+      fileMenu.items.filter { !$0.isSeparatorItem }.map(\.title), ["New Chat", "Export…", "Close Window"])
+  }
+
   func test_should_leave_the_irreversible_delete_without_a_keyboard_shortcut() throws {
     let (mainMenu, _) = menuBar(ThinTalkHostMenuActions(applicationName: "Astronomical"))
     let deleteItem = try XCTUnwrap(

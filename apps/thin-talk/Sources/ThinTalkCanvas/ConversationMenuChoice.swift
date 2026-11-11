@@ -4,6 +4,8 @@ import Foundation
 /// page receives it.
 public enum ConversationMenuChoice: String, Sendable {
   case rename
+  /// Opens the conversation and its export sheet.
+  case export
   /// Chosen and confirmed on the delete sheet.
   case delete
   /// The menu closed without a choice, or the delete sheet was cancelled.

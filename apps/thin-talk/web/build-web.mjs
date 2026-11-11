@@ -25,6 +25,10 @@ const resourcesWebRoot = path.join(
 );
 const bundleScriptPath = path.join(resourcesWebRoot, "bundle.js");
 const bundleStylesheetPath = path.join(resourcesWebRoot, "bundle.css");
+// The export feature is its own script, loaded the first time someone exports
+// (src/ExportLauncher.ts): it carries the Word writer, which alone is about as
+// large as the rest of the client, and most launches never need it.
+const exportScriptPath = path.join(resourcesWebRoot, "export.js");
 const previewShimScriptPath = path.join(resourcesWebRoot, "preview", "preview-shim.js");
 
 const shouldCleanOnly = process.argv.includes("--clean");
@@ -44,7 +48,7 @@ async function fileExists(candidatePath) {
 }
 
 async function cleanOutputs() {
-  for (const outputPath of [bundleScriptPath, bundleStylesheetPath, previewShimScriptPath]) {
+  for (const outputPath of [bundleScriptPath, bundleStylesheetPath, exportScriptPath, previewShimScriptPath]) {
     if (await fileExists(outputPath)) {
       await rm(outputPath);
       reportProgress("clean", `removed ${path.basename(outputPath)}`);
@@ -113,6 +117,45 @@ async function checkBundleBudget() {
   reportProgress("bundle-budget", `within ${budgetReport}`);
 }
 
+// The export script's budget, on the same minified measure. docx and its HTML
+// reader measured 598 KB minified when the script was introduced; the margin
+// covers a minor release, and a budget broken by a new dependency points at
+// it here.
+const MAXIMUM_MINIFIED_EXPORT_SCRIPT_BYTES = 1024 * 1024;
+
+async function bundleExportScript() {
+  reportProgress("bundle-export-script", "start");
+  const startedAtMs = Date.now();
+  const exportEntryPath = path.join(webRoot, "src", "export", "exportEntry.ts");
+  await build({
+    entryPoints: [exportEntryPath],
+    bundle: true,
+    format: "iife",
+    target: ["safari17"],
+    outfile: exportScriptPath,
+    legalComments: "inline",
+    logLevel: "silent",
+    sourcemap: false,
+    minify: false,
+  });
+  const minifiedBuild = await build({
+    entryPoints: [exportEntryPath],
+    bundle: true,
+    format: "iife",
+    target: ["safari17"],
+    write: false,
+    logLevel: "silent",
+    minify: true,
+  });
+  const minifiedByteCount = minifiedBuild.outputFiles.reduce((byteCount, outputFile) => byteCount + outputFile.contents.byteLength, 0);
+  const budgetReport = `elapsed_ms=${Date.now() - startedAtMs} minified_bytes=${minifiedByteCount} budget_bytes=${MAXIMUM_MINIFIED_EXPORT_SCRIPT_BYTES}`;
+  if (minifiedByteCount > MAXIMUM_MINIFIED_EXPORT_SCRIPT_BYTES) {
+    reportProgress("bundle-export-script", `exceeded ${budgetReport}`);
+    throw new Error(`export.js is ${minifiedByteCount} bytes minified, over the ${MAXIMUM_MINIFIED_EXPORT_SCRIPT_BYTES}-byte budget`);
+  }
+  reportProgress("bundle-export-script", `complete output=export.js ${budgetReport}`);
+}
+
 async function bundleStylesheet() {
   reportProgress("bundle-stylesheet", "start");
   const startedAtMs = Date.now();
@@ -164,6 +207,7 @@ if (shouldCleanOnly) {
   await cleanOutputs();
   await bundleScript();
   await checkBundleBudget();
+  await bundleExportScript();
   await bundleStylesheet();
   await bundlePreviewShim();
   reportProgress("done", "web client bundle is up to date");

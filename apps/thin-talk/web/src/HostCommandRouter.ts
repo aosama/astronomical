@@ -9,6 +9,7 @@ export interface HostCommandHandlers {
   stopGenerating(): void;
   copyLastAnswer(): void;
   deleteConversation(): void;
+  exportConversation(): void;
   focusComposer(): void;
   openYourAstro(): void;
   toggleAstro(): void;
@@ -66,6 +67,9 @@ export class HostCommandRouter {
         return;
       case HostCommand.DELETE_CONVERSATION:
         this.handlers.deleteConversation();
+        return;
+      case HostCommand.EXPORT_CONVERSATION:
+        this.handlers.exportConversation();
         return;
       case HostCommand.FOCUS_COMPOSER:
         this.handlers.focusComposer();

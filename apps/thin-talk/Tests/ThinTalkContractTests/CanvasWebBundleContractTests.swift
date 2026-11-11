@@ -1,7 +1,8 @@
 import Foundation
 import XCTest
 
-// The conversation canvas boots from bundle.js/bundle.css, which
+// The conversation canvas boots from bundle.js/bundle.css and exports with
+// export.js, all of which
 // apps/thin-talk/web/build-web.mjs generates and the root .gitignore excludes.
 // SwiftPM copies Resources/web verbatim, so on a fresh clone every target
 // still builds and the app opens a silently blank conversation. This contract
@@ -16,7 +17,7 @@ final class CanvasWebBundleContractTests: XCTestCase {
     let webResourcesURL = packageDirectoryURL
       .appendingPathComponent("Sources/ThinTalkCanvas/Resources/web")
 
-    for generatedClientAsset in ["bundle.js", "bundle.css"] {
+    for generatedClientAsset in ["bundle.js", "bundle.css", "export.js"] {
       XCTAssertTrue(
         FileManager.default.fileExists(
           atPath: webResourcesURL.appendingPathComponent(generatedClientAsset).path),

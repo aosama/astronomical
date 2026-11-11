@@ -32,6 +32,8 @@ const DIAGRAM_SVG_OPTIONS: Config = {
 export class DiagramPipeline {
   private readonly diagramCache = new Map<string, string>();
   private mermaidInitialised = false;
+  /** Numbers each paper drawing, since mermaid needs a fresh id per render. */
+  private paperDrawingCount = 0;
 
   /** Renders every diagram in one finished message. Finished SVGs are cached by
    * content key so a later re-render of the same message re-installs them
@@ -58,7 +60,7 @@ export class DiagramPipeline {
       const cacheKey = `diagram-${ContentKey.hash(diagramSource)}`;
       const cachedSvg = this.diagramCache.get(cacheKey);
       if (cachedSvg !== undefined) {
-        DiagramPipeline.installFigure(codeBlockWrapper, cachedSvg);
+        DiagramPipeline.installFigure(codeBlockWrapper, cachedSvg, diagramSource);
         (diagramBlock as HTMLElement).dataset.diagram = "true";
         return;
       }
@@ -76,7 +78,7 @@ export class DiagramPipeline {
           }
           this.diagramCache.set(cacheKey, sanitisedSvg);
           if (codeBlockWrapper.isConnected) {
-            DiagramPipeline.installFigure(codeBlockWrapper, sanitisedSvg);
+            DiagramPipeline.installFigure(codeBlockWrapper, sanitisedSvg, diagramSource);
           }
         })
         .catch(() => {
@@ -88,6 +90,30 @@ export class DiagramPipeline {
           }
         });
     });
+  }
+
+  /**
+   * Draws a diagram again in mermaid's light theme, for an exported page.
+   * A drawing made in the dark appearance has light lines meant for a dark
+   * window; on paper it would need a black slab behind it, which wastes ink
+   * and reads as a mistake. The directive changes the theme for this one
+   * drawing only. Null when mermaid is missing or the source will not draw.
+   */
+  public async drawForPaper(diagramSource: string): Promise<string | null> {
+    const mermaid = window.mermaid;
+    if (!mermaid) {
+      return null;
+    }
+    this.initializeMermaid();
+    this.paperDrawingCount += 1;
+    try {
+      const paperSource = `%%{init: {"theme": "default"}}%%\n${diagramSource}`;
+      const renderResult = await mermaid.render(`paper-diagram-${this.paperDrawingCount}`, paperSource);
+      const sanitisedSvg = DOMPurify.sanitize(renderResult?.svg ?? "", DIAGRAM_SVG_OPTIONS);
+      return sanitisedSvg.indexOf("<svg") === -1 ? null : sanitisedSvg;
+    } catch {
+      return null;
+    }
   }
 
   private initializeMermaid(): void {
@@ -112,9 +138,12 @@ export class DiagramPipeline {
   }
 
   /** Replaces the fenced source with the rendered figure, keeping the block key. */
-  private static installFigure(codeBlockWrapper: HTMLElement, sanitisedSvg: string): void {
+  private static installFigure(codeBlockWrapper: HTMLElement, sanitisedSvg: string, diagramSource: string): void {
     const figure = document.createElement("figure");
     figure.className = "diagram";
+    // The source stays with the drawing so an export can draw it again for
+    // paper; the fenced block it came from is replaced below.
+    figure.dataset.diagramSource = diagramSource;
     figure.innerHTML = sanitisedSvg;
     codeBlockWrapper.innerHTML = "";
     codeBlockWrapper.appendChild(figure);

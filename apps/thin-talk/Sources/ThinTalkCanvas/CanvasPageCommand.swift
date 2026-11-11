@@ -13,6 +13,7 @@ public enum CanvasPageCommand: String, CaseIterable, Sendable {
   case stopGenerating
   case copyLastAnswer
   case deleteConversation
+  case exportConversation
   case focusComposer
   case openYourAstro
   case toggleAstro

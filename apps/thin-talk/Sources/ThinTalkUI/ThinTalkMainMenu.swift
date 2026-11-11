@@ -80,6 +80,12 @@ public enum ThinTalkMainMenu {
     fileMenu.addItem(
       menuItem("New Chat", #selector(ThinTalkConversationActions.newChat(_:)), "n", conversationActions))
     fileMenu.addItem(.separator())
+    // ⇧⌘E: ⌘E already puts the selection in the find field across the Mac.
+    let exportItem = menuItem(
+      "Export…", #selector(ThinTalkConversationActions.exportConversation(_:)), "e", conversationActions)
+    exportItem.keyEquivalentModifierMask = [.command, .shift]
+    fileMenu.addItem(exportItem)
+    fileMenu.addItem(.separator())
     fileMenu.addItem(menuItem("Close Window", #selector(NSWindow.performClose(_:)), "w", nil))
     return fileMenu
   }

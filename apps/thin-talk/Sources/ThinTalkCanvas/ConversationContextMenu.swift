@@ -35,6 +35,7 @@ final class ConversationContextMenu: NSObject {
     let conversationMenu = NSMenu(title: "Conversation")
     conversationMenu.autoenablesItems = false
     conversationMenu.addItem(menuItem(title: "Rename…", action: #selector(chooseRename(_:))))
+    conversationMenu.addItem(menuItem(title: "Export…", action: #selector(chooseExport(_:))))
     conversationMenu.addItem(.separator())
     conversationMenu.addItem(menuItem(title: "Delete…", action: #selector(chooseDelete(_:))))
     return conversationMenu
@@ -48,6 +49,10 @@ final class ConversationContextMenu: NSObject {
 
   @objc func chooseRename(_ sender: Any?) {
     finish(with: .rename)
+  }
+
+  @objc func chooseExport(_ sender: Any?) {
+    finish(with: .export)
   }
 
   @objc func chooseDelete(_ sender: Any?) {

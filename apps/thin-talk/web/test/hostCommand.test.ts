@@ -19,6 +19,7 @@ function recordingHandlers(calledCommands: string[]): HostCommandHandlers {
     stopGenerating: () => calledCommands.push("stopGenerating"),
     copyLastAnswer: () => calledCommands.push("copyLastAnswer"),
     deleteConversation: () => calledCommands.push("deleteConversation"),
+    exportConversation: () => calledCommands.push("exportConversation"),
     focusComposer: () => calledCommands.push("focusComposer"),
     openYourAstro: () => calledCommands.push("openYourAstro"),
     toggleAstro: () => calledCommands.push("toggleAstro"),

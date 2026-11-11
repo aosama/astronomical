@@ -8,7 +8,8 @@ import WebKit
 /// transcript rendering, and the daemon conversation; Swift owns only what a
 /// web page cannot do for itself: reading and writing session files, keeping
 /// generated images, asking the user's approval for tools and letting them pick
-/// a file, the system pasteboard, opening external links, asking its host to
+/// a file, saving exported files, the system pasteboard, opening external
+/// links, asking its host to
 /// restart the local engine, and injecting the runtime configuration.
 /// Everything else crosses the bridge as data.
 ///
@@ -280,6 +281,10 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
       handleConversationMenuCall(callID: callID)
       return
     }
+    if op == "saveExport" {
+      handleSaveExportCall(callID: callID, payloadObject: envelope["payload"] as? [String: Any])
+      return
+    }
     // The payload is serialized to JSON on the main thread so only Sendable
     // data crosses into the store queue.
     let payloadData: Data?
@@ -441,6 +446,27 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
       let encodedChoice = Result { try self.encodedJSONString(["choice": menuChoice.rawValue]) }
         .mapError { SessionBridgeFailure(message: "showConversationMenu could not encode its choice: \($0)") }
       self.settleSessionCall(callID: callID, outcome: encodedChoice.map { Optional($0) })
+    }
+  }
+
+  /// Saving an export shows a save panel and, for a PDF, prints the page, so
+  /// it runs on the main thread like the menu and settles when it is done.
+  private func handleSaveExportCall(callID: String, payloadObject: [String: Any]?) {
+    guard let payloadObject, let exportRequest = ExportedFileRequest(payload: payloadObject) else {
+      settleSessionCall(callID: callID, outcome: .failure(.init(message: "saveExport requires a format and its content")))
+      return
+    }
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let encodedOutcome: Result<String?, SessionBridgeFailure>
+      do {
+        let saveOutcome = try await ExportedFileSaver.save(exportRequest, from: self.webViewProvider()?.window)
+        encodedOutcome = .success(try self.encodedJSONString(saveOutcome.bridgePayload))
+      } catch {
+        NSLog("ThinTalk canvas: the export could not be saved: \(error)")
+        encodedOutcome = .failure(.init(message: "saveExport failed: \(error)"))
+      }
+      self.settleSessionCall(callID: callID, outcome: encodedOutcome)
     }
   }
 

@@ -24,6 +24,8 @@ export const COPY_IMAGE_ACTION = "copy-image";
 /** The class of the strip holding a code block's language and Copy button. It
  * is page chrome, so copying an answer leaves it out. */
 export const CODE_BLOCK_TOOLS_CLASS = "code-block__tools";
+/** The `data-action` of an answer's Export button. */
+export const EXPORT_ANSWER_ACTION = "export-answer";
 
 /** The longest prompt excerpt used in an image's text alternative; a screen
  * reader reads the whole attribute, and prompts can run to paragraphs. */
@@ -31,7 +33,7 @@ const MAXIMUM_IMAGE_DESCRIPTION_PROMPT_CHARACTERS = 250;
 
 /** The image's text alternative: it says the image was generated and what was
  * asked for, since nothing describes what was actually drawn. */
-function generatedImageDescription(argumentsJSON: string): string {
+export function generatedImageDescription(argumentsJSON: string): string {
   let prompt: unknown = null;
   try {
     const decodedArguments: unknown = JSON.parse(argumentsJSON);
@@ -254,7 +256,13 @@ export class Renderer {
     if (message.state !== ChatMessageState.COMPLETE && message.state !== ChatMessageState.STOPPED) {
       return "";
     }
-    return `<div class="message__actions"><button class="message__action" data-testid="action-copy" data-action="copy">Copy</button></div>`;
+    // An answer can leave the app as a file; a question on its own is not
+    // worth a file, and it is exported with its answer or the whole chat.
+    const exportButton =
+      message.role === ChatRole.ASSISTANT
+        ? `<button class="message__action" data-testid="action-export" data-action="${EXPORT_ANSWER_ACTION}">Export…</button>`
+        : "";
+    return `<div class="message__actions"><button class="message__action" data-testid="action-copy" data-action="copy">Copy</button>${exportButton}</div>`;
   }
 
   /**

@@ -113,6 +113,17 @@
             </div>
           </div>
         </footer>
+        <!--
+          Shown in place of the composer while messages are being picked for an
+          export (src/MessagePicker.ts): how many are ticked, and the way back
+          to the export sheet.
+        -->
+        <div id="pick-bar" class="pick-bar" data-testid="pick-bar" hidden>
+          <p class="pick-bar__count" data-testid="pick-count" aria-live="polite"></p>
+          <button type="button" class="pick-bar__cancel" id="pick-cancel" data-testid="pick-cancel">Cancel</button>
+          <button type="button" class="pick-bar__done" id="pick-done" data-testid="pick-done">Export</button>
+        </div>
+        <p id="brief-notice" class="brief-notice" role="status" data-testid="brief-notice" hidden></p>
       </div>
       <!--
         Astro's first flight covers the whole window, sidebar included, for a
@@ -124,6 +135,11 @@
       -->
       <section id="first-flight" class="first-flight" role="dialog" aria-modal="true" aria-label="Meet Astro" data-testid="first-flight" hidden></section>
       <section id="your-astro" class="your-astro" role="dialog" aria-modal="true" aria-label="Your Astro" data-testid="your-astro" hidden></section>
+      <!--
+        The export sheet, drawn by export.js (src/export/ExportSheetView.ts),
+        which the page loads the first time someone exports.
+      -->
+      <section id="export-sheet" class="export-sheet" role="dialog" aria-modal="true" data-testid="export-sheet" hidden></section>
     </div>
     <!--
       KaTeX and mermaid stay as vendored globals because they are large, slow to
