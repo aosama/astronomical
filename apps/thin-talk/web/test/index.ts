@@ -80,6 +80,7 @@ import "./astroLibrary.test";
 import "./exportBodyCleaner.test";
 import "./exportContentBuilder.test";
 import "./exportArticle.test";
+import "./pageEstimate.test";
 import "./wordDocumentWriter.test";
 import "./exportSheet.test";
 import "./messagePicker.test";

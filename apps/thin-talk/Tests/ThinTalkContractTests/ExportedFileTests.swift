@@ -124,4 +124,32 @@ final class ExportedFileTests: XCTestCase {
 
     XCTAssertEqual(PDFDocument(url: pdfURL)?.pageCount, 1)
   }
+
+  /// WebKit lays a printed page out 1.25 times wider than the paper's text
+  /// column, so a CSS pixel prints as 0.8 of a point, not 0.75, and every
+  /// size comes out sixteen fifteenths too large: a 22-point title was 23.47
+  /// points on paper. The export stylesheet zooms its printed body by fifteen
+  /// sixteenths to undo that; this pins the engine behaviour it relies on.
+  /// Scaling the print job instead was tried and cut tables across pages.
+  @MainActor
+  func test_should_print_text_at_its_css_size_when_the_page_zooms_by_fifteen_sixteenths() async throws {
+    let trueSizeURL = scratchDirectory.appendingPathComponent("TrueSize.pdf")
+    let enlargedURL = scratchDirectory.appendingPathComponent("Enlarged.pdf")
+    let paragraph = "<p style=\"font: 20pt Helvetica; margin: 0\">Sized</p>"
+
+    try await ExportPDFPrinter().printPDF(
+      html: "<!DOCTYPE html><html><head><style>@media print { body { zoom: 0.9375; } }</style></head><body>\(paragraph)</body></html>",
+      to: trueSizeURL)
+    try await ExportPDFPrinter().printPDF(html: "<!DOCTYPE html><html><body>\(paragraph)</body></html>", to: enlargedURL)
+
+    XCTAssertEqual(try printedFontSize(at: trueSizeURL), 20, accuracy: 0.05)
+    XCTAssertEqual(try printedFontSize(at: enlargedURL), 20 * 16 / 15, accuracy: 0.05)
+  }
+
+  private func printedFontSize(at pdfURL: URL) throws -> CGFloat {
+    let printedPage = try XCTUnwrap(PDFDocument(url: pdfURL)?.page(at: 0))
+    let printedText = try XCTUnwrap(printedPage.attributedString)
+    let printedFont = try XCTUnwrap(printedText.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+    return printedFont.pointSize
+  }
 }

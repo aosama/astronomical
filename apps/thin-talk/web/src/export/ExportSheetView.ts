@@ -1,7 +1,9 @@
 import { EXPORT_FORMAT_OFFERS, exportFormatOffer } from "./ExportFormat";
 import type { ExportFormat } from "./ExportFormat";
 import type { ExportOptions, ExportScope } from "./ExportOptions";
-import { PREVIEW_FRAME_CLASS, PREVIEW_SCALE } from "./ExportArticle";
+import { PREVIEW_FRAME_CLASS, PREVIEW_SCALE, WHOLE_BLOCK_SELECTOR } from "./ExportArticle";
+import { wholeBlocksIn } from "./PageEstimate";
+import type { WholeBlock } from "./PageEstimate";
 
 /** The scope choices the sheet can show; "oneAnswer" only when it was opened
  * from an answer. */
@@ -292,6 +294,12 @@ export class ExportSheetView {
   /** The preview's article, for measuring how many pages it makes. */
   public previewArticle(): HTMLElement | null {
     return this.previewRoot.querySelector<HTMLElement>(".export-article");
+  }
+
+  /** Where the preview's uncut blocks sit in the text at full size. */
+  public previewWholeBlocks(textInsetPixels: number): WholeBlock[] {
+    const article = this.previewArticle();
+    return article !== null ? wholeBlocksIn(article, WHOLE_BLOCK_SELECTOR, textInsetPixels) : [];
   }
 
   public setSaving(isSaving: boolean, idleLabel: string): void {
