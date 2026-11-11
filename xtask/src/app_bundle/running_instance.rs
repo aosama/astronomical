@@ -301,3 +301,35 @@ fn process_states(command_line_pattern: &str) -> String {
         Err(_) => matching_process_ids,
     }
 }
+
+/// The link that puts `draft_text` in the Development chat's message field.
+/// Every byte outside the unreserved set is percent-encoded, so no character
+/// of the draft can be read as part of the link. The app reads the link in
+/// `DraftLink` (AstronomicalShared/ApplicationLink.swift), and only its
+/// Development channel answers it.
+pub(crate) fn draft_link(channel_profile: &ChannelProfile, draft_text: &str) -> String {
+    let mut encoded_draft = String::with_capacity(draft_text.len());
+    for draft_byte in draft_text.bytes() {
+        if draft_byte.is_ascii_alphanumeric() || b"-._~".contains(&draft_byte) {
+            encoded_draft.push(char::from(draft_byte));
+        } else {
+            encoded_draft.push_str(&format!("%{draft_byte:02X}"));
+        }
+    }
+    format!(
+        "{}://draft?text={encoded_draft}",
+        channel_profile.chat_url_scheme
+    )
+}
+
+/// Opens the draft link in the background, so typing a question for a live
+/// check never takes the keyboard from whoever is using the Mac.
+pub(crate) fn open_draft_link(draft_text: &str) -> Result<(), String> {
+    let channel_profile = ChannelProfile::for_channel(super::channel_profile::Channel::Development);
+    run_quiet_tool(
+        Command::new("open")
+            .arg("-g")
+            .arg(draft_link(&channel_profile, draft_text)),
+    )
+    .map(drop)
+}

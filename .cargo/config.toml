@@ -238,6 +238,9 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # signing) and swaps it in for the running one, opening it in front; `cargo
 # xtask app dev --background` opens it behind every other window instead,
 # without taking the keyboard, for rebuilding while working in another app;
+# `cargo xtask app draft "<text>"` puts that text in the running Development
+# chat's message field, also in the background and without sending it, so a
+# question can be typed for a live check without taking the keyboard;
 # `cargo xtask app instance
 # status|start|stop|restart` controls that instance headless; `stop` quits
 # the chat app and the menu-bar agent, and `restart` reopens the agent (not

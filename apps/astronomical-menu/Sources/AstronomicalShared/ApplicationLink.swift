@@ -42,3 +42,41 @@ public enum ApplicationLink: String, CaseIterable, Sendable {
 public func isThinTalkChatOpenRequest(_ openedURL: URL, channel: ApplicationChannel) -> Bool {
   ApplicationLink.parse(openedURL, channel: channel) == .chat
 }
+
+/// A link that puts a draft in the Development chat's message field:
+/// `astronomical-dev://draft?text=...`.
+///
+/// It exists so a developer, or an agent testing the app, can type a question
+/// without taking the keyboard from whoever is using the Mac. Three limits
+/// keep it harmless: only the Development channel answers it, so a web page
+/// cannot reach the app people actually use; it only fills the field, so
+/// nothing is sent to a model until someone presses Send; and the text is
+/// bounded.
+public enum DraftLink {
+  public static let destinationName = "draft"
+  public static let textParameterName = "text"
+  /// The page refuses a longer draft (`MAXIMUM_DRAFT_CHARACTERS` in
+  /// HostCommand.ts); refusing here too keeps a huge link out of the bridge.
+  public static let maximumDraftCharacters = 4000
+
+  public static func url(draftText: String, channel: ApplicationChannel) -> URL? {
+    var linkComponents = URLComponents()
+    linkComponents.scheme = channel.chatURLScheme
+    linkComponents.host = destinationName
+    linkComponents.queryItems = [URLQueryItem(name: textParameterName, value: draftText)]
+    return linkComponents.url
+  }
+
+  /// The draft a link carries, or nil when the link is not a draft link for
+  /// this channel, the channel is not Development, or the text is empty or
+  /// too long.
+  public static func draftText(from openedURL: URL, channel: ApplicationChannel) -> String? {
+    guard channel == .development, openedURL.scheme?.lowercased() == channel.chatURLScheme,
+      openedURL.host?.lowercased() == destinationName,
+      let linkComponents = URLComponents(url: openedURL, resolvingAgainstBaseURL: false),
+      let draftText = linkComponents.queryItems?.first(where: { $0.name == textParameterName })?.value
+    else { return nil }
+    let hasText = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    return hasText && draftText.count <= maximumDraftCharacters ? draftText : nil
+  }
+}

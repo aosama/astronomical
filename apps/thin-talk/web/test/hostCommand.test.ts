@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HostCommand, parseHostCommand } from "../src/HostCommand";
+import { HostCommand, MAXIMUM_DRAFT_CHARACTERS, parseHostCommand } from "../src/HostCommand";
 import { HostCommandRouter } from "../src/HostCommandRouter";
 import type { HostCommandHandlers } from "../src/HostCommandRouter";
 import { lastAssistantMessageID } from "../src/HostCommandWiring";
@@ -21,6 +21,7 @@ function recordingHandlers(calledCommands: string[]): HostCommandHandlers {
     deleteConversation: () => calledCommands.push("deleteConversation"),
     exportConversation: () => calledCommands.push("exportConversation"),
     focusComposer: () => calledCommands.push("focusComposer"),
+    fillDraft: (draftText) => calledCommands.push(`fillDraft:${draftText}`),
     openYourAstro: () => calledCommands.push("openYourAstro"),
     toggleAstro: () => calledCommands.push("toggleAstro"),
     setTitlebarInset: (titlebarInsetPixels) => calledCommands.push(`setTitlebarInset:${titlebarInsetPixels}`),
@@ -49,7 +50,7 @@ test("should_refuse_payloads_that_are_not_a_known_command", () => {
 
 test("should_dispatch_each_command_to_its_own_handler_only", () => {
   for (const hostCommand of Object.values(HostCommand)) {
-    if (hostCommand === HostCommand.SET_TITLEBAR_INSET) {
+    if (hostCommand === HostCommand.SET_TITLEBAR_INSET || hostCommand === HostCommand.FILL_DRAFT) {
       continue;
     }
     const calledCommands: string[] = [];
@@ -168,4 +169,32 @@ test("should_toggle_the_sidebar_focus_the_field_and_start_a_new_chat_through_hos
   commandEntry.run({ name: "newChat" });
   await waitFor(() => window.__thintalk?.messageCount() === 0, "the new chat to start empty");
   assert.equal(journey.host.fileCount(), 1, "a new chat keeps the earlier conversation saved");
+}, { timeout: 30_000 });
+
+test("should_hand_a_draft_to_its_handler_and_refuse_one_that_is_empty_too_long_or_not_text", () => {
+  const calledCommands: string[] = [];
+  const router = new HostCommandRouter(recordingHandlers(calledCommands));
+
+  assert.equal(router.run({ name: "fillDraft", text: "What is 15% of 80?" }), true);
+  assert.equal(router.run({ name: "fillDraft", text: "a".repeat(MAXIMUM_DRAFT_CHARACTERS) }), true);
+  for (const refusedText of [undefined, null, 7, "", "   ", "a".repeat(MAXIMUM_DRAFT_CHARACTERS + 1)]) {
+    assert.equal(router.run({ name: "fillDraft", text: refusedText }), false, String(refusedText).slice(0, 20));
+  }
+
+  assert.deepEqual(calledCommands, ["fillDraft:What is 15% of 80?", `fillDraft:${"a".repeat(MAXIMUM_DRAFT_CHARACTERS)}`]);
+});
+
+// The draft only fills the field: the person, or a test, still presses Send.
+test("should_put_a_draft_in_the_real_message_field_ready_to_send_without_sending_it", async () => {
+  const journey = bootJourney();
+  await waitUntilReady();
+  const messageField = document.querySelector("#composer-input") as HTMLTextAreaElement;
+  const sendButton = document.querySelector('[data-testid="composer-send"]') as HTMLButtonElement;
+  messageField.value = "something half typed";
+
+  assert.equal(window.__thintalkCommands?.run({ name: "fillDraft", text: 'Say "hi" <b>now</b>' }), true);
+
+  assert.equal(messageField.value, 'Say "hi" <b>now</b>', "the draft replaces what was there, as text");
+  await waitFor(() => !sendButton.disabled, "Send to become available");
+  assert.equal(journey.daemon.chatRequestBodies().length, 0, "nothing is sent to a model");
 }, { timeout: 30_000 });

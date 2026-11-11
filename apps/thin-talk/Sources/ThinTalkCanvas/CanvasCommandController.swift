@@ -21,6 +21,11 @@ public final class CanvasCommandController {
     canvas?.applyTitlebarInset(points: insetPoints)
   }
 
+  /// Puts a draft in the page's message field without sending it.
+  public func fillDraft(_ draftText: String) {
+    canvas?.fillDraft(draftText)
+  }
+
   func attach(_ canvas: ConversationCanvasView) {
     self.canvas = canvas
   }

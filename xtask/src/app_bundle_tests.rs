@@ -13,7 +13,7 @@ use super::icon_cache::cached_icon_file_name;
 use super::info_plist::{escape_xml_text, render_info_plist};
 use super::instance_control::{InstanceAction, status_report_lines};
 use super::native_metallib::metallib_store_path;
-use super::running_instance::open_bundle_arguments;
+use super::running_instance::{draft_link, open_bundle_arguments};
 use super::step_reporter::estimate_remaining_seconds;
 
 fn sample_build_identity(is_dirty: bool) -> BuildIdentity {
@@ -653,5 +653,40 @@ fn should_open_the_dev_app_behind_other_windows_only_when_asked() {
             std::ffi::OsString::from("--args"),
             std::ffi::OsString::from("--launch-in-background"),
         ]
+    );
+}
+
+#[test]
+fn should_parse_a_draft_and_refuse_an_empty_or_missing_one() {
+    assert_eq!(
+        parse_app_command(&arguments(&["draft", "What is 15% of 80?"])),
+        Ok(AppCommand::Draft("What is 15% of 80?".to_owned()))
+    );
+    assert!(parse_app_command(&arguments(&["draft"])).is_err());
+    assert!(parse_app_command(&arguments(&["draft", "   "])).is_err());
+    assert!(parse_app_command(&arguments(&["draft", "one", "two"])).is_err());
+}
+
+/// The draft is data in a link: a character that means something in a URL
+/// must never be able to end the text or add a parameter.
+#[test]
+fn should_encode_every_character_of_a_draft_that_a_link_could_misread() {
+    let development_profile = ChannelProfile::for_channel(Channel::Development);
+
+    assert_eq!(
+        draft_link(&development_profile, "abc-XYZ_09.~"),
+        "astronomical-dev://draft?text=abc-XYZ_09.~"
+    );
+    assert_eq!(
+        draft_link(&development_profile, "a b&c=d#e?f/g%"),
+        "astronomical-dev://draft?text=a%20b%26c%3Dd%23e%3Ff%2Fg%25"
+    );
+    assert_eq!(
+        draft_link(&development_profile, "é\n"),
+        "astronomical-dev://draft?text=%C3%A9%0A"
+    );
+    assert_eq!(
+        draft_link(&development_profile, ""),
+        "astronomical-dev://draft?text="
     );
 }

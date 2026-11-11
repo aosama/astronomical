@@ -10,7 +10,7 @@ use super::instance_control::{InstanceAction, run_instance_action};
 use super::package_pipeline::{PackageRequest, run_package, validate_package_request};
 use super::smoke_test::{SmokeTestRequest, run_smoke_test};
 
-pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev [--background] | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
+pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev [--background] | app draft TEXT | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
 
 /// `info-plist --channel NAME` prints the main app's plist; a trailing
 /// `--agent` prints the menu-bar agent's instead.
@@ -53,6 +53,9 @@ pub(crate) enum AppCommand {
     /// Rebuild the Development app, swap it in, and open it: in front, or
     /// behind every other window for someone still working in another app.
     Dev(DevOpenPlacement),
+    /// Put a draft in the running Development chat's message field, without
+    /// bringing the app forward or sending it.
+    Draft(String),
     /// Print the Info.plist a channel would get from this checkout, so the
     /// channel profiles can be inspected without building anything.
     InfoPlist(Channel, PlistSubject),
@@ -64,15 +67,32 @@ pub(crate) enum AppCommand {
     SmokeTest(SmokeTestRequest),
 }
 
+/// `dev` opens the rebuilt app in front; `dev --background` behind the others.
+fn parse_dev_command(dev_arguments: &[String]) -> Result<AppCommand, String> {
+    match dev_arguments {
+        [] => Ok(AppCommand::Dev(DevOpenPlacement::InFront)),
+        [background_flag] if background_flag == "--background" => {
+            Ok(AppCommand::Dev(DevOpenPlacement::InBackground))
+        }
+        _ => Err(APP_USAGE.to_owned()),
+    }
+}
+
+/// `draft TEXT` takes exactly one argument with something in it.
+fn parse_draft_command(draft_arguments: &[String]) -> Result<AppCommand, String> {
+    match draft_arguments {
+        [draft_text] if !draft_text.trim().is_empty() => Ok(AppCommand::Draft(draft_text.clone())),
+        _ => Err(APP_USAGE.to_owned()),
+    }
+}
+
 pub(crate) fn parse_app_command(arguments: &[String]) -> Result<AppCommand, String> {
     let Some((subcommand, subcommand_arguments)) = arguments.split_first() else {
         return Err(APP_USAGE.to_owned());
     };
     match (subcommand.as_str(), subcommand_arguments) {
-        ("dev", []) => Ok(AppCommand::Dev(DevOpenPlacement::InFront)),
-        ("dev", [background_flag]) if background_flag == "--background" => {
-            Ok(AppCommand::Dev(DevOpenPlacement::InBackground))
-        }
+        ("dev", dev_arguments) => parse_dev_command(dev_arguments),
+        ("draft", draft_arguments) => parse_draft_command(draft_arguments),
         ("instance", [action_name]) => Ok(AppCommand::Instance(InstanceAction::from_action_name(
             action_name,
         )?)),
@@ -145,9 +165,12 @@ fn parse_flag_values(
     Ok(flag_values)
 }
 
+use super::running_instance::open_draft_link;
+
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     match parse_app_command(arguments)? {
         AppCommand::Dev(open_placement) => run_dev_pipeline(repository_root, open_placement),
+        AppCommand::Draft(draft_text) => open_draft_link(&draft_text),
         AppCommand::Instance(instance_action) => {
             run_instance_action(repository_root, instance_action)
         }

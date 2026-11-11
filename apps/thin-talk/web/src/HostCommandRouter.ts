@@ -1,4 +1,4 @@
-import { HostCommand, parseHostCommand } from "./HostCommand";
+import { HostCommand, parseHostCommand, validDraftText } from "./HostCommand";
 import { validTitlebarInset } from "./WindowChrome";
 
 /** What each host command does; boot.ts supplies these from the controller and
@@ -13,6 +13,7 @@ export interface HostCommandHandlers {
   focusComposer(): void;
   openYourAstro(): void;
   toggleAstro(): void;
+  fillDraft(draftText: string): void;
   setTitlebarInset(titlebarInsetPixels: number): void;
 }
 
@@ -20,7 +21,7 @@ export interface HostCommandHandlers {
  * Receives commands from the native menu bar and toolbar.
  *
  * The host calls `window.__thintalkCommands.run({name})`; `setTitlebarInset`
- * also carries `points`. The return value says whether the command was
+ * also carries `points`, and `fillDraft` carries `text`. The return value says whether the command was
  * understood, which the tests check; the host does not read it.
  */
 export class HostCommandRouter {
@@ -47,11 +48,19 @@ export class HostCommandRouter {
       this.handlers.setTitlebarInset(titlebarInsetPixels);
       return true;
     }
+    if (hostCommand === HostCommand.FILL_DRAFT) {
+      const draftText = validDraftText((payload as Record<string, unknown>)["text"]);
+      if (draftText === null) {
+        return false;
+      }
+      this.handlers.fillDraft(draftText);
+      return true;
+    }
     this.dispatch(hostCommand);
     return true;
   }
 
-  private dispatch(hostCommand: Exclude<HostCommand, HostCommand.SET_TITLEBAR_INSET>): void {
+  private dispatch(hostCommand: Exclude<HostCommand, HostCommand.SET_TITLEBAR_INSET | HostCommand.FILL_DRAFT>): void {
     switch (hostCommand) {
       case HostCommand.NEW_CHAT:
         this.handlers.newChat();

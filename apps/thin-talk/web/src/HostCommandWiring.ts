@@ -62,6 +62,12 @@ export function hostCommandHandlers(targets: HostCommandTargets): HostCommandHan
     },
     exportConversation: () => void targets.exportLauncher.open({ kind: "wholeChat" }),
     focusComposer: () => targets.composerField.focus(),
+    fillDraft: (draftText) => {
+      // The input event is what tells the composer there is something to
+      // send, as it does when a person types.
+      targets.composerField.value = draftText;
+      targets.composerField.dispatchEvent(new Event("input", { bubbles: true }));
+    },
     openYourAstro: () => targets.astro.openYourAstro(),
     toggleAstro: () => targets.astro.toggleShown(),
     setTitlebarInset: (titlebarInsetPixels) => targets.windowChrome.applyTitlebarInset(titlebarInsetPixels),
