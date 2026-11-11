@@ -85,6 +85,18 @@
   cursor: default;
 }
 
+/* The arrow keys move through the radio groups, so where the focus is must
+   be plain to see on every control of the sheet. */
+.export-sheet__choice:focus-visible,
+.export-sheet__format:focus-visible,
+.export-sheet__cancel:focus-visible,
+.export-sheet__save:focus-visible,
+.pick-bar__cancel:focus-visible,
+.pick-bar__done:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .export-sheet__choice {
   padding: 5px 12px;
   font-size: 15px;
