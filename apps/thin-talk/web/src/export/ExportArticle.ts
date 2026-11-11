@@ -52,7 +52,7 @@ pre, table, figure, img { break-inside: avoid; }
 figure { margin: 10pt 0; }
 img { max-width: 100%; height: auto; }
 .export-picture img { max-width: 4.5in; border-radius: 4pt; }
-.export-diagram svg { max-width: 100%; height: auto; }
+.export-diagram svg { max-width: 100%; max-height: 4.8in; width: auto; height: auto; }
 .export-diagram--dark { background: #1f1f1d; padding: 10pt; border-radius: 4pt; }
 math[display="block"] { margin: 8pt 0; }
 p.export-note { border-top: 1px solid #c9c6bf; padding-top: 6pt; }

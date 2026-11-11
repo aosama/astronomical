@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { strFromU8, unzipSync } from "fflate";
 import { writeWordDocument } from "../src/export/WordDocumentWriter";
 import type { ExportContent } from "../src/export/ExportContentBuilder";
+import { fittedDiagramSize } from "../src/export/DiagramRasteriser";
 import type { DiagramRasteriser } from "../src/export/DiagramRasteriser";
 
 // A one-pixel PNG, so Word has a real picture to embed.
@@ -24,6 +25,10 @@ async function wordFileParts(content: ExportContent, rasteriseDiagram: DiagramRa
 const ONE_VIOLET_PIXEL_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPIsj8CAAKEAW76LM8WAAAAAElFTkSuQmCC";
 
 const NEVER_DRAWS: DiagramRasteriser = async () => null;
+
+function drawnAs(dataURL: string, widthPixels = 10, heightPixels = 10): DiagramRasteriser {
+  return async () => ({ dataURL, widthPixels, heightPixels });
+}
 
 test("should_write_a_word_file_with_real_headings_lists_tables_code_and_equations", async () => {
   const parts = await wordFileParts(
@@ -59,7 +64,7 @@ test("should_keep_headings_in_the_apps_ink_instead_of_words_blue", async () => {
 test("should_embed_a_picture_and_a_drawn_diagram_as_pictures", async () => {
   const parts = await wordFileParts(
     answerContent(`<figure class="export-picture"><img src="${ONE_PIXEL_PNG}" alt="A rocket"></figure><figure class="export-diagram"><svg viewBox="0 0 10 10"></svg></figure>`),
-    async () => ONE_VIOLET_PIXEL_PNG,
+    drawnAs(ONE_VIOLET_PIXEL_PNG),
   );
 
   const embeddedMedia = Object.keys(parts).filter((partName) => partName.startsWith("word/media/"));
@@ -76,7 +81,7 @@ test("should_draw_a_dark_diagram_on_its_dark_ground_and_a_light_one_on_white", a
     ),
     async (_diagram, groundColour) => {
       groundColours.push(groundColour);
-      return ONE_PIXEL_PNG;
+      return { dataURL: ONE_PIXEL_PNG, widthPixels: 10, heightPixels: 10 };
     },
   );
 
@@ -96,4 +101,20 @@ test("should_keep_nothing_about_the_person_in_the_files_properties", async () =>
   const coreProperties = parts["docProps/core.xml"] ?? "";
   assert.match(coreProperties, /<dc:creator>Astronomical<\/dc:creator>/);
   assert.match(coreProperties, /<dc:title>Mitosis explained<\/dc:title>/);
+});
+
+// A tall flowchart at full width ran past the page: Word moved it to the next
+// one and left half the first page empty.
+test("should_shrink_a_diagram_to_fit_the_page_in_proportion_and_never_enlarge_it", () => {
+  assert.deepEqual(fittedDiagramSize(300, 200), { width: 300, height: 200 }, "a small diagram keeps its size");
+  assert.deepEqual(fittedDiagramSize(1200, 300), { width: 600, height: 150 }, "a wide one is held to the column");
+  assert.deepEqual(fittedDiagramSize(400, 920), { width: 200, height: 460 }, "a tall one is held to the page");
+  assert.deepEqual(fittedDiagramSize(600, 460), { width: 600, height: 460 }, "exactly at both limits");
+});
+
+test("should_show_a_tall_diagram_in_word_at_its_fitted_size", async () => {
+  const parts = await wordFileParts(answerContent(`<figure class="export-diagram"><svg viewBox="0 0 400 920"></svg></figure>`), drawnAs(ONE_VIOLET_PIXEL_PNG, 400, 920));
+
+  // Word measures in EMU: 9525 to a CSS pixel.
+  assert.match(parts["word/document.xml"] ?? "", new RegExp(`<wp:extent cx="${200 * 9525}" cy="${460 * 9525}"/>`));
 });

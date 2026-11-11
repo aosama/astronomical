@@ -2,9 +2,31 @@
  * the picture at print size where screen resolution looks soft. */
 const WORD_DIAGRAM_SCALE = 2;
 
-/** Draws an SVG diagram to PNG data on a solid ground colour (a CSS colour),
- * or null when the page cannot. */
-export type DiagramRasteriser = (diagram: SVGSVGElement, groundColour: string) => Promise<string | null>;
+/** A diagram drawn as a picture: its PNG data, and the size it was drawn
+ * for in CSS pixels (the data itself is sharper than that). */
+export interface DiagramPicture {
+  readonly dataURL: string;
+  readonly widthPixels: number;
+  readonly heightPixels: number;
+}
+
+/** Draws an SVG diagram to a picture on a solid ground colour (a CSS
+ * colour), or null when the page cannot. */
+export type DiagramRasteriser = (diagram: SVGSVGElement, groundColour: string) => Promise<DiagramPicture | null>;
+
+/** The largest a diagram is shown on an exported page, in CSS pixels: the
+ * width of the text column, and a height that leaves room for the heading
+ * above it. A tall flowchart at full width ran past the page, so Word moved
+ * it to the next one and left the first half empty. */
+export const MAXIMUM_DIAGRAM_WIDTH_PIXELS = 600;
+export const MAXIMUM_DIAGRAM_HEIGHT_PIXELS = 460;
+
+/** The size to show a diagram at: its own size, shrunk in proportion until
+ * it fits both limits, and never enlarged. */
+export function fittedDiagramSize(widthPixels: number, heightPixels: number): { width: number; height: number } {
+  const shrinkFactor = Math.min(1, MAXIMUM_DIAGRAM_WIDTH_PIXELS / widthPixels, MAXIMUM_DIAGRAM_HEIGHT_PIXELS / heightPixels);
+  return { width: Math.round(widthPixels * shrinkFactor), height: Math.round(heightPixels * shrinkFactor) };
+}
 
 function diagramPixelSize(diagram: SVGSVGElement): { width: number; height: number } | null {
   const drawnBox = diagram.getBoundingClientRect();
@@ -50,7 +72,7 @@ export const rasteriseDiagramOnCanvas: DiagramRasteriser = async (diagram, groun
     drawingContext.fillStyle = groundColour;
     drawingContext.fillRect(0, 0, canvas.width, canvas.height);
     drawingContext.drawImage(loadedDiagram, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/png");
+    return { dataURL: canvas.toDataURL("image/png"), widthPixels: pixelSize.width, heightPixels: pixelSize.height };
   } catch {
     return null;
   }
