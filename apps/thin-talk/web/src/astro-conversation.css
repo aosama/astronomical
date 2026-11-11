@@ -44,9 +44,9 @@
   box-sizing: border-box;
 }
 
-/* The constellation's motion for each mood lives with the figure's
+/* The galaxy's motion for each mood lives with the figure's
    (astro.css); a finished answer's Astro hops once. */
-.message--latest .astro-avatar[data-mood="done"] .astro-constellation { animation: astro-avatar-hop 0.6s ease; }
+.message--latest .astro-avatar[data-mood="done"] .astro-galaxy { animation: astro-avatar-hop 0.6s ease; }
 
 @keyframes astro-avatar-hop { 0% { translate: 0 0; } 40% { translate: 0 -6px; } 100% { translate: 0 0; } }
 
@@ -240,7 +240,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .message--latest .astro-avatar .astro-constellation,
+  .message--latest .astro-avatar .astro-galaxy,
   #app.app--astro .tool-step[data-state="running"] .skill-moment__icon {
     animation: none;
   }

@@ -3,7 +3,7 @@ import type { TranscriptMessage } from "../TranscriptMessage";
 import type { TranscriptPersona } from "../TranscriptPersona";
 import { ToolStepState } from "../ToolStep";
 import type { ToolStep } from "../ToolStep";
-import { astroConstellationHtml } from "./AstroConstellation";
+import { astroGalaxyHtml } from "./AstroGalaxy";
 import { CONVERSATION_SKILL_LABELS, answerSkill, skillForToolName } from "../ConversationSkill";
 import { stateWordsHtml } from "../MessageChrome";
 import type { EscapeHtml, MessageChrome } from "../MessageChrome";
@@ -11,7 +11,7 @@ import { AstroStyle } from "./AstroStyle";
 import { skillMomentWords } from "./SkillMomentWords";
 
 /** What Astro is doing in one answer, which picks its status words and, on
- * the newest answer only, how its constellation moves. */
+ * the newest answer only, how its galaxy moves. */
 export enum AstroMood {
   THINKING = "thinking",
   WORKING = "working",
@@ -46,7 +46,7 @@ function byStyle(words: { explorer: string; pilot: string }, persona: Transcript
 }
 
 /**
- * The message chrome while Astro is shown: Astro's constellation and name with a skill
+ * The message chrome while Astro is shown: Astro's galaxy and name with a skill
  * tag and friendly status, the person's nickname, "How I worked it out", and
  * tool steps told as skill moments. Every value that comes from the
  * conversation (the nickname, tool labels) is escaped; the rest is fixed text.
@@ -70,7 +70,7 @@ export class AstroMessageChrome implements MessageChrome {
     return `<span class="message__role message__role--named"><b class="astro-you-badge">${this.escapeHtml(initial.toUpperCase())}</b>${this.escapeHtml(this.persona.nickname)}</span>`;
   }
 
-  /** Astro's constellation, moving for its mood, then "Astro", the answer's skill
+  /** Astro's galaxy, moving for its mood, then "Astro", the answer's skill
    * tag and what Astro is doing now. A failed answer keeps the plain word,
    * because the failure banner explains it. */
   public assistantHeaderHtml(message: TranscriptMessage): string {
@@ -79,7 +79,7 @@ export class AstroMessageChrome implements MessageChrome {
     const statusText = message.state === ChatMessageState.FAILED ? "failed" : byStyle(STATUS_BY_MOOD[mood], this.persona);
     const caret = message.state === ChatMessageState.STREAMING ? '<span class="message__streaming-caret"></span>' : "";
     return (
-      `<div class="astro-avatar" data-mood="${mood}" aria-hidden="true">${astroConstellationHtml()}</div>` +
+      `<div class="astro-avatar" data-mood="${mood}" aria-hidden="true">${astroGalaxyHtml()}</div>` +
       `<div class="message__meta message__meta--astro">` +
       `<span class="message__role">Astro</span>` +
       `<span class="astro-skill-tag astro-skill-tag--${skill}" data-testid="astro-skill-tag">${CONVERSATION_SKILL_LABELS[skill]}</span>` +

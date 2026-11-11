@@ -1,6 +1,6 @@
 /*
- * Astro: the first flight and Astro's home. Colour lives in Astro, the trail
- * and the skill cards. The deep-navy space look from the concept art is a
+ * Astro: the first flight and Astro's home. Colour lives in the skill cards and,
+ * when the person picks a colour look, in Astro. The deep-navy space look from the concept art is a
  * scene (.first-flight, .your-astro), not the colour of the window: on Astro's
  * home the same controls sit on the app's own ground and follow the Mac's
  * light or dark appearance. The scene-or-ground tokens below carry that split. SF Pro Rounded (ui-rounded) gives the friendly display type without
@@ -33,25 +33,32 @@
   --astro-look: #1b7a63;
   --astro-read: #a85a14;
   --astro-voice: #5d628c;
-  --astro-trail-1: #4fc3ff;
-  --astro-trail-2: #8c6bff;
-  --astro-trail-3: #ff6fb8;
-  --astro-trail-4: #ffd23f;
   --astro-display: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
 }
 
-.astro-trail--aurora {
-  --astro-trail-1: #3be8b0;
-  --astro-trail-2: #4fc3ff;
-  --astro-trail-3: #8c6bff;
-  --astro-trail-4: #3be8b0;
+/* The colour looks. Silver, the default, defines none of these: each use
+   falls back to Astro's ink (the galaxy) or Astro's action colour (the
+   download meter), read where it is drawn so the dark sky's own ink and
+   violet still apply. */
+.astro-colours--rainbow {
+  --astro-colours-1: #4fc3ff;
+  --astro-colours-2: #8c6bff;
+  --astro-colours-3: #ff6fb8;
+  --astro-colours-4: #ffd23f;
 }
 
-.astro-trail--sunset {
-  --astro-trail-1: #ff9a52;
-  --astro-trail-2: #ff6fb8;
-  --astro-trail-3: #ffd23f;
-  --astro-trail-4: #ff6f6f;
+.astro-colours--aurora {
+  --astro-colours-1: #3be8b0;
+  --astro-colours-2: #4fc3ff;
+  --astro-colours-3: #8c6bff;
+  --astro-colours-4: #3be8b0;
+}
+
+.astro-colours--sunset {
+  --astro-colours-1: #ff9a52;
+  --astro-colours-2: #ff6fb8;
+  --astro-colours-3: #ffd23f;
+  --astro-colours-4: #ff6f6f;
 }
 
 /* ---------- Astro's figure ---------- */
@@ -65,7 +72,7 @@
 }
 
 /* The figure keeps the character's footprint, because a skill card is dropped
-   onto it; the constellation is inset so a few stars do not crowd the screen. */
+   onto it; the galaxy is inset so its stars do not crowd the screen. */
 .astro-figure__body {
   position: relative;
   width: 100%;
@@ -76,57 +83,52 @@
   pointer-events: none;
 }
 
-/* ---------- Astro's constellation (src/astro/AstroConstellation.ts) ----------
-   At rest the figure is drawn whole and its stars twinkle slowly. While Astro
-   works (charging up a download, or thinking and working in the newest
-   answer) its lines draw one after another and fade, 0.32 s apart, so the
-   cycle is long enough for all seven before the fade. */
+/* ---------- Astro's galaxy (src/astro/AstroGalaxy.ts) ----------
+   At rest the figure holds still: a mark that never stops moving beside every
+   answer pulls the eye off the words. While Astro works (charging up a
+   download, or thinking and working in the newest answer) the arms turn
+   around the core and a twinkle runs along them. */
 
-.astro-constellation {
+.astro-galaxy {
   display: block;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
 
-.astro-constellation__link {
-  stroke-width: 1.1;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 0;
-  opacity: 0.85;
-}
-
 /* Astro's ink: dark on the window's ground, light on the welcome's and Your
-   Astro's sky, which is dark whatever the Mac's appearance. */
-.astro-constellation__star {
+   Astro's sky, which is dark whatever the Mac's appearance. An arm star's own
+   style swaps this for a look's colour when the person picked one. */
+.astro-galaxy__core,
+.astro-galaxy__star {
   fill: var(--astro-ink);
-  animation: astro-twinkle 3.2s ease-in-out infinite;
-  animation-delay: calc(var(--star-order) * -0.55s);
 }
 
-.astro-figure--charging .astro-constellation__link,
-.message--latest .astro-avatar[data-mood="thinking"] .astro-constellation__link,
-.message--latest .astro-avatar[data-mood="working"] .astro-constellation__link {
-  animation: astro-draw-link 3.6s ease-in-out infinite;
-  animation-delay: calc(var(--link-order) * 0.32s);
+/* view-box makes "center" the middle of the drawing grid, where the core
+   sits; the default box would turn the arms around their own corner. */
+.astro-galaxy__arms {
+  transform-box: view-box;
+  transform-origin: center;
 }
 
-.astro-figure--charging .astro-constellation__star,
-.message--latest .astro-avatar[data-mood="thinking"] .astro-constellation__star,
-.message--latest .astro-avatar[data-mood="working"] .astro-constellation__star {
-  animation-duration: 1.6s;
+.astro-figure--charging .astro-galaxy__arms,
+.message--latest .astro-avatar[data-mood="thinking"] .astro-galaxy__arms,
+.message--latest .astro-avatar[data-mood="working"] .astro-galaxy__arms {
+  animation: astro-galaxy-turn 7s linear infinite;
+}
+
+.astro-figure--charging .astro-galaxy__star,
+.message--latest .astro-avatar[data-mood="thinking"] .astro-galaxy__star,
+.message--latest .astro-avatar[data-mood="working"] .astro-galaxy__star {
+  animation: astro-twinkle 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--star-order) * -0.23s);
 }
 
 .astro-figure--hop {
   animation: astro-hop 0.6s ease, astro-bob 4.5s ease-in-out 0.6s infinite;
 }
 
-@keyframes astro-draw-link {
-  0% { stroke-dashoffset: 1; opacity: 0.85; }
-  14%, 62% { stroke-dashoffset: 0; opacity: 0.85; }
-  80%, 100% { stroke-dashoffset: 0; opacity: 0; }
-}
+@keyframes astro-galaxy-turn { to { transform: rotate(360deg); } }
 
 @keyframes astro-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -10px; } }
 @keyframes astro-hop { 0% { translate: 0 0; } 35% { translate: 0 -34px; } 70% { translate: 0 4px; } 100% { translate: 0 0; } }
@@ -402,7 +404,7 @@
   width: min(560px, 100%);
 }
 
-.wake-up__trails {
+.wake-up__colours {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -410,7 +412,7 @@
   justify-content: center;
 }
 
-.wake-up__trails-label {
+.wake-up__colours-label {
   color: var(--astro-muted);
   font-size: 13px;
 }
@@ -442,7 +444,13 @@
   width: 0%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--astro-trail-1), var(--astro-trail-2), var(--astro-trail-3), var(--astro-trail-4));
+  background: linear-gradient(
+    90deg,
+    var(--astro-colours-1, var(--astro-action)),
+    var(--astro-colours-2, var(--astro-action)),
+    var(--astro-colours-3, var(--astro-action)),
+    var(--astro-colours-4, var(--astro-action))
+  );
   transition: width 0.4s linear;
 }
 
@@ -639,19 +647,15 @@
   }
 }
 
-/* Reduce Motion: the constellation is drawn whole and still; nothing bobs,
-   hops, twinkles or draws. */
+/* Reduce Motion: the galaxy holds still; nothing bobs, hops, twinkles or
+   turns. */
 @media (prefers-reduced-motion: reduce) {
   .astro-figure,
   .astro-figure--hop,
-  .astro-constellation__link,
-  .astro-constellation__star,
+  .astro-galaxy__arms,
+  .astro-galaxy__star,
   .first-flight__sky {
     animation: none;
-  }
-  .astro-constellation__link {
-    stroke-dashoffset: 0;
-    opacity: 0.85;
   }
   .skill-card,
   .download-meter__fill {
@@ -685,9 +689,9 @@
   }
 }
 
-/* ---------- Trail chips (brain download and Your Astro) ---------- */
+/* ---------- Colour chips (brain download and Your Astro) ---------- */
 
-.astro-trail-chips {
+.astro-colours-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

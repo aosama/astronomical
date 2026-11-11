@@ -1,12 +1,12 @@
-import { astroConstellationHtml } from "./AstroConstellation";
+import { astroGalaxyHtml } from "./AstroGalaxy";
 
 /**
- * Astro as drawn on screen: the constellation (AstroConstellation.ts), and
- * the small reactions around it (a hop when something happens, its lines
- * drawing in turn while it charges up a download).
+ * Astro as drawn on screen: the galaxy (AstroGalaxy.ts), and the small
+ * reactions around it (a hop when something happens, its arms turning while
+ * it charges up a download).
  *
  * It is also where a skill card is dropped onto Astro, so it keeps the size
- * the character had. With Reduce Motion on, Astro never hops or draws.
+ * the character had. With Reduce Motion on, Astro never hops or turns.
  */
 export class AstroFigure {
   public readonly element: HTMLElement;
@@ -17,7 +17,7 @@ export class AstroFigure {
     this.element.setAttribute("aria-hidden", "true");
     const body = document.createElement("div");
     body.className = "astro-figure__body";
-    body.innerHTML = astroConstellationHtml();
+    body.innerHTML = astroGalaxyHtml();
     this.element.append(body);
   }
 
