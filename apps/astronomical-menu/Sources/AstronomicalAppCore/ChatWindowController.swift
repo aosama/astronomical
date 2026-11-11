@@ -31,6 +31,17 @@ final class ChatWindowController {
     conversationWindow.window.makeKeyAndOrderFront(nil)
   }
 
+  /// Shows the window at launch. Behind the other windows it is on screen,
+  /// so it can be looked at and driven, but it neither covers what the
+  /// person is working in nor takes their keyboard; they bring it forward
+  /// from the Dock when they want it.
+  func showChatWindowAtLaunch(_ launchPlacement: ChatLaunchPlacement) {
+    switch launchPlacement {
+    case .inFront: showChatWindow()
+    case .behindOtherWindows: conversationWindow.window.orderBack(nil)
+    }
+  }
+
   /// Opens the window on Your Astro, the page that holds every answer from
   /// Astro's welcome. The command waits for a newly made window's page to
   /// load (see ConversationCanvasView.runPageCommand).

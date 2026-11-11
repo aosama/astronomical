@@ -235,7 +235,10 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # Repository tooling as typed Rust; the subcommand catalog lives in the
 # xtask sources. `cargo xtask app dev` rebuilds the Development app
 # (incremental `app-dev` profile, cached icon and npm install, ad-hoc
-# signing) and swaps it in for the running one; `cargo xtask app instance
+# signing) and swaps it in for the running one, opening it in front; `cargo
+# xtask app dev --background` opens it behind every other window instead,
+# without taking the keyboard, for rebuilding while working in another app;
+# `cargo xtask app instance
 # status|start|stop|restart` controls that instance headless; `stop` quits
 # the chat app and the menu-bar agent, and `restart` reopens the agent (not
 # the chat window) if it quit one; `cargo xtask
