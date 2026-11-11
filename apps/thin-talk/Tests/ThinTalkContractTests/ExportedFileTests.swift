@@ -217,7 +217,9 @@ final class ExportedFileTests: XCTestCase {
       XCTAssertLessThanOrEqual(textBounds.maxY, paperSize.height - 71, "\(paperName) top margin")
       // The true-size zoom holds on either paper: it corrects the engine's
       // layout ratio, which does not depend on the sheet.
-      XCTAssertEqual(try printedFontSize(at: pdfURL), 20, accuracy: 0.1, paperName)
+      // To a hundredth of a point: writing Letter back to a Mac already set
+      // to Letter once cost a pixel of layout width and printed 20.03.
+      XCTAssertEqual(try printedFontSize(at: pdfURL), 20, accuracy: 0.01, paperName)
     }
   }
 }

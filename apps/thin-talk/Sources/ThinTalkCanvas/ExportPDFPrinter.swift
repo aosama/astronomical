@@ -73,7 +73,13 @@ public final class ExportPDFPrinter: NSObject, WKNavigationDelegate {
 
   static func printInfo(savingTo destinationURL: URL, paperSize: NSSize) -> NSPrintInfo {
     let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
-    printInfo.paperSize = paperSize
+    // Assigned only when it differs: writing back the size the Mac already
+    // has still makes the print system re-derive the sheet, a hair under
+    // 612 points for Letter, and WebKit then lays the text out one pixel
+    // narrower (584 for 585), which printed a 22-point title at 22.04.
+    if printInfo.paperSize != paperSize {
+      printInfo.paperSize = paperSize
+    }
     printInfo.jobDisposition = .save
     printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = destinationURL
     printInfo.topMargin = pageMarginPoints
