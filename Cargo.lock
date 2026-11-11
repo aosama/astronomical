@@ -56,6 +56,7 @@ dependencies = [
  "astronomical-quantization",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
+ "astronomical-speech-contract",
  "astronomical-test-harness",
  "axum",
  "base64 0.23.1",
@@ -171,6 +172,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-english-number-words"
+version = "0.2.102"
+
+[[package]]
+name = "astronomical-english-phonemes"
+version = "0.2.102"
+dependencies = [
+ "astronomical-english-number-words",
+ "serde_json",
+]
+
+[[package]]
 name = "astronomical-expert-atlas"
 version = "0.2.102"
 dependencies = [
@@ -263,6 +276,7 @@ version = "0.2.102"
 dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
+ "astronomical-english-phonemes",
  "astronomical-expert-atlas",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
@@ -272,6 +286,7 @@ dependencies = [
  "astronomical-neural-engine",
  "astronomical-quantization",
  "astronomical-runtime-integration",
+ "astronomical-speech-contract",
  "astronomical-test-harness",
  "image",
  "libc",
@@ -380,6 +395,13 @@ dependencies = [
  "mlx-bridge",
  "sha2",
  "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "astronomical-speech-contract"
+version = "0.2.102"
+dependencies = [
  "thiserror",
 ]
 

@@ -1,0 +1,16 @@
+[package]
+name = "astronomical-english-phonemes"
+description = "Turns English text into the phoneme strings the Kokoro speech model reads, from the Misaki pronunciation lexicon Kokoro was trained with."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+astronomical-english-number-words = { path = "../english-number-words" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

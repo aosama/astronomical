@@ -22,6 +22,8 @@ mod kev_engine_requests;
 #[cfg(feature = "direct-mlx")]
 mod kev_reference_decisions;
 #[cfg(feature = "direct-mlx")]
+mod kokoro_speech;
+#[cfg(feature = "direct-mlx")]
 mod laya_decision_latency;
 #[cfg(feature = "direct-mlx")]
 mod laya_engine_requests;
@@ -37,6 +39,8 @@ mod neural_engine_program_memory;
 mod neural_engine_token_share_sweep;
 mod ornith_load;
 #[cfg(feature = "direct-mlx")]
+mod phonon_speech;
+#[cfg(feature = "direct-mlx")]
 mod qwen_decision_readout;
 mod qwen_image_21_conditioning;
 #[cfg(feature = "direct-mlx")]
@@ -49,6 +53,8 @@ mod qwen_image_21_text_encoder;
 mod qwen_image_21_transformer;
 #[cfg(feature = "direct-mlx")]
 mod qwen_image_21_vae;
+#[cfg(feature = "direct-mlx")]
+mod speech_audio_checks;
 mod tokenizer;
 mod validate;
 mod weights;
