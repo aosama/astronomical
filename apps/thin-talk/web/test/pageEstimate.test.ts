@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pagedTextHeightPixels } from "../src/export/PageEstimate";
+import { pagedTextHeightPixels, wholeBlocksIn } from "../src/export/PageEstimate";
 
 const PAGE_HEIGHT_PIXELS = 864;
 
@@ -40,4 +40,43 @@ test("should_carry_one_blocks_gap_into_where_the_next_block_lands", () => {
 test("should_return_the_flowing_height_when_there_is_no_page_to_cut_to", () => {
   assert.equal(pagedTextHeightPixels(500, [{ topPixels: 0, heightPixels: 100 }], 0), 500);
   assert.equal(pagedTextHeightPixels(500, [], PAGE_HEIGHT_PIXELS), 500);
+});
+
+/** The test window lays nothing out, so the drawn sizes are given by hand. */
+function drawAt(element: HTMLElement, topPixels: number, widthPixels: number, heightPixels: number): void {
+  element.getBoundingClientRect = () => ({ top: topPixels, left: 0, width: widthPixels, height: heightPixels }) as DOMRect;
+}
+
+function articleDrawnAtAThird(markup: string): HTMLElement {
+  const article = document.createElement("article");
+  article.innerHTML = markup;
+  Object.defineProperty(article, "offsetWidth", { value: 816 });
+  drawAt(article, 50, 272, 600);
+  return article;
+}
+
+test("should_measure_uncut_blocks_at_full_size_from_a_scaled_drawing", () => {
+  const article = articleDrawnAtAThird(`<p>Text</p><table></table>`);
+  drawAt(article.querySelector("table") as HTMLElement, 50 + 132, 208, 100);
+
+  const wholeBlocks = wholeBlocksIn(article, "table, figure, img", 96);
+
+  assert.equal(wholeBlocks.length, 1);
+  assert.ok(Math.abs((wholeBlocks[0]?.topPixels ?? 0) - 300) < 0.001, "132 drawn pixels is 396 at full size, less the 96 margin");
+  assert.ok(Math.abs((wholeBlocks[0]?.heightPixels ?? 0) - 300) < 0.001);
+});
+
+test("should_leave_out_a_block_inside_another_uncut_block", () => {
+  const article = articleDrawnAtAThird(`<figure><img></figure>`);
+  drawAt(article.querySelector("figure") as HTMLElement, 60, 208, 90);
+  drawAt(article.querySelector("img") as HTMLElement, 62, 208, 80);
+
+  assert.equal(wholeBlocksIn(article, "table, figure, img", 96).length, 1);
+});
+
+test("should_measure_nothing_in_an_article_that_has_not_been_drawn", () => {
+  const undrawnArticle = document.createElement("article");
+  undrawnArticle.innerHTML = `<table></table>`;
+
+  assert.deepEqual(wholeBlocksIn(undrawnArticle, "table", 96), []);
 });

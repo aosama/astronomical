@@ -14,6 +14,33 @@ export interface WholeBlock {
   readonly heightPixels: number;
 }
 
+/**
+ * Where an article's uncut blocks sit in its text at full size. Read from
+ * drawn rectangles, which the preview's transform has scaled, so each is
+ * divided by the scale the article was drawn at. `textInsetPixels` is the
+ * page margin above the text. A block inside another uncut block moves with
+ * it and is left out.
+ */
+export function wholeBlocksIn(article: HTMLElement, wholeBlockSelector: string, textInsetPixels: number): WholeBlock[] {
+  const articleRectangle = article.getBoundingClientRect();
+  const drawnScale = article.offsetWidth > 0 ? articleRectangle.width / article.offsetWidth : 0;
+  if (drawnScale <= 0) {
+    return [];
+  }
+  const wholeBlocks: WholeBlock[] = [];
+  for (const blockElement of article.querySelectorAll<HTMLElement>(wholeBlockSelector)) {
+    if (blockElement.parentElement?.closest(wholeBlockSelector) != null) {
+      continue;
+    }
+    const blockRectangle = blockElement.getBoundingClientRect();
+    wholeBlocks.push({
+      topPixels: (blockRectangle.top - articleRectangle.top) / drawnScale - textInsetPixels,
+      heightPixels: blockRectangle.height / drawnScale,
+    });
+  }
+  return wholeBlocks;
+}
+
 function gapLeftAbove(wholeBlock: WholeBlock, pushedDownPixels: number, pageHeightPixels: number): number {
   const pagedTopPixels = wholeBlock.topPixels + pushedDownPixels;
   const pageStartPixels = Math.floor(pagedTopPixels / pageHeightPixels) * pageHeightPixels;

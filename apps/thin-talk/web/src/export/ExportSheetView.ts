@@ -2,6 +2,7 @@ import { EXPORT_FORMAT_OFFERS, exportFormatOffer } from "./ExportFormat";
 import type { ExportFormat } from "./ExportFormat";
 import type { ExportOptions, ExportScope } from "./ExportOptions";
 import { PREVIEW_FRAME_CLASS, PREVIEW_SCALE, WHOLE_BLOCK_SELECTOR } from "./ExportArticle";
+import { wholeBlocksIn } from "./PageEstimate";
 import type { WholeBlock } from "./PageEstimate";
 
 /** The scope choices the sheet can show; "oneAnswer" only when it was opened
@@ -295,34 +296,10 @@ export class ExportSheetView {
     return this.previewRoot.querySelector<HTMLElement>(".export-article");
   }
 
-  /**
-   * Where the preview's uncut blocks sit in the text at full size. Read from
-   * drawn rectangles, which the preview's transform has scaled, so each is
-   * divided by the scale the article was drawn at. A block inside another
-   * uncut block moves with it and is left out.
-   */
+  /** Where the preview's uncut blocks sit in the text at full size. */
   public previewWholeBlocks(textInsetPixels: number): WholeBlock[] {
     const article = this.previewArticle();
-    if (article === null || article.offsetWidth <= 0) {
-      return [];
-    }
-    const articleRectangle = article.getBoundingClientRect();
-    const drawnScale = articleRectangle.width / article.offsetWidth;
-    if (drawnScale <= 0) {
-      return [];
-    }
-    const wholeBlocks: WholeBlock[] = [];
-    for (const blockElement of article.querySelectorAll<HTMLElement>(WHOLE_BLOCK_SELECTOR)) {
-      if (blockElement.parentElement?.closest(WHOLE_BLOCK_SELECTOR) != null) {
-        continue;
-      }
-      const blockRectangle = blockElement.getBoundingClientRect();
-      wholeBlocks.push({
-        topPixels: (blockRectangle.top - articleRectangle.top) / drawnScale - textInsetPixels,
-        heightPixels: blockRectangle.height / drawnScale,
-      });
-    }
-    return wholeBlocks;
+    return article !== null ? wholeBlocksIn(article, WHOLE_BLOCK_SELECTOR, textInsetPixels) : [];
   }
 
   public setSaving(isSaving: boolean, idleLabel: string): void {
