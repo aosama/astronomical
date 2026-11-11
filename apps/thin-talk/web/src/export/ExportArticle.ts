@@ -39,6 +39,21 @@ a { color: #5a33b8; }
 p.export-note { color: #6a6761; font-size: 9pt; margin-top: 24pt; }
 `;
 
+/** WebKit lays a printed page out 1.25 times wider than the paper's text
+ * column and shrinks the drawing to fit, so a CSS pixel prints as 0.8 of a
+ * point where it should be 0.75. Every size came out sixteen fifteenths too
+ * large: an 11-point body was 11.73 points on paper, lines wrapped sooner and
+ * pages broke earlier than the preview, which draws the true sizes. Zooming
+ * the printed body by fifteen sixteenths makes a point on paper a point.
+ * Scaling the host's print job by the same factor was tried first and cut
+ * tables and diagrams across pages: the engine and the print system then
+ * disagreed on where a page ends. */
+export const PRINT_TRUE_SIZE_ZOOM = 15 / 16;
+
+/** What a printed page never cuts in two. The page estimate reads the same
+ * list, so the count the sheet shows follows the breaks the printer makes. */
+export const WHOLE_BLOCK_SELECTOR = `pre, table, figure, img, .${KEPT_TOGETHER_CLASS}`;
+
 /** Rules only a browser reads, on screen or when the host prints the PDF.
  * Word is given neither a font (it keeps its own default, which exists on
  * the machine that opens the file) nor page-break hints it would not follow. */
@@ -46,10 +61,10 @@ export const PAGE_ONLY_EXPORT_RULES = `
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body { margin: 0; background: #ffffff; }
 .export-article { max-width: 6.5in; margin: 0 auto; padding: 0.6in 0.5in; font-family: -apple-system, "Helvetica Neue", "Segoe UI", Arial, sans-serif; }
-@media print { .export-article { max-width: none; margin: 0; padding: 0; } }
+@media print { .export-article { max-width: none; margin: 0; padding: 0; } body { zoom: ${PRINT_TRUE_SIZE_ZOOM}; } }
 pre, code { font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace; }
 h1, h2, h3, h4 { break-after: avoid; }
-pre, table, figure, img, .${KEPT_TOGETHER_CLASS} { break-inside: avoid; }
+${WHOLE_BLOCK_SELECTOR} { break-inside: avoid; }
 figure { margin: 10pt 0; }
 img { max-width: 100%; height: auto; }
 .export-picture img { max-width: 4.5in; border-radius: 4pt; }

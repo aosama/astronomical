@@ -47,7 +47,7 @@ test("should_preview_on_the_printed_pages_text_column_and_margins", () => {
 
   assert.match(previewMarkup, /\.export-article\{box-sizing:content-box;max-width:none;width:6\.5in;margin:0;padding:1in\}/);
   assert.match(previewMarkup, /\.export-preview-scaler\{width:8\.5in;transform:scale\(0\.3\);transform-origin:0 0\}/);
-  assert.doesNotMatch(previewMarkup, /zoom:/, "zoomed text is held to WebKit's minimum size and wraps wrongly");
+  assert.doesNotMatch(previewMarkup.replace(/@media print \{.*?\} \}/s, ""), /zoom:/, "zoomed text is held to WebKit's minimum size and wraps wrongly");
   assert.ok(previewMarkup.lastIndexOf("width:6.5in") > previewMarkup.lastIndexOf("max-width: 6.5in"), "the page geometry overrides the screen layout");
   assert.match(previewMarkup, /<article class="export-article">/);
 });
@@ -98,4 +98,14 @@ test("should_give_word_the_article_without_page_groups_and_leave_the_body_untouc
 
   assert.doesNotMatch(exportArticleHtml(content), /export-keep/);
   assert.equal(content.entries[0]?.body.innerHTML, `<h2>Flowchart</h2><p>Text.</p>`);
+});
+
+// The printed PDF drew a 22-point title at 23.47 points and broke pages
+// before the preview did; the host's print test pins the engine side.
+test("should_zoom_the_printed_body_so_sizes_on_paper_are_the_sizes_asked_for", () => {
+  const page = standaloneExportPage(contentWithTitle("Mitosis", null));
+
+  assert.match(page, /@media print \{[^@]*body \{ zoom: 0\.9375; \} \}/);
+  assert.doesNotMatch(page.replace(/@media print \{.*?\} \}/s, ""), /zoom:/, "the page on screen is not zoomed");
+  assert.doesNotMatch(exportPreviewMarkup(contentWithTitle("Mitosis", null)).replace(/@media print \{.*?\} \}/s, ""), /zoom:/);
 });

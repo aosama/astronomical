@@ -10,6 +10,7 @@ import type { ExportScopeKind, ExportSheetFacts, ExportToggle } from "./ExportSh
 import { exportSaveRequest } from "./ExportWriter";
 import { rasteriseDiagramOnCanvas } from "./DiagramRasteriser";
 import type { DiagramRasteriser } from "./DiagramRasteriser";
+import { pagedTextHeightPixels } from "./PageEstimate";
 
 const CSS_PIXELS_PER_INCH = 96;
 /** The height of text on a printed Letter page: eleven inches less the two
@@ -157,13 +158,19 @@ export class ExportSheet {
     }
   }
 
-  /** The preview's text height at full size. Measured once its pictures have
+  /** The preview's text height at full size, with the gaps left by blocks
+   * that move whole to the next page. Measured once its pictures have
    * loaded: a picture still loading has no height, and the count then jumped
    * by a page as it arrived. */
   private measuredTextHeightPixels(): number {
     // Layout sizes, which a transform does not change: the page at full size.
     const previewArticle = this.view.previewArticle();
-    return previewArticle !== null ? previewTextHeightPixels(previewArticle.offsetWidth, previewArticle.offsetHeight) : 0;
+    if (previewArticle === null) {
+      return 0;
+    }
+    const flowingHeightPixels = previewTextHeightPixels(previewArticle.offsetWidth, previewArticle.offsetHeight);
+    const wholeBlocks = this.view.previewWholeBlocks(PRINTED_MARGIN_INCHES * CSS_PIXELS_PER_INCH);
+    return pagedTextHeightPixels(flowingHeightPixels, wholeBlocks, PRINTED_TEXT_HEIGHT_PIXELS);
   }
 
   private async save(): Promise<void> {
