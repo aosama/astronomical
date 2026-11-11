@@ -24,6 +24,30 @@ final class ChatWindowControllerTests: XCTestCase {
     XCTAssertEqual(window.title, "Thin Talk Development")
   }
 
+  /// A rebuild in the middle of other work must not take the screen: the
+  /// window is on screen, so it can be looked at, but it is not the key window.
+  func test_should_show_the_window_at_launch_without_taking_the_keyboard_when_launched_behind() throws {
+    try bootstrap()
+    defer { cleanup() }
+
+    controller.showChatWindowAtLaunch(.behindOtherWindows)
+
+    let window = try XCTUnwrap(chatWindow())
+    XCTAssertTrue(window.isVisible)
+    XCTAssertFalse(window.isKeyWindow, "a background launch must not take the keyboard")
+  }
+
+  func test_should_read_the_launch_placement_from_the_launch_arguments() {
+    XCTAssertEqual(ChatLaunchPlacement.fromLaunchArguments(["/app/astronomical-app"]), .inFront)
+    XCTAssertEqual(
+      ChatLaunchPlacement.fromLaunchArguments(["/app/astronomical-app", "--launch-in-background"]), .behindOtherWindows)
+    XCTAssertEqual(ChatLaunchPlacement.fromLaunchArguments([]), .inFront)
+    XCTAssertEqual(
+      ChatLaunchPlacement.fromLaunchArguments(["--launch-in-background"]), .inFront,
+      "the first argument is the program's own name, never an option")
+    XCTAssertEqual(ChatLaunchPlacement.fromLaunchArguments(["/app/astronomical-app", "--background"]), .inFront)
+  }
+
   /// "Your Astro…" opens the same chat window; the page then opens Your Astro
   /// once it has loaded.
   func test_should_present_the_chat_window_for_your_astro() throws {

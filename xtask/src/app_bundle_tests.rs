@@ -7,12 +7,13 @@ use super::bundle_assembly::{BundleInputs, missing_inputs};
 use super::bundle_check::daemon_version_matches;
 use super::channel_profile::{Channel, ChannelProfile, SandboxPolicy};
 use super::code_signing::{SigningRequest, signing_plan};
-use super::command::{AppCommand, PlistSubject, parse_app_command};
+use super::command::{AppCommand, DevOpenPlacement, PlistSubject, parse_app_command};
 use super::dev_pipeline::DevPipelinePaths;
 use super::icon_cache::cached_icon_file_name;
 use super::info_plist::{escape_xml_text, render_info_plist};
 use super::instance_control::{InstanceAction, status_report_lines};
 use super::native_metallib::metallib_store_path;
+use super::running_instance::open_bundle_arguments;
 use super::step_reporter::estimate_remaining_seconds;
 
 fn sample_build_identity(is_dirty: bool) -> BuildIdentity {
@@ -331,7 +332,16 @@ fn should_match_the_daemon_version_only_with_this_builds_version_and_commit() {
 
 #[test]
 fn should_parse_the_app_subcommands() {
-    assert_eq!(parse_app_command(&arguments(&["dev"])), Ok(AppCommand::Dev));
+    assert_eq!(
+        parse_app_command(&arguments(&["dev"])),
+        Ok(AppCommand::Dev(DevOpenPlacement::InFront))
+    );
+    assert_eq!(
+        parse_app_command(&arguments(&["dev", "--background"])),
+        Ok(AppCommand::Dev(DevOpenPlacement::InBackground))
+    );
+    assert!(parse_app_command(&arguments(&["dev", "--background", "--background"])).is_err());
+    assert!(parse_app_command(&arguments(&["dev", "--front"])).is_err());
     assert_eq!(
         parse_app_command(&arguments(&["info-plist", "--channel", "stable"])),
         Ok(AppCommand::InfoPlist(
@@ -622,4 +632,26 @@ fn should_pass_an_sdk_path_with_spaces_as_one_argument() {
         Some("/Applications/Xcode Beta.app/SDKs/MacOSX.sdk")
     );
     assert!(arguments.contains(&"astronomical-app-app-store".to_string()));
+}
+
+/// `open -g` launches the app inactive, but the app raises its own window
+/// unless the launch argument tells it not to, so a background open needs
+/// both; a normal open needs neither.
+#[test]
+fn should_open_the_dev_app_behind_other_windows_only_when_asked() {
+    let bundle_path = Path::new("/builds/Astronomical Development.app");
+
+    assert_eq!(
+        open_bundle_arguments(bundle_path, DevOpenPlacement::InFront),
+        vec![std::ffi::OsString::from(bundle_path)]
+    );
+    assert_eq!(
+        open_bundle_arguments(bundle_path, DevOpenPlacement::InBackground),
+        vec![
+            std::ffi::OsString::from("-g"),
+            std::ffi::OsString::from(bundle_path),
+            std::ffi::OsString::from("--args"),
+            std::ffi::OsString::from("--launch-in-background"),
+        ]
+    );
 }

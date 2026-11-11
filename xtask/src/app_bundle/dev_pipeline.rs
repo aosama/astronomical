@@ -17,6 +17,7 @@ use super::bundle_assembly::{BundleInputs, BundlePlists, assemble_bundle, missin
 use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{SigningRequest, sign_bundle};
+use super::command::DevOpenPlacement;
 use super::icon_cache::cached_channel_icon;
 use super::info_plist::{render_agent_info_plist, render_info_plist};
 use super::native_metallib::packaged_metallib_source;
@@ -63,7 +64,10 @@ impl DevPipelinePaths {
     }
 }
 
-pub(crate) fn run_dev_pipeline(repository_root: &Path) -> Result<(), String> {
+pub(crate) fn run_dev_pipeline(
+    repository_root: &Path,
+    open_placement: DevOpenPlacement,
+) -> Result<(), String> {
     let channel_profile = ChannelProfile::for_channel(Channel::Development);
     let pipeline_paths = DevPipelinePaths::for_profile(repository_root, &channel_profile);
     create_directory(&pipeline_paths.cache_directory)?;
@@ -90,6 +94,7 @@ pub(crate) fn run_dev_pipeline(repository_root: &Path) -> Result<(), String> {
         &channel_profile,
         &build_identity,
         &pipeline_paths,
+        open_placement,
         &mut step_reporter,
     )?;
     step_reporter.save_timings();
@@ -144,6 +149,7 @@ fn run_bundle_steps(
     channel_profile: &ChannelProfile,
     build_identity: &BuildIdentity,
     pipeline_paths: &DevPipelinePaths,
+    open_placement: DevOpenPlacement,
     step_reporter: &mut StepReporter,
 ) -> Result<(), String> {
     step_reporter.start_step("assemble-and-sign");
@@ -178,7 +184,7 @@ fn run_bundle_steps(
     quit_bundled_applications(channel_profile)?;
     swap_in_staged_bundle(pipeline_paths)?;
     wait_for_daemon_exit(channel_profile)?;
-    open_bundle(&pipeline_paths.bundle_path)?;
+    open_bundle(&pipeline_paths.bundle_path, open_placement)?;
     step_reporter.finish_step();
     Ok(())
 }
