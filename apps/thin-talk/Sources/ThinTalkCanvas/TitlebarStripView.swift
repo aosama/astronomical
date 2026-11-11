@@ -33,20 +33,17 @@ public enum TitlebarDoubleClickAction: Equatable, Sendable {
 /// The window's title bar strip, laid over the top of the conversation page.
 ///
 /// The window draws its content under a transparent title bar, and the
-/// conversation scrolls up under the strip on purpose. But AppKit only sends
-/// clicks in that strip to the title bar where nothing else is there; over
-/// the page, the web view took them, so a double-click selected a word
-/// instead of zooming the window and a drag selected text instead of moving
+/// conversation scrolls up under the strip on purpose. Over the page, the web
+/// view received the clicks in that strip: a double-click selected a word
+/// instead of zooming the window, and a drag selected text instead of moving
 /// it. This view sits above the web view and does what a title bar does. The
 /// toolbar's buttons live above the content view entirely and are unaffected.
 final class TitlebarStripView: NSView {
-  /// Read on every double-click, so a change in System Settings applies at once.
-  var doubleClickAction: () -> TitlebarDoubleClickAction = { TitlebarDoubleClickAction.current() }
-
   override func mouseDown(with event: NSEvent) {
     guard let window else { return }
     if event.clickCount >= 2 {
-      switch doubleClickAction() {
+      // Read on every double-click, so a change in System Settings applies at once.
+      switch TitlebarDoubleClickAction.current() {
       case .zoom: window.performZoom(nil)
       case .minimize: window.performMiniaturize(nil)
       case .doNothing: break

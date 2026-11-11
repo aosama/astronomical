@@ -10,7 +10,8 @@
 
 /*
  * Under a native toolbar the window's title bar strip overlays the top of the
- * page and takes the clicks there (that strip is what drags the window). The
+ * page and takes the clicks there: it drags and zooms the window. Over the
+ * page that is TitlebarStripView.swift, laid above the web view. The
  * sidebar starts below it. The conversation does not: its scroll area runs to
  * the window's top edge, so text scrolls up under the strip the way it does
  * in Apple's own chat apps, and only its opening padding clears the strip so
