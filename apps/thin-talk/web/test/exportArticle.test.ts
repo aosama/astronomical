@@ -80,11 +80,63 @@ test("should_group_every_heading_in_an_answer_not_only_the_first", () => {
   assert.equal(page.split(`<div class="export-keep">`).length - 1, 2);
 });
 
-test("should_not_hold_a_whole_list_to_its_heading", () => {
-  const page = standaloneExportPage(contentWithAnswerMarkup(`<h2>Steps</h2><ul><li>One</li></ul>`));
+test("should_not_hold_a_long_list_to_its_heading_or_keep_it_whole", () => {
+  const sevenItems = "<li>Step</li>".repeat(7);
+  const page = standaloneExportPage(contentWithAnswerMarkup(`<h2>Steps</h2><ul>${sevenItems}</ul>`));
 
-  assert.match(page, /<div class="export-answer"><h2>Steps<\/h2><ul>/);
+  assert.match(page, /<div class="export-answer"><h2>Steps<\/h2><ul><li>/);
+  assert.doesNotMatch(page, /class="export-keep"/);
 });
+
+// A three-item checklist printed two items at the foot of one page and the
+// third at the top of the next.
+test("should_keep_a_short_list_whole_alone_or_under_its_heading", () => {
+  const sixItems = "<li>Step</li>".repeat(6);
+  const underHeading = standaloneExportPage(contentWithAnswerMarkup(`<h2>Checklist</h2><ul>${sixItems}</ul><p>After.</p>`));
+  const alone = standaloneExportPage(contentWithAnswerMarkup(`<p>Before.</p><ol>${sixItems}</ol>`));
+
+  assert.match(underHeading, /<div class="export-keep"><h2>Checklist<\/h2><ul>.*<\/ul><\/div><p>After\.<\/p>/);
+  assert.match(alone, /<p>Before\.<\/p><ol class="export-keep">/);
+});
+
+test("should_treat_a_list_with_few_items_but_much_text_as_long", () => {
+  const wordyItem = `<li>${"word ".repeat(70)}</li>`;
+  const page = standaloneExportPage(contentWithAnswerMarkup(`<ul>${wordyItem}${wordyItem}</ul>`));
+
+  assert.doesNotMatch(page, /class="export-keep"/);
+});
+
+// "…packed into a given volume:" ended one page and its formula began the next.
+test("should_keep_a_sentence_ending_in_a_colon_with_the_block_it_leads_into", () => {
+  const page = standaloneExportPage(contentWithAnswerMarkup(`<p>Intro.</p><p>The density is:</p><math display="block"></math><p>Where m is mass.</p>`));
+
+  assert.match(page, /<p>Intro\.<\/p><div class="export-keep"><p>The density is:<\/p><math display="block"><\/math><\/div><p>Where m is mass\.<\/p>/);
+});
+
+test("should_keep_a_heading_its_lead_in_sentence_and_the_block_after_it_as_one_group", () => {
+  const page = standaloneExportPage(contentWithAnswerMarkup(`<h2>Density</h2><p>The formula is:</p><math display="block"></math><p>After.</p>`));
+
+  assert.match(page, /<div class="export-keep"><h2>Density<\/h2><p>The formula is:<\/p><math display="block"><\/math><\/div><p>After\.<\/p>/);
+  assert.equal(page.split(`class="export-keep"`).length - 1, 1, "one group, not one inside another");
+});
+
+test("should_leave_a_lead_in_sentence_alone_before_a_long_list_a_heading_or_nothing", () => {
+  const sevenItems = "<li>Step</li>".repeat(7);
+  const beforeLongList = standaloneExportPage(contentWithAnswerMarkup(`<p>Do these:</p><ul>${sevenItems}</ul>`));
+  const beforeHeading = standaloneExportPage(contentWithAnswerMarkup(`<p>Next:</p><h2>Part two</h2>`));
+  const atTheEnd = standaloneExportPage(contentWithAnswerMarkup(`<p>Text.</p><p>In short:</p>`));
+
+  for (const page of [beforeLongList, beforeHeading, atTheEnd]) {
+    assert.doesNotMatch(page, /class="export-keep"/);
+  }
+});
+
+test("should_not_take_a_colon_inside_a_sentence_for_a_lead_in", () => {
+  const page = standaloneExportPage(contentWithAnswerMarkup(`<p>Note: water boils at 100 degrees.</p><p>More.</p>`));
+
+  assert.doesNotMatch(page, /class="export-keep"/);
+});
+
 
 test("should_leave_a_heading_with_nothing_after_it_ungrouped", () => {
   const page = standaloneExportPage(contentWithAnswerMarkup(`<p>Text.</p><h2>The end</h2>`));

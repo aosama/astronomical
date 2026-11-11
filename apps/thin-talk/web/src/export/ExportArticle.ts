@@ -1,7 +1,7 @@
 import type { ExportContent, ExportEntry } from "./ExportContentBuilder";
 import { PRINTED_MARGIN_INCHES, textWidthInches } from "./PaperSize";
 import type { PaperSize } from "./PaperSize";
-import { KEPT_TOGETHER_CLASS, markupKeepingHeadingsWithTheirBlocks } from "./HeadingKeeper";
+import { KEPT_TOGETHER_CLASS, markupKeepingBlocksTogether } from "./KeptTogether";
 
 /**
  * The exported document as HTML, and the one stylesheet that dresses it.
@@ -90,8 +90,8 @@ export function escapeExportText(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** How an entry's body becomes markup: as it is for Word, or with headings
- * grouped with their blocks for a page a browser breaks. */
+/** How an entry's body becomes markup: as it is for Word, or with the
+ * blocks that belong on one page grouped, for a page a browser breaks. */
 type EntryBodyMarkup = (body: HTMLElement) => string;
 
 function plainBodyMarkup(body: HTMLElement): string {
@@ -127,7 +127,7 @@ export function exportArticleHtml(content: ExportContent): string {
 /** The article for a page a browser lays out and breaks: the preview, the
  * saved web page and the page printed as the PDF. */
 function pagedArticleHtml(content: ExportContent): string {
-  return articleHtml(content, markupKeepingHeadingsWithTheirBlocks);
+  return articleHtml(content, markupKeepingBlocksTogether);
 }
 
 /** The preview draws the page at this fraction of its size. */
