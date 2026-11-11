@@ -16,6 +16,15 @@ import { ClassicMessageChrome } from "./MessageChrome";
 import type { MessageChrome } from "./MessageChrome";
 import { AstroMessageChrome } from "./astro/AstroMessageChrome";
 
+/** The `data-action` of a code block's Copy button, read by the transcript. */
+export const COPY_CODE_ACTION = "copy-code";
+/** The `data-action`s of the two buttons under a generated picture. */
+export const SAVE_IMAGE_ACTION = "save-image";
+export const COPY_IMAGE_ACTION = "copy-image";
+/** The class of the strip holding a code block's language and Copy button. It
+ * is page chrome, so copying an answer leaves it out. */
+export const CODE_BLOCK_TOOLS_CLASS = "code-block__tools";
+
 /** The longest prompt excerpt used in an image's text alternative; a screen
  * reader reads the whole attribute, and prompts can run to paragraphs. */
 const MAXIMUM_IMAGE_DESCRIPTION_PROMPT_CHARACTERS = 250;
@@ -177,9 +186,17 @@ export class Renderer {
       return "";
     }
     const imageDescription = this.trust.escapeHtml(generatedImageDescription(toolStep.argumentsJSON));
+    // A picture is made to be kept or sent to someone, so the two ways out of
+    // the conversation sit right under it. The buttons carry the stored name,
+    // which the host checks before it touches a file.
+    const storedImageName = this.trust.escapeHtml(toolStep.generatedImageName ?? "");
     return (
       `<figure class="generated-image" data-testid="generated-image:${this.trust.escapeHtml(toolStep.toolCallID)}">` +
       `<img src="${this.trust.escapeHtml(imageSource)}" alt="${imageDescription}" loading="lazy">` +
+      `<figcaption class="generated-image__actions">` +
+      `<button type="button" class="message__action" data-action="${SAVE_IMAGE_ACTION}" data-image-name="${storedImageName}">Save…</button>` +
+      `<button type="button" class="message__action" data-action="${COPY_IMAGE_ACTION}" data-image-name="${storedImageName}">Copy picture</button>` +
+      `</figcaption>` +
       `</figure>`
     );
   }
@@ -286,6 +303,10 @@ export class Renderer {
     });
   }
 
+  /** Wraps every fenced block with its tools: the language, when the fence
+   * named one, and a Copy button for the code alone. People copy a script far
+   * more often than a whole answer, and selecting it by hand drags in the
+   * prose around it. */
   public labelCodeBlocks(root: ParentNode): void {
     root.querySelectorAll("pre > code").forEach((codeBlock) => {
       const pre = codeBlock.parentElement;
@@ -300,17 +321,25 @@ export class Renderer {
       const languageMatch: RegExpMatchArray | null =
         (codeBlock as HTMLElement).className.match(/language-([\w+#-]+)/);
       const language = languageMatch != null ? languageMatch[1] : undefined;
-      if (!language) {
-        return;
-      }
       const codeBlockWrapper = document.createElement("div");
       codeBlockWrapper.className = "code-block";
-      const languageLabel = document.createElement("span");
-      languageLabel.className = "code-block__label";
-      languageLabel.textContent = language;
+      const codeBlockTools = document.createElement("div");
+      codeBlockTools.className = CODE_BLOCK_TOOLS_CLASS;
+      if (language) {
+        const languageLabel = document.createElement("span");
+        languageLabel.className = "code-block__label";
+        languageLabel.textContent = language;
+        codeBlockTools.appendChild(languageLabel);
+      }
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "code-block__copy";
+      copyButton.dataset.action = COPY_CODE_ACTION;
+      copyButton.textContent = "Copy";
+      codeBlockTools.appendChild(copyButton);
       pre.parentElement.insertBefore(codeBlockWrapper, pre);
       codeBlockWrapper.appendChild(pre);
-      codeBlockWrapper.appendChild(languageLabel);
+      codeBlockWrapper.appendChild(codeBlockTools);
     });
   }
 

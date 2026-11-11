@@ -231,6 +231,26 @@ async fn should_return_a_service_unavailable_error_body_when_the_worker_becomes_
 }
 
 #[tokio::test]
+async fn should_report_out_of_graphics_memory_with_its_own_code_for_a_non_streaming_chat() {
+    let application = build_application(ScriptedExecutor::ready(vec![
+        ChatGenerationStreamEvent::Failed {
+            reason: ChatGenerationFailureReason::OutOfGraphicsMemory,
+        },
+    ]));
+
+    let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
+
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    let response_document: serde_json::Value =
+        serde_json::from_str(&response_body).expect("the out-of-memory body should be JSON");
+    assert_eq!(response_document["error"]["code"], "chat_out_of_memory");
+    assert_eq!(
+        response_document["error"]["message"],
+        "this Mac ran out of graphics memory while running the model; close other apps that use a lot of memory, or use a smaller model"
+    );
+}
+
+#[tokio::test]
 async fn should_report_fatal_worker_execution_as_unavailable_for_a_non_streaming_chat() {
     let bounded_fatal_execution_reason =
         "GPU allocation exceeded the platform buffer limit; reduce the prompt size";

@@ -101,8 +101,23 @@ pub(crate) fn failure_error(failure_reason: &ChatGenerationFailureReason) -> Ant
         ChatGenerationFailureReason::EngineBusy => {
             AnthropicError::overloaded("the local worker is busy with another request")
         }
-        other_failure_reason => AnthropicError::api_error(format!(
-            "the local worker could not generate the message: {other_failure_reason:?}"
-        )),
+        terminal_failure_reason => {
+            AnthropicError::api_error(terminal_failure_message(terminal_failure_reason))
+        }
+    }
+}
+
+/// The sentence for a failure that neither a retry nor a shorter prompt
+/// fixes. Running out of graphics memory is one of these on purpose, and not
+/// `overloaded`: Anthropic clients retry that on their own, and a retry
+/// reloads the model only to run out of memory again.
+fn terminal_failure_message(terminal_failure_reason: &ChatGenerationFailureReason) -> String {
+    match terminal_failure_reason {
+        ChatGenerationFailureReason::OutOfGraphicsMemory => {
+            astronomical_ipc_protocol::OUT_OF_GRAPHICS_MEMORY_ADVICE.to_owned()
+        }
+        other_failure_reason => {
+            format!("the local worker could not generate the message: {other_failure_reason:?}")
+        }
     }
 }

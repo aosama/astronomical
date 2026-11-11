@@ -9,6 +9,7 @@ export class ChatFailureClassifier {
   /** Classifies a human-readable reason (from an HTTP body or an error chunk). */
   public static classifyReason(rawReason: string): ChatFailureKind {
     const reason = rawReason.toLowerCase();
+    if (reason.includes("chat_out_of_memory")) return ChatFailureKind.OUT_OF_MEMORY;
     if (reason.includes("model_not_found")) return ChatFailureKind.NO_USABLE_MODEL;
     if (reason.includes("model_load_failed")) return ChatFailureKind.MODEL_LOAD_FAILED;
     if (reason.includes("chat_malformed_model_output")) return ChatFailureKind.MALFORMED_MODEL_OUTPUT;
@@ -20,6 +21,18 @@ export class ChatFailureClassifier {
       return ChatFailureKind.INVALID_REQUEST;
     }
     return ChatFailureKind.UNKNOWN;
+  }
+
+  /** Classifies a streaming error chunk. The daemon sends its public code in
+   * a field of its own, beside the sentence meant for people, so the code is
+   * read first: classifying the sentence alone left every streamed failure
+   * unrecognised, and the person was shown the engine's raw wording. */
+  public static classifyErrorChunk(errorCode: string | null, errorMessage: string | null): ChatFailureKind {
+    const codeKind = errorCode !== null ? ChatFailureClassifier.classifyReason(errorCode) : ChatFailureKind.UNKNOWN;
+    if (codeKind !== ChatFailureKind.UNKNOWN) {
+      return codeKind;
+    }
+    return ChatFailureClassifier.classifyReason(errorMessage !== null ? errorMessage : "");
   }
 
   public static classify(status: number, reason: string): ChatFailureKind {

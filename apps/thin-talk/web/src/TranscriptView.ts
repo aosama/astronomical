@@ -1,4 +1,4 @@
-import { Renderer } from "./Renderer";
+import { CODE_BLOCK_TOOLS_CLASS, COPY_CODE_ACTION, COPY_IMAGE_ACTION, Renderer, SAVE_IMAGE_ACTION } from "./Renderer";
 import { TranscriptMessage } from "./TranscriptMessage";
 import { TranscriptAction } from "./TranscriptAction";
 import { ChatRole } from "./ChatRole";
@@ -6,6 +6,9 @@ import { ChatMessageState } from "./ChatMessageState";
 import { reasoningDisclosureIdentifier } from "./ReasoningDisclosure";
 import type { TranscriptPersona } from "./TranscriptPersona";
 import morphdom from "morphdom";
+
+/** Long enough to read, short enough that a second copy is not held up. */
+const COPIED_CONFIRMATION_MILLISECONDS = 1500;
 
 /** The transcript half of one surface refresh. */
 export interface TranscriptSnapshot {
@@ -213,7 +216,15 @@ export class TranscriptView {
     // buttons; reading the whole article's text would paste that chrome into
     // the clipboard alongside the reply.
     const answerBody = article.querySelector(".markdown-body");
-    const answerText = answerBody != null ? answerBody.textContent : null;
+    if (answerBody == null) {
+      return "";
+    }
+    // A code block's language and Copy button sit inside the body, so they are
+    // taken out of a copy of it: reading the body as it stands pasted
+    // "pythonCopy" after every script.
+    const copiedBody = answerBody.cloneNode(true) as Element;
+    copiedBody.querySelectorAll(`.${CODE_BLOCK_TOOLS_CLASS}`).forEach((codeBlockTools) => codeBlockTools.remove());
+    const answerText = copiedBody.textContent;
     return answerText != null ? answerText : "";
   }
 
@@ -419,6 +430,17 @@ export class TranscriptView {
 
   // MARK: - Interaction
 
+  /** Says "Copied" on the button for a moment. The pasteboard is the host's,
+   * so nothing else on the page shows that the click did anything. */
+  private static confirmCopied(copyButton: Element): void {
+    const restingLabel = copyButton.getAttribute("data-resting-label") ?? copyButton.textContent ?? "Copy";
+    copyButton.setAttribute("data-resting-label", restingLabel);
+    copyButton.textContent = "Copied";
+    setTimeout(() => {
+      copyButton.textContent = restingLabel;
+    }, COPIED_CONFIRMATION_MILLISECONDS);
+  }
+
   private handleClick(event: MouseEvent): void {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -435,6 +457,21 @@ export class TranscriptView {
           messageID = storedMessageID != null ? storedMessageID : "";
         }
         this.onAction(new TranscriptAction({ kind: "copy", messageID, detail: "" }));
+        TranscriptView.confirmCopied(actionButton);
+      }
+      if (kind === SAVE_IMAGE_ACTION || kind === COPY_IMAGE_ACTION) {
+        const storedImageName = actionButton.getAttribute("data-image-name") ?? "";
+        this.onAction(
+          new TranscriptAction({ kind: kind === SAVE_IMAGE_ACTION ? "saveImage" : "copyImage", messageID: "", detail: storedImageName }),
+        );
+        if (kind === COPY_IMAGE_ACTION) {
+          TranscriptView.confirmCopied(actionButton);
+        }
+      }
+      if (kind === COPY_CODE_ACTION) {
+        const copiedCode = actionButton.closest(".code-block")?.querySelector("pre > code")?.textContent ?? "";
+        this.onAction(new TranscriptAction({ kind: "copy", messageID: "", detail: copiedCode }));
+        TranscriptView.confirmCopied(actionButton);
       }
       return;
     }

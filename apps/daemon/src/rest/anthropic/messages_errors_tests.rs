@@ -72,6 +72,24 @@ fn should_map_worker_failures_onto_retryable_or_terminal_errors() {
     );
 }
 
+/// Running out of graphics memory must not look retryable: an Anthropic
+/// client that retries would reload the model and fail the same way.
+#[test]
+fn should_report_out_of_graphics_memory_as_terminal_with_advice() {
+    let out_of_memory_error = failure_error(&ChatGenerationFailureReason::OutOfGraphicsMemory);
+
+    assert_eq!(
+        error_type_and_status(&out_of_memory_error),
+        (AnthropicErrorType::ApiError, 500)
+    );
+    assert!(
+        out_of_memory_error
+            .message
+            .contains("ran out of graphics memory")
+    );
+    assert!(out_of_memory_error.message.contains("use a smaller model"));
+}
+
 #[test]
 fn should_word_context_overflow_the_way_anthropic_clients_match_it() {
     let overflow_error = failure_error(&ChatGenerationFailureReason::ContextLengthExceeded {

@@ -4,8 +4,12 @@ import type { ModelDescription } from "./ModelDescription";
 
 /** The failure banner's content, or null when no failure is showing. */
 export interface ComposerFailure {
+  /** What happened, in plain words. */
   message: string;
   nextAction: string;
+  /** The engine's own sentence, for the banner's tooltip; null when the
+   * message already is that sentence or the engine gave none. */
+  detail: string | null;
 }
 
 /**

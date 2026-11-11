@@ -74,7 +74,14 @@ export function bootChatClient(): AppShell {
     onAction: (action) => {
       if (action.kind === "copy") {
         // The host owns the pasteboard, so the text travels in the action detail.
-        host.postAction("copy", action.messageID, transcript.renderedText(action.messageID));
+        // A code block's Copy button brings its own text; a message's Copy
+        // button asks for the whole rendered answer.
+        const copiedText = action.detail.length > 0 ? action.detail : transcript.renderedText(action.messageID);
+        host.postAction("copy", action.messageID, copiedText);
+        return;
+      }
+      if (action.kind === "saveImage" || action.kind === "copyImage") {
+        host.postAction(action.kind === "saveImage" ? "saveGeneratedImage" : "copyGeneratedImage", "", action.detail);
         return;
       }
       host.postAction("openExternal", "", action.detail);

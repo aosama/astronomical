@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { waitFor } from "./support/dom";
 import { ENGINE_PATIENCE } from "../src/astro/EngineWatch";
-import { bootJourney, MET_ASTRO_PROFILE } from "./support/journey";
+import { bootJourney, MET_ASTRO_PROFILE, sendUserMessage, waitUntilReady } from "./support/journey";
 import type { Journey } from "./support/journey";
 
 // Astro's first flight and home, driven the way a person would: through the
@@ -334,3 +334,39 @@ test("should_offer_a_brain_on_home_once_an_engine_that_was_starting_answers", as
     ENGINE_PATIENCE.askEveryMilliseconds = savedAskEvery;
   }
 });
+
+/** Every hint the message field shows from now on, in order. The reply of the
+ * fake engine is over within a few milliseconds, so the hint shown while it
+ * streams is recorded as it changes rather than looked for afterwards. */
+function recordPlaceholders(): string[] {
+  const shownPlaceholders: string[] = [];
+  const placeholderObserver = new window.MutationObserver(() => shownPlaceholders.push(composerField().placeholder));
+  placeholderObserver.observe(composerField(), { attributes: true, attributeFilter: ["placeholder"] });
+  return shownPlaceholders;
+}
+
+// The field says "Ask Astro anything" while idle, so it must not start calling
+// the same assistant "Thin Talk" the moment an answer begins to stream.
+test("should_name_the_same_assistant_in_the_hint_while_an_answer_streams", async () => {
+  const journeys = [
+    { astroProfile: MET_ASTRO_PROFILE, queueingHint: "Add a message; Astro reads it next", idleHint: "Ask Astro anything" },
+    { astroProfile: { ...MET_ASTRO_PROFILE, isAstroShown: false }, queueingHint: "Add a message; Thin Talk reads it next", idleHint: "Message Thin Talk" },
+  ];
+  for (const journey of journeys) {
+    const { host } = bootJourney(undefined, { astroProfile: journey.astroProfile });
+    await waitUntilReady();
+    await waitFor(() => composerField().placeholder === journey.idleHint, `the idle hint "${journey.idleHint}"`);
+    assert.equal(composerField().getAttribute("aria-label"), journey.idleHint, "VoiceOver hears the name the field shows");
+    const shownPlaceholders = recordPlaceholders();
+
+    sendUserMessage("What is mitosis?");
+    await waitFor(() => host.fileCount() === 1, "the finished turn to be saved");
+    await waitFor(() => composerField().placeholder === journey.idleHint, "the idle hint to come back");
+
+    assert.ok(shownPlaceholders.includes(journey.queueingHint), `${JSON.stringify(shownPlaceholders)} should include "${journey.queueingHint}"`);
+    assert.ok(
+      !shownPlaceholders.some((placeholder) => placeholder.endsWith("reads it next") && placeholder !== journey.queueingHint),
+      `no other assistant is named: ${JSON.stringify(shownPlaceholders)}`,
+    );
+  }
+}, { timeout: 30_000 });

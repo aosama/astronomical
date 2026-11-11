@@ -9,6 +9,8 @@ export enum ChatFailureKind {
   NO_USABLE_MODEL = "noUsableModel",
   /** The selected model will not load, including the memory-ceiling refusal. */
   MODEL_LOAD_FAILED = "modelLoadFailed",
+  /** The Mac ran out of graphics memory while the model was running. */
+  OUT_OF_MEMORY = "outOfMemory",
   /** The daemon is unavailable or not ready to serve requests. */
   WORKER_UNAVAILABLE = "workerUnavailable",
   /** Another request already owns the worker's bounded capacity. */

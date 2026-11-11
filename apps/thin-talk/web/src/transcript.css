@@ -161,6 +161,12 @@
   margin: 0 0 14px;
 }
 
+.generated-image__actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .generated-image img {
   display: block;
   max-width: min(100%, 512px);
@@ -326,15 +332,39 @@
   margin: 14px 0;
 }
 
-.code-block__label {
+/* The language and the Copy button share one strip in the block's corner, so
+   the button never covers the label. */
+.code-block__tools {
   position: absolute;
-  top: 8px;
-  right: 12px;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.code-block__label {
   color: var(--ink-2);
   opacity: 0.7;
   font-size: 15px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.code-block__copy {
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 15px;
+  cursor: default;
+}
+
+.code-block__copy:hover {
+  color: var(--ink);
+  border-color: var(--line-strong, var(--line));
 }
 
 .markdown-body table {
