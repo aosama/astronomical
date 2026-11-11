@@ -1,6 +1,6 @@
-// Astronomical Observatory Models page grouping: turns catalog rows (one per
-// downloadable build) into models (one per name, with its builds as versions),
-// places each model in a section, and words how a build runs on this Mac.
+// Astronomical Observatory Models page grouping: orders catalog rows (one per
+// model, each named by its model ID), places each in a section, and words how a
+// model runs on this Mac.
 // Pure functions over catalog rows; nothing here touches the document.
 
 // Sections in page order. The first two are what most people come for; the
@@ -30,7 +30,7 @@ const DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE = {
     // chats with it, so it sits with the other background helpers.
     decision: "helpers"
 };
-// How a build runs here, worded as speed because that is what the person
+// How a model runs here, worded as speed because that is what the person
 // feels. No outcome ever blocks a download: the Mac's size never stops a model
 // (#1902), so the weakest label still says it runs.
 const DOWNLOAD_MODELS_FIT_COPY = {
@@ -77,50 +77,22 @@ function downloadModelsSectionKey(catalogRow) {
     return DOWNLOAD_MODELS_SECTION_KEY_BY_ROLE[catalogRow.role];
 }
 
-// Builds that share a short name within one section are versions of one model.
-// A row without a short name stands alone under its full display name.
-function downloadModelsModelsFromRows(catalogRows) {
-    const modelByKey = new Map();
-    for (const catalogRow of catalogRows) {
-        const sectionKey = downloadModelsSectionKey(catalogRow);
-        const modelName = catalogRow.shortName || catalogRow.displayName;
-        const modelKey = sectionKey + "/" + modelName.toLowerCase();
-        if (!modelByKey.has(modelKey)) {
-            modelByKey.set(modelKey, { modelKey, sectionKey, name: modelName, versions: [] });
-        }
-        modelByKey.get(modelKey).versions.push(catalogRow);
-    }
-    const models = [...modelByKey.values()];
-    for (const model of models) {
-        // Smallest first, so the picker reads 4-bit, 6-bit, 8-bit.
-        model.versions.sort(compareDownloadModelsVersionSizes);
-    }
-    // Smallest model first, so each section reads as a ladder from quick to
-    // heavy thinker. Array sort is stable, so equal sizes keep catalog order.
-    models.sort(
-        (smallerModel, largerModel) => compareDownloadModelsVersionSizes(smallerModel.versions[0], largerModel.versions[0])
+// The one name the page shows for a model: the name a downloaded copy answers
+// to in chat and the terminal, else the model ID the catalog declares. The two
+// are the same for a copy this page downloaded; a copy the person placed under
+// another folder name keeps that name, so the page never shows a second one.
+function downloadModelsRowName(catalogRow) {
+    return catalogRow.requestableModelId || catalogRow.modelId;
+}
+
+// Every catalog row is one model with one name, its model ID, so the list is
+// the rows themselves in page order: smallest first, so each section reads as a
+// ladder from quick to heavy thinker. Array sort is stable, so equal sizes keep
+// catalog order.
+function downloadModelsRowsInPageOrder(catalogRows) {
+    return [...catalogRows].sort(
+        (smallerRow, largerRow) => smallerRow.approximateSizeBytes - largerRow.approximateSizeBytes
     );
-    return models;
-}
-
-function compareDownloadModelsVersionSizes(smallerVersion, largerVersion) {
-    return smallerVersion.approximateSizeBytes - largerVersion.approximateSizeBytes;
-}
-
-// The version a row shows before the person picks one: the build they are
-// already downloading or already have, else the Get started pick, else the
-// smallest. A row that opens on a build they own answers "do I have this?".
-function downloadModelsDefaultVersion(model, activeDownloadModelId) {
-    return model.versions.find((version) => version.huggingfaceId === activeDownloadModelId)
-        || model.versions.find((version) => version.readyOnThisMac)
-        || model.versions.find((version) => version.getStarted)
-        || model.versions[0];
-}
-
-function downloadModelsSelectedVersion(model, selectedVersionIdByModelKey, activeDownloadModelId) {
-    const selectedVersionId = selectedVersionIdByModelKey[model.modelKey];
-    return model.versions.find((version) => version.huggingfaceId === selectedVersionId)
-        || downloadModelsDefaultVersion(model, activeDownloadModelId);
 }
 
 // A search looks through every section, so a model behind More is still found.
@@ -135,21 +107,19 @@ function downloadModelsVisibleSectionKeys(activeFilterKey, searchQuery) {
     return [activeFilterKey];
 }
 
-function downloadModelsModelMatchesQuery(model, searchQuery) {
+function downloadModelsRowMatchesQuery(catalogRow, searchQuery) {
     if (!searchQuery) return true;
-    const searchableText = model.versions
-        .map((version) => [
-            model.name, version.displayName, version.huggingfaceId, version.summary || "",
-            version.description || "", version.versionLabel || "", version.quantizationLabel || ""
-        ].join(" "))
-        .join(" ")
-        .toLowerCase();
-    return searchableText.includes(searchQuery);
+    return [
+        downloadModelsRowName(catalogRow), catalogRow.modelId, catalogRow.huggingfaceId, catalogRow.summary || "",
+        catalogRow.description || "", catalogRow.quantizationLabel || ""
+    ].join(" ").toLowerCase().includes(searchQuery);
 }
 
-function downloadModelsHiddenModelCount(models) {
+function downloadModelsHiddenModelCount(catalogRows) {
     const everydaySectionKeys = downloadModelsVisibleSectionKeys("all", "");
-    return models.filter((model) => !everydaySectionKeys.includes(model.sectionKey)).length;
+    return catalogRows.filter(
+        (catalogRow) => !everydaySectionKeys.includes(downloadModelsSectionKey(catalogRow))
+    ).length;
 }
 
 // Fit compares the model's fully loaded memory with the serving ceiling, the
@@ -197,7 +167,6 @@ function downloadModelsInstalledSummaryText(catalogRow) {
         .find((section) => section.key === downloadModelsSectionKey(catalogRow)).title;
     const summaryParts = [sectionTitle];
     if (catalogRow.role === "coding") summaryParts.push("tuned for coding");
-    if (catalogRow.versionLabel) summaryParts.push(catalogRow.versionLabel);
     summaryParts.push(formatDownloadModelsCardSize(catalogRow.approximateSizeBytes));
     return summaryParts.join(" · ");
 }

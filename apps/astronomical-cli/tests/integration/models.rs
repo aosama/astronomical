@@ -45,7 +45,12 @@ fn catalog_stub_config() -> StubDaemonConfig {
                 download_state: Some("downloading".to_owned()),
                 ..StubCatalogEntry::chat("test/half-model", "half-model", false)
             },
-            StubCatalogEntry::chat("test/absent-model", "absent-model", false),
+            // The daemon names a model that is not downloaded only by its
+            // catalog model ID: it has no requestable copy yet.
+            StubCatalogEntry {
+                requestable_model_id: None,
+                ..StubCatalogEntry::chat("test/absent-model", "absent-model", false)
+            },
         ],
         ..Default::default()
     }
@@ -116,6 +121,16 @@ async fn should_render_the_catalog_with_local_states() {
     assert!(
         rendered_stdout.contains("absent-model") && rendered_stdout.contains("not on this Mac"),
         "an absent entry should render as not on this Mac: {rendered_stdout:?}"
+    );
+    assert!(
+        rendered_stdout
+            .lines()
+            .any(|listing_line| listing_line.starts_with("absent-model ")),
+        "an absent entry is listed by its model ID, the name `models download` accepts: {rendered_stdout:?}"
+    );
+    assert!(
+        !rendered_stdout.contains("test/"),
+        "no entry is listed by its Hugging Face identity: {rendered_stdout:?}"
     );
     stub_daemon_task.abort();
     let _ = std::fs::remove_dir_all(&test_directory);

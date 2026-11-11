@@ -32,7 +32,7 @@ fn should_parse_and_load_the_shipped_bundled_catalog() {
 #[test]
 fn should_accept_complete_entries_for_all_executable_families_in_authored_order() {
     let catalog_json = serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "entries": [
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-flux", "flux2_klein"),
@@ -178,11 +178,11 @@ fn should_reject_invalid_catalog_document_shapes() {
     for invalid_catalog_json in [
         r#"{"entries":[]}"#,
         r#"{"schema_version":1,"entries":[]}"#,
-        r#"{"schema_version":4}"#,
-        r#"{"schema_version":4,"entries":{}}"#,
-        r#"{"schema_version":4,"entries":[],"unexpected":true}"#,
-        r#"{"schema_version":4,"schema_version":4,"entries":[]}"#,
-        r#"{"schema_version":4,"entries":[]} trailing"#,
+        r#"{"schema_version":5}"#,
+        r#"{"schema_version":5,"entries":{}}"#,
+        r#"{"schema_version":5,"entries":[],"unexpected":true}"#,
+        r#"{"schema_version":5,"schema_version":5,"entries":[]}"#,
+        r#"{"schema_version":5,"entries":[]} trailing"#,
     ] {
         DownloadCatalog::parse_json(invalid_catalog_json)
             .expect_err("an invalid catalog document shape must fail closed");
@@ -196,7 +196,7 @@ fn should_reject_catalog_metadata_that_exceeds_startup_resource_bounds() {
         .expect_err("catalog metadata beyond the startup byte bound must fail closed");
 
     let oversized_entry_count_catalog = serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "entries": (0..1_025)
             .map(|entry_index| valid_entry(
                 &format!("astronomical-test/example-{entry_index}"),
@@ -206,13 +206,6 @@ fn should_reject_catalog_metadata_that_exceeds_startup_resource_bounds() {
     });
     DownloadCatalog::parse_json(&oversized_entry_count_catalog.to_string())
         .expect_err("catalog entry counts beyond the startup bound must fail closed");
-
-    let oversized_display_name = "m".repeat(257);
-    let oversized_display_name_catalog = catalog_with_entry(entry_with_overrides(
-        serde_json::json!({"display_name": oversized_display_name}),
-    ));
-    DownloadCatalog::parse_json(&oversized_display_name_catalog.to_string())
-        .expect_err("display names beyond the metadata bound must fail closed");
 }
 
 #[test]
@@ -250,7 +243,7 @@ fn should_reject_unsafe_or_non_hub_repository_identities() {
 }
 
 #[test]
-fn should_reject_invalid_revision_family_visibility_size_and_display_name() {
+fn should_reject_invalid_revision_family_visibility_and_size() {
     let invalid_entries = [
         entry_with_overrides(serde_json::json!({"revision": "main"})),
         entry_with_overrides(serde_json::json!({
@@ -265,8 +258,6 @@ fn should_reject_invalid_revision_family_visibility_size_and_display_name() {
         entry_with_overrides(
             serde_json::json!({"approximate_size_bytes": 9_007_199_254_740_992_u64}),
         ),
-        entry_with_overrides(serde_json::json!({"display_name": "  "})),
-        entry_with_overrides(serde_json::json!({"display_name": "Bad\nName"})),
     ];
     for invalid_entry in invalid_entries {
         let catalog_json = catalog_with_entry(invalid_entry);
@@ -275,7 +266,7 @@ fn should_reject_invalid_revision_family_visibility_size_and_display_name() {
     }
 
     DownloadCatalog::parse_json(&format!(
-        r#"{{"schema_version":4,"entries":[{{"huggingface_id":"astronomical-test/example-qwen","revision":"{VALID_REVISION}","display_name":"Example","family":"qwen3_5","approximate_size_bytes":4000000000,"approximate_memory_bytes":2000000000,"role":"chat"}}]}}"#
+        r#"{{"schema_version":5,"entries":[{{"huggingface_id":"astronomical-test/example-qwen","revision":"{VALID_REVISION}","family":"qwen3_5","approximate_size_bytes":4000000000,"approximate_memory_bytes":2000000000,"role":"chat"}}]}}"#
     ))
     .expect_err("public must remain a required field");
 }
@@ -303,14 +294,14 @@ fn should_reject_unknown_duplicate_and_case_colliding_entries() {
 
     let duplicated_entry = valid_entry("astronomical-test/example-qwen", "qwen3_5");
     let duplicate_catalog = serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "entries": [duplicated_entry.clone(), duplicated_entry]
     });
     DownloadCatalog::parse_json(&duplicate_catalog.to_string())
         .expect_err("exact duplicate identities must fail closed");
 
     let case_collision_catalog = serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "entries": [
             valid_entry("Astronomical-Test/Example-Qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
@@ -329,7 +320,7 @@ fn should_leave_the_daemon_attribution_file_absent_when_disabled() {
     let measured_catalog = attribution_log
         .measure_operation(
             DaemonPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":4,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":5,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
                 Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
@@ -358,7 +349,7 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let successful_catalog = attribution_log
         .measure_operation(
             DaemonPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":4,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":5,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
                 Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
@@ -416,7 +407,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_write_fails() {
     let attribution_error = attribution_log
         .measure_operation(
             DaemonPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":4,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":5,"entries":[]}"#),
             |_| DaemonPerformanceMeasurement::successful_catalog_load(0),
         )
         .expect_err("required attribution write failures must remain typed");
@@ -449,7 +440,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_timestamp_fails() 
             DaemonPerformanceOperation::LibraryCatalogLoad,
             || {
                 measured_operation_executed_for_operation.store(true, Ordering::SeqCst);
-                DownloadCatalog::parse_json(r#"{"schema_version":4,"entries":[]}"#)
+                DownloadCatalog::parse_json(r#"{"schema_version":5,"entries":[]}"#)
             },
             |_| DaemonPerformanceMeasurement::successful_catalog_load(0),
         )
@@ -481,7 +472,6 @@ fn valid_entry(huggingface_id: &str, family: &str) -> serde_json::Value {
     serde_json::json!({
         "huggingface_id": huggingface_id,
         "revision": VALID_REVISION,
-        "display_name": "Example model",
         "family": family,
         "approximate_size_bytes": 4_000_000_000_u64,
         "approximate_memory_bytes": 2_000_000_000_u64,
@@ -505,7 +495,7 @@ fn entry_with_overrides(overrides: serde_json::Value) -> serde_json::Value {
 }
 
 fn catalog_with_entry(catalog_entry: serde_json::Value) -> serde_json::Value {
-    serde_json::json!({"schema_version": 4, "entries": [catalog_entry]})
+    serde_json::json!({"schema_version": 5, "entries": [catalog_entry]})
 }
 
 /// Counts the Get started picks for one role so catalog-wide uniqueness tests
@@ -554,7 +544,7 @@ fn should_reject_an_unknown_role() {
 #[test]
 fn should_reject_two_get_started_picks_for_one_role_across_the_catalog() {
     let catalog_json = serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "entries": [
             entry_with_overrides(serde_json::json!({
                 "huggingface_id": "astronomical-test/first-chat",
@@ -575,7 +565,7 @@ fn should_reject_two_get_started_picks_for_one_role_across_the_catalog() {
 #[test]
 fn should_accept_one_get_started_pick_per_role_across_the_catalog() {
     let catalog_json = serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "entries": [
             entry_with_overrides(serde_json::json!({
                 "huggingface_id": "astronomical-test/chat-pick",

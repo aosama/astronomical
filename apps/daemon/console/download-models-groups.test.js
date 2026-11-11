@@ -1,5 +1,6 @@
-// Models page grouping tests: builds become versions of one model, each model
-// lands in one section, and a build's fit is worded against the memory ceiling.
+// Models page grouping tests: every catalog row is one model named by its
+// model ID, each lands in one section, and its fit is worded against the
+// memory ceiling.
 
 const {
     assert,
@@ -16,54 +17,68 @@ function catalogRowsFrom(scriptContext, catalogEntries) {
     return vm.runInContext("catalogEntries.map(downloadModelsCatalogRowFromEntry)", scriptContext);
 }
 
-// The models come back as arrays of the script's own realm; tests copy what
-// they compare with Array.from so deepEqual sees ordinary arrays.
-function modelsFrom(catalogEntries) {
+// The rows come back as arrays of the script's own realm; tests copy what they
+// compare with Array.from so deepEqual sees ordinary arrays.
+function orderedRowsFrom(catalogEntries) {
     const scriptContext = createDownloadModelsContext();
     scriptContext.catalogRows = catalogRowsFrom(scriptContext, catalogEntries);
-    const models = vm.runInContext("downloadModelsModelsFromRows(catalogRows)", scriptContext);
-    return { scriptContext, models };
+    const orderedRows = vm.runInContext("downloadModelsRowsInPageOrder(catalogRows)", scriptContext);
+    return { scriptContext, orderedRows };
 }
 
-function buildOf(shortName, versionLabel, sizeGigabytes, overrides = {}) {
+function modelNamed(modelId, sizeGigabytes, overrides = {}) {
     return validCatalogEntry({
-        huggingface_id: "astronomical-test/" + (shortName + "-" + versionLabel).toLowerCase().replaceAll(" ", "-"),
-        display_name: shortName + " " + versionLabel + " build",
-        short_name: shortName,
-        version_label: versionLabel,
+        huggingface_id: "astronomical-test/" + modelId,
         approximate_size_bytes: sizeGigabytes * GIGABYTE,
         ...overrides
     });
 }
 
-test("should_group_builds_sharing_a_short_name_into_one_model_ordered_smallest_first", () => {
-    const { models } = modelsFrom([
-        buildOf("Example 9B", "Sharper", 8),
-        buildOf("Other 2B", "Compact", 2),
-        buildOf("Example 9B", "Compact", 6)
+test("should_list_every_catalog_row_as_its_own_model_smallest_first", () => {
+    const { orderedRows } = orderedRowsFrom([
+        modelNamed("Example-9B-MLX-6bit", 8),
+        modelNamed("Other-2B-4bit", 2),
+        modelNamed("Example-9B-MLX-4bit", 6)
     ]);
 
-    assert.deepEqual(Array.from(models, (model) => model.name), ["Other 2B", "Example 9B"], "smallest model first");
-    assert.deepEqual(Array.from(models[1].versions, (version) => version.versionLabel), ["Compact", "Sharper"]);
+    assert.deepEqual(
+        Array.from(orderedRows, (catalogRow) => catalogRow.modelId),
+        ["Other-2B-4bit", "Example-9B-MLX-4bit", "Example-9B-MLX-6bit"],
+        "builds of one family are separate models now, each under its own name"
+    );
 });
 
-test("should_keep_a_build_without_a_short_name_as_its_own_model_under_its_display_name", () => {
-    const { models } = modelsFrom([
-        validCatalogEntry({ huggingface_id: "astronomical-test/one", display_name: "Plain model one" }),
-        validCatalogEntry({ huggingface_id: "astronomical-test/two", display_name: "Plain model two" })
+// A copy the person placed under another folder name answers to that name in
+// chat and the terminal, so the page shows it too; otherwise the model ID.
+test("should_name_a_row_by_its_installed_copy_else_by_its_model_id", () => {
+    const scriptContext = createDownloadModelsContext();
+    const [placedCopyRow, notDownloadedRow] = catalogRowsFrom(scriptContext, [
+        modelNamed("Example-9B-MLX-6bit", 8, { ready_on_this_mac: true, requestable_model_id: "my-renamed-folder" }),
+        modelNamed("Example-2B-4bit", 2, { requestable_model_id: null })
     ]);
+    scriptContext.placedCopyRow = placedCopyRow;
+    scriptContext.notDownloadedRow = notDownloadedRow;
 
-    assert.deepEqual(Array.from(models, (model) => model.name), ["Plain model one", "Plain model two"]);
-    assert.deepEqual(Array.from(models, (model) => model.versions.length), [1, 1]);
+    assert.equal(vm.runInContext("downloadModelsRowName(placedCopyRow)", scriptContext), "my-renamed-folder");
+    assert.equal(vm.runInContext("downloadModelsRowName(notDownloadedRow)", scriptContext), "Example-2B-4bit");
 });
 
-test("should_not_merge_builds_that_share_a_name_across_sections", () => {
-    const { models } = modelsFrom([
-        buildOf("Example 9B", "Compact", 6, { role: "chat" }),
-        buildOf("Example 9B", "Early", 7, { role: "chat", experimental: true })
-    ]);
+test("should_keep_catalog_order_for_models_of_equal_size_and_leave_the_input_untouched", () => {
+    const catalogEntries = [modelNamed("Second-in-catalog", 4), modelNamed("First-in-catalog", 4)];
+    const { scriptContext, orderedRows } = orderedRowsFrom(catalogEntries);
 
-    assert.deepEqual(Array.from(models, (model) => model.sectionKey), ["chat", "experimental"]);
+    assert.deepEqual(
+        Array.from(orderedRows, (catalogRow) => catalogRow.modelId), ["Second-in-catalog", "First-in-catalog"]
+    );
+    assert.equal(
+        vm.runInContext("catalogRows[0].modelId", scriptContext), "Second-in-catalog", "ordering copies the rows"
+    );
+});
+
+test("should_order_no_rows_into_an_empty_list", () => {
+    const { orderedRows } = orderedRowsFrom([]);
+
+    assert.equal(orderedRows.length, 0);
 });
 
 test("should_place_retiring_before_experimental_before_role_when_choosing_a_section", () => {
@@ -82,40 +97,6 @@ test("should_place_retiring_before_experimental_before_role_when_choosing_a_sect
     assert.equal(sectionKeyOf({ role: "chat" }), "chat");
 });
 
-test("should_open_a_row_on_the_downloading_then_owned_then_starter_then_smallest_build", () => {
-    const { scriptContext, models } = modelsFrom([
-        buildOf("Example 9B", "Compact", 6),
-        buildOf("Example 9B", "Sharper", 8, { get_started: true }),
-        buildOf("Example 9B", "Sharpest", 10, { ready_on_this_mac: true })
-    ]);
-    scriptContext.model = models[0];
-    const defaultLabel = (activeDownloadModelId) => vm.runInContext(
-        `downloadModelsDefaultVersion(model, ${JSON.stringify(activeDownloadModelId)}).versionLabel`, scriptContext
-    );
-
-    assert.equal(defaultLabel("astronomical-test/example-9b-compact"), "Compact", "the build being downloaded wins");
-    assert.equal(defaultLabel(undefined), "Sharpest", "then a build already on this Mac");
-    models[0].versions[2].readyOnThisMac = false;
-    assert.equal(defaultLabel(undefined), "Sharper", "then the Get started pick");
-    models[0].versions[1].getStarted = false;
-    assert.equal(defaultLabel(undefined), "Compact", "then the smallest");
-});
-
-test("should_prefer_the_picked_version_and_fall_back_when_the_pick_is_unknown", () => {
-    const { scriptContext, models } = modelsFrom([
-        buildOf("Example 9B", "Compact", 6),
-        buildOf("Example 9B", "Sharper", 8)
-    ]);
-    scriptContext.model = models[0];
-    const selectedLabel = (pickedVersionId) => vm.runInContext(
-        `downloadModelsSelectedVersion(model, { [model.modelKey]: ${JSON.stringify(pickedVersionId)} }, undefined).versionLabel`,
-        scriptContext
-    );
-
-    assert.equal(selectedLabel("astronomical-test/example-9b-sharper"), "Sharper");
-    assert.equal(selectedLabel("astronomical-test/no-longer-in-the-catalog"), "Compact");
-});
-
 test("should_show_everyday_sections_for_all_the_rest_for_more_and_every_section_while_searching", () => {
     const scriptContext = createDownloadModelsContext();
     const visibleSectionKeys = (filterKey, searchQuery) => JSON.parse(JSON.stringify(vm.runInContext(
@@ -128,36 +109,35 @@ test("should_show_everyday_sections_for_all_the_rest_for_more_and_every_section_
     assert.equal(visibleSectionKeys("pictures", "ornith").length, 5, "a search spans every section");
 });
 
-test("should_match_a_search_against_any_build_of_a_model_and_match_everything_when_empty", () => {
-    const { scriptContext, models } = modelsFrom([
-        buildOf("Example 9B", "Compact", 6, { quantization_label: "4-bit affine" }),
-        buildOf("Example 9B", "Sharper", 8, { quantization_label: "6-bit affine" })
+test("should_match_a_search_against_the_model_id_source_and_texts_and_everything_when_empty", () => {
+    const scriptContext = createDownloadModelsContext();
+    [scriptContext.catalogRow] = catalogRowsFrom(scriptContext, [
+        modelNamed("Example-9B-MLX-6bit", 8, { quantization_label: "6-bit affine", summary: "A quick everyday assistant." })
     ]);
-    scriptContext.model = models[0];
     const matches = (searchQuery) => vm.runInContext(
-        `downloadModelsModelMatchesQuery(model, ${JSON.stringify(searchQuery)})`, scriptContext
+        `downloadModelsRowMatchesQuery(catalogRow, ${JSON.stringify(searchQuery)})`, scriptContext
     );
 
     assert.equal(matches(""), true);
-    assert.equal(matches("example 9b"), true);
-    assert.equal(matches("6-bit"), true, "a term found only on the second build still finds the model");
+    assert.equal(matches("example-9b"), true, "the model ID, lower-cased as the page stores queries");
+    assert.equal(matches("astronomical-test"), true, "the source it downloads from");
+    assert.equal(matches("6-bit affine"), true);
+    assert.equal(matches("everyday"), true);
     assert.equal(matches("flux"), false);
 });
 
 test("should_count_only_models_outside_the_everyday_sections_as_hidden", () => {
-    const { scriptContext, models } = modelsFrom([
-        buildOf("Example 9B", "Compact", 6),
-        buildOf("Helper", "Compact", 1, { role: "helper" }),
-        buildOf("Early", "Compact", 1, { experimental: true }),
-        buildOf("Old", "Compact", 1, { retiring: true })
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.catalogRows = catalogRowsFrom(scriptContext, [
+        modelNamed("Example-9B", 6),
+        modelNamed("Helper", 1, { role: "helper" }),
+        modelNamed("Early", 1, { experimental: true }),
+        modelNamed("Old", 1, { retiring: true })
     ]);
-    scriptContext.models = models;
 
-    assert.equal(vm.runInContext("downloadModelsHiddenModelCount(models)", scriptContext), 3);
-    assert.equal(
-        vm.runInContext('downloadModelsHiddenModelCount(models.filter((model) => model.name === "Example 9B"))', scriptContext),
-        0
-    );
+    assert.equal(vm.runInContext("downloadModelsHiddenModelCount(catalogRows)", scriptContext), 3);
+    assert.equal(vm.runInContext("downloadModelsHiddenModelCount(catalogRows.slice(0, 1))", scriptContext), 0);
+    assert.equal(vm.runInContext("downloadModelsHiddenModelCount([])", scriptContext), 0);
 });
 
 test("should_judge_fit_at_the_exact_memory_boundary_and_stream_only_with_a_measured_floor", () => {
@@ -223,33 +203,35 @@ test("should_round_the_context_window_to_a_feel_for_size_in_words", () => {
     assert.equal(rememberedWords(null), null);
 });
 
-test("should_summarise_an_installed_build_by_section_version_and_size", () => {
+test("should_summarise_an_installed_model_by_section_and_size", () => {
     const scriptContext = createDownloadModelsContext();
-    const [labelledRow, plainRow] = catalogRowsFrom(scriptContext, [
-        buildOf("Example 9B", "Compact", 6, { role: "coding" }),
+    const [codingRow, pictureRow] = catalogRowsFrom(scriptContext, [
+        modelNamed("Example-Coder-9B", 6, { role: "coding" }),
         validCatalogEntry({ approximate_size_bytes: 2 * GIGABYTE, role: "image_generation" })
     ]);
-    scriptContext.labelledRow = labelledRow;
-    scriptContext.plainRow = plainRow;
+    scriptContext.codingRow = codingRow;
+    scriptContext.pictureRow = pictureRow;
 
     assert.equal(
-        vm.runInContext("downloadModelsInstalledSummaryText(labelledRow)", scriptContext),
-        "Chat · tuned for coding · Compact · 6.0 GB"
+        vm.runInContext("downloadModelsInstalledSummaryText(codingRow)", scriptContext),
+        "Chat · tuned for coding · 6.0 GB"
     );
-    assert.equal(vm.runInContext("downloadModelsInstalledSummaryText(plainRow)", scriptContext), "Pictures · 2.0 GB");
+    assert.equal(vm.runInContext("downloadModelsInstalledSummaryText(pictureRow)", scriptContext), "Pictures · 2.0 GB");
 });
 
 test("should_put_coding_and_chat_models_in_one_section_ordered_by_size", () => {
-    const { models } = modelsFrom([
-        buildOf("Big coder", "Compact", 22, { role: "coding" }),
-        buildOf("Talker", "Compact", 6, { role: "chat" }),
-        buildOf("Painter", "Compact", 4, { role: "image_generation" })
+    const { scriptContext, orderedRows } = orderedRowsFrom([
+        modelNamed("Big-coder", 22, { role: "coding" }),
+        modelNamed("Talker", 6, { role: "chat" }),
+        modelNamed("Painter", 4, { role: "image_generation" })
     ]);
-    const chatModelNames = Array.from(models)
-        .filter((model) => model.sectionKey === "chat")
-        .map((model) => model.name);
+    scriptContext.orderedRows = orderedRows;
+    const chatModelIds = JSON.parse(JSON.stringify(vm.runInContext(
+        'orderedRows.filter((catalogRow) => downloadModelsSectionKey(catalogRow) === "chat").map((catalogRow) => catalogRow.modelId)',
+        scriptContext
+    )));
 
-    assert.deepEqual(chatModelNames, ["Talker", "Big coder"]);
+    assert.deepEqual(chatModelIds, ["Talker", "Big-coder"]);
 });
 
 test("should_offer_no_code_filter_now_that_coding_models_live_in_chat", () => {

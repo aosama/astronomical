@@ -5,7 +5,6 @@ import { isLibraryModelReady, parseLibraryStarterPicks } from "../src/LibrarySta
 function catalogEntry(overrides: Record<string, unknown>): Record<string, unknown> {
   return {
     huggingface_id: "example-org/model",
-    display_name: "Example",
     role: "chat",
     get_started: false,
     approximate_size_bytes: 1_000,

@@ -139,9 +139,9 @@ const previewImageModels = [
 /** The Library's plain names and details, so the preview's brain control and
  * panel read the way the app does instead of showing folder names. */
 const previewLibraryEntries = [
-  { short_name: "Preview Chat 9B", version_label: "6-bit", approximate_size_bytes: 8208531833, capabilities: { supports_vision: true }, role: "chat", requestable_model_id: "preview-chat-model" },
-  { display_name: "FLUX.2 Klein 4B full precision", short_name: "FLUX.2 Klein 4B", version_label: "Full precision", approximate_size_bytes: 16000000000, role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
-  { display_name: "FLUX.2 Klein 4B 4-bit", short_name: "FLUX.2 Klein 4B", version_label: "4-bit", approximate_size_bytes: 4500000000, role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
+  { approximate_size_bytes: 8208531833, capabilities: { supports_vision: true }, role: "chat", requestable_model_id: "preview-chat-model" },
+  { approximate_size_bytes: 16000000000, role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+  { approximate_size_bytes: 4500000000, role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
 ];
 
 const server = http.createServer((request, response) => {

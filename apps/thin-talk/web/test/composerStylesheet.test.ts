@@ -52,3 +52,25 @@ test("should_not_count_a_rule_that_only_styles_a_hidden_control_as_hiding_it", (
 
   assert.deepEqual(selectorsThatHide(stylesheetWithoutDisplayNone), []);
 });
+
+/** The body of the one rule whose selector is exactly `selector`. */
+function ruleBody(stylesheet: string, selector: string): string {
+  const stylesheetWithoutComments = stylesheet.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const ruleMatch of stylesheetWithoutComments.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (ruleMatch[1]!.trim() === selector) {
+      return ruleMatch[2]!;
+    }
+  }
+  return "";
+}
+
+// A model's only name is its ID, and IDs share long prefixes, so a fixed-width
+// panel cut three different models down to the same "Ornith-1.5-35B-A3B-MLX-…".
+test("should_size_the_brain_panel_to_its_longest_model_id_within_the_window", () => {
+  const brainPanelRule = ruleBody(composerStylesheet, ".composer__menu--brains");
+
+  assert.match(brainPanelRule, /width:\s*max-content;/, "the panel grows to its longest row");
+  assert.match(brainPanelRule, /min-width:\s*300px;/, "a short list keeps the panel's usual width");
+  assert.match(brainPanelRule, /max-width:\s*calc\(100vw - 32px\);/, "a narrow window still bounds it");
+  assert.doesNotMatch(brainPanelRule, /(^|[^-])width:\s*\d+px;/, "no fixed width that would cut an ID short");
+});

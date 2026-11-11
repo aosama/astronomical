@@ -148,13 +148,16 @@ function findRenderedElementsByClass(rootElement, className) {
     return matches;
 }
 
-// Schema 3 defaults: a chat model that is not a Get started pick, sized to
-// memory the fit tests can compare against explicit ceilings.
+// Schema 5 defaults: a chat model that is not a Get started pick, sized to
+// memory the fit tests can compare against explicit ceilings. Its one name, the
+// model ID, is the leaf of its Hugging Face identity, as the daemon publishes it,
+// unless a test names it outright.
 function validCatalogEntry(overrides = {}) {
+    const huggingfaceId = overrides.huggingface_id || "astronomical-test/example-qwen";
     return {
-        huggingface_id: "astronomical-test/example-qwen",
+        huggingface_id: huggingfaceId,
+        model_id: huggingfaceId.split("/").pop(),
         revision: "0123456789abcdef0123456789abcdef01234567",
-        display_name: "Example model",
         family: "qwen3_5",
         approximate_size_bytes: 4_000_000_000,
         approximate_memory_bytes: 6_000_000_000,

@@ -133,7 +133,7 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
         DaemonResponse::Catalog {
             entries: vec![DaemonCatalogEntry {
                 huggingface_id: "example/local-model".to_owned(),
-                display_name: "Example Local Model".to_owned(),
+                model_id: "local-model".to_owned(),
                 family: "qwen".to_owned(),
                 approximate_size_bytes: 1_750_000_000,
                 ready_on_this_mac: true,

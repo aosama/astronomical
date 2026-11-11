@@ -13,8 +13,8 @@ const BRAIN_ID = "example-org/starter-chat-4bit";
 const SKETCHBOOK_ID = "example-org/starter-image-4bit";
 const STARTER_CATALOG = {
   entries: [
-    { huggingface_id: BRAIN_ID, display_name: "Starter Chat", role: "chat", get_started: true, approximate_size_bytes: 5_970_332_199, ready_on_this_mac: false },
-    { huggingface_id: SKETCHBOOK_ID, display_name: "Starter Image", role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false },
+    { huggingface_id: BRAIN_ID, role: "chat", get_started: true, approximate_size_bytes: 5_970_332_199, ready_on_this_mac: false },
+    { huggingface_id: SKETCHBOOK_ID, role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false },
   ],
 };
 

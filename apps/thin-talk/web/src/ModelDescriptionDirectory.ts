@@ -2,10 +2,10 @@ import type { DaemonClient } from "./DaemonClient";
 import { ModelDescription, parseLibraryModelDescriptions } from "./ModelDescription";
 
 /**
- * Keeps the Library's plain names for the installed models. The last catalog
- * that could be read is kept, so a slow or failed read never swaps a model's
- * plain name back to its folder name halfway through a conversation. Whoever
- * draws the names is told after each successful read.
+ * Keeps the Library's facts (size, whether it sees images) for the installed
+ * models, which are named by their ids. The last catalog that could be read is
+ * kept, so a slow or failed read never drops a model's facts halfway through a
+ * conversation. Whoever draws them is told after each successful read.
  */
 export class ModelDescriptionDirectory {
   private readonly client: DaemonClient;

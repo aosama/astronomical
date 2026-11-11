@@ -1,5 +1,5 @@
 // Models page tests: what a first visit shows, the Add a model list with its
-// filter chips and search, and one model row with its version picker and details.
+// filter chips and search, and one model row, named by its model ID, with its details.
 
 const {
     assert,
@@ -21,7 +21,7 @@ function renderModelsPage(catalogEntries, pageStateScript = "") {
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
-    scriptContext.catalogDocument = { schema_version: 4, entries: catalogEntries };
+    scriptContext.catalogDocument = { schema_version: 5, entries: catalogEntries };
     const renderedState = vm.runInContext(
         `downloadModelsCatalogDocument = catalogDocument;
          ${pageStateScript}
@@ -39,12 +39,12 @@ function clickRendered(renderedElement) {
     for (const clickListener of renderedElement.listeners.click) clickListener();
 }
 
-function entryNamed(shortName, overrides = {}) {
+// A fixture model named by its model ID, which is the leaf of its Hugging
+// Face identity exactly as the daemon publishes it.
+function entryNamed(modelId, overrides = {}) {
     return validCatalogEntry({
-        huggingface_id: "astronomical-test/" + shortName.toLowerCase().replaceAll(" ", "-"),
-        display_name: shortName + " full technical name",
-        short_name: shortName,
-        summary: shortName + " in one line.",
+        huggingface_id: "astronomical-test/" + modelId,
+        summary: modelId + " in one line.",
         ...overrides
     });
 }
@@ -53,7 +53,7 @@ const STARTER_ENTRIES = [
     entryNamed("Coder", { role: "coding", get_started: true, approximate_size_bytes: 22 * GIGABYTE }),
     entryNamed("Painter", { role: "image_generation", get_started: true, approximate_size_bytes: 4 * GIGABYTE }),
     entryNamed("Talker", { role: "chat", get_started: true, approximate_size_bytes: 6 * GIGABYTE }),
-    entryNamed("Other talker", { role: "chat" })
+    entryNamed("Other-talker", { role: "chat" })
 ];
 
 test("should_ask_what_to_do_first_and_offer_the_three_starters_when_nothing_is_on_this_mac", () => {
@@ -87,7 +87,7 @@ test("should_skip_a_starter_whose_role_has_no_get_started_pick", () => {
 test("should_replace_the_first_visit_question_with_on_this_mac_once_a_model_is_here", () => {
     const { downloadModelsDocument } = renderModelsPage([
         entryNamed("Talker", { get_started: true, ready_on_this_mac: true }),
-        entryNamed("Other talker")
+        entryNamed("Other-talker")
     ]);
     const catalogContainer = downloadModelsDocument.catalogContainer;
 
@@ -120,7 +120,7 @@ test("should_show_everyday_sections_by_default_and_offer_the_rest_behind_show_mo
 test("should_show_only_the_hidden_sections_after_show_more_is_clicked", () => {
     const { downloadModelsDocument } = renderModelsPage([
         entryNamed("Talker"),
-        entryNamed("Early coder", { role: "coding", experimental: true }),
+        entryNamed("Early-coder", { role: "coding", experimental: true }),
         entryNamed("Old", { retiring: true, experimental: true })
     ]);
     const catalogContainer = downloadModelsDocument.catalogContainer;
@@ -157,30 +157,25 @@ test("should_say_nothing_matches_instead_of_showing_an_empty_list", () => {
     assert.equal(textsOfClass(catalogContainer, "download-models-no-matches").length, 1);
 });
 
-test("should_show_one_row_per_model_with_a_picker_only_when_it_has_several_builds", () => {
+test("should_show_one_row_per_model_named_by_its_model_id_with_no_version_picker", () => {
     const { downloadModelsDocument } = renderModelsPage([
-        entryNamed("Talker", { version_label: "Compact", approximate_size_bytes: 6 * GIGABYTE }),
-        entryNamed("Talker", { huggingface_id: "astronomical-test/talker-sharper", version_label: "Sharper", approximate_size_bytes: 8 * GIGABYTE }),
+        entryNamed("Talker-9B-6bit", { approximate_size_bytes: 8 * GIGABYTE }),
+        entryNamed("Talker-9B-4bit", { approximate_size_bytes: 6 * GIGABYTE }),
         entryNamed("Solo")
     ]);
-    const modelRows = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-row");
-
-    assert.deepEqual(modelRows.map((modelRow) => textsOfClass(modelRow, "download-models-row-name")[0]), ["Solo", "Talker"]);
-    assert.deepEqual(modelRows.map((modelRow) => textsOfClass(modelRow, "download-models-version")), [[], ["Compact", "Sharper"]]);
-});
-
-test("should_follow_the_picked_version_with_the_button_size_and_the_pressed_state", () => {
-    const { downloadModelsDocument } = renderModelsPage([
-        entryNamed("Talker", { version_label: "Compact", approximate_size_bytes: 6 * GIGABYTE }),
-        entryNamed("Talker", { huggingface_id: "astronomical-test/talker-sharper", version_label: "Sharper", approximate_size_bytes: 8 * GIGABYTE })
-    ]);
     const catalogContainer = downloadModelsDocument.catalogContainer;
-    assert.deepEqual(textsOfClass(catalogContainer, "download-models-download-button"), ["Get · 6.0 GB"]);
+    const modelRows = findRenderedElementsByClass(catalogContainer, "download-models-row");
 
-    clickRendered(findRenderedElement(catalogContainer, (element) => element.textContent === "Sharper"));
-
-    assert.deepEqual(textsOfClass(catalogContainer, "download-models-download-button"), ["Get · 8.0 GB"]);
-    assert.deepEqual(textsOfClass(catalogContainer, "download-models-version-selected"), ["Sharper"]);
+    assert.deepEqual(
+        modelRows.map((modelRow) => textsOfClass(modelRow, "download-models-row-name")[0]),
+        ["Solo", "Talker-9B-4bit", "Talker-9B-6bit"],
+        "two builds of one family are two rows, smallest first, each under the name the terminal accepts"
+    );
+    assert.deepEqual(
+        modelRows.map((modelRow) => textsOfClass(modelRow, "download-models-download-button")),
+        [["Get · 3.7 GB"], ["Get · 6.0 GB"], ["Get · 8.0 GB"]]
+    );
+    assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-version-picker"), []);
 });
 
 test("should_show_a_model_on_this_mac_as_here_instead_of_offering_get", () => {
@@ -194,7 +189,7 @@ test("should_show_a_model_on_this_mac_as_here_instead_of_offering_get", () => {
 test("should_disable_get_and_say_why_while_another_download_holds_the_slot", () => {
     const { downloadModelsDocument } = renderModelsPage(
         [entryNamed("Talker"), entryNamed("Painter", { role: "image_generation" })],
-        `downloadModelsCurrentDownload = { huggingface_id: "astronomical-test/talker", state: "downloading", bytes_total: 10, bytes_completed: 4 };`
+        `downloadModelsCurrentDownload = { huggingface_id: "astronomical-test/Talker", state: "downloading", bytes_total: 10, bytes_completed: 4 };`
     );
     const catalogContainer = downloadModelsDocument.catalogContainer;
     const getButtons = findRenderedElementsByClass(catalogContainer, "download-models-download-button");
@@ -247,15 +242,19 @@ test("should_open_the_details_from_the_name_and_keep_the_technical_facts_inside_
     const { downloadModelsDocument } = renderModelsPage([entryNamed("Talker")]);
     const catalogContainer = downloadModelsDocument.catalogContainer;
     const collapsedTexts = renderedTexts(catalogContainer);
-    assert.equal(collapsedTexts.includes("astronomical-test/talker"), false, "the Hugging Face name stays out of the plain row");
+    assert.equal(collapsedTexts.includes("astronomical-test/Talker"), false, "the source stays out of the plain row");
+    assert.equal(collapsedTexts.includes("Talker"), true, "the row shows the model ID");
 
     const nameButton = findRenderedElementsByClass(catalogContainer, "download-models-row-name")[0];
     assert.equal(nameButton.attributes["aria-expanded"], "false");
     clickRendered(nameButton);
 
     const expandedTexts = renderedTexts(catalogContainer);
-    for (const technicalFact of ["astronomical-test/talker", "Talker full technical name", "6-bit affine (group 64)", "MIT", "About 25,000 words per conversation"]) {
+    for (const technicalFact of ["Downloaded from", "astronomical-test/Talker", "6-bit affine (group 64)", "MIT", "About 25,000 words per conversation"]) {
         assert.equal(expandedTexts.includes(technicalFact), true, technicalFact);
+    }
+    for (const retiredLabel of ["Full name", "Published as"]) {
+        assert.equal(expandedTexts.includes(retiredLabel), false, retiredLabel + " named a second name");
     }
     assert.equal(
         findRenderedElementsByClass(catalogContainer, "download-models-row-name")[0].attributes["aria-expanded"], "true"

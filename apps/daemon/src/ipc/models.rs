@@ -143,7 +143,7 @@ fn build_catalog_response(projections: &[CatalogEntryProjection]) -> DaemonRespo
             let capabilities = &projection.capabilities;
             DaemonCatalogEntry {
                 huggingface_id: catalog_entry.huggingface_id().to_owned(),
-                display_name: catalog_entry.display_name().to_owned(),
+                model_id: catalog_entry.model_id().to_owned(),
                 family: catalog_entry.family().as_str().to_owned(),
                 approximate_size_bytes: catalog_entry.approximate_size_bytes(),
                 ready_on_this_mac: projection.ready_on_this_mac,

@@ -22,7 +22,7 @@ test("should_fetch_the_immutable_catalog_once_when_download_models_wiring_is_rep
     scriptContext.fetch = async (requestPath) => {
         // Only the catalog request is counted; the memory status read is a separate, advisory request.
         if (requestPath === "/v1/library/catalog") catalogFetchCount += 1;
-        return { ok: true, async json() { return { schema_version: 4, entries: [] }; } };
+        return { ok: true, async json() { return { schema_version: 5, entries: [] }; } };
     };
 
     await vm.runInContext(
@@ -38,7 +38,7 @@ test("renders unavailable state for malformed, non-success, and failed catalog r
     const malformedContext = createDownloadModelsContext();
     const malformedDocument = createDownloadModelsDocument();
     malformedContext.document = malformedDocument;
-    malformedContext.catalogDocument = { schema_version: 4, entries: [{}] };
+    malformedContext.catalogDocument = { schema_version: 5, entries: [{}] };
     assert.equal(
         vm.runInContext("renderDownloadModelsCatalogDocument(catalogDocument)", malformedContext),
         "unavailable"
@@ -49,7 +49,7 @@ test("renders unavailable state for malformed, non-success, and failed catalog r
     nonSuccessContext.document = nonSuccessDocument;
     nonSuccessContext.fetch = async () => ({
         ok: false,
-        async json() { return { schema_version: 4, entries: [] }; }
+        async json() { return { schema_version: 5, entries: [] }; }
     });
     await vm.runInContext("wireDownloadModelsCatalog()", nonSuccessContext);
     assert.equal(nonSuccessDocument.catalogContainer.dataset.downloadModelsState, "unavailable");
@@ -75,7 +75,7 @@ test("recovers the catalog automatically after a daemon interruption", ASYNC_TES
             return {
                 ok: true,
                 async json() {
-                    return { schema_version: 4, entries: [validCatalogEntry()] };
+                    return { schema_version: 5, entries: [validCatalogEntry()] };
                 }
             };
         }
@@ -139,7 +139,7 @@ test("should_load_the_shipped_scripts_and_resolve_the_startup_download_models_jo
         fetch: async (requestPath) => {
             requestedPaths.push(requestPath);
             if (requestPath === "/v1/library/catalog") {
-                return { ok: true, async json() { return { schema_version: 4, entries: [] }; } };
+                return { ok: true, async json() { return { schema_version: 5, entries: [] }; } };
             }
             return { ok: false, async json() { return {}; } };
         },
@@ -181,7 +181,7 @@ test("should_load_the_shipped_scripts_and_resolve_the_startup_download_models_jo
 function catalogAndStatusFetch(statusHandler) {
     return async (requestPath) => {
         if (requestPath === "/v1/library/catalog") {
-            return { ok: true, async json() { return { schema_version: 4, entries: [validCatalogEntry()] }; } };
+            return { ok: true, async json() { return { schema_version: 5, entries: [validCatalogEntry()] }; } };
         }
         return statusHandler(requestPath);
     };

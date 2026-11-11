@@ -51,7 +51,7 @@ async fn should_download_publish_and_report_ready_through_the_library_rest_journ
         let test_directory = tempfile::tempdir().expect("temporary directory should be available");
         let download_catalog = Arc::new(
             DownloadCatalog::parse_json(&format!(
-                "{{\"schema_version\":4,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
+                "{{\"schema_version\":5,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
                 repository_bytes()
             ))
             .expect("fictional catalog should parse"),
@@ -482,28 +482,28 @@ fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Route
 /// request for a different model.
 fn two_model_catalog() -> Arc<DownloadCatalog> {
     catalog_of(&[
-        catalog_entry_json(REPOSITORY_ID, "Example Qwen"),
-        catalog_entry_json(OTHER_REPOSITORY_ID, "Other Qwen"),
+        catalog_entry_json(REPOSITORY_ID),
+        catalog_entry_json(OTHER_REPOSITORY_ID),
     ])
 }
 
 fn test_catalog() -> Arc<DownloadCatalog> {
-    catalog_of(&[catalog_entry_json(REPOSITORY_ID, "Example Qwen")])
+    catalog_of(&[catalog_entry_json(REPOSITORY_ID)])
 }
 
 fn catalog_of(entry_documents: &[String]) -> Arc<DownloadCatalog> {
     Arc::new(
         DownloadCatalog::parse_json(&format!(
-            "{{\"schema_version\":4,\"entries\":[{}]}}",
+            "{{\"schema_version\":5,\"entries\":[{}]}}",
             entry_documents.join(",")
         ))
         .expect("fictional catalog should parse"),
     )
 }
 
-fn catalog_entry_json(huggingface_id: &str, display_name: &str) -> String {
+fn catalog_entry_json(huggingface_id: &str) -> String {
     format!(
-        "{{\"huggingface_id\":\"{huggingface_id}\",\"revision\":\"{REVISION}\",\"display_name\":\"{display_name}\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}",
+        "{{\"huggingface_id\":\"{huggingface_id}\",\"revision\":\"{REVISION}\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}",
         repository_bytes()
     )
 }

@@ -17,22 +17,22 @@ function clientAnswering(catalogAnswers: Array<string | Error>): DaemonClient {
   } as unknown as DaemonClient;
 }
 
-const ORNITH_CATALOG = JSON.stringify({ entries: [{ requestable_model_id: "ornith-folder", short_name: "Ornith 1.5 9B" }] });
+const ORNITH_CATALOG = JSON.stringify({ entries: [{ requestable_model_id: "Ornith-1.5-9B", approximate_size_bytes: 7.6 * 1024 * 1024 * 1024 }] });
 
-test("should_read_plain_names_from_the_library", async () => {
+test("should_read_model_facts_from_the_library", async () => {
   const directory = new ModelDescriptionDirectory(clientAnswering([ORNITH_CATALOG]), () => undefined);
   await directory.refresh();
-  assert.equal(directory.descriptions.get("ornith-folder")?.shortName, "Ornith 1.5 9B");
+  assert.equal(directory.descriptions.get("Ornith-1.5-9B")?.detailLine(), "7.6 GB");
 });
 
-test("should_keep_the_last_names_when_a_later_read_fails", async () => {
+test("should_keep_the_last_facts_when_a_later_read_fails", async () => {
   const directory = new ModelDescriptionDirectory(clientAnswering([ORNITH_CATALOG, new Error("engine busy")]), () => undefined);
   await directory.refresh();
   await directory.refresh();
-  assert.equal(directory.descriptions.get("ornith-folder")?.shortName, "Ornith 1.5 9B");
+  assert.equal(directory.descriptions.get("Ornith-1.5-9B")?.detailLine(), "7.6 GB");
 });
 
-test("should_keep_the_last_names_when_a_later_answer_is_not_a_catalog", async () => {
+test("should_keep_the_last_facts_when_a_later_answer_is_not_a_catalog", async () => {
   const directory = new ModelDescriptionDirectory(clientAnswering([ORNITH_CATALOG, "<html>not a catalog</html>"]), () => undefined);
   await directory.refresh();
   await directory.refresh();

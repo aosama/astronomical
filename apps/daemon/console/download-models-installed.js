@@ -45,7 +45,7 @@ function createDownloadModelsInstalledLine(installedRow) {
     const line = createDownloadModelsElement("div", "download-models-installed-line");
     const identity = createDownloadModelsElement("div", "download-models-installed-identity");
     const identityChildren = [
-        createDownloadModelsElement("span", "download-models-installed-name", installedRow.shortName || installedRow.displayName),
+        createDownloadModelsElement("span", "download-models-installed-name", downloadModelsRowName(installedRow)),
         createDownloadModelsElement("span", "download-models-installed-summary", downloadModelsInstalledSummaryText(installedRow))
     ];
     // Why a removal was refused, on the line of the model it is about.
@@ -97,7 +97,7 @@ function createDownloadModelsDownloadBanner(activeDownloadRow) {
 }
 
 function downloadModelsBannerCopy(activeDownloadRow, downloadState) {
-    const modelName = activeDownloadRow.shortName || activeDownloadRow.displayName;
+    const modelName = downloadModelsRowName(activeDownloadRow);
     const isCurrentDownload = downloadModelsCurrentDownload.huggingface_id === activeDownloadRow.huggingfaceId;
     const transferText = isCurrentDownload && downloadModelsCurrentDownload.bytes_total > 0
         ? downloadModelsTransferProgressText(downloadModelsCurrentDownload)
@@ -135,7 +135,7 @@ function createDownloadModelsProgressBar(activeDownloadRow, downloadState) {
     track.setAttribute("aria-valuemin", "0");
     track.setAttribute("aria-valuemax", "100");
     track.setAttribute("aria-valuenow", String(percent));
-    track.setAttribute("aria-label", (activeDownloadRow.shortName || activeDownloadRow.displayName) + " download");
+    track.setAttribute("aria-label", downloadModelsRowName(activeDownloadRow) + " download");
     const fill = createDownloadModelsElement("div", "download-models-download-progress-fill");
     fill.style.width = percent + "%";
     track.appendChild(fill);

@@ -1,46 +1,43 @@
 // Astronomical Observatory Models page: one row of the Add a model list. A row
-// is one model; its builds are versions chosen with the picker, and the speed
-// meter, the action and the details all follow the chosen version.
+// is one model, named by its model ID; the speed meter, the action and the
+// details all describe that one download.
 
-function createDownloadModelsModelRow(model) {
-    const selectedVersion = downloadModelsSelectedVersion(
-        model, downloadModelsSelectedVersionIdByModelKey, downloadModelsCurrentDownload.huggingface_id
-    );
-    const isExpanded = downloadModelsExpandedModelKey === model.modelKey;
+function createDownloadModelsModelRow(catalogRow) {
+    const isExpanded = downloadModelsExpandedModelId === catalogRow.modelId;
     const row = createDownloadModelsElement(
         "article", isExpanded ? "download-models-row download-models-row-expanded" : "download-models-row"
     );
     const rowLine = createDownloadModelsElement("div", "download-models-row-line");
     const rowControls = createDownloadModelsElement("div", "download-models-row-controls");
     const fitSlot = createDownloadModelsElement("div", "download-models-row-fit");
-    const fitMeter = createDownloadModelsFitMeter(selectedVersion);
+    const fitMeter = createDownloadModelsFitMeter(catalogRow);
     if (fitMeter) fitSlot.appendChild(fitMeter);
     const actionSlot = createDownloadModelsElement("div", "download-models-row-action");
-    actionSlot.appendChild(createDownloadModelsRowAction(selectedVersion));
-    rowControls.replaceChildren(createDownloadModelsVersionPicker(model, selectedVersion), fitSlot, actionSlot);
-    rowLine.replaceChildren(createDownloadModelsRowIdentity(model, selectedVersion, isExpanded), rowControls);
+    actionSlot.appendChild(createDownloadModelsRowAction(catalogRow));
+    rowControls.replaceChildren(fitSlot, actionSlot);
+    rowLine.replaceChildren(createDownloadModelsRowIdentity(catalogRow, isExpanded), rowControls);
     row.appendChild(rowLine);
-    if (isExpanded) row.appendChild(createDownloadModelsRowDetails(selectedVersion));
+    if (isExpanded) row.appendChild(createDownloadModelsRowDetails(catalogRow));
     return row;
 }
 
 // The name is the control that opens the details, so the row needs no separate
 // Details button competing with Get.
-function createDownloadModelsRowIdentity(model, selectedVersion, isExpanded) {
+function createDownloadModelsRowIdentity(catalogRow, isExpanded) {
     const identity = createDownloadModelsElement("div", "download-models-row-identity");
-    const nameButton = createDownloadModelsElement("button", "download-models-row-name", model.name);
+    const nameButton = createDownloadModelsElement("button", "download-models-row-name", downloadModelsRowName(catalogRow));
     nameButton.type = "button";
     nameButton.setAttribute("aria-expanded", String(isExpanded));
     nameButton.addEventListener("click", () => {
-        downloadModelsExpandedModelKey = isExpanded ? null : model.modelKey;
+        downloadModelsExpandedModelId = isExpanded ? null : catalogRow.modelId;
         renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
     });
     const identityChildren = [nameButton];
-    const summaryText = selectedVersion.summary || selectedVersion.description;
+    const summaryText = catalogRow.summary || catalogRow.description;
     if (summaryText) {
         identityChildren.push(createDownloadModelsParagraph("download-models-row-summary", summaryText));
     }
-    const abilitiesText = downloadModelsAbilitiesText(selectedVersion);
+    const abilitiesText = downloadModelsAbilitiesText(catalogRow);
     if (abilitiesText) {
         identityChildren.push(createDownloadModelsParagraph("download-models-row-abilities", abilitiesText));
     }
@@ -48,56 +45,23 @@ function createDownloadModelsRowIdentity(model, selectedVersion, isExpanded) {
     return identity;
 }
 
-// A model with one build shows an empty slot of the same width, so the speed
-// meters and buttons of every row line up in columns.
-function createDownloadModelsVersionPicker(model, selectedVersion) {
-    const pickerSlot = createDownloadModelsElement("div", "download-models-row-versions");
-    if (model.versions.length < 2) return pickerSlot;
-    const picker = createDownloadModelsElement("div", "download-models-version-picker");
-    picker.setAttribute("role", "group");
-    picker.setAttribute("aria-label", "Version of " + model.name);
-    picker.replaceChildren(...model.versions.map(
-        (version) => createDownloadModelsVersionButton(model, version, version === selectedVersion)
-    ));
-    pickerSlot.appendChild(picker);
-    return pickerSlot;
-}
-
-function createDownloadModelsVersionButton(model, version, isSelected) {
-    const versionButton = createDownloadModelsElement(
-        "button",
-        isSelected ? "download-models-version download-models-version-selected" : "download-models-version",
-        version.versionLabel || formatDownloadModelsCardSize(version.approximateSizeBytes)
-    );
-    versionButton.type = "button";
-    versionButton.setAttribute("aria-pressed", String(isSelected));
-    versionButton.addEventListener("click", () => {
-        downloadModelsSelectedVersionIdByModelKey = {
-            ...downloadModelsSelectedVersionIdByModelKey,
-            [model.modelKey]: version.huggingfaceId
-        };
-        renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
-    });
-    return versionButton;
-}
-
 // Exactly one of: it is here, it is on its way, or Get. The controls of a
 // download in flight live in its banner under On this Mac, not on the row.
-function createDownloadModelsRowAction(selectedVersion) {
-    if (selectedVersion.readyOnThisMac) {
+function createDownloadModelsRowAction(catalogRow) {
+    if (catalogRow.readyOnThisMac) {
         return createDownloadModelsElement("span", "download-models-row-status download-models-row-status-ready", "On this Mac");
     }
-    const downloadState = downloadModelsRowDownloadState(selectedVersion);
+    const downloadState = downloadModelsRowDownloadState(catalogRow);
     if (downloadState && downloadState !== "idle") {
         return createDownloadModelsElement(
-            "span", "download-models-row-status", downloadModelsRowStatusText(selectedVersion, downloadState)
+            "span", "download-models-row-status", downloadModelsRowStatusText(catalogRow, downloadState)
         );
     }
-    return createDownloadModelsGetButton(selectedVersion);
+    return createDownloadModelsGetButton(catalogRow);
 }
 
-function downloadModelsRowStatusText(selectedVersion, downloadState) {
-    const isCurrentDownload = downloadModelsCurrentDownload.huggingface_id === selectedVersion.huggingfaceId;
+function downloadModelsRowStatusText(catalogRow, downloadState) {
+    const isCurrentDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
     const percentText = isCurrentDownload && downloadModelsCurrentDownload.bytes_total > 0
         ? " · " + downloadModelsProgressPercent(downloadModelsCurrentDownload) + "%"
         : "";
@@ -108,15 +72,15 @@ function downloadModelsRowStatusText(selectedVersion, downloadState) {
     return "Getting ready";
 }
 
-function createDownloadModelsRowDetails(selectedVersion) {
+function createDownloadModelsRowDetails(catalogRow) {
     const details = createDownloadModelsElement("div", "download-models-row-details");
     const prose = createDownloadModelsElement("div", "download-models-row-prose");
     const proseChildren = [];
-    if (selectedVersion.description) {
-        proseChildren.push(createDownloadModelsParagraph("download-models-row-description", selectedVersion.description));
+    if (catalogRow.description) {
+        proseChildren.push(createDownloadModelsParagraph("download-models-row-description", catalogRow.description));
     }
     const fitOutcome = downloadModelsFitOutcome(
-        selectedVersion, downloadModelsServingCeilingBytes, downloadModelsCeilingIsUserLimit
+        catalogRow, downloadModelsServingCeilingBytes, downloadModelsCeilingIsUserLimit
     );
     if (fitOutcome !== null) {
         const fitCopy = DOWNLOAD_MODELS_FIT_COPY[fitOutcome];
@@ -126,8 +90,8 @@ function createDownloadModelsRowDetails(selectedVersion) {
     }
     prose.replaceChildren(...proseChildren);
     const facts = createDownloadModelsElement("div", "download-models-row-facts");
-    const factChildren = [createDownloadModelsFactList(selectedVersion)];
-    const locationActions = createDownloadModelsLocationActions(selectedVersion);
+    const factChildren = [createDownloadModelsFactList(catalogRow)];
+    const locationActions = createDownloadModelsLocationActions(catalogRow);
     if (locationActions) factChildren.push(locationActions);
     facts.replaceChildren(...factChildren);
     details.replaceChildren(prose, facts);
@@ -135,28 +99,28 @@ function createDownloadModelsRowDetails(selectedVersion) {
 }
 
 // Everything technical lives here, one click below the plain row: the people
-// who want the compression scheme or the Hugging Face name know to open it.
-function downloadModelsFactEntries(selectedVersion) {
+// who want the compression scheme or where the files come from know to open it.
+// The Hugging Face identity is shown as a source, not as another name.
+function downloadModelsFactEntries(catalogRow) {
     const factEntries = [
-        ["Download", formatDownloadModelsCardSize(selectedVersion.approximateSizeBytes)],
-        ["Memory while running", formatDownloadModelsCardSize(selectedVersion.approximateMemoryBytes)]
+        ["Download", formatDownloadModelsCardSize(catalogRow.approximateSizeBytes)],
+        ["Memory while running", formatDownloadModelsCardSize(catalogRow.approximateMemoryBytes)]
     ];
-    const rememberedWordsText = downloadModelsRememberedWordsText(selectedVersion.contextWindow);
+    const rememberedWordsText = downloadModelsRememberedWordsText(catalogRow.contextWindow);
     if (rememberedWordsText) factEntries.push(["Remembers", rememberedWordsText]);
-    if (selectedVersion.quantizationLabel) factEntries.push(["Compression", selectedVersion.quantizationLabel]);
-    if (selectedVersion.upstreamLicense) factEntries.push(["License", selectedVersion.upstreamLicense]);
-    factEntries.push(["Full name", selectedVersion.displayName]);
-    factEntries.push(["Published as", selectedVersion.huggingfaceId]);
-    const destinationPath = downloadModelsDestinationPath(selectedVersion);
+    if (catalogRow.quantizationLabel) factEntries.push(["Compression", catalogRow.quantizationLabel]);
+    if (catalogRow.upstreamLicense) factEntries.push(["License", catalogRow.upstreamLicense]);
+    factEntries.push(["Downloaded from", catalogRow.huggingfaceId]);
+    const destinationPath = downloadModelsDestinationPath(catalogRow);
     if (destinationPath) {
-        factEntries.push([selectedVersion.readyOnThisMac ? "Saved in" : "Will be saved in", destinationPath]);
+        factEntries.push([catalogRow.readyOnThisMac ? "Saved in" : "Will be saved in", destinationPath]);
     }
     return factEntries;
 }
 
-function createDownloadModelsFactList(selectedVersion) {
+function createDownloadModelsFactList(catalogRow) {
     const factList = createDownloadModelsElement("dl", "download-models-fact-list");
-    for (const [factLabel, factText] of downloadModelsFactEntries(selectedVersion)) {
+    for (const [factLabel, factText] of downloadModelsFactEntries(catalogRow)) {
         factList.appendChild(createDownloadModelsElement("dt", "", factLabel));
         factList.appendChild(createDownloadModelsElement("dd", "", factText));
     }
@@ -165,8 +129,8 @@ function createDownloadModelsFactList(selectedVersion) {
 
 // Finder can only show a folder that exists, so Show in Finder appears once the
 // model is on this Mac; before that the path is where it will be saved.
-function createDownloadModelsLocationActions(selectedVersion) {
-    const destinationPath = downloadModelsDestinationPath(selectedVersion);
+function createDownloadModelsLocationActions(catalogRow) {
+    const destinationPath = downloadModelsDestinationPath(catalogRow);
     if (!destinationPath) return null;
     const actionRow = createDownloadModelsElement("div", "download-models-location-actions");
     const copyButton = createDownloadModelsElement(
@@ -174,8 +138,8 @@ function createDownloadModelsLocationActions(selectedVersion) {
     );
     copyButton.type = "button";
     copyButton.addEventListener("click", () => copyDownloadModelsPathToClipboard(destinationPath));
-    const actionButtons = selectedVersion.readyOnThisMac
-        ? [createDownloadModelsRevealButton(selectedVersion.huggingfaceId), copyButton]
+    const actionButtons = catalogRow.readyOnThisMac
+        ? [createDownloadModelsRevealButton(catalogRow.huggingfaceId), copyButton]
         : [copyButton];
     actionRow.replaceChildren(...actionButtons);
     return actionRow;

@@ -67,9 +67,5 @@ pub(crate) fn project_catalog_entries<'a>(
 /// Discovery publishes Library models under their leaf directory name, so "org/Model-Name"
 /// becomes requestable as "Model-Name".
 pub(crate) fn requestable_model_id_from_huggingface_id(huggingface_id: &str) -> String {
-    huggingface_id
-        .rsplit('/')
-        .next()
-        .unwrap_or(huggingface_id)
-        .to_owned()
+    astronomical_config::leaf_model_id(huggingface_id).to_owned()
 }

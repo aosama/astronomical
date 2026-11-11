@@ -5,7 +5,7 @@
 use serde_json::json;
 
 use super::download_catalog_parse_tests::{
-    baseline_entry_document, empty_get_started_role_names, empty_normalized_huggingface_ids,
+    baseline_entry_document, empty_get_started_role_names, empty_seen_identities,
     entry_document_with,
 };
 use super::{
@@ -26,7 +26,7 @@ fn should_parse_role_memory_and_flags_into_the_public_entry_type() {
     let catalog_entry = parse_catalog_entry(
         flagged_entry,
         0,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     )
     .expect("a flagged coding entry should parse");
@@ -44,7 +44,7 @@ fn should_default_flags_to_false_and_the_streaming_floor_to_none() {
     let plain_entry = parse_catalog_entry(
         entry_document_with(&[]),
         0,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     )
     .expect("an entry without optional flags should parse");
@@ -60,7 +60,7 @@ fn should_parse_a_retiring_entry_that_is_not_a_get_started_pick() {
     let retiring_entry = parse_catalog_entry(
         entry_document_with(&[("role", json!("chat")), ("retiring", json!(true))]),
         0,
-        &mut empty_normalized_huggingface_ids(),
+        &mut empty_seen_identities(),
         &mut empty_get_started_role_names(),
     )
     .expect("a retiring chat entry should parse");

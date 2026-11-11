@@ -72,7 +72,7 @@ export class ChatController {
   private selectedModelID: string | null = null;
   private readonly imageModelDirectory: ImageModelDirectory;
   private readonly imageModelSelection: ImageModelSelection;
-  /** Plain names for the brain control, read after the model list. */
+  /** Model details for the brain panel, read after the model list. */
   private readonly modelDescriptionDirectory: ModelDescriptionDirectory;
   private isStreaming = false;
   /** Tool calls of the current turn that have started and not yet finished. */
