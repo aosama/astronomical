@@ -340,27 +340,47 @@ pub(crate) fn export_folder_link(channel_profile: &ChannelProfile, export_folder
     )
 }
 
+/// What a background link command says when there is no running app to
+/// answer it.
+pub(crate) const DEVELOPMENT_APP_NOT_RUNNING: &str = "the Development app is not running; start it with `cargo xtask app dev --background`, then run this again";
+
+/// Whether a background link may be opened: only when the app that answers
+/// it is already running. Opening a link for an app that is not running
+/// launches it, and a launch from a link shows the chat window in front,
+/// which is the interruption these links exist to avoid.
+pub(crate) fn background_link_gate(is_application_running: bool) -> Result<(), String> {
+    if is_application_running {
+        Ok(())
+    } else {
+        Err(DEVELOPMENT_APP_NOT_RUNNING.to_owned())
+    }
+}
+
+/// Opens a link in the running Development app without bringing it forward.
+fn open_background_link(
+    channel_profile: &ChannelProfile,
+    background_link: &str,
+) -> Result<(), String> {
+    background_link_gate(process_is_running(&application_process_pattern(
+        channel_profile,
+    )))?;
+    run_quiet_tool(Command::new("open").arg("-g").arg(background_link)).map(drop)
+}
+
 /// Opens the export-folder link in the background. The save panel is a
 /// system window that comes to the front, so without this a live check of
 /// an export took the screen from whoever was using the Mac.
 pub(crate) fn open_export_folder_link(export_folder: &str) -> Result<(), String> {
     let channel_profile = ChannelProfile::for_channel(super::channel_profile::Channel::Development);
-    run_quiet_tool(
-        Command::new("open")
-            .arg("-g")
-            .arg(export_folder_link(&channel_profile, export_folder)),
+    open_background_link(
+        &channel_profile,
+        &export_folder_link(&channel_profile, export_folder),
     )
-    .map(drop)
 }
 
 /// Opens the draft link in the background, so typing a question for a live
 /// check never takes the keyboard from whoever is using the Mac.
 pub(crate) fn open_draft_link(draft_text: &str) -> Result<(), String> {
     let channel_profile = ChannelProfile::for_channel(super::channel_profile::Channel::Development);
-    run_quiet_tool(
-        Command::new("open")
-            .arg("-g")
-            .arg(draft_link(&channel_profile, draft_text)),
-    )
-    .map(drop)
+    open_background_link(&channel_profile, &draft_link(&channel_profile, draft_text))
 }
