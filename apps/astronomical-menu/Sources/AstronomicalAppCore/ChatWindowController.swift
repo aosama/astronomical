@@ -27,6 +27,12 @@ final class ChatWindowController {
   var isShowingChat: Bool { conversationWindow.window.isVisible }
 
   func showChatWindow() {
+    // Asked for by the person (the Dock, a link, the menu bar): a background
+    // launch still waiting to go behind must not then hide what they opened.
+    sendBehindAfterFirstDraw?.cancel()
+    sendBehindAfterFirstDraw = nil
+    conversationWindow.window.alphaValue = 1
+    conversationWindow.window.ignoresMouseEvents = false
     NSApp.activate(ignoringOtherApps: true)
     conversationWindow.window.makeKeyAndOrderFront(nil)
   }
@@ -42,6 +48,10 @@ final class ChatWindowController {
     }
   }
 
+  /// The wait before a background-launched window goes behind; cancelled
+  /// when the person asks for the window first.
+  private var sendBehindAfterFirstDraw: Task<Void, Never>?
+
   /// How long the window stays in front, invisible, before it goes behind:
   /// long enough for the page to load and draw its first frame.
   static let firstDrawInterval: Duration = .seconds(3)
@@ -56,8 +66,10 @@ final class ChatWindowController {
     window.alphaValue = 0
     window.ignoresMouseEvents = true
     window.orderFrontRegardless()
-    Task { @MainActor in
+    sendBehindAfterFirstDraw = Task { @MainActor [weak self] in
       try? await Task.sleep(for: Self.firstDrawInterval)
+      guard !Task.isCancelled else { return }
+      self?.sendBehindAfterFirstDraw = nil
       window.orderBack(nil)
       window.alphaValue = 1
       window.ignoresMouseEvents = false
