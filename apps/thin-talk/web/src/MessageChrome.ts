@@ -37,6 +37,20 @@ const VISIBLE_STATE_LABELS: Record<string, string> = {
   failed: "failed",
 };
 
+/**
+ * An answer's status words, with the words to show instead while the engine
+ * loads a model, when there are any. Both are in the markup and the
+ * stylesheet shows one: the load starts and ends on the engine's clock, and
+ * swapping by a class on the transcript changes the words without drawing
+ * the conversation again. Both arguments are fixed text, never model output.
+ */
+export function stateWordsHtml(stateWords: string, modelLoadingWords: string | null): string {
+  if (modelLoadingWords === null) {
+    return stateWords;
+  }
+  return `<span class="message__state-words">${stateWords}</span><span class="message__loading-words">${modelLoadingWords}</span>`;
+}
+
 /** Plain Thin Talk: "You" and "Assistant", and tool steps by their labels. */
 export class ClassicMessageChrome implements MessageChrome {
   private readonly escapeHtml: EscapeHtml;
@@ -53,7 +67,7 @@ export class ClassicMessageChrome implements MessageChrome {
     return (
       `<div class="message__meta">` +
       `<span class="message__role">Assistant</span>` +
-      `<span class="message__state">${ClassicMessageChrome.stateLabel(message.state)}</span>` +
+      `<span class="message__state">${ClassicMessageChrome.stateLabel(message)}</span>` +
       `</div>`
     );
   }
@@ -70,11 +84,12 @@ export class ClassicMessageChrome implements MessageChrome {
     return `<summary>${this.escapeHtml(toolStep.label)}: ${TOOL_STEP_OUTCOME_LABELS[toolStep.state]}${imageModelSuffix}</summary>`;
   }
 
-  private static stateLabel(state: ChatMessageState): string {
-    if (state === ChatMessageState.STREAMING) {
-      return 'generating<span class="message__streaming-caret"></span>';
+  private static stateLabel(message: TranscriptMessage): string {
+    if (message.state === ChatMessageState.STREAMING) {
+      const hasShownNothing = message.markdown.length === 0;
+      return `${stateWordsHtml("generating", hasShownNothing ? "loading the model…" : null)}<span class="message__streaming-caret"></span>`;
     }
-    const configuredLabel: string | undefined = VISIBLE_STATE_LABELS[state];
+    const configuredLabel: string | undefined = VISIBLE_STATE_LABELS[message.state];
     return configuredLabel != null ? configuredLabel : "";
   }
 }

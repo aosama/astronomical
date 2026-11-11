@@ -40,7 +40,7 @@ test("should_name_astro_and_tag_the_answer_with_its_skill", () => {
 
 test("should_say_what_astro_is_doing_in_each_voice_and_keep_failed_plain", () => {
   const thinking = answer(ChatMessageState.STREAMING, "");
-  assert.match(new AstroMessageChrome(EXPLORER, escapeHtml).assistantHeaderHtml(thinking), /is thinking…<span class="message__streaming-caret"><\/span>/);
+  assert.match(new AstroMessageChrome(EXPLORER, escapeHtml).assistantHeaderHtml(thinking), /<span class="message__state-words">is thinking…<\/span><span class="message__loading-words">is waking up its brain…<\/span><span class="message__streaming-caret"><\/span>/);
   assert.match(new AstroMessageChrome(PILOT, escapeHtml).assistantHeaderHtml(thinking), />thinking…</);
   assert.match(new AstroMessageChrome(EXPLORER, escapeHtml).assistantHeaderHtml(answer(ChatMessageState.FAILED, "")), />failed</);
   assert.match(new AstroMessageChrome(EXPLORER, escapeHtml).assistantHeaderHtml(thinking), /data-mood="thinking"/, "the face is drawn in the pose for the mood");

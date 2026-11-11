@@ -46,6 +46,10 @@ const DEFAULT_CHAT_LINES = [
 ];
 
 export class FakeDaemon {
+  /** What the status reports as loading, as the engine does while it loads a
+   * model: `{ model_id }`, or null when nothing is loading. */
+  public modelLoadInFlight: { model_id: string | null } | null = null;
+
   public readonly requests: RecordedDaemonRequest[] = [];
   private readonly options: FakeDaemonOptions;
   /** The models /v1/models lists; a finished download adds to it. */
@@ -81,6 +85,7 @@ export class FakeDaemon {
       }
       return Response.json({
         status: "ready",
+        model_load_in_flight: this.modelLoadInFlight,
         application: {
           channel: this.options.channel,
           state_directory: this.options.stateDirectory,

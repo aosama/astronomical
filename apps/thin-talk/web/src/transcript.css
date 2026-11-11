@@ -56,6 +56,20 @@
   opacity: 0.75;
 }
 
+/* While the engine loads a model for the newest answer (ModelLoadNotice),
+   its "thinking" words give way to the loading words. */
+.message__loading-words {
+  display: none;
+}
+
+.transcript--model-loading .message--latest .message__state-words {
+  display: none;
+}
+
+.transcript--model-loading .message--latest .message__loading-words {
+  display: inline;
+}
+
 .message--failed .message__state {
   color: var(--danger);
   opacity: 1;

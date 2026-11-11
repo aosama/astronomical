@@ -33,6 +33,7 @@ import { PictureModelGuidance } from "./PictureModelGuidance";
 import { ExportLauncher } from "./ExportLauncher";
 import { MessagePicker } from "./MessagePicker";
 import { BriefNotice } from "./BriefNotice";
+import { ModelLoadNotice, isWaitingForFirstWords } from "./ModelLoadNotice";
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -202,6 +203,11 @@ export function bootChatClient(): AppShell {
     imageModelDirectory,
     imageModelSelection,
   });
+  const modelLoadNotice = new ModelLoadNotice({
+    isModelLoading: () => client.isModelLoading(),
+    transcriptElement: requireElement<HTMLElement>("#transcript"),
+  });
+  controller.subscribe((publishedState) => modelLoadNotice.setWaitingForFirstWords(isWaitingForFirstWords(publishedState)));
   const exportLauncher = wireExport(controller, transcript, bridge, diagrams);
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();
