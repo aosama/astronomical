@@ -1,4 +1,5 @@
 import type { ExportContent, ExportEntry } from "./ExportContentBuilder";
+import { KEPT_TOGETHER_CLASS, markupKeepingHeadingsWithTheirBlocks } from "./HeadingKeeper";
 
 /**
  * The exported document as HTML, and the one stylesheet that dresses it.
@@ -48,7 +49,7 @@ body { margin: 0; background: #ffffff; }
 @media print { .export-article { max-width: none; margin: 0; padding: 0; } }
 pre, code { font-family: ui-monospace, Menlo, Consolas, "Courier New", monospace; }
 h1, h2, h3, h4 { break-after: avoid; }
-pre, table, figure, img { break-inside: avoid; }
+pre, table, figure, img, .${KEPT_TOGETHER_CLASS} { break-inside: avoid; }
 figure { margin: 10pt 0; }
 img { max-width: 100%; height: auto; }
 .export-picture img { max-width: 4.5in; border-radius: 4pt; }
@@ -67,23 +68,44 @@ export function escapeExportText(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function entryHtml(entry: ExportEntry): string {
-  const entryClass = entry.isQuestion ? "export-question" : "export-answer";
-  return `<div class="${entryClass}">${entry.body.innerHTML}</div>`;
+/** How an entry's body becomes markup: as it is for Word, or with headings
+ * grouped with their blocks for a page a browser breaks. */
+type EntryBodyMarkup = (body: HTMLElement) => string;
+
+function plainBodyMarkup(body: HTMLElement): string {
+  return body.innerHTML;
 }
 
-/** The document's markup without a page around it: what the sheet previews
- * and what the Word writer reads. */
-export function exportArticleHtml(content: ExportContent): string {
+function articleHtml(content: ExportContent, bodyMarkup: EntryBodyMarkup): string {
   const noteHtml = content.aiNote !== null ? `<p class="export-note">${escapeExportText(content.aiNote)}</p>` : "";
+  let entriesHtml = "";
+  for (const entry of content.entries) {
+    entriesHtml += `<div class="${entryClass(entry)}">${bodyMarkup(entry.body)}</div>`;
+  }
   return (
     `<article class="export-article">` +
     `<h1 class="export-title">${escapeExportText(content.title)}</h1>` +
     `<p class="export-date">${escapeExportText(content.dateText)}</p>` +
-    content.entries.map(entryHtml).join("") +
+    entriesHtml +
     noteHtml +
     `</article>`
   );
+}
+
+function entryClass(entry: ExportEntry): string {
+  return entry.isQuestion ? "export-question" : "export-answer";
+}
+
+/** The document's markup without a page around it, as the Word writer reads
+ * it. Word keeps a heading with its text through its own heading styles. */
+export function exportArticleHtml(content: ExportContent): string {
+  return articleHtml(content, plainBodyMarkup);
+}
+
+/** The article for a page a browser lays out and breaks: the preview, the
+ * saved web page and the page printed as the PDF. */
+function pagedArticleHtml(content: ExportContent): string {
+  return articleHtml(content, markupKeepingHeadingsWithTheirBlocks);
 }
 
 /** The preview draws the page at this fraction of its size. */
@@ -114,7 +136,7 @@ export function exportPreviewMarkup(content: ExportContent): string {
     `.export-article{box-sizing:content-box;max-width:none;width:6.5in;margin:0;padding:${PRINTED_MARGIN_INCHES}in}`;
   return (
     `<style>${SHARED_EXPORT_RULES}${PAGE_ONLY_EXPORT_RULES}${previewPageRules}</style>` +
-    `<div class="${PREVIEW_FRAME_CLASS}"><div class="export-preview-scaler">${exportArticleHtml(content)}</div></div>`
+    `<div class="${PREVIEW_FRAME_CLASS}"><div class="export-preview-scaler">${pagedArticleHtml(content)}</div></div>`
   );
 }
 
@@ -126,6 +148,6 @@ export function standaloneExportPage(content: ExportContent): string {
     `<meta http-equiv="Content-Security-Policy" content="${STANDALONE_PAGE_POLICY}">` +
     `<title>${escapeExportText(content.title)}</title>` +
     `<style>${SHARED_EXPORT_RULES}${PAGE_ONLY_EXPORT_RULES}</style>` +
-    `</head><body>${exportArticleHtml(content)}</body></html>`
+    `</head><body>${pagedArticleHtml(content)}</body></html>`
   );
 }
