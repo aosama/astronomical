@@ -5,7 +5,10 @@
 //! was answered. The state is filled with Romeo and Juliet to Kev's state
 //! limit, 65,536 tokens with the state token, which is the most work a
 //! request can be: the state is prefilled once per request and every
-//! question continues it. One warmup request runs before timing.
+//! question continues it. One warmup request runs before timing. Beside
+//! each timing it prints the peak MLX memory the process has needed so far;
+//! the value after the last request is what a catalog entry records as
+//! `approximate_memory_bytes`.
 //!
 //! Decision models are measured this way and not with the repository's usual
 //! 10,000 tokens in and 500 out: they generate nothing.
@@ -21,6 +24,8 @@ use astronomical_decision_contract::{
 };
 use astronomical_model_serving::{DecisionEngine, KevDecisionEngine};
 use astronomical_test_harness::test_run::TestRunContext;
+
+use super::decision_memory_peak::{peak_memory_bytes_after_request, peak_memory_report};
 
 /// Kev-9B in bfloat16 is about 18 GB; a 65,536-token prefill needs room beside it.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 36 * 1024 * 1024 * 1024;
@@ -129,8 +134,9 @@ async fn should_measure_kev_decision_latency_at_the_state_limit() {
     assert!(state_token_count > KEV_MAXIMUM_STATE_TOKENS - 64);
     timed_request_milliseconds(&mut decision_engine, &state, 1);
     eprintln!(
-        "[kev-latency] state_tokens={state_token_count} load_and_warmup_milliseconds={}",
-        load_started_at.elapsed().as_millis()
+        "[kev-latency] state_tokens={state_token_count} load_and_warmup_milliseconds={} {}",
+        load_started_at.elapsed().as_millis(),
+        peak_memory_report(peak_memory_bytes_after_request(&mut decision_engine)),
     );
     let request_total = QUESTION_COUNTS.len() * TIMED_REQUESTS_PER_QUESTION_COUNT;
     let measurement_started_at = Instant::now();
@@ -158,10 +164,11 @@ async fn should_measure_kev_decision_latency_at_the_state_limit() {
         request_milliseconds.sort_by(f64::total_cmp);
         let median_milliseconds = request_milliseconds[TIMED_REQUESTS_PER_QUESTION_COUNT / 2];
         eprintln!(
-            "[kev-latency] questions={question_count} input_tokens={input_token_count} median_milliseconds={median_milliseconds:.1} fastest_milliseconds={:.1} slowest_milliseconds={:.1} state_prefill_tokens_per_second={:.0}",
+            "[kev-latency] questions={question_count} input_tokens={input_token_count} median_milliseconds={median_milliseconds:.1} fastest_milliseconds={:.1} slowest_milliseconds={:.1} state_prefill_tokens_per_second={:.0} {}",
             request_milliseconds[0],
             request_milliseconds[TIMED_REQUESTS_PER_QUESTION_COUNT - 1],
             state_token_count as f64 / (median_milliseconds / 1_000.0),
+            peak_memory_report(peak_memory_bytes_after_request(&mut decision_engine)),
         );
     }
 }
