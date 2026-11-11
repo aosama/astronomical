@@ -4,7 +4,7 @@ import type { AstroLibrary } from "./AstroLibrary";
 import { AstroMoment, astroLine, homeIdeas } from "./AstroLines";
 import type { AstroProfile } from "./AstroProfile";
 import { AstroStyle } from "./AstroStyle";
-import type { AstroTrail } from "./AstroTrail";
+import type { AstroColourLook } from "./AstroColourLook";
 import { SketchbookOffer } from "./SketchbookOffer";
 import { SkillCardKind, skillCard, starterPromptFor } from "./SkillCard";
 import { buildSkillShelf } from "./SkillShelf";
@@ -27,7 +27,7 @@ export class AstroHomeView {
   private readonly document: Document;
   private readonly library: AstroLibrary;
   private readonly onStarterPrompt: (prompt: string) => void;
-  private readonly onTrailChosen: (trail: AstroTrail) => void;
+  private readonly onColourLookChosen: (colourLook: AstroColourLook) => void;
   private readonly home: HTMLElement;
   private readonly figure: AstroFigure;
   private readonly greeting: HTMLElement;
@@ -42,13 +42,13 @@ export class AstroHomeView {
     emptyState: HTMLElement;
     library: AstroLibrary;
     onStarterPrompt: (prompt: string) => void;
-    onTrailChosen: (trail: AstroTrail) => void;
+    onColourLookChosen: (colourLook: AstroColourLook) => void;
   }) {
     this.emptyState = init.emptyState;
     this.document = init.emptyState.ownerDocument;
     this.library = init.library;
     this.onStarterPrompt = init.onStarterPrompt;
-    this.onTrailChosen = init.onTrailChosen;
+    this.onColourLookChosen = init.onColourLookChosen;
     this.home = makeElement(this.document, "div", "astro-home");
     this.home.dataset.testid = "astro-home";
     this.home.hidden = true;
@@ -147,7 +147,7 @@ export class AstroHomeView {
     const reply = makeElement(this.document, "p", "astro-home__reply", astroLine(AstroMoment.NEEDS_BRAIN, profile.style, profile.nickname));
     const wakeUpPanel = new WakeUpPanel(this.document, ID_PREFIX, this.library, {
       figure: this.figure,
-      trailChoice: { trail: profile.trail, onTrailChosen: (trail) => this.onTrailChosen(trail) },
+      colourLookChoice: { colourLook: profile.colourLook, onColourLookChosen: (colourLook) => this.onColourLookChosen(colourLook) },
       say: (moment) => {
         reply.textContent = astroLine(moment, profile.style, profile.nickname);
       },

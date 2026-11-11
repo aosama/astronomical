@@ -2,21 +2,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AstroProfile, MAXIMUM_NICKNAME_CHARACTERS } from "../src/astro/AstroProfile";
 import { AstroStyle, parseAstroStyle } from "../src/astro/AstroStyle";
-import { AstroTrail, parseAstroTrail } from "../src/astro/AstroTrail";
+import { AstroColourLook, parseAstroColourLook } from "../src/astro/AstroColourLook";
 
 test("should_start_a_newcomer_with_no_name_explorer_style_astro_shown_and_the_flight_ahead", () => {
   const newcomer = AstroProfile.newcomer();
   assert.equal(newcomer.nickname, "");
   assert.equal(newcomer.style, AstroStyle.EXPLORER);
-  assert.equal(newcomer.trail, AstroTrail.RAINBOW);
+  assert.equal(newcomer.colourLook, AstroColourLook.SILVER);
   assert.equal(newcomer.hasFinishedFirstFlight, false);
   assert.equal(newcomer.isAstroShown, true);
 });
 
 test("should_round_trip_every_field_through_its_saved_form", () => {
-  const savedProfile = AstroProfile.newcomer().withNickname("Maya").withStyle(AstroStyle.PILOT).withTrail(AstroTrail.SUNSET).withFirstFlightFinished().withAstroShown(false);
+  const savedProfile = AstroProfile.newcomer().withNickname("Maya").withStyle(AstroStyle.PILOT).withColourLook(AstroColourLook.SUNSET).withFirstFlightFinished().withAstroShown(false);
   const restoredProfile = AstroProfile.fromPlain(JSON.parse(JSON.stringify(savedProfile.toPlain())));
-  assert.deepEqual(restoredProfile.toPlain(), { nickname: "Maya", style: "pilot", trail: "sunset", hasFinishedFirstFlight: true, isAstroShown: false });
+  assert.deepEqual(restoredProfile.toPlain(), { nickname: "Maya", style: "pilot", colourLook: "sunset", hasFinishedFirstFlight: true, isAstroShown: false });
 });
 
 test("should_treat_a_missing_or_damaged_profile_as_a_newcomer", () => {
@@ -26,10 +26,10 @@ test("should_treat_a_missing_or_damaged_profile_as_a_newcomer", () => {
 });
 
 test("should_read_wrongly_typed_fields_as_their_safe_defaults", () => {
-  const restoredProfile = AstroProfile.fromPlain({ nickname: 12, style: "captain", trail: "plaid", hasFinishedFirstFlight: "yes", isAstroShown: "no" });
+  const restoredProfile = AstroProfile.fromPlain({ nickname: 12, style: "captain", colourLook: "plaid", hasFinishedFirstFlight: "yes", isAstroShown: "no" });
   assert.equal(restoredProfile.nickname, "");
   assert.equal(restoredProfile.style, AstroStyle.EXPLORER, "an unknown style falls back to the gentler voice");
-  assert.equal(restoredProfile.trail, AstroTrail.RAINBOW, "an unknown trail costs only the colour choice");
+  assert.equal(restoredProfile.colourLook, AstroColourLook.SILVER, "an unknown colour look costs only the colour choice");
   assert.equal(restoredProfile.hasFinishedFirstFlight, false);
   assert.equal(restoredProfile.isAstroShown, true, "only an explicit false hides Astro");
 });
@@ -64,16 +64,21 @@ test("should_parse_only_the_two_known_styles", () => {
   assert.equal(parseAstroStyle(undefined), AstroStyle.EXPLORER);
 });
 
-test("should_read_a_profile_saved_before_trails_existed_as_rainbow", () => {
-  const restoredProfile = AstroProfile.fromPlain({ nickname: "Maya", style: "pilot", hasFinishedFirstFlight: true, isAstroShown: true });
-  assert.equal(restoredProfile.trail, AstroTrail.RAINBOW);
+// Profiles saved while Astro was a character kept its space trail's colour
+// under "trail", and the galaxy's first build under "colours". The galaxy
+// starts everyone on silver, so neither key is read.
+test("should_start_a_profile_saved_under_an_older_key_on_silver", () => {
+  const restoredProfile = AstroProfile.fromPlain({ nickname: "Maya", style: "pilot", trail: "sunset", colours: "aurora", hasFinishedFirstFlight: true, isAstroShown: true });
+  assert.equal(restoredProfile.colourLook, AstroColourLook.SILVER);
   assert.equal(restoredProfile.nickname, "Maya", "the older fields survive");
 });
 
-test("should_parse_only_the_three_known_trails", () => {
-  assert.equal(parseAstroTrail("aurora"), AstroTrail.AURORA);
-  assert.equal(parseAstroTrail("sunset"), AstroTrail.SUNSET);
-  assert.equal(parseAstroTrail("rainbow"), AstroTrail.RAINBOW);
-  assert.equal(parseAstroTrail("Aurora"), AstroTrail.RAINBOW);
-  assert.equal(parseAstroTrail(null), AstroTrail.RAINBOW);
+test("should_parse_only_the_four_known_colour_looks", () => {
+  assert.equal(parseAstroColourLook("silver"), AstroColourLook.SILVER);
+  assert.equal(parseAstroColourLook("aurora"), AstroColourLook.AURORA);
+  assert.equal(parseAstroColourLook("sunset"), AstroColourLook.SUNSET);
+  assert.equal(parseAstroColourLook("rainbow"), AstroColourLook.RAINBOW);
+  assert.equal(parseAstroColourLook("Aurora"), AstroColourLook.SILVER, "the stored word is exact");
+  assert.equal(parseAstroColourLook(""), AstroColourLook.SILVER);
+  assert.equal(parseAstroColourLook(null), AstroColourLook.SILVER);
 });

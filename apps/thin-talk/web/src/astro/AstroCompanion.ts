@@ -4,8 +4,8 @@ import { AstroHomeView } from "./AstroHomeView";
 import { AstroProfile } from "./AstroProfile";
 import { FirstFlightView } from "./FirstFlightView";
 import type { AstroStyle } from "./AstroStyle";
-import { applyAstroTrail } from "./AstroTrail";
-import type { AstroTrail } from "./AstroTrail";
+import { applyAstroColourLook } from "./AstroColourLook";
+import type { AstroColourLook } from "./AstroColourLook";
 import { EngineWatch } from "./EngineWatch";
 import { YourAstroView } from "./YourAstroView";
 import { SkillCardKind, skillCard, starterPromptFor } from "./SkillCard";
@@ -34,8 +34,8 @@ export class AstroCompanion {
   private readonly home: AstroHomeView;
   private readonly yourAstro: YourAstroView;
   private readonly engineWatch: EngineWatch;
-  /** The window's root, which carries the trail class for every Astro figure. */
-  private readonly trailOwner: HTMLElement;
+  /** The window's root, which carries the colour look's class for every Astro figure. */
+  private readonly colourLookOwner: HTMLElement;
   private profile = AstroProfile.newcomer();
   /** False until start() has read the saved profile; see openYourAstro. */
   private hasLoadedProfile = false;
@@ -48,12 +48,11 @@ export class AstroCompanion {
     library: AstroLibrary;
     firstFlightOverlay: HTMLElement;
     yourAstroOverlay: HTMLElement;
-    /** An ancestor of every Astro figure; see applyAstroTrail. */
-    trailOwner: HTMLElement;
+    /** An ancestor of every Astro figure; see applyAstroColourLook. */
+    colourLookOwner: HTMLElement;
     emptyState: HTMLElement;
     composerField: HTMLTextAreaElement;
     skillLaunchers: HTMLElement;
-    composerAstro: HTMLElement;
     /** Shows the window classic or with Astro; see applyAstroPresentation. */
     applyPresentation: (persona: TranscriptPersona) => void;
     /** Opens an empty conversation, where Astro's home is shown. */
@@ -67,12 +66,10 @@ export class AstroCompanion {
     this.library = init.library;
     this.composerField = init.composerField;
     this.applyPresentation = init.applyPresentation;
-    this.trailOwner = init.trailOwner;
+    this.colourLookOwner = init.colourLookOwner;
     this.engineWatch = new EngineWatch(init.library);
     this.composerChrome = new AstroComposerChrome({
       launchers: init.skillLaunchers,
-      composerAstro: init.composerAstro,
-      composerField: init.composerField,
       onStarterPrompt: (prompt) => this.prepareMessage(prompt),
       hasImageModel: () => init.library.hasImageModel(),
       onNeedsSketchbook: () => void this.offerSketchbookInNewChat(init.startNewChat),
@@ -85,7 +82,7 @@ export class AstroCompanion {
       callbacks: {
         onNicknameChosen: (typedNickname) => void this.remember(this.profile.withNickname(typedNickname)),
         onStyleChosen: (style: AstroStyle) => void this.remember(this.profile.withStyle(style)),
-        onTrailChosen: (trail) => void this.rememberTrail(trail),
+        onColourLookChosen: (colourLook) => void this.rememberColourLook(colourLook),
         onFinished: (chosenSkill) => this.finishFirstFlight(chosenSkill),
       },
     });
@@ -93,7 +90,7 @@ export class AstroCompanion {
       emptyState: init.emptyState,
       library: init.library,
       onStarterPrompt: (prompt) => this.prepareMessage(prompt),
-      onTrailChosen: (trail) => void this.rememberTrail(trail),
+      onColourLookChosen: (colourLook) => void this.rememberColourLook(colourLook),
     });
     this.yourAstro = this.makeYourAstro(init.yourAstroOverlay, init.library);
     init.library.onModelInstalled(() => this.welcomeNewModel(init.onModelInstalled));
@@ -154,7 +151,7 @@ export class AstroCompanion {
         currentProfile: () => this.profile,
         saveNickname: (typedNickname) => this.remember(this.profile.withNickname(typedNickname)),
         saveStyle: (style) => this.remember(this.profile.withStyle(style)),
-        saveTrail: (trail) => this.rememberTrail(trail),
+        saveColourLook: (colourLook) => this.rememberColourLook(colourLook),
         toggleShown: () => this.rememberShown(!this.profile.isAstroShown),
         retrySave: () => this.remember(this.profile),
         replay: () => void this.replayFirstFlight(),
@@ -179,8 +176,8 @@ export class AstroCompanion {
     return this.remember(this.profile.withAstroShown(isAstroShown));
   }
 
-  private rememberTrail(trail: AstroTrail): Promise<boolean> {
-    return this.remember(this.profile.withTrail(trail));
+  private rememberColourLook(colourLook: AstroColourLook): Promise<boolean> {
+    return this.remember(this.profile.withColourLook(colourLook));
   }
 
   /** The sketchbook offer lives on Astro's home, which an empty chat shows. */
@@ -222,7 +219,7 @@ export class AstroCompanion {
   }
 
   private presentProfile(): void {
-    applyAstroTrail(this.trailOwner, this.profile.trail);
+    applyAstroColourLook(this.colourLookOwner, this.profile.colourLook);
     this.yourAstro.refresh();
     this.applyPresentation(
       new TranscriptPersona({ isAstroShown: this.profile.isAstroShown, style: this.profile.style, nickname: this.profile.nickname }),

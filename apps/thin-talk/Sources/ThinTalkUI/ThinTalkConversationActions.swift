@@ -65,7 +65,7 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
   }
 
   /// Settings (⌘,): opens Your Astro, where a young person changes their
-  /// name, style or trail on its own instead of replaying the whole welcome.
+  /// name, style or colour look on its own instead of replaying the whole welcome.
   @objc public func openYourAstro(_ sender: Any?) {
     commandController.run(.openYourAstro)
   }

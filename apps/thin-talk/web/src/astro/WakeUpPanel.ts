@@ -3,25 +3,25 @@ import { makeButton, makeElement } from "./AstroDom";
 import { AstroMoment } from "./AstroLines";
 import type { AstroFigure } from "./AstroFigure";
 import type { AstroLibrary } from "./AstroLibrary";
-import { buildTrailChips } from "./AstroTrail";
-import type { AstroTrail } from "./AstroTrail";
+import { buildColourLookChips } from "./AstroColourLook";
+import type { AstroColourLook } from "./AstroColourLook";
 import { DownloadMeter } from "./DownloadMeter";
 import { ModelDownloadPhase } from "./ModelDownload";
 import type { ModelDownloadProgress } from "./ModelDownload";
 
 /** The colour chips shown while the brain downloads: a small, harmless choice
  * that makes the wait feel like the person's own. */
-export interface WakeUpTrailChoice {
-  /** The saved trail, shown pressed among the chips. */
-  readonly trail: AstroTrail;
+export interface WakeUpColourLookChoice {
+  /** The saved colour look, shown pressed among the chips. */
+  readonly colourLook: AstroColourLook;
   /** The host saves the choice. */
-  onTrailChosen(trail: AstroTrail): void;
+  onColourLookChosen(colourLook: AstroColourLook): void;
 }
 
 export interface WakeUpPanelHost {
   readonly figure: AstroFigure;
-  /** Null where the trail has a control of its own (Your Astro). */
-  readonly trailChoice: WakeUpTrailChoice | null;
+  /** Null where the colour look has a control of its own (Your Astro). */
+  readonly colourLookChoice: WakeUpColourLookChoice | null;
   say(moment: AstroMoment): void;
   /** Whether the wake-up screen is still on show; a download that lands after
    * the person moved on must not talk over the next screen. */
@@ -91,9 +91,9 @@ export class WakeUpPanel {
       this.startBrainDownload(brainPick, meter, wakeButton);
     });
     this.element.append(meter.element);
-    const trailChoice = this.host.trailChoice;
-    if (trailChoice !== null) {
-      this.element.append(this.trailChips(trailChoice));
+    const colourLookChoice = this.host.colourLookChoice;
+    if (colourLookChoice !== null) {
+      this.element.append(this.colourLookChips(colourLookChoice));
     }
     this.element.append(this.actionRow(wakeButton, keepGoingButton));
     return { meter, wakeButton };
@@ -152,17 +152,17 @@ export class WakeUpPanel {
     return actionRow;
   }
 
-  private trailChips(trailChoice: WakeUpTrailChoice): HTMLElement {
-    const trailRow = makeElement(this.document, "div", "wake-up__trails");
-    trailRow.append(
-      makeElement(this.document, "span", "wake-up__trails-label", "While you wait, pick Astro's colours:"),
-      buildTrailChips(this.document, this.idPrefix, trailChoice.trail, (trail) => this.chooseTrail(trailChoice, trail)),
+  private colourLookChips(colourLookChoice: WakeUpColourLookChoice): HTMLElement {
+    const colourLookRow = makeElement(this.document, "div", "wake-up__colour-look");
+    colourLookRow.append(
+      makeElement(this.document, "span", "wake-up__colour-look-label", "While you wait, pick Astro's colourLook:"),
+      buildColourLookChips(this.document, this.idPrefix, colourLookChoice.colourLook, (colourLook) => this.chooseColourLook(colourLookChoice, colourLook)),
     );
-    return trailRow;
+    return colourLookRow;
   }
 
-  private chooseTrail(trailChoice: WakeUpTrailChoice, trail: AstroTrail): void {
-    trailChoice.onTrailChosen(trail);
+  private chooseColourLook(colourLookChoice: WakeUpColourLookChoice, colourLook: AstroColourLook): void {
+    colourLookChoice.onColourLookChosen(colourLook);
     this.host.figure.hop();
   }
 }

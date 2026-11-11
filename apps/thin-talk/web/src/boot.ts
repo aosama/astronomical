@@ -218,11 +218,10 @@ export function bootChatClient(): AppShell {
     library: new AstroLibrary(client),
     firstFlightOverlay: requireElement<HTMLElement>("#first-flight"),
     yourAstroOverlay: requireElement<HTMLElement>("#your-astro"),
-    trailOwner: requireElement<HTMLElement>("#app"),
+    colourLookOwner: requireElement<HTMLElement>("#app"),
     emptyState: requireElement<HTMLElement>("#empty-state"),
     composerField,
     skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),
-    composerAstro: requireElement<HTMLElement>("#composer-astro"),
     startNewChat: () => controller.newChat(),
     applyPresentation: (persona) => applyAstroPresentation({ appRoot: requireElement<HTMLElement>("#app"), transcript, composer, pictureModelGuidance }, persona),
     onModelInstalled: () => {

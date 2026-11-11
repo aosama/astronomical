@@ -1,4 +1,3 @@
-import { astroConstellationHtml } from "./AstroConstellation";
 import type { AstroStyle } from "./AstroStyle";
 import { SkillCardKind, skillCard, starterPromptFor } from "./SkillCard";
 
@@ -9,18 +8,14 @@ const CARD_BY_LAUNCHER_SKILL: Readonly<Record<string, SkillCardKind>> = {
   read: SkillCardKind.READ,
 };
 
-/** Set on the small Astro while the field holds something to send. */
-const READY_TO_SEND_CLASS = "composer__astro--ready";
-
 /**
- * Astro's part of the message field: the skill buttons inside it and the small
- * Astro beside it, which brightens once there is something to send. The buttons fill the field with the same starter
- * questions as the skill cards; nothing is sent until the person presses Send.
+ * Astro's part of the message field: the skill buttons inside it. They fill
+ * the field with the same starter questions as the skill cards; nothing is
+ * sent until the person presses Send. Astro itself is not drawn here: the
+ * field is where people type, and a figure beside it only crowded the words.
  */
 export class AstroComposerChrome {
   private readonly launchers: HTMLElement;
-  private readonly composerAstro: HTMLElement;
-  private readonly composerField: HTMLTextAreaElement;
   private readonly onStarterPrompt: (prompt: string) => void;
   private readonly hasImageModel: () => Promise<boolean>;
   private readonly onNeedsSketchbook: () => void;
@@ -28,8 +23,6 @@ export class AstroComposerChrome {
 
   public constructor(init: {
     launchers: HTMLElement;
-    composerAstro: HTMLElement;
-    composerField: HTMLTextAreaElement;
     onStarterPrompt: (prompt: string) => void;
     /** Whether a picture model is installed, asked before Draw fills the field. */
     hasImageModel: () => Promise<boolean>;
@@ -37,20 +30,15 @@ export class AstroComposerChrome {
     onNeedsSketchbook: () => void;
   }) {
     this.launchers = init.launchers;
-    this.composerAstro = init.composerAstro;
-    this.composerAstro.innerHTML = astroConstellationHtml();
-    this.composerField = init.composerField;
     this.onStarterPrompt = init.onStarterPrompt;
     this.hasImageModel = init.hasImageModel;
     this.onNeedsSketchbook = init.onNeedsSketchbook;
     this.launchers.addEventListener("click", (clickEvent) => void this.launch(clickEvent));
-    init.composerField.addEventListener("input", () => this.reflectDraft());
   }
 
   public show(style: AstroStyle): void {
     this.style = style;
     this.launchers.hidden = false;
-    this.reflectDraft();
   }
 
   public hide(): void {
@@ -75,9 +63,5 @@ export class AstroComposerChrome {
     if (starterPrompt !== null) {
       this.onStarterPrompt(starterPrompt);
     }
-  }
-
-  private reflectDraft(): void {
-    this.composerAstro.classList.toggle(READY_TO_SEND_CLASS, this.composerField.value.trim().length > 0);
   }
 }

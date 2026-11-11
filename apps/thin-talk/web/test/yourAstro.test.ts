@@ -54,10 +54,10 @@ function submitName(nickname: string): void {
 }
 
 test("should_open_your_astro_from_settings_with_every_saved_answer_shown", async () => {
-  await openYourAstro({ ...MET_ASTRO_PROFILE, trail: "aurora" });
+  await openYourAstro({ ...MET_ASTRO_PROFILE, colourLook: "aurora" });
   assert.equal(element("your-astro-nickname-shown").textContent, "Maya");
   assert.match(element("your-astro-about-you").textContent ?? "", /Explorer · big buttons/);
-  assert.equal(element("your-astro-trail-aurora").getAttribute("aria-pressed"), "true");
+  assert.equal(element("your-astro-colour-look-aurora").getAttribute("aria-pressed"), "true");
   assert.equal(element("your-astro-shown").getAttribute("aria-checked"), "true");
   assert.equal(astroSays(), "Here's everything I remember about you, Maya. Change anything you like!");
   assert.ok(document.getElementById("sidebar")?.hasAttribute("inert"), "the window behind is out of reach");
@@ -71,7 +71,7 @@ test("should_change_only_the_name_and_come_back_to_the_page", async () => {
   assert.equal(element<HTMLInputElement>("your-astro-nickname").value, "Maya", "the field starts from the saved name");
   submitName("  Mia ");
   await waitForStep("page");
-  assert.deepEqual(savedProfile(journey), { ...MET_ASTRO_PROFILE, nickname: "Mia", trail: "rainbow" });
+  assert.deepEqual(savedProfile(journey), { ...MET_ASTRO_PROFILE, nickname: "Mia", colourLook: "silver" });
   assert.equal(element("your-astro-nickname-shown").textContent, "Mia");
   assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hi, Mia!", "home behind the page greets the new name");
 });
@@ -120,14 +120,25 @@ test("should_preview_a_style_without_saving_it_until_save", async () => {
   assert.ok(document.getElementById("app")?.classList.contains("app--astro-pilot"), "the window takes the Pilot look");
 });
 
-test("should_save_a_trail_and_draw_every_astro_with_it", async () => {
+test("should_save_a_colour_look_and_draw_every_astro_with_it", async () => {
   const journey = await openYourAstro();
-  element<HTMLButtonElement>("your-astro-trail-sunset").click();
-  await waitFor(() => savedProfile(journey)["trail"] === "sunset", "the trail to save");
-  assert.ok(document.getElementById("app")?.classList.contains("astro-trail--sunset"));
-  element<HTMLButtonElement>("your-astro-trail-rainbow").click();
-  await waitFor(() => savedProfile(journey)["trail"] === "rainbow", "the trail to save");
-  assert.equal(document.getElementById("app")?.classList.contains("astro-trail--sunset"), false, "rainbow is the stylesheet's own palette");
+  assert.equal(element("your-astro-colour-look-silver").getAttribute("aria-pressed"), "true", "silver until the person picks");
+  element<HTMLButtonElement>("your-astro-colour-look-sunset").click();
+  await waitFor(() => savedProfile(journey)["colourLook"] === "sunset", "the colour look to save");
+  assert.ok(document.getElementById("app")?.classList.contains("astro-colour-look--sunset"));
+  element<HTMLButtonElement>("your-astro-colour-look-rainbow").click();
+  await waitFor(() => savedProfile(journey)["colourLook"] === "rainbow", "the colour look to save");
+  assert.ok(document.getElementById("app")?.classList.contains("astro-colour-look--rainbow"));
+  assert.equal(document.getElementById("app")?.classList.contains("astro-colour-look--sunset"), false, "one look at a time");
+});
+
+test("should_go_back_to_silver_by_clearing_every_colour_look", async () => {
+  const journey = await openYourAstro({ ...MET_ASTRO_PROFILE, colourLook: "aurora" });
+  assert.ok(document.getElementById("app")?.classList.contains("astro-colour-look--aurora"));
+  element<HTMLButtonElement>("your-astro-colour-look-silver").click();
+  await waitFor(() => savedProfile(journey)["colourLook"] === "silver", "the colour look to save");
+  const appClasses = [...(document.getElementById("app")?.classList ?? [])];
+  assert.deepEqual(appClasses.filter((className) => className.startsWith("astro-colour-look--")), [], "silver is the stylesheet's own look");
 });
 
 test("should_follow_the_view_menu_switch_while_the_page_is_open", async () => {
@@ -144,14 +155,14 @@ test("should_follow_the_view_menu_switch_while_the_page_is_open", async () => {
 test("should_say_when_a_change_was_not_saved_and_save_it_on_try_again", async () => {
   const journey = await openYourAstro();
   journey.host.failsAstroProfileSaves = true;
-  element<HTMLButtonElement>("your-astro-trail-aurora").click();
+  element<HTMLButtonElement>("your-astro-colour-look-aurora").click();
   await waitFor(() => isPresent("your-astro-save-failed"), "the failed-save alert");
   assert.equal(astroSays(), "Uh-oh, I couldn't remember that. Let's try again!");
-  assert.equal(savedProfile(journey)["trail"], undefined, "the disk still holds the old profile");
+  assert.equal(savedProfile(journey)["colourLook"], undefined, "the disk still holds the old profile");
   journey.host.failsAstroProfileSaves = false;
   element<HTMLButtonElement>("your-astro-retry-save").click();
   await waitFor(() => !isPresent("your-astro-save-failed"), "the alert to clear");
-  assert.equal(savedProfile(journey)["trail"], "aurora");
+  assert.equal(savedProfile(journey)["colourLook"], "aurora");
 });
 
 test("should_close_with_escape_from_the_page_and_back_out_of_an_answer_first", async () => {

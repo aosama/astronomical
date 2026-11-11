@@ -34,7 +34,6 @@ final class StableAccessibilityIdentifierContractTests: XCTestCase {
     "composer-skill-pictures",
     "composer-skill-look",
     "composer-skill-read",
-    "composer-astro",
     "first-flight",
   ]
 

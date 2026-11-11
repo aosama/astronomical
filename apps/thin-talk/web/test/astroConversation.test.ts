@@ -25,13 +25,13 @@ function text(selector: string): string {
   return document.querySelector(selector)?.textContent ?? "";
 }
 
-test("should_answer_as_astro_with_its_constellation_a_name_and_a_skill_tag", async () => {
+test("should_answer_as_astro_with_its_galaxy_a_name_and_a_skill_tag", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitUntilReady();
   sendUserMessage("Why is the sky blue?");
   await waitFor(() => assistantArticles().length === 1 && text("article.message--assistant .message__state") === "", "a finished answer");
   const answer = assistantArticles()[0]!;
-  assert.ok(answer.querySelector(".astro-avatar svg.astro-constellation"), "Astro's constellation");
+  assert.ok(answer.querySelector(".astro-avatar svg.astro-galaxy"), "Astro's galaxy");
   assert.equal(answer.querySelector(".astro-avatar img"), null, "no character picture");
   assert.equal(answer.querySelector(".message__role")?.textContent, "Astro");
   assert.equal(answer.querySelector("[data-testid=astro-skill-tag]")?.textContent, "Chat");
@@ -159,4 +159,29 @@ test("should_offer_the_sketchbook_in_a_new_chat_when_draw_is_pressed_without_a_p
   assert.equal(document.querySelector<HTMLTextAreaElement>("#composer-input")!.value, "", "no drawing request that would fail");
   assert.equal(daemon.chatRequestBody(), null);
   assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads until the person agrees");
+});
+
+function typeIntoMessageField(draftText: string): void {
+  const field = document.querySelector<HTMLTextAreaElement>("#composer-input");
+  assert.ok(field !== null);
+  field.value = draftText;
+  field.dispatchEvent(new window.Event("input", { bubbles: true }));
+}
+
+function messageField(): HTMLElement {
+  const found = document.getElementById("composer");
+  assert.ok(found !== null);
+  return found;
+}
+
+// The field is where people type; a figure beside it only crowded the words.
+test("should_keep_astro_out_of_the_message_field_while_its_skill_buttons_stay", async () => {
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
+  await waitUntilReady();
+  await waitFor(() => document.querySelector<HTMLElement>("#skill-launchers")?.hidden === false, "the skill buttons");
+
+  assert.equal(messageField().querySelector("svg.astro-galaxy"), null, "an empty field");
+  typeIntoMessageField("Why is the sky blue?");
+  assert.equal(messageField().querySelector("svg.astro-galaxy"), null, "a draft to send");
+  assert.equal(document.getElementById("composer-astro"), null, "no place kept for it");
 });

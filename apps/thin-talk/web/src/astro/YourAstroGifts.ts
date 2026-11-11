@@ -121,7 +121,7 @@ export class YourAstroGifts {
   private offerBrain(): void {
     const wakeUpPanel = new WakeUpPanel(this.document, GIFT_PANEL_ID_PREFIX, this.library, {
       figure: this.host.figure,
-      trailChoice: null,
+      colourLookChoice: null,
       say: (moment) => this.host.say(moment),
       isShowing: () => this.host.isShowing(),
       // The library's install notice reaches AstroCompanion, which asks this

@@ -4,7 +4,7 @@ import type { AstroLibrary } from "./AstroLibrary";
 import { AstroMoment, astroLine } from "./AstroLines";
 import { AstroProfile } from "./AstroProfile";
 import { AstroStyle } from "./AstroStyle";
-import type { AstroTrail } from "./AstroTrail";
+import type { AstroColourLook } from "./AstroColourLook";
 import { ENGINE_PATIENCE } from "./EngineWatch";
 import type { EngineWatch } from "./EngineWatch";
 import { FirstFlightJourney, FirstFlightStep } from "./FirstFlightJourney";
@@ -29,7 +29,7 @@ export interface FirstFlightCallbacks {
   /** Saved as soon as it is chosen, so quitting halfway keeps it. */
   onNicknameChosen(typedNickname: string): void;
   onStyleChosen(style: AstroStyle): void;
-  onTrailChosen(trail: AstroTrail): void;
+  onColourLookChosen(colourLook: AstroColourLook): void;
   /** `chosenSkill` is the skill taught to Astro, whose starter prompt fills
    * the message field; null when the person skipped or chose nothing. */
   onFinished(chosenSkill: SkillCardKind | null): void;
@@ -264,11 +264,11 @@ export class FirstFlightView {
     this.say(AstroMoment.NEEDS_BRAIN);
     const wakeUpPanel = new WakeUpPanel(this.document, ID_PREFIX, this.library, {
       figure: this.figure,
-      trailChoice: {
-        trail: this.shownProfile.trail,
-        onTrailChosen: (trail) => {
-          this.shownProfile = this.shownProfile.withTrail(trail);
-          this.callbacks.onTrailChosen(trail);
+      colourLookChoice: {
+        colourLook: this.shownProfile.colourLook,
+        onColourLookChosen: (colourLook) => {
+          this.shownProfile = this.shownProfile.withColourLook(colourLook);
+          this.callbacks.onColourLookChosen(colourLook);
         },
       },
       say: (moment) => this.say(moment),

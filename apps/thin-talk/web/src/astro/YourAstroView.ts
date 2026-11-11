@@ -4,7 +4,7 @@ import type { AstroLibrary } from "./AstroLibrary";
 import { AstroMoment, astroLine } from "./AstroLines";
 import type { AstroProfile } from "./AstroProfile";
 import { AstroStyle } from "./AstroStyle";
-import type { AstroTrail } from "./AstroTrail";
+import type { AstroColourLook } from "./AstroColourLook";
 import { buildGrownUpNotePanel } from "./GrownUpNote";
 import { buildNameForm } from "./NameForm";
 import { buildStyleChoiceRow } from "./StyleChoices";
@@ -24,7 +24,7 @@ export interface YourAstroCallbacks {
   currentProfile(): AstroProfile;
   saveNickname(typedNickname: string): Promise<boolean>;
   saveStyle(style: AstroStyle): Promise<boolean>;
-  saveTrail(trail: AstroTrail): Promise<boolean>;
+  saveColourLook(colourLook: AstroColourLook): Promise<boolean>;
   toggleShown(): Promise<boolean>;
   /** Saves the profile as it is now, after an earlier save failed. */
   retrySave(): Promise<boolean>;
@@ -157,7 +157,7 @@ export class YourAstroView {
   }
 
   /** Rebuilds the answer groups, keeping keyboard focus on the control that
-   * had it, so flipping the switch or a trail chip never drops VoiceOver. */
+   * had it, so flipping the switch or a colour chip never drops VoiceOver. */
   private redrawAnswers(): void {
     const answers = this.answers;
     if (answers === null) {
@@ -179,7 +179,7 @@ export class YourAstroView {
         this.previewStyle = this.profile().style;
         this.advance(() => this.journey.editStyle());
       },
-      chooseTrail: (trail) => void this.showSaveOutcome(this.callbacks.saveTrail(trail)),
+      chooseColourLook: (colourLook) => void this.showSaveOutcome(this.callbacks.saveColourLook(colourLook)),
       toggleShown: () => void this.showSaveOutcome(this.callbacks.toggleShown()),
       readGrownUpNote: () => this.advance(() => this.journey.readGrownUpNote()),
       replay: () => {
