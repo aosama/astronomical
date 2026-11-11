@@ -22,7 +22,6 @@ const SINGLETON_CONTROL_IDENTIFIERS = [
   "composer-skill-pictures",
   "composer-skill-look",
   "composer-skill-read",
-  "composer-astro",
   "first-flight",
   "your-astro",
 ] as const;

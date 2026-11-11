@@ -1,8 +1,8 @@
 /**
  * Astro drawn as a small constellation: six stars and the seven lines that
  * join them. It stands wherever Astro used to be drawn as a character (the
- * home screen, the welcome, Your Astro, beside the message field and beside
- * each answer).
+ * home screen, the welcome, Your Astro and beside each answer). The message
+ * field has none: it is where people type.
  *
  * The character read as made for small children to older teenagers, and a
  * face kept promising feelings the app could not back up. A star figure says

@@ -203,36 +203,6 @@
   stroke-linejoin: round;
 }
 
-/* Astro listening beside the field. */
-.composer__astro {
-  display: none;
-}
-
-#app.app--astro .composer {
-  position: relative;
-  padding-left: 62px;
-}
-
-#app.app--astro .composer__astro {
-  display: block;
-  position: absolute;
-  left: 10px;
-  top: 10px;
-  width: 46px;
-  height: 46px;
-  padding: 9px;
-  box-sizing: border-box;
-  pointer-events: none;
-  user-select: none;
-  opacity: 0.6;
-  transition: opacity 0.3s ease;
-}
-
-/* Something to send: the small Astro brightens beside it. */
-#app.app--astro .composer__astro.composer__astro--ready {
-  opacity: 1;
-}
-
 /* ---------- Chat colours in the sidebar ---------- */
 
 .sidebar__session-skill {

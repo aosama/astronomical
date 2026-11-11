@@ -222,7 +222,6 @@ export function bootChatClient(): AppShell {
     emptyState: requireElement<HTMLElement>("#empty-state"),
     composerField,
     skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),
-    composerAstro: requireElement<HTMLElement>("#composer-astro"),
     startNewChat: () => controller.newChat(),
     applyPresentation: (persona) => applyAstroPresentation({ appRoot: requireElement<HTMLElement>("#app"), transcript, composer, pictureModelGuidance }, persona),
     onModelInstalled: () => {

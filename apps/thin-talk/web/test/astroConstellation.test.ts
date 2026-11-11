@@ -56,26 +56,22 @@ function typeDraft(draftText: string): void {
   field.dispatchEvent(new window.Event("input", { bubbles: true }));
 }
 
-function composerAstro(): HTMLElement {
-  const found = document.getElementById("composer-astro");
+function messageField(): HTMLElement {
+  const found = document.getElementById("composer");
   assert.ok(found !== null);
   return found;
 }
 
-// Beside the message field Astro used to turn toward Send; a star figure has
-// no head to turn, so it brightens once there is something to send.
-test("should_brighten_the_composers_astro_only_while_there_is_something_to_send", async () => {
+// The field is where people type; a figure beside it only crowded the words.
+test("should_keep_astro_out_of_the_message_field_while_its_skill_buttons_stay", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitUntilReady();
-  await waitFor(() => composerAstro().querySelector("svg.astro-constellation") !== null, "the constellation beside the field");
+  await waitFor(() => document.querySelector<HTMLElement>("#skill-launchers")?.hidden === false, "the skill buttons");
 
-  assert.equal(composerAstro().classList.contains("composer__astro--ready"), false, "an empty field");
+  assert.equal(messageField().querySelector("svg.astro-constellation"), null, "an empty field");
   typeDraft("Why is the sky blue?");
-  assert.equal(composerAstro().classList.contains("composer__astro--ready"), true, "a draft to send");
-  typeDraft("   \n ");
-  assert.equal(composerAstro().classList.contains("composer__astro--ready"), false, "only spaces is nothing to send");
-  typeDraft("");
-  assert.equal(composerAstro().classList.contains("composer__astro--ready"), false, "a cleared field");
+  assert.equal(messageField().querySelector("svg.astro-constellation"), null, "a draft to send");
+  assert.equal(document.getElementById("composer-astro"), null, "no place kept for it");
 });
 
 test("should_draw_lines_in_the_newest_answer_only_while_astro_thinks_or_works", () => {

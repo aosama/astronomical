@@ -53,7 +53,6 @@ export class AstroCompanion {
     emptyState: HTMLElement;
     composerField: HTMLTextAreaElement;
     skillLaunchers: HTMLElement;
-    composerAstro: HTMLElement;
     /** Shows the window classic or with Astro; see applyAstroPresentation. */
     applyPresentation: (persona: TranscriptPersona) => void;
     /** Opens an empty conversation, where Astro's home is shown. */
@@ -71,8 +70,6 @@ export class AstroCompanion {
     this.engineWatch = new EngineWatch(init.library);
     this.composerChrome = new AstroComposerChrome({
       launchers: init.skillLaunchers,
-      composerAstro: init.composerAstro,
-      composerField: init.composerField,
       onStarterPrompt: (prompt) => this.prepareMessage(prompt),
       hasImageModel: () => init.library.hasImageModel(),
       onNeedsSketchbook: () => void this.offerSketchbookInNewChat(init.startNewChat),
