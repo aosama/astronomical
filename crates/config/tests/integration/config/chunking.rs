@@ -545,3 +545,51 @@ fn should_let_one_model_opt_into_neural_engine_prefill_without_changing_the_othe
             .experimental_neural_engine_prefill_enabled()
     );
 }
+
+/// A new user starts with no configuration file at all: the first load writes
+/// one. The Neural Engine prefill must be off in what that load resolves, for
+/// every model, and the written file must not switch it on, because the next
+/// load reads that file. Both instances share the first-run path.
+#[test]
+fn should_leave_neural_engine_prefill_off_on_a_fresh_install() {
+    for load_instance in [
+        AstronomicalConfig::load_from_home_directory
+            as fn(PathBuf) -> Result<AstronomicalConfig, AstronomicalConfigError>,
+        AstronomicalConfig::load_from_development_home_directory,
+    ] {
+        let fresh_home = tempfile::tempdir().expect("an empty home directory");
+
+        let first_load = load_instance(fresh_home.path().to_path_buf())
+            .expect("a fresh install writes and loads its first-run configuration");
+        let written_config_path = first_load.instance_paths().config_file_path();
+        let written_config: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(&written_config_path).expect("the first-run file was written"),
+        )
+        .expect("the first-run file is JSON");
+        let second_load = load_instance(fresh_home.path().to_path_buf())
+            .expect("the written first-run configuration loads again");
+
+        for loaded_config in [&first_load, &second_load] {
+            assert!(
+                !loaded_config
+                    .chunking()
+                    .expect("chunking resolves")
+                    .experimental_neural_engine_prefill_enabled(),
+                "a fresh install must not run prefill on the Neural Engine"
+            );
+            assert!(
+                !loaded_config
+                    .resolved_model_config("any-model", 262_144)
+                    .expect("a model's policy resolves")
+                    .chunking()
+                    .experimental_neural_engine_prefill_enabled(),
+                "a model with no entry of its own must inherit the off default"
+            );
+        }
+        assert_ne!(
+            written_config["chunking"]["experimental_neural_engine_prefill_enabled"],
+            serde_json::json!(true),
+            "the first-run file must not opt the user in"
+        );
+    }
+}
