@@ -3,9 +3,10 @@ import { ComposerAction } from "./ComposerAction";
 import { ModelPanelView } from "./ModelPanelView";
 import type { ComposerFriendlyNames } from "./ComposerFriendlyNames";
 
-/** The field's hint while an answer streams: a message sent now is read as
- * soon as the model can take it, after the current reply or its tool calls. */
-const QUEUEING_PLACEHOLDER = "Add a message; Thin Talk reads it next";
+/** Who the field's hint names while an answer streams, when Astro is hidden.
+ * A message sent then is read as soon as the model can take it, after the
+ * current reply or its tool calls, and the hint says who reads it. */
+const DEFAULT_ASSISTANT_NAME = "Thin Talk";
 const MAX_FIELD_HEIGHT_PX = 160;
 const FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX = 2;
 
@@ -30,6 +31,10 @@ export class ComposerView {
   private idlePlaceholder: string;
   /** The markup's own wording, which the Focus switch restores. */
   private readonly markupPlaceholder: string;
+  /** The name the queueing hint gives the assistant. It follows the idle
+   * hint: a field that says "Ask Astro anything" must not turn into "Thin
+   * Talk reads it next" the moment an answer starts. */
+  private assistantName: string = DEFAULT_ASSISTANT_NAME;
   private readonly banner: HTMLElement;
   private readonly bannerMessage: HTMLElement;
   private readonly bannerNextAction: HTMLElement;
@@ -109,6 +114,7 @@ export class ComposerView {
     if (state.failure) {
       this.bannerMessage.textContent = state.failure.message;
       this.bannerNextAction.textContent = state.failure.nextAction;
+      this.banner.title = state.failure.detail ?? "";
       this.banner.hidden = false;
     } else {
       this.banner.hidden = true;
@@ -134,6 +140,16 @@ export class ComposerView {
    * placeholder still wins while an answer streams. */
   public setIdlePlaceholder(idlePlaceholder: string): void {
     this.idlePlaceholder = idlePlaceholder;
+    // VoiceOver reads the field's label, not its placeholder, so the label
+    // follows the idle words; otherwise it hears "Message Thin Talk" on a
+    // field that shows "Ask Astro anything".
+    this.field.setAttribute("aria-label", idlePlaceholder);
+    this.refreshControls();
+  }
+
+  /** Names the assistant in the queueing hint, or restores the default with null. */
+  public setAssistantName(assistantName: string | null): void {
+    this.assistantName = assistantName ?? DEFAULT_ASSISTANT_NAME;
     this.refreshControls();
   }
 
@@ -150,7 +166,7 @@ export class ComposerView {
     this.field.disabled = !this.state.acceptsInput;
     // While an answer streams, Return queues the message; the placeholder says
     // so, since the send button gives way to Stop.
-    this.field.placeholder = streaming ? QUEUEING_PLACEHOLDER : this.idlePlaceholder;
+    this.field.placeholder = streaming ? `Add a message; ${this.assistantName} reads it next` : this.idlePlaceholder;
     // The placeholder keeps the field discoverable while disabled; the send rule
     // needs the draft, so it is evaluated from the live value.
     this.sendButton.disabled = !this.canSend();

@@ -482,6 +482,20 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
         return
       }
       NSWorkspace.shared.open(externalURL)
+    case "saveGeneratedImage", "copyGeneratedImage":
+      // The store checks the name before any path is built, so a crafted
+      // name cannot reach a file outside the generated-images folder.
+      guard let imageName = envelope["detail"] as? String,
+            let imageURL = generatedImageStore.fileURL(forImageName: imageName)
+      else {
+        NSLog("ThinTalk canvas: no stored picture to \(action)")
+        return
+      }
+      if action == "saveGeneratedImage" {
+        GeneratedImageSharing.saveCopy(of: imageURL, from: webViewProvider()?.window)
+      } else {
+        GeneratedImageSharing.copyToPasteboard(imageURL)
+      }
     case "restartEngine":
       // Astro's welcome offers this when the engine never answered; a host
       // without the ability never advertises it, so nil only logs.

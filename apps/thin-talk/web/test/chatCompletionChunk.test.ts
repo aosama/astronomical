@@ -85,3 +85,16 @@ test("should_skip_a_tool_call_piece_without_a_usable_index", () => {
     assert.deepEqual(chunk?.toolCallFragments, [], badIndex);
   }
 });
+
+test("should_classify_an_error_chunk_by_its_code_field_as_the_engine_really_sends_it", () => {
+  const engineErrorLine =
+    'data: {"error":{"message":"this Mac ran out of graphics memory while running the model; close other apps that use a lot of memory, or use a smaller model","type":"service_unavailable","code":"chat_out_of_memory"}}';
+  assert.throws(
+    () => ChatCompletionChunk.fromServerSentEventLine(engineErrorLine),
+    (error: unknown) => error instanceof ChatFailure && error.kind === ChatFailureKind.OUT_OF_MEMORY && error.reason !== null && error.reason.startsWith("this Mac ran out"),
+  );
+  assert.throws(
+    () => ChatCompletionChunk.fromServerSentEventLine('data: {"error":{"message":"the local worker stopped after a fatal model execution error: x","code":"chat_worker_unavailable"}}'),
+    (error: unknown) => error instanceof ChatFailure && error.kind === ChatFailureKind.WORKER_UNAVAILABLE,
+  );
+});

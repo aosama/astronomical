@@ -2,7 +2,9 @@
 //! events collect into one non-streaming Responses payload.
 
 use crate::{ChatGenerationStreamEvent, OpenAiResponsesCollector};
-use astronomical_ipc_protocol::ChatGenerationCompletionReason;
+use astronomical_ipc_protocol::{
+    ChatGenerationCompletionReason, ChatGenerationFailureReason, OUT_OF_GRAPHICS_MEMORY_ADVICE,
+};
 
 #[test]
 fn should_collect_reasoning_summary_text_and_function_calls_into_one_response() {
@@ -114,4 +116,48 @@ fn should_mark_a_maximum_output_token_response_incomplete() {
         "max_output_tokens"
     );
     assert_eq!(response_document["output"][0]["status"], "incomplete");
+}
+
+fn failed_response_error(failure_reason: ChatGenerationFailureReason) -> serde_json::Value {
+    let collector = OpenAiResponsesCollector::new(
+        "resp_instance-11".to_owned(),
+        1_753_000_000,
+        "astronomical/fake-mixture-of-experts".to_owned(),
+        None,
+        Default::default(),
+    );
+    let failed_response = collector.into_failed_response(failure_reason);
+    let mut response_document =
+        serde_json::to_value(failed_response).expect("a failed response should serialize");
+    assert_eq!(response_document["status"], "failed");
+    response_document["error"].take()
+}
+
+/// A client can only tell someone to free memory if this failure has a code of
+/// its own; under the generic code it reads as an engine that broke.
+#[test]
+fn should_report_out_of_graphics_memory_with_its_own_code_and_advice() {
+    let out_of_memory_error =
+        failed_response_error(ChatGenerationFailureReason::OutOfGraphicsMemory);
+
+    assert_eq!(out_of_memory_error["code"], "chat_out_of_memory");
+    assert_eq!(
+        out_of_memory_error["message"],
+        OUT_OF_GRAPHICS_MEMORY_ADVICE
+    );
+}
+
+#[test]
+fn should_keep_the_generic_code_for_a_failure_that_is_not_out_of_memory() {
+    for other_failure_reason in [
+        ChatGenerationFailureReason::EngineBusy,
+        ChatGenerationFailureReason::FatalExecution {
+            reason: "model execution failed inside the local worker".to_owned(),
+        },
+    ] {
+        let other_error = failed_response_error(other_failure_reason);
+
+        assert_eq!(other_error["code"], "response_generation_failed");
+        assert_ne!(other_error["message"], OUT_OF_GRAPHICS_MEMORY_ADVICE);
+    }
 }

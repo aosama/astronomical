@@ -177,6 +177,13 @@ async fn should_emit_meaningful_openai_errors_for_each_stream_failure() {
             "the local worker stopped after a fatal model execution error: GPU allocation exceeded the platform buffer limit while evaluating the model; reduce the prompt size or configured prefill chunk size",
         ),
         (
+            ChatGenerationStreamEvent::Failed {
+                reason: ChatGenerationFailureReason::OutOfGraphicsMemory,
+            },
+            "chat_out_of_memory",
+            "this Mac ran out of graphics memory while running the model; close other apps that use a lot of memory, or use a smaller model",
+        ),
+        (
             ChatGenerationStreamEvent::Error(
                 astronomical_daemon::ChatGenerationStreamErrorCode::WorkerUnavailable,
             ),

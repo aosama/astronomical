@@ -670,7 +670,11 @@ export class ChatController {
       selectedImageModelID: this.selectedImageModelID(),
       modelDescriptions: this.modelDescriptionDirectory.descriptions,
       failure: this.failure
-        ? { message: this.failure.message, nextAction: this.failure.nextAction }
+        ? {
+            message: this.failure.headline,
+            nextAction: this.failure.nextAction,
+            detail: this.failure.reason !== this.failure.headline ? this.failure.reason : null,
+          }
         : null,
     });
   }

@@ -221,15 +221,14 @@ fn current_unix_timestamp_seconds() -> Result<u64, OpenAiResponsesAssemblyError>
 
 fn failure_details(failure_reason: &ChatGenerationFailureReason) -> (String, String) {
     match failure_reason {
-        ChatGenerationFailureReason::ContextLengthExceeded {
-            actual_total_context_tokens,
-            maximum_context_tokens,
-        } => (
-            "context_length_exceeded".to_owned(),
-            format!(
-                "requested context uses {actual_total_context_tokens} tokens, exceeding the {maximum_context_tokens}-token model context window"
-            ),
-        ),
+        // The two failures a Responses client can act on keep the code and
+        // sentence Chat Completions gives them, so one client-side rule
+        // covers both endpoints.
+        ChatGenerationFailureReason::ContextLengthExceeded { .. }
+        | ChatGenerationFailureReason::OutOfGraphicsMemory => {
+            let wording = super::chat_failure_wording::chat_failure_wording(failure_reason);
+            (wording.code.to_owned(), wording.message)
+        }
         other_failure_reason => (
             "response_generation_failed".to_owned(),
             format!("the local worker could not generate the response: {other_failure_reason:?}"),

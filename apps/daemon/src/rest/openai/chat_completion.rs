@@ -11,7 +11,26 @@ use axum::{
 use thiserror::Error;
 use tokio::sync::mpsc;
 
+use super::chat_failure_wording::chat_failure_wording;
 use crate::{ChatGenerationStreamErrorCode, ChatGenerationStreamEvent};
+
+/// Frames a worker failure as a non-streaming error body. A context overflow
+/// is the caller's to fix, so it alone is an invalid request naming the
+/// `messages` parameter; every other failure is the engine's.
+fn failed_chat_error_response(failure_reason: &ChatGenerationFailureReason) -> OpenAiErrorResponse {
+    let wording = chat_failure_wording(failure_reason);
+    if matches!(
+        failure_reason,
+        ChatGenerationFailureReason::ContextLengthExceeded { .. }
+    ) {
+        return OpenAiErrorResponse::invalid_request(
+            wording.message,
+            Some("messages"),
+            Some(wording.code),
+        );
+    }
+    OpenAiErrorResponse::service_unavailable(wording.message, Some(wording.code))
+}
 
 pub(crate) async fn create_non_streaming_chat_completion(
     mut chat_stream_event_receiver: mpsc::Receiver<ChatGenerationStreamEvent>,
@@ -181,44 +200,9 @@ impl OpenAiChatCompletionCollector {
             }
             ChatGenerationStreamEvent::PrefillProgress { .. } => None,
             ChatGenerationStreamEvent::Completed { .. } => None,
-            ChatGenerationStreamEvent::Failed { reason } => Some(match reason {
-                ChatGenerationFailureReason::InvalidRequest { reason } => {
-                    OpenAiErrorResponse::service_unavailable(
-                        format!("the local worker rejected the chat request: {reason}"),
-                        Some("chat_invalid_request"),
-                    )
-                }
-                ChatGenerationFailureReason::FatalExecution { reason } => {
-                    OpenAiErrorResponse::service_unavailable(
-                        format!(
-                            "the local worker stopped after a fatal model execution error: {reason}"
-                        ),
-                        Some("chat_worker_unavailable"),
-                    )
-                }
-                ChatGenerationFailureReason::ContextLengthExceeded {
-                    actual_total_context_tokens,
-                    maximum_context_tokens,
-                } => OpenAiErrorResponse::invalid_request(
-                    format!(
-                        "requested context uses {actual_total_context_tokens} tokens, exceeding the {maximum_context_tokens}-token model context window"
-                    ),
-                    Some("messages"),
-                    Some("context_length_exceeded"),
-                ),
-                ChatGenerationFailureReason::EngineBusy => {
-                    OpenAiErrorResponse::service_unavailable(
-                        "the local inference engine is already processing another request",
-                        Some("chat_engine_busy"),
-                    )
-                }
-                ChatGenerationFailureReason::MalformedModelOutput => {
-                    OpenAiErrorResponse::service_unavailable(
-                        "the model produced malformed structured output",
-                        Some("chat_malformed_model_output"),
-                    )
-                }
-            }),
+            ChatGenerationStreamEvent::Failed { reason } => {
+                Some(failed_chat_error_response(&reason))
+            }
             ChatGenerationStreamEvent::Error(error_code) => match error_code {
                 ChatGenerationStreamErrorCode::WorkerUnavailable => {
                     Some(OpenAiErrorResponse::service_unavailable(

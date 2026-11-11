@@ -262,8 +262,8 @@ fn write_and_flush_plain(output: &mut dyn Write, text: &str) -> std::io::Result<
 /// assembly from its parts.
 fn chat_generation_failure_reason_text(reason: &ChatGenerationFailureReason) -> String {
     match reason {
-        ChatGenerationFailureReason::InvalidRequest { reason } => reason.clone(),
-        ChatGenerationFailureReason::FatalExecution { reason } => reason.clone(),
+        ChatGenerationFailureReason::InvalidRequest { reason }
+        | ChatGenerationFailureReason::FatalExecution { reason } => reason.clone(),
         ChatGenerationFailureReason::ContextLengthExceeded {
             actual_total_context_tokens,
             maximum_context_tokens,
@@ -271,6 +271,9 @@ fn chat_generation_failure_reason_text(reason: &ChatGenerationFailureReason) -> 
             "the prompt and requested output exceed the model context \
              ({actual_total_context_tokens} of {maximum_context_tokens} tokens)"
         ),
+        ChatGenerationFailureReason::OutOfGraphicsMemory => {
+            astronomical_ipc_protocol::OUT_OF_GRAPHICS_MEMORY_ADVICE.to_owned()
+        }
         ChatGenerationFailureReason::EngineBusy => {
             "the engine is busy with another generation".to_owned()
         }
@@ -395,3 +398,7 @@ pub struct RespondArguments {
     /// Buffer the answer and print it once instead of streaming fragments.
     pub no_stream: bool,
 }
+
+#[cfg(test)]
+#[path = "respond_tests.rs"]
+mod respond_tests;

@@ -72,10 +72,12 @@ export class ChatCompletionChunk {
     if (typeof errorField !== "object" || errorField === null) {
       return;
     }
-    const errorMessage = (errorField as Record<string, unknown>)["message"];
+    const errorRecord = errorField as Record<string, unknown>;
+    const errorMessage = errorRecord["message"];
+    const errorCode = errorRecord["code"];
     const reason = typeof errorMessage === "string" ? errorMessage : null;
-    const classifiedReason: string = reason != null ? reason : "";
-    throw new ChatFailure(ChatFailureClassifier.classifyReason(classifiedReason), reason);
+    const code = typeof errorCode === "string" ? errorCode : null;
+    throw new ChatFailure(ChatFailureClassifier.classifyErrorChunk(code, reason), reason);
   }
 
   /** Thin Talk always asks for one choice; every choice in a chunk is folded in

@@ -212,6 +212,12 @@ pub enum ChatGenerationOutput {
     },
 }
 
+/// What every surface tells a person when a generation fails with
+/// [`ChatGenerationFailureReason::OutOfGraphicsMemory`]. It lives beside the
+/// reason so the command line and each REST dialect give the same advice in
+/// the same words.
+pub const OUT_OF_GRAPHICS_MEMORY_ADVICE: &str = "this Mac ran out of graphics memory while running the model; close other apps that use a lot of memory, or use a smaller model";
+
 /// A bounded request-scoped failure that leaves the worker process responsive.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -221,6 +227,10 @@ pub enum ChatGenerationFailureReason {
     /// A fatal model-execution failure reported before the worker exits.
     /// The reason is bounded and safe for the local API; native details stay in logs.
     FatalExecution { reason: String },
+    /// The graphics processor ran out of memory while running the model, and
+    /// the worker exits. Its own reason because it is the one fatal failure a
+    /// person can act on: free memory, or use a smaller model.
+    OutOfGraphicsMemory,
     /// Prompt plus requested output exceeds the model-native context window.
     ContextLengthExceeded {
         actual_total_context_tokens: u32,

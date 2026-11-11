@@ -1,12 +1,13 @@
 use std::collections::VecDeque;
 
-use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
+use astronomical_ipc_protocol::ChatGenerationCompletionReason;
 use astronomical_rest_contract::{
     OpenAiChatCompletionChunk, OpenAiErrorResponse, OpenAiFinishReason, OpenAiTokenUsage,
 };
 use axum::response::sse::Event;
 use serde::Serialize;
 
+use super::chat_failure_wording::chat_failure_wording;
 use crate::{ChatGenerationStreamErrorCode, ChatGenerationStreamEvent};
 
 /// Encodes bounded daemon chat events into OpenAI-compatible SSE chunks.
@@ -100,33 +101,10 @@ impl OpenAiChatStreamEncoder {
                 cached_token_count,
                 reason,
             ),
-            ChatGenerationStreamEvent::Failed { reason } => match reason {
-                ChatGenerationFailureReason::ContextLengthExceeded {
-                    actual_total_context_tokens,
-                    maximum_context_tokens,
-                } => self.error_event(
-                    format!(
-                        "requested context uses {actual_total_context_tokens} tokens, exceeding the {maximum_context_tokens}-token model context window"
-                    ),
-                    "context_length_exceeded",
-                ),
-                ChatGenerationFailureReason::InvalidRequest { reason } => self.error_event(
-                    format!("the local worker rejected the chat request: {reason}"),
-                    "chat_invalid_request",
-                ),
-                ChatGenerationFailureReason::FatalExecution { reason } => self.error_event(
-                    format!("the local worker stopped after a fatal model execution error: {reason}"),
-                    "chat_worker_unavailable",
-                ),
-                ChatGenerationFailureReason::EngineBusy => self.error_event(
-                    "the local inference engine is already processing another request",
-                    "chat_engine_busy",
-                ),
-                ChatGenerationFailureReason::MalformedModelOutput => self.error_event(
-                    "the model produced malformed structured output",
-                    "chat_malformed_model_output",
-                ),
-            },
+            ChatGenerationStreamEvent::Failed { reason } => {
+                let wording = chat_failure_wording(&reason);
+                self.error_event(wording.message, wording.code)
+            }
             ChatGenerationStreamEvent::Error(error_code) => match error_code {
                 ChatGenerationStreamErrorCode::WorkerUnavailable => self.error_event(
                     "the local worker became unavailable while processing the chat request",

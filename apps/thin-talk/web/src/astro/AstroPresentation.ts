@@ -5,8 +5,10 @@ import type { TranscriptPersona } from "../TranscriptPersona";
 import type { TranscriptView } from "../TranscriptView";
 import { AstroStyle } from "./AstroStyle";
 
+/** The companion's name wherever the composer speaks of it. */
+export const ASTRO_NAME = "Astro";
 /** The message field's placeholder while Astro is shown. */
-export const ASTRO_COMPOSER_PLACEHOLDER = "Ask Astro anything";
+export const ASTRO_COMPOSER_PLACEHOLDER = `Ask ${ASTRO_NAME} anything`;
 
 /** Plain words for the composer's brain control in the Explorer style: the
  * chat model is Astro's brain. Pilots see the models' own names, since
@@ -38,4 +40,5 @@ export function applyAstroPresentation(targets: AstroPresentationTargets, person
   const isExplorer = persona.isAstroShown && persona.style === AstroStyle.EXPLORER;
   targets.composer.setFriendlyNames(isExplorer ? EXPLORER_FRIENDLY_NAMES : null);
   targets.composer.setIdlePlaceholder(persona.isAstroShown ? ASTRO_COMPOSER_PLACEHOLDER : targets.composer.markupIdlePlaceholder);
+  targets.composer.setAssistantName(persona.isAstroShown ? ASTRO_NAME : null);
 }
