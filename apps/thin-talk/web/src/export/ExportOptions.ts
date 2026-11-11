@@ -24,12 +24,35 @@ export interface ExportOptions {
   readonly includesAiNote: boolean;
 }
 
-export function defaultExportOptions(scope: ExportScope): ExportOptions {
+/** The choices worth keeping from one export to the next. Someone who hands
+ * in Word files without pictures wants that again next week; whose messages
+ * to include is not kept, because it follows what is being exported. */
+export interface ExportChoices {
+  readonly format: ExportFormat;
+  readonly includesPictures: boolean;
+  readonly includesAiNote: boolean;
+}
+
+/** Reads saved choices, or null when they are missing or not ones this
+ * version offers, so a damaged or older file falls back to the defaults. */
+export function parseExportChoices(plain: unknown): ExportChoices | null {
+  if (typeof plain !== "object" || plain === null) {
+    return null;
+  }
+  const record = plain as Record<string, unknown>;
+  const format = Object.values(ExportFormat).find((knownFormat) => knownFormat === record["format"]);
+  if (format === undefined || typeof record["includesPictures"] !== "boolean" || typeof record["includesAiNote"] !== "boolean") {
+    return null;
+  }
+  return { format, includesPictures: record["includesPictures"], includesAiNote: record["includesAiNote"] };
+}
+
+export function defaultExportOptions(scope: ExportScope, rememberedChoices: ExportChoices | null = null): ExportOptions {
   return {
     scope,
-    format: ExportFormat.PDF,
+    format: rememberedChoices?.format ?? ExportFormat.PDF,
     includesQuestions: scope.kind !== "oneAnswer",
-    includesPictures: true,
-    includesAiNote: true,
+    includesPictures: rememberedChoices?.includesPictures ?? true,
+    includesAiNote: rememberedChoices?.includesAiNote ?? true,
   };
 }

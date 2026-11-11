@@ -27,6 +27,23 @@ export const CODE_BLOCK_TOOLS_CLASS = "code-block__tools";
 /** The `data-action` of an answer's Export button. */
 export const EXPORT_ANSWER_ACTION = "export-answer";
 
+/** The classes of a checklist item's box, drawn by the stylesheet. */
+export const TASK_BOX_CLASS = "task-box";
+export const DONE_TASK_BOX_CLASS = "task-box--done";
+
+/**
+ * A checklist item's box as the transcript draws it. Markdown's own output
+ * is a form checkbox, which the sanitiser reduced to a bare input: the chat
+ * showed an empty text field in front of every item and lost every tick. A
+ * span keeps form controls out of model output altogether, and the title
+ * says in words what the picture shows.
+ */
+function taskBoxHtml(isDone: boolean): string {
+  return isDone
+    ? `<span class="${TASK_BOX_CLASS} ${DONE_TASK_BOX_CLASS}" title="Done"></span>`
+    : `<span class="${TASK_BOX_CLASS}" title="Not done"></span>`;
+}
+
 /** The longest prompt excerpt used in an image's text alternative; a screen
  * reader reads the whole attribute, and prompts can run to paragraphs. */
 const MAXIMUM_IMAGE_DESCRIPTION_PROMPT_CHARACTERS = 250;
@@ -84,6 +101,7 @@ export class Renderer {
     this.diagrams = init.diagrams;
     this.chrome = new ClassicMessageChrome((text) => this.trust.escapeHtml(text));
     marked.setOptions({ gfm: true, breaks: false });
+    marked.use({ renderer: { checkbox: ({ checked }) => taskBoxHtml(checked) } });
   }
 
   /** Who the conversation is with. The transcript redraws every message after

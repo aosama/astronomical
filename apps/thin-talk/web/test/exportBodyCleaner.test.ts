@@ -97,14 +97,14 @@ test("should_leave_an_empty_body_empty", () => {
   assert.equal(cleanExportBody(renderedBody(""), false).innerHTML, "");
 });
 
-// A form control printed as an empty text field and lost its tick.
+// The transcript's drawn boxes need its stylesheet; a file has only text.
 test("should_turn_checklist_boxes_into_characters_and_drop_the_items_bullets", () => {
   const cleanedBody = cleanExportBody(
-    renderedBody(`<ul><li><input checked="" disabled="" type="checkbox"> Done</li><li><input disabled="" type="checkbox"> Todo</li><li>Plain</li></ul>`),
+    renderedBody(`<ul><li><span class="task-box task-box--done" title="Done"></span> Done</li><li><span class="task-box" title="Not done"></span> Todo</li><li>Plain</li></ul>`),
     false,
   );
 
-  assert.equal(cleanedBody.querySelector("input"), null);
+  assert.equal(cleanedBody.querySelector(".task-box"), null);
   const items = [...cleanedBody.querySelectorAll("li")];
   assert.deepEqual(items.map((item) => (item.textContent ?? "").replace(/\s+/g, " ").trim()), ["☑ Done", "☐ Todo", "Plain"]);
   assert.deepEqual(items.map((item) => item.className), ["export-task", "export-task", ""]);

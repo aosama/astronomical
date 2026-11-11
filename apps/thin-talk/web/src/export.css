@@ -244,17 +244,33 @@
   cursor: default;
 }
 
+/* The circle sticks to the top of the conversation while its message
+   scrolls, so a message taller than the window still shows whether it is
+   ticked. Sticky needs the circle in the flow; the negative margins put it
+   in the gutter and give back the height it would take. */
 .app--picking .message[role="checkbox"]::before {
   content: "";
-  position: absolute;
-  left: 8px;
+  position: sticky;
   top: 14px;
+  align-self: flex-start;
+  flex: none;
+  margin: 14px 0 -44px -32px;
   width: 20px;
   height: 20px;
   box-sizing: border-box;
   border-radius: 50%;
   border: 2px solid var(--line-strong);
   background: var(--surface);
+}
+
+/* Astro's answers are a grid with the face in the first column, where an
+   in-flow circle would land on the text column and cover the face. There it
+   shares the face's cell and is pulled into the gutter beside it. */
+#app.app--astro.app--picking .message--assistant[role="checkbox"]::before {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  margin: 14px 0 0 -32px;
 }
 
 .app--picking .message[data-picked] {
