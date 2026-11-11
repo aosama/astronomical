@@ -86,3 +86,4 @@ import "./messagePicker.test";
 import "./exportLauncher.test";
 import "./exportSource.test";
 import "./briefNotice.test";
+import "./modelLoadNotice.test";

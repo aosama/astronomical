@@ -84,6 +84,13 @@ export class DaemonClient {
     return reportedStatus != null ? reportedStatus : "unknown";
   }
 
+  /** Whether the engine is loading a model right now, from the same status
+   * the handshake reads. */
+  public async isModelLoading(): Promise<boolean> {
+    const status: unknown = JSON.parse(await this.requestText("/v1/status"));
+    return typeof status === "object" && status !== null && (status as Record<string, unknown>)["model_load_in_flight"] != null;
+  }
+
   /** Returns the chat-capable models discovered on this channel. */
   public async fetchModels(): Promise<ChatModel[]> {
     const catalogEntries = await this.fetchCatalogEntries();

@@ -112,3 +112,18 @@ test("should_read_the_current_library_download", async () => {
   const currentStatus = await daemonClient().fetchLibraryDownloadStatus();
   assert.deepEqual([currentStatus.state, currentStatus.bytesCompleted, currentStatus.bytesTotal], ["downloading", 5, 10]);
 });
+
+test("should_report_a_model_load_only_while_the_status_names_one", async () => {
+  const statusBodies = ['{"activity":"idle","model_load_in_flight":{"model_id":"Example-9B"}}', '{"activity":"idle","model_load_in_flight":null}', '{"activity":"idle"}', "[]"];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(statusBodies.shift() ?? "{}", { status: 200 })) as typeof fetch;
+  try {
+    const client = daemonClient();
+    assert.equal(await client.isModelLoading(), true);
+    assert.equal(await client.isModelLoading(), false);
+    assert.equal(await client.isModelLoading(), false, "an engine that does not report loads");
+    assert.equal(await client.isModelLoading(), false, "a status that is not an object");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

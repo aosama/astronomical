@@ -5,6 +5,7 @@ import { ToolStepState } from "../ToolStep";
 import type { ToolStep } from "../ToolStep";
 import { lookFrameURL } from "./AstroFigure";
 import { CONVERSATION_SKILL_LABELS, answerSkill, skillForToolName } from "../ConversationSkill";
+import { stateWordsHtml } from "../MessageChrome";
 import type { EscapeHtml, MessageChrome } from "../MessageChrome";
 import { AstroStyle } from "./AstroStyle";
 import { skillMomentWords } from "./SkillMomentWords";
@@ -28,6 +29,9 @@ const LOOK_FRAME_BY_MOOD: Record<AstroMood, number> = {
   [AstroMood.DONE]: 4,
   [AstroMood.STOPPED]: 3,
 };
+
+/** What Astro says in place of "thinking" while the engine loads a model. */
+const MODEL_LOADING_WORDS = { explorer: "is waking up its brain…", pilot: "loading the model…" };
 
 const STATUS_BY_MOOD: Record<AstroMood, { explorer: string; pilot: string }> = {
   [AstroMood.THINKING]: { explorer: "is thinking…", pilot: "thinking…" },
@@ -89,7 +93,7 @@ export class AstroMessageChrome implements MessageChrome {
       `<div class="message__meta message__meta--astro">` +
       `<span class="message__role">Astro</span>` +
       `<span class="astro-skill-tag astro-skill-tag--${skill}" data-testid="astro-skill-tag">${CONVERSATION_SKILL_LABELS[skill]}</span>` +
-      `<span class="message__state">${statusText}${caret}</span>` +
+      `<span class="message__state">${stateWordsHtml(statusText, mood === AstroMood.THINKING ? byStyle(MODEL_LOADING_WORDS, this.persona) : null)}${caret}</span>` +
       `</div>`
     );
   }
