@@ -27,8 +27,53 @@ final class ChatWindowController {
   var isShowingChat: Bool { conversationWindow.window.isVisible }
 
   func showChatWindow() {
+    // Asked for by the person (the Dock, a link, the menu bar): a background
+    // launch still waiting to go behind must not then hide what they opened.
+    sendBehindAfterFirstDraw?.cancel()
+    sendBehindAfterFirstDraw = nil
+    conversationWindow.window.alphaValue = 1
+    conversationWindow.window.ignoresMouseEvents = false
     NSApp.activate(ignoringOtherApps: true)
     conversationWindow.window.makeKeyAndOrderFront(nil)
+  }
+
+  /// Shows the window at launch. Behind the other windows it is on screen,
+  /// so it can be looked at and driven, but it neither covers what the
+  /// person is working in nor takes their keyboard; they bring it forward
+  /// from the Dock when they want it.
+  func showChatWindowAtLaunch(_ launchPlacement: ChatLaunchPlacement) {
+    switch launchPlacement {
+    case .inFront: showChatWindow()
+    case .behindOtherWindows: showChatWindowBehindOthers()
+    }
+  }
+
+  /// The wait before a background-launched window goes behind; cancelled
+  /// when the person asks for the window first.
+  private var sendBehindAfterFirstDraw: Task<Void, Never>?
+
+  /// How long the window stays in front, invisible, before it goes behind:
+  /// long enough for the page to load and draw its first frame.
+  static let firstDrawInterval: Duration = .seconds(3)
+
+  /// WebKit does not draw a page in a window that has never been visible, so
+  /// a window ordered straight to the back stays blank however long it
+  /// waits. The window is therefore put in front fully transparent and
+  /// ignoring the pointer, which is visible to WebKit and invisible to the
+  /// person, and goes behind the others once the page has drawn.
+  private func showChatWindowBehindOthers() {
+    let window = conversationWindow.window
+    window.alphaValue = 0
+    window.ignoresMouseEvents = true
+    window.orderFrontRegardless()
+    sendBehindAfterFirstDraw = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: Self.firstDrawInterval)
+      guard !Task.isCancelled else { return }
+      self?.sendBehindAfterFirstDraw = nil
+      window.orderBack(nil)
+      window.alphaValue = 1
+      window.ignoresMouseEvents = false
+    }
   }
 
   /// Opens the window on Your Astro, the page that holds every answer from

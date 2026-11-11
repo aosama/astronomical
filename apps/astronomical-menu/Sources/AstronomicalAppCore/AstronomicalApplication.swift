@@ -89,7 +89,7 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
     _ = moveContainerStateIntoGroupContainerIfNeeded(applicationIdentity: applicationIdentity)
     if launchAtLoginSupported { moveWholeApplicationLoginItemToAgent(using: loginItemRegistrar) }
     startAgentOfThisBuild()
-    chatWindowController.showChatWindow()
+    chatWindowController.showChatWindowAtLaunch(ChatLaunchPlacement.fromLaunchArguments())
     hasFinishedLaunching = true
   }
 

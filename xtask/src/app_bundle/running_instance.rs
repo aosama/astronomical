@@ -12,6 +12,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::channel_profile::{APPLICATION_EXECUTABLE_NAME, ChannelProfile};
+use super::command::DevOpenPlacement;
 use super::tool_command::run_quiet_tool;
 
 const APPLICATION_QUIT_WAIT: Duration = Duration::from_secs(15);
@@ -171,9 +172,35 @@ pub(crate) fn wait_for_daemon_exit(channel_profile: &ChannelProfile) -> Result<(
     wait_for_exit(&daemon_pattern, "daemon", DAEMON_EXIT_WAIT)
 }
 
-/// Opens the main app, which shows the chat window and starts its agent.
-pub(crate) fn open_bundle(bundle_path: &Path) -> Result<(), String> {
-    run_quiet_tool(Command::new("open").arg(bundle_path)).map(drop)
+/// The launch argument that tells the app to show its window behind every
+/// other window. `open -g` alone is not enough: it launches the app inactive,
+/// but the app brings itself forward when it shows its window unless told
+/// not to. The app reads the same text in `ChatLaunchPlacement.swift`.
+pub(crate) const LAUNCH_IN_BACKGROUND_ARGUMENT: &str = "--launch-in-background";
+
+/// The `open` arguments for the main app, which shows the chat window and
+/// starts its agent.
+pub(crate) fn open_bundle_arguments(
+    bundle_path: &Path,
+    open_placement: DevOpenPlacement,
+) -> Vec<std::ffi::OsString> {
+    match open_placement {
+        DevOpenPlacement::InFront => vec![bundle_path.into()],
+        DevOpenPlacement::InBackground => vec![
+            "-g".into(),
+            bundle_path.into(),
+            "--args".into(),
+            LAUNCH_IN_BACKGROUND_ARGUMENT.into(),
+        ],
+    }
+}
+
+pub(crate) fn open_bundle(
+    bundle_path: &Path,
+    open_placement: DevOpenPlacement,
+) -> Result<(), String> {
+    run_quiet_tool(Command::new("open").args(open_bundle_arguments(bundle_path, open_placement)))
+        .map(drop)
 }
 
 /// Opens only the menu-bar agent, in the background: the status item comes

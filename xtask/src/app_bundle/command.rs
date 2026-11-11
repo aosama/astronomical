@@ -10,7 +10,7 @@ use super::instance_control::{InstanceAction, run_instance_action};
 use super::package_pipeline::{PackageRequest, run_package, validate_package_request};
 use super::smoke_test::{SmokeTestRequest, run_smoke_test};
 
-pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
+pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev [--background] | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
 
 /// `info-plist --channel NAME` prints the main app's plist; a trailing
 /// `--agent` prints the menu-bar agent's instead.
@@ -39,10 +39,20 @@ pub(crate) enum PlistSubject {
     Agent,
 }
 
+/// Where the rebuilt Development app's window appears.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DevOpenPlacement {
+    InFront,
+    /// Behind every other window, without taking the keyboard: a rebuild in
+    /// the middle of other work must not interrupt it.
+    InBackground,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum AppCommand {
-    /// Rebuild the Development app, swap it in, and open it.
-    Dev,
+    /// Rebuild the Development app, swap it in, and open it: in front, or
+    /// behind every other window for someone still working in another app.
+    Dev(DevOpenPlacement),
     /// Print the Info.plist a channel would get from this checkout, so the
     /// channel profiles can be inspected without building anything.
     InfoPlist(Channel, PlistSubject),
@@ -59,7 +69,10 @@ pub(crate) fn parse_app_command(arguments: &[String]) -> Result<AppCommand, Stri
         return Err(APP_USAGE.to_owned());
     };
     match (subcommand.as_str(), subcommand_arguments) {
-        ("dev", []) => Ok(AppCommand::Dev),
+        ("dev", []) => Ok(AppCommand::Dev(DevOpenPlacement::InFront)),
+        ("dev", [background_flag]) if background_flag == "--background" => {
+            Ok(AppCommand::Dev(DevOpenPlacement::InBackground))
+        }
         ("instance", [action_name]) => Ok(AppCommand::Instance(InstanceAction::from_action_name(
             action_name,
         )?)),
@@ -134,7 +147,7 @@ fn parse_flag_values(
 
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     match parse_app_command(arguments)? {
-        AppCommand::Dev => run_dev_pipeline(repository_root),
+        AppCommand::Dev(open_placement) => run_dev_pipeline(repository_root, open_placement),
         AppCommand::Instance(instance_action) => {
             run_instance_action(repository_root, instance_action)
         }
