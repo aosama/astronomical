@@ -43,6 +43,8 @@ pub(crate) mod model_generation_processor;
 
 pub(crate) mod decision_engine;
 
+pub(crate) mod speech_engine;
+
 #[cfg(all(test, feature = "direct-mlx"))]
 pub(crate) mod synthetic_weights_test_support;
 
@@ -51,6 +53,9 @@ pub(crate) mod decision_models;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod modernbert;
+
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod speech_models;
 
 pub(crate) mod performance_attribution;
 
@@ -284,6 +289,14 @@ pub use model_family_runtime::{
 
 #[cfg(feature = "direct-mlx")]
 pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};
+
+#[cfg(feature = "direct-mlx")]
+pub use speech_models::kokoro::KokoroSpeechEngine;
+
+#[cfg(feature = "direct-mlx")]
+pub use speech_models::phonon::PhononSpeechEngine;
+
+pub use speech_engine::{SpeechEngine, SpeechEngineLoadResult, SpeechEngineStep};
 
 pub use performance_attribution::macos_process_io::{
     MacosProcessIoDelta, sample_current_process_io, sample_process_io_for_process_id,

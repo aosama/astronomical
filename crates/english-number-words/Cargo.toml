@@ -1,0 +1,14 @@
+[package]
+name = "astronomical-english-number-words"
+description = "English numbers as the words a speaker says: cardinals, ordinals, years, decimals, negatives and dollar amounts, and where numbers start and end in running text."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# Deliberately dependency-free: any speech front end can read numbers with it.
+
+[lints]
+workspace = true

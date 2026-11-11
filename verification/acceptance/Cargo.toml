@@ -125,6 +125,7 @@ mlx-bridge.workspace = true
 astronomical-native-identity = { path = "../../crates/native-identity" }
 astronomical-quantization = { path = "../../crates/quantization", features = ["direct-mlx"] }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
+astronomical-speech-contract = { path = "../../crates/speech-contract" }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
 astronomical-test-harness = { path = "../../crates/test-harness", features = ["flux-reference-oracle", "test-fixtures"] }
 axum.workspace = true

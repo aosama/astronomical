@@ -137,6 +137,22 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 test-laya = "test -p astronomical-model-serving --features direct-mlx --lib decision_models"
 test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
 test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
+# Text to speech: Kokoro-82M and Phonon 31M on MLX. `test-speech` runs the
+# speech lib tests (shared layers, both families' layers on small weights from
+# the Shakespeare fixture, the engines' request checks); about a second, no
+# installed model. `test-english-speech-text` runs the pure crates that turn
+# text into what the models read: Kokoro's phonemes and spoken numbers, and
+# the speech contract (request checks, PCM and WAV encoding). The two journeys
+# load a real checkpoint and speak a Romeo and Juliet passage through the
+# speech engine; pass `--configuration PATH` naming a JSON file whose
+# `model_directory` is the model folder (Kokoro: config.json,
+# kokoro-v1_0.safetensors, voices/; Phonon: config.json, model.safetensors,
+# tokenizer.json, default-voice.safetensors) and, to keep the audio as WAV,
+# an `evidence_directory`. A few seconds each.
+test-speech = "test -p astronomical-model-serving --features direct-mlx --lib speech"
+test-english-speech-text = "test -p astronomical-english-phonemes -p astronomical-english-number-words -p astronomical-speech-contract"
+test-kokoro-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kokoro_speech"
+test-phonon-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter phonon_speech"
 # Laya latency on an optimized build: after one warmup request, the median of
 # 20 requests with 1, 5 and 10 questions, each question filled to the
 # checkpoint's own token limit (512 English, 1,024 multilingual). Decision

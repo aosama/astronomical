@@ -200,6 +200,56 @@ Copyright 2024 The Qwen team, Alibaba Group and the HuggingFace Inc. team. All r
 
 Licensed under the Apache License, Version 2.0. A complete copy of that license is provided in the repository root LICENSE and the distributed app bundle.
 
+Kokoro
+Source: https://github.com/hexgrad/kokoro
+The Kokoro-82M text-to-speech model (StyleTTS2 with an iSTFTNet vocoder) is translated from its PyTorch reference into the MLX engine under crates/model-serving/src/speech_models/kokoro.
+
+The upstream license file names no copyright holder; the work is by the hexgrad project.
+
+Licensed under the Apache License, Version 2.0. A complete copy of that license is provided in the repository root LICENSE and the distributed app bundle.
+
+Phonon TTS runtime (xn-ptts)
+Source: https://github.com/gradium-ai/xn-ptts
+The Phonon 31M text-to-speech model (a causal flow language model with a one-step flow head and the Mimi codec decoder) is translated from Gradium's Rust reference runtime into the MLX engine under crates/model-serving/src/speech_models/phonon. The runtime is licensed MIT or Apache-2.0; Astronomical uses it under the Apache License 2.0.
+
+The upstream license files name no copyright holder; the work is by Gradium.
+
+Licensed under the Apache License, Version 2.0. A complete copy of that license is provided in the repository root LICENSE and the distributed app bundle.
+
+Pocket TTS
+Source: https://github.com/kyutai-labs/pocket-tts
+Phonon and its reference runtime build on Kyutai's Pocket TTS; its flow language model, Mimi decoder and streaming convolution semantics inform the same translation.
+
+MIT License
+
+The upstream license file names no copyright holder; the work is by Kyutai.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Misaki
+Source: https://github.com/hexgrad/misaki
+The American English pronunciation lexicon (us_gold.json and us_silver.json) is distributed unchanged in crates/english-phonemes/lexicon, and Misaki's English stress, word-ending and number rules are translated into crates/english-phonemes and crates/english-number-words.
+
+The upstream license file names no copyright holder; the work is by the hexgrad project.
+
+Licensed under the Apache License, Version 2.0. A complete copy of that license is provided in the repository root LICENSE and the distributed app bundle.
+
 Thin Talk conversation canvas web assets
 
 These JavaScript and font assets are vendored into the Thin Talk app bundle and

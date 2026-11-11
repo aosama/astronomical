@@ -1,0 +1,18 @@
+[package]
+name = "astronomical-speech-contract"
+description = "The text-to-speech contract shared by the worker, daemon and CLI: the request and its model-independent checks, the failure reasons, and PCM and WAV audio encoding."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# No graphics-processor dependency: the daemon and the CLI encode and check
+# speech without linking MLX, as decision-contract serves decisions.
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true
