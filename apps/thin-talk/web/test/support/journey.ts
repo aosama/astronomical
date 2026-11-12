@@ -37,6 +37,8 @@ export function bootJourney(
      * it, so journeys about chat neither click through the welcome nor see
      * Astro's look. */
     astroProfile?: unknown;
+    /** Makes the speech endpoint refuse, as with no voice model installed. */
+    speechRefusal?: { status: number; code: string };
     /** Whether the fake host says it can restart the engine. */
     canRestartEngine?: boolean;
   },
@@ -71,6 +73,7 @@ export function bootJourney(
       libraryDownloadSequence: options?.libraryDownloadSequence,
       libraryDownloadRefusal: options?.libraryDownloadRefusal,
       installsWhenDownloadFinishes: options?.installsWhenDownloadFinishes,
+      speechRefusal: options?.speechRefusal,
     });
   daemon.install();
   bootChatClient();

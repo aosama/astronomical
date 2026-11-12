@@ -30,6 +30,13 @@ export class MathPipeline {
   /** Carves maths spans out of the source, replacing each with a slot token and
    * collecting the spans in order for the later graft. */
   public tokenize(source: string, collectedMathSpans: MathSpan[]): string {
+    return MathPipeline.carveOutMath(source, collectedMathSpans);
+  }
+
+  /** The carving itself needs no trust boundary, so speech can drop exactly
+   * the spans the page draws as maths (and keep prices such as "$5 or $50",
+   * and shell variables in code) without building a whole pipeline. */
+  public static carveOutMath(source: string, collectedMathSpans: MathSpan[]): string {
     const segments = source.split(CODE_SEGMENT_RE);
     const rebuiltMarkdown: string[] = [];
     for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
@@ -42,7 +49,7 @@ export class MathPipeline {
         rebuiltMarkdown.push(segment);
         continue;
       }
-      rebuiltMarkdown.push(this.sliceMathSpans(segment, collectedMathSpans));
+      rebuiltMarkdown.push(MathPipeline.sliceMathSpans(segment, collectedMathSpans));
     }
     return rebuiltMarkdown.join("");
   }
@@ -67,6 +74,9 @@ export class MathPipeline {
     return `%%MATH${slotIndex}%%`;
   }
 
+  /** Every slot token a carve-out left in the text. */
+  public static readonly MATH_TOKEN_PATTERN = /%%MATH\d+%%/g;
+
   private static isEmptyMathCandidate(text: string): boolean {
     return text.trim().length === 0;
   }
@@ -83,7 +93,7 @@ export class MathPipeline {
     return /[\\^_{}]/.test(tex);
   }
 
-  private sliceMathSpans(prose: string, collectedMathSpans: MathSpan[]): string {
+  private static sliceMathSpans(prose: string, collectedMathSpans: MathSpan[]): string {
     return prose
       .replace(MATH_BLOCK_RE, (match: string, dollars: string, brackets: string) => {
         const tex = (dollars || brackets || "").trim();

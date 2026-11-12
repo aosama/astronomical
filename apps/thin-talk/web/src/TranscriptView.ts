@@ -1,10 +1,12 @@
-import { CODE_BLOCK_TOOLS_CLASS, COPY_CODE_ACTION, COPY_IMAGE_ACTION, EXPORT_ANSWER_ACTION, Renderer, SAVE_IMAGE_ACTION } from "./Renderer";
+import { CODE_BLOCK_TOOLS_CLASS, COPY_CODE_ACTION, COPY_IMAGE_ACTION, EXPORT_ANSWER_ACTION, Renderer, SAVE_IMAGE_ACTION, SPEAK_ANSWER_ACTION } from "./Renderer";
 import { TranscriptMessage } from "./TranscriptMessage";
 import { TranscriptAction } from "./TranscriptAction";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
 import { reasoningDisclosureIdentifier } from "./ReasoningDisclosure";
 import type { TranscriptPersona } from "./TranscriptPersona";
+import { SpeakPhase } from "./speech/SpeakPhase";
+import type { SpeechState } from "./speech/SpeechState";
 import morphdom from "morphdom";
 
 /** Long enough to read, short enough that a second copy is not held up. */
@@ -64,6 +66,8 @@ export class TranscriptView {
   private latestSnapshot: TranscriptSnapshot | null = null;
   // The newest answer: only its Astro animates, so a long chat stays calm.
   private latestAssistantMessageID: string | null = null;
+  private latestSpeechState: SpeechState | null = null;
+  private latestSpeechBlocked = false;
 
   public constructor(init: {
     transcript: HTMLElement;
@@ -307,11 +311,55 @@ export class TranscriptView {
     // newest content. The decision is made here, from the batch itself, rather
     // than from followScroll, because the reader's scroll event from being
     // dragged up can land between the snapshot and this flush and reset it.
+    // A redrawn reply brings its button back to resting; only the replies of
+    // this batch need their buttons set again.
+    for (const redrawnMessage of batch) {
+      const redrawnArticle = this.articlesByMessageID.get(redrawnMessage.id);
+      if (redrawnArticle !== undefined) {
+        this.applySpeechToButtons(redrawnArticle);
+      }
+    }
     const followNow = wasFollowing || batch.some((message) => message.role === ChatRole.USER);
     if (followNow) {
       this.scrollToBottom();
     }
   }
+
+  /** Shows each reply's Speak button the way the speech controller says.
+   * Applied by attribute and text after every draw too, because a redraw of a
+   * reply's markup brings its button back to resting. `isGenerating` greys the
+   * buttons while an answer is being written: the engine holds one model, so
+   * it cannot speak until the answer is finished. */
+  public showSpeech(speechState: SpeechState, isGenerating: boolean): void {
+    // The controller publishes on every streamed token; the buttons change
+    // only when the speech state or the generating flag does.
+    if (this.latestSpeechState === speechState && this.latestSpeechBlocked === isGenerating) {
+      return;
+    }
+    this.latestSpeechState = speechState;
+    this.latestSpeechBlocked = isGenerating;
+    this.applySpeechToButtons(this.inner);
+  }
+
+  private applySpeechToButtons(scope: ParentNode): void {
+    const speechState = this.latestSpeechState;
+    for (const speakButton of scope.querySelectorAll<HTMLButtonElement>(`button[data-action="${SPEAK_ANSWER_ACTION}"]`)) {
+      const buttonMessageID = speakButton.closest<HTMLElement>("[data-message-id]")?.dataset.messageId;
+      const phase = speechState !== null && speechState.messageID === buttonMessageID ? speechState.phase : SpeakPhase.RESTING;
+      speakButton.dataset.speakPhase = phase;
+      speakButton.textContent = TranscriptView.speakLabels[phase];
+      speakButton.disabled = this.latestSpeechBlocked && phase === SpeakPhase.RESTING;
+    }
+  }
+
+  private static readonly speakLabels: Record<SpeakPhase, string> = {
+    [SpeakPhase.RESTING]: "Speak",
+    [SpeakPhase.PREPARING]: "Preparing…",
+    [SpeakPhase.PLAYING]: "Stop",
+    [SpeakPhase.NO_VOICE]: "Get a voice…",
+    [SpeakPhase.BUSY]: "Busy, try again",
+    [SpeakPhase.FAILED]: "Couldn't speak",
+  };
 
   private shouldFollowScroll(): boolean {
     return this.transcript.scrollHeight - this.transcript.scrollTop - this.transcript.clientHeight < 120;
@@ -504,6 +552,10 @@ export class TranscriptView {
           answerMessageID = article.dataset.messageId;
         }
         this.onAction(new TranscriptAction({ kind: "exportAnswer", messageID: answerMessageID, detail: "" }));
+      }
+      if (kind === SPEAK_ANSWER_ACTION) {
+        const speakingMessageID = article instanceof HTMLElement ? article.dataset.messageId : undefined;
+        this.onAction(new TranscriptAction({ kind: "speakAnswer", messageID: speakingMessageID ?? "", detail: "" }));
       }
       if (kind === COPY_CODE_ACTION) {
         const copiedCode = actionButton.closest(".code-block")?.querySelector("pre > code")?.textContent ?? "";

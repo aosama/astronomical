@@ -1,5 +1,5 @@
 /** What a transcript interaction asks the host to do. */
-export type TranscriptActionKind = "copy" | "openExternal" | "saveImage" | "copyImage" | "exportAnswer";
+export type TranscriptActionKind = "copy" | "openExternal" | "saveImage" | "copyImage" | "exportAnswer" | "speakAnswer";
 
 /**
  * One interaction the transcript reported: copying text, opening a link

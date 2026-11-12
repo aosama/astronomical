@@ -33,6 +33,9 @@ export interface FakeDaemonOptions {
   /** What lands when a requested download finishes: the model joins
    * /v1/models and its catalog entry turns ready, as on the real daemon. */
   readonly installsWhenDownloadFinishes?: { huggingfaceID: string; model: unknown };
+  /** Refuses `POST /v1/audio/speech` with this status and error code, as a
+   * daemon with no voice model installed does. */
+  readonly speechRefusal?: { status: number; code: string };
 }
 
 const DEFAULT_CHAT_LINES = [
@@ -103,6 +106,13 @@ export class FakeDaemon {
     }
     if (url.endsWith("/v1/library/download")) {
       return requestMethod === "POST" ? this.startLibraryDownload(init) : this.nextLibraryDownloadStatus();
+    }
+    if (url.endsWith("/v1/audio/speech")) {
+      const speechRefusal = this.options.speechRefusal;
+      if (speechRefusal !== undefined) {
+        return Response.json({ error: { code: speechRefusal.code, message: "refused by the fake daemon" } }, { status: speechRefusal.status });
+      }
+      return new Response(new ArrayBuffer(8), { headers: { "content-type": "audio/wav" } });
     }
     if (url.endsWith("/v1/images/generations")) {
       return Response.json({ data: [{ b64_json: FAKE_GENERATED_IMAGE_BASE64, mime_type: "image/png" }] });
