@@ -22,6 +22,8 @@ mod kev_engine_requests;
 #[cfg(feature = "direct-mlx")]
 mod kev_reference_decisions;
 #[cfg(feature = "direct-mlx")]
+mod kokoro_reference_speech;
+#[cfg(feature = "direct-mlx")]
 mod kokoro_speech;
 #[cfg(feature = "direct-mlx")]
 mod laya_decision_latency;

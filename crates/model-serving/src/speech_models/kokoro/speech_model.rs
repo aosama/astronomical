@@ -27,6 +27,19 @@ use crate::speech_models::speech_model_error::SpeechModelError;
 
 pub(crate) const KOKORO_SAMPLE_RATE_HERTZ: u32 = 24_000;
 
+/// One utterance's forward pass. Speaking keeps only the samples; a
+/// reference comparison reads the durations and curves as well.
+pub(crate) struct KokoroForwardPass {
+    /// Frames held per token, the two markers included.
+    pub(crate) frame_counts: Vec<i32>,
+    /// `[2 * frames, 1]` pitch in hertz.
+    pub(crate) pitch_curve: MlxArray,
+    /// `[2 * frames, 1]` energy.
+    pub(crate) energy_curve: MlxArray,
+    /// `[600 * frames]` samples.
+    pub(crate) samples: MlxArray,
+}
+
 pub(crate) struct KokoroSpeechModel {
     configuration: KokoroConfiguration,
     albert: AlbertEncoder,
@@ -37,6 +50,8 @@ pub(crate) struct KokoroSpeechModel {
 
 /// Pitch, energy and text states on the utterance's frames.
 struct AlignedProsody {
+    /// Frames held per token, the two markers included.
+    frame_counts: Vec<i32>,
     pitch_curve: MlxArray,
     energy_curve: MlxArray,
     aligned_text: MlxArray,
@@ -76,6 +91,16 @@ impl KokoroSpeechModel {
         runtime: &MlxRuntime,
         utterance: &KokoroUtterance<'_>,
     ) -> Result<Vec<f32>, SpeechModelError> {
+        let forward_pass = self.forward(runtime, utterance)?;
+        Ok(runtime.array_to_vec_f32(&forward_pass.samples)?)
+    }
+
+    /// The whole pass, with the durations and curves that led to the samples.
+    pub(crate) fn forward(
+        &self,
+        runtime: &MlxRuntime,
+        utterance: &KokoroUtterance<'_>,
+    ) -> Result<KokoroForwardPass, SpeechModelError> {
         let token_ids =
             validated_token_ids(&self.configuration, utterance.phonemes, utterance.speed)?;
         let token_array = runtime.array_from_i32(&token_ids, &[token_ids.len() as i32])?;
@@ -84,16 +109,24 @@ impl KokoroSpeechModel {
             .style_for(runtime, utterance.phonemes.chars().count())?;
         let aligned_prosody =
             self.aligned_prosody(runtime, &token_array, &style, utterance.speed)?;
-        let noise_key = runtime.random_key(utterance.noise_seed)?;
+        let noise_key = match utterance.noise_seed {
+            Some(noise_seed) => Some(runtime.random_key(noise_seed)?),
+            None => None,
+        };
         let decoder_inputs = DecoderInputs {
             aligned_text: &aligned_prosody.aligned_text,
             pitch_curve: &aligned_prosody.pitch_curve,
             energy_curve: &aligned_prosody.energy_curve,
             decoder_style: &style.decoder_style,
-            noise_key: &noise_key,
+            noise_key: noise_key.as_ref(),
         };
         let samples = self.decoder.decode(runtime, &decoder_inputs)?;
-        Ok(runtime.array_to_vec_f32(&samples)?)
+        Ok(KokoroForwardPass {
+            frame_counts: aligned_prosody.frame_counts,
+            pitch_curve: aligned_prosody.pitch_curve,
+            energy_curve: aligned_prosody.energy_curve,
+            samples,
+        })
     }
 
     fn aligned_prosody(
@@ -115,6 +148,7 @@ impl KokoroSpeechModel {
                 .pitch_and_energy(runtime, &aligned_durations, &style.prosody_style)?;
         let text_states = self.text_encoder.encode(runtime, token_array)?;
         Ok(AlignedProsody {
+            frame_counts: durations.frame_counts,
             pitch_curve,
             energy_curve,
             aligned_text: runtime.take_axis(&text_states, &frame_to_phoneme, 0)?,

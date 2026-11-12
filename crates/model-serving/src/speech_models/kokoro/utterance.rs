@@ -14,7 +14,8 @@ pub(crate) struct KokoroUtterance<'request> {
     /// 1.0 is the voice's own pace; 1.2 is a fifth faster.
     pub(crate) speed: f32,
     /// Seeds the unvoiced-sound noise, so the same request sounds the same.
-    pub(crate) noise_seed: u64,
+    /// `None` speaks without the noise, for comparison with the reference.
+    pub(crate) noise_seed: Option<u64>,
 }
 
 /// The token ids to read, after checking the utterance: 1 to 510 phonemes,

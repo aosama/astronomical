@@ -1,11 +1,11 @@
 //! Kokoro-82M speaks a Shakespeare passage from the real checkpoint, through
 //! the speech engine a worker uses.
 //!
-//! No reference recording is compared against, so the journey checks what
+//! This journey compares against no recording, so it checks what
 //! wrong arithmetic would break: a human pace, audio neither silent nor
 //! clipped, whole 600-sample frames, and the same seed giving the same
-//! samples. Comparing frame counts and pitch curves against Kokoro's PyTorch
-//! reference is still to do. With `evidence_directory` set it writes the
+//! samples. `kokoro_reference_speech` compares the arithmetic itself against
+//! Kokoro's PyTorch reference. With `evidence_directory` set it writes the
 //! audio as a WAV file for a person to listen to.
 //!
 //! Run it with `cargo test-kokoro-speech --configuration PATH`, where the

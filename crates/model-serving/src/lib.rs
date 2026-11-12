@@ -291,7 +291,7 @@ pub use model_family_runtime::{
 pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};
 
 #[cfg(feature = "direct-mlx")]
-pub use speech_models::kokoro::KokoroSpeechEngine;
+pub use speech_models::kokoro::{KokoroSpeechEngine, KokoroSpeechTrace};
 
 #[cfg(feature = "direct-mlx")]
 pub use speech_models::phonon::PhononSpeechEngine;
