@@ -1,6 +1,6 @@
 # Astronomical
 
-<a href="https://github.com/aosama/astronomical/releases/latest"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
+<a href="https://github.com/aosama/astronomical/releases/download/v0.2.102/Astronomical-0.2.102-macOS-arm64.dmg"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
 
 **Astronomical is a local model runner for Apple silicon. You set one RAM ceiling; when a mixture-of-experts model does not fit, selected experts stream from SSD, and declared precision is preserved.**
 
