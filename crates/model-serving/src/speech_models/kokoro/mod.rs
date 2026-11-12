@@ -14,6 +14,7 @@ mod engine;
 mod frame_alignment;
 mod harmonic_source;
 mod prosody_predictor;
+mod reference_trace;
 mod short_time_fourier;
 mod snake_residual_block;
 mod speech_model;
@@ -25,3 +26,4 @@ mod voice_pack;
 mod waveform_generator;
 
 pub use engine::KokoroSpeechEngine;
+pub use reference_trace::KokoroSpeechTrace;

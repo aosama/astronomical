@@ -9,6 +9,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
 
 use super::artifact_files::{KOKORO_WEIGHTS_FILE_NAME, voice_file_path};
+use super::reference_trace::KokoroSpeechTrace;
 use super::speech_model::{KOKORO_SAMPLE_RATE_HERTZ, KokoroSpeechModel};
 use super::utterance::{KOKORO_MAXIMUM_PHONEMES, KokoroUtterance};
 use super::voice_pack::KokoroVoice;
@@ -62,6 +63,35 @@ impl KokoroSpeechEngine {
             loaded: None,
             request_slot: SpeechRequestSlot::empty(),
         }
+    }
+
+    /// Speaks `phonemes` without excitation noise and returns the durations,
+    /// curves and samples, so a journey can hold them against Kokoro's
+    /// PyTorch reference. Serving never calls it.
+    #[doc(hidden)]
+    pub fn trace_phonemes(
+        &mut self,
+        phonemes: &str,
+        voice_name: &str,
+        speed: f32,
+    ) -> Result<KokoroSpeechTrace, SpeechFailure> {
+        let loaded = self.loaded_mut()?;
+        loaded.ensure_voice_loaded(voice_name)?;
+        let utterance = KokoroUtterance {
+            phonemes,
+            voice: &loaded.voices_by_name[voice_name],
+            speed,
+            noise_seed: None,
+        };
+        let speech_trace = loaded
+            .model
+            .forward(&loaded.runtime, &utterance)
+            .and_then(|forward_pass| KokoroSpeechTrace::read(&loaded.runtime, &forward_pass));
+        // Cleaned up on failure too, so a failed trace leaves no arrays behind.
+        loaded
+            .memory_account
+            .clean_up_after_request(&loaded.runtime);
+        Ok(speech_trace?)
     }
 
     fn loaded_mut(&mut self) -> Result<&mut LoadedKokoro, SpeechFailure> {
@@ -154,6 +184,19 @@ impl SpeechEngine for KokoroSpeechEngine {
     }
 }
 
+impl LoadedKokoro {
+    fn ensure_voice_loaded(&mut self, voice_name: &str) -> Result<(), SpeechFailure> {
+        if !self.voices_by_name.contains_key(voice_name) {
+            let voice = KokoroVoice::load(
+                &self.runtime,
+                &voice_file_path(&self.model_directory, voice_name)?,
+            )?;
+            self.voices_by_name.insert(voice_name.to_owned(), voice);
+        }
+        Ok(())
+    }
+}
+
 impl SegmentSpeaker<String, KokoroRequestContext> for LoadedKokoro {
     /// Pass `n` of a request seeds its noise with `seed + n`.
     fn speak_segment(
@@ -163,20 +206,16 @@ impl SegmentSpeaker<String, KokoroRequestContext> for LoadedKokoro {
         request_context: &KokoroRequestContext,
     ) -> Result<SpokenSegment, SpeechFailure> {
         let voice_name = &request_context.voice_name;
-        if !self.voices_by_name.contains_key(voice_name) {
-            let voice = KokoroVoice::load(
-                &self.runtime,
-                &voice_file_path(&self.model_directory, voice_name)?,
-            )?;
-            self.voices_by_name.insert(voice_name.clone(), voice);
-        }
+        self.ensure_voice_loaded(voice_name)?;
         let utterance = KokoroUtterance {
             phonemes,
             voice: &self.voices_by_name[voice_name],
             speed: request_context.speed,
-            noise_seed: request_context
-                .noise_seed
-                .wrapping_add(segment_index as u64),
+            noise_seed: Some(
+                request_context
+                    .noise_seed
+                    .wrapping_add(segment_index as u64),
+            ),
         };
         let samples = self.model.speak(&self.runtime, &utterance)?;
         Ok(SpokenSegment {

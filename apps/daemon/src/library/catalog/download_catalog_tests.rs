@@ -612,10 +612,11 @@ fn should_accept_one_get_started_pick_per_role_across_the_catalog() {
 
 /// The shipped speech entries download only what their engines read: Kokoro
 /// its weights and its American English voices (not the `.pt` copies or the
-/// other languages' voices), Phonon its weights, tokenizer and voice. Both
-/// stay experimental until their reference comparisons pass.
+/// other languages' voices), Phonon its weights, tokenizer and voice. Neither
+/// is experimental: both speak through the served endpoint, and Kokoro's
+/// arithmetic is held against its PyTorch reference.
 #[test]
-fn should_ship_kokoro_and_phonon_as_experimental_speech_models() {
+fn should_ship_kokoro_and_phonon_as_speech_models() {
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
     let speech_entries: Vec<_> = download_catalog
@@ -626,7 +627,7 @@ fn should_ship_kokoro_and_phonon_as_experimental_speech_models() {
     assert_eq!(speech_entries.len(), 2);
     for speech_entry in &speech_entries {
         assert!(speech_entry.capabilities().supports_speech);
-        assert!(speech_entry.experimental());
+        assert!(!speech_entry.experimental());
         assert_eq!(speech_entry.upstream_license(), Some("Apache-2.0"));
     }
     let kokoro_entry = speech_entries

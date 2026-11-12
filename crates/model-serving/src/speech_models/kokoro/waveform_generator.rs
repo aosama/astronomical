@@ -65,7 +65,7 @@ impl WaveformGenerator {
         decoder_features: &MlxArray,
         decoder_style: &MlxArray,
         pitch_curve: &MlxArray,
-        noise_key: &MlxArray,
+        noise_key: Option<&MlxArray>,
     ) -> Result<MlxArray, SpeechModelError> {
         let excitation = self
             .harmonic_source

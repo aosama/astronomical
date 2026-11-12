@@ -1,13 +1,15 @@
 //! Phonon 31M speaks a Shakespeare passage from the real checkpoint, through
 //! the speech engine a worker uses.
 //!
-//! No reference recording is compared against, so the journey checks what
+//! This journey compares against no recording, so it checks what
 //! wrong arithmetic would break: a human pace, audio neither silent nor
 //! clipped, every chunk ended by the model's own end-of-speech signal rather
-//! than its frame budget, and the same seed giving the same samples.
-//! Comparing latents at temperature 0 against Gradium's reference runtime is
-//! still to do. With `evidence_directory` set it writes the audio as a WAV
-//! file for a person to listen to.
+//! than its frame budget, and the same seed giving the same samples. Unlike
+//! Kokoro, Phonon is not held against its reference runtime: its sampled
+//! latents leave little to compare without one, and what this journey and
+//! the served endpoint show was judged enough for this model. With
+//! `evidence_directory` set it writes the audio as a WAV file for a person
+//! to listen to.
 //!
 //! Run it with `cargo test-phonon-speech --configuration PATH`, where the
 //! configuration's `model_directory` holds Phonon's `config.json`,

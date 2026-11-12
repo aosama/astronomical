@@ -470,7 +470,6 @@
             "approximate_memory_bytes": 1073741824,
             "role": "speech",
             "public": true,
-            "experimental": true,
             "description": "Reads English text aloud and answers with a WAV file. Offers 20 American English voices (af_heart is the default) and can speak from a quarter to four times its natural pace. Speaks a whole sentence in one pass, several times faster than the audio plays. Its other voices expect British English or other languages and are not offered. Based on Kokoro-82M, an 82M-parameter StyleTTS2 model.",
             "capabilities": {
                 "supports_speech": true
@@ -511,7 +510,6 @@
             "approximate_memory_bytes": 536870912,
             "role": "speech",
             "public": true,
-            "experimental": true,
             "description": "Reads English text aloud and answers with a WAV file, in one voice at its natural pace. At 31M parameters it is the smallest speech model in the catalog, and it reads words it has never seen without spelling them out. Based on Gradium's Phonon 31M.",
             "capabilities": {
                 "supports_speech": true

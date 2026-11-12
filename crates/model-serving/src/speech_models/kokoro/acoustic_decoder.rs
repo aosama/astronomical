@@ -37,7 +37,8 @@ pub(crate) struct DecoderInputs<'utterance> {
     pub(crate) energy_curve: &'utterance MlxArray,
     /// `[1, 128]` timbre style.
     pub(crate) decoder_style: &'utterance MlxArray,
-    pub(crate) noise_key: &'utterance MlxArray,
+    /// Seeds the excitation noise; `None` leaves the noise out.
+    pub(crate) noise_key: Option<&'utterance MlxArray>,
 }
 
 impl AcousticDecoder {

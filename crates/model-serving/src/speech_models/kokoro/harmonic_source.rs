@@ -43,17 +43,26 @@ impl HarmonicSource {
     }
 
     /// `[curve steps, 1]` pitch in hertz to `[curve steps * 300]` excitation.
+    /// Without a `noise_key` the excitation is the voiced harmonics alone:
+    /// no two runtimes draw the same random numbers, so comparing against
+    /// the PyTorch reference needs the noise left out on both sides.
     pub(crate) fn excitation(
         &self,
         runtime: &MlxRuntime,
         pitch_curve: &MlxArray,
-        noise_key: &MlxArray,
+        noise_key: Option<&MlxArray>,
     ) -> Result<MlxArray, SpeechModelError> {
         let sample_count = pitch_curve.shape()[0] as usize * SAMPLES_PER_CURVE_STEP;
         let sines = harmonic_sines(runtime, pitch_curve)?;
         let voiced_mask = voiced_mask(runtime, pitch_curve)?;
-        let noise = excitation_noise(runtime, &voiced_mask, sample_count, noise_key)?;
-        let harmonic_waves = runtime.add(&runtime.multiply(&sines, &voiced_mask)?, &noise)?;
+        let voiced_sines = runtime.multiply(&sines, &voiced_mask)?;
+        let harmonic_waves = match noise_key {
+            Some(noise_key) => runtime.add(
+                &voiced_sines,
+                &excitation_noise(runtime, &voiced_mask, sample_count, noise_key)?,
+            )?,
+            None => voiced_sines,
+        };
         let merged = runtime.tanh(&self.harmonic_merge.forward(runtime, &harmonic_waves)?)?;
         Ok(runtime.reshape(&merged, &[sample_count as i32])?)
     }

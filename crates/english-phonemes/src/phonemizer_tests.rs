@@ -35,3 +35,14 @@ fn should_read_numbers_and_money_in_a_sentence() {
 fn should_return_an_empty_string_for_text_without_sounds() {
     assert_eq!(english_phonemes("*** // ~~"), "");
 }
+
+// Positive: on a line with no word whose reading depends on its part of
+// speech, the port gives exactly what Misaki 0.9.4 gave Kokoro's reference
+// (`kokoro_reference_speech.json`, case `romeo_soft`).
+#[test]
+fn should_match_misaki_on_a_line_without_part_of_speech_readings() {
+    assert_eq!(
+        english_phonemes("But soft, what light through yonder window breaks?"),
+        "bˌʌt sˈɔft, wˌʌt lˈIt θɹu jˈɑndəɹ wˈɪndO bɹˈAks?"
+    );
+}
