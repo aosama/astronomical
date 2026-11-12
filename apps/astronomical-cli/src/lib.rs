@@ -38,6 +38,7 @@ pub use verbs::respond::{RespondArguments, RespondDependencies, RespondError, ru
 pub use verbs::schema::{
     SchemaArguments, SchemaPropertyInput, SchemaPropertyKind, build_schema_document, run_schema,
 };
+pub use verbs::speak::{SpeakArguments, SpeakDependencies, SpeakError, run_speak};
 pub use verbs::status::{StatusDependencies, StatusError, run_status};
 pub use verbs::validate_config::{
     ValidateConfigArguments, ValidateConfigDependencies, ValidateConfigError, run_validate_config,

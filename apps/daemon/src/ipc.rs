@@ -7,3 +7,4 @@ pub(crate) mod embeddings;
 pub(crate) mod images;
 pub(crate) mod models;
 pub(crate) mod service;
+pub(crate) mod speech;

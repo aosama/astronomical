@@ -12,6 +12,7 @@ use crate::verbs::models::ModelsCommand;
 use crate::verbs::quantize::QuantizeCommand;
 use crate::verbs::respond::RespondArguments;
 use crate::verbs::schema::SchemaArguments;
+use crate::verbs::speak::{SpeakArguments, parse_speak_arguments};
 use crate::verbs::validate_config::ValidateConfigArguments;
 use crate::verbs::vision::VisionCommand;
 use decide_arguments::parse_decide_arguments;
@@ -19,105 +20,9 @@ use embed_arguments::parse_embed_arguments;
 
 mod decide_arguments;
 mod embed_arguments;
+mod help_text;
 
-const HELP_TEXT: &str = concat!(
-    "Astronomical\n\n",
-    "Usage: astronomical launch [tool]\n",
-    "       astronomical launch opencode [--model MODEL_ID]\n",
-    "       astronomical launch codex [--model MODEL_ID]\n",
-    "       astronomical launch claude [--model MODEL_ID] [-- CLAUDE_ARGUMENT...]\n",
-    "       astronomical respond PROMPT [--text TEXT] [--image PATH]... [--model MODEL_ID]\n",
-    "                                   [--instructions TEXT] [--thinking-budget N] [--schema FILE]\n",
-    "                                   [--no-stream]\n",
-    "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
-    "       astronomical decide [STATE | --state-file PATH] [--json-state] [--model MODEL_ID]\n",
-    "                           (--ask QUESTION | --questions JSON | --questions-file PATH)\n",
-    "       astronomical image PROMPT [--size WIDTHxHEIGHT] [--model MODEL_ID] [--seed N]\n",
-    "                                 [--output PATH]\n",
-    "       astronomical models list | supported | programs | default [MODEL_ID] | download MODEL_ID\n",
-    "       astronomical models convert-atlas MODEL [--output-model-id ORGANIZATION/NAME]\n",
-    "       astronomical status\n",
-    "       astronomical doctor\n",
-    "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
-    "       astronomical validate config [--instance stable|development] [--json]\n",
-    "       astronomical vision inspect MODEL [--json]\n",
-    "       astronomical vision match TEXT_MODEL TOWER_MODEL [--json]\n",
-    "       astronomical vision add TEXT_MODEL --tower TOWER_MODEL --output DIR [--json]\n",
-    "       astronomical quantize plan --sensitivity FILE --target-bits-per-weight N [--candidate-bits LIST]\n",
-    "                                  [--floor-components-per-block N] [--maximum-low-bit-block-run N] [--json]\n",
-    "       astronomical quantize inspect ARTIFACT_DIR [--json]\n",
-    "       astronomical quantize convert SOURCE_DIR --output DIR [--method exact|static]\n",
-    "                                     [--reference auto|bf16|uniform-4-bit] [--target-bits-per-weight N]\n",
-    "                                     [--candidate-bits LIST] [--group-size N] [--calibration-sequences N]\n",
-    "                                     [--calibration-mix FILE] [--floor-components-per-block N]\n",
-    "                                     [--base-model NAME] [--range-search-maximum-bits N]\n",
-    "                                     [--no-range-search] [--overwrite]\n",
-    "       astronomical quantize evaluate ARTIFACT_DIR --reference DIR [--prompts N]\n",
-    "                                      [--sequence-length N] [--json]\n",
-    "       astronomical --help\n",
-    "       astronomical --version\n\n",
-    "Launch a coding harness against the models installed in local Astronomical,\n",
-    "manage model downloads through the daemon, or run ephemeral in-process\n",
-    "utilities against the instance configuration.\n\n",
-    "Commands:\n",
-    "  launch [tool]    Start a supported harness (OpenCode, Codex, or Claude Code in\n",
-    "                   this release); arguments after -- go to the harness unchanged\n",
-    "  respond PROMPT   One-shot chat answer; add --image PATH to send a raster\n",
-    "                   image with the prompt; add --schema FILE to force one\n",
-    "                   JSON object reply; the daemon loads or downloads the\n",
-    "                   model automatically when it is not resident yet\n",
-    "  embed [TEXT]     One-shot embedding vector as one JSON document; the daemon\n",
-    "                   loads or downloads the model automatically when needed\n",
-    "  decide [STATE]   Answer typed questions about a state with a decision model: one JSON\n",
-    "                   document with a probability for every allowed answer and no generated\n",
-    "                   text; STATE is read from standard input when not given\n",
-    "  image PROMPT     Draw one image from text and save it as a PNG (default: 1024x1024 in the\n",
-    "                   working directory); prints the saved path; the daemon loads or downloads\n",
-    "                   the image model automatically; never overwrites an existing file\n",
-    "  models list      Models installed on this Mac\n",
-    "  models supported Release catalog: what can be downloaded, with local state\n",
-    "  models programs  Compiled Neural Engine programs on this Mac: where, how large, and\n",
-    "                   any whose model is no longer installed\n",
-    "  models default   Show the effective default model; with MODEL_ID, download it\n",
-    "                   first when this Mac lacks it, then persist it\n",
-    "  models download  Start (or resume) a download and wait, with live progress\n",
-    "  status           Worker state, resident model, default model, active download\n",
-    "  doctor           This binary's channel binding plus both channels' daemon liveness\n",
-    "  schema object    Build a strict JSON object schema for structured output\n",
-    "  validate config  Report effective values of an instance configuration and what each model setting does\n",
-    "  vision inspect   Show whether a model has a vision tower, reading headers only\n",
-    "  vision match     Prove whether a tower shares a text model's base, reading a few small\n",
-    "                   tensors; MODEL is organization/name[@revision] or a local directory\n",
-    "  vision add       Build a new model from a local text model and a tower, keeping the text\n",
-    "                   weights unchanged; refuses a tower that does not share their base\n",
-    "  quantize plan    Allocate per-module bit widths from a measured sensitivity document\n",
-    "  quantize inspect Show an artifact's quantization method, reference, and bit map summary\n",
-    "  quantize convert Build a mixed-precision artifact from a local bf16 source (in-process;\n",
-    "                   needs a CLI built with the quantize-convert feature)\n\n",
-    "Options:\n",
-    "  --model MODEL_ID     Model to use (default: the daemon's effective default model)\n",
-    "  --no-stream          Print the finished respond answer once instead of streaming\n",
-    "  --text TEXT          Provide the respond prompt as a flag value instead of the positional PROMPT\n",
-    "  --instructions TEXT  System-prompt-style guidance applied to the respond reply\n",
-    "  --thinking-budget N  Cap the tokens a thinking model may spend reasoning (0-65535; default: think freely)\n",
-    "  --image PATH         Attach a raster image (png, jpg, jpeg, webp) to the respond prompt; repeatable\n",
-    "  --schema FILE        Force the respond reply to be one JSON object matching the JSON schema in FILE\n",
-    "  --file PATH          Embed the file's contents instead of TEXT or stdin\n",
-    "  --ask QUESTION       One yes-or-no question for decide; answered as the probability it is true\n",
-    "  --questions JSON     Typed questions for decide, as a JSON object of name -> {type, instructions,\n",
-    "                       criteria}; type is choice, score, or noul (yes or no)\n",
-    "  --questions-file PATH  Read the decide questions object from a file\n",
-    "  --state-file PATH    Read the decide state from a file instead of STATE or stdin\n",
-    "  --json-state         Read the decide state as JSON data, not as plain text\n",
-    "  --size WIDTHxHEIGHT  Image size in pixels for image, e.g. 1024x576 (default: 1024x1024)\n",
-    "  --seed N             Reproducibility seed for image; the run reports the seed it used\n",
-    "  --output PATH        Where image saves the PNG; must end in .png and not exist yet\n",
-    "  --instance NAME      Which instance to inspect for validate config (default: development)\n",
-    "  --json               Render the report as JSON\n",
-    "  -v, --verbose        Print launch timings on stderr\n",
-    "  -h, --help           Show this help\n",
-    "  --version            Show the CLI version\n",
-);
+use help_text::HELP_TEXT;
 
 /// Parsed CLI invocation before any loopback work.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -129,6 +34,7 @@ pub enum CliCommand {
     Embed(EmbedArguments),
     Decide(DecideArguments),
     Image(ImageArguments),
+    Speak(SpeakArguments),
     Models(ModelsCommand),
     Status,
     Doctor,
@@ -177,7 +83,7 @@ pub fn parse_command(
         "launch" => parse_launch_arguments(&remaining_arguments[1..]).map(CliCommand::Launch),
         "respond" => parse_respond_arguments(&remaining_arguments[1..]).map(CliCommand::Respond),
         "embed" | "decide" => parse_helper_model_verb(command_name, &remaining_arguments[1..]),
-        "image" => parse_image_arguments(&remaining_arguments[1..]).map(CliCommand::Image),
+        "image" | "speak" => parse_file_output_verb(command_name, &remaining_arguments[1..]),
         "models" => parse_models_verb(&remaining_arguments[1..]),
         "status" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Status),
         "doctor" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Doctor),
@@ -191,6 +97,17 @@ pub fn parse_command(
             .map(CliCommand::Vision),
         other => Err(UsageError::UnknownCommand(other.to_owned())),
     }
+}
+
+/// Parses a verb that saves its result to a file: `speak`, or else `image`.
+fn parse_file_output_verb(
+    command_name: &str,
+    verb_arguments: &[OsString],
+) -> Result<CliCommand, UsageError> {
+    if command_name == "speak" {
+        return parse_speak_arguments(verb_arguments).map(CliCommand::Speak);
+    }
+    parse_image_arguments(verb_arguments).map(CliCommand::Image)
 }
 
 /// Parses a verb served by a helper model that answers in one step:
@@ -672,7 +589,11 @@ pub enum UsageError {
     #[error("--size must look like 1024x576 (width x height, positive whole pixels): {0}")]
     InvalidImageSize(String),
     #[error("--seed must be a whole number from 0 to 18446744073709551615: {0}")]
-    InvalidImageSeed(String),
+    InvalidSeed(String),
+    #[error("speak reads TEXT or --file, not both")]
+    SpeakTextGivenTwice,
+    #[error("--speed must be a number from 0.25 to 4 (1 is the natural pace): {0}")]
+    InvalidSpeakSpeed(String),
     #[error(
         "models needs a subcommand: list, supported, programs, default, download, convert-atlas"
     )]

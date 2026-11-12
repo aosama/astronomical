@@ -7,6 +7,7 @@
 
 use astronomical_config::{DiscoveredModel, ModelCapabilities};
 use astronomical_ipc_protocol::{RequestId, SpeechCommand};
+use astronomical_speech_contract::{NATURAL_PACE_ONLY_REASON, unknown_voice_reason};
 use thiserror::Error;
 
 use crate::serving::helper_model_resolution::{
@@ -79,6 +80,50 @@ pub(crate) fn speech_capabilities_of<'model>(
             ModelCapabilities::Speech(speech_capabilities) => Some(speech_capabilities),
             _ => None,
         })
+}
+
+/// Why a voice or pace was refused before the model was made resident.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum VoiceOrPaceRefusal {
+    UnknownVoice { reason: String },
+    FixedPace,
+}
+
+impl VoiceOrPaceRefusal {
+    /// The words the caller reads, the same ones the engine would use.
+    pub(crate) fn reason(&self) -> String {
+        match self {
+            Self::UnknownVoice { reason } => reason.clone(),
+            Self::FixedPace => NATURAL_PACE_ONLY_REASON.to_owned(),
+        }
+    }
+}
+
+/// Refuses a voice the chosen model lacks, or a pace it cannot change,
+/// before the request can make that model resident; the engine checks the
+/// same again once loaded. A model discovery knows nothing more about passes.
+pub(crate) fn refuse_voice_or_pace_before_swap(
+    speech_capabilities: Option<&astronomical_config::SpeechModelCapabilities>,
+    voice_name: Option<&str>,
+    speed: f32,
+) -> Result<(), VoiceOrPaceRefusal> {
+    let Some(speech_capabilities) = speech_capabilities else {
+        return Ok(());
+    };
+    if let Some(voice_name) = voice_name
+        && !speech_capabilities
+            .voice_names
+            .iter()
+            .any(|offered_voice_name| offered_voice_name == voice_name)
+    {
+        return Err(VoiceOrPaceRefusal::UnknownVoice {
+            reason: unknown_voice_reason(voice_name, &speech_capabilities.voice_names),
+        });
+    }
+    if !speech_capabilities.supports_speed && speed != 1.0 {
+        return Err(VoiceOrPaceRefusal::FixedPace);
+    }
+    Ok(())
 }
 
 /// What a caller asked to be spoken, before a model was chosen.

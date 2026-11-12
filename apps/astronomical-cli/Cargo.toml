@@ -45,6 +45,7 @@ astronomical-config = { path = "../../crates/config" }
 astronomical-expert-atlas = { path = "../../crates/expert-atlas" }
 astronomical-decision-contract = { path = "../../crates/decision-contract" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
+astronomical-speech-contract = { path = "../../crates/speech-contract" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"], optional = true }
 astronomical-quantization = { path = "../../crates/quantization" }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"], optional = true }

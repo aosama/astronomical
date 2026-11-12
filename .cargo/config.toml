@@ -151,12 +151,15 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 # an `evidence_directory`. A few seconds each; each prints every segment's
 # time. `test-speech-serving` runs how speech is served without a model: the
 # daemon's speech admission, events, model choice and `POST /v1/audio/speech`
-# journeys, with scripted workers; under a minute.
+# and IPC journeys (audio in bounded frames, refusals before dispatch), with
+# scripted workers; under a minute. `test-speak-cli` runs `astronomical
+# speak`'s own tests and its journeys against a stub daemon.
 test-speech = "test -p astronomical-model-serving --features direct-mlx --lib speech"
 test-english-speech-text = "test -p astronomical-english-phonemes -p astronomical-english-number-words -p astronomical-speech-contract"
 test-kokoro-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kokoro_speech"
 test-phonon-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter phonon_speech"
-test-speech-serving = "test -p astronomical-daemon --lib --test rest_api_tests speech"
+test-speech-serving = "test -p astronomical-daemon --lib --test rest_api_tests --test integration_tests speech"
+test-speak-cli = "test -p astronomical-cli speak"
 # Laya latency on an optimized build: after one warmup request, the median of
 # 20 requests with 1, 5 and 10 questions, each question filled to the
 # checkpoint's own token limit (512 English, 1,024 multilingual). Decision

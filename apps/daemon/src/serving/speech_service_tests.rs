@@ -9,8 +9,8 @@ use astronomical_config::{
 };
 
 use super::{
-    SpeechAsked, SpeechModelResolutionError, build_speech_command, resolve_speech_model,
-    speech_capabilities_of,
+    SpeechAsked, SpeechModelResolutionError, VoiceOrPaceRefusal, build_speech_command,
+    refuse_voice_or_pace_before_swap, resolve_speech_model, speech_capabilities_of,
 };
 
 fn speech_model(model_id: &str) -> DiscoveredModel {
@@ -131,4 +131,32 @@ fn should_find_speech_capabilities_only_for_a_speech_model() {
     assert!(speech_capabilities_of(&discovered_models, "Kokoro-82M-bf16").is_some());
     assert!(speech_capabilities_of(&discovered_models, "chatter").is_none());
     assert!(speech_capabilities_of(&discovered_models, "missing").is_none());
+}
+
+// Positive, negative and edge: a voice the model has and its natural pace
+// pass; an unknown voice or a changed pace on a fixed-pace model do not; a
+// model discovery knows nothing more about passes.
+#[test]
+fn should_refuse_only_what_the_model_cannot_speak() {
+    let ModelCapabilities::Speech(mut speech_capabilities) = speech_model("kokoro").capabilities
+    else {
+        panic!("the fixture is a speech model");
+    };
+    assert_eq!(
+        refuse_voice_or_pace_before_swap(Some(&speech_capabilities), Some("af_heart"), 1.5),
+        Ok(())
+    );
+    assert!(matches!(
+        refuse_voice_or_pace_before_swap(Some(&speech_capabilities), Some("alloy"), 1.0),
+        Err(VoiceOrPaceRefusal::UnknownVoice { .. })
+    ));
+    speech_capabilities.supports_speed = false;
+    assert_eq!(
+        refuse_voice_or_pace_before_swap(Some(&speech_capabilities), None, 1.5),
+        Err(VoiceOrPaceRefusal::FixedPace)
+    );
+    assert_eq!(
+        refuse_voice_or_pace_before_swap(None, Some("alloy"), 2.0),
+        Ok(())
+    );
 }

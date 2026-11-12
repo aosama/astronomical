@@ -25,8 +25,8 @@ use astronomical_ipc_protocol::{
 };
 use thiserror::Error;
 
-use crate::model_lifecycle::ProgressSink;
 use crate::transport::ipc::DaemonProbeError;
+use crate::verbs::download_progress_line::DownloadProgressLine;
 use crate::{DaemonProbe, ModelLifecycle, RequiredCapability};
 
 pub use image_arguments::{DEFAULT_IMAGE_SIDE_PIXELS, ImageArguments, parse_image_arguments};
@@ -133,10 +133,7 @@ async fn prepare_image_model(
     image_arguments: &ImageArguments,
     stderr: &mut dyn Write,
 ) -> Result<String, ImageError> {
-    let mut download_progress = DownloadProgressLine {
-        stderr,
-        has_written: false,
-    };
+    let mut download_progress = DownloadProgressLine::new(stderr);
     let image_model_id = model_lifecycle
         .prepare_model_id(
             image_arguments.model_id.as_deref(),
@@ -144,26 +141,8 @@ async fn prepare_image_model(
             &mut download_progress,
         )
         .await?;
-    if download_progress.has_written {
-        // Finalize the live progress line before the next message owns it.
-        let _ = writeln!(download_progress.stderr);
-    }
+    download_progress.finish();
     Ok(image_model_id)
-}
-
-/// The live download line: each report rewrites it in place on standard
-/// error, the way `respond` and `embed` show a model download.
-struct DownloadProgressLine<'a> {
-    stderr: &'a mut dyn Write,
-    has_written: bool,
-}
-
-impl ProgressSink for DownloadProgressLine<'_> {
-    fn report(&mut self, progress_line: &str) {
-        self.has_written = true;
-        let _ = write!(self.stderr, "\r{progress_line}");
-        let _ = self.stderr.flush();
-    }
 }
 
 fn interpret_image_response(

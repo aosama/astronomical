@@ -7,14 +7,17 @@
 pub mod convert_atlas;
 pub mod decide;
 pub mod doctor;
+pub(crate) mod download_progress_line;
 pub mod embed;
 pub mod image;
 pub mod launch;
 pub mod model_programs;
 pub mod models;
 pub mod quantize;
+pub(crate) mod reserved_output_file;
 pub mod respond;
 pub mod schema;
+pub mod speak;
 pub mod status;
 pub mod validate_config;
 pub mod vision;
