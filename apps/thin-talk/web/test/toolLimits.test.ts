@@ -37,7 +37,7 @@ test("should_report_a_tool_that_throws", async () => {
 
 test("should_stop_a_tool_that_runs_past_its_timeout_even_if_it_ignores_the_signal", async () => {
   const neverFinishes = scriptedTool(() => new Promise<string>(() => undefined));
-  await assert.rejects(executeWithinLimits(neverFinishes, {}, new AbortController().signal, undefined, 20), /took too long/);
+  await assert.rejects(executeWithinLimits(neverFinishes, {}, new AbortController().signal, undefined, { timeoutMilliseconds: 20 }), /took too long/);
 });
 
 test("should_stop_a_running_tool_when_the_turn_is_stopped", async () => {

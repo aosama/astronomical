@@ -45,7 +45,7 @@ class MemoryAdapter implements SessionStoreAdapter {
   }
 }
 
-test("listing returns the newest session first and copies records", () => {
+test("should_list_the_newest_session_first_and_copy_records", () => {
   const adapter = new MemoryAdapter();
   adapter.saveSession({ id: "a", title: "old", updatedAt: "2024-01-01T00:00:00Z", messages: [] });
   adapter.saveSession({ id: "b", title: "new", updatedAt: "2024-06-01T00:00:00Z", messages: [] });
@@ -57,7 +57,7 @@ test("listing returns the newest session first and copies records", () => {
   assert.equal(list[0].id, "b");
 });
 
-test("load returns null for a missing session and the full record otherwise", () => {
+test("should_load_null_for_a_missing_session_and_the_full_record_otherwise", () => {
   const adapter = new MemoryAdapter();
   assert.equal(handleSessionCall(SessionBridgeOp.LOAD, { id: "missing" }, adapter), null);
   adapter.saveSession({ id: "b", title: "new", updatedAt: "2024-06-01T00:00:00Z", messages: [{ role: "user", text: "hi" }] });
@@ -66,7 +66,7 @@ test("load returns null for a missing session and the full record otherwise", ()
   assert.deepEqual(record.messages, [{ role: "user", text: "hi" }]);
 });
 
-test("save persists and normalises missing fields without throwing", () => {
+test("should_save_and_normalise_missing_fields_without_throwing", () => {
   const adapter = new MemoryAdapter();
   handleSessionCall(SessionBridgeOp.SAVE, { id: "b" }, adapter);
   const record = handleSessionCall(SessionBridgeOp.LOAD, { id: "b" }, adapter) as SessionStoreRecord;
@@ -76,7 +76,7 @@ test("save persists and normalises missing fields without throwing", () => {
   assert.deepEqual(record.messages, []);
 });
 
-test("delete and rename mutate the stored session in place", () => {
+test("should_delete_and_rename_the_stored_session_in_place", () => {
   const adapter = new MemoryAdapter();
   adapter.saveSession({ id: "b", title: "old", updatedAt: "2024-06-01T00:00:00Z", messages: [] });
   handleSessionCall(SessionBridgeOp.RENAME, { id: "b", title: "renamed" }, adapter);
@@ -85,14 +85,14 @@ test("delete and rename mutate the stored session in place", () => {
   assert.equal(adapter.listSessions().length, 0);
 });
 
-test("preferences round-trip through loadPrefs/savePrefs", () => {
+test("should_load_the_preferences_it_saved", () => {
   const adapter = new MemoryAdapter();
   assert.deepEqual(handleSessionCall(SessionBridgeOp.LOAD_PREFS, null, adapter), {});
   handleSessionCall(SessionBridgeOp.SAVE_PREFS, { theme: "dark" }, adapter);
   assert.deepEqual(handleSessionCall(SessionBridgeOp.LOAD_PREFS, null, adapter), { theme: "dark" });
 });
 
-test("invalid payloads raise the exact host error messages", () => {
+test("should_raise_the_exact_host_error_messages_for_invalid_payloads", () => {
   const adapter = new MemoryAdapter();
   for (const op of [SessionBridgeOp.LOAD, SessionBridgeOp.DELETE, SessionBridgeOp.RENAME]) {
     assert.throws(() => handleSessionCall(op, { id: 5 }, adapter), /payload field "id" must be a string/);
@@ -116,7 +116,7 @@ class MemoryStorage {
   }
 }
 
-test("installPreviewShim resolves a sessionCall through the native bridge", async () => {
+test("should_resolve_a_session_call_through_the_native_bridge", async () => {
   const storage = new MemoryStorage();
   const resolves: { callId: string; payload: unknown }[] = [];
   const rejects: { callId: string; message: string }[] = [];
@@ -150,7 +150,7 @@ test("installPreviewShim resolves a sessionCall through the native bridge", asyn
   assert.deepEqual((resolves[1].payload as SessionStoreRecord[]), [saved]);
 });
 
-test("installPreviewShim routes a malformed envelope and unknown op to reject", async () => {
+test("should_reject_a_malformed_envelope_and_an_unknown_op", async () => {
   const storage = new MemoryStorage();
   const rejects: { callId: string; message: string }[] = [];
   const win: PreviewWindowLike = {

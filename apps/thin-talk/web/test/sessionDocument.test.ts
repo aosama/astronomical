@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SessionDocument } from "../src/SessionDocument";
 
-test("session document decodes a plain host document", () => {
+test("should_decode_a_plain_host_document", () => {
   const document = SessionDocument.fromPlain({
     id: "abc-123",
     title: "Romeo and Juliet notes",
@@ -18,14 +18,14 @@ test("session document decodes a plain host document", () => {
   assert.equal(document.messages[1].reasoning, "recall");
 });
 
-test("session document rejects non-objects and empty ids", () => {
+test("should_reject_non_objects_and_empty_ids", () => {
   assert.throws(() => SessionDocument.fromPlain(null));
   assert.throws(() => SessionDocument.fromPlain("nope"));
   assert.throws(() => SessionDocument.fromPlain({ id: "", title: "t", updatedAt: "u", messages: [] }));
   assert.throws(() => SessionDocument.fromPlain({ id: 7, title: "t", updatedAt: "u", messages: [] }));
 });
 
-test("session document round-trips through toPlain", () => {
+test("should_keep_a_document_unchanged_through_to_plain", () => {
   const document = SessionDocument.fromPlain({
     id: "abc-123",
     title: "t",

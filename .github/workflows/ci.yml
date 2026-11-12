@@ -613,7 +613,7 @@ jobs:
           args: >-
             --commit-time
             apps/astronomical-menu/Sources
-            apps/astronomical-menu/tests
+            apps/astronomical-menu/Tests
             apps/astronomical-menu/Package.swift
             apps/astronomical-menu/Package.resolved
             apps/thin-talk/Sources
@@ -660,7 +660,7 @@ jobs:
           operation: restore
           owner: swiftpm
           path: apps/astronomical-menu/.build
-          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/Tests/**/*.swift') }}
           restore-keys: |
             astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-
       # Restored .build directories are deliberately left untouched. The build
@@ -734,6 +734,21 @@ jobs:
           set -o pipefail
           (cd apps/thin-talk/web && npm test 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk-web.log")
         timeout-minutes: 6
+      # The first Swift command of the job is silent for 19 to 37 seconds
+      # before it prints "Building", on every run, whatever the cache held;
+      # the same command needs under a second on a developer Mac even with
+      # cold SwiftPM and compiler caches. Loading the package graph here, as
+      # a step of its own, gives that time a name in the timing summary: if
+      # it lands on this step it is manifest loading and dependency resolution
+      # on a fresh runner, and if it stays on the contracts step it is build
+      # planning. Either answer says which cache to add; neither costs a build.
+      - name: Resolve the menu Swift package
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end menu-package-resolve' EXIT
+          scripts/ci/ci-step-timing.sh begin menu-package-resolve
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= \
+            swift package --package-path apps/astronomical-menu resolve
+        timeout-minutes: 2
       - name: Run macOS menu status contracts
         id: macos-menu-contracts
         run: |
@@ -757,7 +772,10 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end observatory-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin observatory-contracts
           set -o pipefail
-          node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/memory-control.test.js apps/daemon/console/overview.test.js apps/daemon/console/download-models.test.js apps/daemon/console/download-models-fetch.test.js apps/daemon/console/download-models-pages.test.js apps/daemon/console/download-models-removal.test.js apps/daemon/console/download-models-groups.test.js apps/daemon/console/download-models-installed.test.js apps/daemon/console/appearance.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js apps/daemon/console/configuration-layout.test.js apps/daemon/console/neural-engine-panel.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
+          # Every test file in the folder, by pattern: the hand-kept list this
+          # replaces had fallen one file behind, so the palette contrast
+          # checks never ran here.
+          node --test --test-reporter=spec apps/daemon/console/*.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
         timeout-minutes: 2
       - name: Run Thin Talk conversation canvas contracts
         run: |
@@ -798,7 +816,7 @@ jobs:
           operation: save
           owner: swiftpm
           path: apps/astronomical-menu/.build
-          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/Tests/**/*.swift') }}
       - name: Save thin-talk swiftpm-cache
         id: thin-talk-cache-save
         if: ${{ !cancelled() && steps.thin-talk-cache.outputs.cache-hit != 'true' }}

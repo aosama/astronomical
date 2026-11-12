@@ -34,9 +34,14 @@ function finishingDaemon(): { client: DaemonClient; startRequests: string[] } {
   return { client: client as unknown as DaemonClient, startRequests };
 }
 
+/** Polls again on the next turn of the event loop instead of a second later. */
+function scheduleWithoutWaiting(callback: () => void): void {
+  setTimeout(callback, 0);
+}
+
 test("should_follow_one_download_for_every_screen_watching_the_same_model", async () => {
   const { client, startRequests } = finishingDaemon();
-  const library = new AstroLibrary(client);
+  const library = new AstroLibrary(client, scheduleWithoutWaiting);
   let installNotices = 0;
   library.onModelInstalled(() => {
     installNotices += 1;
@@ -55,7 +60,7 @@ test("should_follow_one_download_for_every_screen_watching_the_same_model", asyn
 
 test("should_start_a_fresh_download_after_the_previous_one_finished", async () => {
   const { client, startRequests } = finishingDaemon();
-  const library = new AstroLibrary(client);
+  const library = new AstroLibrary(client, scheduleWithoutWaiting);
   const phases: ModelDownloadPhase[] = [];
   library.followDownload(CHAT_MODEL_ID, (progress: ModelDownloadProgress) => phases.push(progress.phase));
   await waitFor(() => phases.includes(ModelDownloadPhase.READY), "the first download to land");

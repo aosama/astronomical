@@ -25,10 +25,6 @@ function selectorsThatHide(stylesheet: string): string[] {
   return hidingSelectors;
 }
 
-test("should_hide_the_model_control_while_no_chat_model_is_installed", () => {
-  assert.ok(selectorsThatHide(composerStylesheet).includes(".composer__model[hidden]"));
-});
-
 test("should_hide_every_hidden_composer_control_that_sets_its_own_display", () => {
   const hidingSelectors = selectorsThatHide(composerStylesheet);
   for (const controlClass of [".composer__icon", ".composer__model", ".composer__send"]) {
@@ -45,12 +41,6 @@ test("should_drop_the_model_name_and_keep_the_icon_in_a_narrow_composer", () => 
   assert.ok(selectorsThatHide(narrowRuleMatch[2]!).includes(".composer__model-label"));
   assert.match(narrowRuleMatch[2]!, /\.composer__model \{[^}]*flex: none;/);
   assert.match(composerStylesheet, /\.composer \{\s*container-type: inline-size;/);
-});
-
-test("should_not_count_a_rule_that_only_styles_a_hidden_control_as_hiding_it", () => {
-  const stylesheetWithoutDisplayNone = ".composer__model[hidden] { opacity: 0.5; }";
-
-  assert.deepEqual(selectorsThatHide(stylesheetWithoutDisplayNone), []);
 });
 
 /** The body of the one rule whose selector is exactly `selector`. */

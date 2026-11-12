@@ -80,11 +80,20 @@ function storingBridge(storedImages: string[]): SessionBridge {
   return bridge;
 }
 
-function imageTool(storedImages: string[] = [], imageModelSelection = new ImageModelSelection(), pictureModelGuidance = new PictureModelGuidance()): GenerateImageTool {
+/** The app waits a second before it reads the model list again; tests that
+ * only need the second read to happen wait a few milliseconds instead. */
+const SHORT_RECHECK_DELAY_MILLISECONDS = 5;
+
+function imageTool(
+  storedImages: string[] = [],
+  imageModelSelection = new ImageModelSelection(),
+  pictureModelGuidance = new PictureModelGuidance(),
+  imageModelRecheckDelayMilliseconds = SHORT_RECHECK_DELAY_MILLISECONDS,
+): GenerateImageTool {
   const client = new DaemonClient(
     new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" }),
   );
-  return new GenerateImageTool(client, storingBridge(storedImages), new ImageModelDirectory(client), imageModelSelection, pictureModelGuidance);
+  return new GenerateImageTool(client, storingBridge(storedImages), new ImageModelDirectory(client), imageModelSelection, pictureModelGuidance, imageModelRecheckDelayMilliseconds);
 }
 
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
@@ -191,14 +200,16 @@ test("should_draw_when_a_picture_model_appears_on_the_second_read", async () => 
 test("should_stop_waiting_for_the_recheck_when_the_turn_is_stopped_during_the_pause", async () => {
   installImageDaemon({ models: [CHAT_MODEL] });
   const stopTurn = new AbortController();
-  const pendingDrawing = imageTool().execute({ prompt: "A crown" }, stopTurn.signal, TOOL_CONTEXT);
+  const longRecheckDelayMilliseconds = 5_000;
+  const pendingDrawing = imageTool([], new ImageModelSelection(), new PictureModelGuidance(), longRecheckDelayMilliseconds)
+    .execute({ prompt: "A crown" }, stopTurn.signal, TOOL_CONTEXT);
   // The first list read finishes within a few event-loop turns; the stop then
-  // lands inside the one-second pause before the second read.
+  // lands inside the long pause before the second read.
   await new Promise((resolve) => setTimeout(resolve, 50));
   const stoppedAt = Date.now();
   stopTurn.abort(new Error("stopped by the person"));
   await assert.rejects(pendingDrawing, /stopped by the person/);
-  assert.ok(Date.now() - stoppedAt < 500, "the pause ends at the stop, not after the full second");
+  assert.ok(Date.now() - stoppedAt < 500, "the pause ends at the stop, not after the full delay");
 });
 
 test("should_report_a_daemon_refusal_and_a_response_without_an_image", async () => {

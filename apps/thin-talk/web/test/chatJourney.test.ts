@@ -19,7 +19,7 @@ function sidebarSessionCount(): number {
   return document.querySelectorAll<HTMLElement>("#session-list button").length;
 }
 
-test("a full chat journey: boot, send, stream, persist", async () => {
+test("should_boot_send_stream_and_persist_a_whole_chat", async () => {
   const { host, daemon } = bootJourney();
 
   // Boot settles: handshake, model catalog, and a fresh untitled session.
@@ -58,7 +58,7 @@ test("a full chat journey: boot, send, stream, persist", async () => {
   assert.equal((chatBody["messages"] as { role: string }[])[0]?.role, "user");
 }, { timeout: 30_000 });
 
-test("a second boot restores the persisted transcript from the host", async () => {
+test("should_restore_the_persisted_transcript_on_a_second_boot", async () => {
   // First life: have a conversation that persists.
   const first = bootJourney();
   await waitUntilReady();
@@ -73,7 +73,7 @@ test("a second boot restores the persisted transcript from the host", async () =
   );
 }, { timeout: 30_000 });
 
-test("a failed handshake shows the failure notice instead of a transcript", async () => {
+test("should_show_the_failure_notice_instead_of_a_transcript_when_the_handshake_fails", async () => {
   installDom();
   installConfig(DAEMON_BASE_URL);
   const host = new FakeSessionHost(

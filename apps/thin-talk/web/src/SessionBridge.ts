@@ -45,12 +45,15 @@ export type HostToolUse =
  */
 export class SessionBridge {
   private readonly post: (request: SessionBridgeRequest) => void;
+  /** How long an ordinary call waits for the host before it is given up. */
+  private readonly callTimeoutMilliseconds: number;
   private readonly pendingCalls = new Map<string, PendingSessionCall>();
   private nextCallNumber = 0;
   private readonly pageInstanceTag = Math.random().toString(36).slice(2, 10);
 
-  public constructor(post: (request: SessionBridgeRequest) => void) {
+  public constructor(post: (request: SessionBridgeRequest) => void, callTimeoutMilliseconds: number = CALL_TIMEOUT_MILLISECONDS) {
     this.post = post;
+    this.callTimeoutMilliseconds = callTimeoutMilliseconds;
     window.__thintalkBridge = {
       resolve: (callId: string, payload: unknown) => this.resolveCall(callId, payload),
       reject: (callId: string, message: string) => this.rejectCall(callId, message),
@@ -237,7 +240,7 @@ export class SessionBridge {
   private call(
     op: SessionBridgeOp,
     payload: unknown,
-    timeoutMilliseconds: number = CALL_TIMEOUT_MILLISECONDS,
+    timeoutMilliseconds: number = this.callTimeoutMilliseconds,
     callId: string = this.nextCallID(),
   ): Promise<unknown> {
     return new Promise<unknown>((resolve, reject) => {

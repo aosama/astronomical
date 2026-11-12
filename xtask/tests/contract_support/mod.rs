@@ -14,7 +14,10 @@ pub(crate) const EXPECTED_MACOS_CONCURRENCY_GROUP: &str =
     "macos-integration-${{ github.event_name }}-${{ github.ref }}";
 pub(crate) const EXPECTED_SWIFT_CONCURRENCY_GROUP: &str =
     "macos-swift-node-${{ github.event_name }}-${{ github.ref }}";
-pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str = "node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/memory-control.test.js apps/daemon/console/overview.test.js apps/daemon/console/download-models.test.js apps/daemon/console/download-models-fetch.test.js apps/daemon/console/download-models-pages.test.js apps/daemon/console/download-models-removal.test.js apps/daemon/console/download-models-groups.test.js apps/daemon/console/download-models-installed.test.js apps/daemon/console/appearance.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js apps/daemon/console/configuration-layout.test.js apps/daemon/console/neural-engine-panel.test.js";
+/// The Observatory step names its test files by pattern, so a new test file
+/// runs without anyone remembering to list it.
+pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str =
+    "node --test --test-reporter=spec apps/daemon/console/*.test.js";
 
 /// The one runner image every macOS job uses. Xcode 27, the major version
 /// that builds releases, ships only on this image; a job left on another

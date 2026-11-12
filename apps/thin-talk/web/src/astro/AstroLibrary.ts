@@ -6,6 +6,13 @@ import type { ModelDownloadDependencies, ModelDownloadProgress } from "./ModelDo
 
 type ProgressListener = (progress: ModelDownloadProgress) => void;
 
+/** Runs a callback after a delay; the app uses the page's timer. */
+type DelayScheduler = (callback: () => void, delayMilliseconds: number) => void;
+
+function scheduleWithPageTimer(callback: () => void, delayMilliseconds: number): void {
+  setTimeout(callback, delayMilliseconds);
+}
+
 /** One model's download and everyone currently watching it. */
 interface DownloadFollower {
   readonly listeners: Set<ProgressListener>;
@@ -27,11 +34,15 @@ const FINISHED_PHASES: ReadonlySet<ModelDownloadPhase> = new Set([ModelDownloadP
  */
 export class AstroLibrary {
   private readonly client: DaemonClient;
+  private readonly schedule: DelayScheduler;
   private readonly followersByModelID = new Map<string, DownloadFollower>();
   private readonly installListeners = new Set<() => void>();
 
-  public constructor(client: DaemonClient) {
+  /** `schedule` is what waits between download polls. Tests pass one that
+   * does not wait, so a download's whole life runs in milliseconds. */
+  public constructor(client: DaemonClient, schedule: DelayScheduler = scheduleWithPageTimer) {
     this.client = client;
+    this.schedule = schedule;
   }
 
   /** True with any chat model installed, false with none, null when the
@@ -128,9 +139,7 @@ export class AstroLibrary {
       readStatus: () => this.client.fetchLibraryDownloadStatus(),
       isInstalled: async (huggingfaceID) => isLibraryModelReady(await this.client.fetchLibraryCatalogText(), huggingfaceID),
       nowMilliseconds: () => Date.now(),
-      schedule: (callback, delayMilliseconds) => {
-        setTimeout(callback, delayMilliseconds);
-      },
+      schedule: this.schedule,
     };
   }
 }

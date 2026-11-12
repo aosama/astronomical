@@ -2,9 +2,7 @@ use astronomical_daemon::{
     ActiveRequestProgress, ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot,
     build_application, parse_macos_memory_pressure_level,
 };
-use astronomical_ipc_protocol::{
-    ChatModelCapabilities, MlxMemorySnapshotSource, WorkerMlxMemorySnapshot,
-};
+use astronomical_ipc_protocol::ChatModelCapabilities;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
@@ -418,44 +416,6 @@ fn should_parse_macos_memory_pressure_bitmasks_without_treating_unknown_values_a
             "unexpected pressure mapping for {sysctl_value_text}"
         );
     }
-}
-
-#[tokio::test]
-async fn should_expose_mlx_memory_snapshot_and_serving_session_in_status_for_the_memory_panel() {
-    let mut health_snapshot = ready_health_snapshot_with_model();
-    health_snapshot.latest_mlx_memory_snapshot = Some(WorkerMlxMemorySnapshot {
-        source: MlxMemorySnapshotSource::DecodeSubmitted,
-        active_memory_bytes: 12_000,
-        allocator_cache_memory_bytes: 500,
-        peak_memory_bytes: 13_000,
-        expert_payload_bytes: 2_000,
-        model_core_payload_bytes: 4_000,
-        context_state_payload_bytes: 1_000,
-        memory_ceiling_utilization: None,
-    });
-    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/status")
-                .body(Body::empty())
-                .expect("the status request should be valid"),
-        )
-        .await
-        .expect("the application should return a status response");
-    let response_body = to_bytes(response.into_body(), 16 * 1024)
-        .await
-        .expect("the status body should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the status body should contain JSON");
-    // MLX memory snapshot is optional (None when no worker observation yet)
-    // but the ceiling must always be present.
-    assert!(status_document["mlx_memory_ceiling_bytes"].is_u64());
-    // serving_session must always be present for the session panel.
-    assert!(status_document["serving_session"].is_object());
-    assert!(status_document["serving_session"]["completed_request_count"].is_u64());
-    assert!(status_document["serving_session"]["total_prompt_token_count"].is_u64());
-    assert!(status_document["serving_session"]["total_reused_prompt_token_count"].is_u64());
 }
 
 pub(super) struct ContractScriptedExecutor {

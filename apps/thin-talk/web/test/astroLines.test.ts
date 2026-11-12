@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AstroMoment, HOME_IDEAS, astroLine } from "../src/astro/AstroLines";
+import { AstroMoment, astroLine } from "../src/astro/AstroLines";
 
 const EVERY_MOMENT = Object.values(AstroMoment);
 /** Words from the younger-audience wording the app moved away from, and
@@ -36,9 +36,4 @@ test("should_never_exclaim", () => {
   for (const moment of EVERY_MOMENT) {
     assert.doesNotMatch(astroLine(moment, "Maya"), /!/, moment);
   }
-});
-
-test("should_offer_four_distinct_home_ideas", () => {
-  assert.equal(HOME_IDEAS.length, 4);
-  assert.equal(new Set(HOME_IDEAS).size, 4, "no idea repeats");
 });

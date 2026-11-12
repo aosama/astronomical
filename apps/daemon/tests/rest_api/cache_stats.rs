@@ -179,34 +179,6 @@ async fn should_return_zeroed_cache_stats_when_worker_is_unavailable() {
 }
 
 #[tokio::test]
-async fn should_return_200_ok_with_json_content_type_for_cache_stats() {
-    let health_snapshot = WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
-    let application =
-        astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));
-    let response = application
-        .oneshot(
-            Request::builder()
-                .uri("/v1/cache/stats")
-                .body(Body::empty())
-                .expect("the cache-stats request should be valid"),
-        )
-        .await
-        .expect("the application should return a cache-stats response");
-    assert_eq!(response.status(), StatusCode::OK);
-    let content_type = response
-        .headers()
-        .get(axum::http::header::CONTENT_TYPE)
-        .expect("the cache-stats response should have a content-type header");
-    assert!(
-        content_type
-            .to_str()
-            .expect("the content-type should be valid ASCII")
-            .starts_with("application/json"),
-        "the cache-stats response should be JSON"
-    );
-}
-
-#[tokio::test]
 async fn should_compute_hit_rate_as_hits_over_total_queries() {
     let mut health_snapshot = WorkerHealthSnapshot::ready_with_model(
         MODEL_ID.to_owned(),

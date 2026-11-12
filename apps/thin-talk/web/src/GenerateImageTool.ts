@@ -63,6 +63,7 @@ export class GenerateImageTool implements ConversationTool {
   private readonly imageModelDirectory: ImageModelDirectory;
   private readonly imageModelSelection: ImageModelSelection;
   private readonly pictureModelGuidance: PictureModelGuidance;
+  private readonly imageModelRecheckDelayMilliseconds: number;
 
   public constructor(
     client: DaemonClient,
@@ -70,12 +71,14 @@ export class GenerateImageTool implements ConversationTool {
     imageModelDirectory: ImageModelDirectory,
     imageModelSelection: ImageModelSelection,
     pictureModelGuidance: PictureModelGuidance = new PictureModelGuidance(),
+    imageModelRecheckDelayMilliseconds: number = IMAGE_MODEL_RECHECK_DELAY_MILLISECONDS,
   ) {
     this.client = client;
     this.bridge = bridge;
     this.imageModelDirectory = imageModelDirectory;
     this.imageModelSelection = imageModelSelection;
     this.pictureModelGuidance = pictureModelGuidance;
+    this.imageModelRecheckDelayMilliseconds = imageModelRecheckDelayMilliseconds;
     this.imageReview = new GeneratedImageReview(client);
   }
 
@@ -89,7 +92,7 @@ export class GenerateImageTool implements ConversationTool {
   private async installedImageModel(signal: AbortSignal): Promise<ImageModel | null> {
     for (let readNumber = 1; readNumber <= 2; readNumber += 1) {
       if (readNumber > 1) {
-        await GenerateImageTool.pause(IMAGE_MODEL_RECHECK_DELAY_MILLISECONDS, signal);
+        await GenerateImageTool.pause(this.imageModelRecheckDelayMilliseconds, signal);
       }
       this.imageModelSelection.updateInstalled(await this.imageModelDirectory.load(signal));
       const imageModel = this.imageModelSelection.current();
