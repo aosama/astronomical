@@ -1,4 +1,5 @@
-/** How often the watchdog polls for activity. */
+/** How often the watchdog polls for activity. A stall timeout is tens of
+ * seconds, so noticing one within a second is prompt enough. */
 const POLL_INTERVAL_MILLISECONDS = 1_000;
 
 /**
@@ -10,14 +11,16 @@ const POLL_INTERVAL_MILLISECONDS = 1_000;
 export class StallWatchdog {
   private readonly stallTimeoutMilliseconds: number;
   private readonly onStall: () => void;
+  private readonly pollIntervalMilliseconds: number;
   private pollTimer: number | null = null;
   private lastActivityAt = 0;
   private hasFired = false;
   private isPaused = false;
 
-  public constructor(stallTimeoutMilliseconds: number, onStall: () => void) {
+  public constructor(stallTimeoutMilliseconds: number, onStall: () => void, pollIntervalMilliseconds: number = POLL_INTERVAL_MILLISECONDS) {
     this.stallTimeoutMilliseconds = stallTimeoutMilliseconds;
     this.onStall = onStall;
+    this.pollIntervalMilliseconds = pollIntervalMilliseconds;
   }
 
   public start(): void {
@@ -25,7 +28,7 @@ export class StallWatchdog {
     this.hasFired = false;
     this.isPaused = false;
     this.lastActivityAt = Date.now();
-    this.pollTimer = window.setInterval(() => this.poll(), POLL_INTERVAL_MILLISECONDS);
+    this.pollTimer = window.setInterval(() => this.poll(), this.pollIntervalMilliseconds);
   }
 
   public stop(): void {

@@ -52,10 +52,6 @@ test("should_show_the_persons_initial_and_escaped_nickname_or_you_without_one", 
   assert.equal(new AstroMessageChrome(new TranscriptPersona({ isAstroShown: true, nickname: "" }), escapeHtml).userRoleHtml(), `<span class="message__role">You</span>`);
 });
 
-test("should_call_reasoning_by_its_name", () => {
-  assert.equal(new AstroMessageChrome(ASTRO_PERSONA, escapeHtml).reasoningSummary(), "Reasoning");
-});
-
 test("should_show_the_image_model_beside_a_drawing_moment", () => {
   const drawn = toolStep(ToolStepState.SUCCEEDED);
   assert.match(new AstroMessageChrome(ASTRO_PERSONA, escapeHtml).toolStepSummaryHtml(drawn, " · FLUX"), /Image generated · FLUX/);

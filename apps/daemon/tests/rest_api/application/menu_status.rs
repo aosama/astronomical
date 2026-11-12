@@ -32,10 +32,10 @@ const FLUX_MODEL_ID: &str = "fictional/image-model";
 const FLUX_CONFIGURATION_GENERATION: &str =
     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const AUTOREGRESSIVE_STATUS_FIXTURE: &str = include_str!(
-    "../../../../astronomical-menu/tests/AstronomicalMenuContractTests/Fixtures/full-autoregressive-status.json"
+    "../../../../astronomical-menu/Tests/AstronomicalMenuContractTests/Fixtures/full-autoregressive-status.json"
 );
 const FLUX_STATUS_FIXTURE: &str = include_str!(
-    "../../../../astronomical-menu/tests/AstronomicalMenuContractTests/Fixtures/full-flux-status.json"
+    "../../../../astronomical-menu/Tests/AstronomicalMenuContractTests/Fixtures/full-flux-status.json"
 );
 
 #[tokio::test]

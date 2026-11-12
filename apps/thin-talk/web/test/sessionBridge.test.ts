@@ -22,7 +22,7 @@ function harness(): {
   };
 }
 
-test("session bridge posts call envelopes with the op and payload", async () => {
+test("should_post_call_envelopes_with_the_op_and_payload", async () => {
   const { bridge, posted } = harness();
   const document = new SessionDocument({
     id: "abc",
@@ -48,7 +48,7 @@ test("session bridge posts call envelopes with the op and payload", async () => 
   await pending;
 });
 
-test("session bridge call ids increment across calls and carry one page tag", async () => {
+test("should_increment_call_ids_across_calls_and_carry_one_page_tag", async () => {
   const { bridge, posted } = harness();
   const first = bridge.list();
   const second = bridge.list();
@@ -69,7 +69,7 @@ test("should_give_two_pages_different_call_ids_so_late_answers_cannot_cross", ()
   assert.notEqual(firstPage.posted[0].callId, secondPage.posted[0].callId);
 });
 
-test("session bridge rejects with the host's message", async () => {
+test("should_reject_with_the_hosts_message", async () => {
   const { bridge, reject, posted } = harness();
   const pending = bridge.load("missing");
   reject(posted[0].callId, "unreadable document");
@@ -79,8 +79,8 @@ test("session bridge rejects with the host's message", async () => {
   });
 });
 
-test("session bridge times out when the host never answers", async () => {
-  const { bridge } = harness();
-  const pending = bridge.list();
-  await assert.rejects(pending, SessionBridgeTimeoutError);
-}, { timeout: 15_000 });
+test("should_time_out_when_the_host_never_answers", async () => {
+  const shortCallTimeoutMilliseconds = 20;
+  const bridge = new SessionBridge(() => undefined, shortCallTimeoutMilliseconds);
+  await assert.rejects(bridge.list(), SessionBridgeTimeoutError);
+});

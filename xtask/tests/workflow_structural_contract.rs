@@ -581,7 +581,7 @@ const SWIFT_MTIME_ACTION: &str = "chetan/git-restore-mtime-action";
 const SWIFT_MTIME_STEP_NAME: &str = "Restore Swift input mtimes from their last commits";
 const SWIFT_PACKAGE_INPUT_PATHS: [&str; 7] = [
     "apps/astronomical-menu/Sources",
-    "apps/astronomical-menu/tests",
+    "apps/astronomical-menu/Tests",
     "apps/astronomical-menu/Package.swift",
     "apps/astronomical-menu/Package.resolved",
     "apps/thin-talk/Sources",

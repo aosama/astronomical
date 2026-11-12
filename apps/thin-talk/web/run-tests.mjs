@@ -22,7 +22,12 @@ await build({
 // a limit one such test once grew until the Mac ran out of application memory.
 const TEST_PROCESS_HEAP_LIMIT_MEGABYTES = 1024;
 
-const result = spawnSync(process.execPath, ["--test", `--max-old-space-size=${TEST_PROCESS_HEAP_LIMIT_MEGABYTES}`, bundlePath], {
+// The journey tests boot whole app shells and leave them running: status
+// polls, ten-second host-call timeouts, download followers. Those timers
+// would keep the process alive for about twenty seconds after the last test
+// had already passed, on every run. Forcing the exit ends the run when the
+// tests end; the exit status still reflects every test.
+const result = spawnSync(process.execPath, ["--test", "--test-force-exit", `--max-old-space-size=${TEST_PROCESS_HEAP_LIMIT_MEGABYTES}`, bundlePath], {
   stdio: "inherit",
   env: { ...process.env, THINTALK_INDEX_HTML: indexHTML },
 });

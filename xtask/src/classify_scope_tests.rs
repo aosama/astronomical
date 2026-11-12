@@ -343,7 +343,7 @@ fn should_skip_only_the_macos_lanes_for_a_verified_tree() {
 fn should_call_everything_the_swift_and_node_lane_reads_an_input() {
     for swift_node_input in [
         "apps/astronomical-menu/Sources/AstronomicalMenuCore/Menu.swift",
-        "apps/astronomical-menu/tests/AstronomicalMenuContractTests/Fixtures/full.json",
+        "apps/astronomical-menu/Tests/AstronomicalMenuContractTests/Fixtures/full.json",
         "apps/thin-talk/web/src/app.ts",
         "apps/daemon/console/console.js",
         "scripts/internal/render-macos-app-icon.swift",

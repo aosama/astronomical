@@ -13,7 +13,7 @@ final class CanvasWebBundleContractTests: XCTestCase {
     .deletingLastPathComponent()
     .deletingLastPathComponent()
 
-  func test_generated_web_client_bundle_exists_before_the_canvas_ships() throws {
+  func test_should_find_the_generated_web_client_bundle_before_the_canvas_ships() throws {
     let webResourcesURL = packageDirectoryURL
       .appendingPathComponent("Sources/ThinTalkCanvas/Resources/web")
 
