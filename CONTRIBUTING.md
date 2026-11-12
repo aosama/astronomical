@@ -14,6 +14,10 @@ Never submit credentials, authorization headers, prompt contents, personal paths
 
 Use temporary directories and fictional placeholder paths in tests. Model-artifact tests must discover user-configured artifacts rather than hardwire a workstation location.
 
+## Building
+
+The tools you need, the build commands and the Stable and Development instances are described in [Building and developing Astronomical](docs/development.md).
+
 ## Tests
 
 Add the smallest meaningful behavior test for functional changes. Every test process must have a maximum 120-second timeout and visible progress.

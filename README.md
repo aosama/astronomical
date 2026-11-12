@@ -2,203 +2,68 @@
 
 <a href="https://github.com/aosama/astronomical/releases/download/v0.2.103/Astronomical-0.2.103-macOS-arm64.dmg"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
 
-**Astronomical is a local model runner for Apple silicon. You set one RAM ceiling; when a mixture-of-experts model does not fit, selected experts stream from SSD, and declared precision is preserved.**
+**Run large AI models privately on your Mac, including models bigger than the memory you can spare.**
 
-## Quick start
-
-1. **Download for Mac.** Install the signed, notarized disk image from the [latest release](https://github.com/aosama/astronomical/releases/latest). Astronomical runs on any Apple silicon M-series Mac with macOS 14 (Sonoma) or later.
-2. **Set your RAM ceiling and pick a model.** In Observatory, set **Maximum model RAM** on the Settings page, then install a model from Models. The ceiling is the model memory this Mac can spare. On a 32 GB Mac, for example, a lower ceiling such as 16 GB can leave room for macOS and everyday applications.
-3. **Chat, or point a tool at the local API.** Talk in Thin Talk, the chat window, or send a chat from Observatory. The menu-bar companion stays up while you work. Stable serves OpenAI-compatible and Anthropic-compatible APIs at [http://127.0.0.1:6732/](http://127.0.0.1:6732/). `astronomical launch claude`, `astronomical launch codex`, or `astronomical launch opencode` starts that agent pointed at this Mac for one session. Client settings are on the [local API page](https://aosama.github.io/astronomical/local-api.html).
-
-Run bigger local language and vision models on Apple Silicon without requiring every sparse expert to live in RAM. You set the model RAM your laptop can spare. Astronomical is a local model runner for Mac users who want serious models, private inference, and direct control over memory: it automatically balances hot expert weights, live context, runtime work, and solid-state-drive streaming under that ceiling.
-
-Read the product story and public engineering reports at [aosama.github.io/astronomical](https://aosama.github.io/astronomical/).
+Astronomical is a free app for Apple silicon Macs. You tell it how much memory it may use, pick a model, and start chatting. When a model is too big for that memory, Astronomical keeps part of it on your SSD and reads it as needed, so the rest of your Mac stays usable. Nothing you type leaves your Mac.
 
 [![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.jpeg)](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.mp4)
 
-*A captured development run of Qwen3.6-35B-A3B-oQ4e-mtp: 21.61 GB on disk, an 11 GB model-memory ceiling, automatic RAM plus SSD expert streaming, and live prompt-processing telemetry. This demonstrates the operating mode, not a universal throughput guarantee; results vary by model, context, storage, and Mac. Click the image for the [25-second silent demo](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.mp4): a 23.55 GB mixture-of-experts model generating fully resident under a 30 GB ceiling, then switching to RAM plus SSD streaming after the ceiling is lowered. Captured run, not a throughput claim.*
+*A 21.6 GB model running with an 11 GB memory limit. Click the picture for a 25-second demo. This is a captured run; speed varies by model, prompt length, storage and Mac.*
 
-## Built for the RAM you have
+## What you need
 
-A mixture-of-experts model may contain many expert weights while activating only a small selection for each token. Astronomical takes advantage of that structure instead of treating the complete model as one permanent RAM allocation.
+- A Mac with Apple silicon (any M-series chip).
+- macOS 14 (Sonoma) or later.
+- Free disk space for models. They range from under 1 GB to about 38 GB each.
 
-- **Choose one model-memory ceiling.** On a 32 GB Mac, for example, a lower ceiling such as 16 GB can leave room for macOS and everyday applications.
-- **Stream selected experts from SSD.** When the complete sparse payload does not fit, router-selected expert pages move into MLX memory on demand.
-- **Keep the complete model hot when it fits.** All sparse experts use contiguous resident arrays when safe; context pressure switches the whole model to paging and idle recovery can restore residency.
-- **Adapt automatically.** Resident and RAM plus SSD streaming are observed outcomes, not modes the user has to tune.
-- **See the truth.** The menu reports the effective ceiling, expert residency, model core, runtime work, live context, headroom, GPU utilization, prompt progress, and prompt reuse.
+## Get started
 
-The model core, active context, selected expert pages, and temporary execution work must still fit within the configured ceiling. Model compatibility and practical speed therefore depend on the artifact, context length, SSD, and available memory. Astronomical is designed to adapt rather than promise that every model fits every Mac.
+1. **Install the app.** Download the disk image with the button above or from the [latest release](https://github.com/aosama/astronomical/releases/latest), open it, and drag Astronomical into Applications. The app is signed and notarized by Apple.
+2. **Open Astronomical.** A chat window opens and an Astronomical item appears in the menu bar. The menu-bar item keeps models available while you work, even after you close the chat window.
+3. **Install a model.** Click the menu-bar item and choose **Download a model**. This opens the **Models** page of Observatory, the app's control page in your browser. Pick a model there; Astronomical downloads it and checks the download before using it.
+4. **Say how much memory it may use.** In Observatory, go to **Settings** and set **Maximum model RAM**. On a 32 GB Mac, for example, 16 GB leaves room for macOS and your other apps.
+5. **Chat.** Type in the chat window. The model loads on your first message.
 
-Expert mode always describes the complete sparse payload, never a mixture of resident and paged layers. A model can be resident while idle, switch to paging before or during a large request, and return to resident after synchronized request cleanup when the complete payload fits again.
+To remove a model later, use **Remove** on its line in **Models**. It goes to the Trash.
 
-## Performance from the whole stack
+## Use it with your coding tools
 
-Astronomical is not a generic server wrapped around an off-the-shelf model loop. The serving path is built in Rust and C++, executes through Apple MLX and MLX-C, and contains model-specific optimizations for Apple graphics processors.
+Astronomical can stand in for a cloud model in tools that speak the OpenAI or Anthropic API.
 
-| Optimization | What it does for the user |
-| --- | --- |
-| Automatic sparse-expert residency and paging | Keeps the complete sparse model resident when safe and uses SSD capacity when memory is needed elsewhere. |
-| Adaptive memory admission | Projects context growth and observed transient work before allocation, then reclaims only the expert memory required for the next operation. |
-| Deterministic prompt chunking | Uses a chosen fixed size, exact terminal remainders, and bounded memory-capacity reduction without spending user latency on online exploration. |
-| Persistent prompt reuse | Restores validated prompt state, recurrent snapshots, and projected image embeddings from a bounded SSD store so repeated prefixes need less work. |
-| GPU-native sampling and decode | Keeps sampling on the graphics processor and submits one token ahead to reduce avoidable host synchronization. |
-| Sorted mixture-of-experts execution | Groups larger routing batches by expert and reuses one ordering across projections to reduce scattered quantized matrix work. |
-| Compiled and fused model operations | Reuses compiled MLX graphs and dedicated Metal kernels for recurrent state, activation, gating, and expert combination where measured paths benefit. |
-| Chunk-level allocator cleanup | Materializes the required decoder state, releases completed intermediates, and prevents long prompts from accumulating stale allocator memory. |
-| Lazy loading and model hot-swap | Starts with no model resident and loads only the model requested through the local API. |
+First, add the `astronomical` command to Terminal: click the menu-bar item and choose **Install “astronomical” command in terminal…**. Then start a coding agent that uses the model on your Mac:
 
-## Precision is not the sacrifice
+    astronomical launch claude
+    astronomical launch codex
+    astronomical launch opencode
 
-Low-memory operation should not silently make a model less accurate.
+For any other tool, point it at `http://127.0.0.1:6732/`. The [local API page](https://aosama.github.io/astronomical/local-api.html) has the settings for each client.
 
-- Astronomical does not add hidden quantization when memory pressure increases.
-- Expert paging preserves the artifact's declared data types and quantization parameters.
-- Persistent prompt state preserves the model execution state required for reuse.
-- Unsupported architecture, precision, or artifact combinations fail validation instead of being guessed from a filename.
+## Use it from Terminal
 
-## Local, visible, and private
+    astronomical respond "Explain what a mutex is in two sentences"
+    astronomical models list
+    astronomical models download MODEL_ID
+    astronomical image "A lighthouse at dusk"
+    astronomical status
 
-The embedded Observatory and native menu make model serving observable without a separate monitoring stack.
+Run `astronomical --help` for the full list.
 
-- Live prompt-processing and generation progress.
-- Current and peak MLX memory attribution.
-- Resident or RAM plus SSD streaming state.
-- GPU utilization and session throughput.
-- Prompt reuse rate and cumulative reused tokens.
-- Effective model-memory ceiling with live adjustment.
+## Good to know
 
-Prompts, responses, model files, and persistent prompt state stay on the local Mac. Operational diagnostics retain bounded metadata and payload digests, not request headers, prompt text, tool arguments, or generated output text.
+- **Private by design.** Prompts, replies and models stay on your Mac. The app only accepts connections from your own Mac.
+- **Your model's quality is not reduced.** Astronomical never lowers a model's precision to save memory.
+- **You can see what is happening.** The menu-bar item and Observatory show memory in use, progress and speed.
+- **Models are downloaded, not bundled.** Each model has its own license, which must allow your intended use.
+- **It is experimental.** One person, one conversation at a time. Supported model families today are Qwen3.5, Qwen3.6, Laguna, FLUX.2 Klein for images, and ModernBERT for embeddings.
 
-## Current scope
+## Learn more
 
-Astronomical is experimental and deliberately focused:
-
-- Any Apple silicon M-series Mac.
-- macOS 14 (Sonoma) and later on any Apple silicon M-series Mac, declared best-effort. Capability probes and public MLX fallbacks protect correctness across the range; combinations outside the tested set are supported best-effort.
-- Validated Qwen3.5/Qwen3.6, Laguna, FLUX.2 Klein, and ModernBERT embedding artifacts supported by the repository.
-- One local user and one active generation at a time.
-- OpenAI-compatible chat completions, responses, embeddings, image generation, and model discovery, Anthropic-compatible Messages, and server-sent event streaming over loopback only.
-
-A supported model runs on every Apple silicon M-series Mac that meets the operating-system floor. Measured custom Metal kernels keep capable GPUs on their fastest path; where a GPU cannot run one, the same request completes through public MLX APIs with the output precision the model artifact specifies. Throughput still depends on the GPU generation, the memory ceiling, the model, and storage speed.
-
-Astronomical does not bundle or redistribute model weights. Observatory can download curated public Hugging Face catalog entries directly onto this Mac; each payload is verified before it becomes discoverable. Model licenses remain separate and must permit the intended use.
-
-## Stable and Development instances
-
-Astronomical keeps the trusted daily driver separate from repository development:
-
-| Channel | State | REST API | Application |
-| --- | --- | --- | --- |
-| Stable | `~/.astronomical` | `127.0.0.1:6732` | `~/Applications/Astronomical.app` |
-| Development | `~/.astronomical-dev` | `127.0.0.1:6733` | `target/astronomical-macos-development.noindex/Astronomical Development.app` |
-
-Config, logs, prompt caches, daemon ownership, process locks, and loopback endpoints are isolated. A standard instance rejects a configured endpoint belonging to the other channel. Both configs may reference the same read-only model directories. Real-model development still shares the Mac's GPU, wired memory, and storage bandwidth with Stable.
-
-Serving and acceptance tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
-
-On first launch each instance creates its own versioned `config.json` and adjacent local JSON Schema. Open Models in Observatory to install a curated model under that instance's automatic models directory. A model installed that way can be removed again with **Remove** on its line under On this Mac: its folder moves to the Trash, and copies you placed in other folders are never offered for removal. When an existing unversioned configuration can be migrated without changing its behavior, Astronomical preserves its exact bytes once as `config.legacy-v0.json` before atomically replacing `config.json`. An unsafe migration leaves the original configuration unchanged and creates no backup. Additional existing model locations remain available as recursive scan roots:
-
-    {
-      "$schema": "./astronomical-config.schema.json",
-      "schema_version": 1,
-      "runtime": {
-        "model_directories": ["/path/to/models"],
-        "maximum_mlx_memory_gb": 16
-      },
-      "prompt_cache": {
-        "enabled": true,
-        "maximum_size_gb": 50
-      }
-    }
-
-The memory value uses the gigabyte Apple uses to market the Mac: 1 GB = 1,073,741,824 bytes (2³⁰). Remove `maximum_mlx_memory_gb` to use the Mac-reported MLX ceiling. Per-model entries are keyed by the model folder name or by its full Hugging Face ID, such as `organization/model`; models installed through Observatory's Models page or `astronomical models download` record their full ID, so an entry for a different organisation's model of the same name does not apply to them, and an entry keyed by the folder name wins over one keyed by the full ID. Per-model entries can set a lower context ceiling, generation defaults, chunking overrides, and multi-token-prediction depth. Explicit request values override generation defaults. Overrides for temporarily absent models remain dormant and are reported as unmatched rather than preventing other models from serving. `astronomical validate config` says what each entry does against the models installed now: which model it is used for, why it is not used, or that it is waiting for a model you have not downloaded yet. Settings only change chat models. Global chunking controls remain available under `chunking`, and each model may override individual values. See the [version 1 configuration schema](https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json) for the complete contract.
-
-## Edit the configuration
-
-Observatory's **Settings** and **Tuning** pages edit every setting in that instance's `config.json`. Settings holds what applies to the whole instance. Tuning lists your models with **All models** first, which holds the execution defaults every model starts from, and shows the chosen model's generation defaults, context limit and advanced execution settings. Click the (i) beside a setting or a section for a plain explanation, its `config.json` key and when a change takes effect; a value that differs from its default shows an arrow that returns it to the default. A Save bar appears while either page holds unsaved edits. Saving validates the whole document, refuses to overwrite a file that changed since the page loaded it, and reports whether the change applied, is waiting for a running request, or needs a restart. The ⋯ menu previews the file, applies the saved file, or resets everything; reset keeps the old file beside the new one as `config.previous.json`. The pages are generated from the version 1 schema, whose `x-astronomical-layout` member arranges them. **Maximum model RAM** on Settings has its own Apply button, applies the memory ceiling at once and writes `runtime.maximum_mlx_memory_gb`; the generic row for that setting is left out so there is one place to change it.
-
-## Metal residency refresh
-
-macOS can release the Metal residency of wired memory while the GPU is idle, so model weights may have to be made resident again before the next prompt. Set `metal_residency_refresh_enabled` under `runtime`, or use the switch on Observatory's **Settings** page, to have the inference worker re-request residency once per second. It is off by default, changing it restarts the worker, and the renewal can keep that memory wired through long idle periods.
-
-## Idle model unload
-
-A loaded model is unloaded after it has gone unused for `idle_model_unload_seconds` under `runtime` (60 by default), which frees its memory for the rest of the Mac; the next request loads it again. Set it to 0 to keep a model loaded until another one is requested. The change applies at once from Observatory's **Settings** page.
-
-## Neural Engine prefill (experimental)
-
-Dense models can run part of each full prompt chunk on the Apple Neural Engine next to the GPU: 47 percent of each chunk's MLP work, and the DeltaNet layers' output gates. Set `experimental_neural_engine_prefill_enabled` under `chunking`, globally or for one model; it is off by default and applies at the next model load.
-
-Measured on Ornith-1.5-9B on one M5-class Mac, with 10,000-token Shakespeare prompts through the daemon and the prompt cache on: prefill rose from about 1,207 tokens per second to between 1,362 and 1,444, or 1.13× to 1.2×, and direct model runs without the cache's work measured about 1.27×. Decode did not change. The first long prompt after a load sees less of that gain, and only full 2,048-token chunks use the Neural Engine, so shorter prompts see little or none. The costs are real:
-
-- **Memory:** the programs' cost is measured for each model on your Mac the first time they run, and depends on the model: 1.8 GB on a 0.8B model, 3.6 GB on a 2B model and 15 GB on a 9B model. Each prefill chunk uses the Neural Engine only when the memory MLX is projected to reach plus that cost fits under the MLX memory ceiling, so a long prompt can start on both engines and finish on the GPU. A model is refused only when its programs could not fit even for one chunk, which on the 9B model means a ceiling below about 20 GB. A ceiling just above that leaves `/v1/status` saying `active` while chunks run on the GPU, so allow a few more gigabytes; the worker log records each change of engine. The driver releases the programs' wired memory 10 to 20 seconds after work stops.
-- **Which models gain:** this is found out for each model on your Mac. During its first long prompts, full chunks take turns between the GPU alone and both engines, which costs those prompts a few percent. That takes at least three prompts and 15 comparisons, which is eight 10,000-token prompts or three 25,000-token ones. A model must gain at least 2 percent to keep its programs. Otherwise they are released, the status says why, and later loads skip them until a macOS update. To ask again sooner, remove `program-speed.txt` from that model's program set under `neural-engine-programs`. Through the app, a 9B model read 1.28× and a 2B model read 1.03× to 1.11×, while a 0.8B model read 0.90× to 0.98× and was turned off. `/v1/status` reports the figure as `measured_speed_percent`, and the menu, the Tuning page and the Overview's Neural Engine panel show it. That panel also shows the share of prompt tokens the Neural Engine really ran and an estimate of the time saved since launch. The estimate counts only prompts that began with the programs already awake, because a prompt that wakes them can run slower overall, so it can undercount a large model and won't claim time a small one lost. A 2B model whose first prompts all arrive after idle spells can read too low and be turned off, which costs only the few percent it would have gained on prompts in quick succession.
-- **After an idle spell:** the driver releases the programs 10 to 20 seconds after their last use, and waking them costs time. A prompt after 10 seconds of idle therefore starts with one chunk on the GPU, because a first chunk on both engines took 380 to 600 ms longer than a warm one, and the same programs waking on the second chunk took 140 to 180 ms longer. Over a whole 20,000-token prompt sent after 25 seconds of idle, a 9B model still ran 1.11× the GPU alone, but a 2B model ran 0.94×, against 1.11× for prompts in quick succession. So a small model gains only when its long prompts arrive close together.
-- **A request while programs are measured:** the first two loads wire the whole set to measure it. A request arriving then cancels the measurement and starts at once, and the set can stay wired beside it for up to 20 seconds, past the MLX memory ceiling if the ceiling is tight.
-- **Preparation time and disk:** a model serves on the GPU as soon as it loads, while its programs are prepared in the background, and the menu app raises banners while they prepare and when they engage. On a 9B model with its compiled programs already on disk, preparation took 94 seconds on the first load after the app itself changed, then 43, 13 and about 3 seconds on the next loads, as macOS rebuilt its own compiled copies. A model's very first preparation also writes and compiles its programs, then measures them on its own thread once the GPU has been idle for 30 seconds, which takes about 3 seconds and delays no request. A request restarts the wait, so a steady stream of requests holds the programs back until there is a pause, with their 1.2 GB of surfaces held meanwhile. Measuring happens on the first two loads, and once the two readings agree the result is kept until the macOS build or the Mac changes. A model keeps about 10 GB of compiled programs under the instance's `neural-engine-programs` folder, and macOS keeps its copies in the app's cache folder besides. Performance attribution, when enabled, removes the speed gain by adding synchronization.
-- **Output:** part of each prompt computes in fp16, so output can differ slightly from the GPU alone. In six exact-answer tasks over 13,000-token prompts every answer stayed correct, though on one coding task the answer ignored "output only the code".
-
-Mixture-of-experts models do not benefit, because their routed experts stay on the GPU. When the feature cannot run, serving stays on the GPU and `/v1/status` and the Overview's Neural Engine panel say why.
-
-## Build the app
-
-Required tools:
-
-- Xcode with the macOS 26 software development kit.
-- CMake.
-- Rust nightly-2026-11-07 (rustc 1.101.0-nightly) through the checked-in toolchain file.
-- Swift 6.2.
-- Homebrew coreutils, jq, curl, and sccache for repository verification and application validation.
-
-Provision the pinned, checksum-verified native dependencies:
-
-    cargo xtask bootstrap-native-dependencies
-
-Build the Development app and open it, without touching Stable:
-
-    cargo xtask app dev
-
-The first run compiles everything; later runs rebuild incrementally and replace the running Development app in seconds. A failed build leaves the running app untouched. Control the Development instance headless, for example to start its daemon with exported `ASTRONOMICAL_*` experiment flags:
-
-    cargo xtask app instance status|start|stop|restart
-
-The ad-hoc signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Stable uses the clean product icon, while Development uses a restrained channel badge. To rehearse a launch of any built bundle in isolation, run `cargo xtask app smoke-test --app-bundle PATH`; add `--real-model MODEL_ID` to send one prompt through an advertised model, only when shared GPU pressure is acceptable.
-
-Stable installation and release publication are release-only commands (`cargo xtask release ...` and `scripts/release/`). They are never part of ordinary commit or push verification. Build a clean Stable candidate and explicitly promote it outside the repository build tree with one release-only command:
-
-    cargo xtask release build-and-install-stable
-
-Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `cargo xtask app package --channel stable` and `cargo xtask release install-stable` remain available when the two stages need to run independently. Installing moves the previously installed app to the Trash rather than deleting it. The packaging contracts run on every pull request: the release steps' decisions through `cargo test -p xtask`, the typed packaging contracts as `cargo test-app-builder`, and the icon renderer contract as `swift scripts/internal/render-macos-app-icon-contract.swift`. A real Stable bundle is built with `cargo xtask app package --channel stable` and launched with `cargo xtask app smoke-test` by the macOS packaging workflow, weekly on main, on demand, and on pull requests that change the packaging pipeline.
-
-Stable candidate builds perform signature, resource, metadata, and bundled-daemon validation without launching over a running Stable instance. Promotion does not restart the running app. Stable builds require a clean Git worktree.
-
-Astronomical follows pre-1.0 Semantic Versioning beginning at `0.2.0`. User interfaces and `/v1/status` show the semantic version, Stable or Development channel, short Git commit, and dirty-development marker.
-
-To build only the optimized daemon and worker:
-
-    CARGO_BUILD_JOBS="$(sysctl -n hw.logicalcpu)" cargo build --release \
-      -p astronomical-inference-worker --bin astronomical-inference-worker \
-      -p astronomical-daemon --bin astronomicald
-
-## Connect locally
-
-The daemon exposes its OpenAI-compatible and Anthropic-compatible APIs and embedded Observatory at the same loopback address. Stable uses [http://127.0.0.1:6732/](http://127.0.0.1:6732/) and Development uses [http://127.0.0.1:6733/](http://127.0.0.1:6733/). Astronomical refuses non-loopback bind addresses.
-
-Point an OpenAI-compatible or Anthropic-compatible local client at that address, select a discovered model, and Astronomical loads or swaps the worker on demand. `astronomical launch claude`, `astronomical launch codex`, or `astronomical launch opencode` starts that agent pointed at the running app for one session. The manual settings for other clients are on the [local API page](https://aosama.github.io/astronomical/local-api.html).
-
-## Verification
-
-Check Rust formatting, then run the Rust integration and REST suites:
-
-    cargo fmt --all -- --check
-    cargo test-integration-and-rest
-
-Run the macOS menu contracts:
-
-    cargo xtask menu-contracts
-
-Direct MLX and real-model acceptance lanes remain explicit because they require Apple graphics hardware or local model artifacts.
+- [How Astronomical works](docs/how-it-works.md): memory, speed, precision and current scope.
+- [Configuration](docs/configuration.md): every setting, for people who want to edit the file by hand.
+- [Neural Engine prefill](docs/neural-engine-prefill.md): an experimental speed-up for some models.
+- [Building and developing](docs/development.md): build from source and run the tests.
+- [Product story and engineering reports](https://aosama.github.io/astronomical/) on the website.
+- [Discord](https://discord.gg/dc4E6r4WD) for questions and help, and the [support page](https://aosama.github.io/astronomical/support.html).
 
 ## Contributing
 
