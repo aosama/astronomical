@@ -168,7 +168,7 @@ fn should_refuse_malformed_seeds() {
     for malformed_seed in ["abc", "1.5", "18446744073709551616"] {
         assert_eq!(
             parsed(&["p", "--seed", malformed_seed]),
-            Err(UsageError::InvalidImageSeed(malformed_seed.to_owned())),
+            Err(UsageError::InvalidSeed(malformed_seed.to_owned())),
             "{malformed_seed}"
         );
     }

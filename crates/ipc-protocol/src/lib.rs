@@ -67,6 +67,7 @@ pub use daemon_listener::{AcceptedDaemonConnection, DaemonIpcListener, Streaming
 pub use daemon_protocol::{
     DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob,
     DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ImageGenerateRequest,
+    MAXIMUM_SPEECH_AUDIO_FRAME_BYTES, SpeakGenerateRequest,
 };
 pub use daemon_transport_error::DaemonTransportError;
 pub use decisions::{

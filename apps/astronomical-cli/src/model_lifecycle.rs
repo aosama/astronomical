@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use astronomical_config::{
     BUILTIN_DEFAULT_DECISION_MODEL_ID, BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID,
+    BUILTIN_DEFAULT_SPEECH_MODEL_ID,
 };
 use astronomical_ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonWorkerStatus,
@@ -85,6 +86,7 @@ pub enum RequiredCapability {
     Embeddings,
     ImageGeneration,
     Decisions,
+    Speech,
 }
 
 /// What differs between the capabilities a verb can need, kept in one place
@@ -105,22 +107,21 @@ struct ServedCapabilities {
     embeddings: bool,
     image_generation: bool,
     decisions: bool,
+    speech: bool,
 }
 
 impl RequiredCapability {
     fn profile(self) -> CapabilityProfile {
-        let (article, capability_word, own_default_model_id) = match self {
+        let (article, capability_word, own_default_model_id) = astronomical_config::exhaustive_table!(self, {
             RequiredCapability::Chat => ("a", "chat", None),
             RequiredCapability::Embeddings => ("an", "embeddings", None),
-            RequiredCapability::ImageGeneration => (
-                "an",
-                "image-generation",
-                Some(BUILTIN_DEFAULT_IMAGE_MODEL_ID),
-            ),
-            RequiredCapability::Decisions => {
-                ("a", "decision", Some(BUILTIN_DEFAULT_DECISION_MODEL_ID))
-            }
-        };
+            RequiredCapability::ImageGeneration =>
+                ("an", "image-generation", Some(BUILTIN_DEFAULT_IMAGE_MODEL_ID)),
+            RequiredCapability::Decisions =>
+                ("a", "decision", Some(BUILTIN_DEFAULT_DECISION_MODEL_ID)),
+            RequiredCapability::Speech =>
+                ("a", "speech", Some(BUILTIN_DEFAULT_SPEECH_MODEL_ID)),
+        });
         CapabilityProfile {
             article,
             capability_word,
@@ -138,12 +139,13 @@ impl RequiredCapability {
     }
 
     fn is_among(self, served_capabilities: &ServedCapabilities) -> bool {
-        match self {
+        astronomical_config::exhaustive_table!(self, {
             RequiredCapability::Chat => served_capabilities.chat,
             RequiredCapability::Embeddings => served_capabilities.embeddings,
             RequiredCapability::ImageGeneration => served_capabilities.image_generation,
             RequiredCapability::Decisions => served_capabilities.decisions,
-        }
+            RequiredCapability::Speech => served_capabilities.speech,
+        })
     }
 
     fn describes_installed_model(self, listed_model: &DaemonListedModel) -> bool {
@@ -153,6 +155,7 @@ impl RequiredCapability {
             embeddings: listed_model.supports_embeddings,
             image_generation: listed_model.supports_image_generation,
             decisions: listed_model.supports_decisions,
+            speech: listed_model.supports_speech,
         })
     }
 
@@ -162,6 +165,7 @@ impl RequiredCapability {
             embeddings: catalog_entry.supports_embeddings,
             image_generation: catalog_entry.supports_image_generation,
             decisions: catalog_entry.supports_decisions,
+            speech: catalog_entry.supports_speech,
         })
     }
 }

@@ -8,10 +8,7 @@
 
 use astronomical_config::SpeechModelCapabilities;
 use astronomical_rest_contract::{OpenAiSpeechRequest, OpenAiSpeechRequestParts};
-use astronomical_speech_contract::{
-    AudioFormat, NATURAL_PACE_ONLY_REASON, SpeechFailure, unknown_voice_reason,
-    wav_bytes_from_pcm16,
-};
+use astronomical_speech_contract::{AudioFormat, SpeechFailure, wav_bytes_from_pcm16};
 use axum::{
     Json,
     extract::State,
@@ -27,8 +24,8 @@ use crate::{
         request_identifier_exhausted_response, worker_unavailable_response,
     },
     serving::speech_service::{
-        SpeechAsked, SpeechModelResolutionError, build_speech_command, resolve_speech_model,
-        speech_capabilities_of,
+        SpeechAsked, SpeechModelResolutionError, VoiceOrPaceRefusal, build_speech_command,
+        refuse_voice_or_pace_before_swap, resolve_speech_model, speech_capabilities_of,
     },
 };
 
@@ -153,24 +150,21 @@ fn refusal_before_swap(
     speech_capabilities: Option<&SpeechModelCapabilities>,
     speech_request_parts: &OpenAiSpeechRequestParts,
 ) -> Option<Response> {
-    let speech_capabilities = speech_capabilities?;
-    if let Some(voice_name) = &speech_request_parts.voice
-        && !speech_capabilities.voice_names.contains(voice_name)
-    {
-        return Some(invalid_request_response(
-            unknown_voice_reason(voice_name, &speech_capabilities.voice_names),
-            Some("voice"),
-            "voice_not_found",
-        ));
-    }
-    if !speech_capabilities.supports_speed && speech_request_parts.speed != 1.0 {
-        return Some(invalid_request_response(
-            NATURAL_PACE_ONLY_REASON,
-            Some("speed"),
-            "speed_not_supported",
-        ));
-    }
-    None
+    let refusal = refuse_voice_or_pace_before_swap(
+        speech_capabilities,
+        speech_request_parts.voice.as_deref(),
+        speech_request_parts.speed,
+    )
+    .err()?;
+    let (parameter_name, error_code) = match refusal {
+        VoiceOrPaceRefusal::UnknownVoice { .. } => ("voice", "voice_not_found"),
+        VoiceOrPaceRefusal::FixedPace => ("speed", "speed_not_supported"),
+    };
+    Some(invalid_request_response(
+        refusal.reason(),
+        Some(parameter_name),
+        error_code,
+    ))
 }
 
 fn speech_asked(speech_request_parts: OpenAiSpeechRequestParts) -> SpeechAsked {

@@ -14,6 +14,7 @@ mod model_programs;
 mod models;
 mod quantize;
 mod respond;
+mod speak;
 mod status;
 mod support;
 mod validate_config;

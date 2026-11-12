@@ -167,6 +167,6 @@ pub(crate) fn parse_image_size(raw_size: &str) -> Result<(u32, u32), UsageError>
 fn parse_image_seed(raw_seed: &str) -> Result<u64, UsageError> {
     match raw_seed.parse::<u64>() {
         Ok(seed) => Ok(seed),
-        Err(_parse_error) => Err(UsageError::InvalidImageSeed(raw_seed.to_owned())),
+        Err(_parse_error) => Err(UsageError::InvalidSeed(raw_seed.to_owned())),
     }
 }

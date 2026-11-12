@@ -87,6 +87,7 @@ dependencies = [
  "astronomical-model-serving",
  "astronomical-quantization",
  "astronomical-runtime-integration",
+ "astronomical-speech-contract",
  "astronomical-vision-tower",
  "serde",
  "serde_json",

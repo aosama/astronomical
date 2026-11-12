@@ -213,6 +213,40 @@ async fn read_first_request(
     }
 }
 
+/// Runs a request a helper model answers: decisions or speech.
+async fn run_helper_request(
+    generation_context: &DaemonIpcGenerationContext,
+    helper_request: DaemonRequest,
+    streaming_response_writer: StreamingResponseWriter,
+) -> Result<(), DaemonTransportError> {
+    match helper_request {
+        DaemonRequest::SpeakGenerate(speak_request) => {
+            crate::ipc::speech::run_speech_generation(
+                generation_context,
+                speak_request,
+                streaming_response_writer,
+            )
+            .await
+        }
+        DaemonRequest::DecideGenerate {
+            model,
+            state,
+            questions,
+        } => {
+            crate::ipc::decisions::run_decisions_generation(
+                generation_context,
+                model,
+                state,
+                questions,
+                streaming_response_writer,
+            )
+            .await
+        }
+        // The dispatch routes only those two requests here.
+        _ => streaming_response_writer.close().await,
+    }
+}
+
 async fn handle_streaming_daemon_request(
     generation_context: DaemonIpcGenerationContext,
     daemon_attribution_log: DaemonPerformanceAttributionLog,
@@ -250,16 +284,11 @@ async fn handle_streaming_daemon_request(
             )
             .await
         }
-        DaemonRequest::DecideGenerate {
-            model,
-            state,
-            questions,
-        } => {
-            crate::ipc::decisions::run_decisions_generation(
+        helper_request @ (DaemonRequest::DecideGenerate { .. }
+        | DaemonRequest::SpeakGenerate(_)) => {
+            run_helper_request(
                 &generation_context,
-                model,
-                state,
-                questions,
+                helper_request,
                 streaming_response_writer,
             )
             .await

@@ -75,6 +75,9 @@ pub enum DaemonRequest {
         /// The System One `questions` object, exactly as the caller wrote it.
         questions: OrderedJsonValue,
     },
+    /// Reads text aloud with one speech model. The daemon chooses the model
+    /// when none is named, as it does for decisions.
+    SpeakGenerate(SpeakGenerateRequest),
     /// Generates one image from a text prompt. The daemon owns everything
     /// model-specific (the capability envelope, the diffusion step count,
     /// the guidance scale) so the CLI carries only what the user chose.
@@ -95,6 +98,26 @@ pub enum DaemonRequest {
         model_id: String,
     },
 }
+
+/// What the user chose for one speech request.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpeakGenerateRequest {
+    /// Exact speech model ID, or the daemon's choice when absent.
+    pub model: Option<String>,
+    pub text: String,
+    /// `None` for the model's default voice.
+    pub voice_name: Option<String>,
+    /// 1.0 is the voice's natural pace.
+    pub speed: f32,
+    /// The daemon picks one and reports it when absent.
+    pub seed: Option<u64>,
+}
+
+/// The most audio one `SpeechAudio` frame carries: well inside the frame
+/// ceiling once base64 adds a third, so a long request streams as several
+/// frames instead of one that could not be sent.
+pub const MAXIMUM_SPEECH_AUDIO_FRAME_BYTES: usize = 4 * 1024 * 1024;
 
 /// What the user chose for one image: the daemon adds the model family's own
 /// step count and guidance, so neither is a field here.
@@ -212,6 +235,21 @@ pub enum DaemonResponse {
     /// Terminal frame for an image request the worker failed after admission.
     ImageGenerationFailed {
         reason: ImageGenerationFailureReason,
+    },
+    /// One part of a speech request's audio, 16-bit little-endian mono
+    /// samples, in order; the terminal `SpeechCompleted` follows the last.
+    SpeechAudio {
+        #[serde(with = "crate::base64_bytes")]
+        pcm16_bytes: Vec<u8>,
+    },
+    /// Terminal frame for a spoken request: which model spoke it, and how.
+    SpeechCompleted {
+        model: String,
+        metadata: crate::SpeechResultMetadata,
+    },
+    /// Terminal frame for a speech request the worker failed after admission.
+    SpeechFailed {
+        reason: astronomical_speech_contract::SpeechFailure,
     },
 }
 

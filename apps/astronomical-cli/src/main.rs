@@ -16,6 +16,9 @@ use astronomical_cli::{
 use astronomical_config::AstronomicalRuntimeInstance;
 use std::os::unix::process::CommandExt;
 
+#[path = "main/file_output_verbs.rs"]
+mod file_output_verbs;
+
 fn main() -> ExitCode {
     let process_arguments = env::args_os().collect::<Vec<_>>();
     if astronomical_cli::arguments::is_verbose_requested(&process_arguments) {
@@ -42,7 +45,9 @@ fn main() -> ExitCode {
         Ok(helper_model_command @ (CliCommand::Embed(_) | CliCommand::Decide(_))) => {
             run_helper_model_verb(helper_model_command)
         }
-        Ok(CliCommand::Image(image_arguments)) => run_image_verb(image_arguments),
+        Ok(file_output_command @ (CliCommand::Image(_) | CliCommand::Speak(_))) => {
+            file_output_verbs::run_file_output_verb(file_output_command)
+        }
         Ok(CliCommand::Models(models_command)) => run_models_verb(models_command),
         Ok(CliCommand::Status) => run_status_verb(),
         Ok(CliCommand::Doctor) => run_doctor_verb(),
@@ -499,63 +504,6 @@ fn run_embed_verb(embed_arguments: astronomical_cli::EmbedArguments) -> ExitCode
         }
         Err(embed_error) => {
             let _ = writeln!(stderr, "astronomical: {embed_error}");
-            ExitCode::FAILURE
-        }
-    }
-}
-
-/// An image is the slowest verb: the daemon stops one at 15 minutes (its own
-/// bound), so the CLI waits a little longer than that and reports the daemon's
-/// verdict instead of cutting the run off first.
-const IMAGE_GENERATION_WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(16 * 60);
-
-/// How often an image run reports elapsed time on standard error.
-const IMAGE_PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
-
-fn run_image_verb(image_arguments: astronomical_cli::ImageArguments) -> ExitCode {
-    let image_runtime = match build_current_thread_runtime() {
-        Ok(image_runtime) => image_runtime,
-        Err(runtime_error) => {
-            eprintln!("astronomical: {runtime_error}");
-            return ExitCode::FAILURE;
-        }
-    };
-    let default_output_directory = match std::env::current_dir() {
-        Ok(current_directory) => current_directory,
-        Err(directory_error) => {
-            eprintln!("astronomical: could not read the working directory: {directory_error}");
-            return ExitCode::FAILURE;
-        }
-    };
-    let mut stdout = io::stdout();
-    let mut stderr = io::stderr();
-    let (image_runtime_instance, image_candidate_socket_paths) =
-        own_runtime_instance_and_ipc_socket_paths();
-    let mut image_dependencies = astronomical_cli::ImageDependencies {
-        candidate_socket_paths: image_candidate_socket_paths,
-        runtime_instance: image_runtime_instance,
-        default_output_directory,
-        stdout: &mut stdout,
-        stderr: &mut stderr,
-        request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
-        generation_bound: IMAGE_GENERATION_WAIT_BOUND,
-        progress_interval: IMAGE_PROGRESS_INTERVAL,
-        download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
-        download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
-    };
-    match image_runtime.block_on(astronomical_cli::run_image(
-        &image_arguments,
-        &mut image_dependencies,
-    )) {
-        Ok(()) => ExitCode::SUCCESS,
-        // A missing model or an unusable output path is fixed by changing the
-        // command, so it exits 2 like a bad flag.
-        Err(image_error) if image_error.is_usage_error() => {
-            let _ = writeln!(stderr, "astronomical: {image_error}");
-            ExitCode::from(2)
-        }
-        Err(image_error) => {
-            let _ = writeln!(stderr, "astronomical: {image_error}");
             ExitCode::FAILURE
         }
     }

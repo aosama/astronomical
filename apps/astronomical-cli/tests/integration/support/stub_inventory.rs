@@ -53,6 +53,19 @@ impl StubInstalledModel {
         }
     }
 
+    /// An installed speech model.
+    pub fn speech(model_id: &str, is_resident: bool) -> Self {
+        StubInstalledModel {
+            model_id: model_id.to_owned(),
+            context_window: None,
+            supports_embeddings: false,
+            supports_decisions: false,
+            supports_speech: true,
+            supports_image_generation: false,
+            is_resident,
+        }
+    }
+
     /// An embeddings-only installed model.
     pub fn embeddings(model_id: &str, is_resident: bool) -> Self {
         StubInstalledModel {

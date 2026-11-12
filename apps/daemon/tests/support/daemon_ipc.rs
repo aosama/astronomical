@@ -24,13 +24,13 @@ use astronomical_daemon::{
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
     ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,
     ResolvedRuntimeConfig, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
-    WorkerHealthSnapshot, start_daemon_ipc_service,
+    SpeechExecutionError, SpeechOutput, WorkerHealthSnapshot, start_daemon_ipc_service,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatModelCapabilities, DaemonRequest, DecisionsCommand, EmbeddingsCommand,
-    ImageGenerationCommand, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerModelConfiguration,
+    ImageGenerationCommand, SpeechCommand, WorkerAutoregressiveModelConfiguration,
+    WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use tokio::{sync::mpsc, time::timeout};
 
@@ -193,6 +193,9 @@ pub(crate) struct StubGenerationExecutor {
     /// Present when the stub should serve decision requests.
     pub(crate) decisions_output: Option<Result<DecisionsOutput, DecisionsExecutionError>>,
     pub(crate) received_decisions_commands: Mutex<Vec<DecisionsCommand>>,
+    /// Present when the stub should serve speech requests.
+    pub(crate) speech_output: Option<Result<SpeechOutput, SpeechExecutionError>>,
+    pub(crate) received_speech_commands: Mutex<Vec<SpeechCommand>>,
     /// Present when the stub should serve image requests.
     pub(crate) image_output: Option<Result<ImageGenerationOutput, ImageGenerationExecutionError>>,
     /// Every image command the daemon admitted to the executor; a request the
@@ -223,6 +226,13 @@ impl StubGenerationExecutor {
 
     /// An owned snapshot of the logged decisions commands, for the same
     /// guard-free assertions as `logged_commands`.
+    pub(crate) fn logged_speech_commands(&self) -> Vec<SpeechCommand> {
+        self.received_speech_commands
+            .lock()
+            .expect("the stub speech command log lock should not be poisoned")
+            .clone()
+    }
+
     pub(crate) fn logged_decisions_commands(&self) -> Vec<DecisionsCommand> {
         self.received_decisions_commands
             .lock()
@@ -371,6 +381,37 @@ impl ImageGenerationExecutor for StubGenerationExecutor {
             Ok(decisions_result_receiver)
         })
     }
+
+    fn start_speech_generation(
+        &self,
+        speech_command: SpeechCommand,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<SpeechOutput, SpeechExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        self.received_speech_commands
+            .lock()
+            .expect("the stub speech command log lock should not be poisoned")
+            .push(speech_command);
+        let speech_output = self.speech_output.clone();
+        Box::pin(async move {
+            let Some(speech_output) = speech_output else {
+                return Err(GenerationStartError::WorkerUnavailable);
+            };
+            let (speech_result_sender, speech_result_receiver) = mpsc::channel(1);
+            tokio::spawn(async move {
+                let _ = speech_result_sender.send(speech_output).await;
+            });
+            Ok(speech_result_receiver)
+        })
+    }
 }
 
 pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExecutor> {
@@ -403,6 +444,8 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
         received_embeddings_commands: Mutex::new(Vec::new()),
         decisions_output: None,
         received_decisions_commands: Mutex::new(Vec::new()),
+        speech_output: None,
+        received_speech_commands: Mutex::new(Vec::new()),
         image_output: None,
         received_image_commands: Mutex::new(Vec::new()),
     })
@@ -454,6 +497,37 @@ pub(crate) fn ready_stub_executor_with_decisions(
         .expect("the stub executor should be uniquely owned here")
         .decisions_output = Some(decisions_output);
     stub_executor
+}
+
+pub(crate) fn ready_stub_executor_with_speech(
+    ready_model_id: &str,
+    speech_output: Result<SpeechOutput, SpeechExecutionError>,
+) -> Arc<StubGenerationExecutor> {
+    let mut stub_executor = ready_stub_executor(ready_model_id);
+    Arc::get_mut(&mut stub_executor)
+        .expect("the stub executor should be uniquely owned here")
+        .speech_output = Some(speech_output);
+    stub_executor
+}
+
+/// A discovered Kokoro model offering one voice.
+pub(crate) fn ipc_speech_discovered_model(model_id: &str) -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id: None,
+        model_family: ModelFamily::Kokoro,
+        revision: "ipc-speech-test-revision".to_owned(),
+        model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
+        capabilities: ModelCapabilities::Speech(astronomical_config::SpeechModelCapabilities {
+            model_family: ModelFamily::Kokoro,
+            sample_rate_hertz: 24_000,
+            voice_names: vec!["af_heart".to_owned()],
+            default_voice_name: "af_heart".to_owned(),
+            supports_speed: true,
+        }),
+        license: None,
+        model_size_bytes: 330_000_000,
+    }
 }
 
 /// A discovered decision model with the English Laya checkpoint's limit.

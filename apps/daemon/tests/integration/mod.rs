@@ -6,6 +6,7 @@ mod daemon_ipc_images;
 mod daemon_ipc_lifecycle;
 mod daemon_ipc_models;
 mod daemon_ipc_schema;
+mod daemon_ipc_speech;
 mod download_payload;
 mod download_payload_concurrency;
 mod download_payload_empty_files;

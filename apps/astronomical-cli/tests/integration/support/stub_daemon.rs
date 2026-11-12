@@ -51,6 +51,14 @@ pub enum StubDecisionsOutcome {
     Rejected(String),
 }
 
+/// Scripted result of a speech request.
+pub enum StubSpeechOutcome {
+    /// The daemon answers with these samples, split over two audio frames.
+    Completed(Vec<u8>),
+    /// The worker fails the request after admission.
+    Failed(astronomical_speech_contract::SpeechFailure),
+}
+
 /// Scripted behaviour of the stub daemon for one test.
 pub struct StubDaemonConfig {
     pub worker_status: DaemonWorkerStatus,
@@ -85,6 +93,10 @@ pub struct StubDaemonConfig {
     /// Captures the most recent `DecideGenerate` request the CLI sent, so a
     /// test can assert the state and questions that crossed the socket.
     pub decide_request_capture: Arc<std::sync::Mutex<Option<DaemonRequest>>>,
+    /// What the daemon does with a `SpeakGenerate` request.
+    pub speech_outcome: StubSpeechOutcome,
+    /// Captures the most recent `SpeakGenerate` request the CLI sent.
+    pub speak_request_capture: Arc<std::sync::Mutex<Option<DaemonRequest>>>,
     /// What the daemon does with an `ImageGenerate` request.
     pub image_outcome: StubImageOutcome,
     /// Captures the most recent `ImageGenerate` request the CLI sent, so a
@@ -126,6 +138,8 @@ impl Default for StubDaemonConfig {
             embedding_vector: vec![0.25, -0.5],
             decisions_outcome: StubDecisionsOutcome::Completed(Vec::new()),
             decide_request_capture: Arc::new(std::sync::Mutex::new(None)),
+            speech_outcome: StubSpeechOutcome::Completed(vec![0, 0, 0, 64]),
+            speak_request_capture: Arc::new(std::sync::Mutex::new(None)),
             image_outcome: StubImageOutcome::Completed(Vec::new()),
             image_request_capture: Arc::new(std::sync::Mutex::new(None)),
             download_jobs: Vec::new(),
@@ -455,18 +469,15 @@ pub fn spawn_stub_daemon(
                             return;
                         }
                         helper_model_request @ (DaemonRequest::EmbedGenerate { .. }
-                        | DaemonRequest::DecideGenerate { .. }) => {
-                            let helper_model_response = scripted_helper_model_response(
+                        | DaemonRequest::DecideGenerate { .. }
+                        | DaemonRequest::SpeakGenerate(_)) => {
+                            let helper_model_frames = scripted_helper_model_frames(
                                 &config,
                                 resident_model_id.clone(),
                                 helper_model_request,
                             )
                             .await;
-                            protocol_writer
-                                .send_daemon_response(&helper_model_response)
-                                .await
-                                .expect("the stub helper-model frame should transmit");
-                            let _ = protocol_writer.close().await;
+                            send_frames_and_close(protocol_writer, helper_model_frames).await;
                             return;
                         }
                         DaemonRequest::ImageGenerate(image_request) => {
@@ -528,6 +539,80 @@ async fn scripted_image_response(
             None
         }
     }
+}
+
+/// The frames a helper-model request is answered with: the audio frames and
+/// the terminal one for speech, else the one terminal frame.
+async fn scripted_helper_model_frames(
+    config: &StubDaemonConfig,
+    resident_model_id: Option<String>,
+    helper_model_request: DaemonRequest,
+) -> Vec<DaemonResponse> {
+    let DaemonRequest::SpeakGenerate(speak_request) = &helper_model_request else {
+        return vec![
+            scripted_helper_model_response(config, resident_model_id, helper_model_request).await,
+        ];
+    };
+    let answering_model_id = speak_request.model.clone().unwrap_or_default();
+    let seed = speak_request.seed.unwrap_or(7);
+    let voice_name = speak_request
+        .voice_name
+        .clone()
+        .unwrap_or_else(|| "af_heart".to_owned());
+    *config
+        .speak_request_capture
+        .lock()
+        .expect("the stub speak capture should stay live") = Some(helper_model_request);
+    scripted_speech_frames(&config.speech_outcome, answering_model_id, voice_name, seed)
+}
+
+fn scripted_speech_frames(
+    speech_outcome: &StubSpeechOutcome,
+    answering_model_id: String,
+    voice_name: String,
+    seed: u64,
+) -> Vec<DaemonResponse> {
+    let pcm16_bytes = match speech_outcome {
+        StubSpeechOutcome::Failed(reason) => {
+            return vec![DaemonResponse::SpeechFailed {
+                reason: reason.clone(),
+            }];
+        }
+        StubSpeechOutcome::Completed(pcm16_bytes) => pcm16_bytes,
+    };
+    let (first_half, second_half) = pcm16_bytes.split_at(pcm16_bytes.len() / 4 * 2);
+    vec![
+        DaemonResponse::SpeechAudio {
+            pcm16_bytes: first_half.to_vec(),
+        },
+        DaemonResponse::SpeechAudio {
+            pcm16_bytes: second_half.to_vec(),
+        },
+        DaemonResponse::SpeechCompleted {
+            model: answering_model_id,
+            metadata: astronomical_ipc_protocol::SpeechResultMetadata {
+                sample_rate_hertz: 24_000,
+                sample_count: (pcm16_bytes.len() / 2) as u64,
+                segment_count: 1,
+                cut_short_segment_count: 0,
+                voice_name,
+                seed,
+            },
+        },
+    ]
+}
+
+async fn send_frames_and_close(
+    mut protocol_writer: ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
+    daemon_responses: Vec<DaemonResponse>,
+) {
+    for daemon_response in &daemon_responses {
+        protocol_writer
+            .send_daemon_response(daemon_response)
+            .await
+            .expect("the stub helper-model frame should transmit");
+    }
+    let _ = protocol_writer.close().await;
 }
 
 /// The one terminal frame for a request a helper model answers in one step:

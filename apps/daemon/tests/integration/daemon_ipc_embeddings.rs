@@ -91,6 +91,8 @@ async fn should_reject_embeddings_when_no_model_is_resident_and_none_was_request
         received_embeddings_commands: Mutex::new(Vec::new()),
         decisions_output: None,
         received_decisions_commands: Mutex::new(Vec::new()),
+        speech_output: None,
+        received_speech_commands: Mutex::new(Vec::new()),
         image_output: None,
         received_image_commands: Mutex::new(Vec::new()),
     });
