@@ -1,6 +1,6 @@
 use mlx_bridge::MlxDtype;
 
-use super::CheckpointTensors;
+use super::{CheckpointTensors, weights_file_bytes};
 use crate::speech_models::speech_test_support::{
     checkpoint_from_arrays, initialize_test_runtime, read_back, upload,
 };
@@ -77,4 +77,14 @@ fn should_return_none_for_an_absent_optional_tensor() {
             .expect("a present tensor reads")
             .is_some()
     );
+}
+
+// Positive and edge: a weight file's size, and zero for a missing one.
+#[test]
+fn should_measure_a_weight_file_and_count_a_missing_one_as_empty() {
+    let checkpoint_directory = tempfile::tempdir().expect("a temporary directory");
+    let weights_path = checkpoint_directory.path().join("model.safetensors");
+    assert_eq!(weights_file_bytes(&weights_path), 0);
+    std::fs::write(&weights_path, [0_u8; 1234]).expect("a weight file");
+    assert_eq!(weights_file_bytes(&weights_path), 1234);
 }

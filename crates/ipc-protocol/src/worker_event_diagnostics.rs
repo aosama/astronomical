@@ -1,4 +1,5 @@
-//! Payload-safe summaries for logging worker events without generated text or image bytes.
+//! Payload-safe summaries for logging worker events without generated text,
+//! image bytes or audio.
 
 use crate::exhaustive_table::exhaustive_table;
 use crate::{RequestId, WorkerEvent};
@@ -54,6 +55,10 @@ impl WorkerEvent {
             Self::DecisionsCompleted => "decisions_completed",
             Self::DecisionsFailed => "decisions_failed",
             Self::DecisionsFinalized => "decisions_finalized",
+            Self::SpeechSegmentSpoken => "speech_segment_spoken",
+            Self::SpeechCompleted => "speech_completed",
+            Self::SpeechFailed => "speech_failed",
+            Self::SpeechFinalized => "speech_finalized",
             Self::Ready => "ready",
             Self::Output => "output",
             Self::PrefillProgress => "prefill_progress",
@@ -84,6 +89,10 @@ impl WorkerEvent {
             | Self::DecisionsCompleted { request_id, .. }
             | Self::DecisionsFailed { request_id, .. }
             | Self::DecisionsFinalized { request_id, .. }
+            | Self::SpeechSegmentSpoken { request_id, .. }
+            | Self::SpeechCompleted { request_id, .. }
+            | Self::SpeechFailed { request_id, .. }
+            | Self::SpeechFinalized { request_id, .. }
             | Self::Output { request_id, .. }
             | Self::PrefillProgress { request_id, .. }
             | Self::GenerationPreparationStarted { request_id, .. }

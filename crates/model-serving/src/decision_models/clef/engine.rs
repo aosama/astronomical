@@ -28,8 +28,8 @@ use super::prompt::{
 };
 use super::tokenizer::ClefTokenizer;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
-use crate::decision_models::memory_telemetry::decision_memory_telemetry;
 use crate::decision_models::qwen_backbone::{PREFILL_CHUNK_TOKENS, QwenDecisionBackbone};
+use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 
 /// The temperature every Clef logit is used at: the reference applies none.
@@ -152,7 +152,7 @@ impl DecisionEngine for ClefDecisionEngine {
         let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_allocator_cache();
         self.post_cleanup_memory_telemetry =
             runtime.memory_snapshot().ok().map(|memory_snapshot| {
-                decision_memory_telemetry(
+                forward_pass_memory_telemetry(
                     &memory_snapshot,
                     self.effective_mlx_memory_ceiling_bytes as u64,
                     self.resident_weight_bytes,
@@ -178,7 +178,7 @@ impl DecisionEngine for ClefDecisionEngine {
             .runtime()
             .memory_snapshot()
             .ok()?;
-        Some(decision_memory_telemetry(
+        Some(forward_pass_memory_telemetry(
             &memory_snapshot,
             self.effective_mlx_memory_ceiling_bytes as u64,
             self.resident_weight_bytes,

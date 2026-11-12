@@ -9,17 +9,32 @@ use crate::{ImageGenerationEngine, InferenceEngine};
 
 use super::EngineBackedWorker;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     pub(crate) async fn serve_idle_command<WriteTransport>(
         &mut self,
@@ -42,10 +57,11 @@ where
                         .map(Box::new)
                         .map(ActiveWorkerRequest::Autoregressive)
                 }),
-            WorkerCommand::GenerateImage(generation_command) => self
-                .start_image_generation(generation_command, event_writer)
-                .await
-                .map(|generation| generation.map(ActiveWorkerRequest::Image)),
+            stepped_command @ (WorkerCommand::GenerateImage(_)
+            | WorkerCommand::GenerateSpeech(_)) => {
+                self.start_stepped_request(stepped_command, event_writer)
+                    .await
+            }
             single_shot_command @ (WorkerCommand::GenerateEmbeddings(_)
             | WorkerCommand::GenerateDecisions(_)) => {
                 self.start_single_shot_request(single_shot_command, event_writer)

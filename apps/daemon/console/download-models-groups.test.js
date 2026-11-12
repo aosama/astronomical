@@ -94,6 +94,7 @@ test("should_place_retiring_before_experimental_before_role_when_choosing_a_sect
     assert.equal(sectionKeyOf({ role: "image_generation" }), "pictures");
     assert.equal(sectionKeyOf({ role: "helper" }), "helpers");
     assert.equal(sectionKeyOf({ role: "decision" }), "helpers", "nobody chats with a decision model");
+    assert.equal(sectionKeyOf({ role: "speech" }), "helpers", "nobody chats with a speech model");
     assert.equal(sectionKeyOf({ role: "chat" }), "chat");
 });
 

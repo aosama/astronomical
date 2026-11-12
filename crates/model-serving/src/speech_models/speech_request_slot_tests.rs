@@ -1,12 +1,13 @@
 use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
 
 use super::{
-    SegmentSpeaker, SpeechRequestSlot, SpokenSegment, default_voice_name, voice_for_checked_request,
+    SegmentSpeaker, SpeechRequestSlot, SpokenSegment, ends_request, voice_for_checked_request,
 };
 use crate::speech_engine::{SpeechEngineLoadResult, SpeechEngineStep};
 
 fn load_result(supports_speed: bool) -> SpeechEngineLoadResult {
     SpeechEngineLoadResult {
+        model_id: "Kokoro-82M-bf16".to_owned(),
         sample_rate_hertz: 24_000,
         voice_names: vec!["af_heart".to_owned(), "bf_emma".to_owned()],
         default_voice_name: "af_heart".to_owned(),
@@ -19,7 +20,7 @@ fn request(voice_name: Option<&str>, speed: f32) -> SpeechRequest {
         text: "Parting is such sweet sorrow.".to_owned(),
         voice_name: voice_name.map(str::to_owned),
         speed,
-        seed: None,
+        seed: 7,
     }
 }
 
@@ -147,15 +148,16 @@ fn should_free_the_slot_on_cancel_and_refuse_nothing_to_speak() {
 }
 
 #[test]
-fn should_prefer_the_named_default_voice_and_fall_back_to_the_first() {
-    let voices = vec!["am_adam".to_owned(), "af_heart".to_owned()];
-    assert_eq!(
-        default_voice_name(&voices, "af_heart"),
-        Ok("af_heart".to_owned())
-    );
-    assert_eq!(
-        default_voice_name(&voices, "missing"),
-        Ok("am_adam".to_owned())
-    );
-    assert!(default_voice_name(&[], "af_heart").is_err());
+fn should_end_a_request_on_completion_or_failure_but_not_on_a_segment() {
+    let spoken_segment = Ok(SpeechEngineStep::SegmentSpoken {
+        samples: vec![0.0],
+        completed_segments: 1,
+        total_segments: 2,
+        was_cut_short: false,
+    });
+    assert!(!ends_request(&spoken_segment));
+    assert!(ends_request(&Ok(SpeechEngineStep::Completed)));
+    assert!(ends_request(&Err(SpeechFailure::fatal_execution(
+        "the model failed"
+    ))));
 }

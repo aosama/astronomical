@@ -21,12 +21,12 @@ use crate::serving::decisions_executor::DecisionsResultSender;
 use crate::worker::cache_clear::handle_prompt_cache_clear_command;
 use crate::worker::event_reaction::{
     cancel_active_request, fail_model_load_deadline, react_to_worker_event_outcome,
-    sample_idle_mlx_memory_telemetry, send_image_deadline_exceeded,
+    sample_idle_mlx_memory_telemetry, send_stepped_deadline_exceeded,
 };
 use crate::worker::generation::generate::handle_generate_command;
 use crate::worker::idle_drain::{
-    drain_pending_idle_work, wait_for_image_execution_deadline,
-    wait_for_single_shot_execution_deadline,
+    drain_pending_idle_work, wait_for_single_shot_execution_deadline,
+    wait_for_stepped_request_deadline,
 };
 use crate::worker::idle_model_unload::{should_unload_idle_model, unload_idle_model};
 use crate::worker::image_request::handle_generate_image_command;
@@ -68,6 +68,7 @@ pub(in crate::worker) struct WorkerLoopIterationInputs {
     pub embeddings_result_sender:
         Option<mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>>,
     pub decisions_result_sender: Option<DecisionsResultSender>,
+    pub speech_result_sender: Option<crate::serving::speech_executor::SpeechResultSender>,
     pub is_worker_running: bool,
     pub has_loaded_model: bool,
 }
@@ -96,6 +97,10 @@ pub(in crate::worker) fn prepare_worker_loop_iteration(
             .active_generation
             .as_ref()
             .and_then(ActiveWorkerRequest::decisions_result_sender),
+        speech_result_sender: runtime
+            .active_generation
+            .as_ref()
+            .and_then(ActiveWorkerRequest::speech_result_sender),
         is_worker_running: runtime.worker_process.process_id().is_some(),
         has_loaded_model: runtime
             .health_snapshot
@@ -141,6 +146,7 @@ pub(in crate::worker) async fn run_worker_iteration(
         image_result_sender,
         embeddings_result_sender,
         decisions_result_sender,
+        speech_result_sender,
         is_worker_running,
         has_loaded_model,
     } = prepare_worker_loop_iteration(runtime);
@@ -187,9 +193,13 @@ pub(in crate::worker) async fn run_worker_iteration(
             ) => {
             cancel_active_request(runtime).await;
         }
-        () = wait_for_image_execution_deadline(&runtime.active_generation),
-            if matches!(runtime.active_generation, Some(ActiveWorkerRequest::Image(_))) => {
-            send_image_deadline_exceeded(&runtime.active_generation);
+        () = wait_for_stepped_request_deadline(&runtime.active_generation),
+            if matches!(runtime.active_generation, Some(ActiveWorkerRequest::Image(_) | ActiveWorkerRequest::Speech(_))) => {
+            send_stepped_deadline_exceeded(&runtime.active_generation);
+            cancel_active_request(runtime).await;
+        }
+        () = crate::serving::speech_executor::wait_for_speech_disconnect(speech_result_sender),
+            if matches!(runtime.active_generation, Some(ActiveWorkerRequest::Speech(_))) => {
             cancel_active_request(runtime).await;
         }
         () = wait_for_deadline(contained_failure_relaunch_deadline),
@@ -244,8 +254,9 @@ pub(in crate::worker) async fn handle_worker_loop_command(
             admit_chat_generation_command(runtime, is_worker_running, routed_command).await;
             WorkerLoopFlow::Continue
         }
-        routed_command @ WorkerLoopCommand::GenerateImage { .. } => {
-            admit_image_generation_command(runtime, is_worker_running, routed_command).await;
+        routed_command @ (WorkerLoopCommand::GenerateImage { .. }
+        | WorkerLoopCommand::GenerateSpeech { .. }) => {
+            admit_stepped_generation_command(runtime, is_worker_running, routed_command).await;
             WorkerLoopFlow::Continue
         }
         routed_command @ (WorkerLoopCommand::GenerateEmbeddings { .. }
@@ -282,6 +293,25 @@ pub(in crate::worker) async fn handle_worker_loop_command(
 /// The readiness guard shared by the three generation arms: a worker that is
 /// not ready, or not running, rejects the request with
 /// `WorkerUnavailable` and the arm stops before any admission work.
+/// Admits a request that runs a step at a time: speech through its own arm,
+/// an image through the other.
+async fn admit_stepped_generation_command(
+    runtime: &mut WorkerLoopRuntime,
+    is_worker_running: bool,
+    routed_command: WorkerLoopCommand,
+) {
+    if matches!(routed_command, WorkerLoopCommand::GenerateSpeech { .. }) {
+        crate::worker::speech_request::admit_speech_generation_command(
+            runtime,
+            is_worker_running,
+            routed_command,
+        )
+        .await;
+        return;
+    }
+    admit_image_generation_command(runtime, is_worker_running, routed_command).await;
+}
+
 pub(in crate::worker) fn reject_unavailable_worker(
     is_ready: bool,
     is_worker_running: bool,

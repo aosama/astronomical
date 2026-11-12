@@ -14,17 +14,32 @@ use crate::InferenceEngine;
 use crate::engine_backed_worker::support::ModelFactory;
 use crate::model_generation_processor::ModelGenerationProcessor;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: crate::ImageGenerationEngine,
     EmbeddingsEngine: EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     /// Answers one decisions command, or reports why it could not be answered.
     ///

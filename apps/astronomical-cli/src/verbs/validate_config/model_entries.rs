@@ -228,6 +228,7 @@ fn entry_json_document(entry_report: &ModelConfigEntryReport) -> serde_json::Val
                 SettingsFreeModelKind::ImageGeneration => "image_generation",
                 SettingsFreeModelKind::Embeddings => "embeddings",
                 SettingsFreeModelKind::Decisions => "decisions",
+                SettingsFreeModelKind::Speech => "speech",
             },
         }),
         ModelConfigEntryOutcome::DifferentOrganisation {

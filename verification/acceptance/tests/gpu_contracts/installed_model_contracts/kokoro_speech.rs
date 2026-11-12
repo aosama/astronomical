@@ -19,8 +19,8 @@ use astronomical_speech_contract::SpeechRequest;
 use astronomical_test_harness::test_run::TestRunContext;
 
 use super::speech_audio_checks::{
-    ROMEO_PASSAGE, assert_sounds_like_the_passage, save_evidence, speak_through_engine,
-    test_memory_limits,
+    ROMEO_PASSAGE, TEST_ALLOCATOR_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES,
+    assert_sounds_like_the_passage, save_evidence, speak_through_engine,
 };
 
 /// Kokoro's generator makes 600 samples for every alignment frame.
@@ -31,7 +31,7 @@ fn romeo_request() -> SpeechRequest {
         text: ROMEO_PASSAGE.to_owned(),
         voice_name: Some("af_heart".to_owned()),
         speed: 1.0,
-        seed: Some(7),
+        seed: 7,
     }
 }
 
@@ -40,8 +40,12 @@ fn romeo_request() -> SpeechRequest {
 #[serial_test::serial]
 fn should_speak_a_shakespeare_passage_at_a_human_pace() {
     let context = TestRunContext::current();
-    let mut engine =
-        KokoroSpeechEngine::new(context.required_model_directory(), test_memory_limits());
+    let mut engine = KokoroSpeechEngine::new(
+        "Kokoro-82M-bf16",
+        context.required_model_directory(),
+        TEST_MLX_MEMORY_CEILING_BYTES,
+        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+    );
     let load_result = engine.load().expect("Kokoro loads");
     assert!(
         load_result.voice_names.contains(&"af_heart".to_owned()),

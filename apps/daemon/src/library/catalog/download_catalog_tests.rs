@@ -609,3 +609,46 @@ fn should_accept_one_get_started_pick_per_role_across_the_catalog() {
         .expect("one Get started pick per role should be accepted");
     assert_eq!(download_catalog.entry_count(), 3);
 }
+
+/// The shipped speech entries download only what their engines read: Kokoro
+/// its weights and its American English voices (not the `.pt` copies or the
+/// other languages' voices), Phonon its weights, tokenizer and voice. Both
+/// stay experimental until their reference comparisons pass.
+#[test]
+fn should_ship_kokoro_and_phonon_as_experimental_speech_models() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let speech_entries: Vec<_> = download_catalog
+        .entries()
+        .iter()
+        .filter(|catalog_entry| catalog_entry.role() == DownloadCatalogRole::Speech)
+        .collect();
+    assert_eq!(speech_entries.len(), 2);
+    for speech_entry in &speech_entries {
+        assert!(speech_entry.capabilities().supports_speech);
+        assert!(speech_entry.experimental());
+        assert_eq!(speech_entry.upstream_license(), Some("Apache-2.0"));
+    }
+    let kokoro_entry = speech_entries
+        .iter()
+        .find(|catalog_entry| catalog_entry.huggingface_id() == "mlx-community/Kokoro-82M-bf16")
+        .expect("the shipped catalog should offer Kokoro");
+    let kokoro_selection = kokoro_entry.download_path_selection();
+    assert!(kokoro_selection.includes("voices/af_heart.safetensors"));
+    assert!(!kokoro_selection.includes("voices/af_heart.pt"));
+    assert!(!kokoro_selection.includes("voices/bf_emma.safetensors"));
+    let phonon_entry = speech_entries
+        .iter()
+        .find(|catalog_entry| catalog_entry.huggingface_id() == "gradium/phonon-31m-en")
+        .expect("the shipped catalog should offer Phonon");
+    assert!(
+        phonon_entry
+            .download_path_selection()
+            .includes("default-voice.safetensors")
+    );
+    assert!(
+        !phonon_entry
+            .download_path_selection()
+            .includes("model.q8.gguf")
+    );
+}

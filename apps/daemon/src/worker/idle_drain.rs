@@ -96,9 +96,7 @@ pub(super) async fn drain_pending_idle_work(
 }
 
 /// Waits until the image request's earliest deadline (execution or progress stall).
-pub(super) async fn wait_for_image_execution_deadline(
-    active_request: &Option<ActiveWorkerRequest>,
-) {
+async fn wait_for_image_execution_deadline(active_request: &Option<ActiveWorkerRequest>) {
     let Some(ActiveWorkerRequest::Image(active_image)) = active_request else {
         std::future::pending::<()>().await;
         return;
@@ -106,6 +104,36 @@ pub(super) async fn wait_for_image_execution_deadline(
     let next_deadline = active_image
         .execution_deadline
         .min(active_image.progress_stall_deadline);
+    tokio::time::sleep_until(next_deadline).await;
+}
+
+/// Waits until an image or speech request's earliest deadline (execution or
+/// progress stall); never resolves for any other request.
+pub(super) async fn wait_for_stepped_request_deadline(
+    active_request: &Option<ActiveWorkerRequest>,
+) {
+    if matches!(active_request, Some(ActiveWorkerRequest::Speech(_))) {
+        wait_for_speech_execution_deadline(active_request).await;
+        return;
+    }
+    wait_for_image_execution_deadline(active_request).await;
+}
+
+/// Waits until the speech request's earliest deadline (execution or progress
+/// stall); never resolves for any other request.
+async fn wait_for_speech_execution_deadline(active_request: &Option<ActiveWorkerRequest>) {
+    let Some(ActiveWorkerRequest::Speech(active_speech)) = active_request else {
+        std::future::pending::<()>().await;
+        return;
+    };
+    // A request whose audio ran past its bound ends now rather than after
+    // the worker has spoken every remaining segment.
+    if active_speech.has_exceeded_audio_limit {
+        return;
+    }
+    let next_deadline = active_speech
+        .execution_deadline
+        .min(active_speech.progress_stall_deadline);
     tokio::time::sleep_until(next_deadline).await;
 }
 

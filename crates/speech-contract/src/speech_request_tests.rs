@@ -5,7 +5,7 @@ fn request(text: &str, speed: f32) -> SpeechRequest {
         text: text.to_owned(),
         voice_name: None,
         speed,
-        seed: None,
+        seed: 7,
     }
 }
 

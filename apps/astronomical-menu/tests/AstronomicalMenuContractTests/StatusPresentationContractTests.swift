@@ -283,6 +283,20 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.modelDiskSizeTitle, "3.91 GB")
   }
 
+  func test_should_present_speech_as_active_model_work() throws {
+    let statusDocument = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"speaking","ready_model_id":"fictional/speech-model"}"#.utf8
+      )
+    )
+
+    XCTAssertTrue(statusDocument.isActive)
+    XCTAssertEqual(statusDocument.menuBarTitle, "Speaking…")
+    XCTAssertEqual(statusDocument.phaseTitle, "Reading text aloud")
+    XCTAssertEqual(statusDocument.flightTitle, "Reading text aloud")
+  }
+
   func test_should_keep_post_denoising_image_work_active_without_claiming_completion() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,

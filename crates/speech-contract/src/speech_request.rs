@@ -10,8 +10,8 @@ use crate::speech_failure::SpeechFailure;
 /// speech API allows.
 pub const MAXIMUM_SPEECH_INPUT_CHARACTERS: usize = 4096;
 /// The OpenAI speech API's range of paces.
-const SLOWEST_SPEED: f32 = 0.25;
-const FASTEST_SPEED: f32 = 4.0;
+pub const SLOWEST_SPEED: f32 = 0.25;
+pub const FASTEST_SPEED: f32 = 4.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpeechRequest {
@@ -20,8 +20,10 @@ pub struct SpeechRequest {
     pub voice_name: Option<String>,
     /// 1.0 is the voice's natural pace.
     pub speed: f32,
-    /// `None` lets the engine choose; the same seed and text give the same audio.
-    pub seed: Option<u64>,
+    /// The same seed, text, voice and pace give the same audio. The daemon
+    /// picks one for a caller who names none and reports it, as it does for
+    /// images, so any result can be reproduced.
+    pub seed: u64,
 }
 
 impl SpeechRequest {

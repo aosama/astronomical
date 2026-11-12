@@ -63,6 +63,9 @@ mod decode_seating_tests;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
 mod expert_cache;
+// Only the direct-MLX decision and speech engines report through it.
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod forward_pass_telemetry;
 pub(crate) mod serving_phase;
 pub(crate) mod telemetry;
 mod utilization;

@@ -245,9 +245,13 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             | WorkerEvent::EmbeddingsFinalized { .. }
             | WorkerEvent::DecisionsCompleted { .. }
             | WorkerEvent::DecisionsFailed { .. }
-            | WorkerEvent::DecisionsFinalized { .. } => {
+            | WorkerEvent::DecisionsFinalized { .. }
+            | WorkerEvent::SpeechSegmentSpoken { .. }
+            | WorkerEvent::SpeechCompleted { .. }
+            | WorkerEvent::SpeechFailed { .. }
+            | WorkerEvent::SpeechFinalized { .. } => {
                 panic!(
-                    "an autoregressive model SSD streaming benchmark received an image, embeddings or decisions event"
+                    "an autoregressive model SSD streaming benchmark received an image, embeddings, decisions or speech event"
                 )
             }
         }

@@ -10,17 +10,32 @@ use crate::{ImageGenerationEngine, InferenceEngine, InferenceEngineError};
 
 use super::{EngineBackedWorker, LoadedRuntime};
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     pub(super) async fn start_generation<WriteTransport>(
         &mut self,

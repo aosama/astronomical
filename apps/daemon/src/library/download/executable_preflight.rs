@@ -10,9 +10,11 @@
 use std::collections::BTreeSet;
 
 use astronomical_config::{
-    FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS,
-    ModelFamily, classify_mflux_transformer_index_bytes, classify_pipeline_index_bytes,
-    context_window_tokens, required_shard_file_names,
+    FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, KOKORO_WEIGHTS_FILE_NAME,
+    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, ModelFamily, PHONON_DEFAULT_VOICE_FILE_NAME,
+    PHONON_TOKENIZER_FILE_NAME, PHONON_WEIGHTS_FILE_NAME, classify_mflux_transformer_index_bytes,
+    classify_pipeline_index_bytes, context_window_tokens, is_kokoro_configuration,
+    is_phonon_configuration, required_shard_file_names,
 };
 use serde_json::Value;
 use thiserror::Error;
@@ -23,6 +25,9 @@ use crate::library::{HuggingFaceHub, HuggingFaceHubError, HuggingFaceManifest};
 /// the gate must apply that same precedence or it could reject an executable pipeline.
 const PIPELINE_INDEX_FILE_PATH: &str = "model_index.json";
 const CONFIG_FILE_PATH: &str = "config.json";
+/// The voice a Kokoro request without one is spoken in; a download without
+/// it would offer a different default than the catalog describes.
+const KOKORO_DEFAULT_VOICE_FILE_PATH: &str = "voices/af_heart.safetensors";
 const QWEN_INDEX_FILE_PATH: &str = "model.safetensors.index.json";
 const QWEN_TOKENIZER_FILE_PATH: &str = "tokenizer.json";
 const QWEN_STREAMING_MANIFEST_FILE_PATH: &str = "manifest.json";
@@ -162,9 +167,7 @@ impl DownloadExecutablePreflight {
         let model_family =
             ModelFamily::from_model_type(config_document.get("model_type").and_then(Value::as_str));
         let Some(model_family) = model_family else {
-            return Err(DownloadExecutablePreflightError::NotExecutable(
-                "config.json model_type is not a recognized model family".to_owned(),
-            ));
+            return validate_speech_manifest_shape(manifest_file_paths, &config_document);
         };
         match model_family {
             // Families whose shallow rules need files on disk keep publication as their backstop.
@@ -173,7 +176,9 @@ impl DownloadExecutablePreflight {
             | ModelFamily::Kev
             | ModelFamily::Clef
             | ModelFamily::Flux2Klein
-            | ModelFamily::QwenImage21 => Ok(()),
+            | ModelFamily::QwenImage21
+            | ModelFamily::Kokoro
+            | ModelFamily::Phonon => Ok(()),
             ModelFamily::Qwen3_5 => {
                 self.validate_qwen3_5_manifest_shape(
                     manifest,
@@ -240,6 +245,36 @@ fn unclassifiable_manifest_reason(has_quantized_transformer_index: bool) -> &'st
     }
 }
 
+/// A config without a recognized `model_type` may still be a speech model's,
+/// which discovery knows by the configuration's sections: its weights and a
+/// voice must be selected too, or the download could never speak.
+fn validate_speech_manifest_shape(
+    manifest_file_paths: &BTreeSet<String>,
+    config_document: &Value,
+) -> Result<(), DownloadExecutablePreflightError> {
+    let required_file_paths: &[&str] = if is_kokoro_configuration(config_document) {
+        &[KOKORO_WEIGHTS_FILE_NAME, KOKORO_DEFAULT_VOICE_FILE_PATH]
+    } else if is_phonon_configuration(config_document) {
+        &[
+            PHONON_WEIGHTS_FILE_NAME,
+            PHONON_TOKENIZER_FILE_NAME,
+            PHONON_DEFAULT_VOICE_FILE_NAME,
+        ]
+    } else {
+        return Err(DownloadExecutablePreflightError::NotExecutable(
+            "config.json model_type is not a recognized model family".to_owned(),
+        ));
+    };
+    for required_file_path in required_file_paths {
+        if !manifest_file_paths.contains(*required_file_path) {
+            return Err(DownloadExecutablePreflightError::NotExecutable(format!(
+                "the speech model manifest does not select {required_file_path}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Applies the family-owned shallow folded-pack admission rules: the Hadamard
 /// contract, tokenizer, and single-file weights must all be selected, and the
 /// sharded layout the family validator refuses must be caught before download.
@@ -300,7 +335,10 @@ fn validate_qwen_shard_inventory(
 mod tests {
     use std::collections::BTreeSet;
 
-    use super::{DownloadExecutablePreflightError, validate_prism_hadamard_manifest_shape};
+    use super::{
+        DownloadExecutablePreflightError, validate_prism_hadamard_manifest_shape,
+        validate_speech_manifest_shape,
+    };
     use serde_json::json;
 
     #[test]
@@ -351,6 +389,54 @@ mod tests {
             validate_prism_hadamard_manifest_shape(&manifest_file_paths, &config_document),
             Err(DownloadExecutablePreflightError::NotExecutable(reason))
                 if reason.contains("context window")
+        ));
+    }
+
+    fn kokoro_config() -> serde_json::Value {
+        json!({"istftnet": {"upsample_rates": [10, 6]}, "plbert": {"num_hidden_layers": 12}, "vocab": {"a": 43}})
+    }
+
+    // Positive: Kokoro's and Phonon's catalog selections pass.
+    #[test]
+    fn should_accept_complete_speech_manifests() {
+        let kokoro_files = BTreeSet::from([
+            "config.json".to_owned(),
+            "kokoro-v1_0.safetensors".to_owned(),
+            "voices/af_heart.safetensors".to_owned(),
+        ]);
+        assert!(validate_speech_manifest_shape(&kokoro_files, &kokoro_config()).is_ok());
+        let phonon_files = BTreeSet::from([
+            "config.json".to_owned(),
+            "model.safetensors".to_owned(),
+            "tokenizer.json".to_owned(),
+            "default-voice.safetensors".to_owned(),
+        ]);
+        let phonon_config = json!({"flow_lm": {"d_model": 512}, "mimi": {"sample_rate": 24000}});
+        assert!(validate_speech_manifest_shape(&phonon_files, &phonon_config).is_ok());
+    }
+
+    // Negative: a Kokoro selection without its default voice could not speak
+    // as the catalog says, so it is refused before any transfer.
+    #[test]
+    fn should_refuse_a_kokoro_manifest_without_its_default_voice() {
+        let kokoro_files = BTreeSet::from([
+            "config.json".to_owned(),
+            "kokoro-v1_0.safetensors".to_owned(),
+        ]);
+        assert!(matches!(
+            validate_speech_manifest_shape(&kokoro_files, &kokoro_config()),
+            Err(DownloadExecutablePreflightError::NotExecutable(reason))
+                if reason.contains("voices/af_heart.safetensors")
+        ));
+    }
+
+    // Edge: a config that is neither speech family keeps the model-type refusal.
+    #[test]
+    fn should_keep_the_model_type_refusal_for_an_unknown_config() {
+        assert!(matches!(
+            validate_speech_manifest_shape(&BTreeSet::new(), &json!({"vocab_size": 10})),
+            Err(DownloadExecutablePreflightError::NotExecutable(reason))
+                if reason.contains("model_type")
         ));
     }
 }

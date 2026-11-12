@@ -17,17 +17,32 @@ use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::model_generation_processor::ModelGenerationProcessor;
 use crate::{EmbeddingEngine, ImageGenerationEngine, InferenceEngine, InferenceEngineError};
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     /// Swaps a demoted streaming runtime for the resident engine.
     ///

@@ -14,6 +14,7 @@ fn no_capabilities() -> WorkerModelCapabilities {
         image_generation: None,
         embeddings: None,
         decisions: None,
+        speech: None,
     }
 }
 

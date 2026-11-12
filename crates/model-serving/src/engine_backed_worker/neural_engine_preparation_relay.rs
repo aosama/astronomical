@@ -23,17 +23,32 @@ use crate::{ImageGenerationEngine, InferenceEngine};
 /// nothing it would notice.
 const PREPARATION_STEP_INTERVAL: Duration = Duration::from_millis(100);
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     /// The next command, stepping any preparation along until one arrives. Without
     /// a preparation running this is a plain wait, so an idle worker never wakes.

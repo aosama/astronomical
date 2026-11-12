@@ -161,7 +161,8 @@ pub(crate) fn chat_capabilities(
         astronomical_config::ModelCapabilities::Chat(chat_capabilities) => Some(chat_capabilities),
         astronomical_config::ModelCapabilities::ImageGeneration(_)
         | astronomical_config::ModelCapabilities::Embeddings(_)
-        | astronomical_config::ModelCapabilities::Decisions(_) => None,
+        | astronomical_config::ModelCapabilities::Decisions(_)
+        | astronomical_config::ModelCapabilities::Speech(_) => None,
     }
 }
 

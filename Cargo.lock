@@ -103,6 +103,7 @@ version = "0.2.102"
 dependencies = [
  "astronomical-expert-atlas",
  "astronomical-lowercase-hex",
+ "astronomical-speech-contract",
  "libc",
  "serde",
  "serde_json",
@@ -121,6 +122,7 @@ dependencies = [
  "astronomical-ipc-protocol",
  "astronomical-lowercase-hex",
  "astronomical-rest-contract",
+ "astronomical-speech-contract",
  "axum",
  "base64 0.23.1",
  "bytes",
@@ -224,6 +226,7 @@ dependencies = [
  "astronomical-decision-contract",
  "astronomical-lowercase-hex",
  "astronomical-rest-contract",
+ "astronomical-speech-contract",
  "base64 0.23.1",
  "bytes",
  "crc32fast",
@@ -375,6 +378,7 @@ dependencies = [
 name = "astronomical-rest-contract"
 version = "0.2.102"
 dependencies = [
+ "astronomical-speech-contract",
  "base64 0.23.1",
  "regex-automata",
  "serde",
@@ -402,6 +406,8 @@ dependencies = [
 name = "astronomical-speech-contract"
 version = "0.2.102"
 dependencies = [
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

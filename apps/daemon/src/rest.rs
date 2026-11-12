@@ -24,7 +24,7 @@ pub(crate) mod finder_reveal;
 pub(crate) mod loopback_browser_guard;
 pub(crate) mod maximum_mlx_memory;
 pub(crate) mod request_body_budget;
-pub(crate) mod single_shot_rejections;
+pub(crate) mod request_rejections;
 pub(crate) mod status;
 pub(crate) mod system_one_endpoint;
 

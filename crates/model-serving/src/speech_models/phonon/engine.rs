@@ -5,25 +5,25 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
 
-use super::artifact_files::{PHONON_DEFAULT_VOICE_NAME, voice_file_path, voice_names};
+use super::artifact_files::{PHONON_WEIGHTS_FILE_NAME, voice_file_path};
 use super::attention_history::AttentionHistory;
 use super::speech_model::{PHONON_DEFAULT_TEMPERATURE, PhononSampling, PhononSpeechModel};
 use super::text_chunks::TextChunk;
 use super::voice::PhononVoice;
-use crate::speech_engine::{SpeechEngine, SpeechEngineLoadResult, SpeechEngineStep};
+use crate::memory::telemetry::MlxMemoryTelemetry;
+use crate::speech_engine::{SpeechEngine, SpeechEngineLoadResult, SpeechEngineStep, StartedSpeech};
+use crate::speech_models::checkpoint_tensors::weights_file_bytes;
+use crate::speech_models::engine_settings::SpeechEngineSettings;
+use crate::speech_models::speech_memory::SpeechMemoryAccount;
 use crate::speech_models::speech_request_slot::{
-    SegmentSpeaker, SpeechRequestSlot, SpokenSegment, default_voice_name, voice_for_checked_request,
+    SegmentSpeaker, SpeechRequestSlot, SpokenSegment, ends_request, voice_for_checked_request,
 };
 
-/// The reference runtime's default seed, used when a request names none.
-const DEFAULT_NOISE_SEED: u64 = 4_242_424_242_424_242;
-
 pub struct PhononSpeechEngine {
-    model_directory: PathBuf,
-    memory_limits: MlxMemoryLimits,
+    settings: SpeechEngineSettings,
     loaded: Option<LoadedPhonon>,
     request_slot: SpeechRequestSlot<TextChunk, PhononRequestContext>,
 }
@@ -33,6 +33,7 @@ struct LoadedPhonon {
     runtime: MlxRuntime,
     model: PhononSpeechModel,
     load_result: SpeechEngineLoadResult,
+    memory_account: SpeechMemoryAccount,
     /// The flow model's state after reading each voice used so far. Reading
     /// a voice runs the backbone over about 125 positions; a cached state is
     /// branched per request instead, which copies only array handles.
@@ -46,10 +47,19 @@ struct PhononRequestContext {
 }
 
 impl PhononSpeechEngine {
-    pub fn new(model_directory: PathBuf, memory_limits: MlxMemoryLimits) -> Self {
+    pub fn new(
+        model_id: impl Into<String>,
+        model_directory: PathBuf,
+        effective_mlx_memory_ceiling_bytes: usize,
+        allocator_cache_memory_limit_bytes: usize,
+    ) -> Self {
         Self {
-            model_directory,
-            memory_limits,
+            settings: SpeechEngineSettings {
+                model_id: model_id.into(),
+                model_directory,
+                effective_mlx_memory_ceiling_bytes,
+                allocator_cache_memory_limit_bytes,
+            },
             loaded: None,
             request_slot: SpeechRequestSlot::empty(),
         }
@@ -64,29 +74,31 @@ impl PhononSpeechEngine {
 
 impl SpeechEngine for PhononSpeechEngine {
     fn load(&mut self) -> Result<SpeechEngineLoadResult, SpeechFailure> {
-        let runtime = MlxRuntime::initialize(self.memory_limits)
-            .map_err(|runtime_error| SpeechFailure::fatal_execution(runtime_error.to_string()))?;
-        let model = PhononSpeechModel::load(&runtime, &self.model_directory)?;
-        let voice_names = voice_names(&self.model_directory);
-        let load_result = SpeechEngineLoadResult {
-            sample_rate_hertz: model.sample_rate_hertz(),
-            default_voice_name: default_voice_name(&voice_names, PHONON_DEFAULT_VOICE_NAME)?,
-            voice_names,
-            // Phonon has a duration conditioner, but its effect on pace is
-            // untested here, so only the natural pace is offered.
-            supports_speed: false,
-        };
+        let runtime = self.settings.initialize_runtime()?;
+        let model_directory = self.settings.model_directory.clone();
+        let model = PhononSpeechModel::load(&runtime, &model_directory)?;
+        let load_result = self.settings.load_result(
+            astronomical_config::phonon_speech_capabilities(&model_directory),
+            model.sample_rate_hertz(),
+        )?;
+        let memory_account = self.settings.memory_account(weights_file_bytes(
+            &model_directory.join(PHONON_WEIGHTS_FILE_NAME),
+        ));
         self.loaded = Some(LoadedPhonon {
-            model_directory: self.model_directory.clone(),
+            model_directory,
             runtime,
             model,
             load_result: load_result.clone(),
+            memory_account,
             voice_histories_by_name: HashMap::new(),
         });
         Ok(load_result)
     }
 
-    fn start_speech(&mut self, speech_request: SpeechRequest) -> Result<(), SpeechFailure> {
+    fn start_speech(
+        &mut self,
+        speech_request: SpeechRequest,
+    ) -> Result<StartedSpeech, SpeechFailure> {
         self.request_slot.ensure_idle()?;
         let loaded = self.loaded_mut()?;
         let voice_name = voice_for_checked_request(&speech_request, &loaded.load_result)?;
@@ -95,10 +107,16 @@ impl SpeechEngine for PhononSpeechEngine {
             voice_history: loaded.voice_history(&voice_name)?,
             sampling: PhononSampling {
                 temperature: PHONON_DEFAULT_TEMPERATURE,
-                seed: speech_request.seed.unwrap_or(DEFAULT_NOISE_SEED),
+                seed: speech_request.seed,
             },
         };
-        self.request_slot.start(chunks, request_context)
+        let started_speech = StartedSpeech {
+            voice_name,
+            sample_rate_hertz: loaded.load_result.sample_rate_hertz,
+            total_segments: chunks.len(),
+        };
+        self.request_slot.start(chunks, request_context)?;
+        Ok(started_speech)
     }
 
     fn advance_speech(&mut self) -> Result<SpeechEngineStep, SpeechFailure> {
@@ -107,11 +125,34 @@ impl SpeechEngine for PhononSpeechEngine {
                 "the Phonon engine is not loaded",
             ));
         };
-        self.request_slot.advance(loaded)
+        let speech_step = self.request_slot.advance(loaded);
+        if ends_request(&speech_step) {
+            loaded
+                .memory_account
+                .clean_up_after_request(&loaded.runtime);
+        }
+        speech_step
     }
 
     fn cancel_speech(&mut self) {
         self.request_slot.cancel();
+        if let Some(loaded) = self.loaded.as_mut() {
+            loaded
+                .memory_account
+                .clean_up_after_request(&loaded.runtime);
+        }
+    }
+
+    fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
+        self.loaded
+            .as_mut()?
+            .memory_account
+            .take_post_cleanup_memory_telemetry()
+    }
+
+    fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        let loaded = self.loaded.as_ref()?;
+        loaded.memory_account.observe(&loaded.runtime)
     }
 }
 

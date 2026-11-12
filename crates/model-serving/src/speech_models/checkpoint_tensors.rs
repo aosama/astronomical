@@ -56,6 +56,12 @@ pub(crate) fn load_safetensors_file(
     Ok(runtime.load_safetensors(safetensors_file, None)?)
 }
 
+/// A weight file's size, which a memory report counts as resident weights;
+/// zero when it cannot be read, since loading would already have failed.
+pub(crate) fn weights_file_bytes(weights_path: &Path) -> u64 {
+    std::fs::metadata(weights_path).map_or(0, |weights_metadata| weights_metadata.len())
+}
+
 /// Reads a text artifact such as `config.json`.
 pub(crate) fn read_text_artifact(artifact_path: &Path) -> Result<String, SpeechModelError> {
     std::fs::read_to_string(artifact_path).map_err(|read_error| {

@@ -21,6 +21,7 @@ fn catalog_entry(huggingface_id: &str, requestable_model_id: Option<&str>) -> Da
         supports_image_generation: false,
         supports_embeddings: false,
         supports_decisions: false,
+        supports_speech: false,
     }
 }
 
@@ -94,6 +95,7 @@ fn should_list_near_matches_and_the_supported_hint_for_an_unknown_model() {
         context_window: Some(32_768),
         supports_embeddings: false,
         supports_decisions: false,
+        supports_speech: false,
         supports_image_generation: false,
         is_resident: false,
         size_bytes: 1_500_000_000,
@@ -114,6 +116,7 @@ fn listed_model(model_id: &str, context_window: Option<u32>, can_draw: bool) -> 
         context_window,
         supports_embeddings: false,
         supports_decisions: false,
+        supports_speech: false,
         supports_image_generation: can_draw,
         is_resident: false,
         size_bytes: 1,

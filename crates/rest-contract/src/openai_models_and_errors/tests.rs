@@ -231,3 +231,5 @@ fn should_serialize_a_standard_openai_invalid_request_error() {
 
 mod decision_model_advertisement;
 mod embedding_model_advertisement;
+
+mod speech_model_advertisement;

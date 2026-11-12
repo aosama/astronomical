@@ -122,15 +122,17 @@ fn update_model_capabilities(
                 capabilities.supports_multiple_reference_images,
             );
         }
-        ModelCapabilities::Embeddings(_) | ModelCapabilities::Decisions(_) => {
+        ModelCapabilities::Embeddings(_)
+        | ModelCapabilities::Decisions(_)
+        | ModelCapabilities::Speech(_) => {
             update_helper_model_capabilities(generation_digest, model_capabilities);
         }
     }
 }
 
-/// Digests the capabilities of a model that answers in one step: an
-/// embedding model or a decision model. Any other kind adds nothing here;
-/// `update_model_capabilities` digests those itself.
+/// Digests the capabilities of a helper model: an embedding, decision or
+/// speech model. Any other kind adds nothing here; `update_model_capabilities`
+/// digests those itself.
 fn update_helper_model_capabilities(
     generation_digest: &mut Sha256,
     model_capabilities: &ModelCapabilities,
@@ -143,6 +145,26 @@ fn update_helper_model_capabilities(
     if let ModelCapabilities::Decisions(capabilities) = model_capabilities {
         update_text(generation_digest, "decisions");
         update_number(generation_digest, capabilities.maximum_tokens_per_question);
+    }
+    update_speech_model_capabilities(generation_digest, model_capabilities);
+}
+
+/// A speech model's voices are part of what it offers, so a voice added to
+/// or removed from its folder is a new generation.
+fn update_speech_model_capabilities(
+    generation_digest: &mut Sha256,
+    model_capabilities: &ModelCapabilities,
+) {
+    let ModelCapabilities::Speech(capabilities) = model_capabilities else {
+        return;
+    };
+    update_text(generation_digest, "speech");
+    update_number(generation_digest, capabilities.sample_rate_hertz);
+    update_text(generation_digest, &capabilities.default_voice_name);
+    update_boolean(generation_digest, capabilities.supports_speed);
+    update_number(generation_digest, capabilities.voice_names.len() as u64);
+    for voice_name in &capabilities.voice_names {
+        update_text(generation_digest, voice_name);
     }
 }
 

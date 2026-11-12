@@ -251,7 +251,7 @@ fn reply_is_running(activity: WorkerActivity) -> bool {
         WorkerActivity::PromptProcessing
         | WorkerActivity::GenerationPreparation
         | WorkerActivity::Generating => true,
-        WorkerActivity::Idle | WorkerActivity::ImageGeneration => false,
+        WorkerActivity::Idle | WorkerActivity::ImageGeneration | WorkerActivity::Speaking => false,
     }
 }
 

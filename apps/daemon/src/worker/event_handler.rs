@@ -7,6 +7,10 @@
 
 use astronomical_ipc_protocol::WorkerEvent;
 use std::sync::{Arc, RwLock};
+
+use crate::worker::request_event_dispatch::{
+    dispatch_single_shot_worker_event, dispatch_stepped_event,
+};
 use tokio::time::Instant;
 
 use crate::{
@@ -117,17 +121,19 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::ExpertStreamingStats { .. }) => {
             dispatch_observability_worker_event(observability_event, health_snapshot);
         }
-        prompt_cache_cleared_event @ WorkerEvent::PromptCacheCleared { .. } => {
-            return Err(outside_cache_clear_wait_violation(
-                &prompt_cache_cleared_event,
-            ));
+        cache_cleared_event @ WorkerEvent::PromptCacheCleared { .. } => {
+            return Err(outside_cache_clear_wait_violation(&cache_cleared_event));
         }
-        image_event @ (WorkerEvent::ImageGenerationProgress { .. }
+        stepped_event @ (WorkerEvent::ImageGenerationProgress { .. }
         | WorkerEvent::ImageGenerationCompleted { .. }
         | WorkerEvent::ImageGenerationFailed { .. }
-        | WorkerEvent::ImageGenerationFinalized { .. }) => {
-            crate::worker::image_event::handle_worker_image_event(
-                image_event,
+        | WorkerEvent::ImageGenerationFinalized { .. }
+        | WorkerEvent::SpeechSegmentSpoken { .. }
+        | WorkerEvent::SpeechCompleted { .. }
+        | WorkerEvent::SpeechFailed { .. }
+        | WorkerEvent::SpeechFinalized { .. }) => {
+            dispatch_stepped_event(
+                stepped_event,
                 health_snapshot,
                 active_request,
                 performance_log,
@@ -143,33 +149,6 @@ pub(super) fn handle_worker_event(
         }
     }
     Ok(())
-}
-
-/// Routes the events of a request that answers in one step: decisions and
-/// embeddings. Both follow the same completed-or-failed-then-finalized
-/// order, so one arm of the dispatch match hands them here.
-fn dispatch_single_shot_worker_event(
-    worker_event: WorkerEvent,
-    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    active_request: &mut Option<ActiveWorkerRequest>,
-) -> Result<(), WorkerControlError> {
-    if matches!(
-        worker_event,
-        WorkerEvent::DecisionsCompleted { .. }
-            | WorkerEvent::DecisionsFailed { .. }
-            | WorkerEvent::DecisionsFinalized { .. }
-    ) {
-        return crate::worker::decisions_event::handle_worker_decisions_event(
-            worker_event,
-            health_snapshot,
-            active_request,
-        );
-    }
-    crate::worker::embeddings_event::handle_worker_embeddings_event(
-        worker_event,
-        health_snapshot,
-        active_request,
-    )
 }
 
 /// Publishes prompt-cache and expert-streaming snapshots that ride alongside

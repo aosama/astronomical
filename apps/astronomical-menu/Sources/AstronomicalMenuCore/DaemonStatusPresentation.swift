@@ -10,7 +10,7 @@ extension DaemonStatusDocument {
 
   var isActive: Bool {
     activity == "prompt_processing" || activity == "generation_preparation"
-      || activity == "generating" || activity == "image_generation"
+      || activity == "generating" || activity == "image_generation" || activity == "speaking"
   }
 
   // Prompt-processing activity is published as soon as the request starts, but
@@ -45,6 +45,7 @@ extension DaemonStatusDocument {
         : "Image · \(progress.shortImagePhaseTitle)"
     }
     if activity == "generation_preparation" { return "Preparing…" }
+    if activity == "speaking" { return "Speaking…" }
     if isRestoringPromptCache { return "Restoring…" }
     guard activity == "prompt_processing", let progress else {
       // Only when idle: a generation's own title always says more than a background count.
@@ -71,6 +72,7 @@ extension DaemonStatusDocument {
         : progress.imagePhaseTitle
     }
     if activity == "generation_preparation" { return "Preparing generation…" }
+    if activity == "speaking" { return "Reading text aloud" }
     if isRestoringPromptCache { return "Restoring prompt cache" }
     guard let progress else { return phaseTitle }
     guard let currentPhaseTokensPerSecond else {
@@ -86,6 +88,7 @@ extension DaemonStatusDocument {
     case "generation_preparation": return "Preparing generation"
     case "prompt_processing" where isRestoringPromptCache: return "Restoring prompt cache"
     case "prompt_processing": return "Prompt processing"
+    case "speaking": return "Reading text aloud"
     case "image_generation":
       if let progress {
         return progress.imagePhaseTitle

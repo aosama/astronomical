@@ -9,8 +9,9 @@ use tokio::io::AsyncWrite;
 
 use super::scripted_worker_decisions;
 
-/// Answers one embeddings or decisions command and finalizes it. Any other
-/// command is not a single-pass request and is left unanswered.
+/// Answers one embeddings or decisions command and finalizes it. A speech
+/// command is answered in its own scripted module; any other command is not
+/// a request these fixtures answer and is left unanswered.
 pub(super) async fn answer_single_shot_command<WriteTransport>(
     event_writer: &mut ProtocolWriter<WriteTransport>,
     single_shot_command: WorkerCommand,
@@ -40,6 +41,8 @@ where
                 })
                 .await
         }
-        _ => Ok(()),
+        other_command => {
+            super::scripted_worker_speech::answer_speech_command(event_writer, other_command).await
+        }
     }
 }

@@ -7,8 +7,8 @@ use astronomical_ipc_protocol::{DecisionsCommand, RequestId};
 use tokio::time::Instant;
 
 use crate::serving::decisions_executor::DecisionsResultSender;
-use crate::worker::single_shot_admission::{
-    SINGLE_SHOT_EXECUTION_TIMEOUT, SingleShotAdmissionContext, SingleShotAdmissionOutcome,
+use crate::worker::request_admission::{
+    RequestAdmissionContext, RequestAdmissionOutcome, SINGLE_SHOT_EXECUTION_TIMEOUT,
     classify_dispatch_result, make_requested_model_resident,
 };
 use crate::{
@@ -41,7 +41,7 @@ pub(super) async fn handle_generate_decisions_command(
         tracing::error!("received GenerateDecisions while another request is active");
         return Ok(());
     }
-    let mut admission_context = SingleShotAdmissionContext {
+    let mut admission_context = RequestAdmissionContext {
         worker_process: &mut *worker_process,
         health_snapshot,
         is_ready: &mut *is_ready,
@@ -59,7 +59,7 @@ pub(super) async fn handle_generate_decisions_command(
     )
     .await?
     {
-        SingleShotAdmissionOutcome::Started {
+        RequestAdmissionOutcome::Started {
             request_id,
             execution_started_at,
         } => {
@@ -72,12 +72,12 @@ pub(super) async fn handle_generate_decisions_command(
                 health_snapshot,
             );
         }
-        SingleShotAdmissionOutcome::ClientDisconnected => return Ok(()),
-        SingleShotAdmissionOutcome::StartRejected(start_error) => {
+        RequestAdmissionOutcome::ClientDisconnected => return Ok(()),
+        RequestAdmissionOutcome::StartRejected(start_error) => {
             let _send_outcome = start_sender.send(Err(start_error));
             return Ok(());
         }
-        SingleShotAdmissionOutcome::WorkerFailed(start_error) => {
+        RequestAdmissionOutcome::WorkerFailed(start_error) => {
             let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
             contain_worker_failure(worker_process, health_snapshot, active_request, start_error)
                 .await;
@@ -103,10 +103,10 @@ pub(super) async fn handle_generate_decisions_command(
 /// shared single-shot steps, then the decisions capability gate and the
 /// worker command dispatch.
 async fn admit_decisions_command(
-    admission_context: &mut SingleShotAdmissionContext<'_>,
+    admission_context: &mut RequestAdmissionContext<'_>,
     decisions_command: DecisionsCommand,
     decisions_result_sender: &DecisionsResultSender,
-) -> Result<SingleShotAdmissionOutcome, WorkerControlError> {
+) -> Result<RequestAdmissionOutcome, WorkerControlError> {
     if let Some(admission_ending_outcome) = make_requested_model_resident(
         admission_context,
         &decisions_command.model,
@@ -117,7 +117,7 @@ async fn admit_decisions_command(
         return Ok(admission_ending_outcome);
     }
     if !resident_model_answers_decisions(admission_context.health_snapshot) {
-        return Ok(SingleShotAdmissionOutcome::StartRejected(
+        return Ok(RequestAdmissionOutcome::StartRejected(
             GenerationStartError::WorkerUnavailable,
         ));
     }

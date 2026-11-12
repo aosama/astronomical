@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, DecisionsCommand, EmbeddingsCommand, ImageGenerationCommand,
+    SpeechCommand,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
@@ -15,7 +16,8 @@ use crate::serving::{ChatGenerationStartFuture, GenerationOutcomeStartFuture};
 use crate::worker::loop_types::{ChatWork, QueuedChatRequest, WorkerLoopCommand};
 use crate::{
     DecisionsExecutionError, DecisionsOutput, EmbeddingsExecutionError, EmbeddingsOutput,
-    GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput, WorkerHandle,
+    GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput,
+    SpeechExecutionError, SpeechOutput, WorkerHandle,
 };
 
 // One slot for every possible 128-token prefill progress boundary plus the
@@ -222,6 +224,49 @@ impl WorkerHandle {
             start_acknowledgement_outcome?;
 
             Ok(decisions_result_receiver)
+        })
+    }
+
+    /// Queues one speech request behind the same permits as every other
+    /// request, then hands it to the worker loop.
+    pub(in crate::worker) fn start_speech_generation_with_queue_admission(
+        &self,
+        speech_command: SpeechCommand,
+        admission_sender: Option<oneshot::Sender<()>>,
+    ) -> GenerationOutcomeStartFuture<'_, SpeechOutput, SpeechExecutionError> {
+        Box::pin(async move {
+            let command_sender = self
+                .command_sender
+                .as_ref()
+                .ok_or(GenerationStartError::WorkerUnavailable)?;
+            let generation_queue_permit = Arc::clone(&self.generation_queue_permits)
+                .try_acquire_owned()
+                .map_err(|_| GenerationStartError::CapacityUnavailable)?;
+            if let Some(admission_sender) = admission_sender {
+                let _admission_signal_result = admission_sender.send(());
+            }
+            let active_generation_permit = Arc::clone(&self.active_generation_permits)
+                .acquire_owned()
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            drop(generation_queue_permit);
+
+            let (speech_result_sender, speech_result_receiver) = mpsc::channel(1);
+            let (start_sender, start_receiver) = oneshot::channel();
+            command_sender
+                .send(WorkerLoopCommand::GenerateSpeech {
+                    active_generation_permit,
+                    speech_command,
+                    start_sender,
+                    speech_result_sender,
+                })
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            match start_receiver.await {
+                Ok(start_acknowledgement_outcome) => start_acknowledgement_outcome?,
+                Err(_channel_closed) => return Err(GenerationStartError::WorkerUnavailable),
+            }
+            Ok(speech_result_receiver)
         })
     }
 }

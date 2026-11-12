@@ -21,8 +21,8 @@ use super::settings::KevSettings;
 use super::tokenizer::KevTokenizer;
 use crate::RequestDecoderStateStack;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
-use crate::decision_models::memory_telemetry::decision_memory_telemetry;
 use crate::decision_models::qwen_backbone::QwenDecisionBackbone;
+use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 
 /// A Kev runtime bound to one converted folder.
@@ -138,7 +138,7 @@ impl DecisionEngine for KevDecisionEngine {
         let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_allocator_cache();
         self.post_cleanup_memory_telemetry =
             runtime.memory_snapshot().ok().map(|memory_snapshot| {
-                decision_memory_telemetry(
+                forward_pass_memory_telemetry(
                     &memory_snapshot,
                     self.effective_mlx_memory_ceiling_bytes as u64,
                     self.resident_weight_bytes,
@@ -164,7 +164,7 @@ impl DecisionEngine for KevDecisionEngine {
             .runtime()
             .memory_snapshot()
             .ok()?;
-        Some(decision_memory_telemetry(
+        Some(forward_pass_memory_telemetry(
             &memory_snapshot,
             self.effective_mlx_memory_ceiling_bytes as u64,
             self.resident_weight_bytes,

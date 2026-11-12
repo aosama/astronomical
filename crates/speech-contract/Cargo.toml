@@ -12,7 +12,11 @@ version.workspace = true
 # speech without linking MLX, as decision-contract serves decisions.
 
 [dependencies]
+serde.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

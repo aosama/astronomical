@@ -31,6 +31,7 @@ mod openai_responses_request;
 mod openai_responses_response;
 mod openai_responses_stream;
 mod openai_responses_tools;
+mod openai_speech_request;
 mod openai_structured_outputs;
 mod request_budget;
 mod thinking_controls;
@@ -87,9 +88,10 @@ pub use openai_image_generation_response::{
     OpenAiGeneratedImageParts, OpenAiImageGenerationResponse,
 };
 pub use openai_models_and_errors::{
-    DECISION_OUTPUT_MODALITY, OpenAiDecisionModelParts, OpenAiEmbeddingModelParts, OpenAiError,
-    OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
-    OpenAiModelValidationError, SYSTEM_ONE_ENDPOINT_PATH,
+    AUDIO_OUTPUT_MODALITY, AUDIO_SPEECH_ENDPOINT_PATH, DECISION_OUTPUT_MODALITY,
+    OpenAiDecisionModelParts, OpenAiEmbeddingModelParts, OpenAiError, OpenAiErrorResponse,
+    OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
+    OpenAiModelValidationError, OpenAiSpeechModelParts, SYSTEM_ONE_ENDPOINT_PATH,
 };
 pub use openai_response_format::{
     MAX_STRUCTURED_OUTPUT_SCHEMA_BYTES, OpenAiJsonSchemaSpec, OpenAiResponseFormat,
@@ -116,6 +118,9 @@ pub use openai_responses_stream::OpenAiResponseStreamEvent;
 pub use openai_responses_tools::{
     OpenAiResponseToolChoice, OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition,
     OpenAiResponseToolDefinitionParts,
+};
+pub use openai_speech_request::{
+    OpenAiSpeechRequest, OpenAiSpeechRequestParts, OpenAiSpeechValidationError,
 };
 pub use openai_structured_outputs::{
     EnforcedStructuredGeneration, MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES, OpenAiStructuredOutputs,

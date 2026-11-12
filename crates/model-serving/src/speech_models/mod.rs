@@ -7,9 +7,11 @@
 //! families cannot drift apart.
 
 pub(crate) mod checkpoint_tensors;
+pub(crate) mod engine_settings;
 pub(crate) mod kokoro;
 pub(crate) mod mlx_layers;
 pub(crate) mod phonon;
+pub(crate) mod speech_memory;
 pub(crate) mod speech_model_error;
 pub(crate) mod speech_request_slot;
 #[cfg(test)]

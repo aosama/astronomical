@@ -14,6 +14,10 @@ use crate::model_discovery::{
     derive_revision_from_config_bytes, flux2_klein, kev, laya, model_family, modernbert,
     prism_hadamard_qwen35, qwen_image_21, qwen3_5,
 };
+use crate::model_discovery::{
+    KOKORO_WEIGHTS_FILE_NAME, PHONON_WEIGHTS_FILE_NAME, kokoro_speech_capabilities,
+    phonon_speech_capabilities,
+};
 
 pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
     let model_id = model_directory
@@ -40,7 +44,12 @@ pub fn try_discover_model_with_id(
     match model_family {
         ModelFamily::Qwen3_5 => discover_qwen3_5_model(model_directory, model_id, model_family),
         ModelFamily::Flux2Klein => discover_flux2_klein_model(model_directory, model_family),
-        ModelFamily::ModernBert | ModelFamily::Laya | ModelFamily::Kev | ModelFamily::Clef => {
+        ModelFamily::ModernBert
+        | ModelFamily::Laya
+        | ModelFamily::Kev
+        | ModelFamily::Clef
+        | ModelFamily::Kokoro
+        | ModelFamily::Phonon => {
             discover_single_pass_model(model_directory, model_id, model_family)
         }
         ModelFamily::PrismHadamardQwen35 => {
@@ -53,8 +62,9 @@ pub fn try_discover_model_with_id(
     }
 }
 
-/// Discovers a model that answers in one forward pass: Kev, Clef or Laya,
-/// the decision models, or the ModernBERT embedding model.
+/// Discovers a model whose requests keep nothing between them: Kev, Clef or
+/// Laya, the decision models; the ModernBERT embedding model; or Kokoro or
+/// Phonon, the speech models.
 fn discover_single_pass_model(
     model_directory: &Path,
     model_id: &str,
@@ -65,8 +75,55 @@ fn discover_single_pass_model(
             discover_marked_decision_model(model_directory, model_id, model_family)
         }
         ModelFamily::Laya => discover_laya_model(model_directory, model_id, model_family),
+        other_family => discover_encoder_or_speech_model(model_directory, model_id, other_family),
+    }
+}
+
+fn discover_encoder_or_speech_model(
+    model_directory: &Path,
+    model_id: &str,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    match model_family {
+        ModelFamily::Kokoro | ModelFamily::Phonon => {
+            discover_speech_model(model_directory, model_id, model_family)
+        }
         _ => discover_modernbert_model(model_directory, model_id, model_family),
     }
+}
+
+/// Projects a speech folder into the neutral discovery contract: its voices,
+/// default voice and pace support, and the weight file's size.
+fn discover_speech_model(
+    model_directory: &Path,
+    model_id: &str,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let (speech_capabilities, weights_file_name) = match model_family {
+        ModelFamily::Kokoro => (
+            kokoro_speech_capabilities(model_directory)?,
+            KOKORO_WEIGHTS_FILE_NAME,
+        ),
+        _ => (
+            phonon_speech_capabilities(model_directory)?,
+            PHONON_WEIGHTS_FILE_NAME,
+        ),
+    };
+    let configuration_bytes = fs::read(model_directory.join("config.json")).ok()?;
+    let (provider_model_id, revision) =
+        provenance_or_config_revision(model_directory, &configuration_bytes);
+    Some(DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id,
+        model_family,
+        revision,
+        model_directory: model_directory.to_path_buf(),
+        model_size_bytes: fs::metadata(model_directory.join(weights_file_name))
+            .ok()?
+            .len(),
+        capabilities: ModelCapabilities::Speech(speech_capabilities),
+        license: None,
+    })
 }
 
 /// Projects a decision-model folder its marker file identified (Kev, Clef)

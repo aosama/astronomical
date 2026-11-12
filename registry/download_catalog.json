@@ -460,6 +460,71 @@
             },
             "quantization_label": "Mixed-precision 2/4/8-bit affine (group 64)",
             "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "mlx-community/Kokoro-82M-bf16",
+            "revision": "a71e4d38b236d968966a2002c4c895dbd12b1c3c",
+            "summary": "Reads text aloud in natural American English voices.",
+            "family": "kokoro",
+            "approximate_size_bytes": 337563903,
+            "approximate_memory_bytes": 1073741824,
+            "role": "speech",
+            "public": true,
+            "experimental": true,
+            "description": "Reads English text aloud and answers with a WAV file. Offers 20 American English voices (af_heart is the default) and can speak from a quarter to four times its natural pace. Speaks a whole sentence in one pass, several times faster than the audio plays. Its other voices expect British English or other languages and are not offered. Based on Kokoro-82M, an 82M-parameter StyleTTS2 model.",
+            "capabilities": {
+                "supports_speech": true
+            },
+            "included_paths": [
+                "config.json",
+                "kokoro-v1_0.safetensors",
+                "voices/af_alloy.safetensors",
+                "voices/af_aoede.safetensors",
+                "voices/af_bella.safetensors",
+                "voices/af_heart.safetensors",
+                "voices/af_jessica.safetensors",
+                "voices/af_kore.safetensors",
+                "voices/af_nicole.safetensors",
+                "voices/af_nova.safetensors",
+                "voices/af_river.safetensors",
+                "voices/af_sarah.safetensors",
+                "voices/af_sky.safetensors",
+                "voices/am_adam.safetensors",
+                "voices/am_echo.safetensors",
+                "voices/am_eric.safetensors",
+                "voices/am_fenrir.safetensors",
+                "voices/am_liam.safetensors",
+                "voices/am_michael.safetensors",
+                "voices/am_onyx.safetensors",
+                "voices/am_puck.safetensors",
+                "voices/am_santa.safetensors"
+            ],
+            "quantization_label": "32-bit float (unquantized)",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "gradium/phonon-31m-en",
+            "revision": "92741c5b07d085ff840e26fea8ce43110b87852f",
+            "summary": "Reads text aloud in one natural English voice, from a very small model.",
+            "family": "phonon",
+            "approximate_size_bytes": 103373135,
+            "approximate_memory_bytes": 536870912,
+            "role": "speech",
+            "public": true,
+            "experimental": true,
+            "description": "Reads English text aloud and answers with a WAV file, in one voice at its natural pace. At 31M parameters it is the smallest speech model in the catalog, and it reads words it has never seen without spelling them out. Based on Gradium's Phonon 31M.",
+            "capabilities": {
+                "supports_speech": true
+            },
+            "included_paths": [
+                "README.md",
+                "config.json",
+                "model.safetensors",
+                "tokenizer.json",
+                "default-voice.safetensors"
+            ],
+            "quantization_label": "32-bit float (unquantized)",
+            "upstream_license": "Apache-2.0"
         }
     ]
 }

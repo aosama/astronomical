@@ -17,15 +17,18 @@ mod flux2_klein;
 mod flux2_klein_documents;
 mod flux2_klein_mlx_4bit;
 mod kev;
+mod kokoro;
 mod laya;
 mod marked_decision_folder;
 mod model_card_front_matter;
 mod model_family;
 mod modernbert;
+mod phonon;
 mod prism_hadamard_qwen35;
 mod qwen3_5;
 mod qwen_image_21;
 mod qwen_image_21_documents;
+mod speech_voices;
 
 pub(crate) use artifact_discovery::{try_discover_model, try_discover_model_with_id};
 pub use classified_artifacts::{
@@ -39,9 +42,18 @@ pub use flux2_klein::{
     verify_model_directory as verify_flux2_klein_model_directory,
 };
 pub use flux2_klein_mlx_4bit::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME;
+pub use kokoro::{
+    KOKORO_CONFIGURATION_FILE_NAME, KOKORO_VOICES_DIRECTORY_NAME, KOKORO_WEIGHTS_FILE_NAME,
+    is_kokoro_configuration, kokoro_speech_capabilities,
+};
 pub use model_family::{
     ModelFamily, ModelFamilyClassificationError, classify_mflux_transformer_index_bytes,
     classify_model_directory, classify_pipeline_index_bytes,
+};
+pub use phonon::{
+    PHONON_CONFIGURATION_FILE_NAME, PHONON_DEFAULT_VOICE_FILE_NAME, PHONON_DEFAULT_VOICE_NAME,
+    PHONON_TOKENIZER_FILE_NAME, PHONON_VOICES_DIRECTORY_NAME, PHONON_WEIGHTS_FILE_NAME,
+    is_phonon_configuration, phonon_speech_capabilities,
 };
 pub use qwen_image_21::{
     QwenImage21DirectoryEvidence, QwenImage21DirectoryVerificationError,
@@ -58,6 +70,22 @@ pub enum ModelCapabilities {
     ImageGeneration(ImageGenerationCapabilities),
     Embeddings(EmbeddingModelCapabilities),
     Decisions(DecisionModelCapabilities),
+    Speech(SpeechModelCapabilities),
+}
+
+/// What a speech model offers before it is loaded: discovery reads it from
+/// the folder, and the engine that loads the folder reads the same answer,
+/// so the voices a caller is told about are the ones it can ask for.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SpeechModelCapabilities {
+    pub model_family: ModelFamily,
+    pub sample_rate_hertz: u32,
+    /// Sorted, except that a family's shipped default may come first.
+    pub voice_names: Vec<String>,
+    /// The voice a request without one is spoken in; one of `voice_names`.
+    pub default_voice_name: String,
+    /// Whether a request may ask for a pace other than 1.0.
+    pub supports_speed: bool,
 }
 
 /// What a decision model can be asked: typed questions about a state,

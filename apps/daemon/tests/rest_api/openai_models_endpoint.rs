@@ -278,6 +278,40 @@ async fn should_list_decision_model_metadata_with_its_per_question_token_limit()
     assert!(advertised_model.get("max_output_tokens").is_none());
 }
 
+// Positive: a discovered speech model is listed with its voices, pace
+// support, sample rate and formats, and only the speech endpoint.
+#[tokio::test]
+async fn should_list_speech_model_metadata_with_its_voices() {
+    let application = astronomical_daemon::build_application_with_discovered_models(
+        ScriptedExecutor::ready(Vec::new()),
+        vec![discovered_speech_model()],
+    );
+
+    let model_list_document = get_json_document(application, "/v1/models").await;
+    let advertised_model = &model_list_document["data"][0];
+
+    assert_eq!(advertised_model["id"], "Kokoro-82M-bf16");
+    assert_eq!(
+        advertised_model["output_modalities"],
+        serde_json::json!(["audio"])
+    );
+    assert_eq!(
+        advertised_model["supported_endpoints"],
+        serde_json::json!(["/v1/audio/speech"])
+    );
+    assert_eq!(
+        advertised_model["voices"],
+        serde_json::json!(["af_heart", "am_michael"])
+    );
+    assert_eq!(advertised_model["default_voice"], "af_heart");
+    assert_eq!(advertised_model["supports_speed"], true);
+    assert_eq!(
+        advertised_model["response_formats"],
+        serde_json::json!(["wav", "pcm"])
+    );
+    assert!(advertised_model.get("max_input_tokens").is_none());
+}
+
 #[tokio::test]
 async fn should_project_family_derived_reasoning_and_tool_capabilities() {
     let mut discovered_model = discovered_model_with_vision_support(false);
@@ -491,6 +525,25 @@ fn discovered_decision_model() -> DiscoveredModel {
         ),
         license: Some(astronomical_config::ModelLicense::Apache20),
         model_size_bytes: 0,
+    }
+}
+
+fn discovered_speech_model() -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: "Kokoro-82M-bf16".to_owned(),
+        provider_model_id: Some("mlx-community/Kokoro-82M-bf16".to_owned()),
+        model_family: astronomical_config::ModelFamily::Kokoro,
+        revision: "fixture-revision".to_owned(),
+        model_directory: PathBuf::from("fixtures/models/kokoro"),
+        capabilities: ModelCapabilities::Speech(astronomical_config::SpeechModelCapabilities {
+            model_family: astronomical_config::ModelFamily::Kokoro,
+            sample_rate_hertz: 24_000,
+            voice_names: vec!["af_heart".to_owned(), "am_michael".to_owned()],
+            default_voice_name: "af_heart".to_owned(),
+            supports_speed: true,
+        }),
+        license: None,
+        model_size_bytes: 1,
     }
 }
 

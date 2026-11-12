@@ -82,6 +82,25 @@ pub struct WorkerDecisionModelConfiguration {
     pub maximum_tokens_per_question: u32,
 }
 
+/// Typed speech-model family identifier.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerSpeechModelFamily {
+    /// StyleTTS2 with an iSTFTNet vocoder, reading phonemes.
+    Kokoro,
+    /// A causal flow language model with a Mimi decoder, reading tokens.
+    Phonon,
+}
+
+/// Exact speech artifact identity required by the selected profile.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerSpeechModelConfiguration {
+    pub model_id: String,
+    pub model_family: WorkerSpeechModelFamily,
+    pub artifact_revision: String,
+}
+
 /// Exact FLUX artifact identity required by the selected image profile.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -114,6 +133,7 @@ pub enum WorkerModelConfiguration {
     QwenImage21(WorkerQwenImage21ModelConfiguration),
     Embeddings(WorkerEmbeddingModelConfiguration),
     Decisions(WorkerDecisionModelConfiguration),
+    Speech(WorkerSpeechModelConfiguration),
 }
 
 /// Path-free loaded-model policy acknowledged to the daemon and local status API.
@@ -130,6 +150,7 @@ pub enum WorkerLoadedModelRuntimeConfiguration {
     QwenImage21(WorkerQwenImage21ModelConfiguration),
     Embeddings(WorkerEmbeddingModelConfiguration),
     Decisions(WorkerDecisionModelConfiguration),
+    Speech(WorkerSpeechModelConfiguration),
 }
 
 impl WorkerModelConfiguration {
@@ -145,6 +166,7 @@ impl WorkerModelConfiguration {
                 Self::QwenImage21,
                 Self::Embeddings,
                 Self::Decisions,
+                Self::Speech,
             ]
         )
     }
@@ -157,7 +179,8 @@ impl WorkerModelConfiguration {
             Self::Flux2Klein(_)
             | Self::QwenImage21(_)
             | Self::Embeddings(_)
-            | Self::Decisions(_) => None,
+            | Self::Decisions(_)
+            | Self::Speech(_) => None,
         }
     }
 
@@ -171,7 +194,8 @@ impl WorkerModelConfiguration {
             Self::Flux2Klein(_)
             | Self::QwenImage21(_)
             | Self::Embeddings(_)
-            | Self::Decisions(_) => None,
+            | Self::Decisions(_)
+            | Self::Speech(_) => None,
         }
     }
 
@@ -187,6 +211,7 @@ impl WorkerModelConfiguration {
                 Self::QwenImage21,
                 Self::Embeddings,
                 Self::Decisions,
+                Self::Speech,
             ]
         )
     }
@@ -231,6 +256,12 @@ impl From<&WorkerDecisionModelConfiguration> for WorkerLoadedModelRuntimeConfigu
     }
 }
 
+impl From<&WorkerSpeechModelConfiguration> for WorkerLoadedModelRuntimeConfiguration {
+    fn from(configuration: &WorkerSpeechModelConfiguration) -> Self {
+        Self::Speech(configuration.clone())
+    }
+}
+
 impl WorkerLoadedModelRuntimeConfiguration {
     /// Returns the canonical requestable model identity for either execution family.
     #[must_use]
@@ -244,6 +275,7 @@ impl WorkerLoadedModelRuntimeConfiguration {
                 Self::QwenImage21,
                 Self::Embeddings,
                 Self::Decisions,
+                Self::Speech,
             ]
         )
     }
@@ -258,7 +290,8 @@ impl WorkerLoadedModelRuntimeConfiguration {
             Self::Flux2Klein(_)
             | Self::QwenImage21(_)
             | Self::Embeddings(_)
-            | Self::Decisions(_) => None,
+            | Self::Decisions(_)
+            | Self::Speech(_) => None,
         }
     }
 }

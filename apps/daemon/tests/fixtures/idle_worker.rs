@@ -18,6 +18,7 @@ mod scripted_worker_image;
 
 mod scripted_worker_decisions;
 mod scripted_worker_single_shot;
+mod scripted_worker_speech;
 
 const DELAYED_COMPLETION_MODEL_ID: &str = "astronomical/delayed-completion-model";
 const GENERATION_EVENT_BEFORE_SWAP_MODEL_ID: &str =
@@ -209,7 +210,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 }
             }
             single_shot_command @ (WorkerCommand::GenerateDecisions(_)
-            | WorkerCommand::GenerateEmbeddings(_)) => {
+            | WorkerCommand::GenerateEmbeddings(_)
+            | WorkerCommand::GenerateSpeech(_)) => {
                 scripted_worker_single_shot::answer_single_shot_command(
                     &mut event_writer,
                     single_shot_command,

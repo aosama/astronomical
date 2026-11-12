@@ -6,7 +6,8 @@ use thiserror::Error;
 
 use super::flux2_klein_mlx_4bit;
 use super::{
-    clef, flux2_klein, kev, laya, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
+    clef, flux2_klein, kev, kokoro, laya, modernbert, phonon, prism_hadamard_qwen35, qwen_image_21,
+    qwen3_5,
 };
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
@@ -28,6 +29,12 @@ pub enum ModelFamily {
     /// A decision model: a Qwen3.5 backbone read once over the whole
     /// request, with a joint schema head, marked by `joint_head.safetensors`.
     Clef,
+    /// A speech model: StyleTTS2 with an iSTFTNet vocoder, marked by its
+    /// configuration's sections beside `kokoro-v1_0.safetensors`.
+    Kokoro,
+    /// A speech model: a causal flow language model with a Mimi decoder,
+    /// marked by its configuration's `flow_lm` and `mimi` sections.
+    Phonon,
 }
 
 impl ModelFamily {
@@ -67,6 +74,8 @@ impl ModelFamily {
             Self::Laya => "laya",
             Self::Kev => "kev",
             Self::Clef => "clef",
+            Self::Kokoro => "kokoro",
+            Self::Phonon => "phonon",
         })
     }
 }
@@ -133,19 +142,22 @@ pub fn classify_model_directory(
 /// Whether a folder carries one family's marker file.
 type MarkerCheck = fn(&Path) -> bool;
 
-const FAMILIES_MARKED_BY_FILE: [(MarkerCheck, ModelFamily); 3] = [
+const FAMILIES_MARKED_BY_FILE: [(MarkerCheck, ModelFamily); 5] = [
     (
         flux2_klein_mlx_4bit::classifies_directory,
         ModelFamily::Flux2Klein,
     ),
     (kev::classifies_directory, ModelFamily::Kev),
     (clef::classifies_directory, ModelFamily::Clef),
+    (kokoro::classifies_directory, ModelFamily::Kokoro),
+    (phonon::classifies_directory, ModelFamily::Phonon),
 ];
 
 /// The families a folder declares with a marker file rather than with its
 /// config's model type: the 4-bit FLUX.2 Klein build, whose pipeline index
-/// lives under its transformer, and Kev and Clef, whose configs are their
-/// Qwen3.5 backbones'.
+/// lives under its transformer; Kev and Clef, whose configs are their
+/// Qwen3.5 backbones'; and Kokoro and Phonon, whose configs have no model
+/// type at all.
 fn family_marked_by_file(model_directory: &Path) -> Option<ModelFamily> {
     for (classifies_directory, marked_family) in FAMILIES_MARKED_BY_FILE {
         if classifies_directory(model_directory) {

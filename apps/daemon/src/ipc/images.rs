@@ -28,7 +28,7 @@ use crate::{
             unknown_model_rejection_reason,
         },
     },
-    serving::image_seed::generated_seed,
+    serving::request_seed::generated_seed,
 };
 
 /// Classifier-free guidance, in thousandths, applied to every served image.

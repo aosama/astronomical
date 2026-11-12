@@ -18,6 +18,9 @@ workspace = true
 astronomical-decision-contract = { path = "../decision-contract" }
 astronomical-lowercase-hex = { path = "../lowercase-hex" }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
+# The speech request, its failures and its voice-name rule, shared with the
+# worker and the daemon. Pure Rust, like the decision contract.
+astronomical-speech-contract = { path = "../speech-contract" }
 base64.workspace = true
 bytes.workspace = true
 crc32fast.workspace = true

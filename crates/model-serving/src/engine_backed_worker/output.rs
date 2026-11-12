@@ -15,14 +15,23 @@ use crate::{
 use super::LoadedRuntime;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     pub(crate) async fn emit_model_outputs<WriteTransport>(
         &self,
@@ -477,12 +486,15 @@ where
                     worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
                 }),
             Some(
-                single_shot_runtime @ (LoadedRuntime::Embeddings(_) | LoadedRuntime::Decisions(_)),
-            ) => single_shot_engine_memory_telemetry(single_shot_runtime).map(
-                |mlx_memory_telemetry| {
-                    worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
-                },
-            ),
+                forward_pass_runtime @ (LoadedRuntime::Embeddings(_)
+                | LoadedRuntime::Decisions(_)
+                | LoadedRuntime::Speech(_)),
+            ) => super::forward_pass_memory::forward_pass_engine_memory_telemetry(
+                forward_pass_runtime,
+            )
+            .map(|mlx_memory_telemetry| {
+                worker_memory_observation(mlx_memory_snapshot_source, mlx_memory_telemetry)
+            }),
             None => None,
         };
         let Some((mlx_memory_snapshot, expert_residency)) = mlx_memory_observation else {
@@ -496,37 +508,6 @@ where
             .await?;
         Ok(())
     }
-}
-
-/// The idle memory observation of an engine that answers in one forward
-/// pass: an embedding engine or a decision engine. Other runtimes report
-/// through their own arms, so they yield nothing here.
-fn single_shot_engine_memory_telemetry<
-    Processor,
-    Engine,
-    ImageEngine,
-    EmbeddingsEngine,
-    DecisionsEngine,
->(
-    loaded_runtime: &LoadedRuntime<
-        Processor,
-        Engine,
-        ImageEngine,
-        EmbeddingsEngine,
-        DecisionsEngine,
-    >,
-) -> Option<MlxMemoryTelemetry>
-where
-    EmbeddingsEngine: crate::EmbeddingEngine,
-    DecisionsEngine: crate::DecisionEngine,
-{
-    if let LoadedRuntime::Embeddings(embedding_engine) = loaded_runtime {
-        return embedding_engine.collect_mlx_memory_telemetry();
-    }
-    if let LoadedRuntime::Decisions(decision_engine) = loaded_runtime {
-        return decision_engine.collect_mlx_memory_telemetry();
-    }
-    None
 }
 
 /// Pairs one measurement with the expert ownership observed at the same instant,

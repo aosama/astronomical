@@ -25,7 +25,7 @@ use astronomical_model_serving::{
     Flux2KleinImageEngine, KevDecisionEngine, LayaDecisionEngine, ModelFactory,
     ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
     ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
-    QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
+    QwenImage21ArtifactProvenance, QwenImage21ImageEngine, SpeechEngine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
@@ -34,6 +34,7 @@ mod qwen3_5_dense_engine_placement;
 mod qwen3_5_dense_engine_placement_tests;
 mod qwen3_5_model_startup;
 mod qwen3_5_model_startup_error;
+mod speech_engine_creation;
 
 #[cfg(test)]
 mod qwen3_5_model_startup_error_tests;
@@ -70,6 +71,7 @@ type ModelFamilyRuntime = ModelFactoryRuntime<
     ModelFamilyImageEngine,
     ModernBertEmbeddingEngine,
     Box<dyn DecisionEngine>,
+    Box<dyn SpeechEngine>,
 >;
 
 pub(crate) type InferenceWorker = EngineBackedWorker<
@@ -79,6 +81,7 @@ pub(crate) type InferenceWorker = EngineBackedWorker<
     ModelFamilyImageEngine,
     ModernBertEmbeddingEngine,
     Box<dyn DecisionEngine>,
+    Box<dyn SpeechEngine>,
 >;
 
 impl ModelFamilyFactory {
@@ -149,9 +152,10 @@ impl ModelFamilyFactory {
     }
 
     #[allow(clippy::type_complexity)]
-    /// Builds the engine of a model that answers in one forward pass: the
-    /// embedding engine for ModernBERT, a decision engine for Laya or Kev.
-    /// A family paired with another family's configuration is refused.
+    /// Builds the engine of a model whose requests keep nothing between them:
+    /// the embedding engine for ModernBERT, a decision engine for Laya, Kev
+    /// or Clef, a speech engine for Kokoro or Phonon. A family paired with
+    /// another family's configuration is refused.
     async fn create_single_pass_model_engine(
         &self,
         encoder_family: Option<ModelFamily>,
@@ -174,10 +178,19 @@ impl ModelFamilyFactory {
                 &model_directory_path,
                 model_configuration,
             ),
-            _ => Err(
-                "selected model configuration does not match its classified model family"
-                    .to_owned(),
-            ),
+            (other_family, other_configuration) => {
+                let memory_grant = speech_engine_creation::SpeechMemoryGrant {
+                    effective_mlx_memory_ceiling_bytes: self.effective_mlx_memory_ceiling_bytes,
+                    allocator_cache_memory_limit_bytes: self.allocator_cache_memory_limit_bytes,
+                };
+                speech_engine_creation::unloaded_speech_engine(
+                    other_family,
+                    model_directory_path,
+                    other_configuration,
+                    &memory_grant,
+                )
+                .map(ModelFactoryRuntime::Speech)
+            }
         }
     }
 
@@ -237,6 +250,7 @@ impl
         ModelFamilyImageEngine,
         ModernBertEmbeddingEngine,
         Box<dyn DecisionEngine>,
+        Box<dyn SpeechEngine>,
     > for ModelFamilyFactory
 {
     async fn create(
@@ -293,10 +307,13 @@ impl
                     ModelFamily::ModernBert
                     | ModelFamily::Laya
                     | ModelFamily::Kev
-                    | ModelFamily::Clef,
+                    | ModelFamily::Clef
+                    | ModelFamily::Kokoro
+                    | ModelFamily::Phonon,
                 ),
                 encoder_model_configuration @ (WorkerModelConfiguration::Embeddings(_)
-                | WorkerModelConfiguration::Decisions(_)),
+                | WorkerModelConfiguration::Decisions(_)
+                | WorkerModelConfiguration::Speech(_)),
             ) => {
                 self.create_single_pass_model_engine(
                     encoder_family,
