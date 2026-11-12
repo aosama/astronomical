@@ -150,11 +150,12 @@ Publication intentionally leaves the old public appcast active and writes the ne
 ## 6. Activate the signed appcast
 
 1. Create branch `release/v${VERSION}-appcast` without discarding the appcast worktree modification.
-2. Require `cmp site/appcast.xml target/releases/${TAG}/appcast.xml` to succeed. Do not format or edit the XML. No tests rerun here: the only change is this prepared file, the code it ships was tested in section 2, and its signing key was proven in section 3.
-3. Inspect status, diff, and recent log; commit only `site/appcast.xml` with `release: activate v${VERSION} update feed`.
-4. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}` (see the gotchas for the validator's rules). Wait for required checks and merge it. The macOS build job and the tier lanes it feeds report `skipping`, which the CI verdict accepts for a signed site artifact; every other lane must still be terminal.
-5. Synchronize local `main` with the squash-merged remote commit without rebasing. A clean local branch can diverge by one commit after the remote squash merge; fetch `origin/main`, then use a fast-forward or clean reset to the remote branch. Wait for the Pages workflow for the merge commit, and require success.
-6. Download the public `appcast.xml` to a temporary file. Require it to be byte-identical to `target/releases/${TAG}/appcast.xml` and to match the manifest digest. Verify its enclosure URL answers with a success HTTP status; section 5 already proved the public DMG's digest. Delete temporary files.
+2. Require `cmp site/appcast.xml target/releases/${TAG}/appcast.xml` to succeed. Do not format or edit the XML. No tests rerun here: the only changes are this prepared file and the README link of step 3, the code it ships was tested in section 2, and its signing key was proven in section 3.
+3. Point the `README.md` download button at this release's disk image: in the link around `site/assets/download-for-mac.svg`, replace the previous tag and version so the address reads `https://github.com/OWNER/REPO/releases/download/${TAG}/Astronomical-${VERSION}-macOS-arm64.dmg`. The DMG name carries the version, so no fixed address reaches the newest file and this one link is edited by hand each release. The Pages home page needs no edit: `site/assets/release-feed.js` reads the address from the appcast activated here. Both files are published content, so the pull request still skips the macOS lanes.
+4. Inspect status, diff, and recent log; commit only `site/appcast.xml` and `README.md` with `release: activate v${VERSION} update feed`.
+5. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}` (see the gotchas for the validator's rules). Wait for required checks and merge it. The macOS build job and the tier lanes it feeds report `skipping`, which the CI verdict accepts for a signed site artifact; every other lane must still be terminal.
+6. Synchronize local `main` with the squash-merged remote commit without rebasing. A clean local branch can diverge by one commit after the remote squash merge; fetch `origin/main`, then use a fast-forward or clean reset to the remote branch. Wait for the Pages workflow for the merge commit, and require success.
+7. Download the public `appcast.xml` to a temporary file. Require it to be byte-identical to `target/releases/${TAG}/appcast.xml` and to match the manifest digest. Verify its enclosure URL answers with a success HTTP status; section 5 already proved the public DMG's digest. Delete temporary files.
 
 ## 7. Finish
 
@@ -162,10 +163,30 @@ Require all of the following before reporting success:
 
 - GitHub release `$TAG` is public and is the latest Stable release.
 - Public Pages appcast is the exact prepared signed appcast.
+- Every public "Download for Mac" button passes the download button checklist below.
 - Release issue is explicitly closed after the appcast PR merge, Pages deployment, and public-byte verification. A `Refs #N` maintenance PR does not close it automatically.
 - Local `main` equals remote `main` and the tracked worktree is clean.
 - The ignored `target/releases/${TAG}` evidence directory remains intact.
 - The real Astronomical release was not installed or launched locally; isolated temporary validation fixtures are allowed as described above.
+
+### Download button checklist
+
+A person who clicks "Download for Mac" must receive this release's disk image, not a page that lists it. Check the public copies, after the Pages deployment, never the working tree:
+
+- [ ] **`README.md` on `main`:** the link around `site/assets/download-for-mac.svg` points at this release's DMG.
+- [ ] **The Pages home page (`site/index.html`, served at the repository's GitHub Pages address):** both "Download for Mac" buttons (the hero and the closing call to action) point at this release's DMG. `site/assets/release-feed.js` sets these links from the appcast after the page loads, so read them from the page as rendered in a browser; the page source alone shows only the releases page, which is the address for a visitor whose feed did not load.
+- [ ] **A click downloads the file:** each of those links, followed through its redirects, ends in the DMG itself.
+
+Read the README link from GitHub and the two button links from the browser (`document.querySelectorAll('a[data-latest-disk-image]')`), then probe each without downloading the body:
+
+```sh
+gh api "repos/{owner}/{repo}/readme" -H "Accept: application/vnd.github.raw" | grep -o '<a href="[^"]*"><img src="site/assets/download-for-mac.svg"'
+curl -sIL -o /dev/null -w '%{http_code} %{content_type} %header{content-length} %header{content-disposition}\n' "$BUTTON_URL"
+```
+
+A link passes only when the probe prints status `200`, type `application/octet-stream`, the manifest's DMG size, and a `content-disposition` naming `Astronomical-${VERSION}-macOS-arm64.dmg`. A `text/html` answer means the link opens a web page, such as `releases/latest`, and fails the check even though the page lists the DMG. A link naming an older version also fails. The DMG name carries the version, so the passing address is `https://github.com/OWNER/REPO/releases/download/${TAG}/Astronomical-${VERSION}-macOS-arm64.dmg`.
+
+Section 6 step 3 is where the README link is set. Repair a failing link through its own pull request with `Refs #${ISSUE_NUMBER}`, wait for the Pages deployment when `site/` changed, and probe again before closing the release issue.
 
 Tell the user that Astronomical `$VERSION` is available through the normal public release and Sparkle channels. Do not acquire it for them; they will receive it through the ordinary user journey.
 

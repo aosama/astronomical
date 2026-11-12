@@ -4,6 +4,7 @@
 // ./appcast.xml) and renders:
 //   - the current "Latest Stable" version line
 //   - a derived "What's New" changelog from the appcast release notes
+//   - the "Download for Mac" buttons, pointed at the newest disk image
 //
 // One fetch, parsed once, shared by every component. The page degrades
 // gracefully when the feed is unreachable: the fallback copy (already in the
@@ -15,6 +16,11 @@
 
   var APPCAST_URL = './appcast.xml';
   var MAX_RELEASE_NOTES = 6;
+  // A download button may only ever lead to this project's own release files.
+  // The feed is same-origin, but the check keeps a malformed enclosure from
+  // sending a visitor anywhere else.
+  var RELEASE_DOWNLOAD_URL_PREFIX =
+    'https://github.com/aosama/astronomical/releases/download/';
 
   var feedPromise = null;
 
@@ -44,6 +50,7 @@
         version: firstByLocalName(itemNodes[i], 'shortVersionString'),
         date: firstByLocalName(itemNodes[i], 'pubDate'),
         notes: firstByLocalName(itemNodes[i], 'description'),
+        diskImageUrl: enclosureUrl(itemNodes[i]),
       });
     }
     return releases;
@@ -57,6 +64,38 @@
           return child.localName === localName;
         })[0];
     return found ? (found.textContent || '').trim() : '';
+  }
+
+  function enclosureUrl(itemNode) {
+    var enclosureNode = Array.prototype.filter.call(
+      itemNode.children,
+      function (child) {
+        return child.localName === 'enclosure';
+      }
+    )[0];
+    return enclosureNode ? enclosureNode.getAttribute('url') || '' : '';
+  }
+
+  function latestDiskImageUrl(releases) {
+    var diskImageUrl = releases[0] ? releases[0].diskImageUrl : '';
+    var isReleaseDiskImage =
+      diskImageUrl.indexOf(RELEASE_DOWNLOAD_URL_PREFIX) === 0 &&
+      /\.dmg$/.test(diskImageUrl);
+    return isReleaseDiskImage ? diskImageUrl : '';
+  }
+
+  // The disk image's name carries its version, so no fixed address reaches the
+  // newest one. The HTML keeps the releases page as the address for a visitor
+  // whose feed did not load; with the feed, one click downloads the file.
+  function renderDownloadButtons(releases) {
+    var diskImageUrl = latestDiskImageUrl(releases);
+    if (!diskImageUrl) {
+      return;
+    }
+    var buttonNodes = document.querySelectorAll('a[data-latest-disk-image]');
+    for (var buttonIndex = 0; buttonIndex < buttonNodes.length; buttonIndex += 1) {
+      buttonNodes[buttonIndex].href = diskImageUrl;
+    }
   }
 
   function latestVersionLabel(releases) {
@@ -251,6 +290,7 @@
         renderLatestStable(releases);
         renderChangelog(releases);
         renderHomepageStable(releases);
+        renderDownloadButtons(releases);
       })
       .catch(function () {
         renderFeedFailure();
