@@ -541,3 +541,27 @@
   content: " (diagram could not render)";
   color: var(--danger);
 }
+
+/* Speak: the label changes length (Speak, Preparing…, Stop), so a minimum
+ * width keeps Export from shifting under the pointer; a note (busy, couldn't
+ * speak) reads as a note, not a button; and the reply making sound wears the
+ * accent so it is the findable one. */
+.message__action--speak {
+  min-width: 6.5em;
+}
+
+.message__action--speak[data-speak-phase="playing"],
+.message__action--speak[data-speak-phase="preparing"] {
+  color: var(--accent-text, var(--accent));
+  border-color: var(--line);
+}
+
+.message__action--speak[data-speak-phase="busy"],
+.message__action--speak[data-speak-phase="failed"] {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.message__action:disabled {
+  opacity: 0.45;
+}

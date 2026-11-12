@@ -39,6 +39,12 @@ export class AppConfig {
     this.printedPaper = init.printedPaper ?? LETTER_PAPER;
   }
 
+  /** The Models page (the Observatory), served by the same engine the window
+   * talks to. */
+  public get modelsPageURL(): string {
+    return `${this.daemonBaseURL}/download-models`;
+  }
+
   /** What this window calls itself. Mirrors ThinTalkApplicationIdentity.windowTitle,
    * so the sidebar agrees with the title bar about which instance this is. */
   public get applicationTitle(): string {
