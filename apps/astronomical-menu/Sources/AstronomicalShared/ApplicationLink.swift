@@ -9,8 +9,8 @@ import Foundation
 public enum ApplicationLink: String, CaseIterable, Sendable {
   /// The conversation window.
   case chat
-  /// The conversation window, opened on Your Astro.
-  case yourAstro = "your-astro"
+  /// The conversation window, opened on Settings.
+  case settings
   /// An update check. The main app owns the updater, so the agent's popover
   /// asks for a check this way. The link only ever shows the updater's own
   /// prompt, which is why it is safe for anything on the Mac to open it.

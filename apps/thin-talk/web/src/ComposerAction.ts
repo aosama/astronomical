@@ -5,11 +5,11 @@
  * switch.
  */
 export class ComposerAction {
-  public readonly kind: "send" | "stop" | "retry" | "selectModel" | "selectImageModel" | "openBrainPanel" | "setTools" | "openModelsPage";
+  public readonly kind: "send" | "stop" | "retry" | "selectModel" | "selectImageModel" | "openModelPanel" | "setTools" | "openModelsPage";
   public readonly detail: string;
 
   public constructor(init: {
-    kind: "send" | "stop" | "retry" | "selectModel" | "selectImageModel" | "openBrainPanel" | "setTools" | "openModelsPage";
+    kind: "send" | "stop" | "retry" | "selectModel" | "selectImageModel" | "openModelPanel" | "setTools" | "openModelsPage";
     detail?: string;
   }) {
     const configuredDetail: string | undefined = init.detail;

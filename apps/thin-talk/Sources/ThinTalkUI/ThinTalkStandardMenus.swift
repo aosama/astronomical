@@ -19,11 +19,11 @@ enum ThinTalkStandardMenus {
       applicationMenu.addItem(hostSettingsMenuItem)
     }
     applicationMenu.addItem(.separator())
-    // Settings opens Your Astro in the page, which holds every choice the
-    // window has: the welcome's answers and whether Astro is shown at all.
+    // Settings opens the page's own Settings screen, which holds every
+    // choice the window has: the name, the models and whether Astro is shown.
     applicationMenu.addItem(
       ThinTalkMainMenu.menuItem(
-        "Settings…", #selector(ThinTalkConversationActions.openYourAstro(_:)), ",", conversationActions))
+        "Settings…", #selector(ThinTalkConversationActions.openSettings(_:)), ",", conversationActions))
     applicationMenu.addItem(.separator())
     if let openObservatory = hostActions.openObservatory {
       applicationMenu.addItem(closureItem("Open Observatory", "", openObservatory))

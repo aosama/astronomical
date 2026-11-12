@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitFor } from "./support/dom";
+import { assertNoElement, waitFor } from "./support/dom";
 import { bootJourney, MET_ASTRO_PROFILE, sendUserMessage, waitUntilReady } from "./support/journey";
 import { chunkLine, toolCallLine } from "./support/scriptedChatFetch";
 
 // The conversation with Astro shown, driven through the real page wiring:
 // Astro's face and tags on answers, skill moments, the skill buttons, the
-// friendly pill names, chat colours in the sidebar, and the Focus switch back
+// skill tags, plain sidebar rows, and the Focus switch back
 // to classic Thin Talk.
 
 const TOOL_CAPABLE_MODEL = { id: "tool-model", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"], supports_tool_calls: true };
@@ -15,7 +15,6 @@ const DRAW_THEN_ANSWER = [
   [toolCallLine("call-1", "generate_image", JSON.stringify({ prompt: "Astro past the moon" })), chunkLine({}, "tool_calls"), "data: [DONE]"],
   [chunkLine({ content: "Ta-da!" }, "stop"), "data: [DONE]"],
 ];
-const PILOT_PROFILE = { ...MET_ASTRO_PROFILE, nickname: "Sam", style: "pilot" };
 
 function assistantArticles(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>("article.message--assistant")];
@@ -25,17 +24,15 @@ function text(selector: string): string {
   return document.querySelector(selector)?.textContent ?? "";
 }
 
-test("should_answer_as_astro_with_its_galaxy_a_name_and_a_skill_tag", async () => {
+test("should_answer_as_astro_with_a_name_and_a_skill_tag_and_no_mark", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitUntilReady();
   sendUserMessage("Why is the sky blue?");
   await waitFor(() => assistantArticles().length === 1 && text("article.message--assistant .message__state") === "", "a finished answer");
   const answer = assistantArticles()[0]!;
-  assert.ok(answer.querySelector(".astro-avatar svg.astro-galaxy"), "Astro's galaxy");
-  assert.equal(answer.querySelector(".astro-avatar img"), null, "no character picture");
+  assertNoElement(answer, ".astro-avatar, svg.astro-galaxy, img", "no mark beside the answer");
   assert.equal(answer.querySelector(".message__role")?.textContent, "Astro");
   assert.equal(answer.querySelector("[data-testid=astro-skill-tag]")?.textContent, "Chat");
-  assert.equal(answer.querySelector(".astro-avatar")?.getAttribute("data-mood"), "done");
   assert.match(text("article.message--user .message__role"), /Maya/);
   assert.ok(document.getElementById("app")?.classList.contains("app--astro"));
 });
@@ -52,34 +49,29 @@ test("should_animate_only_the_newest_answer", async () => {
   assert.equal(assistantArticles()[0]!.classList.contains("message--latest"), false);
 });
 
-test("should_tell_a_drawing_as_a_sketchbook_moment_tagged_pictures", async () => {
+test("should_tell_a_drawing_as_a_skill_moment_tagged_pictures", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: [TOOL_CAPABLE_MODEL, IMAGE_MODEL], chatReplySequence: DRAW_THEN_ANSWER });
   await waitUntilReady();
   sendUserMessage("Draw yourself past the moon");
-  await waitFor(() => text(".tool-step .skill-moment__words") === "Drew it in my sketchbook", "the finished sketchbook moment");
+  await waitFor(() => text(".tool-step .skill-moment__words") .startsWith("Image generated"), "the finished drawing moment");
   assert.equal(document.querySelector(".tool-step")?.getAttribute("data-skill"), "pictures");
   await waitFor(() => text("[data-testid=astro-skill-tag]") === "Pictures", "the Pictures tag");
 });
 
-test("should_colour_the_chat_in_the_sidebar_by_its_main_skill", async () => {
+test("should_save_the_main_skill_with_the_chat_and_draw_no_tile_in_the_sidebar", async () => {
   const { host } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: [TOOL_CAPABLE_MODEL, IMAGE_MODEL], chatReplySequence: DRAW_THEN_ANSWER });
   await waitUntilReady();
   sendUserMessage("Draw yourself past the moon");
-  await waitFor(() => document.querySelector(".sidebar__session-skill")?.getAttribute("data-skill") === "pictures", "the sidebar colour");
-  const savedDocument = host.receivedRequests.filter((request) => request.op === "save").pop()?.payload as Record<string, unknown>;
-  assert.equal(savedDocument["skill"], "pictures", "the main skill is saved with the chat");
+  await waitFor(() => (host.receivedRequests.filter((request) => request.op === "save").pop()?.payload as Record<string, unknown> | undefined)?.["skill"] === "pictures", "the main skill saved with the chat");
+  assert.ok(document.querySelector(".sidebar__session-item .sidebar__session-title"), "the chat is listed");
+  assert.equal(document.querySelector(".sidebar__session-item")?.childElementCount, 1, "a sidebar row holds its title and nothing else");
 });
 
-test("should_use_friendly_pill_names_for_explorers_and_real_names_for_pilots", async () => {
+test("should_show_the_models_own_name_on_the_model_control", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitUntilReady();
-  assert.equal(text("[data-testid=composer-model-label]"), "Astro's brain");
-  assert.equal(document.querySelector<HTMLButtonElement>("[data-testid=composer-model]")?.title, "fake-chat-model", "the tooltip still names the model");
-
-  bootJourney(undefined, { astroProfile: PILOT_PROFILE });
-  await waitUntilReady();
   assert.equal(text("[data-testid=composer-model-label]"), "fake-chat-model");
-  assert.ok(document.getElementById("app")?.classList.contains("app--astro-pilot"));
+  assert.equal(document.querySelector<HTMLButtonElement>("[data-testid=composer-model]")?.title, "fake-chat-model");
 });
 
 test("should_fill_the_message_field_from_a_skill_button_without_sending", async () => {
@@ -88,7 +80,7 @@ test("should_fill_the_message_field_from_a_skill_button_without_sending", async 
   assert.equal(document.getElementById("skill-launchers")?.hidden, false);
   document.querySelector<HTMLButtonElement>("[data-testid=composer-skill-look]")!.click();
   const field = document.querySelector<HTMLTextAreaElement>("#composer-input")!;
-  assert.equal(field.value, "Look at a photo I pick and tell me what you see.");
+  assert.equal(field.value, "Describe a photo I choose.");
   assert.equal(daemon.chatRequestBody(), null);
 });
 
@@ -130,7 +122,7 @@ test("should_return_to_classic_thin_talk_with_the_focus_switch_and_back", async 
   await waitFor(() => assistantArticles().length === 1, "an answer");
   window.__thintalkCommands?.run({ name: "toggleAstro" });
   await waitFor(() => text("article.message--assistant .message__role") === "Assistant", "the classic label");
-  assert.equal(document.querySelector(".astro-avatar"), null);
+  assertNoElement(document, ".astro-avatar");
   assert.equal(document.getElementById("skill-launchers")?.hidden, true);
   assert.equal(text("[data-testid=composer-model-label]"), "fake-chat-model");
   assert.equal(document.getElementById("app")?.classList.contains("app--astro"), false);
@@ -148,14 +140,14 @@ test("should_keep_classic_thin_talk_untouched_for_someone_who_hid_astro", async 
   assert.equal(document.getElementById("skill-launchers")?.hidden, true);
 });
 
-test("should_offer_the_sketchbook_in_a_new_chat_when_draw_is_pressed_without_a_picture_model", async () => {
-  const sketchbookCatalog = {
+test("should_offer_the_image_model_in_a_new_chat_when_draw_is_pressed_without_one", async () => {
+  const imageModelCatalog = {
     entries: [{ huggingface_id: "example-org/starter-image-4bit", role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false }],
   };
-  const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, libraryCatalog: sketchbookCatalog });
+  const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, libraryCatalog: imageModelCatalog });
   await waitUntilReady();
   document.querySelector<HTMLButtonElement>("[data-testid=composer-skill-pictures]")!.click();
-  await waitFor(() => document.querySelector("[data-testid=astro-home-get-sketchbook]") !== null, "the sketchbook offer");
+  await waitFor(() => document.querySelector("[data-testid=astro-home-get-image-model]") !== null, "the image model offer");
   assert.equal(document.querySelector<HTMLTextAreaElement>("#composer-input")!.value, "", "no drawing request that would fail");
   assert.equal(daemon.chatRequestBody(), null);
   assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads until the person agrees");
@@ -180,8 +172,8 @@ test("should_keep_astro_out_of_the_message_field_while_its_skill_buttons_stay", 
   await waitUntilReady();
   await waitFor(() => document.querySelector<HTMLElement>("#skill-launchers")?.hidden === false, "the skill buttons");
 
-  assert.equal(messageField().querySelector("svg.astro-galaxy"), null, "an empty field");
+  assertNoElement(messageField(), "svg.astro-galaxy", "an empty field");
   typeIntoMessageField("Why is the sky blue?");
-  assert.equal(messageField().querySelector("svg.astro-galaxy"), null, "a draft to send");
-  assert.equal(document.getElementById("composer-astro"), null, "no place kept for it");
+  assertNoElement(messageField(), "svg.astro-galaxy", "a draft to send");
+  assertNoElement(document, "#composer-astro", "no place kept for it");
 });

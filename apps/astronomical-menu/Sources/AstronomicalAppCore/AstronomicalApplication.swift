@@ -140,7 +140,7 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
     guard let applicationLink = ApplicationLink.parse(openedURL, channel: applicationIdentity.channel) else { return }
     switch applicationLink {
     case .chat: chatWindowController.showChatWindow()
-    case .yourAstro: chatWindowController.showYourAstro()
+    case .settings: chatWindowController.showSettings()
     case .checkForUpdates: updateCheckFromLink.request()
     }
   }

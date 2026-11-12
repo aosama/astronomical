@@ -90,18 +90,18 @@
             </div>
             <div class="composer__group">
               <!--
-                The brain control: which model answers, and behind it one panel
+                The model control: which model answers, and behind it one panel
                 with every installed chat and picture model, the Tools switch and
                 a way to the Models page (src/ModelPanelView.ts). It sits beside
                 Send because it is a setting of the message, not a starter.
               -->
-              <div class="composer__menu-anchor composer__menu-anchor--brain">
-                <button type="button" class="composer__brain" id="composer-model" data-testid="composer-model" aria-label="Brain" aria-haspopup="menu" aria-expanded="false" hidden>
-                  <svg class="composer__brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5a3 3 0 0 0-5.6-1.3 3.2 3.2 0 0 0-2.2 5.3 3.4 3.4 0 0 0 1.3 5.7A3.3 3.3 0 0 0 12 17.5z"/><path d="M12 6.5a3 3 0 0 1 5.6-1.3 3.2 3.2 0 0 1 2.2 5.3 3.4 3.4 0 0 1-1.3 5.7A3.3 3.3 0 0 1 12 17.5z"/></svg>
-                  <span class="composer__brain-label" data-testid="composer-model-label">Model</span>
+              <div class="composer__menu-anchor composer__menu-anchor--model">
+                <button type="button" class="composer__model" id="composer-model" data-testid="composer-model" aria-label="Model" aria-haspopup="menu" aria-expanded="false" hidden>
+                  <svg class="composer__model-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5a3 3 0 0 0-5.6-1.3 3.2 3.2 0 0 0-2.2 5.3 3.4 3.4 0 0 0 1.3 5.7A3.3 3.3 0 0 0 12 17.5z"/><path d="M12 6.5a3 3 0 0 1 5.6-1.3 3.2 3.2 0 0 1 2.2 5.3 3.4 3.4 0 0 1-1.3 5.7A3.3 3.3 0 0 1 12 17.5z"/></svg>
+                  <span class="composer__model-label" data-testid="composer-model-label">Model</span>
                   <svg class="composer__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
                 </button>
-                <ul class="composer__menu composer__menu--brains" id="composer-model-menu" data-testid="composer-model-menu" role="menu" aria-label="Brains" hidden></ul>
+                <ul class="composer__menu composer__menu--models" id="composer-model-menu" data-testid="composer-model-menu" role="menu" aria-label="Models" hidden></ul>
               </div>
               <button type="button" class="composer__send" id="composer-send" data-testid="composer-send" aria-label="Send message" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13L13 3M13 3H6M13 3v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
@@ -125,15 +125,15 @@
         <p id="brief-notice" class="brief-notice" role="status" data-testid="brief-notice" hidden></p>
       </div>
       <!--
-        Astro's first flight covers the whole window, sidebar included, for a
-        newcomer (and on Your Astro's "Replay"). Your Astro, opened from
-        Settings (⌘,), covers it the same way. Both sit inside #app so they
+        The get-started journey covers the whole window, sidebar included, for
+        a newcomer (and from Settings' "Show the welcome again"). Settings
+        (⌘,) covers it the same way. Both sit inside #app so they
         inherit the title bar inset. They are app-owned chrome built by
-        src/astro/FirstFlightView.ts and src/astro/YourAstroView.ts; nothing
+        src/astro/GetStartedView.ts and src/astro/SettingsView.ts; nothing
         in them comes from a model.
       -->
-      <section id="first-flight" class="first-flight" role="dialog" aria-modal="true" aria-label="Meet Astro" data-testid="first-flight" hidden></section>
-      <section id="your-astro" class="your-astro" role="dialog" aria-modal="true" aria-label="Your Astro" data-testid="your-astro" hidden></section>
+      <section id="get-started" class="get-started" role="dialog" aria-modal="true" aria-label="Get started" data-testid="get-started" hidden></section>
+      <section id="settings" class="settings" role="dialog" aria-modal="true" aria-label="Settings" data-testid="settings" hidden></section>
       <!--
         The export sheet, drawn by export.js (src/export/ExportSheetView.ts),
         which the page loads the first time someone exports.

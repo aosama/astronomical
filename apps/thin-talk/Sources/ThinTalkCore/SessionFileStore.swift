@@ -58,7 +58,7 @@ public final class SessionFileStore: @unchecked Sendable {
 
   public var sessionsDirectory: URL { rootDirectory.appendingPathComponent("sessions", isDirectory: true) }
   public var preferencesFileURL: URL { rootDirectory.appendingPathComponent("preferences.json") }
-  /// Astro's profile (nickname, style, whether the first flight is done) lives
+  /// Astro's profile (the optional name, whether the get-started journey is done, whether Astro is shown) lives
   /// apart from the chat preferences: the page saves each from a different
   /// component, and one shared file would let either save overwrite the other.
   public var astroProfileFileURL: URL { rootDirectory.appendingPathComponent("astro-profile.json") }

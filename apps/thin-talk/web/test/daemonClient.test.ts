@@ -84,19 +84,19 @@ function answerEveryRequest(answer: () => Response | Promise<Response>): { metho
 }
 
 test("should_start_a_library_download_and_read_its_starting_status", async () => {
-  const sentRequests = answerEveryRequest(() => Response.json({ state: "checking_disk", huggingface_id: "example-org/brain", bytes_completed: 0, bytes_total: 0, error_code: null }, { status: 202 }));
-  const startingStatus = await daemonClient().startLibraryDownload("example-org/brain");
+  const sentRequests = answerEveryRequest(() => Response.json({ state: "checking_disk", huggingface_id: "example-org/chat-model", bytes_completed: 0, bytes_total: 0, error_code: null }, { status: 202 }));
+  const startingStatus = await daemonClient().startLibraryDownload("example-org/chat-model");
   assert.equal(startingStatus.state, "checking_disk");
-  assert.deepEqual(sentRequests, [{ method: "POST", url: `${DAEMON_BASE_URL}/v1/library/download`, body: JSON.stringify({ huggingface_id: "example-org/brain" }) }]);
+  assert.deepEqual(sentRequests, [{ method: "POST", url: `${DAEMON_BASE_URL}/v1/library/download`, body: JSON.stringify({ huggingface_id: "example-org/chat-model" }) }]);
 });
 
 test("should_carry_the_daemons_refusal_code_or_none_when_a_download_cannot_start", async () => {
   answerEveryRequest(() => Response.json({ error: { code: "library_busy", message: "busy" } }, { status: 409 }));
-  await assert.rejects(daemonClient().startLibraryDownload("example-org/brain"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === "library_busy");
+  await assert.rejects(daemonClient().startLibraryDownload("example-org/chat-model"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === "library_busy");
   answerEveryRequest(() => new Response("<html>gateway</html>", { status: 502 }));
-  await assert.rejects(daemonClient().startLibraryDownload("example-org/brain"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === null);
+  await assert.rejects(daemonClient().startLibraryDownload("example-org/chat-model"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === null);
   answerEveryRequest(() => Promise.reject(new TypeError("connection refused")));
-  await assert.rejects(daemonClient().startLibraryDownload("example-org/brain"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === null);
+  await assert.rejects(daemonClient().startLibraryDownload("example-org/chat-model"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === null);
 });
 
 test("should_resume_the_paused_download_and_report_a_refusal", async () => {
@@ -108,7 +108,7 @@ test("should_resume_the_paused_download_and_report_a_refusal", async () => {
 });
 
 test("should_read_the_current_library_download", async () => {
-  answerEveryRequest(() => Response.json({ state: "downloading", huggingface_id: "example-org/brain", bytes_completed: 5, bytes_total: 10, error_code: null }));
+  answerEveryRequest(() => Response.json({ state: "downloading", huggingface_id: "example-org/chat-model", bytes_completed: 5, bytes_total: 10, error_code: null }));
   const currentStatus = await daemonClient().fetchLibraryDownloadStatus();
   assert.deepEqual([currentStatus.state, currentStatus.bytesCompleted, currentStatus.bytesTotal], ["downloading", 5, 10]);
 });

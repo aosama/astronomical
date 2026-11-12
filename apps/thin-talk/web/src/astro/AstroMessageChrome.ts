@@ -3,15 +3,12 @@ import type { TranscriptMessage } from "../TranscriptMessage";
 import type { TranscriptPersona } from "../TranscriptPersona";
 import { ToolStepState } from "../ToolStep";
 import type { ToolStep } from "../ToolStep";
-import { astroGalaxyHtml } from "./AstroGalaxy";
 import { CONVERSATION_SKILL_LABELS, answerSkill, skillForToolName } from "../ConversationSkill";
 import { stateWordsHtml } from "../MessageChrome";
 import type { EscapeHtml, MessageChrome } from "../MessageChrome";
-import { AstroStyle } from "./AstroStyle";
 import { skillMomentWords } from "./SkillMomentWords";
 
-/** What Astro is doing in one answer, which picks its status words and, on
- * the newest answer only, how its galaxy moves. */
+/** What Astro is doing in one answer, which picks its status words. */
 export enum AstroMood {
   THINKING = "thinking",
   WORKING = "working",
@@ -21,14 +18,14 @@ export enum AstroMood {
 }
 
 /** What Astro says in place of "thinking" while the engine loads a model. */
-const MODEL_LOADING_WORDS = { explorer: "is waking up its brain…", pilot: "loading the model…" };
+const MODEL_LOADING_WORDS = "loading the model…";
 
-const STATUS_BY_MOOD: Record<AstroMood, { explorer: string; pilot: string }> = {
-  [AstroMood.THINKING]: { explorer: "is thinking…", pilot: "thinking…" },
-  [AstroMood.WORKING]: { explorer: "is busy…", pilot: "working…" },
-  [AstroMood.TALKING]: { explorer: "is talking…", pilot: "" },
-  [AstroMood.DONE]: { explorer: "", pilot: "" },
-  [AstroMood.STOPPED]: { explorer: "stopped", pilot: "stopped" },
+const STATUS_BY_MOOD: Record<AstroMood, string> = {
+  [AstroMood.THINKING]: "thinking…",
+  [AstroMood.WORKING]: "working…",
+  [AstroMood.TALKING]: "",
+  [AstroMood.DONE]: "",
+  [AstroMood.STOPPED]: "stopped",
 };
 
 export function astroMood(message: TranscriptMessage): AstroMood {
@@ -41,14 +38,9 @@ export function astroMood(message: TranscriptMessage): AstroMood {
   return message.state === ChatMessageState.COMPLETE ? AstroMood.DONE : AstroMood.STOPPED;
 }
 
-function byStyle(words: { explorer: string; pilot: string }, persona: TranscriptPersona): string {
-  return persona.style === AstroStyle.PILOT ? words.pilot : words.explorer;
-}
-
 /**
- * The message chrome while Astro is shown: Astro's galaxy and name with a skill
- * tag and friendly status, the person's nickname, "How I worked it out", and
- * tool steps told as skill moments. Every value that comes from the
+ * The message chrome while Astro is shown: Astro's name with a skill
+ * tag and status, the person's name, and tool steps told as skill moments. Every value that comes from the
  * conversation (the nickname, tool labels) is escaped; the rest is fixed text.
  */
 export class AstroMessageChrome implements MessageChrome {
@@ -70,26 +62,26 @@ export class AstroMessageChrome implements MessageChrome {
     return `<span class="message__role message__role--named"><b class="astro-you-badge">${this.escapeHtml(initial.toUpperCase())}</b>${this.escapeHtml(this.persona.nickname)}</span>`;
   }
 
-  /** Astro's galaxy, moving for its mood, then "Astro", the answer's skill
-   * tag and what Astro is doing now. A failed answer keeps the plain word,
+  /** "Astro", the answer's skill tag and what Astro is doing now. No mark is
+   * drawn beside an answer: the product's iconography is undecided, and an
+   * unfinished mark repeated on every answer reads as the brand. A failed answer keeps the plain word,
    * because the failure banner explains it. */
   public assistantHeaderHtml(message: TranscriptMessage): string {
     const skill = answerSkill(message.markdown, message.toolSteps.map((toolStep) => toolStep.toolName));
     const mood = astroMood(message);
-    const statusText = message.state === ChatMessageState.FAILED ? "failed" : byStyle(STATUS_BY_MOOD[mood], this.persona);
+    const statusText = message.state === ChatMessageState.FAILED ? "failed" : STATUS_BY_MOOD[mood];
     const caret = message.state === ChatMessageState.STREAMING ? '<span class="message__streaming-caret"></span>' : "";
     return (
-      `<div class="astro-avatar" data-mood="${mood}" aria-hidden="true">${astroGalaxyHtml()}</div>` +
       `<div class="message__meta message__meta--astro">` +
       `<span class="message__role">Astro</span>` +
       `<span class="astro-skill-tag astro-skill-tag--${skill}" data-testid="astro-skill-tag">${CONVERSATION_SKILL_LABELS[skill]}</span>` +
-      `<span class="message__state">${stateWordsHtml(statusText, mood === AstroMood.THINKING ? byStyle(MODEL_LOADING_WORDS, this.persona) : null)}${caret}</span>` +
+      `<span class="message__state">${stateWordsHtml(statusText, mood === AstroMood.THINKING ? MODEL_LOADING_WORDS : null)}${caret}</span>` +
       `</div>`
     );
   }
 
   public reasoningSummary(): string {
-    return this.persona.style === AstroStyle.PILOT ? "Reasoning" : "How I worked it out";
+    return "Reasoning";
   }
 
   /** The skill a step belongs to colours it (astro-conversation.css). */
@@ -98,11 +90,10 @@ export class AstroMessageChrome implements MessageChrome {
     return toolSkill !== null ? ` data-skill="${toolSkill}"` : "";
   }
 
-  /** A tool call told as Astro using a skill; Pilots also see which image
-   * model drew a picture. */
+  /** A tool call told as Astro using a skill, with the image model that
+   * drew a picture named beside it. */
   public toolStepSummaryHtml(toolStep: ToolStep, imageModelSuffix: string): string {
-    const words = skillMomentWords(toolStep.toolName, toolStep.label, toolStep.state, this.persona.style);
-    const suffix = this.persona.style === AstroStyle.PILOT ? imageModelSuffix : "";
-    return `<summary><span class="skill-moment__icon" aria-hidden="true"></span><span class="skill-moment__words">${this.escapeHtml(words)}${suffix}</span></summary>`;
+    const words = skillMomentWords(toolStep.toolName, toolStep.label, toolStep.state);
+    return `<summary><span class="skill-moment__icon" aria-hidden="true"></span><span class="skill-moment__words">${this.escapeHtml(words)}${imageModelSuffix}</span></summary>`;
   }
 }

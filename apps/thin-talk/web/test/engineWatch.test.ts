@@ -40,7 +40,7 @@ test("should_answer_at_once_and_ask_fresh_every_time", async () => {
   const { library, askCount } = scriptedLibrary([false, true]);
   const engineWatch = new EngineWatch(library);
   assert.equal(await engineWatch.ask(), false);
-  assert.equal(await engineWatch.ask(), true, "a brain downloaded since is not missed");
+  assert.equal(await engineWatch.ask(), true, "a chat model downloaded since is not missed");
   assert.equal(askCount(), 2);
 });
 
@@ -49,7 +49,7 @@ test("should_keep_asking_a_silent_engine_while_someone_waits_and_tell_them_once"
     const { library } = scriptedLibrary([null, null, true]);
     const engineWatch = new EngineWatch(library);
     const heardAnswers: boolean[] = [];
-    engineWatch.onceAnswered((hasBrain) => heardAnswers.push(hasBrain));
+    engineWatch.onceAnswered((hasChatModel) => heardAnswers.push(hasChatModel));
     assert.equal(await engineWatch.ask(), null);
     await until(() => heardAnswers.length > 0);
     assert.deepEqual(heardAnswers, [true]);

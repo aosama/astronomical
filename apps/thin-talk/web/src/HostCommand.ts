@@ -13,8 +13,8 @@ export enum HostCommand {
   /** File ▸ Export… and the toolbar's Export button: the whole chat. */
   EXPORT_CONVERSATION = "exportConversation",
   FOCUS_COMPOSER = "focusComposer",
-  /** Settings (⌘,): opens Your Astro, where each welcome answer changes on its own. */
-  OPEN_YOUR_ASTRO = "openYourAstro",
+  /** Settings (⌘,): opens the Settings page. */
+  OPEN_SETTINGS = "openSettings",
   /** The Focus switch: hides or shows Astro. */
   TOGGLE_ASTRO = "toggleAstro",
   /** Carries `text`: a draft to put in the message field, replacing what is

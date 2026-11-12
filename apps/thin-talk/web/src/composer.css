@@ -98,22 +98,22 @@
 }
 
 /*
- * The brain control: an icon and the chat model's plain name, drawn as text
+ * The model control: an icon and the chat model's plain name, drawn as text
  * rather than a filled capsule so Send stays the one strong shape in the row.
  * It only gets a fill on hover or while its panel is open. The name gives way
  * with an ellipsis before it pushes Send out; in a narrow composer it goes
- * altogether and the brain icon alone remains, named by its tooltip.
+ * altogether and the model icon alone remains, named by its tooltip.
  */
 .composer {
   container-type: inline-size;
 }
 
 .composer__actions > .composer__group:last-child,
-.composer__menu-anchor--brain {
+.composer__menu-anchor--model {
   min-width: 0;
 }
 
-.composer__brain {
+.composer__model {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -130,17 +130,17 @@
   cursor: default;
 }
 
-.composer__brain:hover,
-.composer__brain[aria-expanded="true"] {
+.composer__model:hover,
+.composer__model[aria-expanded="true"] {
   background: var(--active);
   color: var(--ink);
 }
 
-.composer__brain[hidden] {
+.composer__model[hidden] {
   display: none;
 }
 
-.composer__brain-icon {
+.composer__model-icon {
   flex: none;
   width: 19px;
   height: 19px;
@@ -151,28 +151,28 @@
   stroke-linejoin: round;
 }
 
-.composer__brain-label {
+.composer__model-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.composer__brain .composer__chevron {
+.composer__model .composer__chevron {
   flex: none;
   width: 12px;
   height: 12px;
 }
 
 @container (max-width: 520px) {
-  .composer__brain-label,
-  .composer__brain .composer__chevron {
+  .composer__model-label,
+  .composer__model .composer__chevron {
     display: none;
   }
 
   /* The icon alone must keep its size: flex would otherwise squeeze it
      into Send when the composer is very narrow. */
-  .composer__brain {
+  .composer__model {
     flex: none;
     width: 32px;
     padding: 0;
@@ -204,12 +204,12 @@
   display: none;
 }
 
-/* The brain panel opens from the right, above Send, and grows to the longest
+/* The model panel opens from the right, above Send, and grows to the longest
    model ID, because the ID is a model's only name and a cut-off one cannot be
    told from its siblings ("Ornith-1.5-35B-A3B-MLX-…" covers three models).
    300px keeps short lists from looking cramped; only a window narrower than
    the longest ID still shortens it, and each row's tooltip then has it whole. */
-.composer__menu--brains {
+.composer__menu--models {
   left: auto;
   right: 0;
   width: max-content;

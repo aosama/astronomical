@@ -93,11 +93,10 @@ final class ChatWindowController {
     occlusionState.contains(.visible)
   }
 
-  /// Opens the window on Your Astro, the page that holds every answer from
-  /// Astro's welcome. The command waits for a newly made window's page to
+  /// Opens the window on its Settings page. The command waits for a newly made window's page to
   /// load (see ConversationCanvasView.runPageCommand).
-  func showYourAstro() {
+  func showSettings() {
     showChatWindow()
-    conversationActions.openYourAstro(nil)
+    conversationActions.openSettings(nil)
   }
 }

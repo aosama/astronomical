@@ -38,7 +38,7 @@ public final class ConversationCanvasView: NSView {
   /// Commands sent before the page finished loading. A command for a page
   /// that has not booted is otherwise lost (the page's command router does
   /// not exist yet), which matters when a host opens the window and asks for
-  /// Your Astro in the same breath.
+  /// Settings in the same breath.
   private var commandsAwaitingPageLoad: [CanvasPageCommand] = []
   /// A draft sent before the page finished loading; only the latest is kept.
   private var draftAwaitingPageLoad: String?

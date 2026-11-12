@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bootChatClient } from "../src/boot";
-import { installConfig, installDom, waitFor } from "./support/dom";
+import { assertNoElement, installConfig, installDom, waitFor } from "./support/dom";
 import { FakeDaemon } from "./support/fakeDaemon";
 import { FakeSessionHost } from "./support/fakeHost";
 import { DAEMON_BASE_URL, waitUntilReady } from "./support/journey";
@@ -111,7 +111,7 @@ test("should_change_nothing_when_the_menu_is_dismissed", async () => {
   await new Promise((settle) => setTimeout(settle, 20));
   assert.deepEqual(sidebarTitles(), ["Hamlet", "Macbeth", "Lear"]);
   assert.equal(host.fileCount(), 3);
-  assert.equal(document.querySelector('[data-testid="session-rename"]'), null);
+  assertNoElement(document, '[data-testid="session-rename"]');
 }, { timeout: 30_000 });
 
 test("should_leave_the_default_menu_outside_the_chat_rows", async () => {

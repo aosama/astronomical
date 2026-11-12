@@ -34,7 +34,7 @@ final class StableAccessibilityIdentifierContractTests: XCTestCase {
     "composer-skill-pictures",
     "composer-skill-look",
     "composer-skill-read",
-    "first-flight",
+    "get-started",
   ]
 
   func test_should_carry_a_matching_id_and_testid_for_every_interactive_shell_control() throws {

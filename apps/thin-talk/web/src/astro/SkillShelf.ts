@@ -1,10 +1,6 @@
 import { SKILL_CARDS, SkillCardKind } from "./SkillCard";
 import type { SkillCard } from "./SkillCard";
 
-/** How far a pointer must travel before a press counts as a drag, so a slightly
- * shaky click on a trackpad still reads as a click. */
-const DRAG_THRESHOLD_PIXELS = 6;
-
 /** The cards' icons, drawn inline: the page may load images only from its own
  * bundle, and inline SVG follows the card's text colour. */
 const CARD_ICON_PATHS: Record<SkillCardKind, string> = {
@@ -16,18 +12,15 @@ const CARD_ICON_PATHS: Record<SkillCardKind, string> = {
 };
 
 export interface SkillShelfCallbacks {
-  /** A card was clicked, pressed with the keyboard, or dropped on the target. */
+  /** A card was clicked or pressed with the keyboard. */
   onChoose(kind: SkillCardKind): void;
-  /** Whether a drag released at this point landed on Astro. */
-  isDropTarget(clientX: number, clientY: number): boolean;
-  /** The drag is over Astro (true) or has left it (false). */
-  onHoverTarget(isOverTarget: boolean): void;
 }
 
 /** Builds the row of skill cards, each a real button so keyboard and
- * VoiceOver users can teach Astro without dragging. `idPrefix` keeps ids
- * unique when the first flight and Astro's home are both in the page
- * ("astro" for the flight, "astro-home" for home). */
+ * VoiceOver users can teach Astro as a pointer does. Cards are chosen by a
+ * click alone: nothing is drawn for Astro on screen, so there is no place to
+ * drop a dragged card. `idPrefix` starts every card's id ("astro-home" on
+ * Astro's home). */
 export function buildSkillShelf(document: Document, idPrefix: string, callbacks: SkillShelfCallbacks): HTMLElement {
   const shelf = document.createElement("div");
   shelf.className = "skill-shelf";
@@ -55,61 +48,6 @@ function buildSkillCardButton(document: Document, idPrefix: string, card: SkillC
   const cardCaption = document.createElement("small");
   cardCaption.textContent = card.caption;
   cardButton.append(cardTitle, cardCaption);
-  attachCardDragging(cardButton, card.kind, callbacks);
+  cardButton.addEventListener("click", () => callbacks.onChoose(card.kind));
   return cardButton;
-}
-
-/**
- * Lets a card be dragged onto Astro. A press that never travels is a click,
- * and a drag released anywhere else springs the card back without choosing
- * it, so a dropped-by-accident card does nothing.
- */
-function attachCardDragging(cardButton: HTMLButtonElement, kind: SkillCardKind, callbacks: SkillShelfCallbacks): void {
-  let dragStart: { x: number; y: number } | null = null;
-  let hasMoved = false;
-  cardButton.addEventListener("pointerdown", (pointerEvent) => {
-    dragStart = { x: pointerEvent.clientX, y: pointerEvent.clientY };
-    hasMoved = false;
-    cardButton.setPointerCapture?.(pointerEvent.pointerId);
-  });
-  cardButton.addEventListener("pointermove", (pointerEvent) => {
-    if (dragStart === null) {
-      return;
-    }
-    const travelX = pointerEvent.clientX - dragStart.x;
-    const travelY = pointerEvent.clientY - dragStart.y;
-    if (!hasMoved && Math.hypot(travelX, travelY) < DRAG_THRESHOLD_PIXELS) {
-      return;
-    }
-    hasMoved = true;
-    cardButton.classList.add("skill-card--dragging");
-    cardButton.style.transform = `translate(${travelX}px, ${travelY}px) rotate(-3deg)`;
-    callbacks.onHoverTarget(callbacks.isDropTarget(pointerEvent.clientX, pointerEvent.clientY));
-  });
-  cardButton.addEventListener("pointerup", (pointerEvent) => {
-    const wasDragged = dragStart !== null && hasMoved;
-    dragStart = null;
-    cardButton.classList.remove("skill-card--dragging");
-    cardButton.style.transform = "";
-    callbacks.onHoverTarget(false);
-    if (wasDragged && callbacks.isDropTarget(pointerEvent.clientX, pointerEvent.clientY)) {
-      callbacks.onChoose(kind);
-    }
-  });
-  // A drag the system cancels (the pointer leaves the window, a gesture takes
-  // over) springs the card back without choosing it.
-  cardButton.addEventListener("pointercancel", () => {
-    dragStart = null;
-    hasMoved = false;
-    cardButton.classList.remove("skill-card--dragging");
-    cardButton.style.transform = "";
-    callbacks.onHoverTarget(false);
-  });
-  // A keyboard press or a pointer press that never moved arrives as a click.
-  cardButton.addEventListener("click", () => {
-    if (!hasMoved) {
-      callbacks.onChoose(kind);
-    }
-    hasMoved = false;
-  });
 }

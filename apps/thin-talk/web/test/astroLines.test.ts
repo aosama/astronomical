@@ -1,52 +1,44 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AstroMoment, astroLine, homeIdeas } from "../src/astro/AstroLines";
-import { AstroStyle } from "../src/astro/AstroStyle";
+import { AstroMoment, HOME_IDEAS, astroLine } from "../src/astro/AstroLines";
 
 const EVERY_MOMENT = Object.values(AstroMoment);
-const EVERY_STYLE = [AstroStyle.EXPLORER, AstroStyle.PILOT];
-/** Words a young person should never meet from Astro. */
-const JARGON = [/\bmodel\b/i, /\bGB\b/, /\bLibrary\b/, /\bdaemon\b/i, /\bMLX\b/, /\berror\b/i, /\bHugging\s*Face\b/i];
+/** Words from the younger-audience wording the app moved away from, and
+ * internals no person should meet. */
+const UNWANTED_WORDS = [/\bbrain\b/i, /\bsketchbook\b/i, /\bgrown-?ups?\b/i, /\bgifts?\b/i, /\bLibrary\b/, /\bdaemon\b/i, /\bMLX\b/, /\bHugging\s*Face\b/i];
 
-test("should_have_a_line_for_every_moment_in_both_styles", () => {
+test("should_have_a_line_for_every_moment", () => {
   for (const moment of EVERY_MOMENT) {
-    for (const style of EVERY_STYLE) {
-      assert.ok(astroLine(moment, style, "Maya").trim().length > 0, `${moment} in ${style}`);
-    }
+    assert.ok(astroLine(moment, "Maya").trim().length > 0, moment);
   }
 });
 
 test("should_greet_by_name_when_given_one_and_never_leave_a_dangling_comma_without", () => {
-  assert.equal(astroLine(AstroMoment.HOME_GREETING, AstroStyle.EXPLORER, "Maya"), "Hi, Maya!");
-  assert.equal(astroLine(AstroMoment.HOME_GREETING, AstroStyle.EXPLORER, ""), "Hi!");
-  assert.equal(astroLine(AstroMoment.HOME_GREETING, AstroStyle.PILOT, ""), "Hey");
-  for (const style of EVERY_STYLE) {
-    for (const moment of EVERY_MOMENT) {
-      assert.doesNotMatch(astroLine(moment, style, ""), /, [!.?]|,\s*$/, `${moment} in ${style}`);
-    }
-  }
-});
-
-test("should_speak_differently_in_each_style_where_it_matters", () => {
-  assert.notEqual(astroLine(AstroMoment.HELLO, AstroStyle.EXPLORER, ""), astroLine(AstroMoment.HELLO, AstroStyle.PILOT, ""));
-  assert.notEqual(astroLine(AstroMoment.CHARGING, AstroStyle.EXPLORER, ""), astroLine(AstroMoment.CHARGING, AstroStyle.PILOT, ""));
-});
-
-test("should_keep_astro_free_of_technical_jargon", () => {
+  assert.equal(astroLine(AstroMoment.HOME_GREETING, "Maya"), "Hey, Maya");
+  assert.equal(astroLine(AstroMoment.HOME_GREETING, ""), "Hey");
   for (const moment of EVERY_MOMENT) {
-    for (const style of EVERY_STYLE) {
-      const line = astroLine(moment, style, "Maya");
-      for (const jargonPattern of JARGON) {
-        assert.doesNotMatch(line, jargonPattern, `${moment} in ${style}: "${line}"`);
-      }
+    assert.doesNotMatch(astroLine(moment, ""), /, [!.?]|,\s*$/, moment);
+  }
+});
+
+test("should_name_the_models_plainly_and_avoid_the_retired_wording", () => {
+  assert.match(astroLine(AstroMoment.NEEDS_CHAT_MODEL, ""), /chat model/);
+  assert.match(astroLine(AstroMoment.NEEDS_IMAGE_MODEL, ""), /image model/);
+  for (const moment of EVERY_MOMENT) {
+    const line = astroLine(moment, "Maya");
+    for (const unwantedWord of UNWANTED_WORDS) {
+      assert.doesNotMatch(line, unwantedWord, `${moment}: "${line}"`);
     }
   }
 });
 
-test("should_offer_four_home_ideas_in_each_style", () => {
-  for (const style of EVERY_STYLE) {
-    const ideas = homeIdeas(style);
-    assert.equal(ideas.length, 4);
-    assert.equal(new Set(ideas).size, 4, "no idea repeats");
+test("should_never_exclaim", () => {
+  for (const moment of EVERY_MOMENT) {
+    assert.doesNotMatch(astroLine(moment, "Maya"), /!/, moment);
   }
+});
+
+test("should_offer_four_distinct_home_ideas", () => {
+  assert.equal(HOME_IDEAS.length, 4);
+  assert.equal(new Set(HOME_IDEAS).size, 4, "no idea repeats");
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitFor } from "./support/dom";
+import { assertNoElement, waitFor } from "./support/dom";
 import { bootJourney, sendUserMessage, waitUntilReady } from "./support/journey";
 import type { Journey } from "./support/journey";
 import { createExportFeature } from "../src/export/exportEntry";
@@ -53,7 +53,7 @@ test("should_export_one_answer_as_a_pdf_and_say_it_was_saved", async () => {
   click(element("action-export"));
   await waitFor(() => !element("export-sheet").hidden && previewText().includes(FAKE_REPLY), "the sheet on this answer");
   assert.equal(element("export-scope-oneAnswer").getAttribute("aria-checked"), "true");
-  assert.equal(element("export-preview").shadowRoot?.querySelector(".export-question"), null, "one answer starts without its question");
+  assertNoElement(element("export-preview").shadowRoot, ".export-question", "one answer starts without its question");
   click(element("export-save"));
 
   await waitFor(() => !element("brief-notice").hidden, "the saved notice");

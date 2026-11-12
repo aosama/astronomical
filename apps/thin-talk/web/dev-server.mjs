@@ -70,7 +70,7 @@ const chatModel = {
   id: "preview-chat-model",
   input_modalities: ["text"],
   supported_endpoints: ["/v1/chat/completions"],
-  // Tools on, so the brain panel shows its Pictures section as in the app.
+  // Tools on, so the model panel shows its Pictures section as in the app.
   supports_tool_calls: true,
 };
 
@@ -136,7 +136,7 @@ const previewImageModels = [
   { id: "FLUX.2-klein-4B", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
   { id: "flux2-klein-4b-4bit", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
 ];
-/** The Library's plain names and details, so the preview's brain control and
+/** The Library's plain names and details, so the preview's model control and
  * panel read the way the app does instead of showing folder names. */
 const previewLibraryEntries = [
   { approximate_size_bytes: 8208531833, capabilities: { supports_vision: true }, role: "chat", requestable_model_id: "preview-chat-model" },

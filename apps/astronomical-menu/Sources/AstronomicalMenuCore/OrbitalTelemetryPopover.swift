@@ -38,7 +38,7 @@ struct OrbitalTelemetryPopover: View {
   let installTerminalCommand: () -> Void
   let removeTerminalCommand: () -> Void
   let revealConfiguration: () -> Void
-  let showYourAstro: () -> Void
+  let showSettings: () -> Void
   let quitApplication: () -> Void
 
   var body: some View {
@@ -205,7 +205,7 @@ struct OrbitalTelemetryPopover: View {
           // Automatic checks, the update channel and Launch at Login live
           // in the main app's menu: they are settings of the main app, which
           // owns the updater and registers this agent at login.
-          Button("Your Astro…", action: showYourAstro)
+          Button("Settings…", action: showSettings)
           Button("Reveal config", action: revealConfiguration)
           Button("Quit Astronomical", action: quitApplication)
         } label: {

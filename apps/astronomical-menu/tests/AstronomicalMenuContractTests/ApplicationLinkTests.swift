@@ -16,11 +16,11 @@ final class ApplicationLinkTests: XCTestCase {
     }
   }
 
-  func test_should_open_your_astro_from_its_own_link_and_not_as_chat() throws {
-    let yourAstroURL = try XCTUnwrap(URL(string: "astronomical-dev://your-astro"))
+  func test_should_open_settings_from_its_own_link_and_not_as_chat() throws {
+    let settingsURL = try XCTUnwrap(URL(string: "astronomical-dev://settings"))
 
-    XCTAssertEqual(ApplicationLink.parse(yourAstroURL, channel: .development), .yourAstro)
-    XCTAssertFalse(isThinTalkChatOpenRequest(yourAstroURL, channel: .development))
+    XCTAssertEqual(ApplicationLink.parse(settingsURL, channel: .development), .settings)
+    XCTAssertFalse(isThinTalkChatOpenRequest(settingsURL, channel: .development))
   }
 
   func test_should_ask_for_an_update_check_from_its_own_link_and_not_as_a_window() throws {
@@ -37,13 +37,13 @@ final class ApplicationLinkTests: XCTestCase {
   }
 
   func test_should_refuse_a_link_of_another_channel() throws {
-    let stableYourAstroURL = try XCTUnwrap(ApplicationLink.yourAstro.url(channel: .stable))
+    let stableSettingsURL = try XCTUnwrap(ApplicationLink.settings.url(channel: .stable))
 
-    XCTAssertNil(ApplicationLink.parse(stableYourAstroURL, channel: .development))
+    XCTAssertNil(ApplicationLink.parse(stableSettingsURL, channel: .development))
   }
 
   func test_should_refuse_unknown_destinations_and_extra_path_components() throws {
-    for refusedLink in ["astronomical://settings", "astronomical://chat/extra", "astronomical://", "astronomical:///a/b"] {
+    for refusedLink in ["astronomical://preferences", "astronomical://chat/extra", "astronomical://", "astronomical:///a/b"] {
       let refusedURL = try XCTUnwrap(URL(string: refusedLink))
       XCTAssertNil(ApplicationLink.parse(refusedURL, channel: .stable), refusedLink)
     }

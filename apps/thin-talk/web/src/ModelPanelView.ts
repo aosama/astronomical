@@ -17,8 +17,8 @@ interface PanelRow {
 }
 
 /**
- * The composer's brain control: one small button beside Send that names the
- * chat model in use and opens one panel listing every installed brain, chat
+ * The composer's model control: one small button beside Send that names the
+ * chat model in use and opens one panel listing every installed model, chat
  * models first, then picture models, then the Tools switch and a way to the
  * Models page. It replaced two wide pills that showed folder names; the
  * folder name now lives only in the button's tooltip.
@@ -54,9 +54,7 @@ export class ModelPanelView {
     this.trigger.setAttribute("aria-expanded", "false");
   }
 
-  /** `friendlyBrainName` replaces the model's name on the button ("Astro's
-   * brain" for younger people); the tooltip and the panel keep real names. */
-  public render(state: ComposerState, friendlyBrainName: string | null): void {
+  public render(state: ComposerState): void {
     const hasModels = state.models.length > 0;
     this.trigger.hidden = !hasModels;
     if (!hasModels || !state.isReady) {
@@ -64,9 +62,9 @@ export class ModelPanelView {
     }
     const selectedModel = state.models.find((model) => model.id === state.selectedModelID);
     const selectedName = selectedModel != null ? selectedModel.id : "Model";
-    this.label.textContent = friendlyBrainName !== null && selectedModel != null ? friendlyBrainName : selectedName;
+    this.label.textContent = selectedName;
     this.trigger.title = selectedModel != null ? selectedModel.id : "";
-    this.trigger.setAttribute("aria-label", selectedModel != null ? `Brain: ${selectedName}` : "Brain");
+    this.trigger.setAttribute("aria-label", selectedModel != null ? `Model: ${selectedName}` : "Model");
     this.rebuildPanelIfChanged(state);
   }
 
@@ -74,7 +72,7 @@ export class ModelPanelView {
     const opening = this.panel.hidden;
     if (opening) {
       // A model installed since the list was read appears once it is re-read.
-      this.onAction(new ComposerAction({ kind: "openBrainPanel" }));
+      this.onAction(new ComposerAction({ kind: "openModelPanel" }));
     }
     this.panel.hidden = !opening;
     this.trigger.setAttribute("aria-expanded", opening ? "true" : "false");

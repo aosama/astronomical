@@ -166,12 +166,6 @@ export class SidebarView {
       button.classList.add("sidebar__session-item--active");
       button.setAttribute("aria-current", "true");
     }
-    // The skill colour is drawn only while Astro is shown (astro-conversation.css).
-    const skillMark = document.createElement("span");
-    skillMark.className = "sidebar__session-skill";
-    skillMark.dataset.skill = session.skill;
-    skillMark.setAttribute("aria-hidden", "true");
-    button.appendChild(skillMark);
     const title = document.createElement("span");
     title.className = "sidebar__session-title";
     title.textContent = displayedTitle;

@@ -7,20 +7,20 @@ import type { AstroLibrary } from "./AstroLibrary";
 export const ENGINE_PATIENCE = {
   /** Between two asks while the engine has not answered yet. */
   askEveryMilliseconds: 1_000,
-  /** How long the "waking up" screen stays before Astro says it cannot wake.
+  /** How long the "starting up" screen stays before it says the engine did not start.
    * The engine normally answers within a few seconds of the app starting. */
   silentAfterMilliseconds: 15_000,
 };
 
-type AnswerListener = (hasBrain: boolean) => void;
+type AnswerListener = (hasChatModel: boolean) => void;
 
 /**
  * Asks the engine whether a chat model is installed, and keeps asking while
  * anyone is waiting for an answer.
  *
  * On a first launch the window can open before the engine has finished
- * starting. Reading that silence as "has a brain" made a new Mac skip the
- * brain download, with nothing asking again. Every ask is fresh, so a brain
+ * starting. Reading that silence as "has a chat model" made a new Mac skip
+ * the download, with nothing asking again. Every ask is fresh, so a model
  * downloaded since is never missed; asks made at the same moment share one
  * request; and the timer runs only while a listener waits, so a silent
  * engine is not asked forever after nobody needs the answer.

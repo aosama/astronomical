@@ -64,10 +64,10 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
     commandController.run(.focusComposer)
   }
 
-  /// Settings (⌘,): opens Your Astro, where a young person changes their
-  /// name, style or colour look on its own instead of replaying the whole welcome.
-  @objc public func openYourAstro(_ sender: Any?) {
-    commandController.run(.openYourAstro)
+  /// Settings (⌘,): opens the chat window's Settings page, where the name,
+  /// the installed models and whether Astro is shown each change on their own.
+  @objc public func openSettings(_ sender: Any?) {
+    commandController.run(.openSettings)
   }
 
   /// The Focus switch: hides Astro for a plain chat window, or brings Astro back.

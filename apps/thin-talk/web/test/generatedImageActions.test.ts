@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitFor } from "./support/dom";
+import { assertNoElement, waitFor } from "./support/dom";
 import { TrustBoundary } from "../src/TrustBoundary";
 import { MathPipeline } from "../src/MathPipeline";
 import { DiagramPipeline } from "../src/DiagramPipeline";
@@ -95,6 +95,6 @@ test("should_offer_no_picture_buttons_for_a_step_without_a_stored_picture", asyn
     await waitFor(() => transcriptHost.querySelector(".tool-step") !== null, "the step to render");
 
     assert.deepEqual(pictureButtons(transcriptHost), [], String(unusableImageName));
-    assert.equal(transcriptHost.querySelector(".generated-image"), null, String(unusableImageName));
+    assertNoElement(transcriptHost, ".generated-image", String(unusableImageName));
   }
 });

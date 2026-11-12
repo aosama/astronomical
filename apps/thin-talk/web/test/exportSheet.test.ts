@@ -2,7 +2,7 @@ import { A4_PAPER, LETTER_PAPER } from "../src/export/PaperSize";
 import { previewSidePixels } from "../src/export/ExportSheetView";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitFor } from "./support/dom";
+import { assertFocusOn, waitFor } from "./support/dom";
 import { ExportSheet, pageCountText, previewTextHeightPixels } from "../src/export/ExportSheet";
 import type { ExportEnvironment, ExportSaveOutcome, ExportSaveRequest, ExportableMessage } from "../src/export/ExportEnvironment";
 import { ExportFormat } from "../src/export/ExportFormat";
@@ -210,13 +210,13 @@ test("should_move_through_a_radio_group_with_the_arrow_keys_without_choosing", a
 
   pdf.focus();
   pressKey(pdf, "ArrowRight");
-  assert.equal(document.activeElement, word);
+  assertFocusOn(word);
   pressKey(word, "ArrowDown");
-  assert.equal(document.activeElement, webPage);
+  assertFocusOn(webPage);
   pressKey(webPage, "ArrowRight");
-  assert.equal(document.activeElement, pdf, "the arrows wrap round");
+  assertFocusOn(pdf, "the arrows wrap round");
   pressKey(pdf, "ArrowLeft");
-  assert.equal(document.activeElement, webPage);
+  assertFocusOn(webPage);
 
   assert.equal(pdf.getAttribute("aria-checked"), "true", "moving the focus chooses nothing");
   assert.deepEqual([pdf.tabIndex, word.tabIndex, webPage.tabIndex], [0, -1, -1], "Tab stops on the chosen one only");
@@ -231,10 +231,10 @@ test("should_skip_a_hidden_choice_and_never_start_picking_from_an_arrow_key", as
   wholeChat.focus();
   pressKey(wholeChat, "ArrowRight");
 
-  assert.equal(document.activeElement, pickMessages, "the hidden 'This answer' is skipped");
+  assertFocusOn(pickMessages, "the hidden 'This answer' is skipped");
   assert.equal(scene.sheetElement.hidden, false, "arrowing onto Pick messages does not leave the sheet");
   pressKey(pickMessages, "a");
-  assert.equal(document.activeElement, pickMessages, "other keys are left alone");
+  assertFocusOn(pickMessages, "other keys are left alone");
 });
 
 test("should_move_the_tab_stop_to_the_newly_chosen_format", () => {
