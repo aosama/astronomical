@@ -5,6 +5,8 @@ mod decision_readout;
 #[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]
+mod decoder_stack_suffix_forward;
+#[cfg(feature = "direct-mlx")]
 mod evaluation;
 #[cfg(feature = "direct-mlx")]
 mod forward;
@@ -52,6 +54,8 @@ pub(crate) use crate::qwen3_5_core::vision::{
 };
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embedding_injection};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use decoder_stack_suffix_forward::RecordedDecoderLayerInput;
 #[cfg(feature = "direct-mlx")]
 pub use forward_graph::Qwen3_5TargetForwardOutput;
 #[cfg(feature = "direct-mlx")]

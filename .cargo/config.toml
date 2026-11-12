@@ -258,9 +258,9 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # with model_directory (a bfloat16 source) and reference_artifact_path (what
 # crates/quantization/tests/fixtures/build_optiq_reference_artifacts.py wrote
 # from that source; build_optiq_parity_sources.py makes the source from an
-# installed quantized model). The measured sweep takes about three minutes
-# on Qwen3.5 0.8B, hence the fifteen-minute case budget and the optimized
-# build.
+# installed quantized model). The measured sweep forwards four calibration
+# sequences and takes about three minutes on Qwen3.5 0.8B, hence the
+# fifteen-minute case budget and the optimized build.
 test-quantization-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --release --ignored --case-budget-seconds 900 --filter python_parity"
 
 # Mixture-of-experts probing on a synthetic model: the router and each

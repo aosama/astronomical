@@ -18,7 +18,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use crate::qwen3_5_resident::Qwen3_5ResidentModel;
+use crate::qwen3_5_resident::{Qwen3_5ResidentModel, RecordedDecoderLayerInput};
 use crate::{Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration};
 
 use super::expert_swaps::SwappedOutWeights;
@@ -28,6 +28,8 @@ use super::simulated_quantization::{
     quantize_dequantized_bfloat16,
 };
 
+#[path = "layer_input_reuse.rs"]
+mod layer_input_reuse;
 #[path = "module_swaps.rs"]
 mod module_swaps;
 
@@ -64,6 +66,9 @@ pub struct Qwen3_5SensitivityProbe {
     /// They live here rather than in the restore token because the token's
     /// state must be `Send` and MLX arrays are not.
     swapped_out_weights: BTreeMap<String, SwappedOutWeights>,
+    /// What the reference forward of each calibration sequence recorded,
+    /// keyed by the sequence's token ids, for probes to resume from.
+    reference_layer_inputs: BTreeMap<Vec<u32>, Vec<RecordedDecoderLayerInput>>,
 }
 
 /// The bf16 source a uniform-baseline probe re-encodes modules from, read
@@ -122,6 +127,7 @@ pub fn load_qwen3_5_probe_model(
         bfloat16_source,
         prefill_chunk_tokens,
         swapped_out_weights: BTreeMap::new(),
+        reference_layer_inputs: BTreeMap::new(),
     })
 }
 
@@ -183,6 +189,13 @@ impl Qwen3_5SensitivityProbe {
         }
     }
 
+    /// Logits at every position from one whole-model forward that records
+    /// nothing: what an artifact evaluation wants, where each prompt is
+    /// forwarded once and layer inputs would only hold memory.
+    pub fn whole_model_logits(&self, token_ids: &[u32]) -> Result<MlxArray, QuantizationError> {
+        self.forward_logits(token_ids)
+    }
+
     /// Whether swapping this module must also swap the head: with tied
     /// embeddings the head is a second reference to the embedding arrays,
     /// and a quantized tied embedding drives both, as mlx-lm's tied
@@ -212,15 +225,11 @@ impl Qwen3_5SensitivityProbe {
     }
 
     /// Prefills every full chunk but the last, then forwards the last chunk
-    /// and returns its logits at every position.
-    fn forward_logits(&self, token_ids: &[u32]) -> Result<MlxArray, QuantizationError> {
-        let mut decoder_state = mlx_step(
-            self.model
-                .empty_request_decoder_state_matching_loaded_weights(
-                    FULL_ATTENTION_KV_GROWTH_TOKENS as i32,
-                ),
-            "allocate the probe decoder state",
-        )?;
+    /// and returns its logits at every position. The whole-model forward:
+    /// what an artifact evaluation runs, and what a sweep falls back to when
+    /// it has no recorded layer inputs to resume from.
+    pub(super) fn forward_logits(&self, token_ids: &[u32]) -> Result<MlxArray, QuantizationError> {
+        let mut decoder_state = self.empty_probe_decoder_state()?;
         let chunk_tokens = self.prefill_chunk_tokens.max(1);
         let final_chunk_start = (token_ids.len().saturating_sub(1) / chunk_tokens) * chunk_tokens;
         let mut chunk_start = 0;
@@ -240,10 +249,31 @@ impl Qwen3_5SensitivityProbe {
                     &mut decoder_state,
                 ),
         )?;
-        let logits =
-            probe_step(self.model.all_position_vocabulary_logits(
-                final_output.pre_final_normalization_hidden_states(),
-            ))?;
+        self.logits_from_final_hidden_states(final_output.pre_final_normalization_hidden_states())
+    }
+
+    /// A fresh decoder state for one forward from position zero.
+    fn empty_probe_decoder_state(
+        &self,
+    ) -> Result<crate::qwen3_5_core::decoder::RequestDecoderStateStack, QuantizationError> {
+        mlx_step(
+            self.model
+                .empty_request_decoder_state_matching_loaded_weights(
+                    FULL_ATTENTION_KV_GROWTH_TOKENS as i32,
+                ),
+            "allocate the probe decoder state",
+        )
+    }
+
+    /// The final normalization and the head at every position, evaluated.
+    fn logits_from_final_hidden_states(
+        &self,
+        final_hidden_states: &MlxArray,
+    ) -> Result<MlxArray, QuantizationError> {
+        let logits = probe_step(
+            self.model
+                .all_position_vocabulary_logits(final_hidden_states),
+        )?;
         mlx_step(logits.evaluate(), "evaluate the probe logits")?;
         Ok(logits)
     }
@@ -295,7 +325,7 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
         &mut self,
         sample: &CalibrationForwardSample,
     ) -> Result<Self::Logits, QuantizationError> {
-        self.forward_logits(&sample.token_ids)
+        self.sweep_forward_logits(&sample.token_ids)
     }
 
     /// Swaps the module's weights for the probed width, keeping what was
@@ -399,7 +429,14 @@ fn probe_step<Value, Failure: std::fmt::Display>(
 
 /// Where a tied head's swapped-out arrays wait beside the embedding's.
 fn tied_head_key(module_name: &str) -> String {
-    format!("{module_name}#tied-head")
+    format!("{module_name}{TIED_HEAD_KEY_SUFFIX}")
+}
+
+/// No module name contains `#`, so the suffix cannot collide with one.
+const TIED_HEAD_KEY_SUFFIX: &str = "#tied-head";
+
+fn is_tied_head_key(swapped_key: &str) -> bool {
+    swapped_key.ends_with(TIED_HEAD_KEY_SUFFIX)
 }
 
 fn unresolvable(module_name: &str, reason: &str) -> QuantizationError {

@@ -120,23 +120,54 @@ pub const fn artifact_directory_name(method: PipelineMethod) -> &'static str {
 /// Refuses an existing artifact unless overwrite was requested. Only the
 /// artifact directory is guarded: the output directory also holds the sweep
 /// checkpoint and the baseline, which a rerun must find to resume.
+///
+/// An empty artifact directory is not an artifact. This function creates the
+/// directory before the sweep so an unwritable output fails in seconds
+/// rather than after hours of measurement, which means a sweep interrupted
+/// before the requantizer started leaves an empty one behind; refusing it
+/// would make every resume demand an overwrite it has nothing to overwrite.
 fn prepare_artifact_directory(
     request: &QuantizationPipelineRequest,
     artifact_directory: &Path,
 ) -> Result<(), QuantizationError> {
-    if artifact_directory.exists() {
-        if !request.overwrite_output {
-            return Err(QuantizationError::OutputDirectoryExists {
-                output_directory: artifact_directory.to_path_buf(),
-            });
-        }
-        if let Err(remove_error) = std::fs::remove_dir_all(artifact_directory) {
-            return Err(artifact_write_failure(artifact_directory, &remove_error));
-        }
+    if holds_artifact_files(artifact_directory)? {
+        remove_artifact_when_overwriting(request, artifact_directory)?;
     }
     match std::fs::create_dir_all(artifact_directory) {
         Ok(()) => Ok(()),
         Err(create_error) => Err(artifact_write_failure(artifact_directory, &create_error)),
+    }
+}
+
+/// Removes an existing artifact, or refuses when overwrite was not requested.
+fn remove_artifact_when_overwriting(
+    request: &QuantizationPipelineRequest,
+    artifact_directory: &Path,
+) -> Result<(), QuantizationError> {
+    if !request.overwrite_output {
+        return Err(QuantizationError::OutputDirectoryExists {
+            output_directory: artifact_directory.to_path_buf(),
+        });
+    }
+    match std::fs::remove_dir_all(artifact_directory) {
+        Ok(()) => Ok(()),
+        Err(remove_error) => Err(artifact_write_failure(artifact_directory, &remove_error)),
+    }
+}
+
+/// Whether the path exists and holds at least one entry. A path that exists
+/// but is not a listable directory counts as holding files, so a stray file
+/// of the artifact's name is refused rather than silently replaced.
+fn holds_artifact_files(artifact_directory: &Path) -> Result<bool, QuantizationError> {
+    if !artifact_directory.exists() {
+        return Ok(false);
+    }
+    if !artifact_directory.is_dir() {
+        return Ok(true);
+    }
+    match std::fs::read_dir(artifact_directory) {
+        Ok(mut directory_entries) => Ok(directory_entries.next().is_some()),
+        Err(read_error) => Err(artifact_write_failure(artifact_directory, &read_error)),
     }
 }
 
