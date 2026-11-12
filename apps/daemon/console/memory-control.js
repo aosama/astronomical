@@ -1,5 +1,5 @@
 // Astronomical Observatory Maximum model RAM control, at the top of the
-// Configuration page. It reuses pollStatus and formatGigabytes from console.js
+// Settings page. It reuses pollStatus and formatGigabytes from console.js
 // and tells the configuration editor about a changed config.json through the
 // "observatory:config-file-written" event rather than calling into it.
 

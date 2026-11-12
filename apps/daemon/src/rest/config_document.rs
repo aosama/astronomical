@@ -1,4 +1,4 @@
-//! Localhost endpoints behind Observatory's Configuration page.
+//! Localhost endpoints behind Observatory's Settings and Tuning pages.
 //!
 //! Saving reuses the reload endpoint, so a change takes the same validation and
 //! worker transitions as a hand edit followed by a reload. The file is the source

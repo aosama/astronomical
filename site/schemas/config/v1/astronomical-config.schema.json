@@ -6,6 +6,25 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "schema_version", "runtime"],
+  "x-astronomical-layout": {
+    "description": "How the Observatory console arranges settings on its Settings and Tuning pages. Paths on the tuning page are relative to one model entry; chunking paths are also the defaults every model starts from. A setting no group lists appears in a trailing Other group.",
+    "settings": [
+        {"title": "Memory", "description": "How much memory models may use, which model is used when none is named, and when an unused model is released.", "settings": ["runtime.maximum_mlx_memory_gb", "runtime.default_model", "runtime.idle_model_unload_seconds", "runtime.metal_residency_refresh_enabled"]},
+        {"title": "Locations", "description": "The folders Astronomical reads models from and writes downloads and compiled programs to.", "settings": ["runtime.model_directories", "runtime.model_download_directory", "runtime.neural_engine_program_directory"]},
+        {"title": "Prompt cache", "description": "A cache on disk that lets a prompt seen before skip most of its processing.", "settings": ["prompt_cache.enabled", "prompt_cache.maximum_size_gb"]},
+        {"title": "Diagnostics", "description": "What Astronomical writes to its logs. Useful when reporting a problem.", "settings": ["diagnostics.log_level", "diagnostics.retained_log_files", "diagnostics.completion_attribution_enabled", "diagnostics.performance_attribution_enabled"]}
+    ],
+    "tuning": [
+        {"title": "Generation", "description": "How this model writes when a request does not say. A request's own values always win.", "settings": ["generation_defaults.temperature", "generation_defaults.top_p", "generation_defaults.repetition_penalty", "generation_defaults.maximum_output_tokens"]},
+        {"title": "Limits", "description": "Ceilings for this model that sit below what the model file allows.", "settings": ["limits.maximum_context_tokens"]},
+        {"title": "Prompt processing", "description": "How a prompt is split into pieces while the model reads it. These trade memory for speed.", "tier": "advanced", "settings": ["chunking.fixed_prompt_processing_chunk_size_tokens", "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens", "chunking.prefill_graph_submission_layer_interval", "chunking.full_attention_key_value_growth_tokens"]},
+        {"title": "Prompt cache blocks", "description": "How a prompt is divided when it is stored in the prompt cache.", "tier": "advanced", "settings": ["chunking.prompt_cache_block_tokens", "chunking.prompt_cache_common_prefix_stride_blocks"]},
+        {"title": "SSD streaming", "description": "Used only while part of a model is read from the SSD because it does not fit in memory.", "tier": "advanced", "settings": ["chunking.experimental_ssd_paging_generation_graph_submission_layer_interval", "chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval"]},
+        {"title": "Speculative decoding", "description": "Drafting several tokens at once with a small helper model, when one is installed beside this model.", "tier": "advanced", "settings": ["chunking.speculative_decoding_block_length_tokens"]},
+        {"title": "Experimental", "description": "Features still being proven. They can change or go away.", "tier": "advanced", "settings": ["chunking.experimental_neural_engine_prefill_enabled", "chunking.experimental_in_memory_prefix_adoption_enabled"]},
+        {"title": "Diagnostics", "description": "Measurement modes for investigating speed. They slow the model down, so leave them off in normal use.", "tier": "diagnostic", "note": "Slows serving. Leave off.", "settings": ["chunking.experimental_decode_stage_attribution_enabled", "chunking.experimental_prefill_stage_attribution_enabled"]}
+    ]
+  },
   "properties": {
     "$schema": {
       "const": "./astronomical-config.schema.json",
@@ -49,6 +68,7 @@
       "required": ["model_directories"],
       "properties": {
         "model_directories": {
+          "title": "Model folders",
           "type": "array",
           "description": "Absolute directories recursively scanned for supported model artifacts.",
           "default": [],
@@ -57,47 +77,66 @@
             "minLength": 1,
             "pattern": "^/"
           },
+          "x-astronomical-explanation": "The folders Astronomical looks in for models, including their subfolders. Add a folder if you keep models somewhere else, for example on an external drive. A model in a folder you remove stops appearing until you add the folder back.",
           "x-astronomical-apply-mode": "application-restart"
         },
         "maximum_mlx_memory_gb": {
+          "title": "Maximum model RAM",
           "type": "integer",
           "minimum": 1,
           "maximum": 18446744073,
           "description": "Optional MLX memory ceiling in gigabytes of 1,073,741,824 bytes (2^30), the unit Apple uses to market the Mac; omission selects the machine maximum.",
+          "x-astronomical-unit": "GB",
+          "x-astronomical-explanation": "The most memory models are allowed to use. Lower it to leave more room for your other apps; raise it to run larger models fully in memory. A model that needs more than this can still run, more slowly, by reading parts of itself from the SSD.",
           "x-astronomical-apply-mode": "live"
         },
         "default_model": {
+          "title": "Default model",
           "type": "string",
           "minLength": 1,
           "description": "Requestable model id used as the default by one-shot CLI verbs; omission falls back to the built-in default model.",
+          "x-astronomical-choices": "chat-models",
+          "x-astronomical-builtin-default": "Qwen3.5-2B-4bit",
+          "x-astronomical-explanation": "The model used when a command or request does not name one, for example a one-line question from the terminal. Chats that name their own model are not affected.",
           "x-astronomical-apply-mode": "live"
         },
         "model_download_directory": {
+          "title": "Download new models to",
           "type": "string",
           "minLength": 1,
           "pattern": "^/",
           "description": "Optional absolute directory that Library downloads are published into; omission publishes into this instance's own models directory.",
+          "x-astronomical-instance-folder-default": "models",
+          "x-astronomical-explanation": "The folder new models are saved to when you download them from the Models page. Change it to keep downloads on another drive. Models you already downloaded stay where they are.",
           "x-astronomical-apply-mode": "application-restart"
         },
         "neural_engine_program_directory": {
+          "title": "Neural Engine programs folder",
           "type": "string",
           "minLength": 1,
           "pattern": "^/",
           "description": "Optional absolute directory for compiled Neural Engine programs, about 10 GB for a dense 9B model; omission uses neural-engine-programs in this instance's folder. Programs left in the old directory are not moved, and programs in the new one are compiled again on first use.",
+          "x-astronomical-instance-folder-default": "neural-engine-programs",
+          "x-astronomical-explanation": "Where Astronomical keeps programs it compiles for the Mac's Neural Engine, about 10 GB for a mid-sized model. Change it to keep them on another drive. Programs in the old folder are not moved, so they are compiled again the first time they are needed.",
           "x-astronomical-apply-mode": "application-restart"
         },
         "metal_residency_refresh_enabled": {
+          "title": "Keep model memory ready while idle",
           "type": "boolean",
           "default": false,
           "description": "Whether the inference worker re-requests Metal residency for its wired memory once per second, because macOS can release residency while the GPU is idle. Meant to avoid a slow first prompt after idle, and can keep that memory wired through long idle periods.",
+          "x-astronomical-explanation": "macOS can quietly take back a model's memory while the Mac sits idle, which makes the first reply afterwards slow. Turn this on to keep that memory ready. The cost is that the memory stays reserved for the model during long idle periods.",
           "x-astronomical-apply-mode": "worker-replacement"
         },
         "idle_model_unload_seconds": {
+          "title": "Unload a model after idle for",
           "type": "integer",
           "minimum": 0,
           "maximum": 604800,
           "default": 60,
           "description": "Seconds a loaded model may stay unused before Astronomical unloads it and frees its memory; the next request loads it again. 0 keeps a model loaded until another model is requested.",
+          "x-astronomical-unit": "seconds",
+          "x-astronomical-explanation": "How long a model may sit unused before it is unloaded to give its memory back to the Mac. The next request loads it again, which takes a moment. Use 0 to keep a model loaded until you ask for a different one.",
           "x-astronomical-apply-mode": "live"
         }
       }
@@ -108,17 +147,22 @@
       "additionalProperties": false,
       "properties": {
         "enabled": {
+          "title": "Use the prompt cache",
           "type": "boolean",
           "default": true,
           "description": "Whether Astronomical may read and write the SSD-backed prompt cache.",
+          "x-astronomical-explanation": "Lets Astronomical save the work of reading a prompt to disk, so a prompt it has seen before, such as a long document or the earlier part of a chat, is answered much sooner. Turn it off to keep nothing on disk.",
           "x-astronomical-apply-mode": "worker-replacement"
         },
         "maximum_size_gb": {
+          "title": "Maximum cache size",
           "type": "integer",
           "minimum": 1,
           "maximum": 18446744073,
           "default": 50,
           "description": "Global prompt-cache capacity in gigabytes of 1,073,741,824 bytes (2^30), the unit Apple uses to market the Mac.",
+          "x-astronomical-unit": "GB",
+          "x-astronomical-explanation": "The most disk space the prompt cache may use. When it is full, older entries are removed to make room. A larger cache remembers more long prompts.",
           "x-astronomical-apply-mode": "worker-replacement"
         }
       }
@@ -129,73 +173,100 @@
       "additionalProperties": false,
       "properties": {
         "fixed_prompt_processing_chunk_size_tokens": {
+          "title": "Prompt chunk size",
           "type": "integer",
           "minimum": 1,
           "default": 2048,
           "description": "Maximum ordinary prompt-processing rows evaluated in one forward.",
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-explanation": "A long prompt is read in pieces. This is the size of each piece. Larger pieces read a prompt faster but need more memory at once; smaller pieces are gentler on memory.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
+          "title": "Prompt chunk size while streaming from SSD",
           "type": "integer",
           "minimum": 1,
           "default": 4096,
           "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Persistent-cache publication may still clamp each forward to the next durable block boundary.",
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-explanation": "The same piece size, used when a model is too large for memory and part of it is read from the SSD. It is set separately because reading from the SSD changes which size is fastest.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "full_attention_key_value_growth_tokens": {
+          "title": "Attention cache growth step",
           "type": "integer",
           "minimum": 1,
           "maximum": 2147483647,
           "default": 256,
           "description": "Append-only attention capacity added by each storage growth operation.",
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-explanation": "As a conversation grows, the model's working memory grows with it in steps. This is the size of each step. Larger steps mean fewer pauses to grow, at the cost of reserving memory a little earlier.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "prefill_graph_submission_layer_interval": {
+          "title": "Prefill submission interval",
           "type": "integer",
           "minimum": 0,
           "default": 0,
           "description": "Decoder-layer interval between multi-token prefill graph submissions while sparse experts are fully resident; zero keeps one lazy tape per chunk.",
+          "x-astronomical-unit": "layers",
+          "x-astronomical-explanation": "While reading a prompt, how many of the model's layers are computed before the work is handed to the graphics processor. 0 hands over one whole piece at a time, which is usually fastest when the model fits in memory.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
+          "title": "SSD prefill submission interval",
           "type": "integer",
           "minimum": 0,
           "default": 1,
           "description": "Experimental decoder-layer interval between multi-token prefill graph submissions while sparse experts stream from SSD; zero keeps one lazy tape per chunk.",
+          "x-astronomical-unit": "layers",
+          "x-astronomical-explanation": "The same hand-over interval for reading a prompt, used only while part of the model is read from the SSD. Smaller numbers keep less of the model in memory at once.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_ssd_paging_generation_graph_submission_layer_interval": {
+          "title": "SSD generation submission interval",
           "type": "integer",
           "minimum": 0,
           "default": 3,
           "description": "Experimental one-token submission interval used only while sparse experts stream from SSD.",
+          "x-astronomical-unit": "layers",
+          "x-astronomical-explanation": "While writing a reply with part of the model read from the SSD, how many layers are computed before the work is handed to the graphics processor. It balances speed against how much of the model must be in memory at once.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_decode_stage_attribution_enabled": {
+          "title": "Decode stage attribution",
           "type": "boolean",
           "default": false,
           "description": "Diagnostic mode that runs decode forwards as stage-split evaluations so one attribution report decomposes decode time. Roughly doubles decode time; never enable in normal serving.",
+          "x-astronomical-explanation": "A measuring mode that times each step of writing a reply, for investigating where time goes. It makes replies about twice as slow, so leave it off unless you are measuring.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_prefill_stage_attribution_enabled": {
+          "title": "Prefill stage attribution",
           "type": "boolean",
           "default": false,
           "description": "Diagnostic mode that runs prefill chunks as stage-split evaluations so one attribution report decomposes prefill time across attention, mixture-of-values, and expert stages. Synchronizes the graphics processor several times per layer; never enable in normal serving.",
+          "x-astronomical-explanation": "A measuring mode that times each step of reading a prompt, for investigating where time goes. It slows prompt reading noticeably, so leave it off unless you are measuring.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_in_memory_prefix_adoption_enabled": {
+          "title": "In-memory prefix adoption",
           "type": "boolean",
           "default": true,
           "description": "Retains the last completed generation's live decoder state and adopts it for the next turn of the same conversation instead of re-reading the prefix KV from the disk store. Adopted state is byte-identical to the restored state; the trade is one conversation's KV held live between requests.",
+          "x-astronomical-explanation": "Keeps the model's working memory from your last reply ready, so the next message in the same chat starts sooner. The cost is that one conversation's memory stays in use between messages.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_neural_engine_prefill_enabled": {
+          "title": "Neural Engine prefill",
           "type": "boolean",
           "default": false,
           "description": "Dense models only: runs part of each full prefill chunk on the Apple Neural Engine next to the GPU, through whole MLP programs and the linear-attention output gates. Measured 1.13x to 1.2x prefill speed on a 9B model with the prompt cache on and no change to decode. Each chunk uses the programs only when they fit under the MLX memory ceiling beside what MLX is projected to reach; their cost is measured for each model on this Mac. A model's first load takes a minute or two longer and keeps about 10 GB of compiled programs on disk; later loads take seconds. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone. A model's first long prompts compare the engines on real chunks, and a model that does not gain at least 2 percent is turned off until the next macOS update. Falls back to the GPU when unavailable; /v1/status reports which happened.",
+          "x-astronomical-explanation": "Uses the Mac's Neural Engine alongside the graphics processor to read long prompts faster, measured at 1.13 to 1.2 times the speed on a mid-sized model. Writing speed does not change. It only helps dense models, the first load takes a minute or two longer, it keeps about 10 GB on disk, and replies can differ very slightly. A model that does not gain is switched back automatically.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "prompt_cache_block_tokens": {
+          "title": "Cache block length",
           "description": "Exact persistent-cache block length, or null for model-derived sizing.",
           "default": null,
           "anyOf": [
@@ -207,9 +278,12 @@
               "type": "null"
             }
           ],
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-explanation": "A saved prompt is stored in blocks. This is the length of each block. Leave it automatic to let each model choose; a fixed length is only for comparing runs.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "speculative_decoding_block_length_tokens": {
+          "title": "Draft block length",
           "description": "Speculative-decoding block length the resident engine drafts per round when a paired DFlash draft artifact is installed beside the target model; absent keeps classic decoding.",
           "default": null,
           "anyOf": [
@@ -222,13 +296,18 @@
               "type": "null"
             }
           ],
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-explanation": "When a small helper model is installed beside this one, it drafts several words at a time and this model checks them, which can make replies faster. This is how many it drafts per round. Automatic leaves the feature to the app.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "prompt_cache_common_prefix_stride_blocks": {
+          "title": "Common prefix stride",
           "type": "integer",
           "minimum": 1,
           "default": 4,
           "description": "Cache-block interval between retained common-prefix restart checkpoints.",
+          "x-astronomical-unit": "blocks",
+          "x-astronomical-explanation": "How often a restart point is kept inside a saved prompt. More frequent points let a new prompt that shares only its beginning reuse more of the saved work, and use a little more disk.",
           "x-astronomical-apply-mode": "model-reload"
         }
       }
@@ -254,9 +333,13 @@
       "additionalProperties": false,
       "properties": {
         "maximum_context_tokens": {
+          "title": "Maximum context tokens",
           "type": "integer",
           "minimum": 2,
           "description": "Optional operational ceiling that cannot exceed the discovered artifact context.",
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-unset-text": "Full context",
+          "x-astronomical-explanation": "The longest conversation, prompt and reply together, this model will accept, counted in tokens (a token is roughly three quarters of a word). Lower it to cap how much memory a long chat can take. It cannot go above what the model itself supports.",
           "x-astronomical-apply-mode": "next-request"
         }
       }
@@ -266,35 +349,47 @@
       "additionalProperties": false,
       "properties": {
         "temperature": {
+          "title": "Temperature",
           "type": "number",
           "minimum": 0,
           "maximum": 2,
           "multipleOf": 0.001,
           "description": "Sampling temperature used only when a request omits temperature.",
+          "x-astronomical-unset-text": "Automatic",
+          "x-astronomical-explanation": "How adventurous the model's wording is. Low values such as 0.2 give steady, predictable answers; higher values such as 1.0 give more varied ones. It is used only when a request does not set its own.",
           "x-astronomical-apply-mode": "next-request"
         },
         "top_p": {
+          "title": "Top p",
           "type": "number",
           "minimum": 0,
           "maximum": 1,
           "multipleOf": 0.001,
           "description": "Nucleus-sampling probability used only when a request omits top_p.",
+          "x-astronomical-unset-text": "Automatic",
+          "x-astronomical-explanation": "Limits the model to its most likely next words. 0.9 means it picks among the words that together make up 90 percent of the likelihood, which trims unlikely choices. It is used only when a request does not set its own.",
           "x-astronomical-apply-mode": "next-request"
         },
         "repetition_penalty": {
+          "title": "Repetition penalty",
           "type": "number",
           "minimum": 1,
           "maximum": 2,
           "multipleOf": 0.001,
           "description": "Multiplicative repetition penalty applied to the logits of tokens already present in the request context, used only when a request omits a penalty. 1 disables the penalty.",
+          "x-astronomical-unset-text": "Automatic",
+          "x-astronomical-explanation": "Discourages the model from repeating words it has already used. 1 leaves it off; values a little above 1, such as 1.1, reduce loops and repeated phrases. It is used only when a request does not set its own.",
           "x-astronomical-apply-mode": "next-request"
         },
         "maximum_output_tokens": {
+          "title": "Maximum output tokens",
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
           "default": 20480,
           "description": "Output-token default used only when a request omits its output limit.",
+          "x-astronomical-unit": "tokens",
+          "x-astronomical-explanation": "The longest reply this model may write when a request does not set a limit, counted in tokens (a token is roughly three quarters of a word). A reply that reaches the limit simply stops there.",
           "x-astronomical-apply-mode": "next-request"
         }
       }
@@ -305,29 +400,38 @@
       "additionalProperties": false,
       "properties": {
         "performance_attribution_enabled": {
+          "title": "Record detailed timings",
           "type": "boolean",
           "default": false,
           "description": "Whether critical-path operations emit detailed performance attribution.",
+          "x-astronomical-explanation": "Writes detailed timings of each important step to the logs. Useful when reporting that something is slow; it adds a little overhead, so it is off by default.",
           "x-astronomical-apply-mode": "application-restart"
         },
         "completion_attribution_enabled": {
+          "title": "Record tool calls",
           "type": "boolean",
           "default": false,
           "description": "Whether completed chat generations record emitted tool-call names and bounded arguments.",
+          "x-astronomical-explanation": "Writes the names of the tools a model called, and a short part of what it passed them, to the logs. Useful for finding out why a coding agent misbehaved. Leave it off if you would rather not record that.",
           "x-astronomical-apply-mode": "application-restart"
         },
         "log_level": {
+          "title": "Log level",
           "type": "string",
           "enum": ["error", "warn", "info", "debug", "trace"],
           "default": "warn",
           "description": "Minimum diagnostic verbosity retained in process logs.",
+          "x-astronomical-explanation": "How much detail Astronomical writes to its logs. 'error' records only failures; 'info' adds routine events; 'debug' and 'trace' record far more and are meant for tracking down a problem.",
           "x-astronomical-apply-mode": "worker-replacement"
         },
         "retained_log_files": {
+          "title": "Log files to keep",
           "type": "integer",
           "minimum": 1,
           "default": 7,
           "description": "Positive number of hourly files retained per process.",
+          "x-astronomical-unit": "files",
+          "x-astronomical-explanation": "Logs are kept in one file per hour. This is how many of those files are kept before the oldest is removed, so a larger number keeps a longer history and uses more disk.",
           "x-astronomical-apply-mode": "worker-replacement"
         }
       }

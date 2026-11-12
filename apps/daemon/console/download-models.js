@@ -548,7 +548,7 @@ async function refreshDownloadModelsDownloadStateOnce() {
 
 // The ceiling is re-read while still unknown (the worker reports it after
 // startup) and otherwise at most every DOWNLOAD_MODELS_CEILING_REFRESH_MILLIS, so a
-// memory limit changed on the Configuration page reaches the fit labels within
+// memory limit changed on the Settings page reaches the fit labels within
 // seconds without doubling every request of the idle 1s catalog poll.
 async function refetchDownloadModelsCatalogDocument(nowMillis = Date.now()) {
     const catalogResponse = await fetch(LIBRARY_CATALOG_URL);

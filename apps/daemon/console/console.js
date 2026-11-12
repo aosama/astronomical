@@ -14,16 +14,17 @@ const OBSERVATORY_PATH_MAP = {
     experts: "/experts",
     "download-models": "/download-models",
     connect: "/connect",
-    configuration: "/configuration"
+    settings: "/settings",
+    tuning: "/tuning"
 };
 
 // Retired addresses still open the page that replaced them: the Model page was
 // folded into Overview, the Library page was renamed Download Models and later Models (keeping its route), and the
-// Settings page was folded into Configuration.
+// Configuration page was split into Settings (the whole instance) and Tuning (one model).
 const OBSERVATORY_RETIRED_PATH_DESTINATIONS = {
     "/model": "overview",
     "/library": "download-models",
-    "/settings": "configuration"
+    "/configuration": "settings"
 };
 
 const OBSERVATORY_PATH_TO_DESTINATION_MAP = Object.fromEntries(
@@ -40,7 +41,7 @@ let loadedModelId = null;
 document.addEventListener("DOMContentLoaded", () => {
     console.log("observatory boot");
     // Navigation runs first: it shows the view for the address (retired ones
-    // included), and the Configuration editor loads only when its view is shown.
+    // included), and the configuration editor loads only when its view is shown.
     wireObservatoryNavigation();
     wireDownloadModelsCatalog();
     wireConnectMaterial();
@@ -121,7 +122,7 @@ async function pollStatus() {
         renderOverviewModel(data, readExpertPlacement(data));
         renderOverviewSession(data);
         renderMemoryLimitControl(data);
-        renderConfigurationNeuralEngineStatus(data);
+        renderConfigurationStatus(data);
         renderNeuralEnginePanel(data);
         renderModelDiscoveryDiagnostic(data.configuration);
     } catch (fetchError) {
