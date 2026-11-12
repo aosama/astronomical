@@ -159,17 +159,17 @@ test("should_open_download_models_for_the_retired_library_path_and_show_its_addr
     assert.deepEqual(replacedPaths, ["/download-models"]);
 });
 
-test("should_open_configuration_for_the_retired_settings_path_and_show_its_address", () => {
+test("should_open_settings_for_the_retired_configuration_path_and_show_its_address", () => {
     const scriptContext = createConsoleContext();
-    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("configuration")];
-    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("configuration")];
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("settings")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("settings")];
     const replacedPaths = [];
     scriptContext.document = {
         querySelectorAll(selector) {
             return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
         }
     };
-    scriptContext.window = { location: { pathname: "/settings" }, addEventListener() {} };
+    scriptContext.window = { location: { pathname: "/configuration" }, addEventListener() {} };
     scriptContext.history = {
         pushState() {},
         replaceState(unusedState, unusedTitle, observatoryPath) {
@@ -179,9 +179,9 @@ test("should_open_configuration_for_the_retired_settings_path_and_show_its_addre
 
     vm.runInContext("wireObservatoryNavigation()", scriptContext);
 
-    assert.equal(observatoryViews[1].hidden, false, "the memory limit now lives on Configuration");
+    assert.equal(observatoryViews[1].hidden, false, "the memory limit lives on Settings");
     assert.equal(navigationButtons[1].attributes["aria-current"], "page");
-    assert.deepEqual(replacedPaths, ["/configuration"]);
+    assert.deepEqual(replacedPaths, ["/settings"]);
 });
 
 test("should_retain_direct_download_models_navigation_and_restore_it_from_browser_history", () => {
@@ -305,8 +305,9 @@ test("maps every observatory destination to a stable URL path", () => {
     assert.equal(pathMap.memory, undefined);
     assert.equal(pathMap.cache, undefined);
     assert.equal(pathMap.model, undefined, "the Model page was folded into Overview");
-    assert.equal(pathMap.configuration, "/configuration");
-    assert.equal(pathMap.settings, undefined, "the Settings page was folded into Configuration");
+    assert.equal(pathMap.settings, "/settings");
+    assert.equal(pathMap.tuning, "/tuning");
+    assert.equal(pathMap.configuration, undefined, "the Configuration page was split into Settings and Tuning");
 });
 
 test("maps every observatory URL path back to its destination", () => {
@@ -322,8 +323,9 @@ test("maps every observatory URL path back to its destination", () => {
     assert.equal(reverseMap["/memory"], undefined);
     assert.equal(reverseMap["/cache"], undefined);
     assert.equal(reverseMap["/model"], undefined, "the retired path is resolved separately");
-    assert.equal(reverseMap["/configuration"], "configuration");
-    assert.equal(reverseMap["/settings"], undefined, "the retired path is resolved separately");
+    assert.equal(reverseMap["/settings"], "settings");
+    assert.equal(reverseMap["/tuning"], "tuning");
+    assert.equal(reverseMap["/configuration"], undefined, "the retired path is resolved separately");
 });
 
 test("defaults observatory to the overview destination path", () => {

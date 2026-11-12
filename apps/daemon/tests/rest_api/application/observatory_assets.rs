@@ -87,6 +87,7 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
         "/connect",
         "/configuration",
         "/settings",
+        "/tuning",
     ] {
         let application =
             astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
@@ -528,11 +529,11 @@ async fn observatory_shell_text() -> String {
 }
 
 #[tokio::test]
-async fn should_serve_the_memory_limit_control_inside_the_configuration_view() {
+async fn should_serve_the_memory_limit_control_beside_the_settings_view() {
     let shell_text = observatory_shell_text().await;
-    let configuration_view_start = shell_text
-        .find("id=\"configuration-view\"")
-        .expect("the shell should have a Configuration view");
+    let settings_view_start = shell_text
+        .find("id=\"settings-view\"")
+        .expect("the shell should have a Settings view");
 
     for control_id in [
         "id=\"maximum-mlx-memory-gb\"",
@@ -542,19 +543,30 @@ async fn should_serve_the_memory_limit_control_inside_the_configuration_view() {
             .find(control_id)
             .unwrap_or_else(|| panic!("the shell should carry {control_id}"));
         assert!(
-            control_position > configuration_view_start,
-            "{control_id} should live on the Configuration page"
+            control_position > settings_view_start,
+            "{control_id} should follow the Settings view, where the page lifts it into its row"
         );
     }
 }
 
 #[tokio::test]
-async fn should_serve_no_settings_page_or_server_controls_after_the_merge() {
+async fn should_serve_settings_and_tuning_in_place_of_one_configuration_page() {
     let shell_text = observatory_shell_text().await;
 
-    for retired_marker in [
+    for expected_marker in [
         "data-observatory-view=\"settings\"",
         "data-observatory-destination=\"settings\"",
+        "data-observatory-view=\"tuning\"",
+        "data-observatory-destination=\"tuning\"",
+    ] {
+        assert!(
+            shell_text.contains(expected_marker),
+            "the shell should carry {expected_marker}"
+        );
+    }
+    for retired_marker in [
+        "data-observatory-view=\"configuration\"",
+        "data-observatory-destination=\"configuration\"",
         "id=\"control-reload\"",
         "id=\"control-stop\"",
     ] {

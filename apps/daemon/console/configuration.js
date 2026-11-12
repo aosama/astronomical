@@ -1,21 +1,34 @@
-// Astronomical Observatory Configuration page: loads config.json through the
-// daemon, edits a working copy, and saves or resets it. All values enter the page
-// through textContent and created elements, never as markup, because a setting
-// could hold any text a hand edit put there.
+// Astronomical Observatory configuration editor: loads config.json through the
+// daemon, keeps one working copy that the Settings and Tuning pages both edit, and
+// saves or resets it. The pages themselves are drawn by configuration-pages.js from
+// the rules in configuration-layout.js. All values enter the page through textContent
+// and created elements, never as markup, because a setting could hold any text a
+// hand edit put there.
 
 const CONFIGURATION_URL = "/v1/config";
 const CONFIGURATION_RESET_URL = "/v1/config/reset";
 const CONFIGURATION_RELOAD_URL = "/v1/config/reload";
 const CONFIGURATION_MODELS_URL = "/v1/models";
+const CONFIGURATION_SUCCESS_NOTICE_MILLISECONDS = 6000;
 
+// One working copy serves both pages, because the file is one document and one Save
+// must cover an edit made on either. selectedModelIdentifier is undefined until the
+// person (or the loaded model) picks one, null for the All models entry.
 const configurationEditorState = {
     schema: null,
     savedDocument: null,
     workingDocument: null,
     documentDigest: null,
-    discoveredModelIdentifiers: [],
+    discoveredModels: [],
+    addedModelIdentifiers: [],
+    selectedModelIdentifier: undefined,
+    isAdvancedOpen: false,
+    invalidSettings: new Map(),
     isBusy: false,
+    neuralEngineStatusDocument: null,
+    stateDirectory: null,
 };
+let configurationFeedbackTimer = null;
 
 function configurationElement(elementTag, className, textContent) {
     const createdElement = document.createElement(elementTag);
@@ -31,270 +44,93 @@ function configurationButton(label, buttonStyle, onClick) {
     return button;
 }
 
-function showConfigurationFeedback(tone, text) {
-    const feedback = document.getElementById("configuration-feedback");
-    feedback.className = `control-feedback feedback-${tone}`;
-    feedback.textContent = text;
-    feedback.hidden = !text;
-}
-
 function configurationHasUnsavedEdits() {
     return configurationEditorState.workingDocument !== null
         && !configurationDocumentsAreEqual(
             configurationEditorState.savedDocument, configurationEditorState.workingDocument);
 }
 
-function updateConfigurationDirtyState() {
-    const hasUnsavedEdits = configurationHasUnsavedEdits();
+function showConfigurationFeedback(tone, text) {
+    const feedback = document.getElementById("configuration-feedback");
+    feedback.className = `configuration-feedback feedback-${tone}`;
+    feedback.textContent = text;
+    feedback.hidden = !text;
+    clearTimeout(configurationFeedbackTimer);
+    if (text && tone === "success") {
+        configurationFeedbackTimer = setTimeout(
+            () => showConfigurationFeedback("success", ""), CONFIGURATION_SUCCESS_NOTICE_MILLISECONDS);
+    }
+    updateConfigurationDirtyState();
+}
+
+// The bar exists only while there is something to say: edits to save, a value to fix,
+// or the outcome of the last save. At rest the page shows no bar at all.
+function updateConfigurationSaveBar(summary) {
+    const invalidSettings = [...configurationEditorState.invalidSettings.values()];
+    const summaryText = configurationChangeSummaryText(summary);
+    const hasEditsOrProblems = summary.changeCount > 0 || invalidSettings.length > 0;
+    const feedbackIsShown = !document.getElementById("configuration-feedback").hidden;
+    document.getElementById("configuration-savebar").hidden = !hasEditsOrProblems && !feedbackIsShown;
+    document.getElementById("configuration-savebar-actions").hidden = !hasEditsOrProblems;
+    document.getElementById("configuration-savebar-count").textContent =
+        summary.changeCount > 0 ? summaryText.countText : "";
+    document.getElementById("configuration-savebar-detail").textContent = summaryText.detailText;
+    document.getElementById("configuration-savebar-problem").textContent =
+        invalidSettings.length > 0 ? `Fix ${invalidSettings[0].label} to save` : "";
     document.getElementById("configuration-save").disabled =
-        !hasUnsavedEdits || configurationEditorState.isBusy;
-    document.getElementById("configuration-discard").disabled =
-        !hasUnsavedEdits || configurationEditorState.isBusy;
-    document.getElementById("configuration-unsaved-note").hidden = !hasUnsavedEdits;
+        !hasEditsOrProblems || invalidSettings.length > 0 || configurationEditorState.isBusy;
+    document.getElementById("configuration-discard").disabled = configurationEditorState.isBusy;
+}
+
+// A dot beside a page's name says that page holds edits the other page's Save bar
+// will also save, since the two pages edit one file.
+function updateConfigurationEditDots(summary) {
+    document.querySelectorAll("[data-edit-dot]").forEach((dot) => {
+        dot.hidden = !summary.editedPages[dot.dataset.editDot];
+    });
+}
+
+function updateConfigurationDirtyState() {
+    if (configurationEditorState.workingDocument === null) {
+        // Nothing loaded: the bar only carries the reason (a file that could not be read).
+        const feedbackIsShown = !document.getElementById("configuration-feedback").hidden;
+        document.getElementById("configuration-savebar").hidden = !feedbackIsShown;
+        document.getElementById("configuration-savebar-actions").hidden = true;
+        return;
+    }
+    const summary = configurationChangeSummary(configurationEditorState.schema,
+        configurationEditorState.savedDocument, configurationEditorState.workingDocument);
+    updateConfigurationSaveBar(summary);
+    updateConfigurationEditDots(summary);
     document.getElementById("configuration-preview").textContent =
         JSON.stringify(configurationEditorState.workingDocument, null, 2);
 }
 
 function setConfigurationWorkingDocument(updatedDocument) {
     configurationEditorState.workingDocument = updatedDocument;
-    renderConfigurationSections();
+    configurationEditorState.invalidSettings.clear();
+    renderConfigurationPages();
     updateConfigurationDirtyState();
 }
 
-function applyConfigurationInput(descriptor, rawText, messageElement) {
-    const parsedInput = parseConfigurationInput(descriptor, rawText);
-    messageElement.textContent = parsedInput.isValid ? "" : parsedInput.message;
-    if (!parsedInput.isValid) { return; }
-    configurationEditorState.workingDocument = withConfigurationValue(
-        configurationEditorState.workingDocument, descriptor.path, parsedInput.value);
+// Typing writes the working copy without a redraw, which would take the caret away;
+// the page redraws when the entry is committed.
+function commitConfigurationValue(descriptor, fullPath, newValue, baselineValue) {
+    const savedFileHasValue = configurationValueAtPath(
+        configurationEditorState.savedDocument, fullPath) !== undefined;
+    configurationEditorState.workingDocument =
+        configurationShouldRemoveValue(newValue, baselineValue, savedFileHasValue)
+            ? withoutConfigurationValue(configurationEditorState.workingDocument, fullPath)
+            : withConfigurationValue(configurationEditorState.workingDocument, fullPath, newValue);
     updateConfigurationDirtyState();
 }
 
-function configurationBooleanControl(descriptor, currentValue) {
-    const select = configurationElement("select", "configuration-input");
-    select.setAttribute("aria-label", descriptor.label);
-    for (const [optionValue, optionLabel] of [["", "Default"], ["true", "On"], ["false", "Off"]]) {
-        const option = configurationElement("option", "", optionLabel);
-        option.value = optionValue;
-        select.append(option);
+function removeConfigurationValues(fullPaths) {
+    let updatedDocument = configurationEditorState.workingDocument;
+    for (const fullPath of fullPaths) {
+        updatedDocument = withoutConfigurationValue(updatedDocument, fullPath);
     }
-    select.value = currentValue === undefined ? "" : String(currentValue);
-    select.addEventListener("change", () => {
-        setConfigurationWorkingDocument(select.value === ""
-            ? withoutConfigurationValue(configurationEditorState.workingDocument, descriptor.path)
-            : withConfigurationValue(configurationEditorState.workingDocument, descriptor.path,
-                select.value === "true"));
-    });
-    return select;
-}
-
-function configurationEnumControl(descriptor, currentValue) {
-    const select = configurationElement("select", "configuration-input");
-    select.setAttribute("aria-label", descriptor.label);
-    const defaultOption = configurationElement("option", "", "Default");
-    defaultOption.value = "";
-    select.append(defaultOption);
-    for (const enumValue of descriptor.enumValues) {
-        const option = configurationElement("option", "", enumValue);
-        option.value = enumValue;
-        select.append(option);
-    }
-    select.value = currentValue === undefined ? "" : currentValue;
-    select.addEventListener("change", () => {
-        setConfigurationWorkingDocument(select.value === ""
-            ? withoutConfigurationValue(configurationEditorState.workingDocument, descriptor.path)
-            : withConfigurationValue(configurationEditorState.workingDocument, descriptor.path,
-                select.value));
-    });
-    return select;
-}
-
-function configurationTextControl(descriptor, currentValue, messageElement) {
-    const input = configurationElement("input", "configuration-input");
-    const isNumeric = descriptor.kind === "integer" || descriptor.kind === "number";
-    input.type = isNumeric ? "number" : "text";
-    input.setAttribute("aria-label", descriptor.label);
-    if (descriptor.minimum !== undefined) { input.min = String(descriptor.minimum); }
-    if (descriptor.maximum !== undefined) { input.max = String(descriptor.maximum); }
-    input.value = currentValue === undefined || currentValue === null ? "" : String(currentValue);
-    input.placeholder = configurationDefaultDescription(descriptor);
-    input.addEventListener("input", () => {
-        if (input.value === "") {
-            messageElement.textContent = "";
-            configurationEditorState.workingDocument = withoutConfigurationValue(
-                configurationEditorState.workingDocument, descriptor.path);
-            updateConfigurationDirtyState();
-            return;
-        }
-        applyConfigurationInput(descriptor, input.value, messageElement);
-    });
-    // Redrawn on commit, not per keystroke, which would take the caret away. This
-    // is what shows a Remove button for a value that was just set.
-    input.addEventListener("change", () => {
-        if (!messageElement.textContent) { renderConfigurationSections(); }
-    });
-    return input;
-}
-
-function configurationStringListControl(descriptor, currentValue) {
-    const listContainer = configurationElement("div", "configuration-list");
-    const entries = Array.isArray(currentValue) ? currentValue : [];
-    entries.forEach((entry, entryIndex) => {
-        const entryRow = configurationElement("div", "configuration-list-row");
-        entryRow.append(configurationElement("code", "configuration-list-value", entry));
-        entryRow.append(configurationButton("Remove", "button-secondary", () => {
-            const remainingEntries = entries.filter((unused, candidateIndex) => candidateIndex !== entryIndex);
-            setConfigurationWorkingDocument(withConfigurationValue(
-                configurationEditorState.workingDocument, descriptor.path, remainingEntries));
-        }));
-        listContainer.append(entryRow);
-    });
-    const addRow = configurationElement("div", "configuration-list-row");
-    const addInput = configurationElement("input", "configuration-input");
-    addInput.type = "text";
-    addInput.placeholder = "Absolute path";
-    addInput.setAttribute("aria-label", `Add to ${descriptor.label}`);
-    addRow.append(addInput);
-    addRow.append(configurationButton("Add", "button-secondary", () => {
-        const newEntry = addInput.value.trim();
-        if (newEntry.length === 0) { return; }
-        setConfigurationWorkingDocument(withConfigurationValue(
-            configurationEditorState.workingDocument, descriptor.path, entries.concat(newEntry)));
-    }));
-    listContainer.append(addRow);
-    return listContainer;
-}
-
-function configurationControl(descriptor, currentValue, messageElement) {
-    if (descriptor.kind === "boolean") { return configurationBooleanControl(descriptor, currentValue); }
-    if (descriptor.kind === "enum") { return configurationEnumControl(descriptor, currentValue); }
-    if (descriptor.kind === "string_list") { return configurationStringListControl(descriptor, currentValue); }
-    return configurationTextControl(descriptor, currentValue, messageElement);
-}
-
-function renderConfigurationSetting(descriptor) {
-    const row = configurationElement("div", "configuration-setting");
-    const currentValue = configurationValueAtPath(
-        configurationEditorState.workingDocument, descriptor.path);
-    const heading = configurationElement("div", "configuration-setting-heading");
-    heading.append(configurationElement("span", "configuration-setting-label", descriptor.label));
-    const applyModeDescription = configurationApplyModeDescription(descriptor.applyMode);
-    if (applyModeDescription) {
-        heading.append(configurationElement("span", "configuration-apply-mode", applyModeDescription));
-    }
-    row.append(heading);
-    if (descriptor.description) {
-        row.append(configurationElement("p", "configuration-setting-description", descriptor.description));
-    }
-    const messageElement = configurationElement("p", "configuration-setting-message");
-    messageElement.setAttribute("role", "status");
-    const controlRow = configurationElement("div", "configuration-control-row");
-    controlRow.append(configurationControl(descriptor, currentValue, messageElement));
-    if (currentValue !== undefined && !descriptor.isRequired) {
-        controlRow.append(configurationButton("Remove", "button-secondary", () => {
-            setConfigurationWorkingDocument(withoutConfigurationValue(
-                configurationEditorState.workingDocument, descriptor.path));
-        }));
-    } else if (descriptor.kind !== "string_list") {
-        controlRow.append(configurationElement("span", "configuration-default-note",
-            configurationDefaultDescription(descriptor)));
-    }
-    row.append(controlRow);
-    row.append(messageElement);
-    return row;
-}
-
-function renderConfigurationGroup(descriptor) {
-    const group = configurationElement("div", "configuration-group");
-    group.append(configurationElement("h4", "", descriptor.label));
-    for (const childDescriptor of descriptor.children) {
-        group.append(renderConfigurationDescriptor(childDescriptor));
-    }
-    return group;
-}
-
-function renderConfigurationDescriptor(descriptor) {
-    if (descriptor.kind === "group") { return renderConfigurationGroup(descriptor); }
-    if (descriptor.kind === "keyed_objects") { return renderConfigurationKeyedObjects(descriptor); }
-    return renderConfigurationSetting(descriptor);
-}
-
-function renderConfigurationModelAdder(descriptor, configuredIdentifiers) {
-    const addRow = configurationElement("div", "configuration-control-row");
-    const select = configurationElement("select", "configuration-input");
-    select.setAttribute("aria-label", "Model to override");
-    const availableIdentifiers = configurationEditorState.discoveredModelIdentifiers
-        .filter((modelIdentifier) => !configuredIdentifiers.includes(modelIdentifier));
-    for (const modelIdentifier of availableIdentifiers) {
-        const option = configurationElement("option", "", modelIdentifier);
-        option.value = modelIdentifier;
-        select.append(option);
-    }
-    addRow.append(select);
-    const addButton = configurationButton("Add model settings", "button-secondary", () => {
-        if (!select.value) { return; }
-        setConfigurationWorkingDocument(withConfigurationValue(
-            configurationEditorState.workingDocument, descriptor.path.concat(select.value), {}));
-    });
-    addButton.disabled = availableIdentifiers.length === 0;
-    addRow.append(addButton);
-    return addRow;
-}
-
-function renderConfigurationKeyedObjects(descriptor) {
-    const section = configurationElement("div", "configuration-group");
-    if (descriptor.description) {
-        section.append(configurationElement("p", "configuration-setting-description", descriptor.description));
-    }
-    const configuredEntries = configurationValueAtPath(
-        configurationEditorState.workingDocument, descriptor.path) || {};
-    const configuredIdentifiers = Object.keys(configuredEntries).sort();
-    section.append(renderConfigurationModelAdder(descriptor, configuredIdentifiers));
-    for (const modelIdentifier of configuredIdentifiers) {
-        const entry = configurationElement("details", "configuration-model-entry");
-        entry.open = true;
-        const summary = configurationElement("summary", "", modelIdentifier);
-        entry.append(summary);
-        const entryPath = descriptor.path.concat(modelIdentifier);
-        entry.append(configurationButton("Remove all settings for this model", "button-secondary", () => {
-            setConfigurationWorkingDocument(withoutConfigurationValue(
-                configurationEditorState.workingDocument, entryPath));
-        }));
-        const entryDescriptors = configurationSettingDescriptors(
-            configurationEditorState.schema, descriptor.entryNode, entryPath);
-        for (const entryDescriptor of entryDescriptors) {
-            entry.append(renderConfigurationDescriptor(entryDescriptor));
-        }
-        section.append(entry);
-    }
-    return section;
-}
-
-function renderConfigurationSection(descriptor) {
-    const section = configurationElement("section", "panel configuration-section");
-    const heading = configurationElement("div", "panel-heading-row");
-    heading.append(configurationElement("h3", "", descriptor.label));
-    const canResetSection = configurationHasValueAtPath(
-        configurationEditorState.workingDocument, descriptor.path) && !descriptor.isRequired;
-    if (canResetSection) {
-        heading.append(configurationButton("Reset section", "button-secondary", () => {
-            setConfigurationWorkingDocument(withoutConfigurationValue(
-                configurationEditorState.workingDocument, descriptor.path));
-        }));
-    }
-    section.append(heading);
-    if (descriptor.description && descriptor.kind === "group") {
-        section.append(configurationElement("p", "panel-note", descriptor.description));
-    }
-    if (descriptor.kind === "group") {
-        for (const childDescriptor of descriptor.children) {
-            if (hasDedicatedConfigurationControl(childDescriptor)) { continue; }
-            section.append(renderConfigurationDescriptor(childDescriptor));
-        }
-    } else {
-        section.append(renderConfigurationDescriptor(descriptor));
-    }
-    return section;
+    setConfigurationWorkingDocument(updatedDocument);
 }
 
 // Called when another control on the page changed config.json. Unsaved edits
@@ -305,27 +141,12 @@ function refreshConfigurationDocumentIfUnedited() {
     }
 }
 
-function renderConfigurationSections() {
-    const sectionsContainer = document.getElementById("configuration-sections");
-    sectionsContainer.replaceChildren();
-    const topLevelDescriptors = configurationSettingDescriptors(
-        configurationEditorState.schema, configurationEditorState.schema, []);
-    // The daemon's JSON sorts members, so the schema's order does not survive; the
-    // section every document must have comes first because it is the one people need.
-    const orderedDescriptors = topLevelDescriptors
-        .filter((descriptor) => descriptor.isRequired)
-        .concat(topLevelDescriptors.filter((descriptor) => !descriptor.isRequired));
-    for (const descriptor of orderedDescriptors) {
-        sectionsContainer.append(renderConfigurationSection(descriptor));
-    }
-}
-
-async function fetchConfigurationModelIdentifiers() {
+async function fetchConfigurationDiscoveredModels() {
     try {
         const response = await fetch(CONFIGURATION_MODELS_URL);
         if (!response.ok) { return []; }
         const modelList = await response.json();
-        return (modelList.data || []).map((model) => model.id).sort();
+        return (modelList.data || []).map(configurationDiscoveredModelFromAdvertisement);
     } catch (fetchError) {
         return [];
     }
@@ -341,9 +162,9 @@ async function loadConfigurationDocument() {
         const snapshot = await response.json();
         configurationEditorState.schema = snapshot.schema;
         configurationEditorState.documentDigest = snapshot.document_digest;
-        configurationEditorState.discoveredModelIdentifiers = await fetchConfigurationModelIdentifiers();
+        configurationEditorState.discoveredModels = await fetchConfigurationDiscoveredModels();
         if (snapshot.document === null) {
-            document.getElementById("configuration-sections").replaceChildren();
+            clearConfigurationPages();
             showConfigurationFeedback("error",
                 `config.json could not be read: ${snapshot.read_error || "it is missing"}. Fix it by hand or reset it.`);
             return;
@@ -357,7 +178,7 @@ async function loadConfigurationDocument() {
 
 function setConfigurationBusy(isBusy) {
     configurationEditorState.isBusy = isBusy;
-    document.getElementById("configuration-reset-all").disabled = isBusy;
+    document.querySelectorAll("[data-configuration-action]").forEach((menuItem) => { menuItem.disabled = isBusy; });
     updateConfigurationDirtyState();
 }
 
@@ -373,17 +194,14 @@ async function finishConfigurationWrite(response) {
     showConfigurationFeedback(saveOutcomeMessage.tone, saveOutcomeMessage.text);
 }
 
-async function saveConfigurationDocument() {
+async function sendConfigurationWrite(url, method, requestBody, progressText) {
     setConfigurationBusy(true);
-    showConfigurationFeedback("progress", "Saving. A model may need to reload, which can take a while.");
+    showConfigurationFeedback("progress", progressText);
     try {
-        await finishConfigurationWrite(await fetch(CONFIGURATION_URL, {
-            method: "PUT",
+        await finishConfigurationWrite(await fetch(url, {
+            method,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                document: configurationEditorState.workingDocument,
-                expected_document_digest: configurationEditorState.documentDigest,
-            }),
+            body: JSON.stringify(requestBody),
         }));
     } catch (fetchError) {
         showConfigurationFeedback("error", "The local server did not answer; the file may not have changed.");
@@ -392,25 +210,22 @@ async function saveConfigurationDocument() {
     }
 }
 
-async function resetConfigurationDocument() {
+function saveConfigurationDocument() {
+    return sendConfigurationWrite(CONFIGURATION_URL, "PUT", {
+        document: configurationEditorState.workingDocument,
+        expected_document_digest: configurationEditorState.documentDigest,
+    }, "Saving. A model may need to reload, which can take a while.");
+}
+
+function resetConfigurationDocument() {
+    const valueCount = configurationValueCount(configurationEditorState.savedDocument);
+    const subject = valueCount > 0 ? `all ${valueCount} ${valueCount === 1 ? "value" : "values"} in config.json` : "config.json";
     const isConfirmed = window.confirm(
-        "Reset every setting to its default, including your model directories? Models in those folders stop appearing until you add them back. The current file is kept beside it as config.previous.json.");
-    if (!isConfirmed) { return; }
-    setConfigurationBusy(true);
-    showConfigurationFeedback("progress", "Resetting.");
-    try {
-        await finishConfigurationWrite(await fetch(CONFIGURATION_RESET_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                expected_document_digest: configurationEditorState.documentDigest,
-            }),
-        }));
-    } catch (fetchError) {
-        showConfigurationFeedback("error", "The local server did not answer; the file may not have changed.");
-    } finally {
-        setConfigurationBusy(false);
-    }
+        `Reset ${subject} to its defaults, including your model directories? Models in those folders stop appearing until you add them back. The current file is kept beside it as config.previous.json.`);
+    if (!isConfirmed) { return Promise.resolve(); }
+    return sendConfigurationWrite(CONFIGURATION_RESET_URL, "POST", {
+        expected_document_digest: configurationEditorState.documentDigest,
+    }, "Resetting.");
 }
 
 async function applySavedConfiguration() {
@@ -434,24 +249,77 @@ function discardConfigurationEdits() {
     showConfigurationFeedback("success", "");
 }
 
-function renderConfigurationNeuralEngineStatus(statusDocument) {
-    const statusElement = document.getElementById("configuration-neural-engine-status");
-    if (statusElement) {
+function resetSelectedConfigurationModel() {
+    const modelIdentifier = configurationEditorState.selectedModelIdentifier;
+    if (typeof modelIdentifier !== "string") { return; }
+    removeConfigurationValues([["models",
+        configurationEntryKeyForModel(configurationEditorState.workingDocument, modelIdentifier)]]);
+}
+
+// Folder settings show the real path they fall back to, which hangs off this instance's
+// folder. The page is redrawn once when the folder is first learned, unless someone is
+// typing in it.
+function rememberConfigurationStateDirectory(statusDocument) {
+    const stateDirectory = statusDocument.application ? statusDocument.application.state_directory : null;
+    if (!stateDirectory || stateDirectory === configurationEditorState.stateDirectory) { return; }
+    configurationEditorState.stateDirectory = stateDirectory;
+    const someoneIsTyping = document.activeElement
+        && document.activeElement.classList
+        && document.activeElement.classList.contains("configuration-input");
+    if (!someoneIsTyping) { renderConfigurationPages(); }
+}
+
+// Called on every status poll. The Neural Engine status line lives in that row's
+// explanation for the loaded model only, so it costs the page nothing until someone
+// asks what the toggle is doing.
+function renderConfigurationStatus(statusDocument) {
+    configurationEditorState.neuralEngineStatusDocument = statusDocument;
+    rememberConfigurationStateDirectory(statusDocument);
+    document.querySelectorAll("[data-neural-engine-status]").forEach((statusElement) => {
         statusElement.textContent = neuralEnginePrefillStatusMessage(statusDocument.neural_engine_prefill);
-    }
+    });
+}
+
+const CONFIGURATION_MENU_ACTIONS = {
+    preview: () => document.getElementById("configuration-preview-dialog").showModal(),
+    apply: applySavedConfiguration,
+    "reset-model": resetSelectedConfigurationModel,
+    "reset-all": resetConfigurationDocument,
+};
+
+function closeConfigurationMenus() {
+    document.querySelectorAll(".configuration-menu").forEach((menu) => { menu.hidden = true; });
+}
+
+function handleConfigurationMenuClick(clickEvent) {
+    const menuButton = clickEvent.target.closest(".configuration-menu-button");
+    const menuAction = clickEvent.target.closest("[data-configuration-action]");
+    const wasOpen = menuButton && !menuButton.nextElementSibling.hidden;
+    closeConfigurationMenus();
+    if (menuButton && !wasOpen) { menuButton.nextElementSibling.hidden = false; }
+    if (menuAction) { void CONFIGURATION_MENU_ACTIONS[menuAction.dataset.configurationAction](); }
 }
 
 function wireConfigurationEditor() {
     document.getElementById("configuration-save").addEventListener("click", saveConfigurationDocument);
     document.getElementById("configuration-discard").addEventListener("click", discardConfigurationEdits);
-    document.getElementById("configuration-reset-all").addEventListener("click", resetConfigurationDocument);
-    document.getElementById("configuration-apply").addEventListener("click", applySavedConfiguration);
-    document.querySelectorAll('[data-observatory-destination="configuration"]')
+    document.getElementById("configuration-preview-close").addEventListener("click",
+        () => document.getElementById("configuration-preview-dialog").close());
+    document.addEventListener("click", handleConfigurationMenuClick);
+    document.addEventListener("click", (clickEvent) => {
+        if (!clickEvent.target.closest(".configuration-label-cell")) { closeConfigurationExplanations(); }
+    });
+    document.addEventListener("keydown", (keyEvent) => { if (keyEvent.key === "Escape") { closeConfigurationMenus(); closeConfigurationExplanations(); } });
+    document.querySelectorAll('[data-observatory-destination="settings"], [data-observatory-destination="tuning"]')
         .forEach((navigationButton) => {
-            navigationButton.addEventListener("click", loadConfigurationDocument);
+            // Moving between the two pages must keep unsaved edits, since they share one
+            // working copy; only an unedited editor reloads from the file.
+            navigationButton.addEventListener("click", refreshConfigurationDocumentIfUnedited);
         });
     document.addEventListener("observatory:config-file-written", refreshConfigurationDocumentIfUnedited);
-    // Reads the view, not the address, so a retired address such as /settings
-    // that opened Configuration loads the editor whatever ran first at startup.
-    if (!document.getElementById("configuration-view").hidden) { void loadConfigurationDocument(); }
+    // Reads the views, not the address, so a retired address such as /configuration
+    // that opens Settings loads the editor whatever ran first at startup.
+    if (!document.getElementById("settings-view").hidden || !document.getElementById("tuning-view").hidden) {
+        void loadConfigurationDocument();
+    }
 }

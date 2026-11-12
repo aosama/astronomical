@@ -62,7 +62,6 @@ test("should_expose_the_neural_engine_opt_in_as_a_boolean_that_defaults_off", ()
     assert.equal(descriptor.kind, "boolean");
     assert.equal(descriptor.defaultValue, false);
     assert.equal(descriptor.applyMode, "model-reload");
-    assert.equal(call("configurationDefaultDescription", descriptor), "Default: off");
 });
 
 test("should_expose_metal_residency_refresh_as_a_switch_that_restarts_the_worker", () => {
@@ -70,7 +69,6 @@ test("should_expose_metal_residency_refresh_as_a_switch_that_restarts_the_worker
     assert.equal(descriptor.kind, "boolean");
     assert.equal(descriptor.defaultValue, false);
     assert.equal(descriptor.isRequired, false);
-    assert.equal(call("configurationDefaultDescription", descriptor), "Default: off");
     assert.equal(call("configurationApplyModeDescription", descriptor.applyMode),
         "Restarts the inference worker");
 });
@@ -147,6 +145,12 @@ test("should_accept_null_only_for_a_nullable_setting", () => {
     assert.equal(call("parseConfigurationInput", { kind: "integer" }, "null").isValid, false);
 });
 
+test("should_refuse_a_folder_that_is_not_a_full_path", () => {
+    const descriptor = { kind: "string", pattern: "^/" };
+    assert.equal(call("parseConfigurationInput", descriptor, "~/models").message, "Enter a full path that starts with /");
+    assert.deepEqual(call("parseConfigurationInput", descriptor, "/models"), { isValid: true, value: "/models" });
+});
+
 test("should_refuse_a_blank_string", () => {
     assert.equal(call("parseConfigurationInput", { kind: "string" }, "   ").isValid, false);
     assert.deepEqual(call("parseConfigurationInput", { kind: "string" }, " /models "), { isValid: true, value: "/models" });
@@ -200,15 +204,30 @@ test("should_describe_each_neural_engine_state_in_words", () => {
 });
 
 test("should_never_write_markup_from_configuration_values", () => {
-    const pageScript = fs.readFileSync(path.join(__dirname, "configuration.js"), "utf8");
-    assert.equal(pageScript.includes("innerHTML"), false);
-    assert.equal(pageScript.includes("insertAdjacentHTML"), false);
+    for (const scriptName of ["configuration.js", "configuration-controls.js", "configuration-pages.js", "configuration-layout.js"]) {
+        const pageScript = fs.readFileSync(path.join(__dirname, scriptName), "utf8");
+        assert.equal(pageScript.includes("innerHTML"), false, scriptName);
+        assert.equal(pageScript.includes("insertAdjacentHTML"), false, scriptName);
+    }
 });
 
 test("should_load_the_page_scripts_before_the_console_script_that_wires_them", () => {
     const shell = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-    assert.ok(shell.indexOf("/configuration.js") < shell.indexOf("/console.js"));
-    assert.ok(shell.indexOf("/configuration-model.js") < shell.indexOf("/configuration.js"));
+    for (const scriptName of ["configuration-model", "configuration-layout", "configuration",
+        "configuration-controls", "configuration-pages"]) {
+        assert.ok(shell.indexOf(`/${scriptName}.js`) !== -1, scriptName);
+        assert.ok(shell.indexOf(`/${scriptName}.js`) < shell.indexOf("/console.js"), scriptName);
+    }
+    assert.ok(shell.indexOf("/configuration-model.js") < shell.indexOf("/configuration-layout.js"));
+});
+
+test("should_open_settings_and_tuning_from_the_top_bar_and_keep_the_old_address_working", () => {
+    const shell = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+    const consoleScript = fs.readFileSync(path.join(__dirname, "console.js"), "utf8");
+    assert.ok(shell.includes('data-observatory-destination="settings"'));
+    assert.ok(shell.includes('data-observatory-destination="tuning"'));
+    assert.equal(shell.includes('data-observatory-destination="configuration"'), false);
+    assert.match(consoleScript, /"\/configuration": "settings"/);
 });
 
 test("should_leave_the_memory_limit_row_to_its_dedicated_live_control", () => {

@@ -1,5 +1,5 @@
 // Astronomical Observatory configuration model: the pure rules behind the
-// Configuration page. The page is generated from the bundled JSON Schema, so a
+// Settings and Tuning pages. The pages are generated from the bundled JSON Schema, so a
 // setting added to the schema appears here without a page change. Nothing in this
 // file touches the document or the network, which is what keeps it testable.
 
@@ -63,7 +63,9 @@ function configurationSettingDescriptors(schema, objectNode, parentPath) {
         const shared = {
             key: settingKey,
             path,
-            label: configurationSettingLabel(settingKey),
+            // The schema's own title is the friendly label; the key is only the fallback
+            // for a setting added without one.
+            label: schemaNode.title || configurationSettingLabel(settingKey),
             description: schemaNode.description || "",
             isRequired: requiredKeys.includes(settingKey),
         };
@@ -80,6 +82,15 @@ function configurationSettingDescriptors(schema, objectNode, parentPath) {
                 defaultValue: schemaNode.default,
                 enumValues: schemaNode.enum,
                 applyMode: schemaNode["x-astronomical-apply-mode"],
+                unit: schemaNode["x-astronomical-unit"],
+                pattern: schemaNode.pattern,
+                choices: schemaNode["x-astronomical-choices"],
+                builtinDefault: schemaNode["x-astronomical-builtin-default"],
+                instanceFolderDefault: schemaNode["x-astronomical-instance-folder-default"],
+                unsetText: schemaNode["x-astronomical-unset-text"],
+                // Written for someone new to the app; the description stays exact for
+                // the schema's other readers.
+                explanation: schemaNode["x-astronomical-explanation"],
                 ...configurationNumericBounds(schemaNode) });
         }
     }
@@ -168,6 +179,10 @@ function parseConfigurationInput(descriptor, rawText) {
     const trimmedText = String(rawText).trim();
     if (descriptor.kind === "string" || descriptor.kind === "enum") {
         if (trimmedText.length === 0) { return { isValid: false, message: "Enter a value" }; }
+        // The only pattern the format uses is "starts with /", so the message can say so.
+        if (descriptor.pattern && !new RegExp(descriptor.pattern).test(trimmedText)) {
+            return { isValid: false, message: "Enter a full path that starts with /" };
+        }
         return { isValid: true, value: trimmedText };
     }
     if (descriptor.kind === "nullable_integer" && trimmedText.toLowerCase() === "null") {
@@ -183,14 +198,6 @@ function parseConfigurationInput(descriptor, rawText) {
     const boundsMessage = configurationBoundsMessage(descriptor, parsedNumber);
     if (boundsMessage) { return { isValid: false, message: boundsMessage }; }
     return { isValid: true, value: parsedNumber };
-}
-
-function configurationDefaultDescription(descriptor) {
-    if (descriptor.defaultValue === undefined) { return "No default"; }
-    if (descriptor.kind === "boolean") { return descriptor.defaultValue ? "Default: on" : "Default: off"; }
-    if (descriptor.defaultValue === null) { return "Default: automatic"; }
-    if (Array.isArray(descriptor.defaultValue)) { return "Default: none"; }
-    return `Default: ${descriptor.defaultValue}`;
 }
 
 // The save itself and applying it are separate outcomes: a valid file stays saved
@@ -239,9 +246,8 @@ function neuralEnginePrefillStatusMessage(neuralEnginePrefill) {
     return "Off for the loaded model.";
 }
 
-// Settings edited by their own live control at the top of the Configuration
-// page. Their generic row is left out so the page offers one place to change
-// each of them.
+// Settings edited by their own live control on the Settings page. Their generic
+// control is left out so the page offers one place to change each of them.
 const CONFIGURATION_PATHS_WITH_DEDICATED_CONTROLS = ["runtime.maximum_mlx_memory_gb"];
 
 function hasDedicatedConfigurationControl(descriptor) {

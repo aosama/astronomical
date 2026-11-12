@@ -27,7 +27,10 @@ const CONNECT_JS: &str = include_str!("../../console/connect.js");
 const EXPERTS_JS: &str = include_str!("../../console/experts.js");
 const EXPERTS_RENDER_JS: &str = include_str!("../../console/experts-render.js");
 const CONFIGURATION_MODEL_JS: &str = include_str!("../../console/configuration-model.js");
+const CONFIGURATION_LAYOUT_JS: &str = include_str!("../../console/configuration-layout.js");
 const CONFIGURATION_JS: &str = include_str!("../../console/configuration.js");
+const CONFIGURATION_CONTROLS_JS: &str = include_str!("../../console/configuration-controls.js");
+const CONFIGURATION_PAGES_JS: &str = include_str!("../../console/configuration-pages.js");
 const CONFIGURATION_CSS: &str = include_str!("../../console/configuration.css");
 const CONSOLE_CSS: &str = include_str!("../../console/console.css");
 const DOWNLOAD_MODELS_CSS: &str = include_str!("../../console/download-models.css");
@@ -56,12 +59,19 @@ where
         // the shell, and console.js opens the renamed page from it.
         .route("/library", get(console_index))
         .route("/connect", get(console_index))
-        .route("/configuration", get(console_index))
-        // The Settings page was folded into Configuration; its old address still
-        // serves the shell, and console.js opens Configuration from it.
         .route("/settings", get(console_index))
+        .route("/tuning", get(console_index))
+        // The Configuration page was split into Settings and Tuning; its old address
+        // still serves the shell, and console.js opens Settings from it.
+        .route("/configuration", get(console_index))
         .route("/configuration-model.js", get(configuration_model_script))
+        .route("/configuration-layout.js", get(configuration_layout_script))
         .route("/configuration.js", get(configuration_script))
+        .route(
+            "/configuration-controls.js",
+            get(configuration_controls_script),
+        )
+        .route("/configuration-pages.js", get(configuration_pages_script))
         .route("/configuration.css", get(configuration_stylesheet))
         .route("/console.js", get(console_script))
         .route("/appearance.js", get(appearance_script))
@@ -176,6 +186,18 @@ pub(crate) async fn configuration_model_script() -> Response {
 
 pub(crate) async fn configuration_script() -> Response {
     embedded_text_response(CONFIGURATION_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn configuration_layout_script() -> Response {
+    embedded_text_response(CONFIGURATION_LAYOUT_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn configuration_controls_script() -> Response {
+    embedded_text_response(CONFIGURATION_CONTROLS_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn configuration_pages_script() -> Response {
+    embedded_text_response(CONFIGURATION_PAGES_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn configuration_stylesheet() -> Response {

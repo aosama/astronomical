@@ -284,7 +284,7 @@ fn every_setting_set(
     configured_settings
 }
 
-/// The Configuration page offers whatever the schema describes, so a setting the
+/// The Settings and Tuning pages offer whatever the schema describes, so a setting the
 /// strict parser rejects would be a control that can only ever fail to save.
 #[test]
 fn should_accept_every_setting_the_schema_describes() {
@@ -307,5 +307,27 @@ fn should_accept_every_setting_the_schema_describes() {
     assert!(
         validation_result.is_ok(),
         "{validation_result:?} for {document:#}"
+    );
+}
+
+/// The console shows the schema's built-in default model and fallback folder names to
+/// the person, so they must be the ones the code really falls back to.
+#[test]
+fn should_describe_the_fallbacks_the_code_really_uses() {
+    let schema: serde_json::Value =
+        serde_json::from_slice(config_schema_bytes()).expect("the bundled schema parses");
+    let runtime_properties = &schema["$defs"]["runtime"]["properties"];
+
+    assert_eq!(
+        runtime_properties["default_model"]["x-astronomical-builtin-default"],
+        crate::BUILTIN_DEFAULT_MODEL_ID
+    );
+    assert_eq!(
+        runtime_properties["neural_engine_program_directory"]["x-astronomical-instance-folder-default"],
+        crate::NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME
+    );
+    assert_eq!(
+        runtime_properties["model_download_directory"]["x-astronomical-instance-folder-default"],
+        "models"
     );
 }
