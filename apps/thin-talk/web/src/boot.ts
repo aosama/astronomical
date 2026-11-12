@@ -35,6 +35,9 @@ import { ExportLauncher } from "./ExportLauncher";
 import { MessagePicker } from "./MessagePicker";
 import { BriefNotice } from "./BriefNotice";
 import { ModelLoadNotice, isWaitingForFirstWords } from "./ModelLoadNotice";
+import { SpeechClient } from "./speech/SpeechClient";
+import { SpeechAudioOutput, createWebAudioContext } from "./speech/SpeechAudioOutput";
+import { SpeechController } from "./speech/SpeechController";
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -93,6 +96,14 @@ export function bootChatClient(): AppShell {
   const store = new SessionStore(bridge);
   const client = new DaemonClient(config);
 
+  const speechClient = new SpeechClient(config.daemonBaseURL);
+  const speech = new SpeechController({
+    output: new SpeechAudioOutput(createWebAudioContext),
+    fetchSpokenPiece: (pieceRequest) => speechClient.fetchSpokenPiece(pieceRequest),
+    listVoiceModels: () => speechClient.listVoiceModels(),
+    openModelsPage: () => host.postAction("openExternal", "", config.modelsPageURL),
+  });
+
   const trust = new TrustBoundary();
   const math = new MathPipeline(trust);
   const diagrams = new DiagramPipeline();
@@ -109,6 +120,13 @@ export function bootChatClient(): AppShell {
         // button asks for the whole rendered answer.
         const copiedText = action.detail.length > 0 ? action.detail : transcript.renderedText(action.messageID);
         host.postAction("copy", action.messageID, copiedText);
+        return;
+      }
+      if (action.kind === "speakAnswer") {
+        const spokenReply = transcript.latestMessages().find((message) => message.id === action.messageID);
+        if (spokenReply !== undefined) {
+          speech.press(spokenReply.id, spokenReply.markdown);
+        }
         return;
       }
       if (action.kind === "exportAnswer") {
@@ -145,6 +163,10 @@ export function bootChatClient(): AppShell {
     onAction: (action) => {
       switch (action.kind) {
         case "send":
+          // Silence at the press itself, not once the answer starts: the reply
+          // being read scrolls away under the new question, taking its Stop
+          // button out of sight.
+          speech.stop();
           controller.send(action.detail);
           return;
         case "stop":
@@ -166,8 +188,7 @@ export function bootChatClient(): AppShell {
           controller.setToolsEnabled(action.detail === "on");
           return;
         case "openModelsPage":
-          // The Observatory is served by the same engine the window talks to.
-          host.postAction("openExternal", "", `${config.daemonBaseURL}/download-models`);
+          host.postAction("openExternal", "", config.modelsPageURL);
           return;
       }
     },
@@ -210,6 +231,20 @@ export function bootChatClient(): AppShell {
     transcriptElement: requireElement<HTMLElement>("#transcript"),
   });
   controller.subscribe((publishedState) => modelLoadNotice.setWaitingForFirstWords(isWaitingForFirstWords(publishedState)));
+  // Buttons follow the speech state, and wait while an answer is written,
+  // since the engine is busy; the controller decides when the conversation
+  // moving on ends a reading.
+  let latestIsGenerating = false;
+  speech.subscribe((speechState) => transcript.showSpeech(speechState, latestIsGenerating));
+  controller.subscribe((publishedState) => {
+    latestIsGenerating = publishedState.composer.isStreaming;
+    speech.followConversation({
+      isGenerating: latestIsGenerating,
+      activeSessionID: publishedState.activeSessionID,
+      shownMessageIDs: new Set(publishedState.transcript.messages.map((message) => message.id)),
+    });
+    transcript.showSpeech(speech.state, latestIsGenerating);
+  });
   const exportLauncher = wireExport(controller, transcript, bridge, diagrams, config.printedPaper);
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();

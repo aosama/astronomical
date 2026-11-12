@@ -158,7 +158,11 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 # and `POST /v1/audio/speech`
 # and IPC journeys (audio in bounded frames, refusals before dispatch), with
 # scripted workers; under a minute. `test-speak-cli` runs `astronomical
-# speak`'s own tests and its journeys against a stub daemon.
+# speak`'s own tests and its journeys against a stub daemon. The chat
+# window's Speak button is not a cargo test: its text, piece, playback and
+# button journeys are part of the web client's suite, `cd apps/thin-talk/web
+# && npm test` (CI's thin-talk-web-tests step), which fakes the speech endpoint
+# and Web Audio; only a rebuilt Development app can show real sound.
 test-speech = "test -p astronomical-model-serving --features direct-mlx --lib speech"
 test-english-speech-text = "test -p astronomical-english-phonemes -p astronomical-english-number-words -p astronomical-speech-contract"
 test-kokoro-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kokoro_speech"

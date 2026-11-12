@@ -15,6 +15,7 @@ import { TranscriptPersona } from "./TranscriptPersona";
 import { ClassicMessageChrome } from "./MessageChrome";
 import type { MessageChrome } from "./MessageChrome";
 import { AstroMessageChrome } from "./astro/AstroMessageChrome";
+import { hasSpeakableText } from "./speech/SpeakableText";
 
 /** The `data-action` of a code block's Copy button, read by the transcript. */
 export const COPY_CODE_ACTION = "copy-code";
@@ -26,6 +27,8 @@ export const COPY_IMAGE_ACTION = "copy-image";
 export const CODE_BLOCK_TOOLS_CLASS = "code-block__tools";
 /** The `data-action` of an answer's Export button. */
 export const EXPORT_ANSWER_ACTION = "export-answer";
+/** The `data-action` of an answer's Speak button. */
+export const SPEAK_ANSWER_ACTION = "speak-answer";
 
 /** The classes of a checklist item's box, drawn by the stylesheet. */
 export const TASK_BOX_CLASS = "task-box";
@@ -280,7 +283,14 @@ export class Renderer {
       message.role === ChatRole.ASSISTANT
         ? `<button class="message__action" data-testid="action-export" data-action="${EXPORT_ANSWER_ACTION}">Export…</button>`
         : "";
-    return `<div class="message__actions"><button class="message__action" data-testid="action-copy" data-action="copy">Copy</button>${exportButton}</div>`;
+    // A reply with nothing to hear (only code, a table or a picture) gets no
+    // Speak button. Its label and state are applied by the transcript, by
+    // attribute, so a redraw of the markup never has to know about playback.
+    const canSpeak = message.role === ChatRole.ASSISTANT && hasSpeakableText(message.markdown);
+    const speakButton = canSpeak
+      ? `<button class="message__action message__action--speak" data-testid="action-speak" data-action="${SPEAK_ANSWER_ACTION}" data-speak-phase="resting">Speak</button>`
+      : "";
+    return `<div class="message__actions"><button class="message__action" data-testid="action-copy" data-action="copy">Copy</button>${speakButton}${exportButton}</div>`;
   }
 
   /**
