@@ -2,7 +2,7 @@ use std::{path::Path, process::Stdio, time::Duration};
 
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    process::Command,
+    process::{Child, Command},
     time::{Instant, sleep, timeout},
 };
 
@@ -58,6 +58,7 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
 
     let daemon_log_text = wait_for_daemon_log_diagnostic(
         development_state_directory.path(),
+        &mut daemon_process,
         WORKER_STDERR_DIAGNOSTIC,
     )
     .await;
@@ -83,6 +84,7 @@ const WORKER_DIAGNOSTIC_DEADLINE: Duration = Duration::from_secs(20);
 
 async fn wait_for_daemon_log_diagnostic(
     state_directory: &Path,
+    daemon_process: &mut Child,
     expected_diagnostic: &str,
 ) -> String {
     let diagnostic_deadline = Instant::now() + WORKER_DIAGNOSTIC_DEADLINE;
@@ -95,11 +97,56 @@ async fn wait_for_daemon_log_diagnostic(
         }
         sleep(Duration::from_millis(25)).await;
     }
-    // The log read so far tells a slow worker launch apart from a lost
-    // diagnostic, which the bare message could not.
-    panic!(
-        "daemon log did not retain the expected worker diagnostic within {WORKER_DIAGNOSTIC_DEADLINE:?}; daemon log so far:\n{daemon_log_text}"
+    // On timeout, name whether the daemon process is still alive and which
+    // files the log directory holds. Together with the log text, that report
+    // classifies the next occurrence on its own.
+    let timeout_report = format!(
+        "{}; {}",
+        daemon_process_liveness(daemon_process),
+        log_directory_contents(&log_directory)
     );
+    panic!(
+        "daemon log did not retain the expected worker diagnostic within {WORKER_DIAGNOSTIC_DEADLINE:?}; {timeout_report}\ndaemon log so far:\n{daemon_log_text}"
+    );
+}
+
+fn daemon_process_liveness(daemon_process: &mut Child) -> String {
+    match daemon_process.try_wait() {
+        Ok(None) => match daemon_process.id() {
+            Some(process_id) => format!("daemon process is still alive (pid {process_id})"),
+            None => "daemon process is still alive".to_owned(),
+        },
+        Ok(Some(exit_status)) => format!("daemon process has exited ({exit_status})"),
+        Err(error) => format!("daemon process liveness could not be determined: {error}"),
+    }
+}
+
+fn log_directory_contents(log_directory: &Path) -> String {
+    let log_directory_path = log_directory.display();
+    let mut log_entry_names = Vec::new();
+    let log_entries = match std::fs::read_dir(log_directory) {
+        Ok(log_entries) => log_entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return format!("log directory {log_directory_path} does not exist");
+        }
+        Err(error) => {
+            return format!(
+                "log directory {log_directory_path} exists but its entries could not be read: {error}"
+            );
+        }
+    };
+    for log_entry in log_entries {
+        log_entry_names.push(match log_entry {
+            Ok(entry) => entry.file_name().to_string_lossy().into_owned(),
+            Err(error) => format!("<unreadable entry: {error}>"),
+        });
+    }
+    log_entry_names.sort();
+    if log_entry_names.is_empty() {
+        format!("log directory {log_directory_path} exists and holds no files")
+    } else {
+        format!("log directory {log_directory_path} exists and holds: {log_entry_names:?}")
+    }
 }
 
 fn read_daemon_logs(log_directory: &Path) -> String {
