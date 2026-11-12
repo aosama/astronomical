@@ -4,40 +4,37 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.102</title>
-            <pubDate>Wed, 11 Nov 2026 07:01:53 -0500</pubDate>
-            <sparkle:version>2261</sparkle:version>
-            <sparkle:shortVersionString>0.2.102</sparkle:shortVersionString>
+            <title>0.2.103</title>
+            <pubDate>Thu, 12 Nov 2026 00:45:19 -0500</pubDate>
+            <sparkle:version>2278</sparkle:version>
+            <sparkle:shortVersionString>0.2.103</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.102
+            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.103
 
 ### New
-- **Export a chat.** Save a whole chat, one answer, or the messages you pick as a PDF, a Word document or a web page. The export sheet previews the pages and remembers your choices. Tables, formulas, code, checklists, pictures and diagrams carry over, and nothing in the file loads from the network.
-- **Exports fit your paper.** The preview, the PDF and the Word document follow the Mac's paper size (A4 or Letter). Text prints at the sizes shown, a heading stays with what it introduces, short lists stay whole, and a diagram is sized to fit its page.
-- **Clef decision models** are recognised in the Library and run as a text-only backend.
+- Speech: Astronomical can now speak text with native Kokoro-82M and Phonon 31M speech engines. Use `astronomical speak` in the terminal or `POST /v1/audio/speech` on the local API. Speech is no longer experimental.
+- The chat window has a Speak button that reads a reply aloud.
+- First launch shows a plain get-started journey in place of the earlier welcome.
+- Observatory's Configuration page is now two pages, Settings and Tuning, with a plain title, unit and explanation for each setting.
 
 ### Improved
-- A chat that fails says what went wrong in plain words and what to try next, including when the Mac ran out of graphics memory.
-- While a model is still loading, the chat says it is loading the model.
-- Code blocks have a Copy button, and a generated picture can be saved or copied.
-- Checklists in answers are drawn as checklists.
-- Every model is shown under one name, its model ID.
-- The Neural Engine preparation banner appears only for waits long enough to matter.
+- Astro is drawn as a dot galaxy and no longer sits in the message field.
+- The decision model catalog records Clef's measured peak memory.
+- The Download for Mac buttons on the website and README lead straight to the disk image.
 
 ### Fixed
-- A fresh install starts with Neural Engine prefill off.
-- Stopping an instance also sees an agent that macOS started at login.
+- Double-clicking the chat window's top strip zooms the window again, and the strip drags like a title bar.
 
 ### Compatibility
 - Requires macOS 14 or later on Apple silicon.
 - Settings, chats, downloaded models and the Library are preserved. No configuration field was removed.
 - The app is signed with a Developer ID, notarized by Apple, and delivered through the signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.102/Astronomical-0.2.102-macOS-arm64.dmg" length="21896504" type="application/octet-stream" sparkle:edSignature="Pi8r1Sm6Wo4LA41o7iCSQ/fJP0bnggKF8YYmIRKV3Z2C99oPjgYJQSUNQOsjl6RC0dCCX09WfymjFEVMoWXrCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.103/Astronomical-0.2.103-macOS-arm64.dmg" length="23626349" type="application/octet-stream" sparkle:edSignature="guNM4RgSf+GzfjJrVUbzRtNmtUaEqSNL7iJq+OjZ7X6u9cAEd7iaO5yC+CYmaXGTYkcAO58YADzIao12U5JRCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: g4q00iQGCYP9ovI6rD68618LcP/IwS0wK6GZyDkBXM74HzPO6uXR2sRkMW60pin4IpZcZPKU3FC5ydxzr/2lCQ==
-length: 2809
+edSignature: VjNIVeZfGnyAJZnICaozOMZ8Xxq/GkE2LPAh6kiOc8r/lPkr09Z6Lb2PNYMmfiR6mZX2vU/8vEIu6m/CblgEDw==
+length: 2399
 -->
