@@ -24,8 +24,11 @@ pub(crate) mod idle_model_unload;
 pub(crate) mod image_event;
 pub(crate) mod image_request;
 pub(crate) mod loop_types;
-mod single_shot_admission;
+mod request_admission;
+mod request_event_dispatch;
 mod single_shot_command_arms;
+pub(crate) mod speech_event;
+pub(crate) mod speech_request;
 
 pub(crate) mod command_arms;
 pub(crate) mod event_reaction;
@@ -96,6 +99,8 @@ pub(crate) async fn run_worker(
         model_load_timeout,
         cancellation_acknowledgement_timeout,
         image_generation_timeouts,
+        // Speech has no per-test override yet; its bounds are the product's.
+        speech_timeouts: crate::SpeechTimeouts::DEFAULT,
         contained_failure_relaunch: ContainedFailureRelaunch::new(),
         idle_model_unload: IdleModelUnloadClock::new(
             idle_model_unload_seconds,

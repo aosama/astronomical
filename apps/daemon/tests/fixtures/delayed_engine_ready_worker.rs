@@ -36,8 +36,12 @@ async fn main() {
             WorkerCommand::GenerateImage(_) => {
                 panic!("the chat-only fixture must not receive image generation")
             }
-            WorkerCommand::GenerateEmbeddings(_) | WorkerCommand::GenerateDecisions(_) => {
-                panic!("the chat-only fixture must not receive an embeddings or decision request")
+            WorkerCommand::GenerateEmbeddings(_)
+            | WorkerCommand::GenerateDecisions(_)
+            | WorkerCommand::GenerateSpeech(_) => {
+                panic!(
+                    "the chat-only fixture must not receive an embeddings, decision or speech request"
+                )
             }
             // A count is answered like a generation: one Completed event.
             WorkerCommand::Generate(generation_command)

@@ -1,12 +1,14 @@
 //! Why a speech request did not produce audio.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// The longest reason a failure carries; a longer one is cut, so an error
 /// from deep in a model cannot flood a response or a log line.
 const MAXIMUM_REASON_CHARACTERS: usize = 512;
 
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Error, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SpeechFailure {
     /// The caller's to fix: empty text, an unknown voice, a speed the model
     /// does not support.
@@ -18,6 +20,9 @@ pub enum SpeechFailure {
     /// Another request is being spoken.
     #[error("the speech engine is busy with another request")]
     EngineBusy,
+    /// The caller withdrew the request; the segments already spoken are dropped.
+    #[error("the speech request was cancelled")]
+    Cancelled,
 }
 
 impl SpeechFailure {

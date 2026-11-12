@@ -10,13 +10,13 @@ use std::{
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, DecisionsExecutionError, DecisionsOutput,
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
-    ImageGenerationExecutionError, ImageGenerationOutput, WorkerActivity, WorkerHealthSnapshot,
-    WorkerHealthStatus,
+    ImageGenerationExecutionError, ImageGenerationOutput, SpeechExecutionError, SpeechOutput,
+    WorkerActivity, WorkerHealthSnapshot, WorkerHealthStatus,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatModelCapabilities, DecisionsCommand, EmbeddingsCommand,
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
-    ImageGenerationResultMetadata, WorkerModelCapabilities,
+    ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata, WorkerModelCapabilities,
 };
 use image::{
     ExtendedColorType, ImageEncoder,
@@ -38,6 +38,8 @@ pub struct ScriptedExecutor {
     pub embeddings_outcome: Result<EmbeddingsOutput, EmbeddingsExecutionError>,
     received_decisions_commands: Arc<Mutex<Vec<DecisionsCommand>>>,
     pub decisions_outcome: Result<DecisionsOutput, DecisionsExecutionError>,
+    received_speech_commands: Arc<Mutex<Vec<SpeechCommand>>>,
+    pub speech_outcome: Result<SpeechOutput, SpeechExecutionError>,
     /// Test override: when true, the executor reports a busy worker so the
     /// config-reload endpoint returns HTTP 409.
     pub is_busy_override: bool,
@@ -99,7 +101,23 @@ impl ScriptedExecutor {
                 input_token_counts: vec![8],
                 elapsed_millis: 12,
             }),
+            received_speech_commands: Arc::new(Mutex::new(Vec::new())),
+            speech_outcome: Ok(SpeechOutput {
+                pcm16_bytes: vec![0x00, 0x00, 0x00, 0x40],
+                result_metadata: SpeechResultMetadata {
+                    sample_rate_hertz: 24_000,
+                    sample_count: 2,
+                    segment_count: 1,
+                    cut_short_segment_count: 0,
+                    voice_name: "af_heart".to_owned(),
+                    seed: 42,
+                },
+            }),
         }
+    }
+
+    pub fn received_speech_commands(&self) -> Arc<Mutex<Vec<SpeechCommand>>> {
+        Arc::clone(&self.received_speech_commands)
     }
 
     pub fn received_decisions_commands(&self) -> Arc<Mutex<Vec<DecisionsCommand>>> {
@@ -275,6 +293,34 @@ impl astronomical_daemon::ImageGenerationExecutor for ScriptedExecutor {
                 .await
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;
             Ok(decisions_result_receiver)
+        })
+    }
+
+    fn start_speech_generation(
+        &self,
+        speech_command: SpeechCommand,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<SpeechOutput, SpeechExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.received_speech_commands
+                .lock()
+                .expect("the scripted speech command log should not be poisoned")
+                .push(speech_command);
+            let (speech_result_sender, speech_result_receiver) = mpsc::channel(1);
+            speech_result_sender
+                .send(self.speech_outcome.clone())
+                .await
+                .map_err(|_| GenerationStartError::WorkerUnavailable)?;
+            Ok(speech_result_receiver)
         })
     }
 }

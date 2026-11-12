@@ -14,6 +14,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::serving::decisions_executor::DecisionsResultSender;
+use crate::serving::speech_executor::SpeechResultSender;
 use crate::worker::memory::limit::PendingMlxMemoryLimitUpdate;
 use crate::worker::process::failure_relaunch::ContainedFailureRelaunch;
 use crate::{
@@ -46,6 +47,7 @@ pub(in crate::worker) struct WorkerLoopRuntime {
     pub model_load_timeout: Duration,
     pub cancellation_acknowledgement_timeout: Duration,
     pub image_generation_timeouts: crate::ImageGenerationTimeouts,
+    pub speech_timeouts: crate::SpeechTimeouts,
     pub contained_failure_relaunch: ContainedFailureRelaunch,
     pub idle_model_unload: crate::worker::idle_model_unload::IdleModelUnloadClock,
 }
@@ -90,6 +92,12 @@ pub(crate) enum WorkerLoopCommand {
         start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
         decisions_result_sender: DecisionsResultSender,
     },
+    GenerateSpeech {
+        active_generation_permit: OwnedSemaphorePermit,
+        speech_command: astronomical_ipc_protocol::SpeechCommand,
+        start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
+        speech_result_sender: SpeechResultSender,
+    },
     Shutdown {
         shutdown_sender: oneshot::Sender<Result<WorkerTerminationOutcome, WorkerControlError>>,
     },
@@ -130,6 +138,7 @@ pub(crate) enum ActiveWorkerRequest {
     Image(ActiveImageGeneration),
     Embeddings(ActiveEmbeddingsGeneration),
     Decisions(ActiveDecisionsGeneration),
+    Speech(ActiveSpeechGeneration),
 }
 
 impl ActiveWorkerRequest {
@@ -137,35 +146,41 @@ impl ActiveWorkerRequest {
         astronomical_config::exhaustive_table!(
             self,
             request => request.request_id,
-            [Self::Chat, Self::Image, Self::Embeddings, Self::Decisions]
+            [
+                Self::Chat,
+                Self::Image,
+                Self::Embeddings,
+                Self::Decisions,
+                Self::Speech
+            ]
         )
     }
 
     pub(crate) fn chat(&self) -> Option<&ActiveGeneration> {
         match self {
             Self::Chat(request) => Some(request),
-            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
+            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) | Self::Speech(_) => None,
         }
     }
 
     pub(crate) fn chat_mut(&mut self) -> Option<&mut ActiveGeneration> {
         match self {
             Self::Chat(request) => Some(request),
-            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
+            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) | Self::Speech(_) => None,
         }
     }
 
     pub(crate) fn image_mut(&mut self) -> Option<&mut ActiveImageGeneration> {
         match self {
             Self::Image(request) => Some(request),
-            Self::Chat(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
+            Self::Chat(_) | Self::Embeddings(_) | Self::Decisions(_) | Self::Speech(_) => None,
         }
     }
 
     pub(crate) fn embeddings_mut(&mut self) -> Option<&mut ActiveEmbeddingsGeneration> {
         match self {
             Self::Embeddings(request) => Some(request),
-            Self::Chat(_) | Self::Image(_) | Self::Decisions(_) => None,
+            Self::Chat(_) | Self::Image(_) | Self::Decisions(_) | Self::Speech(_) => None,
         }
     }
 
@@ -177,7 +192,7 @@ impl ActiveWorkerRequest {
     ) -> Option<mpsc::Sender<ChatGenerationStreamEvent>> {
         match self {
             Self::Chat(request) => Some(request.stream_event_sender.clone()),
-            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
+            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) | Self::Speech(_) => None,
         }
     }
 
@@ -188,7 +203,7 @@ impl ActiveWorkerRequest {
     ) -> Option<mpsc::Sender<Result<ImageGenerationOutput, ImageGenerationExecutionError>>> {
         match self {
             Self::Image(request) => Some(request.image_result_sender.clone()),
-            Self::Chat(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
+            Self::Chat(_) | Self::Embeddings(_) | Self::Decisions(_) | Self::Speech(_) => None,
         }
     }
 
@@ -199,7 +214,7 @@ impl ActiveWorkerRequest {
     ) -> Option<mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>> {
         match self {
             Self::Embeddings(request) => Some(request.embeddings_result_sender.clone()),
-            Self::Chat(_) | Self::Image(_) | Self::Decisions(_) => None,
+            Self::Chat(_) | Self::Image(_) | Self::Decisions(_) | Self::Speech(_) => None,
         }
     }
 }
@@ -208,7 +223,7 @@ impl ActiveWorkerRequest {
     pub(crate) fn decisions_mut(&mut self) -> Option<&mut ActiveDecisionsGeneration> {
         match self {
             Self::Decisions(request) => Some(request),
-            Self::Chat(_) | Self::Image(_) | Self::Embeddings(_) => None,
+            Self::Chat(_) | Self::Image(_) | Self::Embeddings(_) | Self::Speech(_) => None,
         }
     }
 
@@ -217,7 +232,7 @@ impl ActiveWorkerRequest {
     pub(crate) fn decisions_result_sender(&self) -> Option<DecisionsResultSender> {
         match self {
             Self::Decisions(request) => Some(request.decisions_result_sender.clone()),
-            Self::Chat(_) | Self::Image(_) | Self::Embeddings(_) => None,
+            Self::Chat(_) | Self::Image(_) | Self::Embeddings(_) | Self::Speech(_) => None,
         }
     }
 
@@ -227,9 +242,50 @@ impl ActiveWorkerRequest {
         match self {
             Self::Embeddings(request) => Some(request.execution_deadline),
             Self::Decisions(request) => Some(request.execution_deadline),
-            Self::Chat(_) | Self::Image(_) => None,
+            Self::Chat(_) | Self::Image(_) | Self::Speech(_) => None,
         }
     }
+}
+
+impl ActiveWorkerRequest {
+    pub(crate) fn speech_mut(&mut self) -> Option<&mut ActiveSpeechGeneration> {
+        match self {
+            Self::Speech(request) => Some(request),
+            _ => None,
+        }
+    }
+
+    /// The active speech request's result channel, or `None` for any other
+    /// modality.
+    pub(crate) fn speech_result_sender(&self) -> Option<SpeechResultSender> {
+        match self {
+            Self::Speech(request) => Some(request.speech_result_sender.clone()),
+            _ => None,
+        }
+    }
+}
+
+/// One speech request the worker is speaking: its audio so far, segment by
+/// segment, and the two bounds a stuck engine is caught by.
+pub(crate) struct ActiveSpeechGeneration {
+    pub(crate) _active_generation_permit: OwnedSemaphorePermit,
+    pub(crate) request_id: RequestId,
+    pub(crate) execution_deadline: Instant,
+    pub(crate) progress_stall_deadline: Instant,
+    pub(crate) progress_stall_timeout: Duration,
+    /// 16-bit samples of every segment spoken so far, in order.
+    pub(crate) pcm16_bytes: Vec<u8>,
+    /// The most audio this request may collect; it scales with the pace
+    /// asked for, since slow speech of the same text is longer.
+    pub(crate) maximum_audio_bytes: usize,
+    /// The worker spoke more than `maximum_audio_bytes`; the rest is
+    /// dropped and the request fails when it completes.
+    pub(crate) has_exceeded_audio_limit: bool,
+    pub(crate) completed_segments: u32,
+    pub(crate) terminal_received_at: Option<Instant>,
+    pub(crate) speech_result_sender: SpeechResultSender,
+    pub(crate) terminal_outcome:
+        Option<Result<crate::SpeechOutput, astronomical_speech_contract::SpeechFailure>>,
 }
 
 pub(crate) struct ActiveDecisionsGeneration {

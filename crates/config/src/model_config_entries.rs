@@ -19,6 +19,8 @@ pub enum SettingsFreeModelKind {
     Embeddings,
     /// Answers typed questions with probabilities.
     Decisions,
+    /// Reads text aloud.
+    Speech,
 }
 
 /// The effect of one `models` entry on the installed models.
@@ -129,12 +131,13 @@ fn applied_outcome(discovered_model: &DiscoveredModel) -> ModelConfigEntryOutcom
 /// Which kind of settings-free model these capabilities describe, or `None`
 /// for a chat model, the only kind a `models` entry configures.
 fn settings_free_kind_of(model_capabilities: &ModelCapabilities) -> Option<SettingsFreeModelKind> {
-    match model_capabilities {
-        ModelCapabilities::Chat(_) => None,
-        ModelCapabilities::ImageGeneration(_) => Some(SettingsFreeModelKind::ImageGeneration),
-        ModelCapabilities::Embeddings(_) => Some(SettingsFreeModelKind::Embeddings),
-        ModelCapabilities::Decisions(_) => Some(SettingsFreeModelKind::Decisions),
-    }
+    crate::exhaustive_table!(model_capabilities, {
+        ModelCapabilities::Chat => None,
+        ModelCapabilities::ImageGeneration => Some(SettingsFreeModelKind::ImageGeneration),
+        ModelCapabilities::Embeddings => Some(SettingsFreeModelKind::Embeddings),
+        ModelCapabilities::Decisions => Some(SettingsFreeModelKind::Decisions),
+        ModelCapabilities::Speech => Some(SettingsFreeModelKind::Speech),
+    })
 }
 
 /// Why an entry naming an installed model is not the one the model uses. A recorded full ID

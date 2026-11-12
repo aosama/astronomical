@@ -7,7 +7,9 @@
 //!
 //! [`SpeechEngine`]: crate::speech_engine::SpeechEngine
 
-use astronomical_speech_contract::{SpeechFailure, SpeechRequest};
+use astronomical_speech_contract::{
+    NATURAL_PACE_ONLY_REASON, SpeechFailure, SpeechRequest, unknown_voice_reason,
+};
 
 use crate::speech_engine::{SpeechEngineLoadResult, SpeechEngineStep};
 
@@ -111,6 +113,12 @@ impl<Segment, RequestContext> SpeechRequestSlot<Segment, RequestContext> {
     }
 }
 
+/// Whether `speech_step` was the last step of its request: the request was
+/// spoken to its end, or a segment failed and ended it.
+pub(crate) fn ends_request(speech_step: &Result<SpeechEngineStep, SpeechFailure>) -> bool {
+    !matches!(speech_step, Ok(SpeechEngineStep::SegmentSpoken { .. }))
+}
+
 /// The model-independent part of starting a request: the contract's checks,
 /// then the pace and the voice against what the engine loaded. Returns the
 /// voice to speak in.
@@ -120,38 +128,19 @@ pub(crate) fn voice_for_checked_request(
 ) -> Result<String, SpeechFailure> {
     speech_request.validate()?;
     if !load_result.supports_speed && speech_request.speed != 1.0 {
-        return Err(SpeechFailure::invalid_request(
-            "this voice model speaks only at its natural pace (speed 1.0)",
-        ));
+        return Err(SpeechFailure::invalid_request(NATURAL_PACE_ONLY_REASON));
     }
     let voice_name = speech_request
         .voice_name
         .clone()
         .unwrap_or_else(|| load_result.default_voice_name.clone());
     if !load_result.voice_names.contains(&voice_name) {
-        return Err(SpeechFailure::invalid_request(format!(
-            "there is no voice {voice_name:?}; the voices are {}",
-            load_result.voice_names.join(", ")
+        return Err(SpeechFailure::invalid_request(unknown_voice_reason(
+            &voice_name,
+            &load_result.voice_names,
         )));
     }
     Ok(voice_name)
-}
-
-/// The preferred default voice when the artifact has it, else its first voice.
-pub(crate) fn default_voice_name(
-    voice_names: &[String],
-    preferred_voice_name: &str,
-) -> Result<String, SpeechFailure> {
-    if voice_names
-        .iter()
-        .any(|voice_name| voice_name == preferred_voice_name)
-    {
-        return Ok(preferred_voice_name.to_owned());
-    }
-    voice_names
-        .first()
-        .cloned()
-        .ok_or_else(|| SpeechFailure::fatal_execution("the speech model artifact has no voices"))
 }
 
 #[cfg(test)]

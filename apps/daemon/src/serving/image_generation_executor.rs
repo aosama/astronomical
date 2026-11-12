@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     ChatGenerationExecutor, DecisionsExecutionError, DecisionsOutput, EmbeddingsExecutionError,
-    EmbeddingsOutput, GenerationStartError,
+    EmbeddingsOutput, GenerationStartError, SpeechExecutionError, SpeechOutput,
 };
 
 /// One completed worker image and its reproducibility metadata.
@@ -130,6 +130,27 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         let _admission_signal_result = admission_sender.send(());
         self.start_decisions_generation(decisions_command)
+    }
+
+    /// Starts one speech request on this executor.
+    ///
+    /// Speech shares this trait for the same reason embeddings and decisions
+    /// do; the default leaves test executors compiling without a speech impl.
+    fn start_speech_generation(
+        &self,
+        _speech_command: astronomical_ipc_protocol::SpeechCommand,
+    ) -> GenerationOutcomeStartFuture<'_, SpeechOutput, SpeechExecutionError> {
+        Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
+    }
+
+    /// Signals once a speech request owns a place in the immutable FIFO queue.
+    fn start_speech_generation_with_admission_signal(
+        &self,
+        speech_command: astronomical_ipc_protocol::SpeechCommand,
+        admission_sender: tokio::sync::oneshot::Sender<()>,
+    ) -> GenerationOutcomeStartFuture<'_, SpeechOutput, SpeechExecutionError> {
+        let _admission_signal_result = admission_sender.send(());
+        self.start_speech_generation(speech_command)
     }
 }
 

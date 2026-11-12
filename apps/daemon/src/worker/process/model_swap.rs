@@ -380,20 +380,44 @@ fn capabilities_match_runtime_configuration(
         WorkerLoadedModelRuntimeConfiguration::QwenImage21(_) => {
             capabilities.chat.is_none() && capabilities.image_generation.is_some()
         }
-        WorkerLoadedModelRuntimeConfiguration::Embeddings(_) => {
-            capabilities.chat.is_none()
-                && capabilities.image_generation.is_none()
-                && capabilities.embeddings.is_some()
+        helper_configuration => {
+            helper_capabilities_match_runtime_configuration(capabilities, helper_configuration)
         }
+    }
+}
+
+/// The same check for a helper model (embeddings, decisions or speech): it
+/// offers its own surface and none of chat, images or the other helpers.
+fn helper_capabilities_match_runtime_configuration(
+    capabilities: &astronomical_ipc_protocol::WorkerModelCapabilities,
+    expected_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
+) -> bool {
+    let offers_only_helper_surfaces =
+        capabilities.chat.is_none() && capabilities.image_generation.is_none();
+    let offered_helper_surface_count = usize::from(capabilities.embeddings.is_some())
+        + usize::from(capabilities.decisions.is_some())
+        + usize::from(capabilities.speech.is_some());
+    offers_only_helper_surfaces
+        && offered_helper_surface_count == 1
+        && helper_surface_matches(capabilities, expected_runtime_configuration)
+}
+
+/// Whether the one helper surface offered is the configured one, with the
+/// limits the policy set.
+fn helper_surface_matches(
+    capabilities: &astronomical_ipc_protocol::WorkerModelCapabilities,
+    expected_runtime_configuration: &WorkerLoadedModelRuntimeConfiguration,
+) -> bool {
+    match expected_runtime_configuration {
+        WorkerLoadedModelRuntimeConfiguration::Embeddings(_) => capabilities.embeddings.is_some(),
         WorkerLoadedModelRuntimeConfiguration::Decisions(configuration) => {
-            capabilities.chat.is_none()
-                && capabilities.image_generation.is_none()
-                && capabilities.embeddings.is_none()
-                && capabilities.decisions.is_some_and(|decision_capabilities| {
-                    decision_capabilities.maximum_tokens_per_question
-                        == configuration.maximum_tokens_per_question
-                })
+            capabilities.decisions.is_some_and(|decision_capabilities| {
+                decision_capabilities.maximum_tokens_per_question
+                    == configuration.maximum_tokens_per_question
+            })
         }
+        WorkerLoadedModelRuntimeConfiguration::Speech(_) => capabilities.speech.is_some(),
+        _ => false,
     }
 }
 

@@ -156,6 +156,9 @@ pub enum OpenAiModelValidationError {
     /// A decision model must report how many tokens one question may occupy.
     #[error("decision model token limit per question must be positive")]
     DecisionTokenLimitMustBePositive,
+    /// A speech model's default voice must be one of its voices.
+    #[error("speech model default voice must be one of its voices")]
+    SpeechDefaultVoiceMissing,
     /// A loaded embedding artifact must report a positive input budget.
     #[error("embedding input token budget must be positive")]
     EmbeddingInputBudgetMustBePositive,
@@ -259,6 +262,9 @@ pub struct OpenAiModel {
     /// How structured output is enforced (`none` until sample-time grammar exists).
     #[serde(skip_serializing_if = "Option::is_none")]
     structured_output_enforcement: Option<String>,
+    /// What a speech model offers; absent for every other kind of model.
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    speech: Option<OpenAiSpeechModelDetails>,
     /// Anthropic model fields, so Anthropic-protocol clients read the same
     /// model object.
     #[serde(flatten)]
@@ -295,6 +301,7 @@ impl OpenAiModel {
             supported_endpoints: Some(model_parts.supported_endpoints),
             supports_structured_outputs: Some(model_parts.supports_structured_outputs),
             structured_output_enforcement: model_parts.structured_output_enforcement,
+            speech: None,
             anthropic_identity,
         })
     }
@@ -343,6 +350,7 @@ impl OpenAiModel {
             supported_endpoints: Some(image_model_parts.supported_endpoints),
             supports_structured_outputs: Some(false),
             structured_output_enforcement: None,
+            speech: None,
             anthropic_identity,
         })
     }
@@ -380,6 +388,7 @@ impl OpenAiModel {
             supported_endpoints: Some(vec!["/v1/embeddings".to_owned()]),
             supports_structured_outputs: Some(false),
             structured_output_enforcement: None,
+            speech: None,
             anthropic_identity,
         })
     }
@@ -415,9 +424,91 @@ impl OpenAiModel {
             supported_endpoints: Some(vec![SYSTEM_ONE_ENDPOINT_PATH.to_owned()]),
             supports_structured_outputs: Some(false),
             structured_output_enforcement: None,
+            speech: None,
             anthropic_identity,
         })
     }
+}
+
+impl OpenAiModel {
+    /// Builds one speech model: it reads text aloud and generates no text,
+    /// so it carries no token limits; its voices and pace are listed instead.
+    pub fn from_speech_parts(
+        speech_model_parts: OpenAiSpeechModelParts,
+    ) -> Result<Self, OpenAiModelValidationError> {
+        if !speech_model_parts
+            .voices
+            .contains(&speech_model_parts.default_voice)
+        {
+            return Err(OpenAiModelValidationError::SpeechDefaultVoiceMissing);
+        }
+        let anthropic_identity = AnthropicModelIdentity::for_model(
+            &speech_model_parts.model_id,
+            speech_model_parts.created,
+        );
+        Ok(Self {
+            id: speech_model_parts.model_id,
+            object_kind: "model",
+            created: speech_model_parts.created,
+            owned_by: speech_model_parts.owned_by,
+            context_window: None,
+            max_input_tokens: None,
+            max_output_tokens: None,
+            input_modalities: Some(vec!["text".to_owned()]),
+            output_modalities: Some(vec![AUDIO_OUTPUT_MODALITY.to_owned()]),
+            supports_streaming: Some(false),
+            supports_reasoning: Some(false),
+            reasoning_format: None,
+            supports_tool_calls: Some(false),
+            tool_call_format: None,
+            supported_endpoints: Some(vec![AUDIO_SPEECH_ENDPOINT_PATH.to_owned()]),
+            supports_structured_outputs: Some(false),
+            structured_output_enforcement: None,
+            speech: Some(OpenAiSpeechModelDetails {
+                voices: speech_model_parts.voices,
+                default_voice: speech_model_parts.default_voice,
+                sample_rate_hertz: speech_model_parts.sample_rate_hertz,
+                supports_speed: speech_model_parts.supports_speed,
+                response_formats: vec!["wav".to_owned(), "pcm".to_owned()],
+            }),
+            anthropic_identity,
+        })
+    }
+}
+
+/// The path of the speech endpoint, in the OpenAI request shape.
+pub const AUDIO_SPEECH_ENDPOINT_PATH: &str = "/v1/audio/speech";
+/// What a speech model produces.
+pub const AUDIO_OUTPUT_MODALITY: &str = "audio";
+
+/// What a speech model offers, as `/v1/models` lists it.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct OpenAiSpeechModelDetails {
+    /// The names the request's `voice` accepts.
+    voices: Vec<String>,
+    /// The voice a request without `voice` is spoken in.
+    default_voice: String,
+    /// The rate of the samples every response format carries.
+    sample_rate_hertz: u32,
+    /// Whether `speed` may be other than 1.0.
+    supports_speed: bool,
+    /// The `response_format` values accepted.
+    response_formats: Vec<String>,
+}
+
+/// Capability metadata for a speech model.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OpenAiSpeechModelParts {
+    /// Model identifier advertised by the local server.
+    pub model_id: String,
+    /// Unix timestamp associated with this server's model advertisement.
+    pub created: u64,
+    /// Local owner label for the advertised model.
+    pub owned_by: String,
+    pub voices: Vec<String>,
+    pub default_voice: String,
+    pub sample_rate_hertz: u32,
+    pub supports_speed: bool,
 }
 
 /// The path of the decisions endpoint, in the System One request shape.

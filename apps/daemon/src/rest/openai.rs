@@ -14,6 +14,7 @@ pub(crate) mod responses_assembly;
 pub(crate) mod responses_endpoint;
 pub(crate) mod responses_stream;
 pub(crate) mod responses_translation;
+pub(crate) mod speech_endpoint;
 
 #[cfg(test)]
 mod chat_failure_wording_tests;

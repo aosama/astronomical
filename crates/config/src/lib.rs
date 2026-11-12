@@ -46,8 +46,8 @@ pub use config_document_edit::{
 pub use config_error::AstronomicalConfigError;
 pub use default_model::{
     BUILTIN_DEFAULT_DECISION_MODEL_ID, BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID,
-    DefaultModelConfigUpdate, commit_default_model_update, prepare_default_model_update,
-    write_default_model,
+    BUILTIN_DEFAULT_SPEECH_MODEL_ID, DefaultModelConfigUpdate, commit_default_model_update,
+    prepare_default_model_update, write_default_model,
 };
 pub use logging_config::{LogLevel, LoggingConfig};
 pub use maximum_mlx_memory::{
@@ -72,6 +72,13 @@ pub use model_discovery::{
     discover_models_excluding_ambiguous_identities, requestable_model_id,
     required_shard_file_names, verify_flux2_klein_model_directory,
     verify_qwen_image_21_model_directory,
+};
+pub use model_discovery::{
+    KOKORO_CONFIGURATION_FILE_NAME, KOKORO_VOICES_DIRECTORY_NAME, KOKORO_WEIGHTS_FILE_NAME,
+    PHONON_CONFIGURATION_FILE_NAME, PHONON_DEFAULT_VOICE_FILE_NAME, PHONON_DEFAULT_VOICE_NAME,
+    PHONON_TOKENIZER_FILE_NAME, PHONON_VOICES_DIRECTORY_NAME, PHONON_WEIGHTS_FILE_NAME,
+    SpeechModelCapabilities, is_kokoro_configuration, is_phonon_configuration,
+    kokoro_speech_capabilities, phonon_speech_capabilities,
 };
 pub use model_identity::{
     configured_model_id_for, decode_huggingface_cache_directory_name, leaf_model_id,

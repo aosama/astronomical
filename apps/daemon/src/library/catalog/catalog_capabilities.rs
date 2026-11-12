@@ -17,6 +17,7 @@ pub struct DownloadCatalogCapabilities {
     pub supports_image_generation: bool,
     pub supports_embeddings: bool,
     pub supports_decisions: bool,
+    pub supports_speech: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -36,6 +37,8 @@ pub(super) struct DownloadCatalogCapabilitiesDocument {
     pub(super) supports_embeddings: bool,
     #[serde(default)]
     pub(super) supports_decisions: bool,
+    #[serde(default)]
+    pub(super) supports_speech: bool,
 }
 
 impl DownloadCatalogCapabilitiesDocument {
@@ -49,6 +52,7 @@ impl DownloadCatalogCapabilitiesDocument {
             || self.supports_image_generation
             || self.supports_embeddings
             || self.supports_decisions
+            || self.supports_speech
     }
 }
 
@@ -71,6 +75,7 @@ pub(super) fn parse_entry_capabilities(
             supports_image_generation: capabilities_document.supports_image_generation,
             supports_embeddings: capabilities_document.supports_embeddings,
             supports_decisions: capabilities_document.supports_decisions,
+            supports_speech: capabilities_document.supports_speech,
         })
     } else {
         Err(DownloadCatalogError::InvalidCapabilities { entry_index })

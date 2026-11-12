@@ -1,9 +1,10 @@
-//! The seed a daemon picks for an image request that did not carry one.
+//! The seed a daemon picks for an image or speech request that did not carry
+//! one.
 //!
-//! Both image entry points (REST and the CLI's IPC verb) need the same rule,
-//! so it lives with the serving layer, not in either surface. The seed is not
-//! secret: it is reported back in every completion, so a caller can reproduce
-//! the image by passing it in. It only has to differ between requests.
+//! Every entry point (REST and the CLI's IPC verbs) needs the same rule, so it
+//! lives with the serving layer, not in any surface. The seed is not secret:
+//! it is reported back with every result, so a caller can reproduce the image
+//! or the audio by passing it in. It only has to differ between requests.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -22,5 +23,5 @@ pub(crate) fn generated_seed(request_id: u64) -> u64 {
 }
 
 #[cfg(test)]
-#[path = "image_seed_tests.rs"]
-mod image_seed_tests;
+#[path = "request_seed_tests.rs"]
+mod request_seed_tests;

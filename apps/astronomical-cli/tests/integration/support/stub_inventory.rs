@@ -8,6 +8,7 @@ pub struct StubInstalledModel {
     pub context_window: Option<u32>,
     pub supports_embeddings: bool,
     pub supports_decisions: bool,
+    pub supports_speech: bool,
     pub supports_image_generation: bool,
     pub is_resident: bool,
 }
@@ -20,6 +21,7 @@ impl StubInstalledModel {
             context_window: None,
             supports_embeddings: false,
             supports_decisions: false,
+            supports_speech: false,
             supports_image_generation: true,
             is_resident,
         }
@@ -32,6 +34,7 @@ impl StubInstalledModel {
             context_window: Some(32_768),
             supports_embeddings: false,
             supports_decisions: false,
+            supports_speech: false,
             supports_image_generation: false,
             is_resident,
         }
@@ -44,6 +47,7 @@ impl StubInstalledModel {
             context_window: None,
             supports_embeddings: false,
             supports_decisions: true,
+            supports_speech: false,
             supports_image_generation: false,
             is_resident,
         }
@@ -56,6 +60,7 @@ impl StubInstalledModel {
             context_window: None,
             supports_embeddings: true,
             supports_decisions: false,
+            supports_speech: false,
             supports_image_generation: false,
             is_resident,
         }
@@ -72,6 +77,7 @@ pub struct StubCatalogEntry {
     pub context_window: Option<u32>,
     pub supports_embeddings: bool,
     pub supports_decisions: bool,
+    pub supports_speech: bool,
     pub supports_image_generation: bool,
 }
 
@@ -90,6 +96,7 @@ impl StubCatalogEntry {
             context_window: None,
             supports_embeddings: false,
             supports_decisions: false,
+            supports_speech: false,
             supports_image_generation: true,
         }
     }
@@ -104,6 +111,7 @@ impl StubCatalogEntry {
             context_window: Some(32_768),
             supports_embeddings: false,
             supports_decisions: false,
+            supports_speech: false,
             supports_image_generation: false,
         }
     }
@@ -122,6 +130,7 @@ impl StubCatalogEntry {
             context_window: None,
             supports_embeddings: false,
             supports_decisions: true,
+            supports_speech: false,
             supports_image_generation: false,
         }
     }
@@ -140,6 +149,7 @@ impl StubCatalogEntry {
             context_window: None,
             supports_embeddings: true,
             supports_decisions: false,
+            supports_speech: false,
             supports_image_generation: false,
         }
     }

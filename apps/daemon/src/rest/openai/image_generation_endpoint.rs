@@ -21,7 +21,7 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
-use crate::serving::image_seed::generated_seed;
+use crate::serving::request_seed::generated_seed;
 use crate::{
     GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput,
     application::{ApplicationState, allocate_chat_request_id},

@@ -230,6 +230,8 @@ pub struct DaemonListedModel {
     pub supports_embeddings: bool,
     /// True when this model answers typed questions for `decide`.
     pub supports_decisions: bool,
+    /// True when this model reads text aloud for `speak`.
+    pub supports_speech: bool,
     /// True when this model can draw an image from text for `image`.
     pub supports_image_generation: bool,
     /// True when this model is currently resident in the worker.
@@ -262,6 +264,7 @@ pub struct DaemonCatalogEntry {
     pub supports_image_generation: bool,
     pub supports_embeddings: bool,
     pub supports_decisions: bool,
+    pub supports_speech: bool,
 }
 
 /// The active library download job, if any.

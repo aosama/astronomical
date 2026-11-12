@@ -105,6 +105,7 @@ fn should_report_the_acknowledgement_violation_for_a_model_swap_outside_wait() {
             image_generation: None,
             embeddings: None,
             decisions: None,
+            speech: None,
         },
         expert_memory_mode: None,
         minimum_mlx_memory_ceiling_bytes: 0,

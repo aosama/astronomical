@@ -1,4 +1,5 @@
 use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
+use astronomical_speech_contract::SpeechFailure;
 use serde::{Deserialize, Serialize};
 
 use crate::expert_layer_seating::ExpertLayerSeatingCounts;
@@ -6,7 +7,8 @@ use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatGenerationOutput, DecisionsCommand, EmbeddingsCommand, EmbeddingsFailureReason,
     GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
-    ImageGenerationResultMetadata, WorkerModelCapabilities, WorkerModelConfiguration,
+    ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata, SpokenAudioSegment,
+    WorkerModelCapabilities, WorkerModelConfiguration,
     WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
 };
@@ -189,6 +191,8 @@ pub enum MlxMemorySnapshotSource {
     MemoryLimitAdjusted,
     /// One image render step completed while generation was still active.
     ImageGenerationStep,
+    /// One speech segment was spoken while its request was still active.
+    SpeechSegment,
 }
 
 /// One worker-owned MLX allocator observation reconciled into user-visible owners.
@@ -242,6 +246,8 @@ pub enum WorkerCommand {
     GenerateEmbeddings(EmbeddingsCommand),
     /// Starts one decision request: typed questions about a state.
     GenerateDecisions(DecisionsCommand),
+    /// Starts one speech request, spoken a segment at a time.
+    GenerateSpeech(SpeechCommand),
     /// Stops the active generation with this request identifier.
     Cancel { request_id: RequestId },
     /// Swaps the loaded model to a different model directory.
@@ -451,6 +457,34 @@ pub enum WorkerEvent {
         request_id: RequestId,
         elapsed_millis: u64,
         /// Present when the decision engine observed MLX after releasing request arrays and cache.
+        mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    },
+    /// Delivers one spoken segment's audio while its request continues.
+    SpeechSegmentSpoken {
+        request_id: RequestId,
+        audio_segment: SpokenAudioSegment,
+        completed_segments: u32,
+        total_segments: u32,
+        /// The model stopped before saying the segment to its end; the audio is kept.
+        was_cut_short: bool,
+        elapsed_millis: u64,
+        mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    },
+    /// Reports that every segment was spoken; the audio was sent segment by segment.
+    SpeechCompleted {
+        request_id: RequestId,
+        result_metadata: SpeechResultMetadata,
+    },
+    /// Reports a request-scoped speech failure that leaves the worker responsive.
+    SpeechFailed {
+        request_id: RequestId,
+        reason: SpeechFailure,
+    },
+    /// Confirms that speech request state has been released after any outcome.
+    SpeechFinalized {
+        request_id: RequestId,
+        elapsed_millis: u64,
+        /// Present when the speech engine observed MLX after releasing request memory.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Reports that the configured model finished loading.

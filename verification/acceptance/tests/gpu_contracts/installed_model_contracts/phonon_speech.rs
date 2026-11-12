@@ -20,8 +20,8 @@ use astronomical_speech_contract::SpeechRequest;
 use astronomical_test_harness::test_run::TestRunContext;
 
 use super::speech_audio_checks::{
-    ROMEO_PASSAGE, assert_sounds_like_the_passage, save_evidence, speak_through_engine,
-    test_memory_limits,
+    ROMEO_PASSAGE, TEST_ALLOCATOR_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES,
+    assert_sounds_like_the_passage, save_evidence, speak_through_engine,
 };
 
 fn romeo_request() -> SpeechRequest {
@@ -29,7 +29,7 @@ fn romeo_request() -> SpeechRequest {
         text: ROMEO_PASSAGE.to_owned(),
         voice_name: None,
         speed: 1.0,
-        seed: Some(7),
+        seed: 7,
     }
 }
 
@@ -38,8 +38,12 @@ fn romeo_request() -> SpeechRequest {
 #[serial_test::serial]
 fn should_speak_a_shakespeare_passage_at_a_human_pace() {
     let context = TestRunContext::current();
-    let mut engine =
-        PhononSpeechEngine::new(context.required_model_directory(), test_memory_limits());
+    let mut engine = PhononSpeechEngine::new(
+        "phonon-31m-en",
+        context.required_model_directory(),
+        TEST_MLX_MEMORY_CEILING_BYTES,
+        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+    );
     let load_result = engine.load().expect("Phonon loads");
     assert_eq!(load_result.default_voice_name, "default");
     let speak_started = Instant::now();

@@ -19,7 +19,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use crate::{
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
     application::{ApplicationState, allocate_chat_request_id},
-    rest::single_shot_rejections::{
+    rest::request_rejections::{
         generation_start_error_response, invalid_request_response,
         request_identifier_exhausted_response, worker_unavailable_response,
     },

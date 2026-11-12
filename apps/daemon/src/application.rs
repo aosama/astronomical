@@ -442,7 +442,7 @@ fn core_api_routes() -> Router<ApplicationState> {
         )
 }
 
-/// The image-generation, embeddings and decisions endpoints, each under the same
+/// The image-generation, embeddings, decisions and speech endpoints, each under the same
 /// OpenAI request body budget as the text endpoints.
 fn openai_generation_routes(router: Router<ApplicationState>) -> Router<ApplicationState> {
     let router = router.route(
@@ -457,9 +457,15 @@ fn openai_generation_routes(router: Router<ApplicationState>) -> Router<Applicat
             .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
             .layer(axum::middleware::from_fn(enforce_request_body_budget)),
     );
-    router.route(
+    let router = router.route(
         astronomical_rest_contract::SYSTEM_ONE_ENDPOINT_PATH,
         post(crate::rest::system_one_endpoint::create_decisions)
+            .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+            .layer(axum::middleware::from_fn(enforce_request_body_budget)),
+    );
+    router.route(
+        astronomical_rest_contract::AUDIO_SPEECH_ENDPOINT_PATH,
+        post(crate::rest::openai::speech_endpoint::create_speech)
             .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
             .layer(axum::middleware::from_fn(enforce_request_body_budget)),
     )

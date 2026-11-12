@@ -60,6 +60,7 @@ fn matching_autoregressive_capabilities() -> WorkerModelCapabilities {
         image_generation: None,
         embeddings: None,
         decisions: None,
+        speech: None,
     }
 }
 
@@ -188,6 +189,7 @@ fn should_reject_a_model_swapped_event_without_the_expected_chat_capabilities() 
         image_generation: None,
         embeddings: None,
         decisions: None,
+        speech: None,
     };
 
     let stage_outcome = stage_model_swap_acknowledgement(
@@ -366,4 +368,62 @@ fn should_reject_a_duplicate_runtime_policy_acknowledgement() {
         second_stage_outcome,
         "duplicate model swap runtime policy acknowledgement",
     );
+}
+
+fn speech_runtime_configuration() -> WorkerLoadedModelRuntimeConfiguration {
+    WorkerLoadedModelRuntimeConfiguration::Speech(
+        astronomical_ipc_protocol::WorkerSpeechModelConfiguration {
+            model_id: SAMPLE_MODEL_ID.to_owned(),
+            model_family: astronomical_ipc_protocol::WorkerSpeechModelFamily::Kokoro,
+            artifact_revision: "sample-revision".to_owned(),
+        },
+    )
+}
+
+fn speech_capabilities() -> WorkerModelCapabilities {
+    WorkerModelCapabilities::speech(astronomical_ipc_protocol::WorkerSpeechCapabilities {
+        sample_rate_hertz: 24_000,
+        voice_names: vec!["af_heart".to_owned()],
+        default_voice_name: "af_heart".to_owned(),
+        supports_speed: true,
+    })
+}
+
+// Positive: a speech model that announces only its speech surface is the
+// swap the policy asked for.
+#[test]
+fn should_stage_a_speech_model_that_announces_its_speech_surface() {
+    let mut staged_model_swap = StagedModelSwapAcknowledgement::new();
+    let expected_configuration = speech_runtime_configuration();
+    let expected_swap = expected_model_swap(None, &expected_configuration);
+
+    let stage_outcome = stage_model_swap_acknowledgement(
+        &mut staged_model_swap,
+        model_swapped_event(speech_capabilities()),
+        &expected_swap,
+    );
+
+    assert!(stage_outcome.is_ok());
+    assert!(staged_model_swap.model_swap_event.is_some());
+}
+
+// Negative and edge: a speech swap that announces no speech surface, or a
+// second helper surface beside it, is not the model the policy asked for.
+#[test]
+fn should_reject_a_speech_swap_with_the_wrong_surfaces() {
+    let expected_configuration = speech_runtime_configuration();
+    let expected_swap = expected_model_swap(None, &expected_configuration);
+    let mut speech_and_decisions = speech_capabilities();
+    speech_and_decisions.decisions = Some(astronomical_ipc_protocol::WorkerDecisionCapabilities {
+        maximum_tokens_per_question: 512,
+    });
+    for wrong_capabilities in [matching_autoregressive_capabilities(), speech_and_decisions] {
+        let mut staged_model_swap = StagedModelSwapAcknowledgement::new();
+        let stage_outcome = stage_model_swap_acknowledgement(
+            &mut staged_model_swap,
+            model_swapped_event(wrong_capabilities),
+            &expected_swap,
+        );
+        assert!(stage_outcome.is_err());
+    }
 }

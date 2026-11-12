@@ -1,11 +1,11 @@
-//! Admission steps shared by every request that runs as one forward pass.
+//! Admission steps shared by the embeddings, decisions and speech requests.
 //!
-//! Embeddings and decisions requests have the same life before execution:
-//! wait for the worker's startup configuration, make the requested model
-//! resident (swapping the loaded one out when it differs), and notice a
-//! client that went away meanwhile. Those steps live here once. What differs
-//! per kind of request, its capability check, its worker command and its
-//! result type, stays with that kind.
+//! These requests have the same life before execution: wait for the
+//! worker's startup configuration, make the requested model resident
+//! (swapping the loaded one out when it differs), and notice a client that
+//! went away meanwhile. Those steps live here once. What differs per kind of
+//! request, its capability check, its worker command, its result type and
+//! its execution bounds, stays with that kind.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -33,7 +33,7 @@ pub(super) const SINGLE_SHOT_EXECUTION_TIMEOUT: std::time::Duration =
 /// themselves: the owning handler performs every sender send and containment
 /// call in order (`tokio::sync::oneshot::Sender` is not cloneable, so the
 /// answer must stay with the owner).
-pub(super) enum SingleShotAdmissionOutcome {
+pub(super) enum RequestAdmissionOutcome {
     /// The worker accepted the command; admit the active request and confirm.
     Started {
         request_id: RequestId,
@@ -48,7 +48,7 @@ pub(super) enum SingleShotAdmissionOutcome {
 }
 
 /// The worker-loop state an admission needs, borrowed for one command.
-pub(super) struct SingleShotAdmissionContext<'loop_state> {
+pub(super) struct RequestAdmissionContext<'loop_state> {
     pub(super) worker_process: &'loop_state mut WorkerProcess,
     pub(super) health_snapshot: &'loop_state Arc<RwLock<WorkerHealthSnapshot>>,
     pub(super) is_ready: &'loop_state mut bool,
@@ -66,10 +66,10 @@ pub(super) struct SingleShotAdmissionContext<'loop_state> {
 /// connected, so the caller can go on to dispatch; otherwise the outcome
 /// that ends admission.
 pub(super) async fn make_requested_model_resident<ResultMessage>(
-    admission_context: &mut SingleShotAdmissionContext<'_>,
+    admission_context: &mut RequestAdmissionContext<'_>,
     requested_model: &str,
     result_sender: &mpsc::Sender<ResultMessage>,
-) -> Result<Option<SingleShotAdmissionOutcome>, WorkerControlError> {
+) -> Result<Option<RequestAdmissionOutcome>, WorkerControlError> {
     wait_for_startup_runtime_configuration(
         admission_context.worker_process,
         admission_context.health_snapshot,
@@ -93,19 +93,19 @@ pub(super) async fn make_requested_model_resident<ResultMessage>(
         return Ok(Some(swap_ending_outcome));
     }
     if result_sender.is_closed() {
-        return Ok(Some(SingleShotAdmissionOutcome::ClientDisconnected));
+        return Ok(Some(RequestAdmissionOutcome::ClientDisconnected));
     }
     Ok(None)
 }
 
 /// Drives the model swap; `None` means the requested model is now resident.
 async fn swap_to_requested_model<ResultMessage>(
-    admission_context: &mut SingleShotAdmissionContext<'_>,
+    admission_context: &mut RequestAdmissionContext<'_>,
     requested_model: &str,
     result_sender: &mpsc::Sender<ResultMessage>,
-) -> Option<SingleShotAdmissionOutcome> {
+) -> Option<RequestAdmissionOutcome> {
     let Some(model_policy) = admission_context.model_policy_catalog.get(requested_model) else {
-        return Some(SingleShotAdmissionOutcome::StartRejected(
+        return Some(RequestAdmissionOutcome::StartRejected(
             GenerationStartError::WorkerUnavailable,
         ));
     };
@@ -131,7 +131,7 @@ async fn swap_to_requested_model<ResultMessage>(
         )
         .await
     {
-        return Some(SingleShotAdmissionOutcome::WorkerFailed(swap_error));
+        return Some(RequestAdmissionOutcome::WorkerFailed(swap_error));
     }
     let model_load_timeout = admission_context.model_load_timeout;
     let mut swap_loop_state = WorkerLoopState {
@@ -167,17 +167,17 @@ async fn swap_to_requested_model<ResultMessage>(
     };
     match swap_outcome {
         Ok(ModelSwapWaitOutcome::Loaded) if client_disconnected_during_swap => {
-            Some(SingleShotAdmissionOutcome::ClientDisconnected)
+            Some(RequestAdmissionOutcome::ClientDisconnected)
         }
         Ok(ModelSwapWaitOutcome::Loaded) => None,
         Ok(ModelSwapWaitOutcome::Rejected {
             model_load_failure_reason,
-        }) => Some(SingleShotAdmissionOutcome::StartRejected(
+        }) => Some(RequestAdmissionOutcome::StartRejected(
             GenerationStartError::ModelLoadFailed {
                 model_load_failure_reason,
             },
         )),
-        Err(swap_error) => Some(SingleShotAdmissionOutcome::WorkerFailed(swap_error)),
+        Err(swap_error) => Some(RequestAdmissionOutcome::WorkerFailed(swap_error)),
     }
 }
 
@@ -189,19 +189,19 @@ pub(super) fn classify_dispatch_result(
     request_id: RequestId,
     execution_started_at: Instant,
     dispatch_result: Result<(), WorkerControlError>,
-) -> SingleShotAdmissionOutcome {
+) -> RequestAdmissionOutcome {
     match dispatch_result {
-        Ok(()) => SingleShotAdmissionOutcome::Started {
+        Ok(()) => RequestAdmissionOutcome::Started {
             request_id,
             execution_started_at,
         },
         Err(WorkerControlError::Protocol(ProtocolError::OutgoingMessageTooLarge {
             actual_message_bytes,
             maximum_message_bytes,
-        })) => SingleShotAdmissionOutcome::StartRejected(GenerationStartError::RequestTooLarge {
+        })) => RequestAdmissionOutcome::StartRejected(GenerationStartError::RequestTooLarge {
             actual_ipc_message_bytes: actual_message_bytes,
             maximum_ipc_message_bytes: maximum_message_bytes,
         }),
-        Err(start_error) => SingleShotAdmissionOutcome::WorkerFailed(start_error),
+        Err(start_error) => RequestAdmissionOutcome::WorkerFailed(start_error),
     }
 }

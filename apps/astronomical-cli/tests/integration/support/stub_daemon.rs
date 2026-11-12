@@ -298,6 +298,7 @@ pub fn spawn_stub_daemon(
                                     context_window: installed_model.context_window,
                                     supports_embeddings: installed_model.supports_embeddings,
                                     supports_decisions: installed_model.supports_decisions,
+                                    supports_speech: installed_model.supports_speech,
                                     supports_image_generation: installed_model
                                         .supports_image_generation,
                                     is_resident: installed_model.is_resident,
@@ -347,6 +348,7 @@ pub fn spawn_stub_daemon(
                                             .supports_image_generation,
                                         supports_embeddings: catalog_entry.supports_embeddings,
                                         supports_decisions: catalog_entry.supports_decisions,
+                                        supports_speech: catalog_entry.supports_speech,
                                     }
                                 })
                                 .collect();

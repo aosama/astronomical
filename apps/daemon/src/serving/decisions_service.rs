@@ -12,6 +12,10 @@ use astronomical_decision_contract::{
 use astronomical_ipc_protocol::{DecisionsCommand, RequestId};
 use thiserror::Error;
 
+use crate::serving::helper_model_resolution::{
+    HelperModelKind, HelperModelResolutionError, resolve_helper_model,
+};
+
 /// Why no model can be chosen for a decisions request.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub(crate) enum DecisionsModelResolutionError {
@@ -28,85 +32,43 @@ pub(crate) enum DecisionsModelResolutionError {
     SeveralDecisionModelsInstalled { installed_model_ids: Vec<String> },
 }
 
-/// Chooses the model that answers a decisions request.
-///
-/// A named model must be an installed decision model. With no name, the
-/// resident model answers when it is a decision model, so a caller who just
-/// used one keeps using it without a swap. Otherwise the built-in default
-/// decision model answers when it is installed: its download installs a
-/// second model beside it, so without this rule every such install would be
-/// ambiguous from the first request. Failing that, the only installed
-/// decision model answers, and several installed ones are ambiguous:
-/// guessing would answer with a model the caller did not pick.
+/// Chooses the model that answers a decisions request, by the rule every
+/// helper kind shares (`helper_model_resolution`): the named model, else the
+/// resident decision model, the built-in default, or the only installed one.
 pub(crate) fn resolve_decisions_model(
     discovered_models: &[DiscoveredModel],
     resident_model_id: Option<&str>,
     requested_model: Option<&str>,
 ) -> Result<String, DecisionsModelResolutionError> {
-    match requested_model {
-        Some(requested_model) => resolve_named_decisions_model(discovered_models, requested_model),
-        None => resolve_unnamed_decisions_model(discovered_models, resident_model_id),
-    }
-}
-
-/// A named model answers only when it is installed and is a decision model.
-fn resolve_named_decisions_model(
-    discovered_models: &[DiscoveredModel],
-    requested_model: &str,
-) -> Result<String, DecisionsModelResolutionError> {
-    let mut known_model_ids = Vec::with_capacity(discovered_models.len());
-    for discovered_model in discovered_models {
-        known_model_ids.push(discovered_model.model_id.as_str());
-    }
-    let resolved_model_id =
-        astronomical_config::resolve_model_id(requested_model, &known_model_ids);
-    for discovered_model in discovered_models {
-        if discovered_model.model_id == resolved_model_id {
-            return match discovered_model.capabilities {
-                ModelCapabilities::Decisions(_) => Ok(discovered_model.model_id.clone()),
-                _ => Err(DecisionsModelResolutionError::ModelCannotDecide),
-            };
-        }
-    }
-    Err(DecisionsModelResolutionError::ModelNotFound)
-}
-
-/// With no model named: the resident decision model, then the built-in
-/// default, then the only installed one.
-fn resolve_unnamed_decisions_model(
-    discovered_models: &[DiscoveredModel],
-    resident_model_id: Option<&str>,
-) -> Result<String, DecisionsModelResolutionError> {
-    let mut installed_decision_model_ids = Vec::new();
-    for discovered_model in discovered_models {
-        if matches!(
-            discovered_model.capabilities,
-            ModelCapabilities::Decisions(_)
-        ) {
-            installed_decision_model_ids.push(discovered_model.model_id.clone());
-        }
-    }
-    let preferred_model_ids = [
+    resolve_helper_model(
+        discovered_models,
         resident_model_id,
-        Some(astronomical_config::BUILTIN_DEFAULT_DECISION_MODEL_ID),
-    ];
-    for preferred_model_id in preferred_model_ids.into_iter().flatten() {
-        for installed_model_id in &installed_decision_model_ids {
-            if installed_model_id == preferred_model_id {
-                return Ok(installed_model_id.clone());
-            }
-        }
-    }
-    match installed_decision_model_ids.len() {
-        0 => Err(DecisionsModelResolutionError::NoDecisionModelInstalled),
-        1 => Ok(installed_decision_model_ids.remove(0)),
-        _ => {
-            installed_decision_model_ids.sort();
-            Err(
-                DecisionsModelResolutionError::SeveralDecisionModelsInstalled {
-                    installed_model_ids: installed_decision_model_ids,
-                },
-            )
+        requested_model,
+        &DECISION_MODEL_KIND,
+    )
+    .map_err(DecisionsModelResolutionError::from)
+}
+
+const DECISION_MODEL_KIND: HelperModelKind = HelperModelKind {
+    is_of_kind: is_decision_model,
+    builtin_default_model_id: astronomical_config::BUILTIN_DEFAULT_DECISION_MODEL_ID,
+};
+
+fn is_decision_model(model_capabilities: &ModelCapabilities) -> bool {
+    matches!(model_capabilities, ModelCapabilities::Decisions(_))
+}
+
+impl From<HelperModelResolutionError> for DecisionsModelResolutionError {
+    fn from(resolution_error: HelperModelResolutionError) -> Self {
+        match resolution_error {
+            HelperModelResolutionError::ModelNotFound => Self::ModelNotFound,
+            HelperModelResolutionError::ModelOfAnotherKind => Self::ModelCannotDecide,
+            HelperModelResolutionError::NoneInstalled => Self::NoDecisionModelInstalled,
+            HelperModelResolutionError::SeveralInstalled {
+                installed_model_ids,
+            } => Self::SeveralDecisionModelsInstalled {
+                installed_model_ids,
+            },
         }
     }
 }

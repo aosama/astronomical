@@ -89,34 +89,57 @@ impl Drop for ModelSwapPhasePerformanceLog {
 /// One replacement runtime fully loaded: the runtime itself, the
 /// ModelSwapped event to publish, the ceiling it enforces, and the
 /// autoregressive facts the worker state records.
-struct LoadedReplacement<
+pub(super) struct LoadedReplacement<
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine + Send + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 > {
-    replacement_runtime:
-        LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
-    model_swapped_event: WorkerEvent,
-    minimum_mlx_memory_ceiling_bytes: u64,
-    runtime_configuration: astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
-    engine_placement: Option<EnginePlacement>,
-    startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
-    neural_engine_prefill_event: Option<WorkerEvent>,
+    pub(super) replacement_runtime: LoadedRuntime<
+        Processor,
+        Engine,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >,
+    pub(super) model_swapped_event: WorkerEvent,
+    pub(super) minimum_mlx_memory_ceiling_bytes: u64,
+    pub(super) runtime_configuration:
+        astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
+    pub(super) engine_placement: Option<EnginePlacement>,
+    pub(super) startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
+    pub(super) neural_engine_prefill_event: Option<WorkerEvent>,
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     pub(super) async fn swap_model<WriteTransport>(
         &mut self,
@@ -238,11 +261,19 @@ where
             ImageEngine,
             EmbeddingsEngine,
             DecisionsEngine,
+            TextToSpeechEngine,
         >,
         model_configuration: &WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        LoadedReplacement<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
         WorkerRuntimeError,
     >
     where
@@ -268,15 +299,16 @@ where
                     .await
             }
             single_shot_runtime @ (ModelFactoryRuntime::Embeddings(_)
-            | ModelFactoryRuntime::Decisions(_)) => {
+            | ModelFactoryRuntime::Decisions(_)
+            | ModelFactoryRuntime::Speech(_)) => {
                 self.load_single_shot_replacement(single_shot_runtime, model_configuration)
                     .await
             }
         }
     }
 
-    /// Loads a replacement that answers in one forward pass: a decision
-    /// engine or an embedding engine.
+    /// Loads a replacement whose requests keep nothing between them: a
+    /// decision, embedding or speech engine.
     async fn load_single_shot_replacement(
         &self,
         single_shot_runtime: ModelFactoryRuntime<
@@ -285,10 +317,18 @@ where
             ImageEngine,
             EmbeddingsEngine,
             DecisionsEngine,
+            TextToSpeechEngine,
         >,
         model_configuration: &WorkerModelConfiguration,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        LoadedReplacement<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
         WorkerRuntimeError,
     > {
         match single_shot_runtime {
@@ -299,11 +339,7 @@ where
                 self.load_embedding_replacement(embedding_engine, model_configuration)
                     .await
             }
-            // `load_replacement_runtime` loads every other kind itself.
-            _ => Err(WorkerRuntimeError::ModelSwapFailed {
-                model_load_failure_reason: "the selected model is not a single-pass model"
-                    .to_owned(),
-            }),
+            other_runtime => self.load_speech_replacement(other_runtime, model_configuration),
         }
     }
 
@@ -318,7 +354,14 @@ where
         model_configuration: &WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        LoadedReplacement<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
         WorkerRuntimeError,
     >
     where
@@ -356,7 +399,14 @@ where
         mut image_engine: ImageEngine,
         model_configuration: &WorkerModelConfiguration,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        LoadedReplacement<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
         WorkerRuntimeError,
     > {
         let image_load_result = image_engine.load().map_err(|failure_reason| {
@@ -399,7 +449,14 @@ where
         mut embedding_engine: EmbeddingsEngine,
         model_configuration: &WorkerModelConfiguration,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        LoadedReplacement<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
         WorkerRuntimeError,
     > {
         let embedding_load_result = embedding_engine.load().map_err(|failure_reason| {
@@ -441,7 +498,14 @@ where
         mut decision_engine: DecisionsEngine,
         model_configuration: &WorkerModelConfiguration,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        LoadedReplacement<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
         WorkerRuntimeError,
     > {
         let decision_load_result = match decision_engine.load() {
@@ -536,6 +600,7 @@ pub(super) fn factory_runtime_matches_configuration<
     ImageEngine,
     EmbeddingsEngine,
     DecisionsEngine,
+    TextToSpeechEngine,
 >(
     factory_runtime: &ModelFactoryRuntime<
         Processor,
@@ -543,28 +608,26 @@ pub(super) fn factory_runtime_matches_configuration<
         ImageEngine,
         EmbeddingsEngine,
         DecisionsEngine,
+        TextToSpeechEngine,
     >,
     model_configuration: &WorkerModelConfiguration,
 ) -> bool {
-    matches!(
-        (factory_runtime, model_configuration),
-        (
-            ModelFactoryRuntime::Autoregressive { .. },
-            WorkerModelConfiguration::Autoregressive(_)
-        ) | (
-            ModelFactoryRuntime::Image(_),
-            WorkerModelConfiguration::Flux2Klein(_)
-        ) | (
-            ModelFactoryRuntime::Image(_),
-            WorkerModelConfiguration::QwenImage21(_)
-        ) | (
-            ModelFactoryRuntime::Embeddings(_),
-            WorkerModelConfiguration::Embeddings(_)
-        ) | (
-            ModelFactoryRuntime::Decisions(_),
-            WorkerModelConfiguration::Decisions(_)
-        )
-    )
+    // Exhaustive on the runtime, so a new model kind cannot be forgotten
+    // here the way the speech pair once was.
+    astronomical_config::exhaustive_table!(factory_runtime, {
+        ModelFactoryRuntime::Autoregressive =>
+            matches!(model_configuration, WorkerModelConfiguration::Autoregressive(_)),
+        ModelFactoryRuntime::Image => matches!(
+            model_configuration,
+            WorkerModelConfiguration::Flux2Klein(_) | WorkerModelConfiguration::QwenImage21(_)
+        ),
+        ModelFactoryRuntime::Embeddings =>
+            matches!(model_configuration, WorkerModelConfiguration::Embeddings(_)),
+        ModelFactoryRuntime::Decisions =>
+            matches!(model_configuration, WorkerModelConfiguration::Decisions(_)),
+        ModelFactoryRuntime::Speech =>
+            matches!(model_configuration, WorkerModelConfiguration::Speech(_)),
+    })
 }
 
 pub(super) fn model_swapped_from_ready_event(

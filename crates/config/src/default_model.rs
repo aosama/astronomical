@@ -39,6 +39,14 @@ pub const BUILTIN_DEFAULT_IMAGE_MODEL_ID: &str = "FLUX.2-klein-4B";
 /// `laya-MLX-8bit-multilingual` for text in other languages.
 pub const BUILTIN_DEFAULT_DECISION_MODEL_ID: &str = "laya-MLX-8bit";
 
+/// The speech model used when a request names none.
+///
+/// The persisted default model is a chat model and cannot speak, so speech
+/// has its own default, as images and decisions do. Kokoro has many voices,
+/// can change its pace, and speaks a whole sentence in one pass; Phonon
+/// stays available with `--model phonon-31m-en`.
+pub const BUILTIN_DEFAULT_SPEECH_MODEL_ID: &str = "Kokoro-82M-bf16";
+
 /// Rejects ids that cannot resolve to a catalog entry or discovered model.
 fn validate_default_model_id(model_id: &str) -> Result<(), AstronomicalConfigError> {
     if model_id.is_empty() || model_id.trim() != model_id {

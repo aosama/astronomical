@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::WorkerModelCapabilities;
 use astronomical_rest_contract::{
     OpenAiDecisionModelParts, OpenAiEmbeddingModelParts, OpenAiErrorResponse,
     OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
-    OpenAiModelValidationError, STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK,
+    OpenAiModelValidationError, OpenAiSpeechModelParts, STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK,
 };
 use axum::{
     Json,
@@ -114,25 +114,11 @@ fn openai_model_from_ready_worker_capabilities(
     model_advertisement_created_at_unix_seconds: u64,
     ready_model_capabilities: WorkerModelCapabilities,
 ) -> Result<OpenAiModel, OpenAiModelValidationError> {
-    let WorkerModelCapabilities {
-        chat,
-        image_generation,
-        embeddings,
-        decisions,
-    } = ready_model_capabilities;
-    let Some(chat_capabilities) = chat else {
-        if let Some(decision_capabilities) = decisions {
-            return openai_decision_model(
-                ready_model_id,
-                model_advertisement_created_at_unix_seconds,
-                decision_capabilities.maximum_tokens_per_question,
-            );
-        }
-        return openai_model_from_ready_embedding_or_image_capabilities(
+    let Some(chat_capabilities) = ready_model_capabilities.chat.clone() else {
+        return openai_model_from_ready_helper_capabilities(
             ready_model_id,
             model_advertisement_created_at_unix_seconds,
-            embeddings,
-            image_generation,
+            ready_model_capabilities,
         );
     };
     OpenAiModel::from_parts(OpenAiModelParts {
@@ -153,6 +139,46 @@ fn openai_model_from_ready_worker_capabilities(
         supports_structured_outputs: true,
         structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK.to_owned()),
     })
+}
+
+/// Advertises a loaded model that does not chat: a decision or speech model
+/// when it says so, else an embedding or image model.
+fn openai_model_from_ready_helper_capabilities(
+    ready_model_id: String,
+    model_advertisement_created_at_unix_seconds: u64,
+    ready_model_capabilities: WorkerModelCapabilities,
+) -> Result<OpenAiModel, OpenAiModelValidationError> {
+    let WorkerModelCapabilities {
+        image_generation,
+        embeddings,
+        decisions,
+        speech,
+        ..
+    } = ready_model_capabilities;
+    if let Some(decision_capabilities) = decisions {
+        return openai_decision_model(
+            ready_model_id,
+            model_advertisement_created_at_unix_seconds,
+            decision_capabilities.maximum_tokens_per_question,
+        );
+    }
+    if let Some(speech_capabilities) = speech {
+        return OpenAiModel::from_speech_parts(OpenAiSpeechModelParts {
+            model_id: ready_model_id,
+            created: model_advertisement_created_at_unix_seconds,
+            owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+            voices: speech_capabilities.voice_names,
+            default_voice: speech_capabilities.default_voice_name,
+            sample_rate_hertz: speech_capabilities.sample_rate_hertz,
+            supports_speed: speech_capabilities.supports_speed,
+        });
+    }
+    openai_model_from_ready_embedding_or_image_capabilities(
+        ready_model_id,
+        model_advertisement_created_at_unix_seconds,
+        embeddings,
+        image_generation,
+    )
 }
 
 /// Advertises a loaded model that neither chats nor decides: an embedding
@@ -209,27 +235,26 @@ fn openai_model_from_discovered_model(
                 },
             })
         }
-        ModelCapabilities::Embeddings(_) | ModelCapabilities::Decisions(_) => {
-            openai_model_from_discovered_helper_model(
-                discovered_model,
-                model_advertisement_created_at_unix_seconds,
-            )
-        }
+        ModelCapabilities::Embeddings(_)
+        | ModelCapabilities::Decisions(_)
+        | ModelCapabilities::Speech(_) => openai_model_from_discovered_helper_model(
+            discovered_model,
+            model_advertisement_created_at_unix_seconds,
+        ),
     }
 }
 
-/// Advertises a discovered model that answers in one step: a decision model
-/// when its capabilities say so, and an embedding model otherwise.
+/// Advertises a discovered helper model: a decision or speech model when its
+/// capabilities say so, and an embedding model otherwise.
 fn openai_model_from_discovered_helper_model(
     discovered_model: &DiscoveredModel,
     model_advertisement_created_at_unix_seconds: u64,
 ) -> Result<OpenAiModel, OpenAiModelValidationError> {
-    if let ModelCapabilities::Decisions(capabilities) = &discovered_model.capabilities {
-        return openai_decision_model(
-            discovered_model.model_id.clone(),
-            model_advertisement_created_at_unix_seconds,
-            capabilities.maximum_tokens_per_question,
-        );
+    if let Some(advertisement) = discovered_decision_or_speech_model(
+        discovered_model,
+        model_advertisement_created_at_unix_seconds,
+    ) {
+        return advertisement;
     }
     // Anything that is not an embedding model has no vector width, and a
     // zero width fails advertisement closed instead of inventing a surface.
@@ -246,6 +271,33 @@ fn openai_model_from_discovered_helper_model(
         vector_width,
         max_input_tokens,
     })
+}
+
+/// The advertisement of a discovered decision or speech model, or `None`
+/// for an embedding model.
+fn discovered_decision_or_speech_model(
+    discovered_model: &DiscoveredModel,
+    model_advertisement_created_at_unix_seconds: u64,
+) -> Option<Result<OpenAiModel, OpenAiModelValidationError>> {
+    match &discovered_model.capabilities {
+        ModelCapabilities::Decisions(capabilities) => Some(openai_decision_model(
+            discovered_model.model_id.clone(),
+            model_advertisement_created_at_unix_seconds,
+            capabilities.maximum_tokens_per_question,
+        )),
+        ModelCapabilities::Speech(capabilities) => {
+            Some(OpenAiModel::from_speech_parts(OpenAiSpeechModelParts {
+                model_id: discovered_model.model_id.clone(),
+                created: model_advertisement_created_at_unix_seconds,
+                owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+                voices: capabilities.voice_names.clone(),
+                default_voice: capabilities.default_voice_name.clone(),
+                sample_rate_hertz: capabilities.sample_rate_hertz,
+                supports_speed: capabilities.supports_speed,
+            }))
+        }
+        _ => None,
+    }
 }
 
 /// The advertisement of a decision model, whether it is described by

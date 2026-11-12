@@ -86,19 +86,22 @@ pub enum WorkerActivity {
     Generating,
     /// Native image conditioning, denoising, decoding, or encoding is active.
     ImageGeneration,
+    /// A speech model is reading text aloud.
+    Speaking,
 }
 
 impl WorkerActivity {
     /// Stable text used by the status endpoint and menu bar display.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        match self {
+        astronomical_config::exhaustive_table!(self, {
             Self::Idle => "idle",
             Self::PromptProcessing => "prompt_processing",
             Self::GenerationPreparation => "generation_preparation",
             Self::Generating => "generating",
             Self::ImageGeneration => "image_generation",
-        }
+            Self::Speaking => "speaking",
+        })
     }
 }
 

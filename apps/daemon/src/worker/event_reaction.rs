@@ -151,6 +151,34 @@ pub(in crate::worker) fn send_image_deadline_exceeded(
     }
 }
 
+/// Tells the caller of an image or speech request that ran past its bounds;
+/// the cancellation that follows frees the worker.
+pub(in crate::worker) fn send_stepped_deadline_exceeded(
+    active_generation: &Option<ActiveWorkerRequest>,
+) {
+    send_image_deadline_exceeded(active_generation);
+    send_speech_deadline_exceeded(active_generation);
+}
+
+/// Tells the caller of a speech request that ran past its bounds: its audio
+/// was too long for one request, or it ran out of time.
+fn send_speech_deadline_exceeded(active_generation: &Option<ActiveWorkerRequest>) {
+    if let Some(ActiveWorkerRequest::Speech(active_speech)) = active_generation.as_ref() {
+        let speech_error = if active_speech.has_exceeded_audio_limit {
+            crate::SpeechExecutionError::WorkerFailure(
+                astronomical_speech_contract::SpeechFailure::invalid_request(
+                    crate::worker::speech_event::AUDIO_TOO_LONG_REASON,
+                ),
+            )
+        } else {
+            crate::SpeechExecutionError::DeadlineExceeded
+        };
+        let _send_outcome = active_speech
+            .speech_result_sender
+            .try_send(Err(speech_error));
+    }
+}
+
 /// Requests idle MLX memory telemetry when a model is loaded. Mirrors the
 /// inlined idle-telemetry branch body.
 pub(in crate::worker) async fn sample_idle_mlx_memory_telemetry(

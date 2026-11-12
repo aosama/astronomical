@@ -41,10 +41,12 @@ mod protocol_message;
 mod protocol_message_tests;
 mod protocol_reader;
 mod protocol_writer;
+mod speech;
 mod worker_chunking_configuration;
 #[cfg(test)]
 mod worker_chunking_configuration_tests;
 mod worker_event_diagnostics;
+mod worker_model_capabilities;
 mod worker_model_configuration;
 #[cfg(test)]
 mod worker_model_configuration_tests;
@@ -79,7 +81,7 @@ pub use image_generation::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationCompletionValidationError, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, ImageGenerationSettings, ImageGenerationValidationError,
-    WorkerEmbeddingCapabilities, WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
+    WorkerEmbeddingCapabilities,
 };
 pub use message_codec::{
     decode_command, decode_daemon_request, decode_daemon_response, decode_event, encode_command,
@@ -105,15 +107,22 @@ pub use protocol_message::{
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
+pub use speech::{
+    SpeechCommand, SpeechResultMetadata, SpokenAudioSegment, WorkerSpeechCapabilities,
+};
 pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
+};
+pub use worker_model_capabilities::{
+    WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
 };
 pub use worker_model_configuration::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
     WorkerDecisionModelFamily, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
     WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
-    WorkerModelConfiguration, WorkerQwenImage21ModelConfiguration,
+    WorkerModelConfiguration, WorkerQwenImage21ModelConfiguration, WorkerSpeechModelConfiguration,
+    WorkerSpeechModelFamily,
 };
 pub use worker_startup_configuration::{
     WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,

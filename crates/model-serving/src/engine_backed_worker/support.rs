@@ -18,6 +18,7 @@ pub enum ModelFactoryRuntime<
     ImageEngine = ImageGenerationUnavailableEngine,
     EmbeddingEngine = crate::EmbeddingUnavailableEngine,
     DecisionsEngine = crate::DecisionUnavailableEngine,
+    TextToSpeechEngine = crate::SpeechUnavailableEngine,
 > {
     Autoregressive {
         processor: Processor,
@@ -34,10 +35,18 @@ pub enum ModelFactoryRuntime<
     Image(ImageEngine),
     Embeddings(EmbeddingEngine),
     Decisions(DecisionsEngine),
+    Speech(TextToSpeechEngine),
 }
 
-impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    ModelFactoryRuntime<
+        Processor,
+        Engine,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 {
     #[must_use]
     pub fn autoregressive(
@@ -82,6 +91,7 @@ pub trait ModelFactory<
     ImageEngine = ImageGenerationUnavailableEngine,
     EmbeddingsEngine = crate::EmbeddingUnavailableEngine,
     DecisionsEngine = crate::DecisionUnavailableEngine,
+    TextToSpeechEngine = crate::SpeechUnavailableEngine,
 >: Send + Sync + 'static
 {
     /// Creates one unloaded runtime for the exact tagged model configuration.
@@ -94,7 +104,14 @@ pub trait ModelFactory<
         model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<
         Output = Result<
-            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+            ModelFactoryRuntime<
+                Processor,
+                Engine,
+                ImageEngine,
+                EmbeddingsEngine,
+                DecisionsEngine,
+                TextToSpeechEngine,
+            >,
             String,
         >,
     > + Send;
@@ -111,7 +128,14 @@ pub trait ModelFactory<
         _model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<
         Output = Result<
-            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+            ModelFactoryRuntime<
+                Processor,
+                Engine,
+                ImageEngine,
+                EmbeddingsEngine,
+                DecisionsEngine,
+                TextToSpeechEngine,
+            >,
             String,
         >,
     > + Send {
@@ -131,7 +155,14 @@ pub trait ModelFactory<
         _model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<
         Output = Result<
-            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+            ModelFactoryRuntime<
+                Processor,
+                Engine,
+                ImageEngine,
+                EmbeddingsEngine,
+                DecisionsEngine,
+                TextToSpeechEngine,
+            >,
             String,
         >,
     > + Send {
@@ -166,15 +197,29 @@ pub trait ModelFactory<
     }
 }
 
-impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine> for ()
+impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    ModelFactory<
+        Processor,
+        Engine,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    > for ()
 {
     async fn create(
         &self,
         _model_directory: &str,
         _model_configuration: WorkerModelConfiguration,
     ) -> Result<
-        ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        ModelFactoryRuntime<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
         String,
     > {
         Err("model swapping is unavailable because no model factory was configured".to_owned())
@@ -184,6 +229,7 @@ impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
 pub(crate) enum ActiveWorkerRequest<RequestOutput, RetryRequest> {
     Autoregressive(Box<ActiveEngineGeneration<RequestOutput, RetryRequest>>),
     Image(ActiveImageGeneration),
+    Speech(super::speech::ActiveSpeechGeneration),
 }
 
 #[derive(Clone)]

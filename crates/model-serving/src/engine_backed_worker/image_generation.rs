@@ -11,17 +11,32 @@ use super::{EngineBackedWorker, LoadedRuntime};
 use crate::model_generation_processor::ModelGenerationProcessor;
 use crate::{ImageGenerationEngine, ImageGenerationEngineStep, InferenceEngine};
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     pub(crate) async fn start_image_generation<WriteTransport>(
         &mut self,
@@ -50,6 +65,7 @@ where
             Some(LoadedRuntime::Autoregressive(_))
             | Some(LoadedRuntime::Embeddings(_))
             | Some(LoadedRuntime::Decisions(_))
+            | Some(LoadedRuntime::Speech(_))
             | None => Err(ImageGenerationFailureReason::ModelDoesNotSupportImageGeneration),
         };
         match start_result {
@@ -88,6 +104,7 @@ where
             Some(LoadedRuntime::Autoregressive(_))
             | Some(LoadedRuntime::Embeddings(_))
             | Some(LoadedRuntime::Decisions(_))
+            | Some(LoadedRuntime::Speech(_))
             | None => Err(ImageGenerationFailureReason::FatalExecution {
                 reason: "the loaded image runtime was removed during generation".to_owned(),
             }),
@@ -110,7 +127,8 @@ where
                         }
                         LoadedRuntime::Autoregressive(_)
                         | LoadedRuntime::Embeddings(_)
-                        | LoadedRuntime::Decisions(_) => None,
+                        | LoadedRuntime::Decisions(_)
+                        | LoadedRuntime::Speech(_) => None,
                     })
                     .map(|memory_telemetry| {
                         super::output::worker_memory_snapshot(
@@ -199,6 +217,7 @@ where
             Some(LoadedRuntime::Autoregressive(_))
             | Some(LoadedRuntime::Embeddings(_))
             | Some(LoadedRuntime::Decisions(_))
+            | Some(LoadedRuntime::Speech(_))
             | None => Ok(()),
         };
         cancellation.map_err(|cleanup_failure| image_cleanup_error(request_id, cleanup_failure))?;
@@ -268,6 +287,7 @@ where
             Some(LoadedRuntime::Autoregressive(_))
             | Some(LoadedRuntime::Embeddings(_))
             | Some(LoadedRuntime::Decisions(_))
+            | Some(LoadedRuntime::Speech(_))
             | None => None,
         };
         event_writer

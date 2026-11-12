@@ -79,7 +79,8 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                     "supports_tool_calls": false,
                     "supports_image_generation": false,
                     "supports_embeddings": false,
-                    "supports_decisions": false
+                    "supports_decisions": false,
+                    "supports_speech": false
                 }
             },
             {
@@ -104,7 +105,8 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                     "supports_tool_calls": false,
                     "supports_image_generation": false,
                     "supports_embeddings": false,
-                    "supports_decisions": false
+                    "supports_decisions": false,
+                    "supports_speech": false
                 }
             },
             {
@@ -128,7 +130,8 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                     "supports_tool_calls": false,
                     "supports_image_generation": false,
                     "supports_embeddings": true,
-                    "supports_decisions": false
+                    "supports_decisions": false,
+                    "supports_speech": false
                 }
             }
         ]
@@ -357,8 +360,14 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
     .expect("the bundled catalog publication journey must finish within five seconds");
 }
 
-const PUBLISHED_ROLE_NAMES: [&str; 5] =
-    ["chat", "coding", "image_generation", "helper", "decision"];
+const PUBLISHED_ROLE_NAMES: [&str; 6] = [
+    "chat",
+    "coding",
+    "image_generation",
+    "helper",
+    "decision",
+    "speech",
+];
 const JAVASCRIPT_SAFE_INTEGER_MAXIMUM: u64 = 9_007_199_254_740_991;
 
 /// The Library card uses the role for its grouping, the memory figure for the

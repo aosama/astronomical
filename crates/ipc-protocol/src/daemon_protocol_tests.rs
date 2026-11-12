@@ -125,6 +125,7 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
                 context_window: Some(32_768),
                 supports_embeddings: false,
                 supports_decisions: false,
+                supports_speech: false,
                 supports_image_generation: false,
                 is_resident: true,
                 size_bytes: 1_750_000_000,
@@ -146,6 +147,7 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
                 supports_image_generation: false,
                 supports_embeddings: false,
                 supports_decisions: false,
+                supports_speech: false,
             }],
         },
         DaemonResponse::DownloadStarted {

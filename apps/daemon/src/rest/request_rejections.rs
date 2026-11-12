@@ -1,7 +1,6 @@
-//! The refusals shared by the endpoints whose requests run as one forward
-//! pass: embeddings and decisions.
+//! The refusals shared by the embeddings, decisions and speech endpoints.
 //!
-//! Both endpoints refuse a request for the same reasons before it reaches
+//! Each refuses a request for the same reasons before it reaches
 //! the worker (a malformed body, an unavailable worker, a full queue, a
 //! model that failed to load), and a client should see one error shape for
 //! each reason whichever endpoint it called.

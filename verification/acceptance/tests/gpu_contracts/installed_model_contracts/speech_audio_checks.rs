@@ -4,7 +4,6 @@
 use std::path::Path;
 
 use astronomical_model_serving::{SpeechEngine, SpeechEngineStep};
-use astronomical_runtime_integration::MlxMemoryLimits;
 use astronomical_speech_contract::{SpeechRequest, wav_bytes};
 
 pub(crate) const TEST_MLX_MEMORY_CEILING_BYTES: usize = 4 * 1024 * 1024 * 1024;
@@ -14,14 +13,6 @@ Arise, fair sun, and kill the envious moon, who is already sick and pale with gr
 /// The passage's 30 words take a person about 8 to 12 seconds to say.
 const SHORTEST_PLAUSIBLE_SECONDS: f32 = 5.0;
 const LONGEST_PLAUSIBLE_SECONDS: f32 = 16.0;
-
-pub(crate) fn test_memory_limits() -> MlxMemoryLimits {
-    MlxMemoryLimits::new(
-        TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
-    )
-    .expect("valid test limits")
-}
 
 /// What one request's steps produced.
 pub(crate) struct SpokenPassage {
@@ -44,12 +35,20 @@ pub(crate) fn speak_through_engine(
         cut_short_segment_count: 0,
     };
     loop {
+        // Each segment's time is printed so the daemon's progress-stall
+        // bound can be checked against what a real model takes.
+        let segment_started = std::time::Instant::now();
         match engine.advance_speech().expect("the engine speaks") {
             SpeechEngineStep::SegmentSpoken {
                 samples,
                 was_cut_short,
-                ..
+                completed_segments,
+                total_segments,
             } => {
+                eprintln!(
+                    "speech: segment {completed_segments}/{total_segments} spoken in {:.2}s",
+                    segment_started.elapsed().as_secs_f32()
+                );
                 spoken_passage.samples.extend(samples);
                 spoken_passage.segment_count += 1;
                 spoken_passage.cut_short_segment_count += usize::from(was_cut_short);

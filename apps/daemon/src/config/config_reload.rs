@@ -139,7 +139,8 @@ impl ResolvedRuntimeConfigResolver {
                 }
                 ModelCapabilities::ImageGeneration(_)
                 | ModelCapabilities::Embeddings(_)
-                | ModelCapabilities::Decisions(_) => None,
+                | ModelCapabilities::Decisions(_)
+                | ModelCapabilities::Speech(_) => None,
             })
             .collect::<HashMap<_, _>>();
         let unmatched_model_config_ids =

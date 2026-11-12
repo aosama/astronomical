@@ -8,5 +8,4 @@
 pub(crate) mod clef;
 pub(crate) mod kev;
 pub(crate) mod laya;
-pub(crate) mod memory_telemetry;
 pub(crate) mod qwen_backbone;

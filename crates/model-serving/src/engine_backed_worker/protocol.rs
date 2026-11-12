@@ -1,14 +1,14 @@
 //! Protocol startup and command-loop orchestration for the engine-backed worker.
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationFailureReason, EmbeddingsFailureReason,
-    ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
-    WorkerCommand, WorkerDecisionCapabilities, WorkerEvent, WorkerModelCapabilities,
-    WorkerRuntimeFeatureConfiguration,
+    ChatGenerationCompletionReason, ChatGenerationFailureReason, MlxMemorySnapshotSource,
+    ProtocolReader, ProtocolWriter, WorkerCommand, WorkerDecisionCapabilities, WorkerEvent,
+    WorkerModelCapabilities, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::load_announcement::announce_load_started;
+use super::stepped_request::CommandDuringRequest;
 use super::support::{
     ActiveEngineGeneration, ActiveImageGeneration, ActiveWorkerRequest, ModelFactory,
     WorkerRuntimeError,
@@ -41,17 +41,32 @@ fn initialization_failure(engine_error: crate::InferenceEngineError) -> WorkerRu
     }
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine, TextToSpeechEngine>
+    EngineBackedWorker<
+        Processor,
+        Engine,
+        Factory,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+        TextToSpeechEngine,
+    >
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
-        + Send
+    Factory: ModelFactory<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        > + Send
         + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
     DecisionsEngine: crate::DecisionEngine,
+    TextToSpeechEngine: crate::SpeechEngine,
 {
     /// Loads the engine, reports readiness, and serves commands until stdin closes.
     pub async fn run<ReadTransport, WriteTransport>(
@@ -93,9 +108,11 @@ where
                     .await?;
             }
             Some(
-                single_shot_runtime @ (LoadedRuntime::Embeddings(_) | LoadedRuntime::Decisions(_)),
+                forward_pass_runtime @ (LoadedRuntime::Embeddings(_)
+                | LoadedRuntime::Decisions(_)
+                | LoadedRuntime::Speech(_)),
             ) => {
-                self.announce_single_shot_readiness(single_shot_runtime, &mut event_writer)
+                self.announce_forward_pass_readiness(forward_pass_runtime, &mut event_writer)
                     .await?;
             }
             None => self.announce_idle_readiness(&mut event_writer).await?,
@@ -206,24 +223,25 @@ where
             .await
     }
 
-    /// Loads and announces a runtime that answers in one forward pass: an
-    /// embedding engine or a decision engine. Other runtimes are announced
-    /// by their own arms, so they are left alone here.
-    async fn announce_single_shot_readiness<WriteTransport>(
+    /// Loads and announces a runtime whose requests keep nothing between
+    /// them: an embedding, decision or speech engine. Other runtimes are
+    /// announced by their own arms, so they are left alone here.
+    async fn announce_forward_pass_readiness<WriteTransport>(
         &mut self,
-        single_shot_runtime: &mut LoadedRuntime<
+        forward_pass_runtime: &mut LoadedRuntime<
             Processor,
             Engine,
             ImageEngine,
             EmbeddingsEngine,
             DecisionsEngine,
+            TextToSpeechEngine,
         >,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        match single_shot_runtime {
+        match forward_pass_runtime {
             LoadedRuntime::Embeddings(embedding_engine) => {
                 self.announce_embeddings_readiness(embedding_engine, event_writer)
                     .await
@@ -232,7 +250,10 @@ where
                 self.announce_decisions_readiness(decision_engine, event_writer)
                     .await
             }
-            _ => Ok(()),
+            other_runtime => {
+                self.announce_speech_readiness(other_runtime, event_writer)
+                    .await
+            }
         }
     }
 
@@ -330,31 +351,16 @@ where
                 self.has_request_run_since_settling |= active_request.is_some();
                 continue;
             };
-            active_request = match current_request {
-                ActiveWorkerRequest::Autoregressive(current_generation) => {
-                    self.serve_active_autoregressive_request(
-                        current_generation,
-                        &mut command_reader,
-                        &mut event_writer,
-                    )
-                    .await?
-                }
-                ActiveWorkerRequest::Image(current_generation) => {
-                    self.serve_active_image_request(
-                        current_generation,
-                        &mut command_reader,
-                        &mut event_writer,
-                    )
-                    .await?
-                }
-            };
+            active_request = self
+                .serve_active_request(current_request, &mut command_reader, &mut event_writer)
+                .await?;
         }
     }
 
     /// Runs one autoregressive generation to its next yield: a worker
     /// command either replaces the active request state or completes it,
     /// and every otherwise-idle loop tick advances the generation.
-    async fn serve_active_autoregressive_request<ReadTransport, WriteTransport>(
+    pub(super) async fn serve_active_autoregressive_request<ReadTransport, WriteTransport>(
         &mut self,
         current_generation: Box<
             ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>,
@@ -391,17 +397,11 @@ where
                         event_writer.send_event(&WorkerEvent::Failed { request_id: generation_command.request_id, reason: ChatGenerationFailureReason::EngineBusy }).await?;
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
-                    WorkerCommand::GenerateImage(generation_command) => {
-                        self.emit_image_failure_and_finalization(generation_command.request_id, ImageGenerationFailureReason::EngineBusy, 0, event_writer).await?;
-                        Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
-                    }
-                    WorkerCommand::GenerateEmbeddings(embeddings_command) => {
-                        event_writer.send_event(&WorkerEvent::EmbeddingsFailed { request_id: embeddings_command.request_id, reason: EmbeddingsFailureReason::EngineBusy }).await?;
-                        event_writer.send_event(&WorkerEvent::EmbeddingsFinalized { request_id: embeddings_command.request_id, elapsed_millis: 0, mlx_memory_snapshot: None }).await?;
-                        Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
-                    }
-                    WorkerCommand::GenerateDecisions(decisions_command) => {
-                        self.refuse_decisions_while_busy(decisions_command.request_id, event_writer).await?;
+                    busy_command @ (WorkerCommand::GenerateImage(_)
+                    | WorkerCommand::GenerateEmbeddings(_)
+                    | WorkerCommand::GenerateDecisions(_)
+                    | WorkerCommand::GenerateSpeech(_)) => {
+                        self.refuse_request_while_busy(busy_command, event_writer).await?;
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
                     WorkerCommand::SwapModel { .. } => {
@@ -446,9 +446,9 @@ where
     }
 
     /// Runs one image generation to its next yield: a worker command either
-    /// keeps the generation active or cancels/completes it, and every
-    /// otherwise-idle loop tick advances the generation.
-    async fn serve_active_image_request<ReadTransport, WriteTransport>(
+    /// keeps the generation active or cancels it, and every otherwise-idle
+    /// loop tick advances the generation.
+    pub(super) async fn serve_active_image_request<ReadTransport, WriteTransport>(
         &mut self,
         current_generation: ActiveImageGeneration,
         command_reader: &mut ProtocolReader<ReadTransport>,
@@ -464,43 +464,17 @@ where
         tokio::select! {
             biased;
             next_command = command_reader.next_command() => {
-                let Some(worker_command) = next_command? else {
-                    self.cancel_image_generation(current_generation, event_writer).await?;
-                    return Ok(None);
+                let command_during_request = match next_command? {
+                    Some(worker_command) => {
+                        self.answer_command_during_request(worker_command, current_generation.request_id, event_writer).await?
+                    }
+                    None => CommandDuringRequest::Cancel,
                 };
-                match worker_command {
-                    WorkerCommand::Cancel { request_id } if request_id == current_generation.request_id => {
+                match command_during_request {
+                    CommandDuringRequest::Continue => Ok(Some(ActiveWorkerRequest::Image(current_generation))),
+                    CommandDuringRequest::Cancel => {
                         self.cancel_image_generation(current_generation, event_writer).await?;
                         Ok(None)
-                    }
-                    WorkerCommand::Generate(generation_command) | WorkerCommand::CountChatTokens(generation_command) => {
-                        event_writer.send_event(&WorkerEvent::Failed { request_id: generation_command.request_id, reason: ChatGenerationFailureReason::EngineBusy }).await?;
-                        Ok(Some(ActiveWorkerRequest::Image(current_generation)))
-                    }
-                    WorkerCommand::GenerateImage(generation_command) => {
-                        self.emit_image_failure_and_finalization(generation_command.request_id, ImageGenerationFailureReason::EngineBusy, 0, event_writer).await?;
-                        Ok(Some(ActiveWorkerRequest::Image(current_generation)))
-                    }
-                    WorkerCommand::GenerateEmbeddings(embeddings_command) => {
-                        event_writer.send_event(&WorkerEvent::EmbeddingsFailed { request_id: embeddings_command.request_id, reason: EmbeddingsFailureReason::EngineBusy }).await?;
-                        event_writer.send_event(&WorkerEvent::EmbeddingsFinalized { request_id: embeddings_command.request_id, elapsed_millis: 0, mlx_memory_snapshot: None }).await?;
-                        Ok(Some(ActiveWorkerRequest::Image(current_generation)))
-                    }
-                    WorkerCommand::GenerateDecisions(decisions_command) => {
-                        self.refuse_decisions_while_busy(decisions_command.request_id, event_writer).await?;
-                        Ok(Some(ActiveWorkerRequest::Image(current_generation)))
-                    }
-                    WorkerCommand::UpdateMlxMemoryLimit { effective_mlx_memory_ceiling_bytes, configuration_generation: _ } => {
-                        event_writer.send_event(&WorkerEvent::MlxMemoryLimitRejected {
-                            requested_mlx_memory_ceiling_bytes: effective_mlx_memory_ceiling_bytes,
-                            minimum_mlx_memory_ceiling_bytes: self.minimum_mlx_memory_ceiling_bytes,
-                            machine_mlx_memory_ceiling_bytes: self.machine_mlx_memory_ceiling_bytes,
-                            reason: "memory limits cannot change during generation".to_owned(),
-                        }).await?;
-                        Ok(Some(ActiveWorkerRequest::Image(current_generation)))
-                    }
-                    WorkerCommand::Cancel { .. } | WorkerCommand::InitializeWorker(_) | WorkerCommand::SampleMlxMemory | WorkerCommand::SwapModel { .. } | WorkerCommand::ClearPromptCache { .. } => {
-                        Ok(Some(ActiveWorkerRequest::Image(current_generation)))
                     }
                 }
             }

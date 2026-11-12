@@ -2,6 +2,7 @@ mod admission;
 mod chat;
 mod decisions;
 mod image;
+mod speech;
 
 /// Skips load-progress reports, which every autoregressive load now sends ahead of
 /// its readiness event; the chat lifecycle tests cover their place in the stream.

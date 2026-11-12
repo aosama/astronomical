@@ -15,7 +15,7 @@ const LIBRARY_REVEAL_URL = "/v1/library/reveal";
 // Schema 5 names every model by its model ID alone; the display name, short
 // name and version label are gone, so every catalog row is one model.
 const LIBRARY_CATALOG_SCHEMA_VERSION = 5;
-const DOWNLOAD_MODELS_ROLES = ["chat", "coding", "image_generation", "helper", "decision"];
+const DOWNLOAD_MODELS_ROLES = ["chat", "coding", "image_generation", "helper", "decision", "speech"];
 
 let downloadModelsCatalogLoadPromise = null;
 let downloadModelsCatalogDocument = null;
@@ -254,6 +254,7 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         supportsImageGeneration: capabilities.supports_image_generation === true,
         supportsEmbeddings: capabilities.supports_embeddings === true,
         supportsDecisions: capabilities.supports_decisions === true,
+        supportsSpeech: capabilities.supports_speech === true,
         contextWindow: typeof capabilities.context_window === "number"
             ? capabilities.context_window
             : null,

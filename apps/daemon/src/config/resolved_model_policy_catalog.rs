@@ -14,7 +14,7 @@ use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
     WorkerDecisionModelFamily, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration,
+    WorkerQwenImage21ModelConfiguration, WorkerSpeechModelConfiguration, WorkerSpeechModelFamily,
 };
 
 use crate::config::runtime_model_policy::{
@@ -48,6 +48,7 @@ impl ResolvedModelPolicyCatalog {
                     ModelCapabilities::Decisions(decision_capabilities) => {
                         Self::decisions_policy(discovered_model, decision_capabilities)
                     }
+                    ModelCapabilities::Speech(_) => Self::speech_policy(discovered_model),
                 };
                 Ok((discovered_model.model_id.clone(), runtime_model_policy))
             })
@@ -124,7 +125,9 @@ impl ResolvedModelPolicyCatalog {
             | ModelFamily::ModernBert
             | ModelFamily::Laya
             | ModelFamily::Kev
-            | ModelFamily::Clef => {
+            | ModelFamily::Clef
+            | ModelFamily::Kokoro
+            | ModelFamily::Phonon => {
                 WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
                     model_family: WorkerImageGenerationModelFamily::Flux2Klein,
@@ -146,6 +149,30 @@ impl ResolvedModelPolicyCatalog {
             default_maximum_context_tokens: 0,
             configured_chunking_fields: Default::default(),
             worker_model_configuration,
+        }
+    }
+
+    fn speech_policy(discovered_model: &DiscoveredModel) -> RuntimeModelPolicy {
+        RuntimeModelPolicy {
+            model_directory: discovered_model.model_directory.clone(),
+            // Chat request defaults remain inert for a typed speech worker policy.
+            generation_defaults: RuntimeModelGenerationDefaults {
+                maximum_output_tokens: 0,
+                configured_maximum_output_tokens: None,
+                temperature_thousandths: None,
+                top_p_thousandths: None,
+                repetition_penalty_thousandths: None,
+            },
+            configured_maximum_context_tokens: None,
+            default_maximum_context_tokens: 0,
+            configured_chunking_fields: Default::default(),
+            worker_model_configuration: WorkerModelConfiguration::Speech(
+                WorkerSpeechModelConfiguration {
+                    model_id: discovered_model.model_id.clone(),
+                    model_family: worker_speech_family(discovered_model.model_family),
+                    artifact_revision: discovered_model.revision.clone(),
+                },
+            ),
         }
     }
 
@@ -221,6 +248,26 @@ fn worker_decision_family(model_family: ModelFamily) -> WorkerDecisionModelFamil
         ModelFamily::Flux2Klein => WorkerDecisionModelFamily::Laya,
         ModelFamily::QwenImage21 => WorkerDecisionModelFamily::Laya,
         ModelFamily::ModernBert => WorkerDecisionModelFamily::Laya,
+        ModelFamily::Kokoro => WorkerDecisionModelFamily::Laya,
+        ModelFamily::Phonon => WorkerDecisionModelFamily::Laya,
+    })
+}
+
+/// The worker's name for a speech family. A speech capability is only ever
+/// discovered on Kokoro and Phonon folders; any other family is reported as
+/// Kokoro, and the worker refuses it at load because the folder is not one.
+fn worker_speech_family(model_family: ModelFamily) -> WorkerSpeechModelFamily {
+    astronomical_config::exhaustive_table!(model_family, {
+        ModelFamily::Kokoro => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::Phonon => WorkerSpeechModelFamily::Phonon,
+        ModelFamily::Qwen3_5 => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::PrismHadamardQwen35 => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::Flux2Klein => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::QwenImage21 => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::ModernBert => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::Laya => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::Kev => WorkerSpeechModelFamily::Kokoro,
+        ModelFamily::Clef => WorkerSpeechModelFamily::Kokoro,
     })
 }
 

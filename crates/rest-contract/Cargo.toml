@@ -11,6 +11,9 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+# The speech request checks and audio formats the speech endpoint shares
+# with the worker; pure Rust.
+astronomical-speech-contract = { path = "../speech-contract" }
 base64.workspace = true
 regex-automata = "0.4"
 serde.workspace = true

@@ -38,7 +38,10 @@ pub(in crate::worker) async fn cancel_active_generation(
         health_snapshot,
         cancelled_request.request_id(),
         cancellation_acknowledgement_timeout,
-        matches!(cancelled_request, ActiveWorkerRequest::Image(_)),
+        matches!(
+            cancelled_request,
+            ActiveWorkerRequest::Image(_) | ActiveWorkerRequest::Speech(_)
+        ),
     )
     .await;
     if let Err(cancellation_error) = cancellation_outcome {
@@ -263,7 +266,7 @@ async fn cancel_worker_request(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     request_id: RequestId,
     cancellation_acknowledgement_timeout: Duration,
-    expects_image_finalization: bool,
+    expects_stepped_finalization: bool,
 ) -> Result<(), WorkerControlError> {
     worker_process.cancel_generation(request_id).await?;
     timeout(cancellation_acknowledgement_timeout, async {
@@ -276,7 +279,7 @@ async fn cancel_worker_request(
                 health_snapshot,
                 worker_event,
                 request_id,
-                expects_image_finalization,
+                expects_stepped_finalization,
             )? {
                 CancellationEventReaction::KeepDraining => {}
                 CancellationEventReaction::Acknowledged => return Ok(()),
@@ -318,6 +321,46 @@ fn publish_observed_memory_facts(
     }
 }
 
+/// The request an image or speech event belongs to, or `None` for any other event.
+fn stepped_event_request_id(worker_event: &WorkerEvent) -> Option<RequestId> {
+    match worker_event {
+        WorkerEvent::ImageGenerationProgress { request_id, .. }
+        | WorkerEvent::ImageGenerationCompleted { request_id, .. }
+        | WorkerEvent::ImageGenerationFailed { request_id, .. }
+        | WorkerEvent::ImageGenerationFinalized { request_id, .. }
+        | WorkerEvent::SpeechSegmentSpoken { request_id, .. }
+        | WorkerEvent::SpeechCompleted { request_id, .. }
+        | WorkerEvent::SpeechFailed { request_id, .. }
+        | WorkerEvent::SpeechFinalized { request_id, .. } => Some(*request_id),
+        _ => None,
+    }
+}
+
+/// A cancelled image or speech request's progress and outcome are drained;
+/// its finalization acknowledges the cancel, and its cleanup snapshot obeys
+/// the same rules for both kinds.
+fn react_to_stepped_cancellation_event(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    stepped_event: WorkerEvent,
+) -> Result<CancellationEventReaction, WorkerControlError> {
+    let (WorkerEvent::ImageGenerationFinalized {
+        mlx_memory_snapshot,
+        ..
+    }
+    | WorkerEvent::SpeechFinalized {
+        mlx_memory_snapshot,
+        ..
+    }) = stepped_event
+    else {
+        return Ok(CancellationEventReaction::KeepDraining);
+    };
+    crate::worker::image_event::publish_image_finalized_memory_snapshot(
+        health_snapshot,
+        mlx_memory_snapshot,
+    )?;
+    Ok(CancellationEventReaction::Acknowledged)
+}
+
 /// A chat request's own progress, which simply stops mattering once it is cancelled.
 fn is_progress_of_request(worker_event: &WorkerEvent, request_id: RequestId) -> bool {
     let event_request_id = match worker_event {
@@ -340,7 +383,7 @@ fn react_to_cancellation_event(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     worker_event: WorkerEvent,
     request_id: RequestId,
-    expects_image_finalization: bool,
+    expects_stepped_finalization: bool,
 ) -> Result<CancellationEventReaction, WorkerControlError> {
     match worker_event {
         // Sent while the worker was idle and still unread when this request started.
@@ -361,30 +404,13 @@ fn react_to_cancellation_event(
         progress_event if is_progress_of_request(&progress_event, request_id) => {
             Ok(CancellationEventReaction::KeepDraining)
         }
-        WorkerEvent::ImageGenerationProgress {
-            request_id: image_request_id,
-            ..
-        }
-        | WorkerEvent::ImageGenerationCompleted {
-            request_id: image_request_id,
-            ..
-        }
-        | WorkerEvent::ImageGenerationFailed {
-            request_id: image_request_id,
-            ..
-        } if expects_image_finalization && image_request_id == request_id => {
-            Ok(CancellationEventReaction::KeepDraining)
-        }
-        WorkerEvent::ImageGenerationFinalized {
-            request_id: image_request_id,
-            mlx_memory_snapshot,
-            ..
-        } if expects_image_finalization && image_request_id == request_id => {
-            crate::worker::image_event::publish_image_finalized_memory_snapshot(
-                health_snapshot,
-                mlx_memory_snapshot,
-            )?;
-            Ok(CancellationEventReaction::Acknowledged)
+        // An image or speech request reports progress and its outcome
+        // before the finalization that acknowledges the cancel.
+        stepped_event
+            if expects_stepped_finalization
+                && stepped_event_request_id(&stepped_event) == Some(request_id) =>
+        {
+            react_to_stepped_cancellation_event(health_snapshot, stepped_event)
         }
         WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
             publish_expert_memory_mode(health_snapshot, expert_memory_mode);
@@ -497,17 +523,18 @@ pub(in crate::worker) fn fail_active_generation(
                 .try_send(Err(crate::ImageGenerationExecutionError::WorkerUnavailable));
         }
         Some(
-            failed_single_shot_request @ (ActiveWorkerRequest::Embeddings(_)
-            | ActiveWorkerRequest::Decisions(_)),
-        ) => fail_active_single_shot_request(failed_single_shot_request),
+            failed_helper_request @ (ActiveWorkerRequest::Embeddings(_)
+            | ActiveWorkerRequest::Decisions(_)
+            | ActiveWorkerRequest::Speech(_)),
+        ) => fail_active_helper_request(failed_helper_request),
         None => {}
     }
 }
 
-/// Tells the caller of a failed embeddings or decisions request that the
-/// worker is gone. Chat and image requests are answered by their own arms
-/// above, so they are left alone here.
-fn fail_active_single_shot_request(failed_request: ActiveWorkerRequest) {
+/// Tells the caller of a failed embeddings, decisions or speech request that
+/// the worker is gone. Chat and image requests are answered by their own
+/// arms above, so they are left alone here.
+fn fail_active_helper_request(failed_request: ActiveWorkerRequest) {
     if let ActiveWorkerRequest::Embeddings(failed_embeddings) = &failed_request {
         let _send_outcome = failed_embeddings
             .embeddings_result_sender
@@ -517,6 +544,15 @@ fn fail_active_single_shot_request(failed_request: ActiveWorkerRequest) {
         let _send_outcome = failed_decisions
             .decisions_result_sender
             .try_send(Err(crate::DecisionsExecutionError::WorkerUnavailable));
+    }
+    fail_active_speech_request(&failed_request);
+}
+
+fn fail_active_speech_request(failed_request: &ActiveWorkerRequest) {
+    if let ActiveWorkerRequest::Speech(failed_speech) = failed_request {
+        let _send_outcome = failed_speech
+            .speech_result_sender
+            .try_send(Err(crate::SpeechExecutionError::WorkerUnavailable));
     }
 }
 

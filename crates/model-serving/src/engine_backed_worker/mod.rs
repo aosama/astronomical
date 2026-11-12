@@ -9,9 +9,18 @@ pub struct EngineBackedWorker<
     ImageEngine = ImageGenerationUnavailableEngine,
     EmbeddingEngine = EmbeddingUnavailableEngine,
     DecisionsEngine = crate::DecisionUnavailableEngine,
+    TextToSpeechEngine = crate::SpeechUnavailableEngine,
 > {
-    pub(crate) loaded_runtime:
-        Option<LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine, DecisionsEngine>>,
+    pub(crate) loaded_runtime: Option<
+        LoadedRuntime<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingEngine,
+            DecisionsEngine,
+            TextToSpeechEngine,
+        >,
+    >,
     pub(crate) model_factory: Option<Factory>,
     pub(crate) machine_mlx_memory_ceiling_bytes: u64,
     pub(crate) effective_mlx_memory_ceiling_bytes: u64,
@@ -52,11 +61,21 @@ pub struct EngineBackedWorker<
     pub(crate) unsent_neural_engine_prefill_event: Option<WorkerEvent>,
 }
 
-pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine, DecisionsEngine> {
+pub(crate) enum LoadedRuntime<
+    Processor,
+    Engine,
+    ImageEngine,
+    EmbeddingEngine,
+    DecisionsEngine,
+    TextToSpeechEngine,
+> {
     Autoregressive(LoadedModel<Processor, Engine>),
     Image(ImageEngine),
     Embeddings(EmbeddingEngine),
     Decisions(DecisionsEngine),
+    /// Held boxed rather than as another type parameter: every family is
+    /// one trait object, and the worker's generic list stays as it is.
+    Speech(TextToSpeechEngine),
 }
 
 pub(crate) struct LoadedModel<Processor, Engine> {
@@ -68,6 +87,7 @@ mod construction;
 mod decisions;
 mod embeddings;
 mod fatal;
+mod forward_pass_memory;
 mod generation_advance;
 mod generation_advance_prefill;
 mod generation_start;
@@ -81,6 +101,9 @@ mod output;
 mod promotion;
 mod protocol;
 mod retry;
+mod speech;
+mod speech_model_swap;
+mod stepped_request;
 mod support;
 mod token_count;
 

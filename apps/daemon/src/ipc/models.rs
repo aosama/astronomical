@@ -79,7 +79,8 @@ fn build_listed_models(
                 }
                 ModelCapabilities::ImageGeneration(_)
                 | ModelCapabilities::Embeddings(_)
-                | ModelCapabilities::Decisions(_) => None,
+                | ModelCapabilities::Decisions(_)
+                | ModelCapabilities::Speech(_) => None,
             },
             supports_embeddings: matches!(
                 discovered_model.capabilities,
@@ -89,6 +90,7 @@ fn build_listed_models(
                 discovered_model.capabilities,
                 ModelCapabilities::Decisions(_)
             ),
+            supports_speech: matches!(discovered_model.capabilities, ModelCapabilities::Speech(_)),
             supports_image_generation: matches!(
                 &discovered_model.capabilities,
                 ModelCapabilities::ImageGeneration(image_capabilities)
@@ -156,6 +158,7 @@ fn build_catalog_response(projections: &[CatalogEntryProjection]) -> DaemonRespo
                 supports_image_generation: capabilities.supports_image_generation,
                 supports_embeddings: capabilities.supports_embeddings,
                 supports_decisions: capabilities.supports_decisions,
+                supports_speech: capabilities.supports_speech,
             }
         })
         .collect();

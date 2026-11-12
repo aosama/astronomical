@@ -303,6 +303,14 @@ impl WorkerProcess {
             .await
     }
 
+    pub async fn start_speech_generation(
+        &mut self,
+        speech_command: astronomical_ipc_protocol::SpeechCommand,
+    ) -> Result<(), WorkerControlError> {
+        self.send_command_with_timeout(&WorkerCommand::GenerateSpeech(speech_command))
+            .await
+    }
+
     pub async fn start_embeddings_generation(
         &mut self,
         embeddings_command: EmbeddingsCommand,

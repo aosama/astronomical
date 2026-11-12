@@ -12,6 +12,7 @@ mod scripted_worker_chat;
 mod scripted_worker_decisions;
 mod scripted_worker_image;
 mod scripted_worker_single_shot;
+mod scripted_worker_speech;
 
 use scripted_worker_cancellation::{
     CancellationMlxTelemetry, EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID,
@@ -70,7 +71,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         match worker_command {
             WorkerCommand::InitializeWorker(_) => {}
             single_shot_command @ (WorkerCommand::GenerateDecisions(_)
-            | WorkerCommand::GenerateEmbeddings(_)) => {
+            | WorkerCommand::GenerateEmbeddings(_)
+            | WorkerCommand::GenerateSpeech(_)) => {
                 scripted_worker_single_shot::answer_single_shot_command(
                     &mut event_writer,
                     single_shot_command,

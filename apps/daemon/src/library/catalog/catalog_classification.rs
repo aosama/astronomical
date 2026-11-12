@@ -22,6 +22,10 @@ pub enum DownloadCatalogFamily {
     Laya,
     /// A decision model; the wire name matches the discovery family.
     Clef,
+    /// A speech model; the wire name matches the discovery family.
+    Kokoro,
+    /// A speech model; the wire name matches the discovery family.
+    Phonon,
 }
 
 impl DownloadCatalogFamily {
@@ -35,6 +39,8 @@ impl DownloadCatalogFamily {
             Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
             Self::Laya => "laya",
             Self::Clef => "clef",
+            Self::Kokoro => "kokoro",
+            Self::Phonon => "phonon",
         })
     }
 }
@@ -50,6 +56,8 @@ pub enum DownloadCatalogRole {
     /// Answers typed questions with a probability per allowed answer. It
     /// generates no text, so it is not offered for chat.
     Decision,
+    /// Reads text aloud. It generates no text, so it is not offered for chat.
+    Speech,
 }
 
 impl DownloadCatalogRole {
@@ -61,6 +69,7 @@ impl DownloadCatalogRole {
             Self::ImageGeneration => "image_generation",
             Self::Helper => "helper",
             Self::Decision => "decision",
+            Self::Speech => "speech",
         })
     }
 
@@ -69,6 +78,6 @@ impl DownloadCatalogRole {
     /// never a Get started pick.
     #[must_use]
     pub const fn serves_other_programs(self) -> bool {
-        matches!(self, Self::Helper | Self::Decision)
+        matches!(self, Self::Helper | Self::Decision | Self::Speech)
     }
 }
