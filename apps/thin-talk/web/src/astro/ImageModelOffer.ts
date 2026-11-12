@@ -7,18 +7,18 @@ import type { ModelDownloadProgress } from "./ModelDownload";
 
 /** What the offer's own status line says at each point of the download. */
 const STATUS_BY_PHASE: Partial<Record<ModelDownloadPhase, string>> = {
-  [ModelDownloadPhase.READY]: "My sketchbook is ready. Let's draw!",
-  [ModelDownloadPhase.FAILED]: "My sketchbook didn't arrive. You can try again.",
-  [ModelDownloadPhase.BUSY]: "Something else is downloading. Try again when it's done.",
+  [ModelDownloadPhase.READY]: "The image model is ready.",
+  [ModelDownloadPhase.FAILED]: "The download stopped. You can try again.",
+  [ModelDownloadPhase.BUSY]: "Another download is running. Try again when it finishes.",
 };
 
 /**
- * Offers the Library's picture model when a person asks Astro to draw before
- * one is installed. Nothing downloads until they press "Get my sketchbook",
- * and the size is shown on the button first, because 4 to 5 GB is a real ask
- * on a family Mac.
+ * Offers the Library's image model when a person asks Astro to draw before
+ * one is installed. Nothing downloads until they press "Download image
+ * model", and the size is shown first, because 4 to 5 GB is a real ask of
+ * someone's disk.
  */
-export class SketchbookOffer {
+export class ImageModelOffer {
   public readonly element: HTMLElement;
   private readonly document: Document;
   private readonly library: AstroLibrary;
@@ -32,39 +32,39 @@ export class SketchbookOffer {
     this.idPrefix = idPrefix;
     this.library = library;
     this.onDeclined = onDeclined;
-    this.element = makeElement(document, "div", "sketchbook-offer");
-    this.status = makeElement(document, "p", "sketchbook-offer__status", "");
+    this.element = makeElement(document, "div", "image-model-offer");
+    this.status = makeElement(document, "p", "image-model-offer__status", "");
     this.status.setAttribute("role", "status");
     this.element.append(this.status);
   }
 
   public async loadOffer(): Promise<void> {
     const starterPicks = await this.library.starterPicks();
-    const sketchbookPick = starterPicks !== null ? starterPicks.sketchbook : null;
-    if (sketchbookPick === null) {
-      this.status.textContent = "My sketchbook isn't available right now.";
+    const imageModelPick = starterPicks !== null ? starterPicks.imageModel : null;
+    if (imageModelPick === null) {
+      this.status.textContent = "No image model is available to download right now.";
       return;
     }
-    this.showChoice(sketchbookPick);
+    this.showChoice(imageModelPick);
   }
 
   /** Stops listening when the offer leaves the screen; the download and
-   * AstroLibrary's install notice (which refreshes the brain panel) carry on. */
+   * AstroLibrary's install notice (which refreshes the model rows) carry on. */
   public dispose(): void {
     this.stopListening?.();
     this.stopListening = null;
   }
 
-  private showChoice(sketchbookPick: LibraryStarterPick): void {
-    const meter = new DownloadMeter(this.document, this.idPrefix, sketchbookPick.approximateSizeBytes);
-    const getButton = makeButton(this.document, `${this.idPrefix}-get-sketchbook`, "Get my sketchbook", false);
+  private showChoice(imageModelPick: LibraryStarterPick): void {
+    const meter = new DownloadMeter(this.document, this.idPrefix, imageModelPick.approximateSizeBytes);
+    const getButton = makeButton(this.document, `${this.idPrefix}-get-image-model`, "Download image model", false);
     const notNowButton = makeButton(this.document, `${this.idPrefix}-not-now`, "Not now", true);
     getButton.addEventListener("click", () => {
       getButton.disabled = true;
       notNowButton.hidden = true;
       this.status.textContent = "";
       this.dispose();
-      this.stopListening = this.library.followDownload(sketchbookPick.huggingfaceID, (progress) => this.showProgress(progress, meter, getButton));
+      this.stopListening = this.library.followDownload(imageModelPick.huggingfaceID, (progress) => this.showProgress(progress, meter, getButton));
     });
     notNowButton.addEventListener("click", () => this.onDeclined());
     const actionRow = makeElement(this.document, "div", "first-flight__actions");

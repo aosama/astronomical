@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertNoElement } from "./support/dom";
 import { test } from "node:test";
 import { aiNoteText, EXPORT_PICTURE_CLASS, ExportContentBuilder, messagesInScope, suggestedExportName } from "../src/export/ExportContentBuilder";
 import type { ExportableMessage, ExportPictureData } from "../src/export/ExportEnvironment";
@@ -103,7 +104,7 @@ test("should_leave_out_questions_pictures_and_the_note_when_asked", async () => 
   const content = await builder.build(options);
 
   assert.deepEqual(entryTexts(content.entries), ["Cell division.", "Here it is."]);
-  assert.equal(content.entries[1]?.body.querySelector("img"), null);
+  assertNoElement(content.entries[1]?.body, "img");
   assert.deepEqual(pictureLoads, [], "no picture is fetched when none is wanted");
   assert.equal(content.aiNote, null);
 });
@@ -128,7 +129,7 @@ test("should_export_the_rest_of_an_answer_whose_picture_is_gone", async () => {
   const content = await builder.build(defaultExportOptions({ kind: "oneAnswer", messageID: "a2" }));
 
   assert.deepEqual(entryTexts(content.entries), ["Here it is."]);
-  assert.equal(content.entries[0]?.body.querySelector("img"), null);
+  assertNoElement(content.entries[0]?.body, "img");
 });
 
 test("should_start_a_single_answer_without_its_question_and_name_no_assistant_in_the_plain_chat", async () => {
@@ -194,7 +195,7 @@ test("should_title_a_single_answer_with_its_own_opening_heading", async () => {
   const content = await builder.build(defaultExportOptions({ kind: "oneAnswer", messageID: "a2" }));
 
   assert.equal(content.title, "The Water Cycle");
-  assert.equal(content.entries[0]?.body.querySelector("h1"), null, "the heading is not repeated under the title");
+  assertNoElement(content.entries[0]?.body, "h1", "the heading is not repeated under the title");
   assert.equal(content.entries[0]?.body.querySelector("h2")?.textContent, "Stages", "later headings stay");
   assert.match(content.entries[0]?.body.textContent ?? "", /Water moves in a loop\./);
 });
@@ -229,7 +230,7 @@ test("should_title_one_picked_answer_with_its_own_opening_heading", async () => 
   const pickedWithItsQuestion = await builder.build({ ...defaultExportOptions({ kind: "pickedMessages", messageIDs: ["q2", "a2"] } as const), includesQuestions: true });
 
   assert.equal(pickedAlone.title, "The Water Cycle");
-  assert.equal(pickedAlone.entries[0]?.body.querySelector("h1"), null, "the heading is not repeated under the title");
+  assertNoElement(pickedAlone.entries[0]?.body, "h1", "the heading is not repeated under the title");
   assert.equal(pickedWithItsQuestion.title, "The Water Cycle");
   assert.deepEqual(pickedWithItsQuestion.entries.map((entry) => entry.isQuestion), [true, false]);
 });

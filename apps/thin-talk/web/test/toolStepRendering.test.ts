@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertNoElement } from "./support/dom";
 import { test } from "node:test";
 import { TrustBoundary } from "../src/TrustBoundary";
 import { MathPipeline } from "../src/MathPipeline";
@@ -40,7 +41,7 @@ test("should_escape_markup_in_every_value_a_row_shows", () => {
   const container = renderedSteps([
     new ToolStep({ toolCallID: hostile, toolName: hostile, label: hostile, argumentsJSON: hostile, resultText: hostile, state: ToolStepState.FAILED }),
   ]);
-  assert.equal(container.querySelector("img"), null, "no element is created from tool output");
+  assertNoElement(container, "img", "no element is created from tool output");
   const row = container.querySelector<HTMLDetailsElement>("details.tool-step");
   assert.equal(row?.id, toolStepIdentifier("answer-1", hostile));
   assert.equal(row?.dataset.state, "failed");
@@ -48,7 +49,7 @@ test("should_escape_markup_in_every_value_a_row_shows", () => {
 });
 
 test("should_draw_no_tool_rows_for_a_message_without_steps", () => {
-  assert.equal(renderedSteps([]).querySelector(".tool-steps"), null);
+  assertNoElement(renderedSteps([]), ".tool-steps");
 });
 
 test("should_show_a_generated_image_outside_the_rows_with_its_prompt_as_text", () => {
@@ -67,7 +68,7 @@ test("should_show_a_generated_image_outside_the_rows_with_its_prompt_as_text", (
   assert.equal(image?.getAttribute("src"), "thintalk-asset://generated/0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.png");
   assert.equal(image?.getAttribute("alt"), "Generated image: A rose <b>at</b> dusk");
   assert.equal(image?.closest("details"), null, "the image is not hidden inside the collapsed row");
-  assert.equal(container.querySelector("b"), null);
+  assertNoElement(container, "b");
 });
 
 function imageStep(argumentsJSON: string, generatedImageName: string | null): ToolStep {
@@ -90,7 +91,7 @@ test("should_fall_back_to_a_plain_description_and_shorten_a_long_prompt", () => 
 });
 
 test("should_show_no_image_for_a_step_without_one", () => {
-  assert.equal(renderedSteps([imageStep('{"prompt":"A rose"}', null)]).querySelector("figure"), null);
+  assertNoElement(renderedSteps([imageStep('{"prompt":"A rose"}', null)]), "figure");
 });
 
 test("should_label_queued_and_not_sent_user_messages_only", () => {

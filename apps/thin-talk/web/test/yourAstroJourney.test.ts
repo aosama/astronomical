@@ -18,14 +18,13 @@ test("should_start_closed_and_open_on_the_page", () => {
 test("should_open_each_answer_on_its_own_and_come_back_to_the_page", () => {
   for (const [move, expectedStep] of [
     [(journey: YourAstroJourney) => journey.editName(), YourAstroStep.NAME],
-    [(journey: YourAstroJourney) => journey.editStyle(), YourAstroStep.STYLE],
-    [(journey: YourAstroJourney) => journey.readGrownUpNote(), YourAstroStep.GROWN_UP],
+    [(journey: YourAstroJourney) => journey.readPrivacyNote(), YourAstroStep.PRIVACY],
   ] as const) {
     const journey = openJourney();
     move(journey);
     assert.equal(journey.step, expectedStep);
     journey.backToPage();
-    assert.equal(journey.step, YourAstroStep.PAGE, `${expectedStep} returns to the page, not onward through the flight`);
+    assert.equal(journey.step, YourAstroStep.PAGE, `${expectedStep} returns to the page`);
   }
 });
 
@@ -36,13 +35,13 @@ test("should_ignore_a_move_that_belongs_to_another_step", () => {
   assert.equal(closedJourney.step, YourAstroStep.CLOSED, "nothing opens a closed page but open()");
   const journey = openJourney();
   journey.editName();
-  journey.editStyle();
+  journey.readPrivacyNote();
   assert.equal(journey.step, YourAstroStep.NAME, "a late click on another row does not jump screens");
 });
 
 test("should_back_out_one_level_with_escape", () => {
   const journey = openJourney();
-  journey.editStyle();
+  journey.readPrivacyNote();
   journey.escape();
   assert.equal(journey.step, YourAstroStep.PAGE);
   journey.escape();

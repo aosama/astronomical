@@ -1,7 +1,6 @@
 import { ComposerState } from "./ComposerState";
 import { ComposerAction } from "./ComposerAction";
 import { ModelPanelView } from "./ModelPanelView";
-import type { ComposerFriendlyNames } from "./ComposerFriendlyNames";
 
 /** Who the field's hint names while an answer streams, when Astro is hidden.
  * A message sent then is read as soon as the model can take it, after the
@@ -24,8 +23,6 @@ export class ComposerView {
   private readonly stopButton: HTMLButtonElement;
   private readonly retryButton: HTMLButtonElement;
   private readonly modelPanel: ModelPanelView;
-  /** Plain words for the brain control, or null for the models' own names. */
-  private friendlyNames: ComposerFriendlyNames | null = null;
   /** The hint shown in the empty field while no answer is streaming: the
    * markup's wording, or what setIdlePlaceholder asked for (Astro's). */
   private idlePlaceholder: string;
@@ -102,13 +99,6 @@ export class ComposerView {
     });
   }
 
-  /** Switches the brain control between friendly words (Astro's Explorer
-   * style) and the models' own names, and redraws it at once. */
-  public setFriendlyNames(friendlyNames: ComposerFriendlyNames | null): void {
-    this.friendlyNames = friendlyNames;
-    this.render(this.state);
-  }
-
   public render(state: ComposerState): void {
     this.state = state;
     if (state.failure) {
@@ -119,7 +109,7 @@ export class ComposerView {
     } else {
       this.banner.hidden = true;
     }
-    this.modelPanel.render(state, this.friendlyNames !== null ? this.friendlyNames.brain : null);
+    this.modelPanel.render(state);
     this.refreshControls();
   }
 

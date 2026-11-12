@@ -17,7 +17,12 @@ await build({
   logLevel: "warning",
 });
 
-const result = spawnSync(process.execPath, ["--test", bundlePath], {
+// The heap limit makes a runaway test crash on its own within seconds. The
+// whole suite peaks far below it, so a test that reaches it is broken: without
+// a limit one such test once grew until the Mac ran out of application memory.
+const TEST_PROCESS_HEAP_LIMIT_MEGABYTES = 1024;
+
+const result = spawnSync(process.execPath, ["--test", `--max-old-space-size=${TEST_PROCESS_HEAP_LIMIT_MEGABYTES}`, bundlePath], {
   stdio: "inherit",
   env: { ...process.env, THINTALK_INDEX_HTML: indexHTML },
 });

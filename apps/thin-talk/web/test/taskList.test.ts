@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitFor } from "./support/dom";
+import { assertNoElement, waitFor } from "./support/dom";
 import { SANITIZE_OPTIONS, TrustBoundary } from "../src/TrustBoundary";
 import { MathPipeline } from "../src/MathPipeline";
 import { DiagramPipeline } from "../src/DiagramPipeline";
@@ -33,7 +33,7 @@ test("should_draw_a_checklist_with_ticked_and_empty_boxes_and_no_form_control", 
   const { body } = await renderedAnswer("- [x] Explain where it happens\n- [ ] Draw the two stages\n- A plain item");
 
   const taskBoxes = [...body.querySelectorAll(`.${TASK_BOX_CLASS}`)];
-  assert.equal(body.querySelector("input"), null, "no form control in model output");
+  assertNoElement(body, "input", "no form control in model output");
   assert.deepEqual(taskBoxes.map((taskBox) => taskBox.classList.contains(DONE_TASK_BOX_CLASS)), [true, false]);
   assert.deepEqual(taskBoxes.map((taskBox) => taskBox.getAttribute("title")), ["Done", "Not done"]);
   assert.equal(body.querySelectorAll("li").length, 3);
@@ -61,7 +61,7 @@ test("should_forbid_every_form_control_in_model_markup_and_allow_the_drawn_box",
 test("should_leave_text_in_square_brackets_alone_outside_a_list", async () => {
   const { body } = await renderedAnswer("See [x] and [ ] in the text.");
 
-  assert.equal(body.querySelector(`.${TASK_BOX_CLASS}`), null);
+  assertNoElement(body, `.${TASK_BOX_CLASS}`);
   assert.match(body.textContent ?? "", /See \[x\] and \[ \] in the text\./);
 });
 

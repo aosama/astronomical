@@ -54,9 +54,7 @@ export class ModelPanelView {
     this.trigger.setAttribute("aria-expanded", "false");
   }
 
-  /** `friendlyBrainName` replaces the model's name on the button ("Astro's
-   * brain" for younger people); the tooltip and the panel keep real names. */
-  public render(state: ComposerState, friendlyBrainName: string | null): void {
+  public render(state: ComposerState): void {
     const hasModels = state.models.length > 0;
     this.trigger.hidden = !hasModels;
     if (!hasModels || !state.isReady) {
@@ -64,9 +62,9 @@ export class ModelPanelView {
     }
     const selectedModel = state.models.find((model) => model.id === state.selectedModelID);
     const selectedName = selectedModel != null ? selectedModel.id : "Model";
-    this.label.textContent = friendlyBrainName !== null && selectedModel != null ? friendlyBrainName : selectedName;
+    this.label.textContent = selectedName;
     this.trigger.title = selectedModel != null ? selectedModel.id : "";
-    this.trigger.setAttribute("aria-label", selectedModel != null ? `Brain: ${selectedName}` : "Brain");
+    this.trigger.setAttribute("aria-label", selectedModel != null ? `Model: ${selectedName}` : "Model");
     this.rebuildPanelIfChanged(state);
   }
 

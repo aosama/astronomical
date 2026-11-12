@@ -23,13 +23,13 @@ test("should_pick_the_get_started_chat_and_image_models", () => {
     ],
   });
   const starterPicks = parseLibraryStarterPicks(catalogText);
-  assert.deepEqual(starterPicks?.brain, { huggingfaceID: "example-org/starter-chat", approximateSizeBytes: 5_970_332_199 });
-  assert.equal(starterPicks?.sketchbook?.huggingfaceID, "example-org/starter-image");
+  assert.deepEqual(starterPicks?.chatModel, { huggingfaceID: "example-org/starter-chat", approximateSizeBytes: 5_970_332_199 });
+  assert.equal(starterPicks?.imageModel?.huggingfaceID, "example-org/starter-image");
 });
 
 test("should_answer_null_picks_when_the_catalog_recommends_none", () => {
   const starterPicks = parseLibraryStarterPicks(JSON.stringify({ entries: [catalogEntry({ role: "coding", get_started: true })] }));
-  assert.deepEqual(starterPicks, { brain: null, sketchbook: null });
+  assert.deepEqual(starterPicks, { chatModel: null, imageModel: null });
 });
 
 test("should_skip_a_malformed_pick_and_use_the_next_valid_one", () => {
@@ -40,7 +40,7 @@ test("should_skip_a_malformed_pick_and_use_the_next_valid_one", () => {
       catalogEntry({ huggingface_id: "example-org/second", get_started: true }),
     ],
   }));
-  assert.equal(starterPicks?.brain?.huggingfaceID, "example-org/second");
+  assert.equal(starterPicks?.chatModel?.huggingfaceID, "example-org/second");
 });
 
 test("should_refuse_text_that_is_not_a_catalog", () => {

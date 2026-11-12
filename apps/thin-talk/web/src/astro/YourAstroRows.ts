@@ -1,7 +1,7 @@
 import { makeButton, makeElement } from "./AstroDom";
 
-/* The building blocks every group on Your Astro is made of, kept apart from
-   the groups themselves so the gifts group (YourAstroGifts) and the answer
+/* The building blocks every group in Settings is made of, kept apart from
+   the groups themselves so the models group (YourAstroModels) and the answer
    groups (YourAstroSections) draw identical rows. */
 
 /** A titled group of rows. Its rows go in the returned section, after the heading. */

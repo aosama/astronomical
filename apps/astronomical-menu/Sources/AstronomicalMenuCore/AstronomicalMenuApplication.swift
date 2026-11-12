@@ -228,7 +228,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
 
   private func showChatWindow() { openInMainApplication(.chat) }
 
-  // The popover's "Your Astro…" opens chat on the page with every welcome
+  // The popover's "Settings…" opens chat on the page with every welcome
   // answer, so the welcome is always one click from the menu bar.
   private func showYourAstro() { openInMainApplication(.yourAstro) }
 

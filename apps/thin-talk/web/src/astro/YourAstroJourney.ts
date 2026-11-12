@@ -1,18 +1,16 @@
-/** The screens of Your Astro. CLOSED means the page is not on show. */
+/** The screens of Settings. CLOSED means the page is not on show. */
 export enum YourAstroStep {
   CLOSED = "closed",
   PAGE = "page",
   NAME = "name",
-  STYLE = "style",
-  GROWN_UP = "grownUp",
+  PRIVACY = "privacy",
 }
 
-const STEPS_THAT_RETURN_TO_THE_PAGE: ReadonlySet<YourAstroStep> = new Set([YourAstroStep.NAME, YourAstroStep.STYLE, YourAstroStep.GROWN_UP]);
+const STEPS_THAT_RETURN_TO_THE_PAGE: ReadonlySet<YourAstroStep> = new Set([YourAstroStep.NAME, YourAstroStep.PRIVACY]);
 
 /**
- * Where Your Astro is, with no drawing: the page lists every answer, and each
- * answer opens on its own and comes straight back to the page instead of
- * carrying on through the rest of the first flight.
+ * Where Settings is, with no drawing: the page lists every setting, and each
+ * one that needs a screen of its own opens it and comes straight back.
  *
  * As in FirstFlightJourney, a move is accepted only from the step it belongs
  * to, so a late second click never lands on the wrong screen.
@@ -33,15 +31,11 @@ export class YourAstroJourney {
     this.moveFrom(YourAstroStep.PAGE, YourAstroStep.NAME);
   }
 
-  public editStyle(): void {
-    this.moveFrom(YourAstroStep.PAGE, YourAstroStep.STYLE);
+  public readPrivacyNote(): void {
+    this.moveFrom(YourAstroStep.PAGE, YourAstroStep.PRIVACY);
   }
 
-  public readGrownUpNote(): void {
-    this.moveFrom(YourAstroStep.PAGE, YourAstroStep.GROWN_UP);
-  }
-
-  /** Save, Cancel and the "Your Astro" link all come back here. */
+  /** Save, Cancel and the "Settings" link all come back here. */
   public backToPage(): void {
     if (STEPS_THAT_RETURN_TO_THE_PAGE.has(this.currentStep)) {
       this.currentStep = YourAstroStep.PAGE;
@@ -52,7 +46,7 @@ export class YourAstroJourney {
     this.currentStep = YourAstroStep.CLOSED;
   }
 
-  /** Escape backs out one level: from an answer to the page, from the page out. */
+  /** Escape backs out one level: from a setting's screen to the page, from the page out. */
   public escape(): void {
     if (this.currentStep === YourAstroStep.PAGE) {
       this.close();

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitFor } from "./support/dom";
+import { assertNoElement, waitFor } from "./support/dom";
 import { bootJourney, waitUntilReady } from "./support/journey";
 
 /**
@@ -55,7 +55,7 @@ test("should_name_the_chat_model_by_its_id_on_the_control_in_the_tooltip_and_for
   await bootWithEveryModel();
   assert.equal(brainLabel(), CHAT_MODEL.id);
   assert.equal(brainControl().title, CHAT_MODEL.id);
-  assert.equal(brainControl().getAttribute("aria-label"), `Brain: ${CHAT_MODEL.id}`);
+  assert.equal(brainControl().getAttribute("aria-label"), `Model: ${CHAT_MODEL.id}`);
 }, { timeout: 30_000 });
 
 test("should_list_chat_models_then_picture_models_in_one_panel_with_details", async () => {
@@ -132,7 +132,7 @@ test("should_show_a_model_id_with_markup_as_plain_text", async () => {
   await waitUntilReady();
   await waitFor(() => brainLabel() === "<b>Bold</b>-model", "the escaped name");
   click(brainControl());
-  assert.equal(brainPanel().querySelector("b"), null, "the name is text, never markup");
+  assertNoElement(brainPanel(), "b", "the name is text, never markup");
 }, { timeout: 30_000 });
 
 test("should_fall_back_to_the_model_id_when_the_library_cannot_be_read", async () => {

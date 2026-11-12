@@ -4,7 +4,7 @@ import { ModelDownloadPhase } from "./ModelDownload";
 import type { ModelDownloadProgress } from "./ModelDownload";
 
 /**
- * A rainbow progress bar with an honest size and time underneath: "2.4 of
+ * A progress bar with an honest size and time underneath: "2.4 of
  * 6.0 GB" on the left, "about 4 minutes left" on the right. Before any bytes
  * move it shows the one-time size, so the person knows what they agreed to.
  */

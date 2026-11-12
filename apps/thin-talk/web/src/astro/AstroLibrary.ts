@@ -15,15 +15,15 @@ interface DownloadFollower {
 const FINISHED_PHASES: ReadonlySet<ModelDownloadPhase> = new Set([ModelDownloadPhase.READY, ModelDownloadPhase.FAILED, ModelDownloadPhase.BUSY]);
 
 /**
- * Everything Astro asks the daemon: whether it has a brain or a sketchbook
- * yet, which models the Library recommends, and the downloads that install
+ * Everything Astro asks the daemon: whether a chat model or an image model
+ * is installed, which models the Library recommends, and the downloads that install
  * them. Answers are best effort: an unreachable daemon reads as "unknown",
- * never as an error a young person has to deal with.
+ * never as an error the person has to deal with.
  *
  * Each model has at most one download being followed, however many screens
  * show it: a screen that goes away only stops listening, the daemon keeps
  * downloading, and `onModelInstalled` still fires when the model lands, so
- * the chat window learns about a new brain even after the welcome closed.
+ * the chat window learns about a new chat model even after the welcome closed.
  */
 export class AstroLibrary {
   private readonly client: DaemonClient;
@@ -35,7 +35,7 @@ export class AstroLibrary {
   }
 
   /** True with any chat model installed, false with none, null when the
-   * daemon cannot be asked (then Astro skips the wake-up screen, because a
+   * daemon cannot be asked (then Astro skips the download screen, because a
    * download could not start either). */
   public async hasChatModel(): Promise<boolean | null> {
     try {

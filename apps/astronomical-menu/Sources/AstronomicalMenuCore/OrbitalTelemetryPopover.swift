@@ -205,7 +205,7 @@ struct OrbitalTelemetryPopover: View {
           // Automatic checks, the update channel and Launch at Login live
           // in the main app's menu: they are settings of the main app, which
           // owns the updater and registers this agent at login.
-          Button("Your Astro…", action: showYourAstro)
+          Button("Settings…", action: showYourAstro)
           Button("Reveal config", action: revealConfiguration)
           Button("Quit Astronomical", action: quitApplication)
         } label: {

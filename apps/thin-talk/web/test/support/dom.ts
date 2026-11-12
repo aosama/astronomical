@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 
@@ -61,4 +62,38 @@ export async function waitFor(predicate: () => boolean, label: string): Promise<
     }
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+/** A few words naming an element for a failure message: "button#send.primary". */
+function describeElement(element: Element | null | undefined): string {
+  if (element == null) {
+    return "nothing";
+  }
+  const idPart = element.id.length > 0 ? `#${element.id}` : "";
+  const classPart = element.classList.length > 0 ? `.${[...element.classList].join(".")}` : "";
+  return `${element.tagName.toLowerCase()}${idPart}${classPart}`;
+}
+
+/*
+ * Never hand a DOM node to assert.equal or assert.deepEqual. When such an
+ * assert fails, Node prints both values, and printing a happy-dom node walks
+ * the whole document through its parent and owner links. One failing assert
+ * of that kind grew the test process past every limit and took the machine's
+ * memory with it. The two helpers below compare first and only ever put a
+ * short description in the failure message.
+ */
+
+/** Fails when `root` holds an element matching `selector`. */
+export function assertNoElement(root: ParentNode | null | undefined, selector: string, message?: string): void {
+  const foundElement = root != null ? root.querySelector(selector) : null;
+  assert.ok(foundElement === null, `${message ?? `expected no "${selector}"`} (found ${describeElement(foundElement)})`);
+}
+
+/** Fails unless keyboard focus is on `expectedElement`. */
+export function assertFocusOn(expectedElement: Element | null, message?: string): void {
+  const focusedElement = document.activeElement;
+  assert.ok(
+    focusedElement === expectedElement,
+    `${message ?? "keyboard focus"}: expected ${describeElement(expectedElement)}, focus is on ${describeElement(focusedElement)}`,
+  );
 }

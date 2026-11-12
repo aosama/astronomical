@@ -7,7 +7,6 @@ import { ChatRole } from "../src/ChatRole";
 import { TranscriptMessage } from "../src/TranscriptMessage";
 import { ClassicMessageChrome } from "../src/MessageChrome";
 import { AstroMessageChrome } from "../src/astro/AstroMessageChrome";
-import { AstroStyle } from "../src/astro/AstroStyle";
 import { TranscriptPersona } from "../src/TranscriptPersona";
 import fs from "node:fs";
 import path from "node:path";
@@ -108,14 +107,12 @@ const TALKING_ANSWER = new TranscriptMessage({ id: "a", role: ChatRole.ASSISTANT
 const escapeHtml = (text: string): string => text;
 
 test("should_carry_loading_words_beside_the_thinking_words_only_before_the_first_words", () => {
-  const explorer = new AstroMessageChrome(new TranscriptPersona({ isAstroShown: true, style: AstroStyle.EXPLORER, nickname: "Maya" }), escapeHtml);
-  const pilot = new AstroMessageChrome(new TranscriptPersona({ isAstroShown: true, style: AstroStyle.PILOT, nickname: "Maya" }), escapeHtml);
+  const astro = new AstroMessageChrome(new TranscriptPersona({ isAstroShown: true, nickname: "Maya" }), escapeHtml);
   const classic = new ClassicMessageChrome(escapeHtml);
 
-  assert.match(explorer.assistantHeaderHtml(WAITING_ANSWER), /<span class="message__state-words">is thinking…<\/span><span class="message__loading-words">is waking up its brain…<\/span>/);
-  assert.match(pilot.assistantHeaderHtml(WAITING_ANSWER), /<span class="message__loading-words">loading the model…<\/span>/);
+  assert.match(astro.assistantHeaderHtml(WAITING_ANSWER), /<span class="message__state-words">thinking…<\/span><span class="message__loading-words">loading the model…<\/span>/);
   assert.match(classic.assistantHeaderHtml(WAITING_ANSWER), /<span class="message__state-words">generating<\/span><span class="message__loading-words">loading the model…<\/span>/);
-  for (const chrome of [explorer, pilot, classic]) {
+  for (const chrome of [astro, classic]) {
     assert.doesNotMatch(chrome.assistantHeaderHtml(TALKING_ANSWER), /message__loading-words/, "an answer already talking is not loading");
   }
 });

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertNoElement } from "./support/dom";
 import { test } from "node:test";
 import { cleanExportBody, EXPORT_DARK_DIAGRAM_CLASS, EXPORT_DIAGRAM_CLASS } from "../src/export/ExportBodyCleaner";
 
@@ -42,7 +43,7 @@ test("should_keep_katex_maths_as_mathml_and_mark_display_maths_as_a_block", () =
   const cleanedBody = cleanExportBody(renderedBody(katexMaths), false);
 
   assert.equal(cleanedBody.querySelectorAll("math").length, 2);
-  assert.equal(cleanedBody.querySelector(".katex, .katex-html"), null, "the positioned spans need KaTeX's stylesheet");
+  assertNoElement(cleanedBody, ".katex, .katex-html", "the positioned spans need KaTeX's stylesheet");
   assert.equal(cleanedBody.querySelectorAll("math")[1]?.getAttribute("display"), "block");
   assert.equal(cleanedBody.querySelectorAll("math")[0]?.getAttribute("display"), null);
 });
@@ -67,7 +68,7 @@ test("should_replace_a_picture_the_file_cannot_carry_with_its_description", () =
 test("should_open_folded_sections_flat_with_their_summary_as_a_bold_line", () => {
   const cleanedBody = cleanExportBody(renderedBody(`<details><summary>Hint</summary><p>Look closer.</p></details>`), false);
 
-  assert.equal(cleanedBody.querySelector("details"), null);
+  assertNoElement(cleanedBody, "details");
   assert.equal(cleanedBody.querySelector("strong")?.textContent, "Hint");
   assert.match(cleanedBody.textContent ?? "", /Look closer\./);
 });
@@ -104,7 +105,7 @@ test("should_turn_checklist_boxes_into_characters_and_drop_the_items_bullets", (
     false,
   );
 
-  assert.equal(cleanedBody.querySelector(".task-box"), null);
+  assertNoElement(cleanedBody, ".task-box");
   const items = [...cleanedBody.querySelectorAll("li")];
   assert.deepEqual(items.map((item) => (item.textContent ?? "").replace(/\s+/g, " ").trim()), ["☑ Done", "☐ Todo", "Plain"]);
   assert.deepEqual(items.map((item) => item.className), ["export-task", "export-task", ""]);

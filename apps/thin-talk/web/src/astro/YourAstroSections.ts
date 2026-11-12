@@ -1,47 +1,35 @@
 import { makeElement } from "./AstroDom";
 import type { AstroProfile } from "./AstroProfile";
-import { buildColourLookChips } from "./AstroColourLook";
-import type { AstroColourLook } from "./AstroColourLook";
 import { makeRow, makeSection, rowButton } from "./YourAstroRows";
-import { styleSummary } from "./StyleChoices";
-
-/** Prefix for Your Astro's control ids. */
-export const YOUR_ASTRO_ID_PREFIX = "your-astro";
 
 /** What the page's rows do; YourAstroView turns each into a journey move or a save. */
 export interface YourAstroRowActions {
   editName(): void;
-  editStyle(): void;
-  chooseColourLook(colourLook: AstroColourLook): void;
   toggleShown(): void;
-  readGrownUpNote(): void;
+  readPrivacyNote(): void;
   replay(): void;
 }
 
 export function buildAboutYouSection(document: Document, profile: AstroProfile, actions: YourAstroRowActions): HTMLElement {
   const section = makeSection(document, "About you", "your-astro-about-you");
   const hasNickname = profile.nickname.length > 0;
-  const nameValue = makeElement(document, "span", hasNickname ? "" : "your-astro__row-value--empty", hasNickname ? profile.nickname : "Not set. Astro says “Hi!”");
+  const nameValue = makeElement(document, "span", hasNickname ? "" : "your-astro__row-value--empty", hasNickname ? profile.nickname : "Not set. Astro greets you without a name.");
   nameValue.dataset.testid = "your-astro-nickname-shown";
-  section.append(
-    makeRow(document, "Name", nameValue, rowButton(document, "your-astro-name-change", hasNickname ? "Change" : "Add a name", () => actions.editName())),
-    makeRow(document, "Style", styleSummary(profile.style), rowButton(document, "your-astro-style-change", "Change", () => actions.editStyle())),
-  );
+  section.append(makeRow(document, "Name", nameValue, rowButton(document, "your-astro-name-change", hasNickname ? "Change" : "Add a name", () => actions.editName())));
   return section;
 }
 
-export function buildLookSection(document: Document, profile: AstroProfile, actions: YourAstroRowActions): HTMLElement {
-  const section = makeSection(document, "Look", "your-astro-look");
-  const colourLookChips = buildColourLookChips(document, YOUR_ASTRO_ID_PREFIX, profile.colourLook, (colourLook) => actions.chooseColourLook(colourLook));
-  section.append(makeRow(document, "Colours", colourLookChips, null), makeRow(document, "Show Astro", shownDetail(document, profile.isAstroShown), shownSwitch(document, profile.isAstroShown, actions)));
+export function buildAppearanceSection(document: Document, profile: AstroProfile, actions: YourAstroRowActions): HTMLElement {
+  const section = makeSection(document, "Appearance", "your-astro-appearance");
+  section.append(makeRow(document, "Show Astro", shownDetail(document, profile.isAstroShown), shownSwitch(document, profile.isAstroShown, actions)));
   return section;
 }
 
-export function buildGrownUpSection(document: Document, actions: YourAstroRowActions): HTMLElement {
-  const section = makeSection(document, "For grown-ups", "your-astro-grown-ups");
+export function buildPrivacySection(document: Document, actions: YourAstroRowActions): HTMLElement {
+  const section = makeSection(document, "Privacy", "your-astro-privacy");
   section.append(
-    makeRow(document, null, "What Astro does and what stays private", rowButton(document, "your-astro-grown-up-read", "Read", () => actions.readGrownUpNote())),
-    makeRow(document, null, "Replay the welcome from the start", rowButton(document, "your-astro-replay", "Replay", () => actions.replay())),
+    makeRow(document, null, "What Astro does and what stays private", rowButton(document, "your-astro-privacy-read", "Read", () => actions.readPrivacyNote())),
+    makeRow(document, null, "Show the welcome again", rowButton(document, "your-astro-replay", "Show", () => actions.replay())),
   );
   return section;
 }

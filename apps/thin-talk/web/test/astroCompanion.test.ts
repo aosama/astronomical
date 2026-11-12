@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { waitFor } from "./support/dom";
+import { assertFocusOn, assertNoElement, waitFor } from "./support/dom";
 import { ENGINE_PATIENCE } from "../src/astro/EngineWatch";
 import { bootJourney, MET_ASTRO_PROFILE, sendUserMessage, waitUntilReady } from "./support/journey";
 import type { Journey } from "./support/journey";
 
-// Astro's first flight and home, driven the way a person would: through the
+// The get-started journey and Astro's home, driven the way a person would: through the
 // real page wiring, a fake host that stores astro-profile.json, and a fake
 // daemon with a Library.
 
-const BRAIN_ID = "example-org/starter-chat-4bit";
-const SKETCHBOOK_ID = "example-org/starter-image-4bit";
+const CHAT_MODEL_ID = "example-org/starter-chat-4bit";
+const IMAGE_MODEL_ID = "example-org/starter-image-4bit";
 const STARTER_CATALOG = {
   entries: [
-    { huggingface_id: BRAIN_ID, role: "chat", get_started: true, approximate_size_bytes: 5_970_332_199, ready_on_this_mac: false },
-    { huggingface_id: SKETCHBOOK_ID, role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false },
+    { huggingface_id: CHAT_MODEL_ID, role: "chat", get_started: true, approximate_size_bytes: 5_970_332_199, ready_on_this_mac: false },
+    { huggingface_id: IMAGE_MODEL_ID, role: "image_generation", get_started: true, approximate_size_bytes: 4_619_700_724, ready_on_this_mac: false },
   ],
 };
 
@@ -47,151 +47,136 @@ async function waitForStep(step: string): Promise<void> {
   await waitFor(() => !overlay().hidden && overlay().dataset.step === step, `the "${step}" step`);
 }
 
-async function introduceSelf(nickname: string, styleTestID: string): Promise<void> {
-  await waitForStep("hello");
-  element<HTMLButtonElement>("astro-greet").click();
-  await waitForStep("name");
-  element<HTMLInputElement>("astro-nickname").value = nickname;
-  const nameForm = element<HTMLInputElement>("astro-nickname").form!;
-  nameForm.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-  await waitForStep("style");
-  element<HTMLButtonElement>(styleTestID).click();
+async function getStarted(): Promise<void> {
+  await waitForStep("welcome");
+  element<HTMLButtonElement>("astro-get-started").click();
 }
 
 function bootNewcomer(options?: Parameters<typeof bootJourney>[1]): Journey {
   return bootJourney(undefined, { libraryCatalog: STARTER_CATALOG, ...options, astroProfile: null });
 }
 
-test("should_welcome_a_newcomer_and_land_them_home_with_their_first_skill_ready_to_send", async () => {
-  const { host } = bootNewcomer();
-  await introduceSelf("  Sam  ", "astro-style-pilot");
-  await waitForStep("skills");
-  element<HTMLButtonElement>("astro-skill-chat").click();
-  await waitFor(() => isPresent("astro-go-home"), "the way home");
-  assert.match(astroSays(), /Chat's ready/);
-  element<HTMLButtonElement>("astro-go-home").click();
-  await waitFor(() => overlay().hidden, "the first flight to close");
-  assert.equal(composerField().value, "Explain black holes in three sentences.");
-  assert.deepEqual(host.astroProfile, { nickname: "Sam", style: "pilot", colourLook: "silver", hasFinishedFirstFlight: true, isAstroShown: true });
-  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, Sam");
+test("should_welcome_a_newcomer_and_land_them_in_an_empty_chat_when_a_chat_model_is_installed", async () => {
+  const { host, daemon } = bootNewcomer();
+  await waitForStep("welcome");
+  assert.equal(document.querySelector(".first-flight__headline")?.textContent, "Welcome to Astronomical");
+  assert.equal(astroSays(), "Astronomical runs AI models privately on this Mac.");
+  element<HTMLButtonElement>("astro-get-started").click();
+  await waitFor(() => overlay().hidden, "the journey to close");
+  assert.equal(composerField().value, "", "nothing is typed for the person");
+  assert.equal(document.activeElement?.id, "composer-input", "the caret is in the message field");
+  assert.deepEqual(host.astroProfile, { nickname: "", hasFinishedFirstFlight: true, isAstroShown: true });
+  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey");
   assert.equal(composerField().placeholder, "Ask Astro anything");
+  assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads when a chat model is already here");
 });
 
 test("should_go_straight_home_for_someone_astro_already_met", async () => {
   const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
   await waitFor(() => isPresent("astro-home"), "Astro's home");
   assert.equal(overlay().hidden, true);
-  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hi, Maya!");
+  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, Maya");
   assert.equal(daemon.requests.some((request) => request.url.includes("/v1/library/download")), false, "nothing downloads on its own");
 });
 
-test("should_finish_with_nothing_prepared_when_the_newcomer_explores_on_their_own", async () => {
-  const { host } = bootNewcomer();
-  await waitForStep("hello");
-  element<HTMLButtonElement>("astro-skip").click();
-  await waitFor(() => overlay().hidden, "the first flight to close");
-  assert.equal(composerField().value, "");
-  assert.equal((host.astroProfile as Record<string, unknown>)["hasFinishedFirstFlight"], true);
+test("should_ask_no_name_and_no_style_on_the_way_in", async () => {
+  bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
+  assertNoElement(overlay(), "input", "the journey asks for nothing to be typed");
+  assert.doesNotMatch(overlay().textContent ?? "", /brain|sketchbook|grown-up|Explorer|Pilot/i);
 });
 
-test("should_keep_a_name_and_style_chosen_halfway_through_and_offer_them_on_replay", async () => {
-  const first = bootNewcomer();
-  await introduceSelf("Ada", "astro-style-explorer");
-  await waitForStep("skills");
-  assert.deepEqual(first.host.astroProfile, { nickname: "Ada", style: "explorer", colourLook: "silver", hasFinishedFirstFlight: false, isAstroShown: true });
-  bootJourney(first);
-  await waitForStep("hello");
-  element<HTMLButtonElement>("astro-greet").click();
-  await waitForStep("name");
-  assert.equal(element<HTMLInputElement>("astro-nickname").value, "Ada", "an unfinished flight resumes with the saved name");
+test("should_show_a_saved_name_as_text_never_as_markup", async () => {
+  bootJourney(undefined, { astroProfile: { ...MET_ASTRO_PROFILE, nickname: "<b>Bo</b>" } });
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  assertNoElement(document, ".astro-home__greeting b");
+  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, <b>Bo</b>");
 });
 
-test("should_show_a_nickname_as_text_never_as_markup", async () => {
-  bootNewcomer();
-  await introduceSelf("<b>Bo</b>", "astro-style-explorer");
-  await waitForStep("skills");
-  assert.equal(document.querySelector(".first-flight__bubble b"), null);
-  element<HTMLButtonElement>("astro-skip").click();
-  await waitFor(() => overlay().hidden, "the first flight to close");
-  assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hi, <b>Bo</b>!");
+test("should_offer_the_recommended_model_by_name_and_size_with_one_download_button", async () => {
+  const { daemon, host } = bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  assert.equal(document.querySelector(".first-flight__headline")?.textContent, "Download a model");
+  assert.equal(element("astro-download-model").textContent, "starter-chat-4bit", "the model is named without its owner");
+  assert.equal(element("astro-download-size").textContent, "6.0 GB, one time");
+  assert.equal(element("astro-download").textContent, "Download");
+  assert.equal(element("astro-keep-going").textContent, "Skip for now");
+  assert.equal(isPresent("astro-download-next"), false, "what comes next waits for the download to start");
+  assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads until Download is pressed");
+  element<HTMLButtonElement>("astro-other-model").click();
+  assert.ok(host.receivedActions.some((action) => JSON.stringify(action).includes("openExternal") && JSON.stringify(action).includes("/download-models")), "the Models page opens for a different model");
 });
 
-test("should_detour_to_the_grown_up_note_and_come_back_to_the_style_choice", async () => {
-  bootNewcomer();
-  await introduceSelf("", "astro-style-grown-up");
-  await waitForStep("grownUp");
-  assert.match(overlay().textContent ?? "", /runs entirely on this Mac/);
-  element<HTMLButtonElement>("astro-grown-up-back").click();
-  await waitForStep("style");
-  assert.equal(astroSays(), "Nice to meet you! How do you like your space?", "no name means no dangling comma");
-});
-
-test("should_say_voice_is_coming_and_keep_the_flight_open", async () => {
-  bootNewcomer();
-  await introduceSelf("", "astro-style-explorer");
-  await waitForStep("skills");
-  element<HTMLButtonElement>("astro-skill-voice").click();
-  await waitFor(() => /coming soon/.test(astroSays()), "the voice reply");
-  assert.equal(isPresent("astro-go-home"), false);
-});
-
-test("should_offer_the_sketchbook_before_drawing_and_take_no_for_an_answer", async () => {
-  const { daemon } = bootNewcomer();
-  await introduceSelf("", "astro-style-explorer");
-  await waitForStep("skills");
-  element<HTMLButtonElement>("astro-skill-pictures").click();
-  await waitFor(() => isPresent("astro-get-sketchbook"), "the sketchbook offer");
-  assert.match(astroSays(), /sketchbook/);
-  assert.equal(element("astro-download-size").textContent, "4.6 GB, one time");
-  element<HTMLButtonElement>("astro-not-now").click();
-  await waitFor(() => !isPresent("astro-get-sketchbook"), "the offer to close");
-  assert.deepEqual(daemon.requestedLibraryDownloads, [], "declining downloads nothing");
-});
-
-test("should_wake_astro_on_a_mac_without_a_brain_and_make_chat_ready_when_it_lands", async () => {
+test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async () => {
   const { daemon } = bootNewcomer({
     models: [],
     libraryDownloadSequence: [
-      { state: "downloading", huggingface_id: BRAIN_ID, bytes_completed: 2_000_000_000, bytes_total: 6_000_000_000, error_code: null },
+      { state: "downloading", huggingface_id: CHAT_MODEL_ID, bytes_completed: 2_000_000_000, bytes_total: 6_000_000_000, error_code: null },
       { state: "idle", huggingface_id: null, bytes_completed: 0, bytes_total: 0, error_code: null },
     ],
-    installsWhenDownloadFinishes: { huggingfaceID: BRAIN_ID, model: { id: "starter-chat-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"] } },
+    installsWhenDownloadFinishes: { huggingfaceID: CHAT_MODEL_ID, model: { id: "starter-chat-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"] } },
   });
-  await introduceSelf("", "astro-style-explorer");
-  await waitForStep("wake");
-  await waitFor(() => isPresent("astro-wake"), "the wake-up button");
-  assert.equal(element("astro-download-size").textContent, "6.0 GB, one time");
-  element<HTMLButtonElement>("astro-wake").click();
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  element<HTMLButtonElement>("astro-download").click();
   await waitFor(() => daemon.requestedLibraryDownloads.length === 1, "the download request");
-  assert.deepEqual(daemon.requestedLibraryDownloads, [BRAIN_ID]);
+  assert.deepEqual(daemon.requestedLibraryDownloads, [CHAT_MODEL_ID]);
+  assert.equal(element("astro-keep-going").textContent, "Continue in the background");
+  assert.match(element("astro-download-next").textContent ?? "", /Ask a question/);
   await waitFor(() => element("astro-download-size").textContent === "2.0 of 6.0 GB", "progress");
-  await waitFor(() => astroSays() === "I'm awake! Thank you!", "Astro to wake up");
+  await waitFor(() => astroSays() === "The model is ready.", "the ready line");
   await waitFor(() => document.getElementById("empty-state-notice")?.textContent === "", "chat to become ready");
-  element<HTMLButtonElement>("astro-wake").click();
-  await waitForStep("skills");
+  assert.equal(element("astro-download").textContent, "Start chatting");
+  element<HTMLButtonElement>("astro-download").click();
+  await waitFor(() => overlay().hidden, "the journey to close");
+  assert.equal(document.activeElement?.id, "composer-input");
 });
 
-test("should_save_a_colour_look_picked_while_the_brain_downloads", async () => {
-  const { host } = bootNewcomer({ models: [] });
-  await introduceSelf("", "astro-style-explorer");
-  await waitForStep("wake");
-  await waitFor(() => isPresent("astro-colour-look-sunset"), "the colour chips");
-  element<HTMLButtonElement>("astro-colour-look-sunset").click();
-  await waitFor(() => (host.astroProfile as Record<string, unknown>)["colourLook"] === "sunset", "the colour look to save");
-  assert.equal(element("astro-colour-look-sunset").getAttribute("aria-pressed"), "true");
-  assert.ok(document.getElementById("app")?.classList.contains("astro-colour-look--sunset"), "every Astro takes the look");
-});
-
-test("should_tell_a_newcomer_kindly_when_another_download_holds_the_library", async () => {
-  bootNewcomer({ models: [], libraryDownloadRefusal: { status: 409, code: "library_busy" } });
-  await introduceSelf("", "astro-style-explorer");
-  await waitForStep("wake");
-  await waitFor(() => isPresent("astro-wake"), "the wake-up button");
-  element<HTMLButtonElement>("astro-wake").click();
-  await waitFor(() => /Something else is downloading/.test(astroSays()), "the busy line");
-  assert.equal(element<HTMLButtonElement>("astro-wake").textContent, "Try again");
+test("should_finish_without_downloading_when_the_newcomer_skips", async () => {
+  const { host, daemon } = bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-keep-going"), "Skip for now");
   element<HTMLButtonElement>("astro-keep-going").click();
-  await waitForStep("skills");
+  await waitFor(() => overlay().hidden, "the journey to close");
+  assert.equal((host.astroProfile as Record<string, unknown>)["hasFinishedFirstFlight"], true);
+  assert.deepEqual(daemon.requestedLibraryDownloads, []);
+});
+
+test("should_say_plainly_when_another_download_holds_the_library", async () => {
+  bootNewcomer({ models: [], libraryDownloadRefusal: { status: 409, code: "library_busy" } });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  element<HTMLButtonElement>("astro-download").click();
+  await waitFor(() => /Another download is running/.test(astroSays()), "the busy line");
+  assert.equal(element<HTMLButtonElement>("astro-download").textContent, "Try again");
+  element<HTMLButtonElement>("astro-keep-going").click();
+  await waitFor(() => overlay().hidden, "the journey to close");
+});
+
+test("should_say_voice_is_coming_on_home_and_fill_nothing", async () => {
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  element<HTMLButtonElement>("astro-home-skill-voice").click();
+  await waitFor(() => /coming soon/.test(document.querySelector(".astro-home__reply")?.textContent ?? ""), "the voice reply");
+  assert.equal(composerField().value, "");
+});
+
+test("should_offer_the_image_model_before_drawing_and_take_no_for_an_answer", async () => {
+  const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, libraryCatalog: STARTER_CATALOG });
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  element<HTMLButtonElement>("astro-home-skill-pictures").click();
+  await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
+  assert.match(document.querySelector(".astro-home__reply")?.textContent ?? "", /image model/);
+  assert.equal(element("astro-home-download-size").textContent, "4.6 GB, one time");
+  element<HTMLButtonElement>("astro-home-not-now").click();
+  await waitFor(() => !isPresent("astro-home-get-image-model"), "the offer to close");
+  assert.deepEqual(daemon.requestedLibraryDownloads, [], "declining downloads nothing");
 });
 
 test("should_hide_and_bring_back_astro_with_the_focus_switch", async () => {
@@ -208,95 +193,94 @@ test("should_hide_and_bring_back_astro_with_the_focus_switch", async () => {
 
 test("should_fill_the_message_field_from_a_home_idea_without_sending_it", async () => {
   const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
-  await waitFor(() => isPresent("astro-home-idea-0"), "the home ideas");
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  await waitUntilReady();
   element<HTMLButtonElement>("astro-home-idea-0").click();
-  assert.equal(composerField().value, "Why is the sky blue?");
-  assert.equal(document.activeElement, composerField());
+  assert.equal(composerField().value, "Explain black holes in three sentences");
+  assertFocusOn(composerField());
   assert.equal(daemon.chatRequestBody(), null, "an idea only prepares the message");
 });
 
-test("should_keep_astro_hidden_when_hidden_during_the_first_flight", async () => {
-  const { host } = bootNewcomer();
-  await introduceSelf("Kim", "astro-style-explorer");
-  await waitForStep("skills");
+test("should_keep_astro_hidden_when_hidden_during_the_journey", async () => {
+  const { host } = bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
   window.__thintalkCommands?.run({ name: "toggleAstro" });
-  element<HTMLButtonElement>("astro-skip").click();
-  await waitFor(() => overlay().hidden, "the first flight to close");
-  assert.deepEqual(host.astroProfile, { nickname: "Kim", style: "explorer", colourLook: "silver", hasFinishedFirstFlight: true, isAstroShown: false });
+  await waitFor(() => isPresent("astro-keep-going"), "Skip for now");
+  element<HTMLButtonElement>("astro-keep-going").click();
+  await waitFor(() => overlay().hidden, "the journey to close");
+  assert.deepEqual(host.astroProfile, { nickname: "", hasFinishedFirstFlight: true, isAstroShown: false });
   assert.equal(isPresent("astro-home"), false);
 });
 
 test("should_move_keyboard_focus_into_each_step_and_keep_the_window_behind_inert", async () => {
-  bootNewcomer();
-  await waitForStep("hello");
-  assert.equal(document.activeElement, element("astro-greet"));
+  bootNewcomer({ models: [] });
+  await waitForStep("welcome");
+  assert.equal(document.activeElement?.id, "astro-get-started");
   assert.ok(document.getElementById("sidebar")?.hasAttribute("inert"), "the sidebar is out of reach behind the welcome");
-  element<HTMLButtonElement>("astro-greet").click();
-  await waitForStep("name");
-  assert.equal(document.activeElement, element("astro-nickname"));
-  element<HTMLInputElement>("astro-nickname").form!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-  await waitForStep("style");
-  assert.equal(document.activeElement, element("astro-style-explorer"), "focus follows to the style choice");
-  element<HTMLButtonElement>("astro-style-explorer").click();
-  await waitForStep("skills");
-  assert.ok(overlay().contains(document.activeElement), "focus stays inside the welcome");
+  element<HTMLButtonElement>("astro-get-started").click();
+  await waitForStep("download");
+  assert.ok(overlay().contains(document.activeElement) || document.activeElement === document.body, "focus does not escape to the window behind");
 });
 
-test("should_skip_the_first_flight_with_escape_and_free_the_window", async () => {
+test("should_skip_the_journey_with_escape_and_free_the_window", async () => {
   bootNewcomer();
-  await waitForStep("hello");
+  await waitForStep("welcome");
   overlay().dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-  await waitFor(() => overlay().hidden, "the first flight to close");
+  await waitFor(() => overlay().hidden, "the journey to close");
   assert.equal(document.getElementById("sidebar")?.hasAttribute("inert"), false);
 });
 
 test("should_add_a_starter_question_after_a_draft_instead_of_replacing_it", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
-  await waitFor(() => isPresent("astro-home-idea-0"), "the home ideas");
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  await waitUntilReady();
   composerField().value = "Hi Astro!";
   element<HTMLButtonElement>("astro-home-idea-0").click();
-  assert.equal(composerField().value, "Hi Astro! Why is the sky blue?");
+  assert.equal(composerField().value, "Hi Astro! Explain black holes in three sentences");
 });
 
-test("should_hide_the_library_notice_while_home_offers_a_brain_itself", async () => {
+test("should_hide_the_library_notice_while_home_offers_a_chat_model_itself", async () => {
   bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: [], libraryCatalog: STARTER_CATALOG });
-  await waitFor(() => isPresent("astro-home-wake"), "home's brain offer");
-  assert.ok(document.getElementById("empty-state")?.classList.contains("empty-state--astro-offers-brain"));
+  await waitFor(() => isPresent("astro-home-download"), "home's chat model offer");
+  assert.ok(document.getElementById("empty-state")?.classList.contains("empty-state--astro-offers-chat-model"));
+  assertNoElement(document, "[data-testid=astro-home-other-model]", "home keeps to the one recommended model");
 });
 
-test("should_wait_for_an_engine_still_starting_and_then_offer_the_brain", async () => {
+test("should_wait_for_an_engine_still_starting_and_then_offer_the_download", async () => {
   const savedAskEvery = ENGINE_PATIENCE.askEveryMilliseconds;
   ENGINE_PATIENCE.askEveryMilliseconds = 10;
   try {
     const { daemon } = bootNewcomer({ models: [] });
     daemon.modelsUnreachable = true;
-    await introduceSelf("", "astro-style-explorer");
+    await getStarted();
     await waitForStep("engineStarting");
-    assert.equal(astroSays(), "Hang on… I'm just waking up!");
+    assert.equal(astroSays(), "One moment. Starting up.");
     daemon.modelsUnreachable = false;
-    await waitForStep("wake");
-    await waitFor(() => isPresent("astro-wake"), "the brain offer");
+    await waitForStep("download");
+    await waitFor(() => isPresent("astro-download"), "the Download button");
   } finally {
     ENGINE_PATIENCE.askEveryMilliseconds = savedAskEvery;
   }
 });
 
-test("should_offer_a_restart_when_the_engine_never_wakes_and_wait_again", async () => {
+test("should_offer_a_restart_when_the_engine_never_starts_and_wait_again", async () => {
   const savedPatience = { ...ENGINE_PATIENCE };
   ENGINE_PATIENCE.askEveryMilliseconds = 10;
   ENGINE_PATIENCE.silentAfterMilliseconds = 40;
   try {
     const { daemon, host } = bootNewcomer({ models: [], canRestartEngine: true });
     daemon.modelsUnreachable = true;
-    await introduceSelf("", "astro-style-explorer");
+    await getStarted();
     await waitForStep("engineSilent");
-    assert.equal(astroSays(), "I can't wake up right now. A restart usually fixes it!");
-    assert.equal(element("astro-engine-retry").textContent, "Restart Astro's engine");
+    assert.equal(astroSays(), "The engine didn't start. A restart usually fixes it.");
+    assert.equal(element("astro-engine-retry").textContent, "Restart the engine");
+    assert.equal(isPresent("astro-skip"), true, "a silent engine never traps the person on this screen");
     element<HTMLButtonElement>("astro-engine-retry").click();
     assert.ok(host.receivedActions.some((action) => action["action"] === "restartEngine"), "the host is asked to restart");
     await waitForStep("engineStarting");
     daemon.modelsUnreachable = false;
-    await waitForStep("wake");
+    await waitForStep("download");
   } finally {
     Object.assign(ENGINE_PATIENCE, savedPatience);
   }
@@ -309,7 +293,7 @@ test("should_offer_try_again_instead_of_restart_where_the_host_cannot_restart", 
   try {
     const { daemon, host } = bootNewcomer({ models: [] });
     daemon.modelsUnreachable = true;
-    await introduceSelf("", "astro-style-explorer");
+    await getStarted();
     await waitForStep("engineSilent");
     assert.equal(element("astro-engine-retry").textContent, "Try again");
     element<HTMLButtonElement>("astro-engine-retry").click();
@@ -320,16 +304,16 @@ test("should_offer_try_again_instead_of_restart_where_the_host_cannot_restart", 
   }
 });
 
-test("should_offer_a_brain_on_home_once_an_engine_that_was_starting_answers", async () => {
+test("should_offer_a_chat_model_on_home_once_an_engine_that_was_starting_answers", async () => {
   const savedAskEvery = ENGINE_PATIENCE.askEveryMilliseconds;
   ENGINE_PATIENCE.askEveryMilliseconds = 10;
   try {
     const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: [], libraryCatalog: STARTER_CATALOG });
     daemon.modelsUnreachable = true;
     await waitFor(() => isPresent("astro-home"), "Astro's home");
-    assert.equal(isPresent("astro-home-wake"), false, "nothing to offer while the engine is silent");
+    assert.equal(isPresent("astro-home-download"), false, "nothing to offer while the engine is silent");
     daemon.modelsUnreachable = false;
-    await waitFor(() => isPresent("astro-home-wake"), "home's brain offer");
+    await waitFor(() => isPresent("astro-home-download"), "home's chat model offer");
   } finally {
     ENGINE_PATIENCE.askEveryMilliseconds = savedAskEvery;
   }

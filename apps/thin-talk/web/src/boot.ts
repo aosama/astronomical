@@ -218,7 +218,6 @@ export function bootChatClient(): AppShell {
     library: new AstroLibrary(client),
     firstFlightOverlay: requireElement<HTMLElement>("#first-flight"),
     yourAstroOverlay: requireElement<HTMLElement>("#your-astro"),
-    colourLookOwner: requireElement<HTMLElement>("#app"),
     emptyState: requireElement<HTMLElement>("#empty-state"),
     composerField,
     skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),
@@ -229,6 +228,8 @@ export function bootChatClient(): AppShell {
       void controller.refreshImageModels();
     },
     restartEngine: config.canRestartEngine ? () => host.requestEngineRestart() : null,
+    // The Observatory is served by the same engine the window talks to.
+    openModelsPage: () => host.postAction("openExternal", "", `${config.daemonBaseURL}/download-models`),
   });
   new HostCommandRouter(
     hostCommandHandlers({ controller, transcript, composerField, host, windowChrome, astro, exportLauncher }),

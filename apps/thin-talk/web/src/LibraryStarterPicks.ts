@@ -4,11 +4,11 @@ export interface LibraryStarterPick {
   readonly approximateSizeBytes: number;
 }
 
-/** The Library's get-started recommendations Astro offers: a brain to chat
- * with and a sketchbook to draw with. Either may be missing from a catalog. */
+/** The Library's get-started recommendations Astro offers: a chat model and
+ * an image model. Either may be missing from a catalog. */
 export interface LibraryStarterPicks {
-  readonly brain: LibraryStarterPick | null;
-  readonly sketchbook: LibraryStarterPick | null;
+  readonly chatModel: LibraryStarterPick | null;
+  readonly imageModel: LibraryStarterPick | null;
 }
 
 const CHAT_ROLE = "chat";
@@ -32,8 +32,8 @@ export function parseLibraryStarterPicks(catalogBodyText: string): LibraryStarte
     return null;
   }
   return {
-    brain: firstStarterPick(rawEntries, CHAT_ROLE),
-    sketchbook: firstStarterPick(rawEntries, IMAGE_GENERATION_ROLE),
+    chatModel: firstStarterPick(rawEntries, CHAT_ROLE),
+    imageModel: firstStarterPick(rawEntries, IMAGE_GENERATION_ROLE),
   };
 }
 
