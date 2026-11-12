@@ -32,7 +32,7 @@ function isPresent(testID: string): boolean {
 }
 
 function overlay(): HTMLElement {
-  return element("first-flight");
+  return element("get-started");
 }
 
 function astroSays(): string {
@@ -59,7 +59,7 @@ function bootNewcomer(options?: Parameters<typeof bootJourney>[1]): Journey {
 test("should_welcome_a_newcomer_and_land_them_in_an_empty_chat_when_a_chat_model_is_installed", async () => {
   const { host, daemon } = bootNewcomer();
   await waitForStep("welcome");
-  assert.equal(document.querySelector(".first-flight__headline")?.textContent, "Welcome to Astronomical");
+  assert.equal(document.querySelector(".get-started__headline")?.textContent, "Welcome to Astronomical");
   assert.equal(astroSays(), "Astronomical runs AI models privately on this Mac.");
   element<HTMLButtonElement>("astro-get-started").click();
   await waitFor(() => overlay().hidden, "the journey to close");
@@ -99,11 +99,11 @@ test("should_offer_the_recommended_model_by_name_and_size_with_one_download_butt
   await getStarted();
   await waitForStep("download");
   await waitFor(() => isPresent("astro-download"), "the Download button");
-  assert.equal(document.querySelector(".first-flight__headline")?.textContent, "Download a model");
+  assert.equal(document.querySelector(".get-started__headline")?.textContent, "Download a model");
   assert.equal(element("astro-download-model").textContent, "starter-chat-4bit", "the model is named without its owner");
   assert.equal(element("astro-download-size").textContent, "6.0 GB, one time");
   assert.equal(element("astro-download").textContent, "Download");
-  assert.equal(element("astro-keep-going").textContent, "Skip for now");
+  assert.equal(element("astro-continue").textContent, "Skip for now");
   assert.equal(isPresent("astro-download-next"), false, "what comes next waits for the download to start");
   assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads until Download is pressed");
   element<HTMLButtonElement>("astro-other-model").click();
@@ -125,12 +125,13 @@ test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async (
   element<HTMLButtonElement>("astro-download").click();
   await waitFor(() => daemon.requestedLibraryDownloads.length === 1, "the download request");
   assert.deepEqual(daemon.requestedLibraryDownloads, [CHAT_MODEL_ID]);
-  assert.equal(element("astro-keep-going").textContent, "Continue in the background");
+  assert.equal(element("astro-continue").textContent, "Continue in the background");
   assert.match(element("astro-download-next").textContent ?? "", /Ask a question/);
   await waitFor(() => element("astro-download-size").textContent === "2.0 of 6.0 GB", "progress");
   await waitFor(() => astroSays() === "The model is ready.", "the ready line");
   await waitFor(() => document.getElementById("empty-state-notice")?.textContent === "", "chat to become ready");
   assert.equal(element("astro-download").textContent, "Start chatting");
+  assert.equal(isPresent("astro-continue"), false, "one way forward once the model is ready");
   element<HTMLButtonElement>("astro-download").click();
   await waitFor(() => overlay().hidden, "the journey to close");
   assert.equal(document.activeElement?.id, "composer-input");
@@ -140,8 +141,8 @@ test("should_finish_without_downloading_when_the_newcomer_skips", async () => {
   const { host, daemon } = bootNewcomer({ models: [] });
   await getStarted();
   await waitForStep("download");
-  await waitFor(() => isPresent("astro-keep-going"), "Skip for now");
-  element<HTMLButtonElement>("astro-keep-going").click();
+  await waitFor(() => isPresent("astro-continue"), "Skip for now");
+  element<HTMLButtonElement>("astro-continue").click();
   await waitFor(() => overlay().hidden, "the journey to close");
   assert.equal((host.astroProfile as Record<string, unknown>)["hasFinishedFirstFlight"], true);
   assert.deepEqual(daemon.requestedLibraryDownloads, []);
@@ -155,7 +156,7 @@ test("should_say_plainly_when_another_download_holds_the_library", async () => {
   element<HTMLButtonElement>("astro-download").click();
   await waitFor(() => /Another download is running/.test(astroSays()), "the busy line");
   assert.equal(element<HTMLButtonElement>("astro-download").textContent, "Try again");
-  element<HTMLButtonElement>("astro-keep-going").click();
+  element<HTMLButtonElement>("astro-continue").click();
   await waitFor(() => overlay().hidden, "the journey to close");
 });
 
@@ -206,8 +207,8 @@ test("should_keep_astro_hidden_when_hidden_during_the_journey", async () => {
   await getStarted();
   await waitForStep("download");
   window.__thintalkCommands?.run({ name: "toggleAstro" });
-  await waitFor(() => isPresent("astro-keep-going"), "Skip for now");
-  element<HTMLButtonElement>("astro-keep-going").click();
+  await waitFor(() => isPresent("astro-continue"), "Skip for now");
+  element<HTMLButtonElement>("astro-continue").click();
   await waitFor(() => overlay().hidden, "the journey to close");
   assert.deepEqual(host.astroProfile, { nickname: "", hasFinishedFirstFlight: true, isAstroShown: false });
   assert.equal(isPresent("astro-home"), false);
@@ -220,7 +221,7 @@ test("should_move_keyboard_focus_into_each_step_and_keep_the_window_behind_inert
   assert.ok(document.getElementById("sidebar")?.hasAttribute("inert"), "the sidebar is out of reach behind the welcome");
   element<HTMLButtonElement>("astro-get-started").click();
   await waitForStep("download");
-  assert.ok(overlay().contains(document.activeElement) || document.activeElement === document.body, "focus does not escape to the window behind");
+  await waitFor(() => document.activeElement?.id === "astro-download", "focus to reach the Download button once it is drawn");
 });
 
 test("should_skip_the_journey_with_escape_and_free_the_window", async () => {

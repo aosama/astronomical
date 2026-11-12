@@ -1,5 +1,5 @@
 /** The screens of the get-started journey, in the order a newcomer meets them. */
-export enum FirstFlightStep {
+export enum GetStartedStep {
   WELCOME = "welcome",
   /** Only when the engine has not answered by the time "Get started" is
    * pressed: the next screen depends on whether a chat model is installed. */
@@ -25,8 +25,8 @@ export enum FirstFlightStep {
  * arriving after the view has moved on is ignored instead of skipping a
  * screen.
  */
-export class FirstFlightJourney {
-  private currentStep: FirstFlightStep = FirstFlightStep.WELCOME;
+export class GetStartedJourney {
+  private currentStep: GetStartedStep = GetStartedStep.WELCOME;
   /** Null while the engine has not said whether a chat model is installed. */
   private hasChatModel: boolean | null;
 
@@ -34,36 +34,36 @@ export class FirstFlightJourney {
     this.hasChatModel = init.hasChatModel;
   }
 
-  public get step(): FirstFlightStep {
+  public get step(): GetStartedStep {
     return this.currentStep;
   }
 
   /** "Get started". The welcome needs no engine, so on a first launch the
    * engine's start-up time is usually spent before anyone has to wait. */
   public begin(): void {
-    this.moveFrom(FirstFlightStep.WELCOME, this.hasChatModel === null ? FirstFlightStep.ENGINE_STARTING : FirstFlightJourney.stepAfterEngineAnswer(this.hasChatModel));
+    this.moveFrom(GetStartedStep.WELCOME, this.hasChatModel === null ? GetStartedStep.ENGINE_STARTING : GetStartedJourney.stepAfterEngineAnswer(this.hasChatModel));
   }
 
   /** The engine answered. Recorded on any step; a journey waiting on the
    * answer moves on at once. */
   public engineAnswered(hasChatModel: boolean): void {
     this.hasChatModel = hasChatModel;
-    if (this.currentStep === FirstFlightStep.ENGINE_STARTING || this.currentStep === FirstFlightStep.ENGINE_SILENT) {
-      this.currentStep = FirstFlightJourney.stepAfterEngineAnswer(hasChatModel);
+    if (this.currentStep === GetStartedStep.ENGINE_STARTING || this.currentStep === GetStartedStep.ENGINE_SILENT) {
+      this.currentStep = GetStartedJourney.stepAfterEngineAnswer(hasChatModel);
     }
   }
 
   public engineStayedSilent(): void {
-    this.moveFrom(FirstFlightStep.ENGINE_STARTING, FirstFlightStep.ENGINE_SILENT);
+    this.moveFrom(GetStartedStep.ENGINE_STARTING, GetStartedStep.ENGINE_SILENT);
   }
 
   /** After a restart the journey waits again. */
   public retryEngine(): void {
-    this.moveFrom(FirstFlightStep.ENGINE_SILENT, FirstFlightStep.ENGINE_STARTING);
+    this.moveFrom(GetStartedStep.ENGINE_SILENT, GetStartedStep.ENGINE_STARTING);
   }
 
-  private static stepAfterEngineAnswer(hasChatModel: boolean): FirstFlightStep {
-    return hasChatModel ? FirstFlightStep.FINISHED : FirstFlightStep.DOWNLOAD;
+  private static stepAfterEngineAnswer(hasChatModel: boolean): GetStartedStep {
+    return hasChatModel ? GetStartedStep.FINISHED : GetStartedStep.DOWNLOAD;
   }
 
   /** The chat model finished downloading. The view stays on DOWNLOAD so the
@@ -75,15 +75,15 @@ export class FirstFlightJourney {
   /** Allowed before and while the download runs: the daemon keeps
    * downloading, and a newcomer should not have to watch a progress bar. */
   public leaveDownload(): void {
-    this.moveFrom(FirstFlightStep.DOWNLOAD, FirstFlightStep.FINISHED);
+    this.moveFrom(GetStartedStep.DOWNLOAD, GetStartedStep.FINISHED);
   }
 
   /** Escape and "Skip for now" work from every screen. */
   public skip(): void {
-    this.currentStep = FirstFlightStep.FINISHED;
+    this.currentStep = GetStartedStep.FINISHED;
   }
 
-  private moveFrom(expectedStep: FirstFlightStep, nextStep: FirstFlightStep): void {
+  private moveFrom(expectedStep: GetStartedStep, nextStep: GetStartedStep): void {
     if (this.currentStep === expectedStep) {
       this.currentStep = nextStep;
     }

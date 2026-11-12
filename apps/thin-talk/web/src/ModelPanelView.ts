@@ -17,8 +17,8 @@ interface PanelRow {
 }
 
 /**
- * The composer's brain control: one small button beside Send that names the
- * chat model in use and opens one panel listing every installed brain, chat
+ * The composer's model control: one small button beside Send that names the
+ * chat model in use and opens one panel listing every installed model, chat
  * models first, then picture models, then the Tools switch and a way to the
  * Models page. It replaced two wide pills that showed folder names; the
  * folder name now lives only in the button's tooltip.
@@ -72,7 +72,7 @@ export class ModelPanelView {
     const opening = this.panel.hidden;
     if (opening) {
       // A model installed since the list was read appears once it is re-read.
-      this.onAction(new ComposerAction({ kind: "openBrainPanel" }));
+      this.onAction(new ComposerAction({ kind: "openModelPanel" }));
     }
     this.panel.hidden = !opening;
     this.trigger.setAttribute("aria-expanded", opening ? "true" : "false");

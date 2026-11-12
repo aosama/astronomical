@@ -143,7 +143,7 @@ export function bootChatClient(): AppShell {
   });
 
   // One choice of image model and one list of installed image models, shared
-  // by the controller (which draws the composer's brain panel) and the image tool
+  // by the controller (which draws the composer's model panel) and the image tool
   // (which draws pictures), so the two can never disagree.
   const imageModelDirectory = new ImageModelDirectory(client);
   const imageModelSelection = new ImageModelSelection();
@@ -154,9 +154,9 @@ export function bootChatClient(): AppShell {
     sendButton: requireElement<HTMLButtonElement>('[data-testid="composer-send"]'),
     stopButton: requireElement<HTMLButtonElement>('[data-testid="composer-stop"]'),
     retryButton: requireElement<HTMLButtonElement>('[data-testid="composer-retry"]'),
-    brainControl: requireElement<HTMLButtonElement>('[data-testid="composer-model"]'),
-    brainLabel: requireElement<HTMLElement>('[data-testid="composer-model-label"]'),
-    brainPanel: requireElement<HTMLElement>('[data-testid="composer-model-menu"]'),
+    modelControl: requireElement<HTMLButtonElement>('[data-testid="composer-model"]'),
+    modelLabel: requireElement<HTMLElement>('[data-testid="composer-model-label"]'),
+    modelPanel: requireElement<HTMLElement>('[data-testid="composer-model-menu"]'),
     banner: requireElement<HTMLElement>('[data-testid="composer-banner"]'),
     bannerMessage: requireElement<HTMLElement>('[data-testid="banner-message"]'),
     bannerNextAction: requireElement<HTMLElement>('[data-testid="banner-next-action"]'),
@@ -181,7 +181,7 @@ export function bootChatClient(): AppShell {
         case "selectImageModel":
           controller.selectImageModel(action.detail);
           return;
-        case "openBrainPanel":
+        case "openModelPanel":
           void controller.refreshImageModels();
           return;
         case "setTools":
@@ -251,8 +251,8 @@ export function bootChatClient(): AppShell {
   const astro = new AstroCompanion({
     bridge,
     library: new AstroLibrary(client),
-    firstFlightOverlay: requireElement<HTMLElement>("#first-flight"),
-    yourAstroOverlay: requireElement<HTMLElement>("#your-astro"),
+    getStartedOverlay: requireElement<HTMLElement>("#get-started"),
+    settingsOverlay: requireElement<HTMLElement>("#settings"),
     emptyState: requireElement<HTMLElement>("#empty-state"),
     composerField,
     skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),

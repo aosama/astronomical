@@ -25,30 +25,30 @@ function selectorsThatHide(stylesheet: string): string[] {
   return hidingSelectors;
 }
 
-test("should_hide_the_brain_control_while_no_chat_model_is_installed", () => {
-  assert.ok(selectorsThatHide(composerStylesheet).includes(".composer__brain[hidden]"));
+test("should_hide_the_model_control_while_no_chat_model_is_installed", () => {
+  assert.ok(selectorsThatHide(composerStylesheet).includes(".composer__model[hidden]"));
 });
 
 test("should_hide_every_hidden_composer_control_that_sets_its_own_display", () => {
   const hidingSelectors = selectorsThatHide(composerStylesheet);
-  for (const controlClass of [".composer__icon", ".composer__brain", ".composer__send"]) {
+  for (const controlClass of [".composer__icon", ".composer__model", ".composer__send"]) {
     assert.ok(hidingSelectors.includes(`${controlClass}[hidden]`), `${controlClass} needs a [hidden] rule`);
   }
 });
 
-test("should_drop_the_brain_name_and_keep_the_icon_in_a_narrow_composer", () => {
+test("should_drop_the_model_name_and_keep_the_icon_in_a_narrow_composer", () => {
   // A narrow window must never push Send out of the composer: the name goes,
-  // and the brain icon keeps its own size so flex cannot squeeze it.
+  // and the model icon keeps its own size so flex cannot squeeze it.
   const narrowRuleMatch = composerStylesheet.match(/@container \(max-width: (\d+)px\) \{([\s\S]*?)\n\}/);
   assert.ok(narrowRuleMatch, "the composer has a narrow-width rule");
   assert.ok(Number(narrowRuleMatch[1]) > 0);
-  assert.ok(selectorsThatHide(narrowRuleMatch[2]!).includes(".composer__brain-label"));
-  assert.match(narrowRuleMatch[2]!, /\.composer__brain \{[^}]*flex: none;/);
+  assert.ok(selectorsThatHide(narrowRuleMatch[2]!).includes(".composer__model-label"));
+  assert.match(narrowRuleMatch[2]!, /\.composer__model \{[^}]*flex: none;/);
   assert.match(composerStylesheet, /\.composer \{\s*container-type: inline-size;/);
 });
 
 test("should_not_count_a_rule_that_only_styles_a_hidden_control_as_hiding_it", () => {
-  const stylesheetWithoutDisplayNone = ".composer__brain[hidden] { opacity: 0.5; }";
+  const stylesheetWithoutDisplayNone = ".composer__model[hidden] { opacity: 0.5; }";
 
   assert.deepEqual(selectorsThatHide(stylesheetWithoutDisplayNone), []);
 });
@@ -66,11 +66,11 @@ function ruleBody(stylesheet: string, selector: string): string {
 
 // A model's only name is its ID, and IDs share long prefixes, so a fixed-width
 // panel cut three different models down to the same "Ornith-1.5-35B-A3B-MLX-…".
-test("should_size_the_brain_panel_to_its_longest_model_id_within_the_window", () => {
-  const brainPanelRule = ruleBody(composerStylesheet, ".composer__menu--brains");
+test("should_size_the_model_panel_to_its_longest_model_id_within_the_window", () => {
+  const modelPanelRule = ruleBody(composerStylesheet, ".composer__menu--models");
 
-  assert.match(brainPanelRule, /width:\s*max-content;/, "the panel grows to its longest row");
-  assert.match(brainPanelRule, /min-width:\s*300px;/, "a short list keeps the panel's usual width");
-  assert.match(brainPanelRule, /max-width:\s*calc\(100vw - 32px\);/, "a narrow window still bounds it");
-  assert.doesNotMatch(brainPanelRule, /(^|[^-])width:\s*\d+px;/, "no fixed width that would cut an ID short");
+  assert.match(modelPanelRule, /width:\s*max-content;/, "the panel grows to its longest row");
+  assert.match(modelPanelRule, /min-width:\s*300px;/, "a short list keeps the panel's usual width");
+  assert.match(modelPanelRule, /max-width:\s*calc\(100vw - 32px\);/, "a narrow window still bounds it");
+  assert.doesNotMatch(modelPanelRule, /(^|[^-])width:\s*\d+px;/, "no fixed width that would cut an ID short");
 });

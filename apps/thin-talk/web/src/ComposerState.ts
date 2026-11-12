@@ -13,7 +13,7 @@ export interface ComposerFailure {
 }
 
 /**
- * The state the composer, the brain control, and the failure
+ * The state the composer, the model control, and the failure
  * banner render. The controller produces it; the composer only draws it and
  * reports intents back.
  */
@@ -29,7 +29,7 @@ export class ComposerState {
    * disabled when it cannot, so it never promises tools that will not run. */
   public readonly toolsAvailable: boolean;
   public readonly failure: ComposerFailure | null;
-  /** The installed image models, in the order the brain panel lists them. */
+  /** The installed image models, in the order the model panel lists them. */
   public readonly imageModels: readonly ImageModel[];
   /** The image model that draws the next picture, or null with none installed. */
   public readonly selectedImageModelID: string | null;

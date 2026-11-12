@@ -66,8 +66,8 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
 
   /// Settings (⌘,): opens the chat window's Settings page, where the name,
   /// the installed models and whether Astro is shown each change on their own.
-  @objc public func openYourAstro(_ sender: Any?) {
-    commandController.run(.openYourAstro)
+  @objc public func openSettings(_ sender: Any?) {
+    commandController.run(.openSettings)
   }
 
   /// The Focus switch: hides Astro for a plain chat window, or brings Astro back.

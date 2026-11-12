@@ -4,10 +4,10 @@ import { AstroMoment, astroLine } from "./AstroLines";
 import type { AstroProfile } from "./AstroProfile";
 import { buildNameForm } from "./NameForm";
 import { buildPrivacyNotePanel } from "./PrivacyNote";
-import { YourAstroJourney, YourAstroStep } from "./YourAstroJourney";
-import { YourAstroModels } from "./YourAstroModels";
-import { buildAboutYouSection, buildAppearanceSection, buildPrivacySection } from "./YourAstroSections";
-import type { YourAstroRowActions } from "./YourAstroSections";
+import { SettingsJourney, SettingsStep } from "./SettingsJourney";
+import { SettingsModels } from "./SettingsModels";
+import { buildAboutYouSection, buildAppearanceSection, buildPrivacySection } from "./SettingsSections";
+import type { SettingsRowActions } from "./SettingsSections";
 
 /**
  * What Settings asks of its owner. AstroCompanion owns the saved profile:
@@ -16,7 +16,7 @@ import type { YourAstroRowActions } from "./YourAstroSections";
  * never overwritten by an older copy. Each save answers whether it reached
  * the disk, so a failed save is shown instead of looking saved.
  */
-export interface YourAstroCallbacks {
+export interface SettingsCallbacks {
   currentProfile(): AstroProfile;
   saveNickname(typedNickname: string): Promise<boolean>;
   toggleShown(): Promise<boolean>;
@@ -32,28 +32,28 @@ export interface YourAstroCallbacks {
  * own. Opened from the app menu's Settings (⌘,). The name and the privacy
  * note open a screen of their own whose Save, Cancel or Back come back here.
  */
-export class YourAstroView {
+export class SettingsView {
   private readonly overlay: HTMLElement;
   private readonly document: Document;
-  private readonly callbacks: YourAstroCallbacks;
+  private readonly callbacks: SettingsCallbacks;
   private readonly line: HTMLElement;
-  private readonly models: YourAstroModels;
-  private readonly journey = new YourAstroJourney();
+  private readonly models: SettingsModels;
+  private readonly journey = new SettingsJourney();
   private answers: HTMLElement | null = null;
   private saveAlert: HTMLElement | null = null;
   private hasFailedSave = false;
 
-  public constructor(init: { overlay: HTMLElement; library: AstroLibrary; callbacks: YourAstroCallbacks }) {
+  public constructor(init: { overlay: HTMLElement; library: AstroLibrary; callbacks: SettingsCallbacks }) {
     this.overlay = init.overlay;
     this.document = init.overlay.ownerDocument;
     this.callbacks = init.callbacks;
-    this.line = makeElement(this.document, "p", "first-flight__line");
+    this.line = makeElement(this.document, "p", "astro-screen__line");
     this.line.setAttribute("role", "status");
-    this.line.dataset.testid = "your-astro-says";
-    this.models = new YourAstroModels(this.document, init.library, {
+    this.line.dataset.testid = "settings-says";
+    this.models = new SettingsModels(this.document, init.library, {
       say: (moment) => this.say(moment),
       sayPageLine: () => this.say(this.hasFailedSave ? AstroMoment.SAVE_FAILED : AstroMoment.SETTINGS),
-      isShowing: () => this.journey.step === YourAstroStep.PAGE,
+      isShowing: () => this.journey.step === SettingsStep.PAGE,
     });
     this.overlay.addEventListener("keydown", (keyEvent) => {
       if (keyEvent.key === "Escape") {
@@ -77,14 +77,14 @@ export class YourAstroView {
   /** The profile changed: redraw the answers in place, leaving the model
    * group's download panels running. */
   public refresh(): void {
-    if (this.journey.step === YourAstroStep.PAGE) {
+    if (this.journey.step === SettingsStep.PAGE) {
       this.redrawAnswers();
     }
   }
 
   /** A model landed: the models group checks again. */
   public refreshModels(): void {
-    if (this.journey.step === YourAstroStep.PAGE) {
+    if (this.journey.step === SettingsStep.PAGE) {
       void this.models.refresh();
     }
   }
@@ -103,35 +103,35 @@ export class YourAstroView {
     this.models.dispose();
     this.answers = this.saveAlert = null;
     switch (step) {
-      case YourAstroStep.PAGE:
+      case SettingsStep.PAGE:
         this.renderPage();
         break;
-      case YourAstroStep.NAME:
+      case SettingsStep.NAME:
         this.renderName();
         break;
-      case YourAstroStep.PRIVACY:
+      case SettingsStep.PRIVACY:
         this.renderPrivacy();
         break;
-      case YourAstroStep.CLOSED:
+      case SettingsStep.CLOSED:
         this.close();
         return;
     }
-    this.overlay.querySelector<HTMLElement>("input, .your-astro__list button:not([disabled]), .your-astro__step button:not([disabled])")?.focus();
+    this.overlay.querySelector<HTMLElement>("input, .settings__list button:not([disabled]), .settings__step button:not([disabled])")?.focus();
   }
 
   private renderPage(): void {
     this.say(this.hasFailedSave ? AstroMoment.SAVE_FAILED : AstroMoment.SETTINGS);
-    const intro = makeElement(this.document, "div", "your-astro__intro");
-    intro.append(makeElement(this.document, "h1", "your-astro__title", "Settings"), this.line);
-    const doneButton = makeButton(this.document, "your-astro-done", "Done", false);
+    const intro = makeElement(this.document, "div", "settings__intro");
+    intro.append(makeElement(this.document, "h1", "settings__title", "Settings"), this.line);
+    const doneButton = makeButton(this.document, "settings-done", "Done", false);
     doneButton.addEventListener("click", () => this.closeAndReturn());
-    const topBar = makeElement(this.document, "div", "your-astro__top-bar");
+    const topBar = makeElement(this.document, "div", "settings__top-bar");
     topBar.append(doneButton);
-    const list = makeElement(this.document, "div", "your-astro__list");
+    const list = makeElement(this.document, "div", "settings__list");
     this.saveAlert = this.makeSaveAlert();
-    this.answers = makeElement(this.document, "div", "your-astro__answers");
+    this.answers = makeElement(this.document, "div", "settings__answers");
     list.append(topBar, this.saveAlert, this.answers);
-    const page = makeElement(this.document, "div", "your-astro__page");
+    const page = makeElement(this.document, "div", "settings__page");
     page.append(intro, list);
     this.overlay.replaceChildren(page);
     this.redrawAnswers();
@@ -154,7 +154,7 @@ export class YourAstroView {
     }
   }
 
-  private rowActions(): YourAstroRowActions {
+  private rowActions(): SettingsRowActions {
     return {
       editName: () => this.advance(() => this.journey.editName()),
       toggleShown: () => void this.showSaveOutcome(this.callbacks.toggleShown()),
@@ -168,10 +168,10 @@ export class YourAstroView {
   }
 
   private makeSaveAlert(): HTMLElement {
-    const saveAlert = makeElement(this.document, "div", "your-astro__alert");
+    const saveAlert = makeElement(this.document, "div", "settings__alert");
     saveAlert.setAttribute("role", "alert");
-    saveAlert.dataset.testid = "your-astro-save-failed";
-    const retryButton = makeButton(this.document, "your-astro-retry-save", "Try again", false);
+    saveAlert.dataset.testid = "settings-save-failed";
+    const retryButton = makeButton(this.document, "settings-retry-save", "Try again", false);
     retryButton.addEventListener("click", () => void this.showSaveOutcome(this.callbacks.retrySave()));
     saveAlert.append(makeElement(this.document, "span", "", "Your last change wasn't saved on this Mac."), retryButton);
     saveAlert.hidden = !this.hasFailedSave;
@@ -183,7 +183,7 @@ export class YourAstroView {
   private async showSaveOutcome(saving: Promise<boolean>): Promise<void> {
     const isSaved = await saving;
     this.hasFailedSave = !isSaved;
-    if (this.journey.step !== YourAstroStep.PAGE) {
+    if (this.journey.step !== SettingsStep.PAGE) {
       return;
     }
     if (this.saveAlert !== null) {
@@ -194,12 +194,12 @@ export class YourAstroView {
 
   private renderName(): void {
     this.say(AstroMoment.ASK_NAME);
-    const cancelButton = makeButton(this.document, "your-astro-name-cancel", "Cancel", true);
+    const cancelButton = makeButton(this.document, "settings-name-cancel", "Cancel", true);
     cancelButton.addEventListener("click", () => this.advance(() => this.journey.backToPage()));
     const nameForm = buildNameForm(this.document, {
-      fieldID: "your-astro-nickname",
+      fieldID: "settings-nickname",
       nickname: this.profile().nickname,
-      confirmButton: makeButton(this.document, "your-astro-name-save", "Save", false),
+      confirmButton: makeButton(this.document, "settings-name-save", "Save", false),
       secondaryButton: cancelButton,
       onSubmit: (typedNickname) => this.saveAndReturn(this.callbacks.saveNickname(typedNickname)),
     });
@@ -208,23 +208,23 @@ export class YourAstroView {
 
   private renderPrivacy(): void {
     this.say(AstroMoment.PRIVACY);
-    const backButton = makeButton(this.document, "your-astro-privacy-back", "Back to Settings", false);
+    const backButton = makeButton(this.document, "settings-privacy-back", "Back to Settings", false);
     backButton.addEventListener("click", () => this.advance(() => this.journey.backToPage()));
-    const actionRow = makeElement(this.document, "div", "first-flight__actions");
+    const actionRow = makeElement(this.document, "div", "astro-screen__actions");
     actionRow.append(backButton);
     this.showStep(buildPrivacyNotePanel(this.document), actionRow);
   }
 
   /** A setting's own screen: the way back, the page's line, and the controls. */
   private showStep(...controls: HTMLElement[]): void {
-    const backLink = makeButton(this.document, "your-astro-back", "‹ Settings", true);
-    backLink.classList.add("your-astro__back");
+    const backLink = makeButton(this.document, "settings-back", "‹ Settings", true);
+    backLink.classList.add("settings__back");
     backLink.addEventListener("click", () => this.advance(() => this.journey.backToPage()));
-    const stage = makeElement(this.document, "div", "first-flight__stage");
+    const stage = makeElement(this.document, "div", "astro-screen__stage");
     stage.append(this.line);
-    const controlArea = makeElement(this.document, "div", "first-flight__controls");
+    const controlArea = makeElement(this.document, "div", "astro-screen__controls");
     controlArea.append(...controls);
-    const step = makeElement(this.document, "div", "your-astro__step");
+    const step = makeElement(this.document, "div", "settings__step");
     step.append(stage, controlArea);
     this.overlay.replaceChildren(backLink, step);
   }

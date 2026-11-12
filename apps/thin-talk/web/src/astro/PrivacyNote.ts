@@ -6,7 +6,7 @@ const PRIVACY_NOTE =
 
 /** What the app does and what stays on this Mac, shown from Settings. */
 export function buildPrivacyNotePanel(document: Document): HTMLElement {
-  const notePanel = makeElement(document, "div", "first-flight__panel");
+  const notePanel = makeElement(document, "div", "astro-screen__panel");
   notePanel.append(makeElement(document, "h2", "", "Privacy"), makeElement(document, "p", "", PRIVACY_NOTE));
   return notePanel;
 }

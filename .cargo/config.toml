@@ -163,6 +163,9 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 # button journeys are part of the web client's suite, `cd apps/thin-talk/web
 # && npm test` (CI's thin-talk-web-tests step), which fakes the speech endpoint
 # and Web Audio; only a rebuilt Development app can show real sound.
+# That suite runs with a 1 GB heap limit (run-tests.mjs): it peaks near 600 MB,
+# so `heap out of memory` there means one test is broken, usually a failing
+# assert that was handed a DOM node, never that the limit is too low.
 test-speech = "test -p astronomical-model-serving --features direct-mlx --lib speech"
 test-english-speech-text = "test -p astronomical-english-phonemes -p astronomical-english-number-words -p astronomical-speech-contract"
 test-kokoro-speech = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kokoro_speech"

@@ -66,7 +66,7 @@ function makeStorageAdapter(storage: Storage): SessionStoreAdapter {
       storage.setItem(PREFERENCES_KEY, JSON.stringify(value));
     },
     // Null before the first save, as the Swift store answers, so the preview
-    // also opens on Astro's first flight.
+    // also opens on Astro's get-started journey.
     loadAstroProfile: () => {
       return storage.getItem(ASTRO_PROFILE_KEY) ? JSON.parse(storage.getItem(ASTRO_PROFILE_KEY) as string) : null;
     },

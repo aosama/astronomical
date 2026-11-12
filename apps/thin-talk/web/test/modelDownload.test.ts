@@ -6,9 +6,9 @@ import type { LibraryDownloadStatus } from "../src/LibraryDownloadStatus";
 import { ModelDownload, ModelDownloadPhase } from "../src/astro/ModelDownload";
 import type { ModelDownloadDependencies, ModelDownloadProgress } from "../src/astro/ModelDownload";
 
-const BRAIN_ID = "example-org/brain-4bit";
+const CHAT_MODEL_ID = "example-org/chat-model-4bit";
 
-function status(state: string, bytesCompleted = 0, bytesTotal = 0, huggingfaceID: string | null = BRAIN_ID, errorCode: string | null = null): LibraryDownloadStatus {
+function status(state: string, bytesCompleted = 0, bytesTotal = 0, huggingfaceID: string | null = CHAT_MODEL_ID, errorCode: string | null = null): LibraryDownloadStatus {
   return { state, huggingfaceID, bytesCompleted, bytesTotal, errorCode };
 }
 
@@ -63,7 +63,7 @@ class ScriptedLibrary implements ModelDownloadDependencies {
 
 async function startedDownload(library: ScriptedLibrary): Promise<{ download: ModelDownload; reports: ModelDownloadProgress[] }> {
   const reports: ModelDownloadProgress[] = [];
-  const download = new ModelDownload(BRAIN_ID, library, (progress) => reports.push(progress));
+  const download = new ModelDownload(CHAT_MODEL_ID, library, (progress) => reports.push(progress));
   await download.start();
   return { download, reports };
 }
@@ -72,7 +72,7 @@ test("should_start_the_download_then_follow_it_until_the_model_is_installed", as
   const library = new ScriptedLibrary();
   library.statusAnswers = [IDLE_DOWNLOAD_STATUS, status("downloading", 1_000, 10_000), status("downloading", 6_000, 10_000), status("publishing", 10_000, 10_000), IDLE_DOWNLOAD_STATUS];
   const { reports } = await startedDownload(library);
-  assert.deepEqual(library.startedIDs, [BRAIN_ID]);
+  assert.deepEqual(library.startedIDs, [CHAT_MODEL_ID]);
   for (let pollNumber = 0; pollNumber < 3; pollNumber += 1) {
     await library.runNextPoll(5_000);
   }
@@ -123,7 +123,7 @@ test("should_tell_busy_from_failed_when_the_daemon_refuses_to_start", async () =
 
 test("should_report_ready_when_the_job_fails_because_the_model_is_already_installed", async () => {
   const library = new ScriptedLibrary();
-  library.statusAnswers = [IDLE_DOWNLOAD_STATUS, status("failed", 0, 0, BRAIN_ID, "model_already_present")];
+  library.statusAnswers = [IDLE_DOWNLOAD_STATUS, status("failed", 0, 0, CHAT_MODEL_ID, "model_already_present")];
   const { reports } = await startedDownload(library);
   await library.runNextPoll();
   assert.equal(reports[reports.length - 1]!.phase, ModelDownloadPhase.READY);
@@ -159,7 +159,7 @@ test("should_still_request_the_download_when_the_first_status_read_fails", async
     throw new Error("the daemon blinked");
   };
   await startedDownload(library);
-  assert.deepEqual(library.startedIDs, [BRAIN_ID]);
+  assert.deepEqual(library.startedIDs, [CHAT_MODEL_ID]);
 });
 
 test("should_report_failed_when_the_job_fails", async () => {

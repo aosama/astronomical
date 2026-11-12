@@ -138,7 +138,7 @@
 
 /* The skill buttons sit in the composer's own row and borrow its icon-button
    look (.composer__icon), so they need only their group layout and a line
-   icon. The group never shrinks: when the window is narrow the brain
+   icon. The group never shrinks: when the window is narrow the model
    control's name gives way instead. */
 .skill-launchers {
   display: flex;

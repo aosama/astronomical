@@ -71,7 +71,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         installTerminalCommand: { [weak self] in self?.installTerminalCommand() },
         removeTerminalCommand: { [weak self] in self?.removeTerminalCommand() },
         revealConfiguration: revealConfiguration,
-        showYourAstro: { [weak self] in self?.showYourAstro() },
+        showSettings: { [weak self] in self?.showSettings() },
         quitApplication: { [weak self] in self?.quitEverything() }
       )
     )
@@ -228,9 +228,9 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
 
   private func showChatWindow() { openInMainApplication(.chat) }
 
-  // The popover's "Settings…" opens chat on the page with every welcome
-  // answer, so the welcome is always one click from the menu bar.
-  private func showYourAstro() { openInMainApplication(.yourAstro) }
+  // The popover's "Settings…" opens the chat window on its Settings page,
+  // so the chat settings are always one click from the menu bar.
+  private func showSettings() { openInMainApplication(.settings) }
 
   /// Opens a link in the main app that contains this agent. Naming the bundle
   /// keeps the link from reaching another installed copy that registers the

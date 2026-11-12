@@ -85,13 +85,13 @@ final class ChatWindowControllerTests: XCTestCase {
     XCTAssertEqual(ChatLaunchPlacement.fromLaunchArguments(["/app/astronomical-app", "--background"]), .inFront)
   }
 
-  /// "Settings…" opens the same chat window; the page then opens Your Astro
+  /// "Settings…" opens the same chat window; the page then opens Settings
   /// once it has loaded.
-  func test_should_present_the_chat_window_for_your_astro() throws {
+  func test_should_present_the_chat_window_for_settings() throws {
     try bootstrap()
     defer { cleanup() }
 
-    controller.showYourAstro()
+    controller.showSettings()
 
     XCTAssertTrue(try XCTUnwrap(chatWindow(), "Settings… must present the chat window").isVisible)
   }

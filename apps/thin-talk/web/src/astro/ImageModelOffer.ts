@@ -67,7 +67,7 @@ export class ImageModelOffer {
       this.stopListening = this.library.followDownload(imageModelPick.huggingfaceID, (progress) => this.showProgress(progress, meter, getButton));
     });
     notNowButton.addEventListener("click", () => this.onDeclined());
-    const actionRow = makeElement(this.document, "div", "first-flight__actions");
+    const actionRow = makeElement(this.document, "div", "astro-screen__actions");
     actionRow.append(getButton, notNowButton);
     this.element.append(meter.element, actionRow);
   }

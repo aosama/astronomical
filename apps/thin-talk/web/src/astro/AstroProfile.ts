@@ -2,6 +2,12 @@
  * greeting on one line. */
 export const MAXIMUM_NICKNAME_CHARACTERS = 20;
 
+/** The saved file's key for "has finished the get-started journey". It keeps
+ * the name it was first saved under: every profile already on disk carries
+ * it, and reading a new key instead would show each of those people the
+ * welcome again after an update. */
+const FINISHED_GET_STARTED_STORED_KEY = "hasFinishedFirstFlight";
+
 /**
  * What Astro remembers about the person, kept only on this Mac: the optional
  * name Astro greets them by, whether they have finished the get-started
@@ -12,12 +18,12 @@ export const MAXIMUM_NICKNAME_CHARACTERS = 20;
  */
 export class AstroProfile {
   public readonly nickname: string;
-  public readonly hasFinishedFirstFlight: boolean;
+  public readonly hasFinishedGetStarted: boolean;
   public readonly isAstroShown: boolean;
 
-  public constructor(init: { nickname?: string; hasFinishedFirstFlight?: boolean; isAstroShown?: boolean }) {
+  public constructor(init: { nickname?: string; hasFinishedGetStarted?: boolean; isAstroShown?: boolean }) {
     this.nickname = AstroProfile.cleanNickname(init.nickname != null ? init.nickname : "");
-    this.hasFinishedFirstFlight = init.hasFinishedFirstFlight === true;
+    this.hasFinishedGetStarted = init.hasFinishedGetStarted === true;
     this.isAstroShown = init.isAstroShown !== false;
   }
 
@@ -45,16 +51,17 @@ export class AstroProfile {
     return new AstroProfile({ ...this.fields(), nickname: typedNickname });
   }
 
-  public withFirstFlightFinished(): AstroProfile {
-    return new AstroProfile({ ...this.fields(), hasFinishedFirstFlight: true });
+  public withGetStartedFinished(): AstroProfile {
+    return new AstroProfile({ ...this.fields(), hasFinishedGetStarted: true });
   }
 
   public withAstroShown(isAstroShown: boolean): AstroProfile {
     return new AstroProfile({ ...this.fields(), isAstroShown });
   }
 
-  public toPlain(): { nickname: string; hasFinishedFirstFlight: boolean; isAstroShown: boolean } {
-    return this.fields();
+  /** The profile as it is saved; see FINISHED_GET_STARTED_STORED_KEY. */
+  public toPlain(): Record<string, string | boolean> {
+    return { nickname: this.nickname, [FINISHED_GET_STARTED_STORED_KEY]: this.hasFinishedGetStarted, isAstroShown: this.isAstroShown };
   }
 
   /** Reads a saved profile. Null or anything that is not an object is a
@@ -69,15 +76,15 @@ export class AstroProfile {
     const storedNickname = profileRecord["nickname"];
     return new AstroProfile({
       nickname: typeof storedNickname === "string" ? storedNickname : "",
-      hasFinishedFirstFlight: profileRecord["hasFinishedFirstFlight"] === true,
+      hasFinishedGetStarted: profileRecord[FINISHED_GET_STARTED_STORED_KEY] === true,
       isAstroShown: profileRecord["isAstroShown"] !== false,
     });
   }
 
-  private fields(): { nickname: string; hasFinishedFirstFlight: boolean; isAstroShown: boolean } {
+  private fields(): { nickname: string; hasFinishedGetStarted: boolean; isAstroShown: boolean } {
     return {
       nickname: this.nickname,
-      hasFinishedFirstFlight: this.hasFinishedFirstFlight,
+      hasFinishedGetStarted: this.hasFinishedGetStarted,
       isAstroShown: this.isAstroShown,
     };
   }

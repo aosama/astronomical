@@ -14,7 +14,7 @@ export enum HostCommand {
   EXPORT_CONVERSATION = "exportConversation",
   FOCUS_COMPOSER = "focusComposer",
   /** Settings (⌘,): opens the Settings page. */
-  OPEN_YOUR_ASTRO = "openYourAstro",
+  OPEN_SETTINGS = "openSettings",
   /** The Focus switch: hides or shows Astro. */
   TOGGLE_ASTRO = "toggleAstro",
   /** Carries `text`: a draft to put in the message field, replacing what is

@@ -90,17 +90,17 @@ final class ThinTalkMainMenuTests: XCTestCase {
     XCTAssertNil(viewMenu.item(withTitle: "Enter Full Screen")?.target, "full screen goes to the key window")
   }
 
-  func test_should_open_your_astro_from_settings_with_command_comma() throws {
+  func test_should_open_the_settings_page_with_command_comma() throws {
     let (mainMenu, actions) = menuBar(ThinTalkHostMenuActions(applicationName: "Astronomical"))
     let applicationMenu = try submenu(mainMenu, "Astronomical")
     let settingsItem = try XCTUnwrap(applicationMenu.item(withTitle: "Settings…"))
-    XCTAssertEqual(settingsItem.action, #selector(ThinTalkConversationActions.openYourAstro(_:)))
+    XCTAssertEqual(settingsItem.action, #selector(ThinTalkConversationActions.openSettings(_:)))
     XCTAssertEqual(settingsItem.keyEquivalent, ",")
     XCTAssertEqual(settingsItem.keyEquivalentModifierMask, [.command])
-    XCTAssertTrue(settingsItem.target === actions, "Settings opens Your Astro in the conversation page")
+    XCTAssertTrue(settingsItem.target === actions, "Settings opens Settings in the conversation page")
     XCTAssertNil(
       try submenu(mainMenu, "View").item(withTitle: "Meet Astro Again"),
-      "the replay lives on Your Astro, not in the View menu")
+      "the replay lives on Settings, not in the View menu")
   }
 
   func test_should_quit_through_the_normal_terminate_path() throws {

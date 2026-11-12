@@ -10,7 +10,7 @@ const MAX_FIELD_HEIGHT_PX = 160;
 const FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX = 2;
 
 /**
- * Composer layer: the ask field, the brain control and its panel, and the
+ * Composer layer: the ask field, the model control and its panel, and the
  * failure banner.
  *
  * This class renders the state the controller pushes and reports every intent
@@ -50,9 +50,9 @@ export class ComposerView {
     sendButton: HTMLButtonElement;
     stopButton: HTMLButtonElement;
     retryButton: HTMLButtonElement;
-    brainControl: HTMLButtonElement;
-    brainLabel: HTMLElement;
-    brainPanel: HTMLElement;
+    modelControl: HTMLButtonElement;
+    modelLabel: HTMLElement;
+    modelPanel: HTMLElement;
     banner: HTMLElement;
     bannerMessage: HTMLElement;
     bannerNextAction: HTMLElement;
@@ -65,9 +65,9 @@ export class ComposerView {
     this.stopButton = init.stopButton;
     this.retryButton = init.retryButton;
     this.modelPanel = new ModelPanelView({
-      trigger: init.brainControl,
-      label: init.brainLabel,
-      panel: init.brainPanel,
+      trigger: init.modelControl,
+      label: init.modelLabel,
+      panel: init.modelPanel,
       onAction: (action) => this.onAction(action),
     });
     this.banner = init.banner;

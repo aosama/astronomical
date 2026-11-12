@@ -4,7 +4,7 @@ import { AstroMoment, astroLine } from "./AstroLines";
 import { ChatModelDownloadPanel } from "./ChatModelDownloadPanel";
 import { ENGINE_PATIENCE } from "./EngineWatch";
 import type { EngineWatch } from "./EngineWatch";
-import { FirstFlightJourney, FirstFlightStep } from "./FirstFlightJourney";
+import { GetStartedJourney, GetStartedStep } from "./GetStartedJourney";
 
 /** Prefix for the journey's control ids; Astro's home uses "astro-home". */
 const ID_PREFIX = "astro";
@@ -16,10 +16,10 @@ interface DisposablePanel {
 
 /**
  * The get-started journey: a full-window welcome for a newcomer, one action
- * per screen. It draws one step at a time and asks FirstFlightJourney where
+ * per screen. It draws one step at a time and asks GetStartedJourney where
  * to go next; the download runs through AstroLibrary.
  */
-export class FirstFlightView {
+export class GetStartedView {
   private readonly overlay: HTMLElement;
   private readonly document: Document;
   private readonly library: AstroLibrary;
@@ -33,7 +33,7 @@ export class FirstFlightView {
   private readonly headline: HTMLElement;
   private readonly line: HTMLElement;
   private readonly controls: HTMLElement;
-  private journey = new FirstFlightJourney({ hasChatModel: null });
+  private journey = new GetStartedJourney({ hasChatModel: null });
   private openPanels: DisposablePanel[] = [];
 
   public constructor(init: {
@@ -52,12 +52,12 @@ export class FirstFlightView {
     this.openModelsPage = init.openModelsPage;
     this.engineWatch = init.engineWatch;
     this.restartEngine = init.restartEngine;
-    this.headline = makeElement(this.document, "h1", "first-flight__headline");
-    this.line = makeElement(this.document, "p", "first-flight__line");
+    this.headline = makeElement(this.document, "h1", "get-started__headline");
+    this.line = makeElement(this.document, "p", "astro-screen__line");
     this.line.setAttribute("role", "status");
     this.line.dataset.testid = "astro-says";
-    this.controls = makeElement(this.document, "div", "first-flight__controls");
-    const stage = makeElement(this.document, "div", "first-flight__stage");
+    this.controls = makeElement(this.document, "div", "astro-screen__controls");
+    const stage = makeElement(this.document, "div", "astro-screen__stage");
     stage.append(this.headline, this.line);
     this.overlay.replaceChildren(stage, this.controls);
     this.overlay.addEventListener("keydown", (keyEvent) => {
@@ -75,7 +75,7 @@ export class FirstFlightView {
    * starts anyway, because the welcome needs no engine; the answer is handed
    * to the journey whenever it arrives. */
   public open(hasChatModel: boolean | null): void {
-    this.journey = new FirstFlightJourney({ hasChatModel });
+    this.journey = new GetStartedJourney({ hasChatModel });
     this.stopAwaitingEngine?.();
     this.stopAwaitingEngine = hasChatModel === null ? this.engineWatch.onceAnswered((answeredHasChatModel) => this.engineAnswered(answeredHasChatModel)) : null;
     this.overlay.hidden = false;
@@ -101,19 +101,19 @@ export class FirstFlightView {
     this.disposeOpenPanels();
     this.controls.replaceChildren();
     switch (this.journey.step) {
-      case FirstFlightStep.WELCOME:
+      case GetStartedStep.WELCOME:
         this.renderWelcome();
         break;
-      case FirstFlightStep.ENGINE_STARTING:
+      case GetStartedStep.ENGINE_STARTING:
         this.renderEngineStarting();
         break;
-      case FirstFlightStep.ENGINE_SILENT:
+      case GetStartedStep.ENGINE_SILENT:
         this.renderEngineSilent();
         break;
-      case FirstFlightStep.DOWNLOAD:
+      case GetStartedStep.DOWNLOAD:
         this.renderDownload();
         break;
-      case FirstFlightStep.FINISHED:
+      case GetStartedStep.FINISHED:
         this.close();
         return;
     }
@@ -144,10 +144,10 @@ export class FirstFlightView {
 
   private renderEngineStarting(): void {
     this.say("Starting up", AstroMoment.ENGINE_STARTING);
-    const waitingDots = makeElement(this.document, "div", "first-flight__waiting");
+    const waitingDots = makeElement(this.document, "div", "get-started__waiting");
     waitingDots.setAttribute("aria-hidden", "true");
     waitingDots.append(makeElement(this.document, "span", ""), makeElement(this.document, "span", ""), makeElement(this.document, "span", ""));
-    const note = makeElement(this.document, "p", "first-flight__note", "The engine is starting on this Mac. The first time takes a few seconds.");
+    const note = makeElement(this.document, "p", "astro-screen__note", "The engine is starting on this Mac. The first time takes a few seconds.");
     this.controls.append(waitingDots, note);
     const silenceTimer = setTimeout(() => this.advance(() => this.journey.engineStayedSilent()), ENGINE_PATIENCE.silentAfterMilliseconds);
     this.openPanels.push({ dispose: () => clearTimeout(silenceTimer) });
@@ -164,7 +164,7 @@ export class FirstFlightView {
     });
     const skipButton = makeButton(this.document, "astro-skip", "Skip for now", true);
     skipButton.addEventListener("click", () => this.skip());
-    const statusNote = makeElement(this.document, "p", "first-flight__note", "The local server on this Mac didn't answer. The Astronomical icon in the menu bar shows its status.");
+    const statusNote = makeElement(this.document, "p", "astro-screen__note", "The local server on this Mac didn't answer. The Astronomical icon in the menu bar shows its status.");
     this.controls.append(this.actionRow(retryButton, skipButton), statusNote);
   }
 
@@ -176,17 +176,27 @@ export class FirstFlightView {
       say: (moment) => {
         this.line.textContent = astroLine(moment, "");
       },
-      isShowing: () => this.isOpen && this.journey.step === FirstFlightStep.DOWNLOAD,
+      isShowing: () => this.isOpen && this.journey.step === GetStartedStep.DOWNLOAD,
       onChatModelArrived: () => this.journey.chatModelArrived(),
       onContinue: () => this.advance(() => this.journey.leaveDownload()),
     });
     this.controls.append(downloadPanel.element);
     this.openPanels.push(downloadPanel);
-    void downloadPanel.loadOffer();
+    void this.focusDownloadWhenOffered(downloadPanel);
+  }
+
+  /** The panel draws its buttons only once it has read the catalog, after
+   * render() looked for a control to focus and found none. Focus moves in
+   * when they exist, unless the person has already left this step. */
+  private async focusDownloadWhenOffered(downloadPanel: ChatModelDownloadPanel): Promise<void> {
+    await downloadPanel.loadOffer();
+    if (this.isOpen && this.journey.step === GetStartedStep.DOWNLOAD && this.openPanels.includes(downloadPanel)) {
+      this.focusFirstControl();
+    }
   }
 
   private actionRow(...buttons: HTMLButtonElement[]): HTMLElement {
-    const actionRow = makeElement(this.document, "div", "first-flight__actions");
+    const actionRow = makeElement(this.document, "div", "astro-screen__actions");
     actionRow.append(...buttons);
     return actionRow;
   }

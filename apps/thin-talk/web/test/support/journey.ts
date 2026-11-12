@@ -5,7 +5,7 @@ import { bootChatClient } from "../../src/boot";
 
 export const DAEMON_BASE_URL = "http://127.0.0.1:6733";
 
-/** A person who already finished Astro's first flight with Astro shown. */
+/** A person who already finished Astro's get-started journey with Astro shown. */
 export const MET_ASTRO_PROFILE = { nickname: "Maya", hasFinishedFirstFlight: true, isAstroShown: true };
 
 /** Someone who met Astro and then hid it: classic Thin Talk, the default for

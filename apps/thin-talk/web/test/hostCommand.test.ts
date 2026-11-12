@@ -22,7 +22,7 @@ function recordingHandlers(calledCommands: string[]): HostCommandHandlers {
     exportConversation: () => calledCommands.push("exportConversation"),
     focusComposer: () => calledCommands.push("focusComposer"),
     fillDraft: (draftText) => calledCommands.push(`fillDraft:${draftText}`),
-    openYourAstro: () => calledCommands.push("openYourAstro"),
+    openSettings: () => calledCommands.push("openSettings"),
     toggleAstro: () => calledCommands.push("toggleAstro"),
     setTitlebarInset: (titlebarInsetPixels) => calledCommands.push(`setTitlebarInset:${titlebarInsetPixels}`),
   };

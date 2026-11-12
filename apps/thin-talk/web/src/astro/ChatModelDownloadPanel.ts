@@ -3,6 +3,7 @@ import { makeButton, makeElement } from "./AstroDom";
 import { AstroMoment } from "./AstroLines";
 import type { AstroLibrary } from "./AstroLibrary";
 import { DownloadMeter } from "./DownloadMeter";
+import { modelNameFromHuggingfaceID } from "./HuggingfaceModelName";
 import { ModelDownloadPhase } from "./ModelDownload";
 import type { ModelDownloadProgress } from "./ModelDownload";
 
@@ -24,12 +25,6 @@ export interface ChatModelDownloadPanelHost {
   isShowing(): boolean;
   onChatModelArrived(): void;
   onContinue(): void;
-}
-
-/** The repository name without its owner: "owner/Model-4bit" reads "Model-4bit". */
-export function modelNameFromHuggingfaceID(huggingfaceID: string): string {
-  const nameStart = huggingfaceID.lastIndexOf("/") + 1;
-  return huggingfaceID.slice(nameStart);
 }
 
 /**
@@ -128,11 +123,7 @@ export class ChatModelDownloadPanel {
     downloadButton.disabled = true;
     downloadButton.textContent = "Downloading…";
     this.host.say(AstroMoment.DOWNLOADING);
-    const continueButton = this.element.querySelector<HTMLButtonElement>(`#${this.idPrefix}-keep-going`);
-    if (continueButton !== null) {
-      continueButton.hidden = false;
-      continueButton.textContent = "Continue in the background";
-    }
+    this.setContinueButton({ isHidden: false, label: "Continue in the background" });
     const whatComesNext = this.element.querySelector<HTMLElement>(".model-download__next");
     if (whatComesNext !== null) {
       whatComesNext.hidden = false;
@@ -151,6 +142,8 @@ export class ChatModelDownloadPanel {
       this.speakIfShowing(AstroMoment.MODEL_READY);
       downloadButton.disabled = false;
       downloadButton.textContent = "Start chatting";
+      // The main button now does what "Continue in the background" did.
+      this.setContinueButton({ isHidden: true });
       return;
     }
     if (progress.phase === ModelDownloadPhase.FAILED || progress.phase === ModelDownloadPhase.BUSY) {
@@ -166,14 +159,25 @@ export class ChatModelDownloadPanel {
     }
   }
 
+  private setContinueButton(change: { isHidden: boolean; label?: string }): void {
+    const continueButton = this.element.querySelector<HTMLButtonElement>(`#${this.idPrefix}-continue`);
+    if (continueButton === null) {
+      return;
+    }
+    continueButton.hidden = change.isHidden;
+    if (change.label !== undefined) {
+      continueButton.textContent = change.label;
+    }
+  }
+
   private continueButton(label: string): HTMLButtonElement {
-    const continueButton = makeButton(this.document, `${this.idPrefix}-keep-going`, label, true);
+    const continueButton = makeButton(this.document, `${this.idPrefix}-continue`, label, true);
     continueButton.addEventListener("click", () => this.host.onContinue());
     return continueButton;
   }
 
   private actionRow(...buttons: HTMLButtonElement[]): HTMLElement {
-    const actionRow = makeElement(this.document, "div", "first-flight__actions");
+    const actionRow = makeElement(this.document, "div", "astro-screen__actions");
     actionRow.append(...buttons);
     return actionRow;
   }

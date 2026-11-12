@@ -73,7 +73,7 @@ export class ChatController {
   private selectedModelID: string | null = null;
   private readonly imageModelDirectory: ImageModelDirectory;
   private readonly imageModelSelection: ImageModelSelection;
-  /** Model details for the brain panel, read after the model list. */
+  /** Model details for the model panel, read after the model list. */
   private readonly modelDescriptionDirectory: ModelDescriptionDirectory;
   private isStreaming = false;
   /** Tool calls of the current turn that have started and not yet finished. */
@@ -81,7 +81,7 @@ export class ChatController {
 
   /** `imageModelSelection` is shared with the image tool: choosing here is what
    * the next picture is drawn with, and the tool's fresh list of installed
-   * models redraws the composer's brain panel through it. */
+   * models redraws the composer's model panel through it. */
   public constructor(init: {
     client: DaemonClient;
     streamer: ChatStreamer;
@@ -250,7 +250,7 @@ export class ChatController {
 
   /**
    * Re-reads the chat models after one was installed while the window was
-   * open (Astro's brain landing). Keeps the current choice when it is still
+   * open (a chat model Astro downloaded landing). Keeps the current choice when it is still
    * installed; a window that had no model becomes ready to chat. A failed read
    * keeps the previous list, as the picture list does.
    */
@@ -278,7 +278,7 @@ export class ChatController {
     this.publish();
   }
 
-  /** Lists the installed image models again, for the brain panel. A failed
+  /** Lists the installed image models again, for the model panel. A failed
    * read keeps the last list: the image tool lists them again when it runs. */
   public async refreshImageModels(): Promise<void> {
     void this.modelDescriptionDirectory.refresh();

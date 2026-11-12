@@ -11,7 +11,7 @@ export interface HostCommandHandlers {
   deleteConversation(): void;
   exportConversation(): void;
   focusComposer(): void;
-  openYourAstro(): void;
+  openSettings(): void;
   toggleAstro(): void;
   fillDraft(draftText: string): void;
   setTitlebarInset(titlebarInsetPixels: number): void;
@@ -83,8 +83,8 @@ export class HostCommandRouter {
       case HostCommand.FOCUS_COMPOSER:
         this.handlers.focusComposer();
         return;
-      case HostCommand.OPEN_YOUR_ASTRO:
-        this.handlers.openYourAstro();
+      case HostCommand.OPEN_SETTINGS:
+        this.handlers.openSettings();
         return;
       case HostCommand.TOGGLE_ASTRO:
         this.handlers.toggleAstro();

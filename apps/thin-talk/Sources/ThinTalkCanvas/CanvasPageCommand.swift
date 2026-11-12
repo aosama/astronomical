@@ -16,7 +16,7 @@ public enum CanvasPageCommand: String, CaseIterable, Sendable {
   case deleteConversation
   case exportConversation
   case focusComposer
-  case openYourAstro
+  case openSettings
   case toggleAstro
 
   /// The script that delivers the command to the page's command router.

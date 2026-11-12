@@ -2,9 +2,9 @@ import type { SessionBridge } from "../SessionBridge";
 import type { AstroLibrary } from "./AstroLibrary";
 import { AstroHomeView } from "./AstroHomeView";
 import { AstroProfile } from "./AstroProfile";
-import { FirstFlightView } from "./FirstFlightView";
+import { GetStartedView } from "./GetStartedView";
 import { EngineWatch } from "./EngineWatch";
-import { YourAstroView } from "./YourAstroView";
+import { SettingsView } from "./SettingsView";
 import { SkillCardKind } from "./SkillCard";
 import { AstroComposerChrome } from "./AstroComposerChrome";
 import { TranscriptPersona } from "../TranscriptPersona";
@@ -27,22 +27,22 @@ export class AstroCompanion {
   private readonly composerField: HTMLTextAreaElement;
   private readonly applyPresentation: (persona: TranscriptPersona) => void;
   private readonly composerChrome: AstroComposerChrome;
-  private readonly firstFlight: FirstFlightView;
+  private readonly getStarted: GetStartedView;
   private readonly home: AstroHomeView;
-  private readonly yourAstro: YourAstroView;
+  private readonly settings: SettingsView;
   private readonly engineWatch: EngineWatch;
   private profile = AstroProfile.newcomer();
-  /** False until start() has read the saved profile; see openYourAstro. */
+  /** False until start() has read the saved profile; see openSettings. */
   private hasLoadedProfile = false;
   /** Settings was asked for before the profile was read, as when the menu
    * bar's "Settings…" opens a new chat window; start() opens it then. */
-  private opensYourAstroAfterLoad = false;
+  private opensSettingsAfterLoad = false;
 
   public constructor(init: {
     bridge: SessionBridge;
     library: AstroLibrary;
-    firstFlightOverlay: HTMLElement;
-    yourAstroOverlay: HTMLElement;
+    getStartedOverlay: HTMLElement;
+    settingsOverlay: HTMLElement;
     emptyState: HTMLElement;
     composerField: HTMLTextAreaElement;
     skillLaunchers: HTMLElement;
@@ -68,20 +68,20 @@ export class AstroCompanion {
       hasImageModel: () => init.library.hasImageModel(),
       onNeedsImageModel: () => void this.offerImageModelInNewChat(init.startNewChat),
     });
-    this.firstFlight = new FirstFlightView({
-      overlay: init.firstFlightOverlay,
+    this.getStarted = new GetStartedView({
+      overlay: init.getStartedOverlay,
       library: init.library,
       engineWatch: this.engineWatch,
       restartEngine: init.restartEngine,
       openModelsPage: init.openModelsPage,
-      onFinished: () => this.finishFirstFlight(),
+      onFinished: () => this.finishGetStarted(),
     });
     this.home = new AstroHomeView({
       emptyState: init.emptyState,
       library: init.library,
       onStarterPrompt: (prompt) => this.prepareMessage(prompt),
     });
-    this.yourAstro = this.makeYourAstro(init.yourAstroOverlay, init.library);
+    this.settings = this.makeSettings(init.settingsOverlay, init.library);
     init.library.onModelInstalled(() => this.welcomeNewModel(init.onModelInstalled));
   }
 
@@ -92,7 +92,7 @@ export class AstroCompanion {
     if (this.profile.isAstroShown) {
       this.home.show(this.profile);
     }
-    this.yourAstro.refreshModels();
+    this.settings.refreshModels();
   }
 
   /** Reads the saved profile; a newcomer starts the get-started journey. A profile
@@ -106,14 +106,14 @@ export class AstroCompanion {
     }
     this.presentProfile();
     void this.followEngineStart();
-    if (!this.profile.hasFinishedFirstFlight) {
-      await this.openFirstFlight();
+    if (!this.profile.hasFinishedGetStarted) {
+      await this.openGetStarted();
     }
     // Only now: a newcomer's journey is open, so Settings stays ignored.
     this.hasLoadedProfile = true;
-    if (this.opensYourAstroAfterLoad) {
-      this.opensYourAstroAfterLoad = false;
-      this.openYourAstro();
+    if (this.opensSettingsAfterLoad) {
+      this.opensSettingsAfterLoad = false;
+      this.openSettings();
     }
   }
 
@@ -121,19 +121,19 @@ export class AstroCompanion {
    * covers the window. Before the saved profile is read it waits, because
    * the page would show a newcomer's blank answers and a newcomer's journey
    * could then open underneath it. */
-  public openYourAstro(): void {
+  public openSettings(): void {
     if (!this.hasLoadedProfile) {
-      this.opensYourAstroAfterLoad = true;
+      this.opensSettingsAfterLoad = true;
       return;
     }
-    if (this.firstFlight.isOpen || this.yourAstro.isOpen) {
+    if (this.getStarted.isOpen || this.settings.isOpen) {
       return;
     }
-    this.yourAstro.open();
+    this.settings.open();
   }
 
-  private makeYourAstro(overlay: HTMLElement, library: AstroLibrary): YourAstroView {
-    return new YourAstroView({
+  private makeSettings(overlay: HTMLElement, library: AstroLibrary): SettingsView {
+    return new SettingsView({
       overlay,
       library,
       callbacks: {
@@ -141,7 +141,7 @@ export class AstroCompanion {
         saveNickname: (typedNickname) => this.remember(this.profile.withNickname(typedNickname)),
         toggleShown: () => this.rememberShown(!this.profile.isAstroShown),
         retrySave: () => this.remember(this.profile),
-        replay: () => void this.replayFirstFlight(),
+        replay: () => void this.replayGetStarted(),
         onClosed: () => this.composerField.focus(),
       },
     });
@@ -149,9 +149,9 @@ export class AstroCompanion {
 
   /** Settings' last row: the welcome from the start, with Astro brought
    * back if hidden. */
-  private async replayFirstFlight(): Promise<void> {
+  private async replayGetStarted(): Promise<void> {
     void this.rememberShown(true);
-    await this.openFirstFlight();
+    await this.openGetStarted();
   }
 
   /** The Focus switch. */
@@ -169,8 +169,8 @@ export class AstroCompanion {
     await this.home.chooseSkill(SkillCardKind.PICTURES);
   }
 
-  private async openFirstFlight(): Promise<void> {
-    this.firstFlight.open(await this.engineWatch.ask());
+  private async openGetStarted(): Promise<void> {
+    this.getStarted.open(await this.engineWatch.ask());
   }
 
   /** A window opened while the engine is still starting drew home and
@@ -185,18 +185,18 @@ export class AstroCompanion {
       if (this.profile.isAstroShown) {
         this.home.show(this.profile);
       }
-      this.yourAstro.refreshModels();
+      this.settings.refreshModels();
     });
   }
 
   /** The journey ends in an empty chat with the caret in the message field. */
-  private finishFirstFlight(): void {
-    void this.remember(this.profile.withFirstFlightFinished());
+  private finishGetStarted(): void {
+    void this.remember(this.profile.withGetStartedFinished());
     this.composerField.focus();
   }
 
   private presentProfile(): void {
-    this.yourAstro.refresh();
+    this.settings.refresh();
     this.applyPresentation(
       new TranscriptPersona({ isAstroShown: this.profile.isAstroShown, nickname: this.profile.nickname }),
     );
