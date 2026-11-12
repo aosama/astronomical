@@ -78,7 +78,9 @@ fn should_refuse_an_existing_artifact_unless_overwrite_is_requested() {
     let workspace = tempfile::tempdir().expect("a temporary directory should be creatable");
     let mut request = pipeline_request(workspace.path(), PipelineMethod::StaticStructural);
     write_source(&runtime, &request.source_directory);
-    std::fs::create_dir_all(request.output_directory.join("static_mixed")).expect("creatable");
+    let artifact_directory = request.output_directory.join("static_mixed");
+    std::fs::create_dir_all(&artifact_directory).expect("creatable");
+    std::fs::write(artifact_directory.join("config.json"), "{}").expect("writable");
     let mut silent_reporter = SilentProgressReporter;
 
     let refusal = run_quantization_pipeline(
@@ -102,6 +104,26 @@ fn should_refuse_an_existing_artifact_unless_overwrite_is_requested() {
         Err(QuantizationError::OutputDirectoryExists { .. })
     ));
     assert!(overwritten.is_ok());
+}
+
+#[test]
+#[parallel]
+fn should_convert_into_an_empty_artifact_directory_an_interrupted_run_left_behind() {
+    let runtime = contract_runtime();
+    let workspace = tempfile::tempdir().expect("a temporary directory should be creatable");
+    let request = pipeline_request(workspace.path(), PipelineMethod::StaticStructural);
+    write_source(&runtime, &request.source_directory);
+    std::fs::create_dir_all(request.output_directory.join("static_mixed")).expect("creatable");
+
+    let resumed = run_quantization_pipeline(
+        &runtime,
+        &request,
+        u64::MAX,
+        &mut UnusedProbeLoader,
+        &mut SilentProgressReporter,
+    );
+
+    assert!(resumed.is_ok());
 }
 
 #[test]

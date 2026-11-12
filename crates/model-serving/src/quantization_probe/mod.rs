@@ -13,6 +13,7 @@
 
 mod expert_swaps;
 mod kl_evaluation_engine;
+mod layer_input_reuse_plan;
 mod module_locations;
 mod qwen3_5_probe;
 mod simulated_quantization;

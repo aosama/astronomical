@@ -405,6 +405,66 @@ fn should_reproduce_its_own_reference_forward() {
     let _ = std::fs::remove_dir_all(&output_directory);
 }
 
+/// Modules at the first, a middle and the last decoder layer of the small
+/// base: the resume points that reuse the least, about half, and nearly all
+/// of the reference forward.
+const RESUMED_FORWARD_MODULE_NAMES: [&str; 3] = [
+    "language_model.model.layers.0.mlp.up_proj",
+    "language_model.model.layers.11.mlp.down_proj",
+    "language_model.model.layers.23.mlp.up_proj",
+];
+
+#[test]
+#[serial]
+#[ignore = "needs model_directory (a small Qwen3.5 checkpoint) in the explicit test-run configuration"]
+fn should_resume_a_probe_forward_to_the_same_logits_as_the_whole_model_forward() {
+    // The sweep's forward resumes from the reference forward's recorded
+    // layer inputs. Every sensitivity value rests on that being the whole
+    // forward's arithmetic, so a resumed probe must equal a probe that
+    // recomputed every layer, while still differing from the reference.
+    let runtime = journey_runtime();
+    let output_directory = fresh_output_directory("resumed-forward");
+    let bfloat16_source = bfloat16_copy_of(
+        &runtime,
+        &source_model_directory(),
+        &output_directory.join("bfloat16_source"),
+    );
+    let calibration_samples = romeo_and_juliet_samples(&bfloat16_source);
+    let calibration_sample = &calibration_samples[0];
+    let mut probe_model = load_probe(&bfloat16_source);
+    let reference_logits = probe_model.forward(calibration_sample).expect("forward");
+
+    for module_name in RESUMED_FORWARD_MODULE_NAMES {
+        let restore_token = probe_model
+            .simulate_quantize_module(
+                module_name,
+                BitWidth::new(2).expect("valid"),
+                GroupSize::new(64).expect("valid"),
+            )
+            .expect("simulate");
+        let resumed_logits = probe_model.forward(calibration_sample).expect("forward");
+        let whole_model_logits = probe_model
+            .whole_model_logits(&calibration_sample.token_ids)
+            .expect("whole-model forward");
+        let resumed_to_whole = probe_model
+            .kl_divergence(&whole_model_logits, &resumed_logits)
+            .expect("kl");
+        let reference_to_resumed = probe_model
+            .kl_divergence(&reference_logits, &resumed_logits)
+            .expect("kl");
+        probe_model.restore_module(restore_token).expect("restore");
+        eprintln!(
+            "[resumed-forward] {module_name} resumed_to_whole={resumed_to_whole:.3e} reference_to_resumed={reference_to_resumed:.3e}"
+        );
+        assert!(resumed_to_whole < 1e-9, "{module_name} resumed differently");
+        assert!(
+            reference_to_resumed > 1e-6,
+            "{module_name} swap did not reach the forward"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&output_directory);
+}
+
 /// KL against `reference_logits` with one module probed at `bits`, restored
 /// afterwards.
 pub(super) fn probed_kl(

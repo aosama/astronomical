@@ -53,7 +53,7 @@ impl Qwen3_5KlDivergenceEngine {
         let mut reference_model = self.load_model(reference_directory)?;
         let mut reference_logits = Vec::with_capacity(prompts.len());
         for prompt in prompts {
-            reference_logits.push(reference_model.forward(prompt)?);
+            reference_logits.push(reference_model.whole_model_logits(&prompt.token_ids)?);
             progress_tracker.advance("reference forward");
         }
         reference_model.release_transient_memory()?;
@@ -79,10 +79,10 @@ impl KlDivergenceEngine for Qwen3_5KlDivergenceEngine {
             request.prompts,
             &mut progress_tracker,
         )?;
-        let mut candidate_model = self.load_model(request.candidate_directory)?;
+        let candidate_model = self.load_model(request.candidate_directory)?;
         let mut per_prompt_divergences = Vec::with_capacity(request.prompts.len());
         for (prompt, prompt_reference_logits) in request.prompts.iter().zip(&reference_logits) {
-            let candidate_logits = candidate_model.forward(prompt)?;
+            let candidate_logits = candidate_model.whole_model_logits(&prompt.token_ids)?;
             per_prompt_divergences.push(
                 candidate_model
                     .per_position_kl_divergences(prompt_reference_logits, &candidate_logits)?,
