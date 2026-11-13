@@ -1,14 +1,106 @@
 # Neural Engine prefill (experimental)
 
-Dense models can run part of each full prompt chunk on the Apple Neural Engine next to the GPU: 47 percent of each chunk's MLP work, and the DeltaNet layers' output gates. Set `experimental_neural_engine_prefill_enabled` under `chunking`, globally or for one model; it is off by default and applies at the next model load.
+Every Apple silicon Mac has a Neural Engine, a part of the chip built for AI work. Astronomical normally runs models on the graphics chip alone. With this setting on, it shares part of the work of reading a long prompt between the graphics chip and the Neural Engine, which can make long prompts faster on some models.
 
-Measured on Ornith-1.5-9B on one M5-class Mac, with 10,000-token Shakespeare prompts through the daemon and the prompt cache on: prefill rose from about 1,207 tokens per second to between 1,362 and 1,444, or 1.13× to 1.2×, and direct model runs without the cache's work measured about 1.27×. Decode did not change. The first long prompt after a load sees less of that gain, and only full 2,048-token chunks use the Neural Engine, so shorter prompts see little or none. The costs are real:
+It is off by default, and it has real costs in memory and disk space. Read the costs below before turning it on.
 
-- **Memory:** the programs' cost is measured for each model on your Mac the first time they run, and depends on the model: 1.8 GB on a 0.8B model, 3.6 GB on a 2B model and 15 GB on a 9B model. Each prefill chunk uses the Neural Engine only when the memory MLX is projected to reach plus that cost fits under the MLX memory ceiling, so a long prompt can start on both engines and finish on the GPU. A model is refused only when its programs could not fit even for one chunk, which on the 9B model means a ceiling below about 20 GB. A ceiling just above that leaves `/v1/status` saying `active` while chunks run on the GPU, so allow a few more gigabytes; the worker log records each change of engine. The driver releases the programs' wired memory 10 to 20 seconds after work stops.
-- **Which models gain:** this is found out for each model on your Mac. During its first long prompts, full chunks take turns between the GPU alone and both engines, which costs those prompts a few percent. That takes at least three prompts and 15 comparisons, which is eight 10,000-token prompts or three 25,000-token ones. A model must gain at least 2 percent to keep its programs. Otherwise they are released, the status says why, and later loads skip them until a macOS update. To ask again sooner, remove `program-speed.txt` from that model's program set under `neural-engine-programs`. Through the app, a 9B model read 1.28× and a 2B model read 1.03× to 1.11×, while a 0.8B model read 0.90× to 0.98× and was turned off. `/v1/status` reports the figure as `measured_speed_percent`, and the menu, the Tuning page and the Overview's Neural Engine panel show it. That panel also shows the share of prompt tokens the Neural Engine really ran and an estimate of the time saved since launch. The estimate counts only prompts that began with the programs already awake, because a prompt that wakes them can run slower overall, so it can undercount a large model and won't claim time a small one lost. A 2B model whose first prompts all arrive after idle spells can read too low and be turned off, which costs only the few percent it would have gained on prompts in quick succession.
-- **After an idle spell:** the driver releases the programs 10 to 20 seconds after their last use, and waking them costs time. A prompt after 10 seconds of idle therefore starts with one chunk on the GPU, because a first chunk on both engines took 380 to 600 ms longer than a warm one, and the same programs waking on the second chunk took 140 to 180 ms longer. Over a whole 20,000-token prompt sent after 25 seconds of idle, a 9B model still ran 1.11× the GPU alone, but a 2B model ran 0.94×, against 1.11× for prompts in quick succession. So a small model gains only when its long prompts arrive close together.
-- **A request while programs are measured:** the first two loads wire the whole set to measure it. A request arriving then cancels the measurement and starts at once, and the set can stay wired beside it for up to 20 seconds, past the MLX memory ceiling if the ceiling is tight.
-- **Preparation time and disk:** a model serves on the GPU as soon as it loads, while its programs are prepared in the background, and the menu app raises banners while they prepare and when they engage. On a 9B model with its compiled programs already on disk, preparation took 94 seconds on the first load after the app itself changed, then 43, 13 and about 3 seconds on the next loads, as macOS rebuilt its own compiled copies. A model's very first preparation also writes and compiles its programs, then measures them on its own thread once the GPU has been idle for 30 seconds, which takes about 3 seconds and delays no request. A request restarts the wait, so a steady stream of requests holds the programs back until there is a pause, with their 1.2 GB of surfaces held meanwhile. Measuring happens on the first two loads, and once the two readings agree the result is kept until the macOS build or the Mac changes. A model keeps about 10 GB of compiled programs under the instance's `neural-engine-programs` folder, and macOS keeps its copies in the app's cache folder besides. Performance attribution, when enabled, removes the speed gain by adding synchronization.
-- **Output:** part of each prompt computes in fp16, so output can differ slightly from the GPU alone. In six exact-answer tasks over 13,000-token prompts every answer stayed correct, though on one coding task the answer ignored "output only the code".
+## The short version
 
-Mixture-of-experts models do not benefit, because their routed experts stay on the GPU. When the feature cannot run, serving stays on the GPU and `/v1/status` and the Overview's Neural Engine panel say why.
+- **What gets faster:** reading long prompts (called *prefill*). Writing the reply does not change.
+- **How much:** about 1.1× to 1.3× on a 9B model. Smaller models gain less or nothing.
+- **Which models:** dense models only. Mixture-of-experts models do not benefit, because their experts stay on the graphics chip.
+- **What it costs:** extra memory (1.8 GB to 15 GB depending on the model) and about 10 GB of disk per model.
+- **You do not have to guess:** Astronomical measures each model on your Mac and turns the feature off for a model that does not gain.
+
+## Turn it on
+
+Set `experimental_neural_engine_prefill_enabled` under `chunking` in `config.json`, for every model or for one model. In Observatory it is the switch in the **Experimental** section of the **Tuning** page. It applies the next time the model loads. See [Configuration](configuration.md) for where the file is and how per-model settings work.
+
+When the feature cannot run, the model keeps running on the graphics chip, and `/v1/status` and the Overview's Neural Engine panel say why.
+
+## What it does
+
+A long prompt is read in pieces of 2,048 tokens. For each full piece, the Neural Engine takes 47 percent of the MLP work and the output gates of the DeltaNet layers, while the graphics chip does the rest.
+
+Only full 2,048-token pieces use the Neural Engine, so short prompts see little or no gain.
+
+## What was measured
+
+On Ornith-1.5-9B, on one M5-class Mac, with 10,000-token Shakespeare prompts sent through the app with the prompt cache on:
+
+| | Graphics chip alone | With the Neural Engine | Gain |
+| --- | --- | --- | --- |
+| Reading the prompt | about 1,207 tokens per second | 1,362 to 1,444 tokens per second | 1.13× to 1.2× |
+| Direct model runs, without the cache's work | | | about 1.27× |
+| Writing the reply | no change | no change | none |
+
+The first long prompt after a model loads sees less of the gain.
+
+## The costs
+
+### Memory
+
+The Neural Engine's programs need memory of their own. The amount depends on the model and is measured on your Mac the first time the programs run:
+
+| Model size | Extra memory |
+| --- | --- |
+| 0.8B | 1.8 GB |
+| 2B | 3.6 GB |
+| 9B | 15 GB |
+
+- **It counts against your memory limit.** A piece of the prompt uses the Neural Engine only when the memory the model is expected to reach, plus this cost, fits under your limit. A long prompt can therefore start on both chips and finish on the graphics chip.
+- **A model is refused only when its programs could not fit even for one piece.** On the 9B model that means a limit below about 20 GB.
+- **Leave a few GB of room.** With a limit just above that point, `/v1/status` says `active` while the pieces actually run on the graphics chip. The worker log records each change of chip.
+- **The memory is given back** 10 to 20 seconds after work stops.
+
+### Disk space and preparation time
+
+- **Disk:** a model keeps about 10 GB of compiled programs in the `neural-engine-programs` folder of the app's state folder. macOS keeps its own copies in the app's cache folder as well.
+- **You are not kept waiting.** A model answers on the graphics chip as soon as it loads, while its programs are prepared in the background. The menu-bar app shows a banner while they prepare and another when they start being used.
+- **Preparation gets quicker.** On a 9B model with its compiled programs already on disk, preparation took 94 seconds on the first load after the app itself changed, then 43, 13 and about 3 seconds on the next loads, as macOS rebuilt its own compiled copies.
+- **The very first preparation does more.** It writes and compiles the programs, then measures them once the graphics chip has been idle for 30 seconds. Measuring takes about 3 seconds and delays no request. A request restarts that 30-second wait, so a steady stream of requests holds the programs back until there is a pause, and 1.2 GB of memory is held for them meanwhile.
+- **Measuring happens on the first two loads.** Once the two readings agree, the result is kept until macOS is updated or the Mac changes.
+- **A request that arrives during measuring** cancels the measurement and starts at once. The programs' memory can stay in use beside it for up to 20 seconds, which can go past a tight memory limit.
+
+### After the Mac has been idle
+
+The Neural Engine's programs go to sleep 10 to 20 seconds after their last use, and waking them takes time.
+
+- A prompt sent after 10 seconds of idle starts with one piece on the graphics chip alone. This is because a first piece on both chips took 380 to 600 ms longer than a warm one, and the same programs waking on the second piece took only 140 to 180 ms longer.
+- Over a whole 20,000-token prompt sent after 25 seconds of idle, a 9B model still ran 1.11× the speed of the graphics chip alone. A 2B model ran 0.94×, against 1.11× for prompts sent in quick succession.
+
+So a small model gains only when its long prompts arrive close together.
+
+### Slightly different output
+
+Part of each prompt is calculated in a lower-precision number format (fp16), so a reply can differ slightly from one made on the graphics chip alone. In six exact-answer tasks over 13,000-token prompts, every answer stayed correct, though on one coding task the answer ignored "output only the code".
+
+## How Astronomical decides whether a model gains
+
+Astronomical finds this out for each model on your Mac.
+
+1. **It compares.** During a model's first long prompts, full pieces take turns between the graphics chip alone and both chips. This costs those prompts a few percent.
+2. **It needs enough evidence:** at least three prompts and 15 comparisons, which is eight 10,000-token prompts or three 25,000-token ones.
+3. **It decides.** A model must gain at least 2 percent to keep its programs. Otherwise they are released, the status says why, and later loads skip them until a macOS update.
+
+To have a model measured again sooner, remove `program-speed.txt` from that model's folder under `neural-engine-programs`.
+
+Results through the app:
+
+| Model size | Measured speed | Outcome |
+| --- | --- | --- |
+| 9B | 1.28× | Kept |
+| 2B | 1.03× to 1.11× | Kept |
+| 0.8B | 0.90× to 0.98× | Turned off |
+
+A 2B model whose first prompts all arrive after idle spells can read too low and be turned off. That costs only the few percent it would have gained on prompts sent in quick succession.
+
+## Where to see it
+
+- `/v1/status` reports the measured figure as `measured_speed_percent`.
+- The menu-bar item, the **Tuning** page and the Overview's Neural Engine panel show the same figure.
+- The Overview panel also shows the share of prompt tokens the Neural Engine actually ran, and an estimate of the time saved since the app started.
+
+The time-saved estimate counts only prompts that began with the programs already awake, because a prompt that has to wake them can run slower overall. It can therefore undercount for a large model, and it never claims time that a small model lost.
+
+Performance attribution, a diagnostic setting, removes the speed gain while it is on, because it adds synchronization.

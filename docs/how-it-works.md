@@ -79,9 +79,9 @@ Astronomical is experimental and deliberately narrow.
 
 - **Macs:** any Mac with Apple silicon (an M-series chip).
 - **macOS:** 14 (Sonoma) or later. Support across that range is best effort: Astronomical checks what each Mac can do and uses a standard path where a faster one is not available. Combinations nobody has tested are also best effort.
-- **Models:** Qwen3.5, Qwen3.6 and Laguna for chat, FLUX.2 Klein for images, and ModernBERT for embeddings, in the builds this repository has validated.
+- **Models:** chat and coding models built on Qwen3.5 and Qwen3.6, FLUX.2 Klein and Qwen-Image for images, Kokoro and Phonon for speech, ModernBERT for embeddings, and small decision models, in the builds this repository has validated.
 - **People:** one person on one Mac, with one reply being written at a time.
-- **Connections:** only from your own Mac. Other apps can talk to it in the same way they talk to OpenAI or Anthropic services: chat, responses, embeddings, image generation, listing models, and replies that arrive word by word.
+- **Connections:** only from your own Mac. Other apps can talk to it in the same way they talk to OpenAI or Anthropic services: chat, responses, embeddings, image generation, speech, listing models, and replies that arrive word by word.
 
 A supported model runs on every Apple silicon Mac with a new enough macOS. Graphics chips that can run Astronomical's custom routines use them, because they measured fastest. Where a chip cannot run one, the same request still finishes through Apple's standard routines, at the precision the model specifies. Speed depends on the chip, your memory limit, the model and your SSD.
 
@@ -121,4 +121,4 @@ For readers who want the precise vocabulary:
 - "Clears finished work" is chunk-level allocator cleanup: it materializes the required decoder state and releases completed intermediates.
 - Expert paging preserves the artifact's declared data types and quantization parameters. No quantization is added under memory pressure.
 - Troubleshooting records keep bounded metadata and payload digests.
-- The API surfaces are OpenAI-compatible chat completions, responses, embeddings, image generation and model discovery, Anthropic-compatible Messages, and server-sent event streaming, over loopback only.
+- The API surfaces are OpenAI-compatible chat completions, responses, embeddings, image generation, speech and model discovery, Anthropic-compatible Messages, and server-sent event streaming, over loopback only.

@@ -2,62 +2,68 @@
 
 For people who build Astronomical from source or contribute to it. Read [CONTRIBUTING.md](../CONTRIBUTING.md) first. To use the released app, see the [README](../README.md).
 
-## Stable and Development instances
+## Two copies that never mix: Stable and Development
 
-Astronomical keeps the trusted daily driver separate from repository development:
+The app you use every day and the app you are changing are kept apart, so a broken build cannot disturb your daily one.
 
-| Channel | State | REST API | Application |
-| --- | --- | --- | --- |
-| Stable | `~/.astronomical` | `127.0.0.1:6732` | `~/Applications/Astronomical.app` |
-| Development | `~/.astronomical-dev` | `127.0.0.1:6733` | `target/astronomical-macos-development.noindex/Astronomical Development.app` |
+| | Stable | Development |
+| --- | --- | --- |
+| What it is | The released app you rely on | The app built from your checkout |
+| State folder | `~/.astronomical` | `~/.astronomical-dev` |
+| Address | `127.0.0.1:6732` | `127.0.0.1:6733` |
+| App | `~/Applications/Astronomical.app` | `target/astronomical-macos-development.noindex/Astronomical Development.app` |
 
-Config, logs, prompt caches, daemon ownership, process locks, and loopback endpoints are isolated. A standard instance rejects a configured endpoint belonging to the other channel. Both configs may reference the same read-only model directories. Real-model development still shares the Mac's GPU, wired memory, and storage bandwidth with Stable.
+- **Kept apart:** settings, logs, prompt caches, background processes, process locks and addresses. Each copy refuses a configured address that belongs to the other.
+- **Shared:** both may read the same model folders, which they never write to. Both also share the Mac's graphics chip, memory and SSD, so running a real model in Development slows Stable down.
+- **Tests use Development only.** Tests that run a model read model locations and policy from Development. Tests that write settings, caches or logs use a temporary `.astronomical-dev` folder and never `~/.astronomical`. The only exception is settings tests that build a temporary Stable fixture to prove the two stay apart.
 
-Serving and acceptance tests read user-selected model locations and policy from Development only. Their mutable config, cache, and logging fixtures use temporary `.astronomical-dev` state and never `~/.astronomical`. Config boundary tests may construct temporary Stable fixtures solely to prove channel separation. Explicit app validation with `--real-model` uses the Development instance.
+The settings file each copy creates is described in [Configuration](configuration.md).
 
-The configuration file each instance creates is described in [Configuration](configuration.md).
-
-## Build the app
-
-Required tools:
+## What you need
 
 - Xcode with the macOS 26 software development kit.
 - CMake.
-- Rust nightly-2026-11-07 (rustc 1.101.0-nightly) through the checked-in toolchain file.
+- Rust nightly-2026-11-07 (rustc 1.101.0-nightly). The checked-in toolchain file selects it for you.
 - Swift 6.2.
-- Homebrew coreutils, jq, curl, and sccache for repository verification and application validation.
+- Homebrew coreutils, jq, curl and sccache, used by the repository's checks.
 
-Provision the pinned, checksum-verified native dependencies:
+## Build and run the Development app
 
-    cargo xtask bootstrap-native-dependencies
+1. Fetch the native dependencies. Each one is pinned to a version and checked against a checksum:
 
-Build the Development app and open it, without touching Stable:
+       cargo xtask bootstrap-native-dependencies
 
-    cargo xtask app dev
+2. Build the Development app and open it. This never touches Stable:
 
-The first run compiles everything; later runs rebuild incrementally and replace the running Development app in seconds. A failed build leaves the running app untouched. Control the Development instance headless, for example to start its daemon with exported `ASTRONOMICAL_*` experiment flags:
+       cargo xtask app dev
+
+   Add `--background` to open it behind your other windows, so the app you are working in stays in front.
+
+The first build compiles everything. Later builds are incremental and replace the running Development app in seconds. A failed build leaves the running app as it was.
+
+To control the Development copy without its window, for example to start it with exported `ASTRONOMICAL_*` experiment flags:
 
     cargo xtask app instance status|start|stop|restart
 
-The ad-hoc signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Stable uses the clean product icon, while Development uses a restrained channel badge. To rehearse a launch of any built bundle in isolation, run `cargo xtask app smoke-test --app-bundle PATH`; add `--real-model MODEL_ID` to send one prompt through an advertised model, only when shared GPU pressure is acceptable.
+**About the built app:**
 
-Stable installation and release publication are release-only commands (`cargo xtask release ...` and `scripts/release/`). They are never part of ordinary commit or push verification. Build a clean Stable candidate and explicitly promote it outside the repository build tree with one release-only command:
+- It is signed ad hoc, for local use only.
+- The `.noindex` folder name keeps built apps out of Spotlight.
+- Development's icon carries a small badge so you can tell it from Stable.
 
-    cargo xtask release build-and-install-stable
+To rehearse launching any built app in isolation:
 
-Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `cargo xtask app package --channel stable` and `cargo xtask release install-stable` remain available when the two stages need to run independently. Installing moves the previously installed app to the Trash rather than deleting it. The packaging contracts run on every pull request: the release steps' decisions through `cargo test -p xtask`, the typed packaging contracts as `cargo test-app-builder`, and the icon renderer contract as `swift scripts/internal/render-macos-app-icon-contract.swift`. A real Stable bundle is built with `cargo xtask app package --channel stable` and launched with `cargo xtask app smoke-test` by the macOS packaging workflow, weekly on main, on demand, and on pull requests that change the packaging pipeline.
+    cargo xtask app smoke-test --app-bundle PATH
 
-Stable candidate builds perform signature, resource, metadata, and bundled-daemon validation without launching over a running Stable instance. Promotion does not restart the running app. Stable builds require a clean Git worktree.
+Add `--real-model MODEL_ID` to send one prompt through a model. This uses the Development copy and the graphics chip, so do it only when nothing else needs them.
 
-Astronomical follows pre-1.0 Semantic Versioning beginning at `0.2.0`. User interfaces and `/v1/status` show the semantic version, Stable or Development channel, short Git commit, and dirty-development marker.
-
-To build only the optimized daemon and worker:
+To build only the optimized background service and worker:
 
     CARGO_BUILD_JOBS="$(sysctl -n hw.logicalcpu)" cargo build --release \
       -p astronomical-inference-worker --bin astronomical-inference-worker \
       -p astronomical-daemon --bin astronomicald
 
-## Verification
+## Check your change
 
 Check Rust formatting, then run the Rust integration and REST suites:
 
@@ -68,4 +74,32 @@ Run the macOS menu contracts:
 
     cargo xtask menu-contracts
 
-Direct MLX and real-model acceptance lanes remain explicit because they require Apple graphics hardware or local model artifacts.
+Tests that drive MLX directly or need a real model are run on request, because they need Apple graphics hardware or models on your Mac.
+
+## Build and install Stable (release only)
+
+Installing Stable and publishing a release use release-only commands, `cargo xtask release ...` and the scripts under `scripts/release/`. They are never part of checking an ordinary commit or push.
+
+To build a clean Stable app and install it outside the repository's build folder:
+
+    cargo xtask release build-and-install-stable
+
+- **Preview first** with `--dry-run`: it builds and validates Stable and shows what installing would do, without doing it.
+- **Run the two stages separately** with `cargo xtask app package --channel stable` and `cargo xtask release install-stable`.
+- **The previous app goes to the Trash.** Installing never deletes it.
+- **A running Stable is left alone.** The build checks the signature, resources, metadata and the bundled background service without launching over a running Stable, and installing does not restart it.
+- **Commit first.** Stable builds require a Git worktree with no uncommitted changes.
+
+### What checks the packaging
+
+On every pull request:
+
+- the release steps' decisions, through `cargo test -p xtask`,
+- the typed packaging contracts, as `cargo test-app-builder`,
+- the icon renderer contract, as `swift scripts/internal/render-macos-app-icon-contract.swift`.
+
+A real Stable app is built with `cargo xtask app package --channel stable` and launched with `cargo xtask app smoke-test` by the macOS packaging workflow. That runs weekly on main, on demand, and on pull requests that change the packaging pipeline.
+
+## Version numbers
+
+Astronomical follows pre-1.0 Semantic Versioning, beginning at `0.2.0`. The app's screens and `/v1/status` show the version, Stable or Development, the short Git commit, and a marker when a Development build has uncommitted changes.

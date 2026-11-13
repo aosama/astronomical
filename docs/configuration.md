@@ -1,12 +1,14 @@
 # Configuration
 
-Most people never need this page: Observatory's **Settings** and **Tuning** pages change every setting described here. This page is for people who want to know what those pages write, or who edit the file by hand.
+Most people never need this page. Observatory's **Settings** and **Tuning** pages change every setting described here, and they are the easier way to do it. This page is for people who want to know what those pages write, or who edit the file by hand.
 
-Each instance keeps its settings in `config.json` in its state folder, which is `~/.astronomical` for the installed app.
+## Where the settings live
 
-## The configuration file
+Astronomical keeps its settings in one file, `config.json`, in its state folder. For the installed app that folder is `~/.astronomical`.
 
-On first launch each instance creates its own versioned `config.json` and adjacent local JSON Schema. Open Models in Observatory to install a curated model under that instance's automatic models directory. A model installed that way can be removed again with **Remove** on its line under On this Mac: its folder moves to the Trash, and copies you placed in other folders are never offered for removal. When an existing unversioned configuration can be migrated without changing its behavior, Astronomical preserves its exact bytes once as `config.legacy-v0.json` before atomically replacing `config.json`. An unsafe migration leaves the original configuration unchanged and creates no backup. Additional existing model locations remain available as recursive scan roots:
+The app creates the file the first time it starts, with a second file beside it, `astronomical-config.schema.json`, that describes every setting. Editors that understand JSON Schema use it to check your edits as you type.
+
+A small file looks like this:
 
     {
       "$schema": "./astronomical-config.schema.json",
@@ -21,18 +23,91 @@ On first launch each instance creates its own versioned `config.json` and adjace
       }
     }
 
-The memory value uses the gigabyte Apple uses to market the Mac: 1 GB = 1,073,741,824 bytes (2³⁰). Remove `maximum_mlx_memory_gb` to use the Mac-reported MLX ceiling. Per-model entries are keyed by the model folder name or by its full Hugging Face ID, such as `organization/model`; models installed through Observatory's Models page or `astronomical models download` record their full ID, so an entry for a different organisation's model of the same name does not apply to them, and an entry keyed by the folder name wins over one keyed by the full ID. Per-model entries can set a lower context ceiling, generation defaults, chunking overrides, and multi-token-prediction depth. Explicit request values override generation defaults. Overrides for temporarily absent models remain dormant and are reported as unmatched rather than preventing other models from serving. `astronomical validate config` says what each entry does against the models installed now: which model it is used for, why it is not used, or that it is waiting for a model you have not downloaded yet. Settings only change chat models. Global chunking controls remain available under `chunking`, and each model may override individual values. See the [version 1 configuration schema](https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json) for the complete contract.
+## The settings most people change
 
-## Edit the configuration
+| Setting | What it does | If you leave it out |
+| --- | --- | --- |
+| `runtime.maximum_mlx_memory_gb` | The most memory models may use, in GB. | The limit your Mac reports. |
+| `runtime.model_directories` | Extra folders to search for models you already have. Subfolders are searched too. | No extra folders. |
+| `runtime.default_model` | The model used when a command or request does not name one. | The built-in default, Qwen3.5-2B-4bit. |
+| `runtime.idle_model_unload_seconds` | How long an unused model stays loaded. | 60 seconds. |
+| `runtime.metal_residency_refresh_enabled` | Keeps a model's memory ready for the graphics chip while idle. | Off. |
+| `prompt_cache.enabled` | Saves work on prompts to the SSD so repeated text is not read again. | On. |
+| `prompt_cache.maximum_size_gb` | The most disk space that saved work may use. | 50 GB. |
 
-Observatory's **Settings** and **Tuning** pages edit every setting in that instance's `config.json`. Settings holds what applies to the whole instance. Tuning lists your models with **All models** first, which holds the execution defaults every model starts from, and shows the chosen model's generation defaults, context limit and advanced execution settings. Click the (i) beside a setting or a section for a plain explanation, its `config.json` key and when a change takes effect; a value that differs from its default shows an arrow that returns it to the default. A Save bar appears while either page holds unsaved edits. Saving validates the whole document, refuses to overwrite a file that changed since the page loaded it, and reports whether the change applied, is waiting for a running request, or needs a restart. The ⋯ menu previews the file, applies the saved file, or resets everything; reset keeps the old file beside the new one as `config.previous.json`. The pages are generated from the version 1 schema, whose `x-astronomical-layout` member arranges them. **Maximum model RAM** on Settings has its own Apply button, applies the memory ceiling at once and writes `runtime.maximum_mlx_memory_gb`; the generic row for that setting is left out so there is one place to change it.
+One GB here is the gigabyte Apple uses when it describes a Mac's memory: 1,073,741,824 bytes (2³⁰).
 
-## Metal residency refresh
+The [version 1 schema](https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json) lists every setting.
 
-macOS can release the Metal residency of wired memory while the GPU is idle, so model weights may have to be made resident again before the next prompt. Set `metal_residency_refresh_enabled` under `runtime`, or use the switch on Observatory's **Settings** page, to have the inference worker re-request residency once per second. It is off by default, changing it restarts the worker, and the renewal can keep that memory wired through long idle periods.
+## Where models are kept
 
-## Idle model unload
+- **Models you download in Observatory** go into a models folder that Astronomical manages for you. You can remove one with **Remove** on its line under **On this Mac**; its folder moves to the Trash.
+- **Models you already have elsewhere** stay where they are. Add their folder to `model_directories` and Astronomical finds them. It never offers to remove models in those folders.
 
-A loaded model is unloaded after it has gone unused for `idle_model_unload_seconds` under `runtime` (60 by default), which frees its memory for the rest of the Mac; the next request loads it again. Set it to 0 to keep a model loaded until another one is requested. The change applies at once from Observatory's **Settings** page.
+## Settings for one model
+
+You can give a single model its own settings under `models`:
+
+    "models": {
+      "organization/model": {
+        "limits": { "maximum_context_tokens": 32768 },
+        "generation_defaults": { "temperature": 0.7 }
+      }
+    }
+
+**What you can set for a model:**
+
+- a lower limit on the length of a conversation,
+- defaults for how it writes, such as temperature,
+- how a long prompt is split into pieces (chunking),
+- how many tokens a small helper model may draft at once, when one is installed beside the model.
+
+**How a model is matched:**
+
+- Name the entry after the model's folder, or after its full Hugging Face ID, such as `organization/model`.
+- Models downloaded through Observatory or `astronomical models download` record their full ID. An entry for another organization's model of the same name does not apply to them.
+- If one entry uses the folder name and another uses the full ID, the folder-name entry wins.
+
+**Good to know:**
+
+- These settings only change chat models.
+- A value sent with a request overrides the model's default for that request.
+- An entry for a model you have not downloaded does nothing and causes no error. It waits until that model appears.
+- Settings under `chunking` at the top level apply to every model. A model's own entry can override any of them.
+
+To see what each entry does with the models you have now, run:
+
+    astronomical validate config
+
+It says which model each entry is used for, why an entry is not used, or that it is waiting for a model you have not downloaded yet.
+
+## Editing in Observatory
+
+**Settings** holds what applies to the whole app. **Tuning** holds what applies to models: **All models** comes first, with the defaults every model starts from, followed by each of your models with its writing defaults, conversation limit and advanced settings.
+
+- **Click the (i)** beside a setting or section for a plain explanation, its `config.json` key, and when a change takes effect.
+- **An arrow** appears beside a value that differs from its default. Click it to return to the default.
+- **A Save bar** appears while either page has unsaved edits.
+- **Saving checks the whole file first.** It will not overwrite a file that changed after the page loaded it. It then tells you whether the change applied, is waiting for a running request to finish, or needs a restart.
+- **The ⋯ menu** previews the file, applies the saved file, or resets everything. A reset keeps your old file beside the new one as `config.previous.json`.
+- **Maximum model RAM** on Settings has its own **Apply** button. It changes the memory limit at once and writes `runtime.maximum_mlx_memory_gb`. It is the only place on the page that changes this setting.
+
+Both pages are generated from the version 1 schema; its `x-astronomical-layout` member arranges them.
+
+## Unloading an idle model
+
+A loaded model is unloaded after it has gone unused for `idle_model_unload_seconds` (60 by default). That frees its memory for the rest of your Mac, and the next request loads it again. Set it to 0 to keep a model loaded until you ask for a different one. A change made on the **Settings** page applies at once.
+
+## Keeping memory ready while idle
+
+macOS can stop holding a model's memory ready for the graphics chip while the chip is idle. The model then has to be made ready again before the next prompt, which takes time.
+
+Set `metal_residency_refresh_enabled` under `runtime`, or use the switch on the **Settings** page, to have Astronomical ask macOS once per second to keep that memory ready. It is off by default. Changing it restarts the part of the app that runs the model. While it is on, that memory can stay reserved through long idle periods.
+
+## Updating from an older file
+
+When Astronomical finds a `config.json` from before settings files had a version number, it updates the file if it can do so without changing how the app behaves. It first saves an exact copy of the old file, once, as `config.legacy-v0.json`. If the update is not safe, it leaves your file as it is and makes no copy.
+
+## Related
 
 The experimental Neural Engine setting has [its own page](neural-engine-prefill.md).
