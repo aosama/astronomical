@@ -87,7 +87,7 @@
           <dl class="term-list">
             <div><dt>The menu</dt><dd>Effective memory, expert residency, graphics-processor use, prompt progress, and prompt reuse, while you work.</dd></div>
             <div><dt>Observatory</dt><dd>The local console on the same loopback address: install from the Library, watch status, and send a chat without a separate monitoring stack.</dd></div>
-            <div><dt>The local API</dt><dd>OpenAI-compatible Chat Completions, Responses, embeddings, and image generation, plus Anthropic-compatible Messages, over loopback only. <code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> starts the agent already pointed at this Mac. <a class="text-link" href="./local-api.html">Connect a coding agent →</a></dd></div>
+            <div><dt>The local API</dt><dd>OpenAI-compatible Chat Completions, Responses, embeddings, image generation, and speech, plus Anthropic-compatible Messages, over loopback only. <code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> starts the agent already pointed at this Mac. <a class="text-link" href="./local-api.html">Connect a coding agent →</a></dd></div>
           </dl>
           <p class="home-note" id="home-stable-note"><strong>Stable</strong> is on GitHub Releases — open it and the local runner goes live on this Mac; Observatory is the local console for the Library, status, and interim chat.</p>
         </div>
@@ -103,6 +103,8 @@
           <div><dt>Chat locally</dt><dd>Observatory or any local OpenAI- or Anthropic-compatible client. Tool calls, Responses, and Messages share the same loopback server.</dd></div>
           <div><dt>Vision in the same chat</dt><dd>Attach an image; a vision-capable model sees it on this Mac and the image does not leave the laptop.</dd></div>
           <div><dt>Generate an image</dt><dd>A text prompt becomes one lossless PNG through the local image endpoint or <code>astronomical image</code>, served by the same app.</dd></div>
+          <div><dt>Speak text aloud</dt><dd>The speech endpoint or <code>astronomical speak</code> turns text into audio with a speech model on this Mac, and the chat window can read a reply aloud.</dd></div>
+          <div><dt>Decide with a small model</dt><dd><code>astronomical decide</code> asks a small decision model a question about a situation you describe and gets a short, structured answer.</dd></div>
           <div><dt>Install from the Library</dt><dd>Download a curated public model; Astronomical verifies the payload before the model becomes discoverable.</dd></div>
           <div><dt>One memory ceiling</dt><dd>Set the model RAM your laptop can spare. Complete experts stay resident when they fit; selected experts stream from storage when the request needs room.</dd></div>
           <div><dt>No hidden quantization</dt><dd>A tighter ceiling never silently downgrades the model. Paging keeps the artifact's declared types; unsupported files fail validation instead of being guessed from a name.</dd></div>
@@ -148,10 +150,10 @@
             </a>
           </li>
           <li>
-            <a href="#method">
-              <span class="note-id">Next</span>
-              <span class="note-title note-title-planned">Ten thousand tokens in, five hundred out, memory beside speed.</span>
-              <span class="note-meta">Measurement · Planned</span>
+            <a href="./reports/memory-ceiling-throughput/">
+              <span class="note-id">R-002</span>
+              <span class="note-title">A 22 GB model wrote 30 tokens a second under a 12 GB ceiling.</span>
+              <span class="note-meta">Memory ceiling · <strong>Measured</strong></span>
             </a>
           </li>
         </ol>

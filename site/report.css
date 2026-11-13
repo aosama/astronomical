@@ -94,3 +94,19 @@ blockquote p { margin: 0; font-family: var(--display); font-size: clamp(1.75rem,
   .evidence-list li, .principle-callout { grid-template-columns: 1fr; }
   .share-card, .decision-box, blockquote { padding: 28px 24px; }
 }
+
+/* Measurement tables and the demo clip. A table keeps memory beside speed on
+   one row, which is the evidence standard's rule; it scrolls sideways on a
+   narrow window instead of squeezing the figures. */
+/* A grid item is as wide as its widest child unless told otherwise, and a
+   table row that must not wrap would then push the whole page sideways. */
+.report-prose { min-width: 0; }
+.report-video { display: block; width: 100%; margin: 28px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--ground-raised); }
+.measure-table { display: block; width: 100%; max-width: 100%; margin: 28px 0 36px; overflow-x: auto; border-collapse: collapse; font-size: 0.9375rem; }
+.measure-table caption { padding-bottom: 12px; color: var(--silver); font-weight: 600; text-align: left; white-space: nowrap; }
+.measure-table th, .measure-table td { padding: 12px 16px 12px 0; border-top: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.measure-table thead th { color: var(--mist); font-weight: 500; }
+.measure-table tbody th { color: var(--silver); font-weight: 600; }
+.measure-table td { color: var(--silver-dim); }
+.report-prose ol { margin: 24px 0; padding-left: 22px; color: var(--silver-dim); font-size: 1.0625rem; }
+.report-prose ol li { margin-bottom: 12px; }

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>A 22 GB model under a 12 GB ceiling | Astronomical Field Note R-002</title>
+    <meta name="description" content="Ten thousand tokens in and five hundred out on a 35B mixture-of-experts model, measured fully in memory and under 16 GB and 12 GB memory ceilings.">
+    <meta name="theme-color" content="#141517">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="A 22 GB model wrote 30 tokens a second under a 12 GB ceiling">
+    <meta property="og:description" content="Ten thousand tokens in, five hundred out, with memory reported beside speed and the limits of the measurement stated.">
+    <meta property="og:url" content="https://getastronomical.com/reports/memory-ceiling-throughput/">
+    <meta property="og:image" content="https://getastronomical.com/assets/astronomical-35b-under-12gb-ceiling.jpeg">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png">
+    <link rel="stylesheet" href="../../styles.css">
+    <link rel="stylesheet" href="../../report.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../index.html" aria-label="Astronomical home">
+        <img src="../../assets/mark.svg" alt="" width="32" height="32">
+        <span>astronomical</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="../../index.html#reports">Field notes</a>
+        <a href="../../index.html#method">Method</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
+    </header>
+
+    <main id="main" class="report-page report-page-featured">
+      <header class="report-hero shell">
+        <div class="report-meta">
+          <span>Field note R-002</span>
+          <span>13 November 2026</span>
+          <span class="verdict verdict-open"><i></i> Measured, one run per row</span>
+        </div>
+        <p class="eyebrow">Memory ceiling · speed</p>
+        <h1>A 22 GB model wrote 30 tokens a second <em>under a 12 GB ceiling.</em></h1>
+        <p class="report-lead">The same 35B mixture-of-experts model answered a 10,000-token prompt three ways: fully in memory, under a 16 GB ceiling, and under a 12 GB ceiling. Reading the prompt took the same time in all three. Writing the reply slowed as the ceiling came down.</p>
+      </header>
+
+      <section class="report-stat-band report-stat-band-featured" aria-label="Measured results">
+        <div><strong>21.9 GB</strong><span>the model on disk</span></div>
+        <div><strong>12 GB</strong><span>the ceiling that was set</span></div>
+        <div><strong>11.1 GB</strong><span>peak model memory</span></div>
+        <div><strong>30.2</strong><span>tokens written per second</span></div>
+      </section>
+
+      <div class="report-body shell">
+        <aside class="report-toc" aria-label="Report contents">
+          <span>In this report</span>
+          <a href="#watch">Watch it</a>
+          <a href="#measured">Measured</a>
+          <a href="#method">How it was measured</a>
+          <a href="#limits">What it does not show</a>
+          <a href="#repeat">Repeat it</a>
+        </aside>
+
+        <article class="report-prose">
+          <section id="watch">
+            <p class="section-index">Watch it</p>
+            <h2>One question, one ceiling, both screens.</h2>
+            <video class="report-video" controls muted playsinline preload="metadata" poster="../../assets/astronomical-35b-under-12gb-ceiling.jpeg" aria-label="The chat window streams a reply while Observatory shows 10.6 GB in use under a 12 GB ceiling for a model that is 21.9 GB on disk.">
+              <source src="../../assets/astronomical-35b-under-12gb-ceiling.mp4" type="video/mp4">
+            </video>
+            <p>On the left, the chat window sends a short coding question to Ornith-1.5-35B-A3B-OptiQ-4bit. On the right, Observatory shows the same moment: no model loaded, then about 10.6 GB in use under a 12 GB ceiling, with the line "This reply has read experts from the SSD." The clip runs at real speed and shows the model's reasoning as it streams. It was recorded on a development build.</p>
+          </section>
+
+          <section id="measured">
+            <p class="section-index">Measured</p>
+            <h2>Ten thousand tokens in, five hundred out.</h2>
+            <p>Each row is one request of 10,077 prompt tokens and 500 written tokens, after a small warmup, with the prompt cache off.</p>
+            <table class="measure-table">
+              <caption>Ornith-1.5-35B-A3B-OptiQ-4bit, 21.9 GB on disk</caption>
+              <thead>
+                <tr><th scope="col">Memory ceiling</th><th scope="col">Experts</th><th scope="col">Peak model memory</th><th scope="col">Reading the prompt</th><th scope="col">Writing the reply</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">36 GB</th><td>All in memory</td><td>20.9 GB</td><td>4.8 s · 2,085 tokens/s</td><td>66.5 tokens/s</td></tr>
+                <tr><th scope="row">16 GB</th><td>Read from the SSD</td><td>15.4 GB</td><td>4.5 s · 2,228 tokens/s</td><td>40.3 tokens/s</td></tr>
+                <tr><th scope="row">12 GB</th><td>Read from the SSD</td><td>11.1 GB</td><td>4.5 s · 2,235 tokens/s</td><td>30.2 tokens/s</td></tr>
+              </tbody>
+            </table>
+            <p>The largest model in the catalog, an experimental build, ran under the same two ceilings:</p>
+            <table class="measure-table">
+              <caption>Ornith-1.5-122B-MLX-mixed-2bit, about 38 GB on disk</caption>
+              <thead>
+                <tr><th scope="col">Memory ceiling</th><th scope="col">Experts</th><th scope="col">Peak model memory</th><th scope="col">Reading the prompt</th><th scope="col">Writing the reply</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">16 GB</th><td>Read from the SSD</td><td>15.1 GB</td><td>17.7 s · 570 tokens/s</td><td>16.1 tokens/s</td></tr>
+                <tr><th scope="row">12 GB</th><td>Read from the SSD</td><td>10.8 GB</td><td>12.8 s · 789 tokens/s</td><td>14.2 tokens/s</td></tr>
+              </tbody>
+            </table>
+            <p>Peak model memory stayed under the ceiling in every row. On the 122B model the prompt was read faster under the lower ceiling; with one run per row, that difference is within what a second run could reverse.</p>
+          </section>
+
+          <section id="method">
+            <p class="section-index">How it was measured</p>
+            <h2>The workload, the build, and the clock.</h2>
+            <ul class="evidence-list">
+              <li><span>Mac</span><p>Apple M5 Pro with 48 GB of memory.</p></li>
+              <li><span>Build</span><p>An optimized development build of version 0.2.103, serving through the local API the way any client would.</p></li>
+              <li><span>Prompt</span><p>The opening of Romeo and Juliet followed by a request for a detailed summary: 10,077 prompt tokens. The reply was capped at 500 tokens.</p></li>
+              <li><span>Warmup</span><p>One request of 602 prompt tokens and 50 written tokens before each measured request, which also loads the model.</p></li>
+              <li><span>Cache</span><p>The persistent prompt cache was turned off, so no saved prompt work counted as speed.</p></li>
+              <li><span>Clock</span><p>Reading the prompt is the time from sending the request to the first streamed token. Writing speed is 500 tokens divided by the time after that first token.</p></li>
+              <li><span>Memory</span><p>Peak model memory is the peak the app reports for the model's own memory, read after each request.</p></li>
+            </ul>
+          </section>
+
+          <section id="limits">
+            <p class="section-index">What it does not show</p>
+            <h2>A ceiling on a large Mac is not a small Mac.</h2>
+            <p>The ceiling limits the memory the model itself may use. This Mac had 48 GB, so macOS could keep recently read model files in its own file cache, outside that ceiling. A Mac with 16 GB has far less room for that, and its SSD reads will be slower than the ones measured here. These rows show how the app behaves under a ceiling. They do not predict speed on a Mac with that much memory.</p>
+            <p>The model files had been read earlier in the session, so every row is a warm run. Cold reads from the SSD were not measured. Each row is a single run, so small differences between rows are not meaningful.</p>
+            <div class="principle-callout"><span>Read it as</span><p>A 21.9 GB model stayed under a 12 GB ceiling and kept writing at a usable speed. Not as a promise for any other Mac, model, or prompt.</p></div>
+          </section>
+
+          <section id="repeat">
+            <p class="section-index">Repeat it</p>
+            <h2>Four steps on your own Mac.</h2>
+            <ol>
+              <li>In Observatory, download the model from the <strong>Models</strong> page.</li>
+              <li>On the <strong>Settings</strong> page, set <strong>Maximum model RAM</strong> to the ceiling you want and press <strong>Apply</strong>. Turn the prompt cache off and save.</li>
+              <li>Send a long prompt to <code>/v1/chat/completions</code> on the local API with <code>"stream": true</code> and <code>"max_tokens": 500</code>, after one short warmup request.</li>
+              <li>Time the first streamed token and the last, and read peak memory on Observatory's <strong>Overview</strong> page.</li>
+            </ol>
+            <p>Your numbers will differ with your Mac, your SSD, the model and the prompt.</p>
+          </section>
+
+          <section class="share-card share-card-featured">
+            <span>Share the result</span>
+            <p>A 21.9 GB mixture-of-experts model wrote 30 tokens a second under a 12 GB memory ceiling in Astronomical, with peak model memory at 11.1 GB. Ten thousand tokens in, five hundred out, limits stated.</p>
+            <a class="button button-dark" href="https://twitter.com/intent/tweet?text=A%2021.9%20GB%20mixture-of-experts%20model%20wrote%2030%20tokens%20a%20second%20under%20a%2012%20GB%20memory%20ceiling%20in%20Astronomical%2C%20with%20peak%20model%20memory%20at%2011.1%20GB.%20Ten%20thousand%20tokens%20in%2C%20five%20hundred%20out%2C%20limits%20stated.&url=https%3A%2F%2Fgetastronomical.com%2Freports%2Fmemory-ceiling-throughput%2F">Post on X <span aria-hidden="true">↗</span></a>
+          </section>
+
+          <footer class="report-sources">
+            <h2>Sources and limits</h2>
+            <p>The figures come from one session on one Mac, through the app's local API, following the evidence standard on the home page. They are a record of that session and assert no threshold.</p>
+            <a href="../../index.html#method">Read the evidence standard <span aria-hidden="true">→</span></a>
+          </footer>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand" href="../../index.html"><img src="../../assets/mark.svg" alt="" width="26" height="26"><span>astronomical</span></a>
+      <p>Local language, vision, and image serving for Apple silicon.</p>
+      <div><a href="../../index.html#reports">All field notes</a><a href="https://github.com/aosama/astronomical">GitHub</a></div>
+    </footer>
+  </body>
+</html>

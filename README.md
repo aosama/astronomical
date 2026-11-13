@@ -65,6 +65,7 @@ Run `astronomical --help` for the full list.
 - [Neural Engine prefill](docs/neural-engine-prefill.md): an experimental speed-up for some models.
 - [Building and developing](docs/development.md): build from source and run the tests.
 - [Product story and engineering reports](https://getastronomical.com/) on the website.
+- [Measured: a 22 GB model under a 12 GB memory ceiling](https://getastronomical.com/reports/memory-ceiling-throughput/), with a short video and the limits of the measurement.
 - [Discord](https://discord.gg/dc4E6r4WD) for questions and help, and the [support page](https://getastronomical.com/support.html).
 
 ## Contributing
