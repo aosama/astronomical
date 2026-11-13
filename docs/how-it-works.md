@@ -104,7 +104,7 @@ To start a coding agent already pointed at the running app for one session:
     astronomical launch codex
     astronomical launch opencode
 
-Settings for other apps are on the [local API page](https://aosama.github.io/astronomical/local-api.html).
+Settings for other apps are on the [local API page](https://getastronomical.com/local-api.html).
 
 ## The same things, in engineering terms
 

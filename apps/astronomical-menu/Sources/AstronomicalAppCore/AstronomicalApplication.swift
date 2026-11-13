@@ -163,7 +163,7 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
       applicationName: bundleApplicationName,
       checkForUpdates: checkForUpdatesAction,
       openObservatory: { [weak self] in self?.openObservatory() },
-      helpURL: URL(string: "https://aosama.github.io/astronomical/"),
+      helpURL: URL(string: "https://getastronomical.com/"),
       hostSettingsMenuItems: settingsMenu.makeMenuItems(),
       quitEverything: { [weak self] in self?.quitAndStopEngine() })
   }
