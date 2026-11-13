@@ -65,8 +65,3 @@ export function describeTimeLeft(secondsLeft: number | null): string {
   const hoursLeft = Math.round(minutesLeft / 60);
   return hoursLeft === 1 ? "about an hour left" : `about ${hoursLeft} hours left`;
 }
-
-/** "5.6 GB": one decimal, in the decimal gigabytes macOS Finder shows. */
-export function describeGigabytes(byteCount: number): string {
-  return `${(Math.max(0, byteCount) / 1_000_000_000).toFixed(1)} GB`;
-}

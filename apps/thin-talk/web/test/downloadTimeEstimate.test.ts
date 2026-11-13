@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DownloadTimeEstimate, describeGigabytes, describeTimeLeft } from "../src/astro/DownloadTimeEstimate";
+import { DownloadTimeEstimate, describeTimeLeft } from "../src/astro/DownloadTimeEstimate";
 
 const GIGABYTE = 1_000_000_000;
 
@@ -59,11 +59,4 @@ test("should_describe_waits_in_plain_words", () => {
   assert.equal(describeTimeLeft(89 * 60), "about 89 minutes left");
   assert.equal(describeTimeLeft(90 * 60), "about 2 hours left");
   assert.equal(describeTimeLeft(60 * 60 + 1), "about 60 minutes left");
-});
-
-test("should_describe_sizes_in_decimal_gigabytes_with_one_decimal", () => {
-  assert.equal(describeGigabytes(5_970_332_199), "6.0 GB");
-  assert.equal(describeGigabytes(4_619_700_724), "4.6 GB");
-  assert.equal(describeGigabytes(0), "0.0 GB");
-  assert.equal(describeGigabytes(-5), "0.0 GB");
 });

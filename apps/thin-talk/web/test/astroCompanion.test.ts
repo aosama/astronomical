@@ -60,7 +60,7 @@ test("should_welcome_a_newcomer_and_land_them_in_an_empty_chat_when_a_chat_model
   const { host, daemon } = bootNewcomer();
   await waitForStep("welcome");
   assert.equal(document.querySelector(".get-started__headline")?.textContent, "Welcome to Astronomical");
-  assert.equal(astroSays(), "Astronomical runs AI models privately on this Mac.");
+  assert.equal(astroSays(), "Astronomical runs AI models privately on this Mac. Its assistant is called Astro.");
   element<HTMLButtonElement>("astro-get-started").click();
   await waitFor(() => overlay().hidden, "the journey to close");
   assert.equal(composerField().value, "", "nothing is typed for the person");
@@ -101,7 +101,7 @@ test("should_offer_the_recommended_model_by_name_and_size_with_one_download_butt
   await waitFor(() => isPresent("astro-download"), "the Download button");
   assert.equal(document.querySelector(".get-started__headline")?.textContent, "Download a model");
   assert.equal(element("astro-download-model").textContent, "starter-chat-4bit", "the model is named without its owner");
-  assert.equal(element("astro-download-size").textContent, "6.0 GB, one time");
+  assert.equal(element("astro-download-size").textContent, "5.6 GB, one time");
   assert.equal(element("astro-download").textContent, "Download");
   assert.equal(element("astro-continue").textContent, "Skip for now");
   assert.equal(isPresent("astro-download-next"), false, "what comes next waits for the download to start");
@@ -127,7 +127,7 @@ test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async (
   assert.deepEqual(daemon.requestedLibraryDownloads, [CHAT_MODEL_ID]);
   assert.equal(element("astro-continue").textContent, "Continue in the background");
   assert.match(element("astro-download-next").textContent ?? "", /Ask a question/);
-  await waitFor(() => element("astro-download-size").textContent === "2.0 of 6.0 GB", "progress");
+  await waitFor(() => element("astro-download-size").textContent === "1.9 of 5.6 GB", "progress");
   await waitFor(() => astroSays() === "The model is ready.", "the ready line");
   await waitFor(() => document.getElementById("empty-state-notice")?.textContent === "", "chat to become ready");
   assert.equal(element("astro-download").textContent, "Start chatting");
@@ -174,7 +174,7 @@ test("should_offer_the_image_model_before_drawing_and_take_no_for_an_answer", as
   element<HTMLButtonElement>("astro-home-skill-pictures").click();
   await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
   assert.match(document.querySelector(".astro-home__reply")?.textContent ?? "", /image model/);
-  assert.equal(element("astro-home-download-size").textContent, "4.6 GB, one time");
+  assert.equal(element("astro-home-download-size").textContent, "4.3 GB, one time");
   element<HTMLButtonElement>("astro-home-not-now").click();
   await waitFor(() => !isPresent("astro-home-get-image-model"), "the offer to close");
   assert.deepEqual(daemon.requestedLibraryDownloads, [], "declining downloads nothing");
@@ -200,6 +200,29 @@ test("should_fill_the_message_field_from_a_home_idea_without_sending_it", async 
   assert.equal(composerField().value, "Explain black holes in three sentences");
   assertFocusOn(composerField());
   assert.equal(daemon.chatRequestBody(), null, "an idea only prepares the message");
+});
+
+test("should_offer_the_image_model_from_a_drawing_idea_when_none_is_installed", async () => {
+  const { daemon } = bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, libraryCatalog: STARTER_CATALOG });
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  await waitUntilReady();
+  element<HTMLButtonElement>("astro-home-idea-3").click();
+  await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
+  assert.equal(composerField().value, "", "a prompt that can only fail is not offered");
+  assert.equal(daemon.chatRequestBody(), null);
+});
+
+test("should_fill_the_message_field_from_a_drawing_idea_when_an_image_model_is_installed", async () => {
+  const installedModels = [
+    { id: "starter-chat-4bit" },
+    { id: "starter-image-4bit", supported_endpoints: ["/v1/images/generations"] },
+  ];
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE, models: installedModels });
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  await waitUntilReady();
+  element<HTMLButtonElement>("astro-home-idea-3").click();
+  await waitFor(() => composerField().value === "Draw a poster of a rocket launch", "the drawing prompt");
+  assert.equal(isPresent("astro-home-get-image-model"), false);
 });
 
 test("should_keep_astro_hidden_when_hidden_during_the_journey", async () => {

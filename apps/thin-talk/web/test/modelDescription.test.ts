@@ -59,5 +59,11 @@ test("should_build_an_empty_detail_line_when_nothing_is_known", () => {
 
 test("should_print_sizes_as_gigabytes_to_one_decimal_like_the_models_page", () => {
   assert.equal(formatGigabytes(29_100_000_000), "27.1 GB");
+  assert.equal(formatGigabytes(5_970_332_199), "5.6 GB");
   assert.equal(formatGigabytes(1), "0.0 GB");
+});
+
+test("should_print_nothing_for_an_empty_or_negative_size", () => {
+  assert.equal(formatGigabytes(0), "0.0 GB");
+  assert.equal(formatGigabytes(-5), "0.0 GB");
 });
