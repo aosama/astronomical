@@ -6,7 +6,7 @@
 
 Astronomical is a free app for Apple silicon Macs. You tell it how much memory it may use, pick a model, and start chatting. When a model is too big for that memory, Astronomical keeps part of it on your SSD and reads it as needed, so the rest of your Mac stays usable. Nothing you type leaves your Mac.
 
-[![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.jpeg)](https://aosama.github.io/astronomical/assets/astronomical-ram-ssd-streaming.mp4)
+[![Astronomical running a Qwen3.6 35B mixture-of-experts model with an 11 GB model RAM ceiling and RAM plus SSD streaming](https://getastronomical.com/assets/astronomical-ram-ssd-streaming.jpeg)](https://getastronomical.com/assets/astronomical-ram-ssd-streaming.mp4)
 
 *A 21.6 GB model running with an 11 GB memory limit. Click the picture for a 25-second demo. This is a captured run; speed varies by model, prompt length, storage and Mac.*
 
@@ -36,7 +36,7 @@ First, add the `astronomical` command to Terminal: click the menu-bar item, clic
     astronomical launch codex
     astronomical launch opencode
 
-For any other tool, point it at `http://127.0.0.1:6732/`. The [local API page](https://aosama.github.io/astronomical/local-api.html) has the settings for each client.
+For any other tool, point it at `http://127.0.0.1:6732/`. The [local API page](https://getastronomical.com/local-api.html) has the settings for each client.
 
 ## Use it from Terminal
 
@@ -64,8 +64,8 @@ Run `astronomical --help` for the full list.
 - [Configuration](docs/configuration.md): every setting, for people who want to edit the file by hand.
 - [Neural Engine prefill](docs/neural-engine-prefill.md): an experimental speed-up for some models.
 - [Building and developing](docs/development.md): build from source and run the tests.
-- [Product story and engineering reports](https://aosama.github.io/astronomical/) on the website.
-- [Discord](https://discord.gg/dc4E6r4WD) for questions and help, and the [support page](https://aosama.github.io/astronomical/support.html).
+- [Product story and engineering reports](https://getastronomical.com/) on the website.
+- [Discord](https://discord.gg/dc4E6r4WD) for questions and help, and the [support page](https://getastronomical.com/support.html).
 
 ## Contributing
 
