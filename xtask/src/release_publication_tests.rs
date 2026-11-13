@@ -16,7 +16,9 @@ use super::release_identity::{
     ReleaseIdentity, check_output_directory, parse_release_version, repository_slug,
 };
 use super::release_manifest::{ArtifactRecord, ReleaseManifest, record_artifact, verify_artifact};
-use super::release_preparation::{appcast_problems, release_download_prefix};
+use super::release_preparation::{
+    appcast_problems, notary_profile_access_problem, release_download_prefix,
+};
 
 fn arguments(argument_words: &[&str]) -> Vec<String> {
     let mut owned_arguments = Vec::new();
@@ -374,4 +376,45 @@ fn should_parse_prepare_and_publish_requests() {
         ]))
         .is_err()
     );
+}
+
+#[test]
+fn should_name_a_pending_agreement_and_where_to_accept_it() {
+    let apple_refusal =
+        "Error: HTTP status code: 403. A required agreement is missing or has expired.";
+
+    let problem = notary_profile_access_problem(apple_refusal, "");
+
+    assert!(problem.contains(apple_refusal), "Apple's reply is quoted");
+    assert!(problem.contains("accept the pending agreement"));
+    assert!(
+        !problem.contains("Unlock this Mac"),
+        "a refusal from Apple must not send the operator to the Keychain"
+    );
+}
+
+#[test]
+fn should_quote_a_reply_from_standard_output_when_the_error_stream_is_empty() {
+    let problem = notary_profile_access_problem("  \n", "Error: No Keychain password item found.");
+
+    assert!(problem.contains("No Keychain password item found."));
+    assert!(problem.contains("unlock this Mac and retry"));
+}
+
+#[test]
+fn should_fall_back_to_unlocking_when_notarytool_gives_no_reason() {
+    let problem = notary_profile_access_problem("", "\n");
+
+    assert!(problem.contains("gave no reason"));
+    assert!(problem.contains("Unlock this Mac and retry"));
+}
+
+#[test]
+fn should_bound_a_long_reply_so_it_cannot_flood_the_log() {
+    let long_reply = "x".repeat(5_000);
+
+    let problem = notary_profile_access_problem(&long_reply, "");
+
+    assert!(problem.contains(&"x".repeat(600)));
+    assert!(!problem.contains(&"x".repeat(601)));
 }
