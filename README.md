@@ -19,18 +19,18 @@ Astronomical is a free app for Apple silicon Macs. You tell it how much memory i
 ## Get started
 
 1. **Install the app.** Download the disk image with the button above or from the [latest release](https://github.com/aosama/astronomical/releases/latest), open it, and drag Astronomical into Applications. The app is signed and notarized by Apple.
-2. **Open Astronomical.** A chat window opens and an Astronomical item appears in the menu bar. The menu-bar item keeps models available while you work, even after you close the chat window.
-3. **Install a model.** Click the menu-bar item and choose **Download a model**. This opens the **Models** page of Observatory, the app's control page in your browser. Pick a model there; Astronomical downloads it and checks the download before using it.
-4. **Say how much memory it may use.** In Observatory, go to **Settings** and set **Maximum model RAM**. On a 32 GB Mac, for example, 16 GB leaves room for macOS and your other apps.
-5. **Chat.** Type in the chat window. The model loads on your first message.
+2. **Open Astronomical.** A chat window opens with a welcome, and an Astronomical item appears in the menu bar. The menu-bar item keeps models available while you work, even after you close the chat window.
+3. **Download a model.** Click **Get started**. Astronomical suggests a model for your Mac: click **Download**, or **Choose a different model** to pick from the full list. It checks the download before using it.
+4. **Chat.** When the download finishes, click **Start chatting** and type your first message. The model loads when you send it.
+5. **Say how much memory it may use (optional).** In the **Astronomical** menu at the top of the screen, choose **Open Observatory**. It opens the app's control page in your browser. Go to **Settings** and set **Maximum model RAM**. On a 32 GB Mac, for example, 16 GB leaves room for macOS and your other apps.
 
-To remove a model later, use **Remove** on its line in **Models**. It goes to the Trash.
+To add more models, open **Models** in Observatory and click **Get** beside one. To remove a model you downloaded there, use **Remove** on its line; it goes to the Trash.
 
 ## Use it with your coding tools
 
 Astronomical can stand in for a cloud model in tools that speak the OpenAI or Anthropic API.
 
-First, add the `astronomical` command to Terminal: click the menu-bar item and choose **Install “astronomical” command in terminal…**. Then start a coding agent that uses the model on your Mac:
+First, add the `astronomical` command to Terminal: click the menu-bar item, click the **⋯** button, and choose **Install “astronomical” command in terminal…**. Then start a coding agent that uses the model on your Mac:
 
     astronomical launch claude
     astronomical launch codex
