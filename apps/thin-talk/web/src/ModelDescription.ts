@@ -28,11 +28,12 @@ export class ModelDescription {
 }
 
 /** Gibibytes, labelled GB, to one decimal: the Observatory's Models page
- * prints sizes the same way, so the two never disagree about one model. */
+ * prints sizes the same way, and the download screens use this too, so no two
+ * screens disagree about one model. A count below zero reads as nothing. */
 const BYTES_PER_GIGABYTE = 1024 * 1024 * 1024;
 
 export function formatGigabytes(sizeBytes: number): string {
-  return `${(sizeBytes / BYTES_PER_GIGABYTE).toFixed(1)} GB`;
+  return `${(Math.max(0, sizeBytes) / BYTES_PER_GIGABYTE).toFixed(1)} GB`;
 }
 
 /**

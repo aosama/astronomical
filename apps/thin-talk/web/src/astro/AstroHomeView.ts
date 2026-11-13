@@ -1,6 +1,7 @@
 import { makeButton, makeElement } from "./AstroDom";
 import type { AstroLibrary } from "./AstroLibrary";
 import { AstroMoment, HOME_IDEAS, astroLine } from "./AstroLines";
+import type { HomeIdea } from "./AstroLines";
 import type { AstroProfile } from "./AstroProfile";
 import { ChatModelDownloadPanel } from "./ChatModelDownloadPanel";
 import { ImageModelOffer } from "./ImageModelOffer";
@@ -95,11 +96,24 @@ export class AstroHomeView {
 
   private renderIdeas(): void {
     for (const [ideaPosition, idea] of HOME_IDEAS.entries()) {
-      const ideaChip = makeButton(this.document, `${ID_PREFIX}-idea-${ideaPosition}`, idea, true);
+      const ideaChip = makeButton(this.document, `${ID_PREFIX}-idea-${ideaPosition}`, idea.prompt, true);
       ideaChip.classList.add("astro-chip");
-      ideaChip.addEventListener("click", () => this.onStarterPrompt(idea));
+      ideaChip.addEventListener("click", () => void this.chooseIdea(idea));
       this.ideas.append(ideaChip);
     }
+  }
+
+  /** Fills the message field with the idea, unless it asks for a picture on
+   * a Mac with no image model: sent as it is, that prompt ends in a failed
+   * drawing, so the chip offers the image model the way the Pictures card
+   * does. */
+  private async chooseIdea(idea: HomeIdea): Promise<void> {
+    const profile = this.profile;
+    if (profile !== null && idea.needsImageModel && !(await this.library.hasImageModel())) {
+      this.offerImageModel(profile);
+      return;
+    }
+    this.onStarterPrompt(idea.prompt);
   }
 
   /** Chooses a skill as its card would: the Draw button uses it to offer the

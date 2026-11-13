@@ -36,7 +36,7 @@ function addressed(opening: string, nickname: string): string {
  * when something goes wrong.
  */
 const LINES: Record<AstroMoment, (nickname: string) => string> = {
-  [AstroMoment.WELCOME]: () => "Astronomical runs AI models privately on this Mac.",
+  [AstroMoment.WELCOME]: () => "Astronomical runs AI models privately on this Mac. Its assistant is called Astro.",
   [AstroMoment.NEEDS_CHAT_MODEL]: () => "Download a chat model to get started. It's a one-time download.",
   [AstroMoment.DOWNLOADING]: () => "Downloading. You can keep going while it runs.",
   [AstroMoment.MODEL_READY]: () => "The model is ready.",
@@ -63,10 +63,17 @@ export function astroLine(moment: AstroMoment, nickname: string): string {
   return LINES[moment](nickname);
 }
 
-/** Ideas offered as one-click chips on Astro's home. */
-export const HOME_IDEAS: readonly string[] = [
-  "Explain black holes in three sentences",
-  "Quiz me on the French Revolution",
-  "Help me plan a science project",
-  "Draw a poster of a rocket launch",
+/** One idea offered as a chip on Astro's home. */
+export interface HomeIdea {
+  readonly prompt: string;
+  /** True when the idea asks for a picture. Without an image model the chip
+   * offers that download instead of a prompt that can only fail. */
+  readonly needsImageModel: boolean;
+}
+
+export const HOME_IDEAS: readonly HomeIdea[] = [
+  { prompt: "Explain black holes in three sentences", needsImageModel: false },
+  { prompt: "Quiz me on the French Revolution", needsImageModel: false },
+  { prompt: "Help me plan a science project", needsImageModel: false },
+  { prompt: "Draw a poster of a rocket launch", needsImageModel: true },
 ];
