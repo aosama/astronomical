@@ -1,75 +1,124 @@
 # How Astronomical works
 
-What Astronomical does with memory, speed and precision, and what it supports today. To install and start using it, see the [README](../README.md).
+This page explains, in plain terms, how Astronomical runs big models in a small amount of memory, why it stays fast, and what it supports today. To install and start using it, see the [README](../README.md).
 
-## Built for the RAM you have
+## The short version
 
-A mixture-of-experts model may contain many expert weights while activating only a small selection for each token. Astronomical takes advantage of that structure instead of treating the complete model as one permanent RAM allocation.
+- You set one number: how much memory models may use.
+- If a model fits in that memory, Astronomical keeps all of it there.
+- If it does not fit, Astronomical keeps the rest on your SSD and reads the parts it needs, when it needs them.
+- It never lowers a model's quality to make it fit.
+- Everything stays on your Mac.
 
-- **Choose one model-memory ceiling.** On a 32 GB Mac, for example, a lower ceiling such as 16 GB can leave room for macOS and everyday applications.
-- **Stream selected experts from SSD.** When the complete sparse payload does not fit, router-selected expert pages move into MLX memory on demand.
-- **Keep the complete model hot when it fits.** All sparse experts use contiguous resident arrays when safe; context pressure switches the whole model to paging and idle recovery can restore residency.
-- **Adapt automatically.** Resident and RAM plus SSD streaming are observed outcomes, not modes the user has to tune.
-- **See the truth.** The menu reports the effective ceiling, expert residency, model core, runtime work, live context, headroom, GPU utilization, prompt progress, and prompt reuse.
+## Running a model bigger than your memory
 
-The model core, active context, selected expert pages, and temporary execution work must still fit within the configured ceiling. Model compatibility and practical speed therefore depend on the artifact, context length, SSD, and available memory. Astronomical is designed to adapt rather than promise that every model fits every Mac.
+Many large models are built as a *mixture of experts*. The model holds a large number of small specialist parts, called experts, but uses only a few of them for each word it writes. Most of the model is idle at any moment.
 
-Expert mode always describes the complete sparse payload, never a mixture of resident and paged layers. A model can be resident while idle, switch to paging before or during a large request, and return to resident after synchronized request cleanup when the complete payload fits again.
+Astronomical uses that. It does not need the whole model in memory at once, only the parts in use.
 
-## Performance from the whole stack
+- **You choose one memory limit.** On a 32 GB Mac, for example, a limit of 16 GB leaves room for macOS and your other apps.
+- **Experts are read from the SSD when needed.** When the whole model does not fit under your limit, Astronomical loads only the experts the model picks for the next word.
+- **A model that fits stays fully in memory.** That is the fastest way to run it, so Astronomical does it whenever it is safe.
+- **It switches by itself.** A long conversation needs more memory. If that pushes a model over your limit, Astronomical moves the experts to SSD reading. When the model is idle and fits again, it moves them back. You never pick a mode.
+- **You can see what it is doing.** The menu-bar item shows your memory limit, whether the model is in memory or being read from the SSD, how memory is being used, how much room is left, how busy the graphics chip is, how far along your prompt is, and how much earlier work was reused.
 
-Astronomical is not a generic server wrapped around an off-the-shelf model loop. The serving path is built in Rust and C++, executes through Apple MLX and MLX-C, and contains model-specific optimizations for Apple graphics processors.
+The switch is all or nothing: a model's experts are either all in memory or all read from the SSD, never a mix of the two.
 
-| Optimization | What it does for the user |
+### What still has to fit
+
+Some things must always fit under your limit:
+
+- the part of the model that every word uses,
+- your conversation so far,
+- the experts in use right now,
+- working space for the calculation.
+
+So not every model fits every Mac. Which models work, and how fast, depends on the model, the length of the conversation, the speed of your SSD and the memory you allow. Astronomical adapts as far as it can; it does not promise that everything fits.
+
+## Why it is fast
+
+The part of Astronomical that runs the model is written specifically for Apple silicon, with speed-ups made for each supported model family.
+
+| What Astronomical does | What you get |
 | --- | --- |
-| Automatic sparse-expert residency and paging | Keeps the complete sparse model resident when safe and uses SSD capacity when memory is needed elsewhere. |
-| Adaptive memory admission | Projects context growth and observed transient work before allocation, then reclaims only the expert memory required for the next operation. |
-| Deterministic prompt chunking | Uses a chosen fixed size, exact terminal remainders, and bounded memory-capacity reduction without spending user latency on online exploration. |
-| Persistent prompt reuse | Restores validated prompt state, recurrent snapshots, and projected image embeddings from a bounded SSD store so repeated prefixes need less work. |
-| GPU-native sampling and decode | Keeps sampling on the graphics processor and submits one token ahead to reduce avoidable host synchronization. |
-| Sorted mixture-of-experts execution | Groups larger routing batches by expert and reuses one ordering across projections to reduce scattered quantized matrix work. |
-| Compiled and fused model operations | Reuses compiled MLX graphs and dedicated Metal kernels for recurrent state, activation, gating, and expert combination where measured paths benefit. |
-| Chunk-level allocator cleanup | Materializes the required decoder state, releases completed intermediates, and prevents long prompts from accumulating stale allocator memory. |
-| Lazy loading and model hot-swap | Starts with no model resident and loads only the model requested through the local API. |
+| Keeps a model fully in memory when it fits, and reads from the SSD when it does not | The best speed your memory limit allows, with no setting to tune. |
+| Works out how much memory the next step needs before starting it | Memory is checked before it is used, and only as much is freed as the next step needs. |
+| Reads a long prompt in pieces of a set size, made smaller only when memory requires it | Predictable memory use, and no time spent on trial runs while you wait. |
+| Saves its work on a prompt to the SSD | When a new request starts with text it has seen before, it picks up from there. This also covers images it has already looked at. The space used is capped. |
+| Chooses each next word on the graphics chip | Less waiting between the graphics chip and the rest of the Mac while it writes. |
+| Groups work by expert | Less scattered work for the graphics chip on larger prompts. |
+| Reuses prepared calculations, with custom graphics-chip routines where they measured faster | Less repeated setup for every word. |
+| Clears finished work after each piece of a prompt | Memory does not creep up over a long prompt. |
+| Loads a model only when it is asked for | No model is loaded at startup. Asking for a different model swaps it in. |
 
-## Precision is not the sacrifice
+## Your model's quality is not reduced
 
-Low-memory operation should not silently make a model less accurate.
+Running in less memory must not quietly make a model worse.
 
-- Astronomical does not add hidden quantization when memory pressure increases.
-- Expert paging preserves the artifact's declared data types and quantization parameters.
-- Persistent prompt state preserves the model execution state required for reuse.
-- Unsupported architecture, precision, or artifact combinations fail validation instead of being guessed from a filename.
+- Astronomical never lowers a model's precision when memory is tight.
+- Experts read from the SSD are exactly as the model's author stored them.
+- Saved prompt work restores the model to the same state it was in.
+- If a model's design or number format is not supported, Astronomical says so and refuses to run it. It does not guess from the file name.
 
-## Local, visible, and private
+## Private, and easy to watch
 
-The embedded Observatory and native menu make model serving observable without a separate monitoring stack.
+Astronomical includes a control page called Observatory, and a menu-bar item. Together they show:
 
-- Live prompt-processing and generation progress.
-- Current and peak MLX memory attribution.
-- Resident or RAM plus SSD streaming state.
-- GPU utilization and session throughput.
-- Prompt reuse rate and cumulative reused tokens.
-- Effective model-memory ceiling with live adjustment.
+- progress while a prompt is being read and while a reply is being written,
+- memory in use now and the highest it has been,
+- whether the model is in memory or being read from the SSD,
+- how busy the graphics chip is, and the speed of the session,
+- how often saved prompt work was reused,
+- your memory limit, which you can change while a model is running.
 
-Prompts, responses, model files, and persistent prompt state stay on the local Mac. Operational diagnostics retain bounded metadata and payload digests, not request headers, prompt text, tool arguments, or generated output text.
+Your prompts, replies, models and saved prompt work stay on your Mac. The app keeps a small record for troubleshooting. That record holds a limited amount of technical detail and fingerprints of requests. It does not hold what you typed, what the model wrote, the details of tool calls, or request headers.
 
-## Current scope
+## What it supports today
 
-Astronomical is experimental and deliberately focused:
+Astronomical is experimental and deliberately narrow.
 
-- Any Apple silicon M-series Mac.
-- macOS 14 (Sonoma) and later on any Apple silicon M-series Mac, declared best-effort. Capability probes and public MLX fallbacks protect correctness across the range; combinations outside the tested set are supported best-effort.
-- Validated Qwen3.5/Qwen3.6, Laguna, FLUX.2 Klein, and ModernBERT embedding artifacts supported by the repository.
-- One local user and one active generation at a time.
-- OpenAI-compatible chat completions, responses, embeddings, image generation, and model discovery, Anthropic-compatible Messages, and server-sent event streaming over loopback only.
+- **Macs:** any Mac with Apple silicon (an M-series chip).
+- **macOS:** 14 (Sonoma) or later. Support across that range is best effort: Astronomical checks what each Mac can do and uses a standard path where a faster one is not available. Combinations nobody has tested are also best effort.
+- **Models:** Qwen3.5, Qwen3.6 and Laguna for chat, FLUX.2 Klein for images, and ModernBERT for embeddings, in the builds this repository has validated.
+- **People:** one person on one Mac, with one reply being written at a time.
+- **Connections:** only from your own Mac. Other apps can talk to it in the same way they talk to OpenAI or Anthropic services: chat, responses, embeddings, image generation, listing models, and replies that arrive word by word.
 
-A supported model runs on every Apple silicon M-series Mac that meets the operating-system floor. Measured custom Metal kernels keep capable GPUs on their fastest path; where a GPU cannot run one, the same request completes through public MLX APIs with the output precision the model artifact specifies. Throughput still depends on the GPU generation, the memory ceiling, the model, and storage speed.
+A supported model runs on every Apple silicon Mac with a new enough macOS. Graphics chips that can run Astronomical's custom routines use them, because they measured fastest. Where a chip cannot run one, the same request still finishes through Apple's standard routines, at the precision the model specifies. Speed depends on the chip, your memory limit, the model and your SSD.
 
-Astronomical does not bundle or redistribute model weights. Observatory can download curated public Hugging Face catalog entries directly onto this Mac; each payload is verified before it becomes discoverable. Model licenses remain separate and must permit the intended use.
+Astronomical does not include any models. Observatory downloads models from Astronomical's hand-picked list of public Hugging Face models straight to your Mac, and checks each download before offering it. Each model has its own license, which must allow your intended use.
 
-## Connect locally
+## Connecting other apps
 
-The daemon exposes its OpenAI-compatible and Anthropic-compatible APIs and embedded Observatory at the same loopback address. Stable uses [http://127.0.0.1:6732/](http://127.0.0.1:6732/) and Development uses [http://127.0.0.1:6733/](http://127.0.0.1:6733/). Astronomical refuses non-loopback bind addresses.
+Astronomical listens at one address on your Mac, for both other apps and Observatory:
 
-Point an OpenAI-compatible or Anthropic-compatible local client at that address, select a discovered model, and Astronomical loads or swaps the worker on demand. `astronomical launch claude`, `astronomical launch codex`, or `astronomical launch opencode` starts that agent pointed at the running app for one session. The manual settings for other clients are on the [local API page](https://aosama.github.io/astronomical/local-api.html).
+- the installed app: [http://127.0.0.1:6732/](http://127.0.0.1:6732/)
+- a development build: [http://127.0.0.1:6733/](http://127.0.0.1:6733/)
+
+It refuses to listen on any address that other computers could reach.
+
+Point an app that speaks the OpenAI or Anthropic API at that address and choose one of the models it lists. Astronomical loads that model, or swaps to it, when the first request arrives.
+
+To start a coding agent already pointed at the running app for one session:
+
+    astronomical launch claude
+    astronomical launch codex
+    astronomical launch opencode
+
+Settings for other apps are on the [local API page](https://aosama.github.io/astronomical/local-api.html).
+
+## The same things, in engineering terms
+
+For readers who want the precise vocabulary:
+
+- The serving path is written in Rust and C++ and runs on Apple MLX through MLX-C.
+- "Read from the SSD" is sparse-expert paging: router-selected expert pages move into MLX memory on demand. "Fully in memory" is expert residency in contiguous arrays. The mode always describes the complete sparse payload.
+- "Works out how much memory the next step needs" is adaptive memory admission: it projects context growth and observed transient work before allocating.
+- "Pieces of a set size" is deterministic prompt chunking, with exact terminal remainders and a bounded reduction when memory capacity requires it.
+- "Saved prompt work" is the persistent prompt store: validated prompt state, recurrent snapshots and projected image embeddings in a bounded SSD store.
+- "Chooses each next word on the graphics chip" is GPU-native sampling, submitting one token ahead to avoid host synchronization.
+- "Groups work by expert" is sorted mixture-of-experts execution: larger routing batches are grouped by expert, and one ordering is reused across projections.
+- "Prepared calculations" are compiled MLX graphs, with dedicated Metal kernels for recurrent state, activation, gating and expert combination.
+- "Clears finished work" is chunk-level allocator cleanup: it materializes the required decoder state and releases completed intermediates.
+- Expert paging preserves the artifact's declared data types and quantization parameters. No quantization is added under memory pressure.
+- Troubleshooting records keep bounded metadata and payload digests.
+- The API surfaces are OpenAI-compatible chat completions, responses, embeddings, image generation and model discovery, Anthropic-compatible Messages, and server-sent event streaming, over loopback only.
