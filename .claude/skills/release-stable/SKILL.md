@@ -32,7 +32,7 @@ Use these sources exactly; no other credential discovery is allowed:
 
 `cargo xtask release prepare-signed` resolves this map itself, failing closed unless exactly one Developer ID Application identity and a 10-character Team ID are found, and it checks the notarization profile is readable before any build starts, so no separate profile preflight is needed. Use it instead of resolving the values by hand.
 
-If any credential check fails, stop and ask the user to unlock the Mac or repair the Keychain. Do not search chats for alternatives.
+If any credential check fails, stop and read the message: the notarization check quotes notarytool's own reply. A reply about a missing or expired agreement means the account holder must accept an updated agreement on the Apple Developer account page, which shows it only as a banner there; Apple's services can then take a few minutes to recognise it, during which the check can pass and fail by turns. Any other failure: ask the user to unlock the Mac or repair the Keychain. Do not search chats for alternatives.
 
 ## 1. Establish scope and issue
 

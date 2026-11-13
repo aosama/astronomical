@@ -56,10 +56,19 @@ pub(crate) fn validate_distribution_credentials(
     verify_notary_profile_access(&credentials.notary_profile)
 }
 
-/// The default notarytool profile lives in the Data Protection Keychain,
-/// which a locked screen makes unreadable mid-run.
+/// Enough of Apple's reply to name the cause without flooding the log.
+const MAXIMUM_NOTARY_REPLY_CHARACTERS: usize = 600;
+
+/// Asks the notary service for the submission history, which needs both the
+/// Keychain profile and Apple's consent to serve this account. The default
+/// notarytool profile lives in the Data Protection Keychain, which a locked
+/// screen makes unreadable mid-run, but Apple also refuses the request for
+/// reasons that have nothing to do with this Mac, such as a program agreement
+/// awaiting acceptance. The failure therefore carries Apple's own words: a
+/// fixed "unlock this Mac" message once sent a release looking at the
+/// Keychain while the cause sat on the developer account.
 pub(crate) fn verify_notary_profile_access(notary_profile: &str) -> Result<(), String> {
-    let history_status = Command::new("xcrun")
+    let history_attempt = Command::new("xcrun")
         .args([
             "notarytool",
             "history",
@@ -67,10 +76,53 @@ pub(crate) fn verify_notary_profile_access(notary_profile: &str) -> Result<(), S
             notary_profile,
         ])
         .output();
-    match history_status {
+    match history_attempt {
         Ok(history_output) if history_output.status.success() => Ok(()),
-        _ => Err("notarization profile is inaccessible. Unlock this Mac and retry; if access still fails, verify the configured notarytool profile.".to_owned()),
+        refused_or_unlaunched => Err(notary_check_failure(refused_or_unlaunched)),
     }
+}
+
+/// Words a failed profile check: notarytool's reply when it ran and was
+/// refused, or the launch error when it never ran.
+fn notary_check_failure(history_attempt: std::io::Result<std::process::Output>) -> String {
+    match history_attempt {
+        Ok(history_output) => notary_profile_access_problem(
+            &String::from_utf8_lossy(&history_output.stderr),
+            &String::from_utf8_lossy(&history_output.stdout),
+        ),
+        Err(launch_failure) => {
+            format!("notarization profile check could not run xcrun notarytool: {launch_failure}")
+        }
+    }
+}
+
+/// Describes a refused profile check: Apple's reply, then the step that
+/// usually clears it. notarytool writes its error to either stream depending
+/// on the output format, so the first stream that says anything is quoted.
+pub(crate) fn notary_profile_access_problem(
+    notary_error_output: &str,
+    notary_standard_output: &str,
+) -> String {
+    let notary_reply = if notary_error_output.trim().is_empty() {
+        notary_standard_output.trim()
+    } else {
+        notary_error_output.trim()
+    };
+    if notary_reply.is_empty() {
+        return "notarization profile check failed and notarytool gave no reason. Unlock this Mac and retry; if access still fails, verify the configured notarytool profile.".to_owned();
+    }
+    let bounded_notary_reply: String = notary_reply
+        .chars()
+        .take(MAXIMUM_NOTARY_REPLY_CHARACTERS)
+        .collect();
+    let remedy = if notary_reply.to_lowercase().contains("agreement") {
+        "Sign in to the Apple Developer account, accept the pending agreement, and retry; Apple's services can take a few minutes to recognise it."
+    } else {
+        "If the reply names no cause, unlock this Mac and retry, then verify the configured notarytool profile."
+    };
+    format!(
+        "notarization profile check failed. notarytool replied: {bounded_notary_reply} {remedy}"
+    )
 }
 
 /// Keeps the Mac from idle-locking (and so locking the keychain) for as long
