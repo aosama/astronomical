@@ -30,7 +30,7 @@ Run focused tests while developing. Before proposing a pull request, run:
 
 Run direct MLX or model-artifact acceptance only when the change crosses those boundaries. State exactly which checks ran and which hardware-dependent checks could not run.
 
-Routine integration, Representational State Transfer (REST), and commit verification tests retain one stable Cargo graph for warm iteration. Commit verification preserves caller-selected Cargo and compiler-cache configuration. Release and acceptance Cargo commands can use marker-owned disposable targets that are removed automatically. Use the `full-debug` profile only when complete packed symbols are required.
+Routine integration, REST, and commit verification tests retain one stable Cargo graph for warm iteration. Commit verification preserves caller-selected Cargo and compiler-cache configuration. Release and acceptance Cargo commands can use marker-owned disposable targets that are removed automatically. Use the `full-debug` profile only when complete packed symbols are required.
 
 Cargo aliases in `.cargo/config.toml` are string-valued on purpose. Cargo merges the config file of every ancestor directory and joins array values across them, while a string from the nearest file replaces the outer value; an array alias defined in both this file and an ancestor `.cargo/config.toml` would therefore concatenate and double.
 

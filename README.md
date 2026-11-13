@@ -42,8 +42,10 @@ For any other tool, point it at `http://127.0.0.1:6732/`. The [local API page](h
 
     astronomical respond "Explain what a mutex is in two sentences"
     astronomical models list
+    astronomical models supported
     astronomical models download MODEL_ID
     astronomical image "A lighthouse at dusk"
+    astronomical speak "Hello from my Mac"
     astronomical status
 
 Run `astronomical --help` for the full list.
@@ -54,7 +56,7 @@ Run `astronomical --help` for the full list.
 - **Your model's quality is not reduced.** Astronomical never lowers a model's precision to save memory.
 - **You can see what is happening.** The menu-bar item and Observatory show memory in use, progress and speed.
 - **Models are downloaded, not bundled.** Each model has its own license, which must allow your intended use.
-- **It is experimental.** One person, one conversation at a time. Supported model families today are Qwen3.5, Qwen3.6, Laguna, FLUX.2 Klein for images, and ModernBERT for embeddings.
+- **It is experimental.** One person, one conversation at a time. Supported models today are chat and coding models built on Qwen3.5 and Qwen3.6, FLUX.2 Klein and Qwen-Image for images, Kokoro and Phonon for speech, ModernBERT for embeddings, and small decision models.
 
 ## Learn more
 
