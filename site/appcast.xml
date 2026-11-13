@@ -4,37 +4,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.103</title>
-            <pubDate>Thu, 12 Nov 2026 00:45:19 -0500</pubDate>
-            <sparkle:version>2278</sparkle:version>
-            <sparkle:shortVersionString>0.2.103</sparkle:shortVersionString>
+            <title>0.2.104</title>
+            <pubDate>Fri, 13 Nov 2026 08:48:25 -0500</pubDate>
+            <sparkle:version>2289</sparkle:version>
+            <sparkle:shortVersionString>0.2.104</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.103
-
-### New
-- Speech: Astronomical can now speak text with native Kokoro-82M and Phonon 31M speech engines. Use `astronomical speak` in the terminal or `POST /v1/audio/speech` on the local API. Speech is no longer experimental.
-- The chat window has a Speak button that reads a reply aloud.
-- First launch shows a plain get-started journey in place of the earlier welcome.
-- Observatory's Configuration page is now two pages, Settings and Tuning, with a plain title, unit and explanation for each setting.
+            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.104
 
 ### Improved
-- Astro is drawn as a dot galaxy and no longer sits in the message field.
-- The decision model catalog records Clef's measured peak memory.
-- The Download for Mac buttons on the website and README lead straight to the disk image.
-
-### Fixed
-- Double-clicking the chat window's top strip zooms the window again, and the strip drags like a title bar.
+- On a first run, the "Draw a poster of a rocket launch" idea now offers the image model download when no image model is installed. Before, it ended in a failed drawing.
+- The download screens and Observatory's Models page now show the same size for the same model.
+- The welcome now introduces Astro, the assistant the chat window names.
+- The Help menu opens the website at its new address, getastronomical.com.
+- The website moved to getastronomical.com. Earlier addresses redirect, and updates keep arriving as before.
+- The README is focused on getting started, and the documentation was reviewed against the app and rewritten in plain language.
+- A new field note on the website measures one model fully in memory and under 16 GB and 12 GB memory ceilings.
+- Developer builds: quantization sensitivity probes reuse the reference forward's layer inputs, and an interrupted conversion can resume.
 
 ### Compatibility
 - Requires macOS 14 or later on Apple silicon.
-- Settings, chats, downloaded models and the Library are preserved. No configuration field was removed.
-- The app is signed with a Developer ID, notarized by Apple, and delivered through the signed update feed.
+- Your settings, downloaded models, conversations and prompt cache are kept.
+- The app and its disk image are signed with a Developer ID and notarized by Apple.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.103/Astronomical-0.2.103-macOS-arm64.dmg" length="23626349" type="application/octet-stream" sparkle:edSignature="guNM4RgSf+GzfjJrVUbzRtNmtUaEqSNL7iJq+OjZ7X6u9cAEd7iaO5yC+CYmaXGTYkcAO58YADzIao12U5JRCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.104/Astronomical-0.2.104-macOS-arm64.dmg" length="23622528" type="application/octet-stream" sparkle:edSignature="D9Orx6CWpc9GKZejjwqhuDTufZdwQGo1tM0iPT2RU3LWGMcvUBG4KOyIRXP2j/jFk7nuascPZvTUoCFn8EvgCA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: VjNIVeZfGnyAJZnICaozOMZ8Xxq/GkE2LPAh6kiOc8r/lPkr09Z6Lb2PNYMmfiR6mZX2vU/8vEIu6m/CblgEDw==
-length: 2399
+edSignature: b+0qinW46e2tutIBTX30harKoUZjAo8Gg8kH/u6053YvHfHx36SsYq8RbcytN/Pug6qM6EeOAARgqk2no+icBw==
+length: 2398
 -->
