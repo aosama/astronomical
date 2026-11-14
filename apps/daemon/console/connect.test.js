@@ -439,3 +439,54 @@ test("lists only the model identifiers the running instance advertises", () => {
         []
     );
 });
+
+test("offers a coding agent only the models that can chat", () => {
+    const scriptContext = createConnectContext();
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(scriptContext.connectionModelIdentifiers({
+            data: [
+                { id: "example-chat-model", supported_endpoints: ["/v1/chat/completions", "/v1/responses"] },
+                { id: "example-picture-model", supported_endpoints: ["/v1/images/generations"] },
+                { id: "example-voice-model", supported_endpoints: ["/v1/audio/speech"] },
+                { id: "example-model-without-endpoint-list" },
+                { id: "example-model-with-no-endpoints", supported_endpoints: [] }
+            ]
+        }))),
+        ["example-chat-model", "example-model-without-endpoint-list"]
+    );
+});
+
+test("keeps a selected picture model out of the coding-agent samples", () => {
+    const scriptContext = createConnectContext();
+    const { connectDocument, elements } = createConnectDocumentFixture();
+    scriptContext.document = connectDocument;
+
+    scriptContext.renderConnectionMaterial({
+        consoleOrigin: "http://127.0.0.1:6733",
+        modelIdentifiers: ["example-chat-model"],
+        selectedModelIdentifier: "example-picture-model"
+    });
+
+    assert.match(elements["connect-opencode-snippet"].textContent, /"example-chat-model"/);
+    assert.equal(elements["connect-opencode-snippet"].textContent.includes("example-picture-model"), false);
+    assert.equal(elements["connect-pi-snippet"].textContent.includes("example-picture-model"), false);
+    assert.match(elements["connect-model-guidance"].textContent, /first advertised model/);
+});
+
+test("names the fictional example model when only picture and voice models are installed", () => {
+    const scriptContext = createConnectContext();
+    const { connectDocument, elements } = createConnectDocumentFixture();
+    scriptContext.document = connectDocument;
+    const chatCapableIdentifiers = scriptContext.connectionModelIdentifiers({
+        data: [{ id: "example-picture-model", supported_endpoints: ["/v1/images/generations"] }]
+    });
+
+    scriptContext.renderConnectionMaterial({
+        consoleOrigin: "http://127.0.0.1:6733",
+        modelIdentifiers: chatCapableIdentifiers,
+        selectedModelIdentifier: "example-picture-model"
+    });
+
+    assert.match(elements["connect-opencode-snippet"].textContent, /example-model-not-downloaded/);
+});
