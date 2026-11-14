@@ -116,6 +116,21 @@ impl Qwen3_5Model {
             .map_or(0, Qwen3_5DenseLayerStreamer::streaming_slot_bytes_in_use)
     }
 
+    /// The bytes one forward's admission reserves for weights it streams: a
+    /// sparse model's routed-page reservation, or the slots a dense model's
+    /// streamed layers use. Post-forward learning gives the peak back at most
+    /// this much, because this is what the next admission adds on top of the
+    /// learned workspace (issue #2218).
+    pub(crate) fn streamed_weight_reservation_bytes_for_forward(
+        &self,
+        forward_token_count: usize,
+    ) -> Result<u64, crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
+        if self.expert_pager.is_some() {
+            return self.expert_page_reservation_bytes_for_forward(forward_token_count);
+        }
+        Ok(self.dense_streaming_slot_reservation_bytes())
+    }
+
     /// Payload admission may reclaim: retained experts, plus a dense model's
     /// kept layers, which stream once given back.
     pub(crate) fn reclaimable_retained_payload_bytes(&self) -> u64 {

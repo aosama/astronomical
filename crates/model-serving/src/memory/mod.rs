@@ -101,6 +101,7 @@ pub use budget::{
     TransientWorkspaceReserveSource, measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
+    promoted_expert_page_bytes_within_forward_peak,
 };
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};

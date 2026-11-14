@@ -9,7 +9,12 @@
 //! prefill chunk of 4096 tokens exceeded the MLX active-memory limit". This
 //! journey sends the same 7,053-token prompt twice with the default chunking
 //! (the first reply's decode seats the residency the second prefill meets)
-//! and asserts both requests are served.
+//! and asserts both requests are served. Since the workspace a streamed
+//! chunk needs is learned in both diagnostics modes (issue #2218), the first
+//! request's chunks usually teach enough that the second no longer overflows;
+//! the journey still guards that both are served. The refill journey below,
+//! which runs with everyday settings, is the one that reliably exercises
+//! recovery.
 //!
 //! Serving the request is not the whole promise. The freeze used to hold
 //! until decode, so a long prompt that hit a recovery read all of its

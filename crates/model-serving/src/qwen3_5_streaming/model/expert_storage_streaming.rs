@@ -84,6 +84,18 @@ impl Qwen3_5StreamingModel {
     pub(crate) fn begin_request_expert_storage_read_observation(&self) {
         self.request_expert_storage_read_tally.begin_request();
     }
+
+    /// Expert payload bytes streamed from storage since the request began.
+    ///
+    /// Sampling it before and after one forward yields what that forward
+    /// streamed. Post-forward learning reads this tally and not the
+    /// performance-attribution counter of the same bytes: that counter reads
+    /// zero whenever attribution is off, which made the engine learn a
+    /// different workspace with diagnostics on than without (issue #2218).
+    pub(crate) fn request_expert_storage_read_byte_count(&self) -> u64 {
+        self.request_expert_storage_read_tally
+            .expert_storage_read_byte_count()
+    }
 }
 
 /// Route-length approximation used only when no warm cache tracks phase.
