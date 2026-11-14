@@ -4,33 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.104</title>
-            <pubDate>Fri, 13 Nov 2026 08:48:25 -0500</pubDate>
-            <sparkle:version>2289</sparkle:version>
-            <sparkle:shortVersionString>0.2.104</sparkle:shortVersionString>
+            <title>0.2.105</title>
+            <pubDate>Fri, 13 Nov 2026 21:37:48 -0500</pubDate>
+            <sparkle:version>2293</sparkle:version>
+            <sparkle:shortVersionString>0.2.105</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.104
+            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.105
+
+### New
+- A link can now open Astronomical on one model: `astronomical://models/huggingface/OWNER/NAME`. It shows Observatory's Models page with that model at the top and its own Get button. Nothing downloads until you press Get, and only models from Astronomical's checked list are offered.
 
 ### Improved
-- On a first run, the "Draw a poster of a rocket launch" idea now offers the image model download when no image model is installed. Before, it ended in a failed drawing.
-- The download screens and Observatory's Models page now show the same size for the same model.
-- The welcome now introduces Astro, the assistant the chat window names.
-- The Help menu opens the website at its new address, getastronomical.com.
-- The website moved to getastronomical.com. Earlier addresses redirect, and updates keep arriving as before.
-- The README is focused on getting started, and the documentation was reviewed against the app and rewritten in plain language.
-- A new field note on the website measures one model fully in memory and under 16 GB and 12 GB memory ceilings.
-- Developer builds: quantization sensitivity probes reuse the reference forward's layer inputs, and an interrupted conversion can resume.
+- Developer builds: when Apple refuses a notarization check, the release tool now shows Apple's own reply.
 
 ### Compatibility
 - Requires macOS 14 or later on Apple silicon.
 - Your settings, downloaded models, conversations and prompt cache are kept.
 - The app and its disk image are signed with a Developer ID and notarized by Apple.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.104/Astronomical-0.2.104-macOS-arm64.dmg" length="23622528" type="application/octet-stream" sparkle:edSignature="D9Orx6CWpc9GKZejjwqhuDTufZdwQGo1tM0iPT2RU3LWGMcvUBG4KOyIRXP2j/jFk7nuascPZvTUoCFn8EvgCA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.105/Astronomical-0.2.105-macOS-arm64.dmg" length="23628468" type="application/octet-stream" sparkle:edSignature="OjC1TAzZ4mAmdf6AyaHWaxql/CEIRgGQZCU5NRj8DCL4csijGwNZPnbj0LDTytwV8uVyWvrmfA0c/8tVfjJYAA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: b+0qinW46e2tutIBTX30harKoUZjAo8Gg8kH/u6053YvHfHx36SsYq8RbcytN/Pug6qM6EeOAARgqk2no+icBw==
-length: 2398
+edSignature: LzKLkv7w47JgOJaBial0COv0ky7LiP/4TiGUhCoF2AMTrN4Qxr/kqn8svHuR+uwYRriUIsnfmCfPXed1y3LgBw==
+length: 1897
 -->
