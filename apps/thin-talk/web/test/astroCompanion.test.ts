@@ -132,6 +132,9 @@ test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async (
   await waitFor(() => document.getElementById("empty-state-notice")?.textContent === "", "chat to become ready");
   assert.equal(element("astro-download").textContent, "Start chatting");
   assert.equal(isPresent("astro-continue"), false, "one way forward once the model is ready");
+  assert.equal(document.querySelector(".get-started__headline")?.textContent, "Your model is ready");
+  assert.match(element("astro-download-next").textContent ?? "", /^You can now:/);
+  assert.equal(isPresent("astro-other-model"), false, "no second download is offered as this one lands");
   element<HTMLButtonElement>("astro-download").click();
   await waitFor(() => overlay().hidden, "the journey to close");
   assert.equal(document.activeElement?.id, "composer-input");

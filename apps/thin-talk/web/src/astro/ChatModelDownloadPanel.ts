@@ -115,7 +115,7 @@ export class ChatModelDownloadPanel {
     for (const nextThing of WHAT_COMES_NEXT) {
       nextList.append(makeElement(this.document, "li", "", nextThing));
     }
-    whatComesNext.append(makeElement(this.document, "p", "", "When it finishes you can:"), nextList);
+    whatComesNext.append(makeElement(this.document, "p", "model-download__next-lead", "When it finishes you can:"), nextList);
     return whatComesNext;
   }
 
@@ -144,12 +144,28 @@ export class ChatModelDownloadPanel {
       downloadButton.textContent = "Start chatting";
       // The main button now does what "Continue in the background" did.
       this.setContinueButton({ isHidden: true });
+      this.showArrival();
       return;
     }
     if (progress.phase === ModelDownloadPhase.FAILED || progress.phase === ModelDownloadPhase.BUSY) {
       this.speakIfShowing(progress.phase === ModelDownloadPhase.BUSY ? AstroMoment.LIBRARY_BUSY : AstroMoment.DOWNLOAD_FAILED);
       downloadButton.disabled = false;
       downloadButton.textContent = "Try again";
+    }
+  }
+
+  /** Once the model is here the screen stops talking about a download still
+   * to come: the list reads as what the person can do now, and the offer of a
+   * different model goes, since choosing one would start a second download
+   * just as this one landed. */
+  private showArrival(): void {
+    const nextLead = this.element.querySelector<HTMLElement>(".model-download__next-lead");
+    if (nextLead !== null) {
+      nextLead.textContent = "You can now:";
+    }
+    const otherModelButton = this.element.querySelector<HTMLButtonElement>(`#${this.idPrefix}-other-model`);
+    if (otherModelButton !== null) {
+      otherModelButton.hidden = true;
     }
   }
 
