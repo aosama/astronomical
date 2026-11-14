@@ -13,6 +13,14 @@ final class ToolApprovalPolicyTests: XCTestCase {
       .ask(actionDescription: "search your saved conversations"))
   }
 
+  /// The sheets ask on behalf of the app the person installed. An internal
+  /// name there reads as some other program asking for their files.
+  func test_should_name_the_installed_app_in_what_the_sheets_say() {
+    XCTAssertEqual(ToolApprovalPolicy.applicationName, "Astronomical")
+    XCTAssertFalse(ToolApprovalPolicy.applicationName.contains("Thin Talk"))
+    XCTAssertFalse(ToolApprovalPolicy.applicationName.isEmpty)
+  }
+
   func test_should_refuse_a_tool_outside_the_allowlist_or_without_a_conversation() {
     let policy = ToolApprovalPolicy()
     for toolName in ["run_shell", "", "READ_FILE", "read_file "] {

@@ -79,7 +79,11 @@ final class ThinTalkToolHost {
     callID: String
   ) async -> HostToolOutcome {
     let approvalAlert = NSAlert()
-    approvalAlert.messageText = "Allow Thin Talk to \(actionDescription)?"
+    // The sheet names the app as the menu bar and the Dock do. "Thin Talk" is
+    // the chat surface's internal name; a person who installed Astronomical
+    // has never been told it, and a sheet asking permission for an unknown
+    // name reads as something else asking.
+    approvalAlert.messageText = "Allow \(ToolApprovalPolicy.applicationName) to \(actionDescription)?"
     approvalAlert.informativeText = ToolApprovalPolicy.consequencesByToolName[toolName] ?? ""
     approvalAlert.addButton(withTitle: "Allow")
     approvalAlert.addButton(withTitle: "Allow for This Conversation")
@@ -129,7 +133,10 @@ final class ThinTalkToolHost {
     openPanel.allowedContentTypes = isImage ? [.png, .jpeg] : [.data]
     openPanel.allowsMultipleSelection = false
     openPanel.canChooseDirectories = false
-    openPanel.message = isImage ? "Choose an image for Thin Talk to look at." : "Choose a text file for Thin Talk to read."
+    openPanel.message =
+      isImage
+      ? "Choose an image for \(ToolApprovalPolicy.applicationName) to look at."
+      : "Choose a text file for \(ToolApprovalPolicy.applicationName) to read."
     presentedCallID = callID
     dismissPresentedChoice = { [weak openPanel] in openPanel?.cancel(nil) }
     let response = await openPanel.beginSheetModal(for: window)
