@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::app_store_package::{AppStorePackageRequest, package_for_app_store};
+use super::app_store_upload::{AppStoreUploadRequest, validate_and_upload_for_app_store};
 use super::disk_image_creation::{DiskImageRequest, create_disk_image};
 use super::disk_image_validation::validate_disk_image;
 use super::distribution_signature::validate_distribution_app;
@@ -15,7 +16,7 @@ use super::stable_installation::{
     InstallRequest, build_and_install_stable, default_stable_bundle, install_stable,
 };
 
-pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH] | release prepare-and-publish --tag vX.Y.Z (--notes-file PATH --signing-identity NAME --team-id ID --notary-profile NAME | --publish) [--output-directory PATH] | release prepare-signed --tag vX.Y.Z [--notes-file PATH] [--output-directory PATH] [--publish] | release accept-sparkle-update";
+pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH] | release app-store-upload --package PATH --api-key ID --api-issuer ID [--upload] | release prepare-and-publish --tag vX.Y.Z (--notes-file PATH --signing-identity NAME --team-id ID --notary-profile NAME | --publish) [--output-directory PATH] | release prepare-signed --tag vX.Y.Z [--notes-file PATH] [--output-directory PATH] [--publish] | release accept-sparkle-update";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReleaseCommand {
@@ -33,7 +34,7 @@ pub(crate) enum ReleaseCommand {
     BuildAndInstallStable {
         is_dry_run: bool,
     },
-    AppStorePackage(AppStorePackageRequest),
+    AppStore(AppStoreCommand),
     PrepareAndPublish(PublicationRequest),
     PrepareSigned(PublicationRequest),
     AcceptSparkleUpdate,
@@ -60,7 +61,9 @@ pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseComma
         "accept-sparkle-update" if subcommand_arguments.is_empty() => {
             Ok(ReleaseCommand::AcceptSparkleUpdate)
         }
-        "app-store-pkg" => parse_app_store_package_command(subcommand_arguments),
+        "app-store-pkg" | "app-store-upload" => {
+            parse_app_store_command(subcommand, subcommand_arguments)
+        }
         "install-stable" => parse_install_stable_command(subcommand_arguments),
         "build-and-install-stable" => parse_build_and_install_stable_command(subcommand_arguments),
         _ => Err(RELEASE_USAGE.to_owned()),
@@ -108,6 +111,36 @@ fn parse_distribution_validation_command(
     })
 }
 
+/// The two Mac App Store subcommands, kept as one release command so the
+/// release dispatch does not grow with each store step.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AppStoreCommand {
+    /// Wrap a store bundle in its signed installer package.
+    Package(AppStorePackageRequest),
+    /// Ask App Store Connect to validate that package, and send it on request.
+    Upload(AppStoreUploadRequest),
+}
+
+fn parse_app_store_command(
+    subcommand_name: &str,
+    subcommand_arguments: &[String],
+) -> Result<ReleaseCommand, String> {
+    if subcommand_name == "app-store-upload" {
+        parse_app_store_upload_command(subcommand_arguments)
+    } else {
+        parse_app_store_package_command(subcommand_arguments)
+    }
+}
+
+fn run_app_store_command(app_store_command: &AppStoreCommand) -> Result<(), String> {
+    match app_store_command {
+        AppStoreCommand::Package(package_request) => package_for_app_store(package_request),
+        AppStoreCommand::Upload(upload_request) => {
+            validate_and_upload_for_app_store(upload_request)
+        }
+    }
+}
+
 fn parse_app_store_package_command(
     subcommand_arguments: &[String],
 ) -> Result<ReleaseCommand, String> {
@@ -115,11 +148,41 @@ fn parse_app_store_package_command(
         subcommand_arguments,
         &["--app-bundle", "--installer-identity", "--output-pkg"],
     )?;
-    Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
-        app_bundle: required_path(&flag_values, "--app-bundle")?,
-        installer_identity: required_text(&flag_values, "--installer-identity")?,
-        output_package: flag_values.get("--output-pkg").map(PathBuf::from),
-    }))
+    Ok(ReleaseCommand::AppStore(AppStoreCommand::Package(
+        AppStorePackageRequest {
+            app_bundle: required_path(&flag_values, "--app-bundle")?,
+            installer_identity: required_text(&flag_values, "--installer-identity")?,
+            output_package: flag_values.get("--output-pkg").map(PathBuf::from),
+        },
+    )))
+}
+
+/// Validation is the default; `--upload` must be given by name, because an
+/// uploaded build cannot be taken back.
+fn parse_app_store_upload_command(
+    subcommand_arguments: &[String],
+) -> Result<ReleaseCommand, String> {
+    let mut should_upload = false;
+    let mut valued_arguments = Vec::new();
+    for subcommand_argument in subcommand_arguments {
+        if subcommand_argument == "--upload" {
+            should_upload = true;
+        } else {
+            valued_arguments.push(subcommand_argument.clone());
+        }
+    }
+    let flag_values = parse_flag_values(
+        &valued_arguments,
+        &["--package", "--api-key", "--api-issuer"],
+    )?;
+    Ok(ReleaseCommand::AppStore(AppStoreCommand::Upload(
+        AppStoreUploadRequest {
+            package: required_path(&flag_values, "--package")?,
+            api_key_identifier: required_text(&flag_values, "--api-key")?,
+            api_issuer_identifier: required_text(&flag_values, "--api-issuer")?,
+            should_upload,
+        },
+    )))
 }
 
 fn parse_install_stable_command(subcommand_arguments: &[String]) -> Result<ReleaseCommand, String> {
@@ -234,7 +297,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         ReleaseCommand::BuildAndInstallStable { is_dry_run } => {
             build_and_install_stable(repository_root, is_dry_run)
         }
-        ReleaseCommand::AppStorePackage(package_request) => package_for_app_store(&package_request),
+        ReleaseCommand::AppStore(app_store_command) => run_app_store_command(&app_store_command),
         ReleaseCommand::PrepareAndPublish(publication_request) => {
             run_prepare_and_publish(repository_root, &publication_request)
         }

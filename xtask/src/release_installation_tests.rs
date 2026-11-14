@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use super::app_store_package::{
     AppStorePackageRequest, app_store_channel_problem, default_output_package, identity_is_listed,
 };
-use super::command::{ReleaseCommand, parse_release_command};
+use super::command::{AppStoreCommand, ReleaseCommand, parse_release_command};
 use super::sparkle_acceptance::{acceptance_info_plist, state_fingerprint};
 use super::stable_installation::{
     PromotionTools, canonical_home_directory, promote_bundle, stable_promotion_problems,
@@ -269,11 +269,13 @@ fn should_parse_the_app_store_package_command() {
             "--installer-identity",
             "Installer"
         ])),
-        Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
-            app_bundle: PathBuf::from("/a.app"),
-            installer_identity: "Installer".to_owned(),
-            output_package: None,
-        }))
+        Ok(ReleaseCommand::AppStore(AppStoreCommand::Package(
+            AppStorePackageRequest {
+                app_bundle: PathBuf::from("/a.app"),
+                installer_identity: "Installer".to_owned(),
+                output_package: None,
+            }
+        )))
     );
     assert!(
         parse_release_command(&arguments(&["app-store-pkg", "--app-bundle", "/a.app"])).is_err()

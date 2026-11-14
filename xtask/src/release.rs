@@ -5,6 +5,7 @@
 //! only the pure planning and checking functions through unit tests.
 
 mod app_store_package;
+mod app_store_upload;
 mod command;
 mod disk_image_creation;
 mod disk_image_validation;

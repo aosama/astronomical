@@ -312,7 +312,11 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo xtask release install-stable [--dry-run]` and `build-and-install-stable
 # [--dry-run]` promote Stable to ~/Applications; `cargo xtask release
 # app-store-pkg --app-bundle PATH --installer-identity NAME` wraps an App Store
-# bundle in its signed installer package; `cargo xtask release prepare-and-publish`
+# bundle in its signed installer package, and `cargo xtask release
+# app-store-upload --package PATH --api-key ID --api-issuer ID [--upload]`
+# asks App Store Connect to validate that package and sends it only with
+# `--upload` (the API key's private half stays in
+# ~/.appstoreconnect/private_keys); `cargo xtask release prepare-and-publish`
 # and its credential-resolving front door `cargo xtask release prepare-signed`
 # prepare a signed release locally and, with --publish, publish the reviewed
 # directory; `cargo xtask release accept-sparkle-update` proves a signed
