@@ -8,7 +8,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::channel_profile::{AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile};
+use super::channel_profile::{
+    AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, SandboxPolicy,
+};
 use super::tool_command::run_quiet_tool;
 
 /// Everything copied into the bundle, resolved before anything is written so
@@ -24,7 +26,15 @@ pub(crate) struct BundleInputs {
     /// Destination file name in `Contents/Resources`, then source path.
     pub(crate) notice_files: Vec<(&'static str, PathBuf)>,
     pub(crate) sparkle_framework: Option<PathBuf>,
+    /// The privacy manifest both applications of a sandboxed channel carry.
+    pub(crate) privacy_manifest: Option<PathBuf>,
 }
+
+/// The checked-in privacy manifest: no tracking, no collected data, and the
+/// reasons for the system calls Apple asks apps to explain.
+pub(crate) const PRIVACY_MANIFEST_PATH: &str = "scripts/internal/privacy/PrivacyInfo.xcprivacy";
+/// The name Apple's tooling looks for in a bundle's `Contents/Resources`.
+pub(crate) const PRIVACY_MANIFEST_FILE_NAME: &str = "PrivacyInfo.xcprivacy";
 
 impl BundleInputs {
     pub(crate) fn for_repository(
@@ -62,6 +72,7 @@ impl BundleInputs {
             sparkle_framework = Some(swift_build_directory.join("release/Sparkle.framework"));
         }
         Self {
+            privacy_manifest: privacy_manifest_for(repository_root, channel_profile),
             application_executable: swift_build_directory
                 .join("release")
                 .join(channel_profile.application_swift_product),
@@ -101,7 +112,20 @@ impl BundleInputs {
         if let Some(sparkle_framework) = &self.sparkle_framework {
             source_paths.push(sparkle_framework);
         }
+        source_paths.extend(self.privacy_manifest.as_deref());
         source_paths
+    }
+}
+
+/// Only a sandboxed channel's bundle carries the privacy manifest: it is part
+/// of what App Store Connect reviews, and a direct build is not reviewed.
+fn privacy_manifest_for(
+    repository_root: &Path,
+    channel_profile: &ChannelProfile,
+) -> Option<PathBuf> {
+    match channel_profile.sandbox_policy {
+        SandboxPolicy::AppStoreSandbox => Some(repository_root.join(PRIVACY_MANIFEST_PATH)),
+        SandboxPolicy::Unsandboxed => None,
     }
 }
 
@@ -163,6 +187,14 @@ pub(crate) fn assemble_bundle(
         &bundle_inputs.icon,
         &contents_path.join("Resources/Astronomical.icns"),
     )?;
+    if let Some(privacy_manifest) = &bundle_inputs.privacy_manifest {
+        copy_file(
+            privacy_manifest,
+            &contents_path
+                .join("Resources")
+                .join(PRIVACY_MANIFEST_FILE_NAME),
+        )?;
+    }
     copy_tree(
         &bundle_inputs.thin_talk_resource_bundle,
         &contents_path.join("Resources/ThinTalk_ThinTalkCanvas.bundle"),
@@ -226,7 +258,18 @@ fn assemble_agent_bundle(
     copy_file(
         &bundle_inputs.icon,
         &agent_contents_path.join("Resources/Astronomical.icns"),
-    )
+    )?;
+    // The agent is an application of its own, so it states its own privacy
+    // practices; they are the same as the main app's.
+    if let Some(privacy_manifest) = &bundle_inputs.privacy_manifest {
+        copy_file(
+            privacy_manifest,
+            &agent_contents_path
+                .join("Resources")
+                .join(PRIVACY_MANIFEST_FILE_NAME),
+        )?;
+    }
+    Ok(())
 }
 
 fn create_directory(directory_path: &Path) -> Result<(), String> {

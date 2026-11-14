@@ -12,6 +12,9 @@
 use super::build_identity::BuildIdentity;
 use super::channel_profile::{AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile};
 
+/// The App Store category decided for the product (issue #492).
+pub(crate) const APPLICATION_CATEGORY: &str = "public.app-category.developer-tools";
+
 /// Sparkle's EdDSA public key: updates must be signed by its private half.
 pub(crate) const SPARKLE_PUBLIC_ED25519_KEY: &str = "g0URwy+j86uDYcmOu0k/IUVWwCOSrGOPSoFnVoYQ9AQ=";
 
@@ -47,6 +50,13 @@ pub(crate) fn render_info_plist(
         channel_profile.chat_url_scheme,
     ));
     push_string(&mut plist_text, "CFBundlePackageType", "APPL");
+    // App Store Connect refuses a Mac app without a category, and the same
+    // key files a direct install under Developer Tools in Launchpad.
+    push_string(
+        &mut plist_text,
+        "LSApplicationCategoryType",
+        APPLICATION_CATEGORY,
+    );
     plist_text.push_str("</dict>\n</plist>\n");
     plist_text
 }

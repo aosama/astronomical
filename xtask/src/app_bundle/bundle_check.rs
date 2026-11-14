@@ -15,6 +15,7 @@ use std::process::Command;
 
 use super::application_group::{APPLICATION_GROUP_PLIST_KEY, APPLICATION_GROUPS_ENTITLEMENT_KEY};
 use super::build_identity::BuildIdentity;
+use super::bundle_assembly::PRIVACY_MANIFEST_FILE_NAME;
 use super::channel_profile::{
     AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, DAEMON_EXECUTABLE_NAME,
     SandboxPolicy, TERMINAL_COMMAND_EXECUTABLE_NAME, WORKER_EXECUTABLE_NAME,
@@ -296,8 +297,38 @@ pub(crate) fn layout_problems(bundle_path: &Path, channel_profile: &ChannelProfi
         layout_problems
             .push("an App Store bundle must not embed Sparkle or its license".to_owned());
     }
+    layout_problems.extend(privacy_manifest_problems(bundle_path, channel_profile));
     layout_problems.extend(hidden_entry_problems(bundle_path));
     layout_problems
+}
+
+/// A sandboxed channel's two applications must each carry the privacy
+/// manifest, which is part of what App Store Connect reviews.
+fn privacy_manifest_problems(bundle_path: &Path, channel_profile: &ChannelProfile) -> Vec<String> {
+    if channel_profile.sandbox_policy != SandboxPolicy::AppStoreSandbox {
+        return Vec::new();
+    }
+    let mut manifest_problems = Vec::new();
+    let application_contents = [
+        ("the main app", bundle_path.join("Contents")),
+        (
+            "the menu-bar agent",
+            bundle_path
+                .join(channel_profile.agent_bundle_relative_path())
+                .join("Contents"),
+        ),
+    ];
+    for (application_label, contents_path) in application_contents {
+        let manifest_path = contents_path
+            .join("Resources")
+            .join(PRIVACY_MANIFEST_FILE_NAME);
+        if !is_non_empty_file(&manifest_path) {
+            manifest_problems.push(format!(
+                "{application_label} of an App Store bundle is missing its privacy manifest"
+            ));
+        }
+    }
+    manifest_problems
 }
 
 /// Hidden entries reported before the list is cut short; enough to name a
