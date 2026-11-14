@@ -134,6 +134,11 @@ impl Qwen3_5EngineState {
             exact_temporary_workspace_bytes,
             streamed_expert_page_bytes_before_growth,
         )?;
+        self.refill_expert_memory_after_measured_prefill_chunk(
+            request_id,
+            active_request,
+            prefill_end - prefill_start,
+        );
         Ok(Some(self.prefill_progress_token(
             active_request,
             request_id,
@@ -409,12 +414,16 @@ impl Qwen3_5EngineState {
                 .engine_extension
                 .completed_prefill_memory_recovery_attempt_count,
             active_request.has_visual_inputs,
+            active_request
+                .engine_extension
+                .post_recovery_expert_refill
+                .allowed_recovery_attempt_count(),
         ) {
             return Err(prefill_memory_failure_error);
         }
         self.recover_prefill_after_memory_exhaustion(request_id, active_request, prefill_start)?;
-        // Recursion depth is bounded by the one-recovery-per-request
-        // counter incremented inside the recovery.
+        // Recursion depth is bounded by the recovery counter incremented
+        // inside the recovery.
         self.advance_prompt_prefill_if_pending(request_id, active_request)
     }
 

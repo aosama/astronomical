@@ -27,9 +27,10 @@ impl WarmExpertSlotTableCache {
         self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
     }
 
-    /// Freezes retention at zero for the rest of a prefill after memory
-    /// recovery, evicting every retained table now. Returns whether any
-    /// table was released.
+    /// Freezes retention at zero after a prefill memory recovery, evicting
+    /// every retained table now. The freeze holds until a chunk has measured
+    /// the real workspace or decode begins. Returns whether any table was
+    /// released.
     pub fn freeze_for_prefill_memory_recovery(&mut self) -> bool {
         self.is_frozen_for_prefill_memory_recovery = true;
         self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
