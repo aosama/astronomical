@@ -38,46 +38,79 @@ impl Qwen3_5ResidentModel {
                 self.decoder_cache_layout(),
                 full_attention_kv_state_growth_tokens,
             )?;
-        self.runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache()?;
-        let active_bytes_before_chunk = self.runtime.memory_snapshot()?.active_memory_bytes();
-        self.runtime.reset_peak_memory()?;
-        self.prefill_chunk_with_performance_attribution(
-            &probe_token_ids,
-            0,
-            &mut probe_decoder_state,
-            &mut PerformanceAttribution::disabled(),
-        )?;
-        let memory_after_chunk = self.runtime.memory_snapshot()?;
-        let active_bytes_after_chunk = memory_after_chunk.active_memory_bytes();
-        let prompt_chunk_working_memory_bytes = memory_after_chunk
-            .peak_memory_bytes()
-            .saturating_sub(active_bytes_before_chunk.max(active_bytes_after_chunk));
-
-        self.runtime.reset_peak_memory()?;
-        let reply_logits = self.build_forward_chunk_with_performance_attribution(
-            &probe_token_ids[..1],
-            u32::try_from(prompt_chunk_token_count).unwrap_or(u32::MAX),
-            &mut probe_decoder_state,
-            &mut PerformanceAttribution::disabled(),
-        )?;
-        self.runtime
-            .evaluate_arrays(&forward_state_arrays(&reply_logits, &probe_decoder_state)?)?;
-        let memory_after_reply_token = self.runtime.memory_snapshot()?;
+        let prompt_chunk_working_memory_bytes =
+            self.measure_probe_prompt_chunk(&probe_token_ids, &mut probe_decoder_state)?;
         let reply_token_working_memory_bytes =
-            memory_after_reply_token.peak_memory_bytes().saturating_sub(
-                active_bytes_after_chunk.max(memory_after_reply_token.active_memory_bytes()),
-            );
-
-        drop(reply_logits);
+            self.measure_probe_reply_token(&probe_token_ids, &mut probe_decoder_state)?;
         drop(probe_decoder_state);
         self.runtime
             .synchronize_gpu_stream_and_clear_allocator_cache()?;
         Ok(ProbedForwardWorkingMemory {
             prompt_chunk_token_count,
-            prompt_chunk_working_memory_bytes: prompt_chunk_working_memory_bytes as u64,
-            reply_token_working_memory_bytes: reply_token_working_memory_bytes as u64,
+            prompt_chunk_working_memory_bytes,
+            reply_token_working_memory_bytes,
         })
+    }
+
+    /// Runs the probe's prompt chunk and returns how far MLX's peak rose
+    /// above what was held around it.
+    fn measure_probe_prompt_chunk(
+        &self,
+        probe_token_ids: &[u32],
+        probe_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<u64, Qwen3_5ExecutionError> {
+        self.runtime
+            .synchronize_gpu_stream_and_clear_allocator_cache()?;
+        let active_bytes_before_chunk = self.runtime.memory_snapshot()?.active_memory_bytes();
+        self.runtime.reset_peak_memory()?;
+        self.prefill_chunk_with_performance_attribution(
+            probe_token_ids,
+            0,
+            probe_decoder_state,
+            &mut PerformanceAttribution::disabled(),
+        )?;
+        self.peak_beyond_held_after_settling(active_bytes_before_chunk)
+    }
+
+    /// Runs one reply token after the probe's chunk and returns the same
+    /// rise for it.
+    fn measure_probe_reply_token(
+        &self,
+        probe_token_ids: &[u32],
+        probe_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<u64, Qwen3_5ExecutionError> {
+        let active_bytes_before_reply_token = self.runtime.memory_snapshot()?.active_memory_bytes();
+        self.runtime.reset_peak_memory()?;
+        let reply_logits = self.build_forward_chunk_with_performance_attribution(
+            &probe_token_ids[..1],
+            u32::try_from(probe_token_ids.len()).unwrap_or(u32::MAX),
+            probe_decoder_state,
+            &mut PerformanceAttribution::disabled(),
+        )?;
+        self.runtime
+            .evaluate_arrays(&forward_state_arrays(&reply_logits, probe_decoder_state)?)?;
+        drop(reply_logits);
+        self.peak_beyond_held_after_settling(active_bytes_before_reply_token)
+    }
+
+    /// How far the peak rose above the larger of what was held before the
+    /// step and what is held now.
+    ///
+    /// Arrays a step has finished with are released when the stream is
+    /// synchronized. Reading what is held before that counts them as kept
+    /// and under-reads the working memory: measured 0.53 GB against the
+    /// 1.10 GB a real prompt step needed, and 1.09 GB once settled.
+    fn peak_beyond_held_after_settling(
+        &self,
+        active_bytes_before_step: usize,
+    ) -> Result<u64, Qwen3_5ExecutionError> {
+        self.runtime
+            .synchronize_gpu_stream_and_clear_allocator_cache()?;
+        let memory_after_step = self.runtime.memory_snapshot()?;
+        Ok(memory_after_step
+            .peak_memory_bytes()
+            .saturating_sub(active_bytes_before_step.max(memory_after_step.active_memory_bytes()))
+            as u64)
     }
 
     fn probe_token_ids(
