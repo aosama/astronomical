@@ -223,6 +223,13 @@ impl WarmExpertSlotTableCache {
     }
 
     /// Counts streamed expert payloads and storage batches read this session.
+    /// Forgets the reads counted so far, for the reads made while the model
+    /// loaded: they served no request.
+    pub(crate) fn forget_disk_loads_made_while_loading(&mut self) {
+        self.disk_page_load_count = 0;
+        self.disk_batch_load_count = 0;
+    }
+
     pub fn record_disk_load(&mut self, expert_count: usize, batch_count: usize) {
         self.disk_page_load_count = self
             .disk_page_load_count

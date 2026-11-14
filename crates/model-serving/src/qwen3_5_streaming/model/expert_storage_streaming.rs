@@ -80,6 +80,23 @@ impl Qwen3_5StreamingModel {
         }
     }
 
+    /// Starts every count of expert reads afresh once the model has loaded,
+    /// so nothing read to measure the model at load is reported as serving.
+    pub(crate) fn begin_serving_session_observation(&self) {
+        if let Some(expert_pager) = self.expert_pager.as_ref() {
+            expert_pager.begin_serving_session();
+        }
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
+            let mut retained_experts = retained_experts.borrow_mut();
+            retained_experts.forget_disk_loads_made_while_loading();
+            retained_experts.begin_prefill_demand_window();
+        }
+        self.deferred_expert_demand
+            .borrow_mut()
+            .discard_pending_layer_routes();
+        self.request_expert_storage_read_tally.begin_request();
+    }
+
     /// Starts the active request's storage-read observation window.
     pub(crate) fn begin_request_expert_storage_read_observation(&self) {
         self.request_expert_storage_read_tally.begin_request();

@@ -105,6 +105,14 @@ test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-a
 # the same positions. About fifteen seconds.
 test-dense-checkpoint-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_publish_the_chunk_path_prompt_cache_state_from_a_layer_major_prefill"
 
+# Expert layer-at-a-time checkpoint parity (issue #2221): one Shakespeare
+# prompt prefilled one layer at a time and chunk by chunk on the
+# small_sparse_moe_streaming model under an 11 GiB limit, with every layer
+# streamed and with the planned layers kept, must publish identical
+# prompt-cache boundary state, and one layer at a time must read every
+# expert exactly once. About thirty seconds.
+test-expert-layer-at-a-time-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_publish_the_chunk_path_prompt_cache_state_reading_experts_one_layer_at_a_time"
+
 # Dense prompt forward memory (issue #1985): one streamed_dense prompt forward,
 # a full 4,096-token chunk and a shorter prompt, with every layer streamed and
 # with seven kept, must peak within the plan's reserve for one streamed

@@ -186,15 +186,12 @@ impl Qwen3_5EngineState {
     ) -> StreamingForwardShape {
         StreamingForwardShape {
             model_chunking,
-            dense_layer_probe_shape: self.dense_layer_probe_shape(),
+            layer_probe_shape: self.layer_probe_shape(),
         }
     }
 
-    fn dense_layer_probe_shape(
-        &self,
-    ) -> crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape
-    {
-        crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape {
+    fn layer_probe_shape(&self) -> crate::qwen3_5_streaming::model::LayerProbeShape {
+        crate::qwen3_5_streaming::model::LayerProbeShape {
             prefill_chunk_token_count: self
                 .prompt_processing_chunk_sizer
                 .maximum_prompt_processing_chunk_size_tokens(),
@@ -336,8 +333,7 @@ fn resolve_model_chunking_configuration(
 /// the prefill shape a dense model's working memory is measured at.
 struct StreamingForwardShape {
     model_chunking: Qwen3_5ModelChunkingConfiguration,
-    dense_layer_probe_shape:
-        crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape,
+    layer_probe_shape: crate::qwen3_5_streaming::model::LayerProbeShape,
 }
 
 /// Loads the streaming model from the validated artifact under the engine's
@@ -367,11 +363,15 @@ fn load_and_materialize_streaming_model(
                 // memory at the prefill chunk size it will serve and keeps the
                 // layers that fit beside it; a sparse model has none to plan.
                 model.materialize_target_weights_and_plan_dense_layers(
-                    streaming_forward_shape.dense_layer_probe_shape,
+                    streaming_forward_shape.layer_probe_shape,
                 )
             },
         )
         .map_err(InferenceEngineError::from)?;
+    // A sparse model's turn: one expert layer step, measured, so the memory
+    // ledger knows a prompt layer's working memory before the first request.
+    model.probe_expert_layer_working_memory(streaming_forward_shape.layer_probe_shape);
+    model.begin_serving_session_observation();
     Ok(model)
 }
 

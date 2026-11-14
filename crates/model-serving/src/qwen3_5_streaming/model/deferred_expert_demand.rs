@@ -25,6 +25,9 @@ struct PendingLayerRoute {
     expert_capacity: usize,
     selected_indices: MlxArray,
     resident_layer_payload_byte_count: Option<u64>,
+    /// The prompt-demand weight in force when the route was built, which
+    /// may have moved on by the time the route is recorded.
+    prefill_demand_assignment_weight: u64,
 }
 
 /// Model-owned routes of on-device seated layers for the forward in flight.
@@ -42,8 +45,15 @@ impl DeferredExpertDemandCollector {
         layer_index: usize,
         expert_capacity: usize,
         selected_indices: &MlxArray,
+        prefill_demand_assignment_weight: u64,
     ) {
-        self.retain_route_with_baseline(layer_index, expert_capacity, selected_indices, None);
+        self.retain_route_with_baseline(
+            layer_index,
+            expert_capacity,
+            selected_indices,
+            None,
+            prefill_demand_assignment_weight,
+        );
     }
 
     /// Retains one route that a seated complete layer served wholly from RAM,
@@ -54,12 +64,14 @@ impl DeferredExpertDemandCollector {
         expert_capacity: usize,
         selected_indices: &MlxArray,
         resident_layer_payload_byte_count: u64,
+        prefill_demand_assignment_weight: u64,
     ) {
         self.retain_route_with_baseline(
             layer_index,
             expert_capacity,
             selected_indices,
             Some(resident_layer_payload_byte_count),
+            prefill_demand_assignment_weight,
         );
     }
 
@@ -69,6 +81,7 @@ impl DeferredExpertDemandCollector {
         expert_capacity: usize,
         selected_indices: &MlxArray,
         resident_layer_payload_byte_count: Option<u64>,
+        prefill_demand_assignment_weight: u64,
     ) {
         match selected_indices.retain() {
             Ok(selected_indices) => self.pending_layer_routes.push(PendingLayerRoute {
@@ -76,6 +89,7 @@ impl DeferredExpertDemandCollector {
                 expert_capacity,
                 selected_indices,
                 resident_layer_payload_byte_count,
+                prefill_demand_assignment_weight,
             }),
             Err(retain_error) => {
                 tracing::warn!(
@@ -118,13 +132,16 @@ impl Qwen3_5Model {
         expert_capacity: usize,
         selected_indices: &MlxArray,
     ) {
-        if self.retained_experts.is_none() {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
             return;
-        }
+        };
+        let prefill_demand_assignment_weight =
+            retained_experts.borrow().prefill_demand_assignment_weight();
         self.deferred_expert_demand.borrow_mut().retain_layer_route(
             layer_index,
             expert_capacity,
             selected_indices,
+            prefill_demand_assignment_weight,
         );
     }
 
@@ -138,9 +155,11 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         resident_layer_payload_byte_count: u64,
     ) {
-        if self.retained_experts.is_none() {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
             return;
-        }
+        };
+        let prefill_demand_assignment_weight =
+            retained_experts.borrow().prefill_demand_assignment_weight();
         self.deferred_expert_demand
             .borrow_mut()
             .retain_resident_layer_route(
@@ -148,6 +167,7 @@ impl Qwen3_5Model {
                 expert_capacity,
                 selected_indices,
                 resident_layer_payload_byte_count,
+                prefill_demand_assignment_weight,
             );
     }
 
@@ -175,11 +195,14 @@ impl Qwen3_5Model {
                         .into_iter()
                         .map(|expert_id| expert_id as usize)
                         .collect();
-                    retained_experts.borrow_mut().record_expert_demand(
-                        pending_layer_route.layer_index,
-                        pending_layer_route.expert_capacity,
-                        &selected_expert_ids,
-                    );
+                    retained_experts
+                        .borrow_mut()
+                        .record_expert_demand_at_prefill_weight(
+                            pending_layer_route.layer_index,
+                            pending_layer_route.expert_capacity,
+                            &selected_expert_ids,
+                            pending_layer_route.prefill_demand_assignment_weight,
+                        );
                     self.record_owed_resident_route_avoided_bytes(
                         &pending_layer_route,
                         &selected_expert_ids,

@@ -14,7 +14,7 @@
 use std::time::Duration;
 
 use astronomical_model_serving::{
-    DenseLayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ResidentModel,
+    LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ResidentModel,
     Qwen3_5StreamingModel,
 };
 use astronomical_runtime_integration::MlxRuntime;
@@ -70,7 +70,7 @@ async fn assert_dense_streaming_logit_parity() {
         for kept_layer_count in KEPT_LAYER_COUNTS {
             streaming_model
                 .plan_dense_layer_residency(
-                    DenseLayerProbeShape {
+                    LayerProbeShape {
                         prefill_chunk_token_count: PREFILL_CHUNK_TOKEN_COUNT,
                         full_attention_kv_state_growth_tokens: PREFILL_CHUNK_TOKEN_COUNT as i32,
                     },

@@ -17,7 +17,7 @@
 use std::time::{Duration, Instant};
 
 use astronomical_model_serving::{
-    DenseLayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5StreamingModel,
+    LayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5StreamingModel,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -119,7 +119,7 @@ fn load_streaming_model(
 fn pin_kept_layers(streaming_model: &Qwen3_5StreamingModel, kept_layer_count: usize) {
     streaming_model
         .plan_dense_layer_residency(
-            DenseLayerProbeShape {
+            LayerProbeShape {
                 prefill_chunk_token_count: PREFILL_SPAN_TOKEN_COUNT,
                 full_attention_kv_state_growth_tokens: 256,
             },

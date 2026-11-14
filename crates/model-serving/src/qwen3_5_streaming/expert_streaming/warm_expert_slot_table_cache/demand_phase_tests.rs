@@ -146,3 +146,55 @@ fn should_report_historical_hotness_from_the_decode_record_only() {
         "decode depth is the only seed of historical hotness"
     );
 }
+
+#[test]
+fn should_record_an_earlier_route_under_the_prompt_weight_it_was_built_with() {
+    let mut cache = WarmExpertSlotTableCache::new(1);
+    // The weight has moved on to the last span's by the time the first
+    // span's route is recorded.
+    cache.set_prefill_demand_assignment_weight(4);
+    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[2], 1);
+    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[3], 4);
+
+    let persisted_usage = cache.take_persisted_expert_usage();
+    assert_eq!(
+        persisted_usage.prefill_demand_counts_by_layer,
+        vec![dense_counts(&[(2, 1), (3, 4)])],
+        "each route keeps its own weight, whatever the cache's weight is now"
+    );
+}
+
+#[test]
+fn should_ignore_a_route_prompt_weight_once_the_reply_has_begun() {
+    let mut cache = WarmExpertSlotTableCache::new(1);
+    cache.begin_decode_forward();
+    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[6], 9);
+
+    let persisted_usage = cache.take_persisted_expert_usage();
+    assert_eq!(
+        persisted_usage.decode_demand_counts_by_layer,
+        vec![dense_counts(&[(6, 1)])],
+        "reply demand always records plainly"
+    );
+}
+
+#[test]
+fn should_floor_a_zero_route_weight_at_one() {
+    let mut cache = WarmExpertSlotTableCache::new(1);
+    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[1], 0);
+
+    assert_eq!(
+        cache
+            .take_persisted_expert_usage()
+            .prefill_demand_counts_by_layer,
+        vec![dense_counts(&[(1, 1)])]
+    );
+}
+
+#[test]
+fn should_report_the_prompt_weight_a_new_route_would_record_under() {
+    let mut cache = WarmExpertSlotTableCache::new(1);
+    assert_eq!(cache.prefill_demand_assignment_weight(), 1);
+    cache.set_prefill_demand_assignment_weight(5);
+    assert_eq!(cache.prefill_demand_assignment_weight(), 5);
+}

@@ -46,6 +46,9 @@ pub struct LedgerReading {
     /// it, and the same for a reply step: what one step needs for a moment.
     pub largest_reading_step_peak_beyond_held_bytes: u64,
     pub largest_writing_step_peak_beyond_held_bytes: u64,
+    /// The largest working memory measured outside a request, such as one
+    /// layer step probed at load; `None` when nothing was probed.
+    pub probed_working_memory_bytes: Option<u64>,
     /// The emptiest the kept weights were against the ledger's capacity
     /// while a prompt was read, in thousandths; `None` until a prompt step
     /// with nonzero capacity has been observed.
@@ -72,6 +75,7 @@ pub struct LedgerObserver {
     request_is_open: bool,
     request_context_bytes: u64,
     worst_readings: WorstReadings,
+    probed_working_memory_bytes: Option<u64>,
     latest_reading: Option<LedgerReading>,
 }
 
@@ -83,8 +87,21 @@ impl LedgerObserver {
             request_is_open: false,
             request_context_bytes: 0,
             worst_readings: WorstReadings::default(),
+            probed_working_memory_bytes: None,
             latest_reading: None,
         })
+    }
+
+    /// Tells the ledger a working memory measured outside a request, such as
+    /// one layer step probed at load.
+    pub fn record_probed_working_memory(&mut self, phase: LedgerPhase, working_memory_bytes: u64) {
+        self.ledger
+            .record_working_memory(phase, working_memory_bytes);
+        self.probed_working_memory_bytes = Some(
+            self.probed_working_memory_bytes
+                .unwrap_or(0)
+                .max(working_memory_bytes),
+        );
     }
 
     /// The reading of the most recent observed step.
@@ -135,6 +152,7 @@ impl LedgerObserver {
             largest_writing_step_peak_beyond_held_bytes: self
                 .worst_readings
                 .largest_writing_step_peak_beyond_held_bytes,
+            probed_working_memory_bytes: self.probed_working_memory_bytes,
             lowest_kept_share_while_reading_permille: self
                 .worst_readings
                 .lowest_kept_share_while_reading_permille,

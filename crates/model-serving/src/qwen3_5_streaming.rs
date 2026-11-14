@@ -25,7 +25,7 @@ pub use inference_execution::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{
-    DenseLayerProbeShape, Qwen3_5Model as Qwen3_5StreamingModel,
+    LayerProbeShape, Qwen3_5Model as Qwen3_5StreamingModel,
     Qwen3_5TargetForwardOutput as Qwen3_5StreamingTargetForwardOutput,
 };
 #[cfg(feature = "direct-mlx")]

@@ -38,6 +38,7 @@ pub(crate) const fn worker_memory_ledger_snapshot(
             .largest_reading_step_peak_beyond_held_bytes,
         largest_writing_step_peak_beyond_held_bytes: ledger_reading
             .largest_writing_step_peak_beyond_held_bytes,
+        probed_working_memory_bytes: ledger_reading.probed_working_memory_bytes,
         lowest_kept_share_while_reading_permille: ledger_reading
             .lowest_kept_share_while_reading_permille,
     }

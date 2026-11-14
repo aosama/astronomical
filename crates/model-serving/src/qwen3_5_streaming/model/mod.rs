@@ -21,6 +21,8 @@ pub(crate) mod dense_layer_working_memory_probe;
 #[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod expert_layer_working_memory_probe;
+#[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
 /// Temporary retained-page freeze while the remaining prompt still needs RAM.
 #[cfg(feature = "direct-mlx")]
@@ -39,10 +41,14 @@ mod layer_major_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_major_prefill;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod layer_probe_shape;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_submission;
-// Reads the next streamed layer while the graphics processor computes.
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod memory_ledger_observation;
+// Holds one streamed layer for every span of a layer-at-a-time prompt.
+pub(crate) mod held_prompt_expert_layer;
+// Reads the next streamed layer while the graphics processor computes.
 pub(crate) mod prefill_complete_layer_prefetch;
 #[cfg(test)]
 mod prefill_complete_layer_prefetch_tests;
@@ -85,7 +91,7 @@ pub(crate) use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 pub(crate) use crate::qwen3_5_core::model_math::{error, forward_contract, weights};
 pub use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel as Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
-pub use dense_layer_working_memory_probe::DenseLayerProbeShape;
+pub use layer_probe_shape::LayerProbeShape;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod paged_execution_tests;

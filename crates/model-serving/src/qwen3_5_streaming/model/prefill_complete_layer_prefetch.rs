@@ -154,6 +154,17 @@ pub(crate) fn next_prefill_prefetch_layer_index(
         .find(|&layer_index| is_prefetch_candidate(layer_index))
 }
 
+/// Whether a layer the cache keeps part of may have its complete page read.
+///
+/// A chunk forward serves such a layer from its hot table and reads only
+/// what the table lacks, so a complete read there would be wasted. A prompt
+/// read one layer at a time reads the whole page once for all of its spans.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PartlyKeptLayers {
+    Included,
+    Excluded,
+}
+
 /// One complete layer whose lazy read MLX has already been asked to run.
 #[derive(Debug)]
 pub(crate) struct PrefetchedCompleteLayer {
@@ -163,9 +174,46 @@ pub(crate) struct PrefetchedCompleteLayer {
 }
 
 impl Qwen3_5Model {
+    /// Whether a forward that routes `route_token_count` tokens reads this
+    /// layer's complete page from storage: the tokens reach every expert,
+    /// the page multiplies as read, the cache does not already keep the
+    /// whole layer, and the residency plan is not giving the layer back.
+    pub(super) fn prompt_reads_complete_expert_layer(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        route_token_count: i32,
+        partly_kept_layers: PartlyKeptLayers,
+    ) -> bool {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return false;
+        };
+        let Some(layer_plan) = expert_pager.layer_plans().get(layer_index) else {
+            return false;
+        };
+        let expert_capacity = layer_plan.expert_capacity;
+        let experts_per_token = usize::try_from(self.config.experts_per_token()).unwrap_or(0);
+        prefill_chunk_routes_complete_layer(route_token_count, experts_per_token, expert_capacity)
+            && layer_plan_allows_prefill_prefetch(
+                layer_plan,
+                route_token_count,
+                self.fused_jangtq2_gathered_projection_kernel.is_some(),
+            )
+            && matches!(
+                self.expert_page_disposition(layer_index, expert_capacity),
+                ExpertPageDisposition::Miss
+            )
+            && (partly_kept_layers == PartlyKeptLayers::Included
+                || retained_experts.borrow().occupied_slot_count(layer_index) == 0)
+            && residency_target_allows_prefill_prefetch(self.expert_residency_target(layer_index))
+    }
+
     /// Drops a prefetched layer the current forward will not consume.
     pub(crate) fn discard_prefill_complete_layer_prefetch(&self) {
-        self.prefill_complete_layer_prefetch.borrow_mut().take();
+        self.prompt_expert_pages_in_hand
+            .read_ahead_layer
+            .borrow_mut()
+            .take();
     }
 
     /// Takes the prefetched complete page when it belongs to `layer_index`.
@@ -173,7 +221,10 @@ impl Qwen3_5Model {
         &self,
         layer_index: usize,
     ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
-        let mut prefetch_slot = self.prefill_complete_layer_prefetch.borrow_mut();
+        let mut prefetch_slot = self
+            .prompt_expert_pages_in_hand
+            .read_ahead_layer
+            .borrow_mut();
         if prefetch_slot
             .as_ref()
             .is_none_or(|prefetched| prefetched.layer_index != layer_index)
@@ -185,6 +236,22 @@ impl Qwen3_5Model {
             .map(|prefetched| (prefetched.weights, prefetched.manifest))
     }
 
+    /// A chunk forward's read ahead: the next layer the cache keeps nothing
+    /// of, since the chunk serves a partly kept layer from its hot table.
+    pub(super) fn read_next_chunk_layer_ahead(
+        &self,
+        completed_layer_index: usize,
+        route_token_count: i32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        self.issue_prefill_complete_layer_prefetch(
+            completed_layer_index,
+            route_token_count,
+            PartlyKeptLayers::Excluded,
+            performance_attribution,
+        );
+    }
+
     /// Issues the next streamed layer's complete read after `completed_layer_index`.
     ///
     /// Failures are never fatal: the layer's ordinary mandatory read still
@@ -194,44 +261,37 @@ impl Qwen3_5Model {
         &self,
         completed_layer_index: usize,
         route_token_count: i32,
+        partly_kept_layers: PartlyKeptLayers,
         performance_attribution: &mut PerformanceAttribution,
     ) {
-        if self.prefill_complete_layer_prefetch.borrow().is_some() {
+        if self
+            .prompt_expert_pages_in_hand
+            .read_ahead_layer
+            .borrow()
+            .is_some()
+        {
             return;
         }
-        let (Some(expert_pager), Some(retained_experts)) =
-            (self.expert_pager.as_ref(), self.retained_experts.as_ref())
-        else {
+        let Some(expert_pager) = self.expert_pager.as_ref() else {
             return;
         };
-        let experts_per_token = usize::try_from(self.config.experts_per_token()).unwrap_or(0);
-        let has_fused_codebook_decode_kernel =
-            self.fused_jangtq2_gathered_projection_kernel.is_some();
         let layer_plans = expert_pager.layer_plans();
         let Some(prefetch_layer_index) = next_prefill_prefetch_layer_index(
             completed_layer_index,
             layer_plans.len(),
             |layer_index| {
-                let expert_capacity = layer_plans[layer_index].expert_capacity;
-                prefill_chunk_routes_complete_layer(
+                self.prompt_reads_complete_expert_layer(
+                    expert_pager,
+                    layer_index,
                     route_token_count,
-                    experts_per_token,
-                    expert_capacity,
-                ) && layer_plan_allows_prefill_prefetch(
-                    &layer_plans[layer_index],
-                    route_token_count,
-                    has_fused_codebook_decode_kernel,
-                ) && matches!(
-                    self.expert_page_disposition(layer_index, expert_capacity),
-                    ExpertPageDisposition::Miss
-                ) && retained_experts.borrow().occupied_slot_count(layer_index) == 0
-                    && residency_target_allows_prefill_prefetch(
-                        self.expert_residency_target(layer_index),
-                    )
+                    partly_kept_layers,
+                )
             },
         ) else {
             return;
         };
+        let has_fused_codebook_decode_kernel =
+            self.fused_jangtq2_gathered_projection_kernel.is_some();
         let expert_capacity = layer_plans[prefetch_layer_index].expert_capacity;
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
         let (weights, manifest) = match self.stream_expert_page_from_storage(
@@ -281,11 +341,50 @@ impl Qwen3_5Model {
             PerformanceCounter::PrefillCompleteLayerPrefetchPayloadBytes,
             manifest.payload_byte_count,
         );
-        *self.prefill_complete_layer_prefetch.borrow_mut() = Some(PrefetchedCompleteLayer {
+        *self
+            .prompt_expert_pages_in_hand
+            .read_ahead_layer
+            .borrow_mut() = Some(PrefetchedCompleteLayer {
             layer_index: prefetch_layer_index,
             weights,
             manifest,
         });
+    }
+
+    /// Serves a multi-token chunk from a prefetched complete layer when one
+    /// is staged for this layer. `Ok(None)` falls through to the retained
+    /// and routed dispatch paths.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn dispatch_prefetched_complete_layer(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        token_count: i32,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        selected_indices: &MlxArray,
+        selected_scores: &MlxArray,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+        if let Some((prefetched_weights, prefetched_manifest)) =
+            self.take_prefetched_complete_layer(layer_index)
+        {
+            return Ok(Some(self.forward_moe_with_prefetched_complete_layer(
+                hidden_states,
+                mixture_of_experts_weights,
+                expert_pager,
+                layer_index,
+                token_count,
+                prefetched_weights,
+                prefetched_manifest,
+                selected_indices,
+                selected_scores,
+                should_use_compiled_elementwise_graphs,
+                performance_attribution,
+            )?));
+        }
+        Ok(None)
     }
 
     /// Multiplies a prefetched complete page with the route remapped on-device.

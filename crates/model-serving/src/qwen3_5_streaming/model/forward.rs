@@ -94,7 +94,7 @@ impl Qwen3_5Model {
             self.fused_jangtq2_gathered_projection_kernel.is_some();
         if should_use_loaded_model_mode
             && token_count > 1
-            && let Some(handled) = self.dispatch_prefetched_complete_layer(
+            && let Some(handled) = self.dispatch_complete_layer_page_in_hand(
                 expert_pager,
                 layer_index,
                 token_count,
@@ -198,42 +198,6 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .retain_layer_route(layer_index, selected_indices);
         }
-    }
-
-    /// Serves a multi-token chunk from a prefetched complete layer when one
-    /// is staged for this layer. `Ok(None)` falls through to the retained
-    /// and routed dispatch paths.
-    #[allow(clippy::too_many_arguments)]
-    fn dispatch_prefetched_complete_layer(
-        &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        token_count: i32,
-        hidden_states: &MlxArray,
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        should_use_compiled_elementwise_graphs: bool,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
-        if let Some((prefetched_weights, prefetched_manifest)) =
-            self.take_prefetched_complete_layer(layer_index)
-        {
-            return Ok(Some(self.forward_moe_with_prefetched_complete_layer(
-                hidden_states,
-                mixture_of_experts_weights,
-                expert_pager,
-                layer_index,
-                token_count,
-                prefetched_weights,
-                prefetched_manifest,
-                selected_indices,
-                selected_scores,
-                should_use_compiled_elementwise_graphs,
-                performance_attribution,
-            )?));
-        }
-        Ok(None)
     }
 
     /// The retained-table fast path: a seated complete layer whose packed page
