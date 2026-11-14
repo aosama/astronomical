@@ -53,6 +53,7 @@ Do not ask again. Change one only when the account holder says so.
 | Content rights | Contains third-party content, with the rights to use it. Every catalog model is Apache-2.0 or MIT |
 | Screenshots | Three, 2880 by 1800, each with a caption. The generated rocket poster comes first because it catches the eye |
 | Listing tone | Inviting, plain, no jargon. It promises only what works in the sandboxed build |
+| Model folders outside the app | Not offered in the store version (aosama/astronomical#2187, not planned). Its customer gets models inside the app and does not manage model files by hand; someone who does is served by the direct download |
 
 ### The European Union rule
 
@@ -61,6 +62,10 @@ The account holder declared to Apple that they do not distribute in the European
 ### The export declaration
 
 The store build's main `Info.plist` carries `ITSAppUsesNonExemptEncryption` set to false, so App Store Connect does not hold each upload for the encryption questions. It is written by `xtask/src/app_bundle/info_plist.rs` and required by the bundle check. It restates the account holder's answer. If the app starts using encryption beyond HTTPS and hashing, or France is added to availability, the answer is theirs to give again before the key changes.
+
+### Who the store version is for
+
+Someone who is not technical and wants no friction: they install, press Get started, and chat. Before adding anything to the store version, name the store customer who would use it. A feature that assumes the terminal, other model tools, or files arranged by hand belongs to the direct download.
 
 ## How the store build differs
 
@@ -213,4 +218,4 @@ Screenshots are kept outside version control, in the ignored `private/store-scre
 
 ## Open work
 
-Read the umbrella issue for the current state. When this was written, every promise in the table above had been tried in the sandbox, and what remained was: the folder picker for model locations (not built), provisioning profiles for TestFlight (do not exist), and building the store bundle as part of every direct release.
+Read the umbrella issue for the current state. When this was written, every promise in the table above had been tried in the sandbox, version 0.2.105 was waiting for review, and what remained was provisioning profiles for TestFlight, which need the developer account and are not needed for review.
