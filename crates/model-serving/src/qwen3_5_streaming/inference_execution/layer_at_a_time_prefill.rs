@@ -78,8 +78,7 @@ impl Qwen3_5EngineState {
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::PrefillChunkCount, 1);
-        let memory_baseline =
-            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
+        let memory_baseline = self.begin_forward_memory_measurement()?;
         let span_to_fail_once = self.prompt_span_to_fail_once_for_tests.take();
         let model = self
             .model
@@ -197,17 +196,10 @@ impl Qwen3_5EngineState {
         )?;
         Ok(LayerAtATimePrefillStep::PromptFinished {
             prompt_prefill_chunk_outcome: PromptPrefillChunkOutcome {
-                active_memory_bytes_before_growth: memory_baseline.active_memory_bytes,
-                retained_expert_payload_bytes_before_growth: memory_baseline
-                    .retained_expert_payload_bytes,
-                streamed_expert_page_bytes_before_growth: memory_baseline
-                    .streamed_expert_page_bytes,
+                active_memory_bytes_before_forward: memory_baseline.active_memory_bytes,
                 forward_chunk_elapsed_millis: u64::try_from(started_at.elapsed().as_millis())
                     .unwrap_or(u64::MAX),
-                adaptive_ram_growth_context: plan
-                    .observed_growth_context
-                    .with_execution_profile(crate::AdaptiveRamGrowthExecutionProfile::Paged),
-                exact_temporary_workspace_bytes: plan.exact_temporary_workspace_bytes,
+                measured_forward_token_count: plan.measured_forward_token_count,
                 boundary_checkpoints,
             },
             prefill_start,

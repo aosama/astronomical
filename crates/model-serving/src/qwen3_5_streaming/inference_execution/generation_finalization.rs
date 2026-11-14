@@ -27,20 +27,21 @@ impl Qwen3_5EngineState {
     }
 
     /// Reads back the dense layers this request gave up for its context, now
-    /// that its state is gone (issue #1985). Without this one long prompt
-    /// left every later request streaming more layers than the plan needs.
-    /// It costs at most a few layer reads per request, while decode already
-    /// reads every streamed layer for every token. A failure leaves the
-    /// layers streaming, which is still correct, so it is only logged.
-    fn keep_planned_dense_layers_at_finalization(&self, request_id: u64) {
+    /// that its state is gone and the memory governor is idle again (issue
+    /// #1985). Without this one long prompt left every later request
+    /// streaming more layers than there is room to keep. It costs at most a
+    /// few layer reads per request, while decode already reads every
+    /// streamed layer for every token. A failure leaves the layers
+    /// streaming, which is still correct, so it is only logged.
+    fn keep_dense_layers_again_at_finalization(&self, request_id: u64) {
         let Some(model) = self.model.as_ref() else {
             return;
         };
-        if let Err(replan_error) = model.replan_kept_dense_layers_under_installed_limit() {
+        if let Err(keep_error) = model.keep_dense_layers_the_governor_has_room_for() {
             tracing::warn!(
                 request_id,
-                error = %replan_error,
-                "could not keep the planned dense layers again after the request"
+                error = %keep_error,
+                "could not keep the dense layers again after the request"
             );
         }
     }
@@ -148,8 +149,8 @@ impl Qwen3_5EngineState {
         // instead of re-reading its experts (issue #955). The next request's
         // start gives the cache its capacity for that prompt, and the cache
         // gives back only what no longer fits.
-        self.keep_planned_dense_layers_at_finalization(request_id.value());
         self.govern_request_end_at_finalization(request_id.value());
+        self.keep_dense_layers_again_at_finalization(request_id.value());
         if let Some(model) = self.model.as_ref() {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();
@@ -167,9 +168,7 @@ impl Qwen3_5EngineState {
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
             PerformanceOperation::MlxAllocatorCacheCleanup,
-            |_performance_attribution| {
-                self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
-            },
+            |_performance_attribution| self.release_request_memory(request_id),
         );
         let generation_finalization = self.collect_generation_finalization(
             &mut performance_attribution,
@@ -328,19 +327,18 @@ impl Qwen3_5EngineState {
             );
             return;
         };
+        let measured_prompt_working_memory_bytes = self.model.as_ref().and_then(
+            crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_working_memory_bytes,
+        );
         let Some(performance_attribution_report) =
             performance_attribution.finish_generation(GenerationPerformanceAttributionMetadata {
                 outcome,
                 model_id,
                 model_revision,
-                prefill_transient_observation_completed: self
-                    .adaptive_ram_growth_guard
-                    .has_completed_growth_observation(crate::MemoryPhase::Prefill),
-                prefill_observed_transient_high_water_bytes: u64::try_from(
-                    self.adaptive_ram_growth_guard
-                        .observed_transient_high_water_bytes(crate::MemoryPhase::Prefill),
-                )
-                .unwrap_or(u64::MAX),
+                prefill_transient_observation_completed: measured_prompt_working_memory_bytes
+                    .is_some(),
+                prefill_observed_transient_high_water_bytes: measured_prompt_working_memory_bytes
+                    .unwrap_or(0),
                 request_id: request_id.value(),
                 configured_maximum_output_tokens,
                 mlx_active_memory_bytes: mlx_memory_snapshot

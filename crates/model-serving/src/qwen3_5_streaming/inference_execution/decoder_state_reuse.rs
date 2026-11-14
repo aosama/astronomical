@@ -118,11 +118,8 @@ impl Qwen3_5EngineState {
         )
         .unwrap_or(usize::MAX);
         let target_expert_payload_bytes_reclaimed_before_restore = self
-            .validate_context_memory_admission(
-                total_context_tokens,
+            .lease_prompt_cache_restore_workspace(
                 persistent_prompt_cache_restore_temporary_workspace_bytes,
-                0,
-                performance_attribution,
             )?;
         let last_restored_persistent_prompt_cache_block_key = self
             .load_and_reconstruct_restored_prefix(
@@ -134,21 +131,18 @@ impl Qwen3_5EngineState {
                 request_decoder_state,
                 performance_attribution,
             )?;
-        self.finalize_restored_prefix_hit(
-            performance_attribution,
-            RestoreHitFinalization {
-                request_id: &request_id,
-                prompt_token_count: prompt_token_ids.len(),
-                total_context_tokens,
-                restored_token_count,
-                complete_block_count,
-                restored_partial_tail_block_key: restored_partial_tail_block_key.as_ref(),
-                lookup_diagnostics,
-                target_expert_payload_bytes_reclaimed_before_restore,
-                persistent_prompt_cache_diagnostics,
-                last_restored_persistent_prompt_cache_block_key,
-            },
-        )
+        self.finalize_restored_prefix_hit(RestoreHitFinalization {
+            request_id: &request_id,
+            prompt_token_count: prompt_token_ids.len(),
+            total_context_tokens,
+            restored_token_count,
+            complete_block_count,
+            restored_partial_tail_block_key: restored_partial_tail_block_key.as_ref(),
+            lookup_diagnostics,
+            target_expert_payload_bytes_reclaimed_before_restore,
+            persistent_prompt_cache_diagnostics,
+            last_restored_persistent_prompt_cache_block_key,
+        })
     }
 
     /// Loads the enumerated prefix, reconstructs the concatenated full-attention
@@ -244,33 +238,22 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// Hit finalization: re-admits only the uncached context after the
-    /// transient load memory is gone, records the reclaimed-expert total,
-    /// logs the hit, stamps the counters, and builds the outcome.
+    /// Hit finalization: gives the restore's leased room back now that the
+    /// transient load memory is gone, records what the kept weights gave
+    /// up for it, logs the hit, stamps the counters, and builds the outcome.
     fn finalize_restored_prefix_hit(
         &mut self,
-        performance_attribution: &mut PerformanceAttribution,
         hit_finalization: RestoreHitFinalization<'_>,
     ) -> Result<PersistentPromptCacheRestoreOutcome, InferenceEngineError> {
         let mut hit_finalization = hit_finalization;
-        let remaining_context_token_count = hit_finalization
-            .total_context_tokens
-            .checked_sub(hit_finalization.restored_token_count)
-            .ok_or_else(|| {
-                super::fatal_engine_error(
-                    "persistent prompt-cache restore exceeded the generation context",
-                )
-            })?;
-        let target_expert_payload_bytes_reclaimed_after_restore = self
-            .validate_context_memory_admission(
-                remaining_context_token_count,
-                0,
-                0,
-                performance_attribution,
-            )?;
-        let target_expert_payload_bytes_reclaimed_during_restore = hit_finalization
-            .target_expert_payload_bytes_reclaimed_before_restore
-            .saturating_add(target_expert_payload_bytes_reclaimed_after_restore);
+        if hit_finalization.restored_token_count > hit_finalization.total_context_tokens {
+            return Err(super::fatal_engine_error(
+                "persistent prompt-cache restore exceeded the generation context",
+            ));
+        }
+        self.give_back_prompt_cache_restore_workspace();
+        let target_expert_payload_bytes_reclaimed_during_restore =
+            hit_finalization.target_expert_payload_bytes_reclaimed_before_restore;
         hit_finalization
             .persistent_prompt_cache_diagnostics
             .expert_bytes_reclaimed_for_restore =
@@ -304,5 +287,31 @@ impl Qwen3_5EngineState {
             persistent_prompt_cache_diagnostics: hit_finalization
                 .persistent_prompt_cache_diagnostics,
         })
+    }
+}
+
+impl Qwen3_5EngineState {
+    /// Leases room from the memory governor for the blocks a restore loads
+    /// beside the stored state they become, and returns the kept weight
+    /// bytes given back for it. A restore that fails leaves the lease to
+    /// the end of the request, which gives it back.
+    fn lease_prompt_cache_restore_workspace(
+        &self,
+        restore_workspace_bytes: usize,
+    ) -> Result<u64, InferenceEngineError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        Ok(model
+            .govern_restore_workspace(u64::try_from(restore_workspace_bytes).unwrap_or(u64::MAX)))
+    }
+
+    /// The restored blocks have joined the stored state: their room goes
+    /// back to the kept weights.
+    fn give_back_prompt_cache_restore_workspace(&self) {
+        if let Some(model) = self.model.as_ref() {
+            model.govern_restore_workspace_end();
+        }
     }
 }

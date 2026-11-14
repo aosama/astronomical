@@ -197,7 +197,6 @@ fn create_engine(
         IMAGE_PAD_TOKEN_ID,
         model_directory.to_path_buf(),
         crate::common::standard_worker_chunking_configuration(),
-        true,
         model_loading_performance_attribution,
         performance_attribution_log,
     )

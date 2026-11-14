@@ -1,33 +1,23 @@
-//! How many dense decoder layers stay kept after a release or a re-plan.
+//! How many dense decoder layers stay kept after a release, and how many
+//! fit in the room the memory governor has.
 //!
-//! The streamer and the live limit path apply these counts; keeping the
-//! arithmetic apart lets it be tested without loading a model (issue #1985).
+//! The streamer applies these counts; keeping the arithmetic apart lets it
+//! be tested without loading a model (issues #1985 and #2221).
 
-/// Which way a re-plan may move the kept layer count.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum KeptLayerReplan {
-    /// After a raise, a load, or a finished request: keep what the plan
-    /// allows, reading back layers that were given up.
-    MatchPlan,
-    /// Before a lower limit is installed: only give layers up. Reading a
-    /// layer back here would spend an SSD read on bytes the lower limit is
-    /// about to need, and the plan for the lower limit never needs more.
-    NeverGrow,
-}
-
-/// The kept count a re-plan settles on.
-pub(crate) const fn kept_layer_count_after_replan(
-    planned_kept_layer_count: usize,
-    current_kept_layer_count: usize,
-    kept_layer_replan: KeptLayerReplan,
-) -> usize {
-    match kept_layer_replan {
-        KeptLayerReplan::MatchPlan => planned_kept_layer_count,
-        KeptLayerReplan::NeverGrow if planned_kept_layer_count < current_kept_layer_count => {
-            planned_kept_layer_count
+/// How many leading layers fit in `room_bytes`. Layers are kept whole and
+/// in order, so the count stops at the first layer that does not fit.
+pub(crate) fn leading_layer_count_within(layer_payload_bytes: &[u64], room_bytes: u64) -> usize {
+    let mut kept_layer_count = 0;
+    let mut kept_layer_payload_bytes = 0_u64;
+    for one_layer_payload_bytes in layer_payload_bytes {
+        kept_layer_payload_bytes =
+            kept_layer_payload_bytes.saturating_add(*one_layer_payload_bytes);
+        if kept_layer_payload_bytes > room_bytes {
+            break;
         }
-        KeptLayerReplan::NeverGrow => current_kept_layer_count,
+        kept_layer_count += 1;
     }
+    kept_layer_count
 }
 
 /// Kept layers left after giving trailing ones back until at least

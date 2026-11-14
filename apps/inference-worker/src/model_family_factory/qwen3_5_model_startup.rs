@@ -534,7 +534,6 @@ fn construct_streaming_engine(
         model_directory_path.to_path_buf(),
         maximum_context_tokens,
         chunking,
-        true,
         model_loading_performance_attribution,
         performance_attribution_log,
         decode_expert_cache_policy,

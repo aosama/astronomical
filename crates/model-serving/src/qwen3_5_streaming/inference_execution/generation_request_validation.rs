@@ -10,7 +10,7 @@ use crate::{
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_core::text;
-use crate::qwen3_5_streaming::model::memory_admission;
+use crate::qwen3_5_streaming::model::request_refusal;
 
 impl Qwen3_5EngineState {
     pub(super) fn validate_generation_request_and_resolve_reserved_context(
@@ -34,7 +34,7 @@ impl Qwen3_5EngineState {
             let forced_transition_token_ids =
                 inference_request.forced_thinking_transition_token_ids();
             if forced_transition_token_ids.last().copied() != Some(self.think_end_token_id) {
-                return Err(memory_admission::invalid_request_error(
+                return Err(request_refusal::invalid_request_error(
                     "thinking budget requires a model-owned transition ending with the model thinking marker",
                 ));
             }
@@ -43,12 +43,12 @@ impl Qwen3_5EngineState {
                 forced_transition_token_ids.len(),
             )
             .ok_or_else(|| {
-                memory_admission::invalid_request_error(
+                request_refusal::invalid_request_error(
                     "thinking-budget output reservation overflowed",
                 )
             })?;
             if usize::from(inference_request.max_output_tokens()) < minimum_bounded_output_tokens {
-                return Err(memory_admission::invalid_request_error(format!(
+                return Err(request_refusal::invalid_request_error(format!(
                     "output-token budget must reserve {minimum_bounded_output_tokens} positions for the thinking allowance, forced transition, and final answer"
                 )));
             }
@@ -68,7 +68,7 @@ impl Qwen3_5EngineState {
             .chain(inference_request.natural_reasoning_end_token_ids())
             .any(|token_id| *token_id >= self.vocabulary_size)
         {
-            return Err(memory_admission::invalid_request_error(
+            return Err(request_refusal::invalid_request_error(
                 "thinking-budget configuration contains a token outside the model vocabulary",
             ));
         }
@@ -78,10 +78,10 @@ impl Qwen3_5EngineState {
         let total_context_tokens = prompt_token_count
             .checked_add(maximum_output_token_count)
             .ok_or_else(|| {
-                memory_admission::invalid_request_error("generation context token count overflowed")
+                request_refusal::invalid_request_error("generation context token count overflowed")
             })?;
         if total_context_tokens > self.hard_maximum_position_count {
-            return Err(memory_admission::invalid_request_error(
+            return Err(request_refusal::invalid_request_error(
                 "generation context exceeds the model maximum position count",
             ));
         }

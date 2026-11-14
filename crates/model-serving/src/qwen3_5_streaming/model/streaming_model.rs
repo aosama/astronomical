@@ -53,8 +53,9 @@ pub struct Qwen3_5StreamingModel {
     /// streams reads is observed as Resident.
     pub(super) request_expert_storage_read_tally:
         super::request_expert_storage_read_tally::RequestExpertStorageReadTally,
-    /// One expert layer's prompt working memory, measured at load; `None`
-    /// for a dense model and when the probe could not run.
+    /// One layer's prompt working memory, measured at load, for the memory
+    /// governor: an expert layer's for a sparse model, a streamed decoder
+    /// layer's for a dense one. `None` when the probe could not run.
     pub(crate) probed_prompt_layer_working_memory: Cell<
         Option<
             crate::qwen3_5_streaming::model::expert_layer_working_memory_probe::ProbedPromptLayerWorkingMemory,
@@ -170,21 +171,6 @@ impl Qwen3_5StreamingModel {
             ExpertWeightMemoryCacheStatistics::default,
             |retained_experts| retained_experts.borrow().statistics(),
         )
-    }
-
-    /// Updates the expert pager's memory budget with the observed transient
-    /// high-water mark from completed forward-pass evidence. The retention
-    /// ceiling uses this reservation to ensure enough headroom for computation
-    /// buffers (attention KV growth, intermediate tensors) between expert-page
-    /// loads.
-    pub(crate) fn update_expert_pager_transient_high_water_bytes(
-        &self,
-        observed_transient_high_water_bytes: u64,
-    ) {
-        if let Some(expert_pager) = self.expert_pager.as_ref() {
-            expert_pager
-                .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
-        }
     }
 
     /// Sets the warm-table slot capacity for decode-time hot-expert warming.

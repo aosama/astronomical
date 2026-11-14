@@ -43,6 +43,10 @@ pub(crate) struct GovernedMemory {
     /// forward completes.
     pub(super) publication_workspace_lease:
         std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
+    /// Room leased for blocks read back from the prompt cache, until they
+    /// have joined the request's stored state.
+    pub(super) restore_workspace_lease:
+        std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
     /// What MLX held at the last layer boundary of a prompt that is being
     /// measured one layer at a time; `None` outside such a prompt.
     pub(super) prompt_layer_boundary_active_bytes: std::cell::Cell<Option<u64>>,
@@ -94,14 +98,42 @@ impl Qwen3_5Model {
         let idle_capacity = memory_governor.kept_weight_capacity();
         *self.governed_memory.governor.borrow_mut() = Some(memory_governor);
         self.apply_kept_weight_capacity(idle_capacity);
+        if let Err(keep_error) = self.keep_dense_layers_the_governor_has_room_for() {
+            // The layers stream instead, which is still correct.
+            tracing::warn!(error = %keep_error, "could not keep dense layers at load");
+        }
+    }
+
+    /// The room a holder that pays to fill itself may fill while no request
+    /// runs: the smaller of the capacity now and the capacity a prompt with
+    /// no stored state would leave. `None` during a request, before the
+    /// governor opens, and while no prompt step has been measured, since
+    /// room nobody measured is not room.
+    pub(super) fn idle_kept_weight_room_bytes(&self) -> Option<u64> {
+        let memory_governor = self.governed_memory.governor.borrow();
+        let memory_governor = memory_governor.as_ref()?;
+        if !matches!(memory_governor.phase(), LedgerPhase::Idle) {
+            return None;
+        }
+        let probed_working_memory = self.probed_prompt_layer_working_memory.get()?;
+        let capacity_while_reading = memory_governor.capacity_while(LedgerPhase::ReadingPrompt {
+            span_token_count: probed_working_memory.span_token_count,
+        });
+        Some(
+            memory_governor
+                .kept_weight_capacity()
+                .bytes()
+                .min(capacity_while_reading.bytes()),
+        )
     }
 
     /// The one place the expert cache is told how much it may keep. The
     /// cache gives back, in its own order, whatever no longer fits.
     ///
-    /// A dense model's kept layers are not governed here yet: its streamer
-    /// still follows the dense layer plan, and the governor only measures.
-    fn apply_kept_weight_capacity(&self, capacity: KeptWeightCapacity) {
+    /// A dense model's kept layers are its kept weights: trailing layers
+    /// are given back until what is kept fits.
+    pub(super) fn apply_kept_weight_capacity(&self, capacity: KeptWeightCapacity) {
+        self.give_back_kept_dense_layers_beyond(capacity);
         let Some(retained_experts) = self.retained_experts.as_ref() else {
             return;
         };
@@ -413,58 +445,6 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Publishing prompt-cache blocks needs `workspace_bytes` more than is
-    /// free. Leases them until the next forward completes, has the cache
-    /// give back that much, and returns the allocator's freed buffers to
-    /// the system so the retry finds the room.
-    pub(crate) fn govern_publication_workspace(
-        &self,
-        workspace_bytes: u64,
-    ) -> Result<(), crate::InferenceEngineError> {
-        let capacity = {
-            let mut memory_governor = self.governed_memory.governor.borrow_mut();
-            let Some(memory_governor) = memory_governor.as_mut() else {
-                return Ok(());
-            };
-            if let Some(earlier_lease) = self.governed_memory.publication_workspace_lease.take() {
-                let _ = memory_governor.give_back_lease(earlier_lease);
-            }
-            let (publication_lease, capacity) = memory_governor.grant_lease(
-                astronomical_memory_policy::ledger::LeasePurpose::PromptCachePublication,
-                workspace_bytes,
-            );
-            self.governed_memory
-                .publication_workspace_lease
-                .set(Some(publication_lease));
-            capacity
-        };
-        self.apply_kept_weight_capacity(capacity);
-        self.runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
-            .map_err(crate::qwen3_5_streaming::inference_execution::qwen3_5_runtime_error)
-    }
-
-    /// A forward measured layer by layer still ends the publication its
-    /// workspace lease covered.
-    fn give_back_publication_workspace_after_forward(&self) {
-        let capacity = {
-            let mut memory_governor = self.governed_memory.governor.borrow_mut();
-            let Some(memory_governor) = memory_governor.as_mut() else {
-                return;
-            };
-            self.give_back_publication_workspace(memory_governor);
-            memory_governor.kept_weight_capacity()
-        };
-        self.apply_kept_weight_capacity(capacity);
-    }
-
-    /// Gives a publication lease back once the work it covered is over.
-    fn give_back_publication_workspace(&self, memory_governor: &mut MemoryGovernor) {
-        if let Some(publication_lease) = self.governed_memory.publication_workspace_lease.take() {
-            let _ = memory_governor.give_back_lease(publication_lease);
-        }
-    }
-
     /// The request is over. A redo left unsettled gives its room back; the
     /// streaming engine keeps no stored state between requests.
     pub(crate) fn govern_request_end(&self, request_id: u64) {
@@ -482,6 +462,7 @@ impl Qwen3_5Model {
                 let _ = memory_governor.abandon_redo(redo_attempt);
             }
             self.give_back_publication_workspace(memory_governor);
+            self.give_back_restore_workspace_lease(memory_governor);
             if let Some(ledger_reading) = memory_governor.latest_reading() {
                 tracing::info!(
                     request_id,
@@ -560,6 +541,21 @@ impl Qwen3_5Model {
         })
     }
 
+    /// The working memory one prompt step needs, as far as it has been
+    /// measured: the larger of the probe at load and the largest prompt step
+    /// of the latest request. `None` until either exists.
+    pub(crate) fn measured_prompt_working_memory_bytes(&self) -> Option<u64> {
+        let probed_working_memory_bytes = self
+            .probed_prompt_layer_working_memory
+            .get()
+            .map(|probed_working_memory| probed_working_memory.working_memory_bytes);
+        let largest_measured_step_bytes = self
+            .latest_memory_ledger_reading()
+            .map(|ledger_reading| ledger_reading.largest_reading_step_peak_beyond_held_bytes)
+            .filter(|largest_step_bytes| *largest_step_bytes > 0);
+        larger_of_what_was_measured(probed_working_memory_bytes, largest_measured_step_bytes)
+    }
+
     /// Steps that hit the limit and redo attempts made since the model
     /// loaded, in that order.
     pub(crate) fn memory_redo_counts(&self) -> (u64, u64) {
@@ -581,6 +577,23 @@ impl Qwen3_5Model {
             .borrow()
             .as_ref()
             .and_then(MemoryGovernor::latest_reading)
+    }
+}
+
+/// The larger of two measurements of the same thing, either of which may
+/// not exist yet.
+const fn larger_of_what_was_measured(
+    first_measurement_bytes: Option<u64>,
+    second_measurement_bytes: Option<u64>,
+) -> Option<u64> {
+    match (first_measurement_bytes, second_measurement_bytes) {
+        (Some(first_bytes), Some(second_bytes)) => Some(if first_bytes > second_bytes {
+            first_bytes
+        } else {
+            second_bytes
+        }),
+        (Some(only_bytes), None) | (None, Some(only_bytes)) => Some(only_bytes),
+        (None, None) => None,
     }
 }
 

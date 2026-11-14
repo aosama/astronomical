@@ -118,14 +118,14 @@ fn load_streaming_model(
 
 fn pin_kept_layers(streaming_model: &Qwen3_5StreamingModel, kept_layer_count: usize) {
     streaming_model
-        .plan_dense_layer_residency(
+        .probe_dense_layers(
             LayerProbeShape {
                 prefill_chunk_token_count: PREFILL_SPAN_TOKEN_COUNT,
                 full_attention_kv_state_growth_tokens: 256,
             },
             Some(kept_layer_count),
         )
-        .expect("the dense layers should plan");
+        .expect("the dense layers should be probed");
 }
 
 /// Step 1: cold reads of the last layers, which no run keeps.

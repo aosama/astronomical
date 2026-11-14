@@ -20,7 +20,7 @@
 use astronomical_ipc_protocol::RequestId;
 
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_streaming::model::memory_admission;
+use crate::qwen3_5_streaming::model::request_refusal;
 use crate::{GeneratedToken, InferenceEngineError, MemoryPhase};
 
 use super::engine_request::Qwen3_5EngineRequest;
@@ -176,7 +176,7 @@ fn prefill_memory_failure_error(
                 allowed_active_memory_bytes,
                 "prefill forward exceeded the MLX active-memory limit"
             );
-            memory_admission::invalid_request_error(format!(
+            request_refusal::invalid_request_error(format!(
                 "prompt forward of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
             ))
         }
@@ -188,7 +188,7 @@ fn prefill_memory_failure_error(
                 reason = %reason,
                 "prefill forward exhausted graphics-processor memory"
             );
-            memory_admission::invalid_request_error(format!(
+            request_refusal::invalid_request_error(format!(
                 "prompt forward of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
             ))
         }
@@ -341,13 +341,11 @@ impl Qwen3_5EngineState {
     /// Sends a dense model's prompt chunk by chunk after its layer-major
     /// prefill ran out of memory (issue #1985).
     ///
-    /// A dense model's kept layers are not on the memory governor yet, so a
-    /// redo would free nothing. Holding every span's hidden states and
-    /// checkpoints at once can need more than one chunk did, so the failure
-    /// means the group did not fit, not that the prompt cannot run: the
-    /// state is rebuilt from the prompt cache and the planned layers are
-    /// kept again. If that cannot fit beside this request's state, the
-    /// layers stream until the request ends, which is still correct.
+    /// Holding every span's hidden states and checkpoints at once can need
+    /// more than one chunk did, so the failure means the group did not fit,
+    /// not that the prompt cannot run: the state is rebuilt from the prompt
+    /// cache and the tokens run again as chunks. The kept layers stay as
+    /// the memory governor's capacity left them.
     pub(super) fn decline_dense_layer_major_prefill_after_failure(
         &mut self,
         request_id: RequestId,
@@ -360,22 +358,7 @@ impl Qwen3_5EngineState {
             "layer-major prefill did not fit; continuing chunk by chunk"
         );
         active_request.engine_extension.layer_major_prefill_declined = true;
-        self.reseed_prefill_from_prompt_cache(request_id, active_request, prefill_start)?;
-        self.keep_planned_dense_layers_after_decline(request_id);
-        Ok(())
-    }
-
-    fn keep_planned_dense_layers_after_decline(&self, request_id: RequestId) {
-        let Some(model) = self.model.as_ref() else {
-            return;
-        };
-        if let Err(replan_error) = model.replan_kept_dense_layers_under_installed_limit() {
-            tracing::warn!(
-                request_id = request_id.value(),
-                error = %replan_error,
-                "could not keep the planned dense layers beside this request; they stream until it ends"
-            );
-        }
+        self.reseed_prefill_from_prompt_cache(request_id, active_request, prefill_start)
     }
 }
 

@@ -10,7 +10,7 @@ use crate::{
     plan_qwen3_5_visual_prompt_cache_block_inputs,
 };
 
-use crate::qwen3_5_streaming::model::memory_admission;
+use crate::qwen3_5_streaming::model::request_refusal;
 
 pub(super) struct Qwen3_5PersistentPromptCacheVisualIdentity {
     pub(super) ordered_image_visual_embedding_row_counts: Vec<usize>,
@@ -64,7 +64,7 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
         if has_processed_visual_images
             && visual_identity_input.prompt_image_pad_token_count != expected_visual_row_count
         {
-            return Err(memory_admission::invalid_request_error(
+            return Err(request_refusal::invalid_request_error(
                 "image pad token count does not match processed image token count",
             ));
         }
@@ -94,7 +94,7 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
                     },
                 )
                 .map_err(|visual_identity_plan_error| {
-                    memory_admission::invalid_request_error(format!(
+                    request_refusal::invalid_request_error(format!(
                         "visual prompt-cache identity planning failed: {visual_identity_plan_error}"
                     ))
                 })?

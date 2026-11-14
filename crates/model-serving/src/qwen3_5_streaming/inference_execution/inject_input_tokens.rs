@@ -1,13 +1,10 @@
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, InferenceEngineError,
-    PerformanceOperation,
-};
+use crate::{InferenceEngineError, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
-use super::completed_forward_memory;
-use crate::qwen3_5_streaming::model::memory_admission;
+use super::completed_forward_memory::{self, MeasuredForward};
+use crate::qwen3_5_streaming::model::request_refusal;
 
 impl Qwen3_5EngineState {
     pub(super) fn inject_input_tokens(
@@ -72,7 +69,7 @@ impl Qwen3_5EngineState {
                 hard_maximum_position_count: self.hard_maximum_position_count,
                 advertised_maximum_position_count: self.maximum_position_count,
             })?;
-        self.validate_injection_context_memory_admission(active_request, projected_context_tokens)?;
+        self.make_room_for_injected_context(projected_context_tokens)?;
 
         // External feedback changes the continuation frontier. Discard both the
         // one-token-ahead successor and its rollback verdict before forwarding
@@ -93,28 +90,21 @@ impl Qwen3_5EngineState {
         )
     }
 
-    fn validate_injection_context_memory_admission(
-        &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+    /// Injection extends the request's stored state between measured
+    /// steps. The memory governor grows the context account to the
+    /// projected extent first, so the kept weights have made room before
+    /// the injected tokens run.
+    fn make_room_for_injected_context(
+        &self,
         projected_context_tokens: usize,
     ) -> Result<(), InferenceEngineError> {
-        // Injection extends the same live context as ordinary request admission.
-        // Re-run binary residency admission before mutating decoder state so a
-        // rejection leaves the continuation frontier unchanged.
-        let target_expert_payload_bytes_reclaimed_during_injection = self
-            .validate_context_memory_admission(
-                projected_context_tokens,
-                0,
-                0,
-                &mut active_request.performance_attribution,
-            )?;
-        if target_expert_payload_bytes_reclaimed_during_injection > 0 {
-            tracing::info!(
-                request_id = active_request.request_id.value(),
-                target_expert_payload_bytes_reclaimed_during_injection,
-                "admitted injected model feedback after reclaiming target experts"
-            );
-        }
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let projected_context_bytes = projected_context_tokens
+            .saturating_mul(self.context_memory_reservation_bytes_per_token);
+        model.govern_context_extent(u64::try_from(projected_context_bytes).unwrap_or(u64::MAX));
         Ok(())
     }
 
@@ -125,25 +115,7 @@ impl Qwen3_5EngineState {
         final_input_token_position: usize,
     ) -> Result<(), InferenceEngineError> {
         let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
-        let injected_prefill_execution_context =
-            super::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
-                false,
-                AdaptiveRamGrowthExecutionProfile::Paged,
-                self.persistent_prompt_cache.is_some()
-                    && active_request.can_use_persistent_prompt_cache,
-            );
-        let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
-            feedback_prefix_token_ids.len(),
-            injected_prefill_execution_context.context_identifier_flags(),
-            false,
-            AdaptiveRamGrowthExecutionProfile::Paged,
-        );
-        let admitted_baseline =
-            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
+        let memory_baseline = self.begin_forward_memory_measurement()?;
         let model = self
             .model
             .as_ref()
@@ -157,17 +129,11 @@ impl Qwen3_5EngineState {
             )
             .map_err(InferenceEngineError::from)?;
         active_request.advance_position(feedback_prefix_token_ids.len())?;
-        completed_forward_memory::record_completed_adaptive_ram_growth(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context
-                .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
-            false,
+        completed_forward_memory::measure_completed_forward(
             model,
-            active_request.request_context_extent(),
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
+            MeasuredForward::prompt(feedback_prefix_token_ids.len()),
+            active_request.request_decoder_state.payload_byte_count(),
+            memory_baseline.active_memory_bytes,
             &mut active_request.performance_attribution,
         )?;
         Ok(())
@@ -180,14 +146,7 @@ impl Qwen3_5EngineState {
         final_input_token_position: usize,
     ) -> Result<(), InferenceEngineError> {
         let final_input_token_id = input_token_ids[final_input_token_position];
-        let adaptive_ram_growth_context =
-            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged);
-        let admitted_baseline =
-            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
+        let memory_baseline = self.begin_forward_memory_measurement()?;
         let model = self
             .model
             .as_ref()
@@ -214,17 +173,11 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(InferenceEngineError::from)?;
-        completed_forward_memory::record_completed_adaptive_ram_growth(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context
-                .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
-            true,
+        completed_forward_memory::measure_completed_forward(
             model,
-            active_request.request_context_extent(),
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
+            MeasuredForward::reply_token(),
+            active_request.request_decoder_state.payload_byte_count(),
+            memory_baseline.active_memory_bytes,
             &mut active_request.performance_attribution,
         )?;
         active_request.pending_generated_token = Some(next_generated_token);
@@ -253,10 +206,10 @@ fn project_injection_context_token_count(
         .checked_add(projection.injected_input_token_count)
         .and_then(|context_tokens| context_tokens.checked_add(projection.remaining_output_tokens))
         .ok_or_else(|| {
-            memory_admission::invalid_request_error("generation context token count overflowed")
+            request_refusal::invalid_request_error("generation context token count overflowed")
         })?;
     if projected_context_tokens > projection.hard_maximum_position_count {
-        return Err(memory_admission::invalid_request_error(
+        return Err(request_refusal::invalid_request_error(
             "generation context exceeds the model maximum position count",
         ));
     }

@@ -11,7 +11,6 @@ use crate::{
 };
 
 use super::Qwen3_5Model;
-use super::dense_layer_counts::KeptLayerReplan;
 use super::prefill_partial_layer_read::should_clear_prefill_completion_refusals;
 
 /// The live runtime facts one ceiling-change decision reads: limits currently
@@ -249,32 +248,14 @@ impl Qwen3_5Model {
                     mlx_ram_budget_error.to_string(),
                 )
             })?;
-        // The governor follows the installed limit and the cache gives back
-        // what no longer fits; the amount the ceiling decision asked for is a
-        // lower bound the dense replan below still honours.
+        // The governor follows the installed limit, and the expert cache or
+        // a dense model's kept layers give back what no longer fits.
         self.govern_limit_change();
-        self.give_back_kept_dense_layers_for_lower_limit(requested_mlx_memory_ceiling_bytes)?;
         let Some(expert_pager) = self.expert_pager.as_mut() else {
             return Ok(());
         };
         expert_pager.update_configured_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
         Ok(())
-    }
-
-    /// Gives back the kept dense layers the plan for the lower limit leaves
-    /// no room for; an expert model's cache has already followed the
-    /// governor. The plan keeps the always
-    /// resident bytes, kept layers, slots and working memory under the lower
-    /// limit, so it frees at least what the decision needs; releasing by
-    /// bytes first could overshoot and read layers straight back.
-    fn give_back_kept_dense_layers_for_lower_limit(
-        &self,
-        requested_mlx_memory_ceiling_bytes: u64,
-    ) -> Result<(), InferenceEngineError> {
-        Ok(self.replan_kept_dense_layers(
-            requested_mlx_memory_ceiling_bytes,
-            KeptLayerReplan::NeverGrow,
-        )?)
     }
 
     fn update_expert_residency_for_live_mlx_memory_limit(
@@ -289,9 +270,9 @@ impl Qwen3_5Model {
         Ok(())
     }
 
-    /// Moves the RAM budget to the new ceiling, then plans a dense model's
-    /// kept layers again: a raise the resident engine cannot use yet still
-    /// lets it keep more, and the plan reads the limit just installed.
+    /// Moves the RAM budget and the memory governor to the new ceiling, then
+    /// reads back the dense layers the governor now has room for: a raise
+    /// the resident engine cannot use yet still lets this one keep more.
     fn apply_live_ceiling_to_budget_and_dense_layers(
         &self,
         requested_mlx_memory_ceiling_bytes: u64,
@@ -305,10 +286,7 @@ impl Qwen3_5Model {
                 )
             })?;
         self.govern_limit_change();
-        Ok(self.replan_kept_dense_layers(
-            requested_mlx_memory_ceiling_bytes,
-            KeptLayerReplan::MatchPlan,
-        )?)
+        Ok(self.keep_dense_layers_the_governor_has_room_for()?)
     }
 
     /// Returns the budget, the pager and a dense model's kept layers to the

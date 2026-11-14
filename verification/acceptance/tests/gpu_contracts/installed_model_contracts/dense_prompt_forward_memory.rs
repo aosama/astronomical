@@ -85,16 +85,16 @@ async fn assert_prompt_forwards_stay_within_reserve() {
         .expect("the model weights should materialize");
 
     for kept_layer_count in KEPT_LAYER_COUNTS {
-        let residency_plan = streaming_model
-            .plan_dense_layer_residency(
+        let dense_layer_probe = streaming_model
+            .probe_dense_layers(
                 LayerProbeShape {
                     prefill_chunk_token_count: PROBE_CHUNK_TOKEN_COUNT,
                     full_attention_kv_state_growth_tokens: 256,
                 },
                 Some(kept_layer_count),
             )
-            .expect("the dense layers should plan")
-            .expect("a dense model should have a plan");
+            .expect("the dense layers should be probed")
+            .expect("a dense model should have a probe");
         for (preceding_token_count, chunk_token_count) in MEASURED_CHUNKS {
             let forward_growth = measure_chunk_forward_growth(
                 &streaming_model,
@@ -104,20 +104,20 @@ async fn assert_prompt_forwards_stay_within_reserve() {
             );
             eprintln!(
                 "[dense-forward-memory] kept={kept_layer_count} preceding={preceding_token_count} tokens={chunk_token_count} growth_beyond_state={forward_growth} reserve={}",
-                residency_plan.streamed_forward_reserve_bytes
+                dense_layer_probe.streamed_forward_reserve_bytes
             );
             assert!(
                 forward_growth
-                    <= residency_plan.streamed_forward_reserve_bytes + OUTSIDE_LAYER_SLACK_BYTES,
+                    <= dense_layer_probe.streamed_forward_reserve_bytes + OUTSIDE_LAYER_SLACK_BYTES,
                 "a {chunk_token_count}-token chunk after {preceding_token_count} tokens with {kept_layer_count} kept layers grew {forward_growth} bytes beyond its state; the plan reserved {}",
-                residency_plan.streamed_forward_reserve_bytes
+                dense_layer_probe.streamed_forward_reserve_bytes
             );
         }
         assert_layer_major_prefill_stays_within_reserve(
             &streaming_model,
             &qwen3_5_config,
             &prompt_token_ids,
-            residency_plan.streamed_forward_reserve_bytes,
+            dense_layer_probe.streamed_forward_reserve_bytes,
             kept_layer_count,
         );
     }

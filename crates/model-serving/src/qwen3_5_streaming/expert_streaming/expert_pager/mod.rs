@@ -285,14 +285,6 @@ impl Qwen3_5ExpertPager {
             .update_active_memory_ceiling_bytes(configured_mlx_memory_ceiling_bytes);
     }
 
-    pub(crate) fn update_observed_transient_high_water_bytes(
-        &self,
-        observed_transient_high_water_bytes: u64,
-    ) {
-        self.memory_budget
-            .update_observed_transient_high_water_bytes(observed_transient_high_water_bytes);
-    }
-
     pub(crate) fn configured_mlx_memory_ceiling_bytes(&self) -> u64 {
         self.memory_budget.active_memory_ceiling_bytes()
     }

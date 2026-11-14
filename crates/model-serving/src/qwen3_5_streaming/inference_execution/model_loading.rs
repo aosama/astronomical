@@ -360,9 +360,9 @@ fn load_and_materialize_streaming_model(
             PerformanceOperation::ResidentWeightMaterializationSynchronizationWait,
             |_performance_attribution| {
                 // A dense model then measures one streamed layer's working
-                // memory at the prefill chunk size it will serve and keeps the
-                // layers that fit beside it; a sparse model has none to plan.
-                model.materialize_target_weights_and_plan_dense_layers(
+                // memory at the prefill chunk size it will serve; its layers
+                // are kept when the memory governor opens below.
+                model.materialize_target_weights_and_probe_dense_layers(
                     streaming_forward_shape.layer_probe_shape,
                 )
             },

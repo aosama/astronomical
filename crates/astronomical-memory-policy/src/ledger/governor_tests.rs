@@ -168,6 +168,39 @@ fn should_lease_as_much_room_again_for_a_first_redo_and_take_it_from_the_capacit
 }
 
 #[test]
+fn should_say_what_the_capacity_would_be_while_reading_without_changing_anything() {
+    let mut governor = governor();
+    let _ = governor.record_probe(READING, GIBIBYTE);
+    let idle_capacity = governor.kept_weight_capacity();
+    let capacity_while_reading = governor.capacity_while(READING);
+    assert!(
+        capacity_while_reading.bytes() < idle_capacity.bytes(),
+        "reading a prompt sets working memory and layer slots aside"
+    );
+    assert_eq!(governor.phase(), LedgerPhase::Idle);
+    assert_eq!(governor.kept_weight_capacity(), idle_capacity);
+    assert_eq!(
+        governor.start_request(READING, 0),
+        capacity_while_reading,
+        "the answer is the capacity that phase then has"
+    );
+}
+
+#[test]
+fn should_answer_the_capacity_in_force_when_asked_about_the_current_phase() {
+    let mut governor = governor();
+    let _ = governor.record_probe(READING, GIBIBYTE);
+    let capacity = governor.start_request(READING, GIBIBYTE);
+    assert_eq!(governor.capacity_while(READING), capacity);
+}
+
+#[test]
+fn should_answer_no_capacity_for_a_phase_nothing_has_measured() {
+    let governor = governor();
+    assert_eq!(governor.capacity_while(READING).bytes(), 0);
+}
+
+#[test]
 fn should_lease_the_known_shortfall_when_it_is_more_than_as_much_again() {
     let mut governor = governor();
     let _ = governor.record_probe(READING, GIBIBYTE);

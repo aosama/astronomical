@@ -204,18 +204,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             .map_err(|_| fatal_engine_error("redo counts owner operation returned no response"))
     }
 
-    /// Disables adaptive growth guarding and its memory sampling for benchmarks.
-    #[doc(hidden)]
-    pub async fn disable_adaptive_ram_growth_memory_guard_for_tests(
-        &self,
-    ) -> Result<(), InferenceEngineError> {
-        self.run_owner_test_operation(|qwen_inference_execution| {
-            qwen_inference_execution.adaptive_ram_growth_guard_enabled = false;
-            Ok(())
-        })
-        .await
-    }
-
     /// Resets the process-global MLX peak counter on the engine owner thread.
     #[doc(hidden)]
     pub async fn reset_mlx_peak_memory_for_tests(&self) -> Result<(), InferenceEngineError> {

@@ -85,7 +85,6 @@ async fn load_and_generate_with_configured_ornith_artifact() {
             crate::serving_acceptance::support::IMAGE_PAD_TOKEN_ID,
             model_directory,
             crate::common::standard_worker_chunking_configuration(),
-            true,
             PerformanceAttribution::enabled(),
             PerformanceAttributionLog::open(
                 &performance_attribution_directory

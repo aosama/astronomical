@@ -1,10 +1,9 @@
-//! Kept-layer counts after releases and re-plans: nothing to release, an
-//! exact layer, a partial layer, more than is kept, and both re-plan
-//! directions.
+//! Kept-layer counts after releases and for a given room: nothing to
+//! release, an exact layer, a partial layer, more than is kept, and the
+//! leading layers that fit.
 
 use super::{
-    KeptLayerReplan, kept_layer_count_after_release, kept_layer_count_after_replan,
-    streaming_slot_count_in_use,
+    kept_layer_count_after_release, leading_layer_count_within, streaming_slot_count_in_use,
 };
 
 const LAYER_BYTES: [u64; 4] = [100, 100, 150, 100];
@@ -49,35 +48,22 @@ fn should_release_nothing_when_no_layer_is_kept() {
 }
 
 #[test]
-fn should_follow_the_plan_up_and_down_when_matching_it() {
-    assert_eq!(
-        kept_layer_count_after_replan(7, 3, KeptLayerReplan::MatchPlan),
-        7
-    );
-    assert_eq!(
-        kept_layer_count_after_replan(3, 7, KeptLayerReplan::MatchPlan),
-        3
-    );
+fn should_keep_every_leading_layer_that_fits_the_room() {
+    assert_eq!(leading_layer_count_within(&LAYER_BYTES, 350), 3);
+    assert_eq!(leading_layer_count_within(&LAYER_BYTES, 10_000), 4);
 }
 
 #[test]
-fn should_never_read_layers_back_before_a_lower_limit() {
-    assert_eq!(
-        kept_layer_count_after_replan(7, 3, KeptLayerReplan::NeverGrow),
-        3
-    );
+fn should_stop_at_the_first_layer_that_does_not_fit() {
+    // The third layer needs 150; a later 100-byte layer is not kept instead.
+    assert_eq!(leading_layer_count_within(&LAYER_BYTES, 349), 2);
+    assert_eq!(leading_layer_count_within(&LAYER_BYTES, 99), 0);
 }
 
 #[test]
-fn should_give_layers_up_before_a_lower_limit() {
-    assert_eq!(
-        kept_layer_count_after_replan(3, 7, KeptLayerReplan::NeverGrow),
-        3
-    );
-    assert_eq!(
-        kept_layer_count_after_replan(5, 5, KeptLayerReplan::NeverGrow),
-        5
-    );
+fn should_keep_no_layer_in_no_room_or_of_no_layers() {
+    assert_eq!(leading_layer_count_within(&LAYER_BYTES, 0), 0);
+    assert_eq!(leading_layer_count_within(&[], 1_000), 0);
 }
 
 #[test]

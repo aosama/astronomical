@@ -51,7 +51,6 @@ pub(crate) fn create_attributed_engine_with_ssd_streaming_prefill(
             IMAGE_PAD_TOKEN_ID,
             model_directory.to_path_buf(),
             crate::common::standard_worker_chunking_configuration(),
-            true,
             PerformanceAttribution::enabled(),
             performance_attribution_log,
         )

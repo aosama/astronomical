@@ -77,14 +77,14 @@ async fn assert_checkpoint_parity() {
 
     for kept_layer_count in KEPT_LAYER_COUNTS {
         streaming_model
-            .plan_dense_layer_residency(
+            .probe_dense_layers(
                 LayerProbeShape {
                     prefill_chunk_token_count: CHUNK_TOKEN_COUNT,
                     full_attention_kv_state_growth_tokens: 256,
                 },
                 Some(kept_layer_count),
             )
-            .expect("the dense layers should plan");
+            .expect("the dense layers should be probed");
         let chunk_path_boundaries = streaming_model
             .prefill_chunk_by_chunk_with_prompt_cache_checkpoints(
                 &prompt_token_ids,
