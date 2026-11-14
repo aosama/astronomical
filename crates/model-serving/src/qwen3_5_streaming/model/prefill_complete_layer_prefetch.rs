@@ -35,8 +35,7 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model::expert_reuse::ExpertPageDisposition;
 use crate::{
-    ExpertLayerResidencyTarget, PerformanceAttribution, PerformanceCounter,
-    should_commit_multi_token_union_as_complete_layer,
+    PerformanceAttribution, PerformanceCounter, should_commit_multi_token_union_as_complete_layer,
 };
 
 /// Expected-coverage factor for "this chunk routes every expert".
@@ -78,23 +77,6 @@ pub(crate) fn prefill_chunk_routes_complete_layer(
         && expert_capacity > 0
         && route_token_count.saturating_mul(experts_per_token)
             >= expert_capacity.saturating_mul(COMPLETE_UNION_ASSIGNMENTS_PER_EXPERT)
-}
-
-/// Whether the residency plan lets a layer's complete page be read early.
-///
-/// Release targets are shrinking that layer's memory, so an early read would
-/// fight the plan; every other target either streams or seats the layer.
-#[must_use]
-pub(crate) fn residency_target_allows_prefill_prefetch(
-    residency_target: Option<ExpertLayerResidencyTarget>,
-) -> bool {
-    !matches!(
-        residency_target,
-        Some(
-            ExpertLayerResidencyTarget::ReleasePartial
-                | ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-        )
-    )
 }
 
 /// Whether a layer's complete page could be multiplied as read, judged from
@@ -211,7 +193,6 @@ impl Qwen3_5Model {
             )
             && (partly_kept_layers == PartlyKeptLayers::Included
                 || retained_experts.borrow().occupied_slot_count(layer_index) == 0)
-            && residency_target_allows_prefill_prefetch(self.expert_residency_target(layer_index))
     }
 
     /// Drops a prefetched layer the current forward will not consume.
@@ -438,7 +419,7 @@ impl Qwen3_5Model {
             if should_commit_multi_token_union_as_complete_layer(
                 route_token_count,
                 true,
-                self.expert_residency_target(layer_index),
+                self.expert_layer_state(layer_index),
                 expert_capacity,
                 expert_capacity,
             ) && retained_experts.borrow_mut().try_adopt_complete_layer(

@@ -23,11 +23,10 @@
 //!   re-exported here): `Prefill`, `GenerationPreparation`, `Decode`,
 //!   `Idle`. Budget composition treats `GenerationPreparation` as
 //!   `Decode`-equivalent; the growth guard only observes `Prefill`/`Decode`.
-//! - **7 layer targets** — `residency` plans one `ExpertLayerResidencyTarget`
-//!   per sparse decoder layer (`PreserveComplete`,
-//!   `PromoteCompleteOnMandatoryRead`, `PreservePartial`,
-//!   `AdmitPartialOnMandatoryRouteRead`, `StreamOperationLocal`,
-//!   `ReleasePartial`, `ReleaseCompleteForExactDeficit`).
+//! - **3 layer states** — when a reply begins, `residency` plans one
+//!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or
+//!   `Absent`. What to do about a layer follows from its state and from
+//!   what the cache holds.
 //! - **2 page classes** — `StableCompleteLayer` and `ElasticRoutedExperts`,
 //!   the eviction-priority classes for retained *prefill* pages.
 //!
@@ -152,17 +151,15 @@ pub use serving_phase::SessionStreamingPhase;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use astronomical_memory_policy::residency;
 pub use astronomical_memory_policy::residency::{
-    CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerResidencyTarget,
-    ExpertResidencyPlan, ExpertResidencyPlanError, RequestExpertLayerRole, RequestExpertResidency,
-    RetainedExpertPageClass, StreamingStartupResidencyFacts, classify_expert_memory_mode,
-    complete_layer_indexes_required_before_decode, decode_warm_floor_eviction_indexes,
-    hot_expert_warm_slot_count, minimum_decode_warm_slot_count, observed_expert_memory_mode,
-    plan_expert_residency, publish_request_stable_residency_plan,
-    retained_complete_layer_ceiling_after_prefill_budget_refresh,
+    CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerState,
+    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
+    StreamingStartupResidencyFacts, classify_expert_memory_mode,
+    decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count,
+    kept_layer_indexes_to_seat_before_reply, minimum_decode_warm_slot_count,
+    observed_expert_memory_mode, plan_expert_residency,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
-    should_complete_partial_layer_on_prefill_read, should_enact_planned_expert_release,
-    should_seed_partial_layer_on_prefill_read,
+    should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
 pub use astronomical_memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,

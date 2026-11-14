@@ -2,9 +2,8 @@
 
 use super::validation::routed_floor_payload_bytes;
 use super::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass, foundation_overlay,
-    validation,
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerState, ExpertResidencyPlan,
+    ExpertResidencyPlanError, RetainedExpertPageClass, foundation_overlay, validation,
 };
 use crate::phase::MemoryPhase;
 
@@ -82,15 +81,9 @@ fn complete_model_plan(
     complete_model_payload_bytes: u64,
 ) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
     let mut preserved_bytes = 0_u64;
-    let mut layer_targets = Vec::with_capacity(geometries.len());
+    let mut layer_states = Vec::with_capacity(geometries.len());
     for current_residency in current_by_layer {
-        if current_residency.is_some_and(|residency| {
-            residency.class == RetainedExpertPageClass::StableCompleteLayer
-        }) {
-            layer_targets.push(ExpertLayerResidencyTarget::PreserveComplete);
-        } else {
-            layer_targets.push(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead);
-        }
+        layer_states.push(ExpertLayerState::Kept);
         if let Some(residency) = current_residency {
             preserved_bytes = preserved_bytes
                 .checked_add(residency.payload_bytes)
@@ -101,7 +94,7 @@ fn complete_model_plan(
         phase,
         retained_expert_ceiling_bytes: ceiling_bytes,
         complete_layer_targets: (0..geometries.len()).collect(),
-        layer_targets,
+        layer_states,
         reserved_routed_overlay_bytes: 0,
         expected_preserved_bytes: preserved_bytes,
         maximum_new_retained_bytes: complete_model_payload_bytes.saturating_sub(preserved_bytes),
@@ -138,25 +131,23 @@ fn preserve_existing_expert_pages_for_generation(
         current_by_layer,
         &selected,
     )?;
-    let layer_targets = current_by_layer
+    let layer_states = current_by_layer
         .iter()
         .enumerate()
         .map(|(layer_index, residency)| {
             match (residency, selected[layer_index], promoted[layer_index]) {
-                (_, _, true) => ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead,
+                // The room left funds the whole layer.
+                (_, _, true) => ExpertLayerState::Kept,
                 (Some(residency), true, false)
                     if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
                 {
-                    ExpertLayerResidencyTarget::PreserveComplete
+                    ExpertLayerState::Kept
                 }
-                (Some(_), true, false) => ExpertLayerResidencyTarget::PreservePartial,
-                (Some(residency), false, false)
-                    if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
-                {
-                    ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-                }
-                (Some(_), false, false) => ExpertLayerResidencyTarget::ReleasePartial,
-                (None, _, false) => ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+                // What is held of the layer stays; a layer holding nothing
+                // keeps the experts the reply routes to.
+                (Some(_), true, false) | (None, _, false) => ExpertLayerState::Hot,
+                // What is held does not fit the capacity.
+                (Some(_), false, false) => ExpertLayerState::Absent,
             }
         })
         .collect();
@@ -172,7 +163,7 @@ fn preserve_existing_expert_pages_for_generation(
                         }))
             })
             .collect(),
-        layer_targets,
+        layer_states,
         reserved_routed_overlay_bytes: 0,
         expected_preserved_bytes: preserved_bytes,
         maximum_new_retained_bytes: ceiling_bytes.saturating_sub(preserved_bytes),
@@ -264,7 +255,7 @@ fn low_budget_partial_plan(
                 .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
     }
-    let layer_targets = current_by_layer
+    let layer_states = current_by_layer
         .iter()
         .enumerate()
         .map(
@@ -272,16 +263,12 @@ fn low_budget_partial_plan(
                 (Some(residency), true)
                     if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
                 {
-                    ExpertLayerResidencyTarget::PreserveComplete
+                    ExpertLayerState::Kept
                 }
-                (Some(_), true) => ExpertLayerResidencyTarget::PreservePartial,
-                (Some(residency), false)
-                    if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
-                {
-                    ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-                }
-                (Some(_), false) => ExpertLayerResidencyTarget::ReleasePartial,
-                (None, _) => ExpertLayerResidencyTarget::StreamOperationLocal,
+                (Some(_), true) => ExpertLayerState::Hot,
+                // Too little room even for every layer's routed floor: what
+                // does not fit goes, and nothing new is kept.
+                (Some(_), false) | (None, _) => ExpertLayerState::Absent,
             },
         )
         .collect();
@@ -299,7 +286,7 @@ fn low_budget_partial_plan(
                 .then_some(layer_index)
             })
             .collect(),
-        layer_targets,
+        layer_states,
         reserved_routed_overlay_bytes: 0,
         expected_preserved_bytes: preserved_bytes,
         maximum_new_retained_bytes: 0,

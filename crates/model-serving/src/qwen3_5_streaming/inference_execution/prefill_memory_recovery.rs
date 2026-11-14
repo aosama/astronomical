@@ -81,7 +81,7 @@ impl Qwen3_5EngineState {
             )
             .map_err(qwen3_5_runtime_error)?;
         active_request.pending_generated_token = None;
-        model.clear_phase_aware_expert_residency_plan();
+        model.forget_expert_layer_states();
         model
             .runtime()
             .synchronize_gpu_stream_and_clear_allocator_cache()

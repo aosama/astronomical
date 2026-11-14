@@ -1,26 +1,35 @@
-//! Decode-handoff seating after an atomic complete-owner demote.
+//! Which whole layers to read in before the first reply token.
 //!
-//! The planner may name complete layers that leftover RAM can hold. Decode never
-//! takes the complete-layer stream path, so those indexes are not loaded by
-//! later generate tokens. This decision is the only answer to "which complete
-//! layers must be seated before the first decode token." Family code enacts it;
-//! it must not invent a second policy of skipping the load.
+//! The plan may name layers to keep whole that the room left can hold. A
+//! reply never reads a whole layer on its own, so those layers are read in
+//! at the reply's start. This decision is the only answer to "which layers
+//! must be seated before the first reply token." Family code enacts it; it
+//! must not invent a second policy of skipping the load.
 
-use super::{ExpertLayerResidencyTarget, ExpertResidencyPlan};
+use super::{
+    CurrentExpertLayerResidency, ExpertLayerState, ExpertResidencyPlan, RetainedExpertPageClass,
+};
 
-/// Complete-layer indexes the plan named for promotion that are not already retained.
+/// Layers the plan keeps whole that the cache does not hold whole yet.
 ///
-/// Empty means decode may proceed without a seating pass.
+/// Empty means the reply may proceed without a seating pass.
 #[must_use]
-pub fn complete_layer_indexes_required_before_decode(plan: &ExpertResidencyPlan) -> Vec<usize> {
-    plan.complete_layer_targets
-        .iter()
-        .copied()
-        .filter(|&layer_index| {
-            matches!(
-                plan.layer_targets.get(layer_index),
-                Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead)
-            )
-        })
-        .collect()
+pub fn kept_layer_indexes_to_seat_before_reply(
+    plan: &ExpertResidencyPlan,
+    current_residencies: &[CurrentExpertLayerResidency],
+) -> Vec<usize> {
+    let mut layer_indexes_to_seat = Vec::new();
+    for layer_index in plan.complete_layer_targets.iter().copied() {
+        if plan.layer_states.get(layer_index) != Some(&ExpertLayerState::Kept) {
+            continue;
+        }
+        let is_held_whole = current_residencies.iter().any(|current_residency| {
+            current_residency.layer_index == layer_index
+                && current_residency.class == RetainedExpertPageClass::StableCompleteLayer
+        });
+        if !is_held_whole {
+            layer_indexes_to_seat.push(layer_index);
+        }
+    }
+    layer_indexes_to_seat
 }

@@ -1,5 +1,7 @@
-//! Family-neutral expert residency policy. Prefill keeps a request-stable
-//! contract; generation completes partial pages whenever the complete payload fits.
+//! Family-neutral expert residency policy. While a prompt is read every
+//! layer may be kept whole and the cache's capacity is the only refusal; a
+//! plan is made once, when the reply begins, and says for each layer where
+//! it should end up: kept whole, hot, or absent.
 
 mod complete_headroom;
 mod decode_seating;
@@ -9,8 +11,7 @@ mod ownership_mode;
 mod page_commit;
 mod planner;
 mod promotion_on_raise;
-mod release;
-mod request_plan;
+mod seated_layers;
 mod types;
 mod validation;
 
@@ -35,16 +36,10 @@ mod planner_boundary_tests;
 #[cfg(test)]
 mod promotion_on_raise_tests;
 #[cfg(test)]
-mod release_boundary_tests;
-#[cfg(test)]
-mod request_plan_boundary_tests;
-#[cfg(test)]
-mod request_plan_seated_charge_boundary_tests;
-#[cfg(test)]
 mod validation_boundary_tests;
 
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;
-pub use decode_seating::complete_layer_indexes_required_before_decode;
+pub use decode_seating::kept_layer_indexes_to_seat_before_reply;
 pub use observed_mode::observed_expert_memory_mode;
 pub use ownership_mode::classify_expert_memory_mode;
 pub use page_commit::{
@@ -55,13 +50,10 @@ pub use page_commit::{
 };
 pub use planner::plan_expert_residency;
 pub use promotion_on_raise::StreamingStartupResidencyFacts;
-pub use release::should_enact_planned_expert_release;
-pub use request_plan::{
-    RequestExpertLayerRole, RequestExpertResidency, publish_request_stable_residency_plan,
-    retained_complete_layer_ceiling_after_prefill_budget_refresh,
+pub use seated_layers::{
     retained_resident_ceiling_after_budget_refresh, seated_complete_layer_count,
 };
 pub use types::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerState, ExpertResidencyPlan,
+    ExpertResidencyPlanError, RetainedExpertPageClass,
 };

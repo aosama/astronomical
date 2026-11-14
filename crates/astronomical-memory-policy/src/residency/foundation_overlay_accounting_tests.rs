@@ -3,8 +3,8 @@
 
 use crate::phase::MemoryPhase;
 use crate::residency::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    RetainedExpertPageClass, plan_expert_residency, should_enact_planned_expert_release,
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerState, RetainedExpertPageClass,
+    plan_expert_residency,
 };
 
 /// Uniform geometry: routed floor 20 bytes per layer, complete payload 40.
@@ -57,10 +57,7 @@ fn should_preserve_a_seated_complete_layer_at_the_exact_incremental_boundary() {
     .expect("the seated complete layer fits at the boundary");
 
     assert_eq!(plan.complete_layer_targets, vec![0]);
-    assert_eq!(
-        plan.layer_targets[0],
-        ExpertLayerResidencyTarget::PreserveComplete
-    );
+    assert_eq!(plan.layer_states[0], ExpertLayerState::Kept);
     assert_eq!(plan.expected_preserved_bytes, 40);
     assert_eq!(plan.reserved_routed_overlay_bytes, 40);
 }
@@ -79,10 +76,7 @@ fn should_release_a_seated_complete_layer_one_byte_below_the_incremental_boundar
         plan.complete_layer_targets.is_empty(),
         "one byte short of the incremental, no complete layer may stay seated"
     );
-    assert_eq!(
-        plan.layer_targets[0],
-        ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-    );
+    assert_eq!(plan.layer_states[0], ExpertLayerState::Absent);
 }
 
 #[test]
@@ -104,10 +98,7 @@ fn should_count_the_retained_remainder_of_a_complete_layer_released_for_exact_de
     )
     .expect("the routed floors fit");
 
-    assert_eq!(
-        plan.layer_targets[0],
-        ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-    );
+    assert_eq!(plan.layer_states[0], ExpertLayerState::Absent);
     assert_eq!(plan.reserved_routed_overlay_bytes, 60);
     assert_eq!(
         plan.expected_preserved_bytes, 20,
@@ -133,14 +124,8 @@ fn should_not_reduce_the_new_retention_budget_by_preserved_bytes_above_the_route
     )
     .expect("the routed floors fit");
 
-    assert_eq!(
-        plan.layer_targets[0],
-        ExpertLayerResidencyTarget::PreservePartial
-    );
-    assert_eq!(
-        plan.layer_targets[1],
-        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-    );
+    assert_eq!(plan.layer_states[0], ExpertLayerState::Hot);
+    assert_eq!(plan.layer_states[1], ExpertLayerState::Hot);
     assert_eq!(
         plan.maximum_new_retained_bytes, 20,
         "layer 1's admission floor must fit inside the new-retention budget exactly"
@@ -161,10 +146,7 @@ fn should_charge_only_the_missing_bytes_when_promoting_over_a_smaller_elastic_pa
     )
     .expect("both complete targets fit");
 
-    assert_eq!(
-        plan.layer_targets[0],
-        ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-    );
+    assert_eq!(plan.layer_states[0], ExpertLayerState::Kept);
     assert_eq!(plan.expected_preserved_bytes, 20);
     assert_eq!(plan.maximum_new_retained_bytes, 60);
 }
@@ -187,25 +169,4 @@ fn should_order_whole_table_release_after_every_elastic_page_and_coldest_demand_
     .expect("current residency fits the planning ceiling");
 
     assert_eq!(plan.deterministic_release_order, vec![0, 1, 2]);
-}
-
-#[test]
-fn should_defer_the_whole_table_release_of_a_demoted_complete_layer_to_idle() {
-    let demoted_target = ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit;
-    assert!(!should_enact_planned_expert_release(
-        MemoryPhase::Prefill,
-        demoted_target,
-    ));
-    assert!(!should_enact_planned_expert_release(
-        MemoryPhase::GenerationPreparation,
-        demoted_target,
-    ));
-    assert!(!should_enact_planned_expert_release(
-        MemoryPhase::Decode,
-        demoted_target,
-    ));
-    assert!(should_enact_planned_expert_release(
-        MemoryPhase::Idle,
-        demoted_target,
-    ));
 }

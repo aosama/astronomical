@@ -45,7 +45,7 @@ impl Qwen3_5Model {
             && should_commit_multi_token_union_as_complete_layer(
                 route_token_count,
                 production_default_paging,
-                self.expert_residency_target(layer_index),
+                self.expert_layer_state(layer_index),
                 routed_expert_ids.len(),
                 expert_capacity,
             )
@@ -73,7 +73,7 @@ impl Qwen3_5Model {
         } else if should_seed_partial_layer_on_prefill_read(
             route_token_count,
             production_default_paging,
-            self.expert_residency_target(layer_index),
+            self.expert_layer_state(layer_index),
             resident_expert_count,
             routed_expert_ids.len(),
             expert_capacity,
@@ -121,7 +121,7 @@ impl Qwen3_5Model {
             if should_commit_mandatory_routed_page(
                 route_token_count,
                 production_default_paging,
-                self.expert_residency_target(layer_index),
+                self.expert_layer_state(layer_index),
                 false,
             ) {
                 retained_experts

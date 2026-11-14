@@ -237,7 +237,7 @@ impl Qwen3_5Model {
                 complete_expert_ids.len(),
                 streamed_manifest.source_manifests.len(),
             );
-            let residency_target = self.expert_residency_target(layer_index);
+            let residency_target = self.expert_layer_state(layer_index);
             if should_commit_mandatory_complete_layer(
                 route_token_count,
                 production_default_paging,
@@ -488,7 +488,7 @@ impl Qwen3_5Model {
         }
         let completion_is_funded = should_complete_partial_layer_on_prefill_read(
             production_default_paging,
-            self.expert_residency_target(layer_index),
+            self.expert_layer_state(layer_index),
             resident_expert_count,
             expert_capacity,
         );

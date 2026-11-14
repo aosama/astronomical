@@ -8,8 +8,8 @@
 use super::planner::{compare_partial_coverage, release_order};
 use super::validation;
 use super::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerState, ExpertResidencyPlan,
+    ExpertResidencyPlanError, RetainedExpertPageClass,
 };
 use crate::phase::MemoryPhase;
 
@@ -27,12 +27,12 @@ struct CompleteLayerSelection {
     foundation_and_floor_bytes: u64,
 }
 
-/// The preserved and newly retained byte charges of the planned targets.
+/// The preserved and newly retained byte charges of the planned layer states.
 #[derive(Debug)]
 struct LayerResidencyAccounting {
     preserved_bytes: u64,
     new_retained_bytes: u64,
-    layer_targets: Vec<ExpertLayerResidencyTarget>,
+    layer_states: Vec<ExpertLayerState>,
 }
 
 pub(super) fn foundation_and_overlay_plan(
@@ -89,7 +89,7 @@ pub(super) fn foundation_and_overlay_plan(
             .enumerate()
             .filter_map(|(layer_index, is_complete)| is_complete.then_some(layer_index))
             .collect(),
-        layer_targets: residency_accounting.layer_targets,
+        layer_states: residency_accounting.layer_states,
         reserved_routed_overlay_bytes,
         expected_preserved_bytes: residency_accounting.preserved_bytes,
         maximum_new_retained_bytes: residency_accounting.new_retained_bytes,
@@ -172,7 +172,7 @@ fn select_preserved_partial_layers(
     preserve_partial
 }
 
-/// Charges every planned target against the preserved and new-retention byte
+/// Charges every planned layer state against the preserved and new-retention byte
 /// budgets.
 fn account_planned_layer_charges(
     layer_facts: &FoundationOverlayLayerFacts<'_>,
@@ -181,30 +181,20 @@ fn account_planned_layer_charges(
 ) -> Result<LayerResidencyAccounting, ExpertResidencyPlanError> {
     let mut preserved_bytes = 0_u64;
     let mut new_retained_bytes = 0_u64;
-    let mut layer_targets = Vec::with_capacity(layer_facts.geometries.len());
+    let mut layer_states = Vec::with_capacity(layer_facts.geometries.len());
     for layer_index in 0..layer_facts.geometries.len() {
         let current_residency = layer_facts.current_by_layer[layer_index];
-        let target = if complete_targets[layer_index] {
-            if current_residency.is_some_and(|residency| {
-                residency.class == RetainedExpertPageClass::StableCompleteLayer
-            }) {
-                ExpertLayerResidencyTarget::PreserveComplete
-            } else {
-                ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-            }
+        let is_held_whole = current_residency.is_some_and(|residency| {
+            residency.class == RetainedExpertPageClass::StableCompleteLayer
+        });
+        let layer_state = if complete_targets[layer_index] {
+            ExpertLayerState::Kept
+        } else if current_residency.is_none() || (!is_held_whole && preserve_partial[layer_index]) {
+            // A layer holding nothing keeps the experts tokens route to; a
+            // partly held one stays as it is while the overlay has room.
+            ExpertLayerState::Hot
         } else {
-            match current_residency {
-                Some(residency)
-                    if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
-                {
-                    ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-                }
-                Some(_) if preserve_partial[layer_index] => {
-                    ExpertLayerResidencyTarget::PreservePartial
-                }
-                Some(_) => ExpertLayerResidencyTarget::ReleasePartial,
-                None => ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
-            }
+            ExpertLayerState::Absent
         };
         // The layer's charged capacity: its complete payload when seated,
         // otherwise the routed floor the plan reserves for it.
@@ -213,40 +203,32 @@ fn account_planned_layer_charges(
         } else {
             layer_facts.routed_floor_bytes[layer_index]
         };
-        match target {
-            ExpertLayerResidencyTarget::PreserveComplete
-            | ExpertLayerResidencyTarget::PreservePartial
-            | ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead => {
-                if let Some(residency) = current_residency {
-                    // Preserved bytes above the charged capacity (an elastic
-                    // page larger than its routed floor) are already-resident
-                    // overlay, not budget taken from other layers' floors, so
-                    // only the overlap with the charged capacity reduces the
-                    // new-retention budget.
-                    let kept_charged_bytes = residency.payload_bytes.min(charged_capacity_bytes);
-                    preserved_bytes = preserved_bytes
-                        .checked_add(residency.payload_bytes)
-                        .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
-                    new_retained_bytes = new_retained_bytes
-                        .checked_add(charged_capacity_bytes - kept_charged_bytes)
-                        .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
-                }
+        match (layer_state, current_residency) {
+            // What is held stays. Bytes held above the charged capacity (a
+            // partly held layer larger than its routed floor) are overlay
+            // that is resident already, not budget taken from other layers'
+            // floors, so only the overlap with the charged capacity reduces
+            // the new-retention budget.
+            (ExpertLayerState::Kept, Some(residency))
+            | (ExpertLayerState::Hot, Some(residency)) => {
+                let kept_charged_bytes = residency.payload_bytes.min(charged_capacity_bytes);
+                preserved_bytes = preserved_bytes
+                    .checked_add(residency.payload_bytes)
+                    .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
+                new_retained_bytes = new_retained_bytes
+                    .checked_add(charged_capacity_bytes - kept_charged_bytes)
+                    .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
             }
-            ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit => {
-                // The exact-deficit release is deferred to Idle and, by this
-                // target's contract, leaves the rest of the layer retained,
-                // so the layer's reserved routed floor is already resident
-                // inside the seated table and must not be ordered as a fresh
-                // storage read. (The Idle enactment currently removes the
-                // whole table instead — issue #1522 — which is exactly the
-                // re-read churn this accounting now makes visible.)
-                let retained_floor_bytes = current_residency
-                    .map(|residency| {
-                        residency
-                            .payload_bytes
-                            .min(layer_facts.routed_floor_bytes[layer_index])
-                    })
-                    .unwrap_or(0);
+            // A layer to keep whole that holds nothing is read in when the
+            // reply begins; it adds nothing here.
+            (ExpertLayerState::Kept, None) => {}
+            // A whole layer that no longer has a complete claim: its routed
+            // floor is resident inside the seated table already and must not
+            // be counted as a fresh storage read.
+            (ExpertLayerState::Absent, Some(residency)) if is_held_whole => {
+                let retained_floor_bytes = residency
+                    .payload_bytes
+                    .min(layer_facts.routed_floor_bytes[layer_index]);
                 preserved_bytes = preserved_bytes
                     .checked_add(retained_floor_bytes)
                     .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
@@ -254,28 +236,21 @@ fn account_planned_layer_charges(
                     .checked_add(charged_capacity_bytes - retained_floor_bytes)
                     .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
             }
-            // Every remaining target describes a layer whose reserved floor
-            // becomes resident through fresh reads: released partial pages
-            // may drop mid-prefill, admitted layers hold nothing today, and
-            // streamed-role or complete-on-mandatory-read layers (not named
-            // by this planner, but valid vocabulary) read their way in. The
-            // explicit arms keep a future target variant from silently
-            // falling into the full-capacity charge.
-            ExpertLayerResidencyTarget::ReleasePartial
-            | ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-            | ExpertLayerResidencyTarget::StreamOperationLocal
-            | ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead => {
+            // Every other layer's reserved floor becomes resident through
+            // fresh reads: a partly held layer that is dropped, and a layer
+            // that holds nothing and keeps what tokens route to.
+            (ExpertLayerState::Absent, _) | (ExpertLayerState::Hot, None) => {
                 new_retained_bytes = new_retained_bytes
                     .checked_add(charged_capacity_bytes)
                     .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
             }
         }
-        layer_targets.push(target);
+        layer_states.push(layer_state);
     }
     Ok(LayerResidencyAccounting {
         preserved_bytes,
         new_retained_bytes,
-        layer_targets,
+        layer_states,
     })
 }
 

@@ -8,55 +8,40 @@
 
 use super::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 
-/// Seat a complete layer after a mandatory read when the plan asked for it.
+/// Keep a whole layer that was just read when the layer should be kept.
 ///
-/// Prefill does this for multi-token chunks. Decode must do it too after an
-/// atomic complete-owner demote, or leftover budget never becomes resident RAM
-/// and every generate token streams from SSD. Streamed-role layers admit too:
-/// a multi-token chunk routes nearly every expert, so the mandatory read
-/// already paid the complete-layer cost and discarding it would re-stream the
-/// same bytes every later chunk. Budget admission remains the only refusal.
+/// While a prompt is read every layer is in that state, so a layer read
+/// whole is kept as long as the cache has room: the read already paid the
+/// whole-layer cost and discarding it would read the same bytes again. A
+/// reply does it too for the layers its plan keeps, or room left over never
+/// becomes resident memory and every token reads from storage. The cache's
+/// capacity remains the only refusal.
 #[must_use]
 pub const fn should_commit_mandatory_complete_layer(
     _route_token_count: i32,
     production_default_paging: bool,
-    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    layer_state: super::ExpertLayerState,
 ) -> bool {
-    production_default_paging
-        && matches!(
-            residency_target,
-            Some(
-                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
-            )
-        )
+    production_default_paging && matches!(layer_state, super::ExpertLayerState::Kept)
 }
 
 /// Keep routed experts after a mandatory read so the next forward can hit them
 /// (hot-expert caching). Overflow is handled by evicting the least-used
 /// retained page, not by refusing to cache what this forward used.
 ///
-/// The active residency plan is the phase's will for the layer, so the commit
-/// honors it: a layer the plan streams operation-local keeps streaming, and a
-/// layer the plan is releasing is not refilled behind the plan's back.
+/// A layer the reply's plan leaves absent keeps nothing new: it is not
+/// refilled behind the plan's back.
 #[must_use]
 pub const fn should_commit_mandatory_routed_page(
     _route_token_count: i32,
     production_default_paging: bool,
-    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    layer_state: super::ExpertLayerState,
     _layer_has_no_retained_page: bool,
 ) -> bool {
     if !production_default_paging {
         return false;
     }
-    match residency_target {
-        Some(super::ExpertLayerResidencyTarget::StreamOperationLocal) => false,
-        Some(
-            super::ExpertLayerResidencyTarget::ReleasePartial
-            | super::ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit,
-        ) => false,
-        Some(_) | None => true,
-    }
+    !matches!(layer_state, super::ExpertLayerState::Absent)
 }
 
 /// Whether a multi-token prefill chunk's operation-local routed-union stream
@@ -69,13 +54,13 @@ pub const fn should_commit_mandatory_routed_page(
 /// 389,018,225,728 bytes for one 23,976-token prompt — about 12.6 passes
 /// over the model's whole expert set — while 26.95 GB of ceiling sat unused).
 /// The offer is honest only when the plan funds the layer's complete claim
-/// (a Promote or Admit target) and the union covers the layer exactly;
+/// (the layer should be kept whole) and the union covers the layer exactly;
 /// budget admission inside the retained cache remains the only refusal path.
 #[must_use]
 pub const fn should_commit_multi_token_union_as_complete_layer(
     route_token_count: i32,
     production_default_paging: bool,
-    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    layer_state: super::ExpertLayerState,
     routed_expert_count: usize,
     expert_capacity: usize,
 ) -> bool {
@@ -83,13 +68,7 @@ pub const fn should_commit_multi_token_union_as_complete_layer(
         && production_default_paging
         && expert_capacity > 0
         && routed_expert_count == expert_capacity
-        && matches!(
-            residency_target,
-            Some(
-                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
-            )
-        )
+        && matches!(layer_state, super::ExpertLayerState::Kept)
 }
 
 /// Whether a partial prefill union may seed a funded complete-layer table.
@@ -101,7 +80,7 @@ pub const fn should_commit_multi_token_union_as_complete_layer(
 pub const fn should_seed_partial_layer_on_prefill_read(
     route_token_count: i32,
     production_default_paging: bool,
-    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    layer_state: super::ExpertLayerState,
     resident_expert_count: usize,
     routed_expert_count: usize,
     expert_capacity: usize,
@@ -112,13 +91,7 @@ pub const fn should_seed_partial_layer_on_prefill_read(
         && expert_capacity > 0
         && routed_expert_count > 0
         && routed_expert_count < expert_capacity
-        && matches!(
-            residency_target,
-            Some(
-                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
-            )
-        )
+        && matches!(layer_state, super::ExpertLayerState::Kept)
 }
 
 /// Whether a prefill read that must stream some of a layer's routed experts
@@ -135,7 +108,7 @@ pub const fn should_seed_partial_layer_on_prefill_read(
 #[must_use]
 pub const fn should_complete_partial_layer_on_prefill_read(
     production_default_paging: bool,
-    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    layer_state: super::ExpertLayerState,
     resident_expert_count: usize,
     expert_capacity: usize,
 ) -> bool {
@@ -143,13 +116,7 @@ pub const fn should_complete_partial_layer_on_prefill_read(
         && expert_capacity > 0
         && resident_expert_count > 0
         && resident_expert_count < expert_capacity
-        && matches!(
-            residency_target,
-            Some(
-                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
-            )
-        )
+        && matches!(layer_state, super::ExpertLayerState::Kept)
 }
 
 /// Structural slot cap for one decode warm table (hot-expert caching).

@@ -17,9 +17,7 @@ use crate::qwen3_5_streaming::{
     PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedExecutionMode,
     WarmExpertSlotTableCache,
 };
-use crate::{
-    DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution, RequestExpertResidency,
-};
+use crate::{DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution};
 
 use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 
@@ -35,10 +33,9 @@ pub struct Qwen3_5StreamingModel {
         Option<crate::qwen3_5_streaming::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer>,
     /// Individual routed experts retained within the paged-mode RAM ceiling.
     pub(crate) retained_experts: Option<RefCell<WarmExpertSlotTableCache>>,
-    /// Pure target published at load and refreshed before mandatory expert reads.
+    /// Where each expert layer should end up for the reply being written;
+    /// `None` while a prompt is read, when every layer may be kept whole.
     pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,
-    /// Prefill pin/stream contract for the active request. Generation clears it.
-    pub(crate) request_expert_residency: RefCell<Option<RequestExpertResidency>>,
     /// Deferred GPU missing-route roots collected during one paged forward.
     pub(crate) paged_forward_missing_route_collector: PagedForwardMissingRouteCollector,
     /// Warm-table slot capacity for decode-time hot-expert warming; zero
