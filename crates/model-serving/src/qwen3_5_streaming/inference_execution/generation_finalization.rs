@@ -23,6 +23,14 @@ impl Qwen3_5EngineState {
         }
     }
 
+    /// Closes the request in the memory ledger that watches this engine, so
+    /// its next reading starts a new request's worst-case tally.
+    fn finish_request_in_memory_ledger_at_finalization(&self, request_id: u64) {
+        if let Some(model) = self.model.as_ref() {
+            model.finish_request_in_memory_ledger(request_id);
+        }
+    }
+
     /// Reads back the dense layers this request gave up for its context, now
     /// that its state is gone (issue #1985). Without this one long prompt
     /// left every later request streaming more layers than the plan needs.
@@ -87,7 +95,8 @@ impl Qwen3_5EngineState {
                     active_memory_bytes,
                     active_memory_breakdown,
                 ),
-            ),
+            )
+            .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
         ))
     }
 
@@ -151,6 +160,7 @@ impl Qwen3_5EngineState {
             .is_some_and(|model| model.resume_expert_retention_after_request_memory_pressure());
         self.lift_prefill_memory_recovery_freeze_at_finalization();
         self.keep_planned_dense_layers_at_finalization(request_id.value());
+        self.finish_request_in_memory_ledger_at_finalization(request_id.value());
         if let Some(model) = self.model.as_ref() {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();
@@ -248,7 +258,8 @@ impl Qwen3_5EngineState {
                                     active_memory_bytes,
                                     active_memory_breakdown,
                                 ),
-                            ),
+                            )
+                            .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
                         ),
                         expert_residency_telemetry,
                     )

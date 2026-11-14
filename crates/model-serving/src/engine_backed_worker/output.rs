@@ -645,6 +645,9 @@ pub(crate) fn worker_memory_snapshot(
                 owner_overrun_bytes: utilization.owner_overrun_bytes,
             },
         ),
+        memory_ledger: mlx_memory_telemetry
+            .memory_ledger_reading
+            .map(super::memory_ledger_snapshot::worker_memory_ledger_snapshot),
     }
 }
 

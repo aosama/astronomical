@@ -150,5 +150,6 @@ pub(super) fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMl
         model_core_payload_bytes: 10_000,
         context_state_payload_bytes: 5_000,
         memory_ceiling_utilization: None,
+        memory_ledger: None,
     }
 }

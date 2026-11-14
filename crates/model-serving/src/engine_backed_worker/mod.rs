@@ -94,6 +94,7 @@ mod generation_start;
 mod idle_command;
 mod image_generation;
 mod load_announcement;
+mod memory_ledger_snapshot;
 mod memory_limit;
 mod model_swap;
 mod neural_engine_preparation_relay;

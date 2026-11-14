@@ -240,6 +240,7 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
             model_core_payload_bytes: 8_000_000_000,
             context_state_payload_bytes: 0,
             memory_ceiling_utilization: None,
+            memory_ledger: None,
         }),
         expert_residency: None,
     };

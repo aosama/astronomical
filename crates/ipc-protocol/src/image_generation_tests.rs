@@ -58,6 +58,7 @@ async fn should_round_trip_an_image_generation_journey() {
                 model_core_payload_bytes: 0,
                 context_state_payload_bytes: 0,
                 memory_ceiling_utilization: None,
+                memory_ledger: None,
             }),
         },
         WorkerEvent::ImageGenerationCompleted {
@@ -311,6 +312,7 @@ fn finalized_image_memory_snapshot() -> WorkerMlxMemorySnapshot {
         model_core_payload_bytes: 0,
         context_state_payload_bytes: 0,
         memory_ceiling_utilization: None,
+        memory_ledger: None,
     }
 }
 

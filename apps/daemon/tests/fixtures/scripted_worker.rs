@@ -531,6 +531,7 @@ async fn dispatch_unstructured_chat(
                         model_core_payload_bytes: 3_000,
                         context_state_payload_bytes: 2_000,
                         memory_ceiling_utilization: None,
+                        memory_ledger: None,
                     }),
                     expert_residency: None,
                 })
@@ -567,6 +568,7 @@ async fn dispatch_unstructured_chat(
                         model_core_payload_bytes: 3_000,
                         context_state_payload_bytes: 0,
                         memory_ceiling_utilization: None,
+                        memory_ledger: None,
                     }),
                 })
                 .await?;

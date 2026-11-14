@@ -41,6 +41,8 @@ pub(crate) mod layer_major_prefill;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_submission;
 // Reads the next streamed layer while the graphics processor computes.
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod memory_ledger_observation;
 pub(crate) mod prefill_complete_layer_prefetch;
 #[cfg(test)]
 mod prefill_complete_layer_prefetch_tests;

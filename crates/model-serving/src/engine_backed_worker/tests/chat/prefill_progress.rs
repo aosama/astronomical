@@ -170,6 +170,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     model_core_payload_bytes: 4_000,
                     context_state_payload_bytes: 2_000,
                     memory_ceiling_utilization: None,
+                    memory_ledger: None,
                 })
             );
         }

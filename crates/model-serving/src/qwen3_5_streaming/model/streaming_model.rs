@@ -53,6 +53,10 @@ pub struct Qwen3_5StreamingModel {
     /// streams reads is observed as Resident.
     pub(super) request_expert_storage_read_tally:
         super::request_expert_storage_read_tally::RequestExpertStorageReadTally,
+    /// The memory ledger watching this model, opened at the first completed
+    /// forward (issue #2221). It decides nothing yet.
+    pub(crate) memory_ledger_observer:
+        RefCell<Option<astronomical_memory_policy::ledger::LedgerObserver>>,
     /// Decode route capture for the expert-predictor program: lazy pending
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation: RefCell<RouteObservationCollector>,

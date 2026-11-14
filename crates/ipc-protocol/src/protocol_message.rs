@@ -210,6 +210,54 @@ pub struct WorkerMlxMemorySnapshot {
     /// `None` from engines without a composed RAM budget.
     #[serde(default)]
     pub memory_ceiling_utilization: Option<WorkerMemoryCeilingUtilizationSnapshot>,
+    /// The memory ledger's view of the same instant (issue #2221). `None`
+    /// from engines the ledger does not watch yet.
+    #[serde(default)]
+    pub memory_ledger: Option<WorkerMemoryLedgerSnapshot>,
+}
+
+/// The memory ledger's accounts, what the engine held, and how the two
+/// compared with MLX, at one instant, with the worst readings of the
+/// request so far.
+///
+/// While the ledger only watches, this is evidence, not policy: it shows
+/// what the ledger would have allowed beside what the engine did.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerMemoryLedgerSnapshot {
+    pub limit_bytes: u64,
+    pub core_weight_bytes: u64,
+    pub context_bytes: u64,
+    pub working_memory_bytes: u64,
+    pub stream_slot_bytes: u64,
+    pub lease_bytes: u64,
+    pub margin_bytes: u64,
+    /// What the ledger leaves for kept weights: always the remainder.
+    pub kept_weight_capacity_bytes: u64,
+    pub unassigned_bytes: u64,
+    pub shortfall_bytes: u64,
+    pub working_memory_is_measured: bool,
+    pub held_context_bytes: u64,
+    pub held_kept_weight_bytes: u64,
+    pub held_stream_slot_bytes: u64,
+    /// What the ledger expected MLX to report as in use.
+    pub expected_active_bytes: u64,
+    /// Memory in use that no account names.
+    pub unaccounted_bytes: u64,
+    /// Memory an account names that is not in use.
+    pub overcounted_bytes: u64,
+    pub kept_over_capacity_bytes: u64,
+    pub step_peak_beyond_held_bytes: u64,
+    pub observed_step_count: u64,
+    pub largest_unaccounted_bytes: u64,
+    pub largest_overcounted_bytes: u64,
+    pub largest_kept_over_capacity_bytes: u64,
+    /// The largest rise of one prompt step's peak above what was held
+    /// around it, and the same for one reply step.
+    pub largest_reading_step_peak_beyond_held_bytes: u64,
+    pub largest_writing_step_peak_beyond_held_bytes: u64,
+    /// The emptiest the kept weights were against the capacity while a
+    /// prompt was read, in thousandths.
+    pub lowest_kept_share_while_reading_permille: Option<u32>,
 }
 
 /// One utilization decomposition published beside its memory snapshot.

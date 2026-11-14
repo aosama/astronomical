@@ -156,5 +156,6 @@ fn decode_mlx_memory_telemetry_from_completed_forward(
         1,
         mlx_active_memory_bytes,
         active_memory_breakdown,
-    )))
+    ))
+    .with_memory_ledger_reading(model.latest_memory_ledger_reading()))
 }

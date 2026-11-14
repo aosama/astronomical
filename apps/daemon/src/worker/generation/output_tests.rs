@@ -22,6 +22,7 @@ fn decode_snapshot(peak_memory_bytes: u64) -> WorkerMlxMemorySnapshot {
         model_core_payload_bytes: 0,
         context_state_payload_bytes: 0,
         memory_ceiling_utilization: None,
+        memory_ledger: None,
     }
 }
 

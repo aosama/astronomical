@@ -25,6 +25,7 @@ async fn should_round_trip_prefill_progress_event() {
             model_core_payload_bytes: 3_000,
             context_state_payload_bytes: 2_000,
             memory_ceiling_utilization: None,
+            memory_ledger: None,
         }),
         expert_residency: Some(WorkerExpertResidencySnapshot {
             dense_layers: None,
