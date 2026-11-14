@@ -131,6 +131,7 @@ impl Qwen3_5Model {
             should_materialize_logits,
         } = layer_major_prefill_request;
         validate_layer_major_spans(token_ids.len(), spans)?;
+        self.discard_expert_state_of_an_unfinished_prompt();
         let mut span_states =
             self.embed_layer_major_spans(token_ids, spans, checkpoint_contract)?;
         let every_layer_outcome = self.run_every_layer_over_spans(
@@ -142,10 +143,14 @@ impl Qwen3_5Model {
             performance_attribution,
         );
         // Whether the layers finished or one failed, no expert page may
-        // outlive the prompt in the slots that hold it.
+        // outlive the prompt in the slots that hold it, and a failed
+        // prompt's routes are not demand.
+        if let Err(layer_error) = every_layer_outcome {
+            self.discard_expert_state_of_an_unfinished_prompt();
+            return Err(layer_error);
+        }
         self.release_held_prompt_expert_layer();
         self.discard_prefill_complete_layer_prefetch();
-        every_layer_outcome?;
         let final_logits = match (should_materialize_logits, span_states.last()) {
             (
                 true,
@@ -243,6 +248,18 @@ impl Qwen3_5Model {
         Ok(span_states)
     }
 
+    /// Drops the expert pages in hand and the routes not yet recorded: what
+    /// a failed or cancelled attempt leaves behind. Recording such a route
+    /// would count a discarded forward as demand, and reading it would
+    /// evaluate a graph that already failed.
+    fn discard_expert_state_of_an_unfinished_prompt(&self) {
+        self.release_held_prompt_expert_layer();
+        self.discard_prefill_complete_layer_prefetch();
+        self.deferred_expert_demand
+            .borrow_mut()
+            .discard_pending_layer_routes();
+    }
+
     /// Runs the decoder layers in order, each over every span.
     fn run_every_layer_over_spans(
         &self,
@@ -283,12 +300,12 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let forward_layer_weights = self.forward_layer_weights(layer_pass.layer_index)?;
-        let prompt_token_count =
+        let spans_token_count =
             i32::try_from(spans.last().map_or(0, |last_span| last_span.end_token))
                 .unwrap_or(i32::MAX);
         self.hold_prompt_expert_layer(
             layer_pass.layer_index,
-            prompt_token_count,
+            spans_token_count,
             performance_attribution,
         );
         for (span_index, (span, span_state)) in spans.iter().zip(span_states.iter_mut()).enumerate()
@@ -310,7 +327,7 @@ impl Qwen3_5Model {
             self.read_next_expert_layer_ahead_after_first_span(
                 span_index,
                 layer_pass.layer_index,
-                prompt_token_count,
+                spans_token_count,
                 performance_attribution,
             );
         }
@@ -354,7 +371,7 @@ impl Qwen3_5Model {
         &self,
         submitted_span_index: usize,
         layer_index: usize,
-        prompt_token_count: i32,
+        spans_token_count: i32,
         performance_attribution: &mut PerformanceAttribution,
     ) {
         if submitted_span_index != 0 {
@@ -362,7 +379,7 @@ impl Qwen3_5Model {
         }
         self.issue_prefill_complete_layer_prefetch(
             layer_index,
-            prompt_token_count,
+            spans_token_count,
             PartlyKeptLayers::Included,
             performance_attribution,
         );

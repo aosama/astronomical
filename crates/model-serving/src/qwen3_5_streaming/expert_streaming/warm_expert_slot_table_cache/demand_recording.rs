@@ -40,10 +40,10 @@ impl WarmExpertSlotTableCache {
     /// [`Self::record_expert_demand`] for a route built earlier, under the
     /// prompt-demand weight in force when it was built.
     ///
-    /// A prompt read one layer at a time builds every span's routes before
-    /// any is recorded, and only the last span carries the final-chunk
-    /// boost; recording all of them at the weight in force afterwards would
-    /// boost the whole prompt alike.
+    /// A prompt read one layer at a time builds the routes of every span of
+    /// a layer before it records them, and only the last span carries the
+    /// final-chunk boost; recording all of them at the weight in force
+    /// afterwards would boost the whole prompt alike.
     pub(crate) fn record_expert_demand_at_prefill_weight(
         &mut self,
         layer_index: usize,

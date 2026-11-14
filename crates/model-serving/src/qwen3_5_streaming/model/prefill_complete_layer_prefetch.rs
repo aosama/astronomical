@@ -216,6 +216,22 @@ impl Qwen3_5Model {
             .take();
     }
 
+    /// Drops a page read ahead for a layer before `layer_index`. A prompt
+    /// read one layer at a time never goes back, so such a page can only
+    /// occupy the slot and keep the next read from being issued.
+    pub(super) fn discard_read_ahead_before(&self, layer_index: usize) {
+        let mut read_ahead_layer = self
+            .prompt_expert_pages_in_hand
+            .read_ahead_layer
+            .borrow_mut();
+        if read_ahead_layer
+            .as_ref()
+            .is_some_and(|read_ahead| read_ahead.layer_index < layer_index)
+        {
+            read_ahead_layer.take();
+        }
+    }
+
     /// Takes the prefetched complete page when it belongs to `layer_index`.
     pub(super) fn take_prefetched_complete_layer(
         &self,

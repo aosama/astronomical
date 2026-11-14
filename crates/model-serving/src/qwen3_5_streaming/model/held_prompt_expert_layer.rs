@@ -57,10 +57,11 @@ impl Qwen3_5Model {
     pub(super) fn hold_prompt_expert_layer(
         &self,
         layer_index: usize,
-        prompt_token_count: i32,
+        spans_token_count: i32,
         performance_attribution: &mut PerformanceAttribution,
     ) {
         self.release_held_prompt_expert_layer();
+        self.discard_read_ahead_before(layer_index);
         let (Some(expert_pager), Some(retained_experts)) =
             (self.expert_pager.as_ref(), self.retained_experts.as_ref())
         else {
@@ -69,7 +70,7 @@ impl Qwen3_5Model {
         if !self.prompt_reads_complete_expert_layer(
             expert_pager,
             layer_index,
-            prompt_token_count,
+            spans_token_count,
             PartlyKeptLayers::Included,
         ) {
             return;
@@ -77,7 +78,7 @@ impl Qwen3_5Model {
         let Some((weights, manifest)) = self.complete_prompt_expert_layer_page(
             expert_pager,
             layer_index,
-            prompt_token_count,
+            spans_token_count,
             performance_attribution,
         ) else {
             return;
@@ -87,15 +88,12 @@ impl Qwen3_5Model {
             .borrow_mut()
             .record_disk_load(expert_capacity, manifest.source_manifests.len());
         if should_commit_multi_token_union_as_complete_layer(
-            prompt_token_count,
+            spans_token_count,
             true,
             self.expert_residency_target(layer_index),
             expert_capacity,
             expert_capacity,
-        ) && retained_experts
-            .borrow_mut()
-            .try_adopt_complete_layer(&self.runtime, layer_index, &manifest.expert_ids, &weights)
-            .unwrap_or(false)
+        ) && self.adopt_held_layer_into_cache(retained_experts, layer_index, &manifest, &weights)
         {
             performance_attribution.record_counter(
                 PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
@@ -109,13 +107,42 @@ impl Qwen3_5Model {
         });
     }
 
+    /// Offers the page to the cache, which shares its arrays when the layer
+    /// fits. A runtime failure leaves the layer streamed for this prompt.
+    fn adopt_held_layer_into_cache(
+        &self,
+        retained_experts: &std::cell::RefCell<
+            crate::qwen3_5_streaming::expert_streaming::WarmExpertSlotTableCache,
+        >,
+        layer_index: usize,
+        manifest: &QuantizedExpertPageManifest,
+        weights: &Qwen3_5PagedExpertWeights,
+    ) -> bool {
+        match retained_experts.borrow_mut().try_adopt_complete_layer(
+            &self.runtime,
+            layer_index,
+            &manifest.expert_ids,
+            weights,
+        ) {
+            Ok(was_adopted) => was_adopted,
+            Err(adoption_error) => {
+                tracing::warn!(
+                    layer_index,
+                    error = %adoption_error,
+                    "the expert cache could not adopt a prompt layer's page; the layer streams for this prompt"
+                );
+                false
+            }
+        }
+    }
+
     /// The layer's complete page: the read-ahead when it was this layer's,
     /// and a read from storage otherwise.
     fn complete_prompt_expert_layer_page(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
-        prompt_token_count: i32,
+        spans_token_count: i32,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
         if let Some(read_ahead_page) = self.take_prefetched_complete_layer(layer_index) {
@@ -128,7 +155,7 @@ impl Qwen3_5Model {
             layer_index,
             &complete_expert_ids,
             Qwen3_5ExpertStreamingRequestShape {
-                route_token_count: prompt_token_count,
+                route_token_count: spans_token_count,
                 routed_expert_count: expert_capacity,
             },
             performance_attribution,
