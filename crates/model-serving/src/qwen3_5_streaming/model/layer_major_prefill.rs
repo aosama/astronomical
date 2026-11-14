@@ -132,7 +132,7 @@ impl Qwen3_5Model {
         validate_layer_major_spans(token_ids.len(), spans)?;
         let mut span_states =
             self.embed_layer_major_spans(token_ids, spans, checkpoint_contract)?;
-        let mut previous_dense_layer_output = None;
+        let mut previous_layer_output = None;
         for layer_index in 0..self.config.layer_count() as usize {
             self.run_layer_over_spans(
                 LayerPass {
@@ -142,7 +142,7 @@ impl Qwen3_5Model {
                 spans,
                 &mut span_states,
                 request_decoder_state,
-                &mut previous_dense_layer_output,
+                &mut previous_layer_output,
                 performance_attribution,
             )?;
         }
@@ -247,7 +247,7 @@ impl Qwen3_5Model {
         spans: &[LayerMajorSpan],
         span_states: &mut [SpanState],
         request_decoder_state: &mut RequestDecoderStateStack,
-        previous_dense_layer_output: &mut Option<MlxArray>,
+        previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let forward_layer_weights = self.forward_layer_weights(layer_pass.layer_index)?;
@@ -289,7 +289,7 @@ impl Qwen3_5Model {
                         .and_then(DecoderCacheState::convolution_state_array),
                     boundary_checkpoint_states,
                 },
-                previous_dense_layer_output,
+                previous_layer_output,
                 LayerGroupSubmission {
                     completed_layer_count: layer_pass.layer_index + 1,
                     decoder_layer_count: self.config.layer_count() as usize,
