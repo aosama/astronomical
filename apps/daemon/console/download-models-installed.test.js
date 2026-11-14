@@ -157,7 +157,7 @@ function installedActionLabelsFor(entryOverrides) {
 }
 
 test("should_offer_the_thin_talk_handoff_for_a_chat_model_on_this_mac", () => {
-    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: true }), ["Open in Thin Talk", "Remove"]);
+    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: true }), ["Chat with this model", "Remove"]);
 });
 
 test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_decision_or_speech_model", () => {
@@ -168,20 +168,20 @@ test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_decision_or_
         role: "helper", capabilities: { supports_embeddings: true }
     });
 
-    assert.equal(pictureModelLabels.includes("Open in Thin Talk"), false);
-    assert.equal(embeddingModelLabels.includes("Open in Thin Talk"), false);
+    assert.equal(pictureModelLabels.includes("Chat with this model"), false);
+    assert.equal(embeddingModelLabels.includes("Chat with this model"), false);
     const decisionModelLabels = installedActionLabelsFor({
         role: "decision", capabilities: { supports_decisions: true }
     });
-    assert.equal(decisionModelLabels.includes("Open in Thin Talk"), false);
+    assert.equal(decisionModelLabels.includes("Chat with this model"), false);
     const speechModelLabels = installedActionLabelsFor({
         role: "speech", capabilities: { supports_speech: true }
     });
-    assert.equal(speechModelLabels.includes("Open in Thin Talk"), false);
+    assert.equal(speechModelLabels.includes("Chat with this model"), false);
 });
 
 test("should_show_a_copy_the_person_placed_in_finder_instead_of_offering_to_remove_it", () => {
-    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: false }), ["Open in Thin Talk", "Show in Finder"]);
+    assert.deepEqual(installedActionLabelsFor({ removable_from_disk: false }), ["Chat with this model", "Show in Finder"]);
 });
 
 function thinTalkHandoffsFor(applicationChannel) {

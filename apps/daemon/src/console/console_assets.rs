@@ -282,7 +282,7 @@ mod tests {
             !INDEX_HTML.contains("astronomical://"),
             "console shell must not hardcode a channel's chat link"
         );
-        for thin_talk_handoff in ["open-thin-talk", "Open Thin Talk", "choose Chat"] {
+        for thin_talk_handoff in ["open-thin-talk", "Open the chat window", "choose Chat"] {
             assert!(
                 INDEX_HTML.contains(thin_talk_handoff),
                 "console shell is missing the Thin Talk handoff `{thin_talk_handoff}`"

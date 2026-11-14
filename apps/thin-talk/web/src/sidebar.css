@@ -50,7 +50,7 @@
   color: var(--ink-2);
 }
 
-/* "Thin Talk Development" does not fit on one line beside this button, so the
+/* "Astronomical Development" does not fit on one line beside this button, so the
    name takes the wrap and the button keeps its shape. */
 .sidebar__new-chat {
   display: inline-flex;

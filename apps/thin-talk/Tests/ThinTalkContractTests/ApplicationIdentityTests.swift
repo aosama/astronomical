@@ -30,20 +30,20 @@ final class ApplicationIdentityTests: XCTestCase {
   func test_should_name_development_in_the_window_title() {
     let identity = ThinTalkApplicationIdentity(channel: .development, daemonPort: 6733)
 
-    XCTAssertEqual(identity.windowTitle, "Thin Talk Development")
+    XCTAssertEqual(identity.windowTitle, "Astronomical Development")
   }
 
   func test_should_keep_the_plain_window_title_for_stable() {
     let identity = ThinTalkApplicationIdentity(channel: .stable, daemonPort: 6732)
 
-    XCTAssertEqual(identity.windowTitle, "Thin Talk")
+    XCTAssertEqual(identity.windowTitle, "Astronomical")
   }
 
   func test_should_name_development_when_the_bundle_has_no_channel() {
     let identity = ThinTalkApplicationIdentity.current(
       bundle: ApplicationIdentityBundle(identityFields: [:]))
 
-    XCTAssertEqual(identity.windowTitle, "Thin Talk Development")
+    XCTAssertEqual(identity.windowTitle, "Astronomical Development")
   }
 
   func test_should_use_channel_defaults_when_bundle_connection_fields_are_missing() {

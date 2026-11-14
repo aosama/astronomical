@@ -24,7 +24,7 @@ export class SearchConversationsTool implements ConversationTool {
   public readonly name = "search_conversations";
   public readonly label = "Search conversations";
   public readonly description =
-    "Searches the user's saved Thin Talk conversations for a word or phrase and returns where it appears. Use it when the user refers to something discussed in an earlier conversation.";
+    "Searches the user's saved Astronomical conversations for a word or phrase and returns where it appears. Use it when the user refers to something discussed in an earlier conversation.";
   public readonly parameters: ToolParametersSchema = {
     type: "object",
     properties: { query: { type: "string", description: "The word or phrase to look for." } },
