@@ -564,6 +564,16 @@ test-neural-engine = "test --no-fail-fast -p astronomical-neural-engine --all-ta
 # {"diagnostics": true} for performance attribution.
 test-engine-versus-memory-ceiling = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter engine_versus_memory_ceiling --ignored"
 
+# Streaming scoreboard (issue #2221): the rows the streaming memory redesign is
+# judged by, one model under one limit per row, taken at the product's default
+# prompt chunk with attribution off. Runs all four cells in turn, each with
+# its own worker process. For one cell, run the same xtask command with that
+# cell's test name as the filter, for example
+# should_record_the_small_sparse_model_scoreboard_row_at_an_11_gib_limit.
+# Rows print as [streaming-scoreboard] lines and append to
+# target/acceptance-evidence/streaming-scoreboard/streaming-scoreboard.jsonl.
+measure-streaming-scoreboard = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --ignored --case-budget-seconds 1320 --filter streaming_scoreboard"
+
 # Paged-versus-resident parity (issue #1679): the 35B sparse-MoE answers a long
 # greedy and a short seeded question resident and paged, and both engines must
 # give identical tokens. Each journey spawns its resident recording test in a

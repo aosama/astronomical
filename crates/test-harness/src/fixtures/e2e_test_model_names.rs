@@ -22,7 +22,8 @@ const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
 const DENSE_VISION_ROLE: &str = "dense_vision";
 const FLUX2_KLEIN_4BIT_ROLE: &str = "flux2_klein_4bit";
 const STREAMED_DENSE_ROLE: &str = "streamed_dense";
-const E2E_TEST_MODEL_ROLES: [&str; 9] = [
+const SMALL_SPARSE_MOE_STREAMING_ROLE: &str = "small_sparse_moe_streaming";
+const E2E_TEST_MODEL_ROLES: [&str; 10] = [
     LARGE_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
     ORNITH_DFLASH_DRAFT_ROLE,
@@ -32,6 +33,7 @@ const E2E_TEST_MODEL_ROLES: [&str; 9] = [
     DENSE_VISION_ROLE,
     FLUX2_KLEIN_4BIT_ROLE,
     STREAMED_DENSE_ROLE,
+    SMALL_SPARSE_MOE_STREAMING_ROLE,
 ];
 
 fn e2e_test_model_names() -> &'static BTreeMap<String, String> {
@@ -119,12 +121,19 @@ pub fn streamed_dense_model_id() -> &'static str {
     model_id_for_role(STREAMED_DENSE_ROLE)
 }
 
+/// The smallest sparse model in the catalog, for streaming measurements at a
+/// limit near half its size: a low limit keeps the machine out of swap, which
+/// made timings on the larger builds noise (issue #2221).
+pub fn small_sparse_moe_streaming_model_id() -> &'static str {
+    model_id_for_role(SMALL_SPARSE_MOE_STREAMING_ROLE)
+}
+
 /// The 4-bit MLX build of FLUX.2 Klein 4B (issue #1904).
 pub fn flux2_klein_4bit_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_4BIT_ROLE)
 }
 
-pub fn e2e_test_model_ids() -> [&'static str; 9] {
+pub fn e2e_test_model_ids() -> [&'static str; 10] {
     [
         large_sparse_moe_streaming_model_id(),
         resident_sparse_moe_model_id(),
@@ -135,6 +144,7 @@ pub fn e2e_test_model_ids() -> [&'static str; 9] {
         dense_vision_model_id(),
         flux2_klein_4bit_model_id(),
         streamed_dense_model_id(),
+        small_sparse_moe_streaming_model_id(),
     ]
 }
 

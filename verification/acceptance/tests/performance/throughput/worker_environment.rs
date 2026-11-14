@@ -38,6 +38,35 @@ fn discovery_root_for_model_directory(model_directory: &Path) -> &Path {
         .unwrap_or(model_directory)
 }
 
+/// The prompt chunk the long-running throughput series was recorded at.
+const MEASUREMENT_LANE_PROMPT_CHUNK_TOKENS: u32 = 2_048;
+
+/// Which prompt chunk size a measured worker serves with.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PromptChunking {
+    /// The fixed 2,048-token chunk every historical throughput record was
+    /// taken at, kept so the durable series stays one comparable series.
+    MeasurementLane,
+    /// Whatever the product resolves by default, for a lane that reports what
+    /// a person running the app gets (issue #2221).
+    ProductDefault,
+}
+
+/// Pins the measurement lane's fixed chunk in the worker's configuration, or
+/// leaves chunking out so the product's own defaults resolve.
+fn apply_prompt_chunking(
+    configuration_document: &mut serde_json::Value,
+    prompt_chunking: PromptChunking,
+) {
+    if prompt_chunking == PromptChunking::MeasurementLane {
+        configuration_document["chunking"] = serde_json::json!({
+            "fixed_prompt_processing_chunk_size_tokens": MEASUREMENT_LANE_PROMPT_CHUNK_TOKENS,
+            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens":
+                MEASUREMENT_LANE_PROMPT_CHUNK_TOKENS,
+        });
+    }
+}
+
 /// Builds an isolated Development home pinned to the measured model and resolves
 /// the daemon-owned bootstrap settings for the worker. The worker executable is
 /// the one built with this test binary's profile (see the module docs), so an
@@ -55,6 +84,7 @@ pub(crate) fn perf_worker_environment(
     model_id: &str,
     model_directory: &Path,
     attribution_enabled: bool,
+    prompt_chunking: PromptChunking,
 ) -> (
     tempfile::TempDir,
     PathBuf,
@@ -83,11 +113,8 @@ pub(crate) fn perf_worker_environment(
     let mut configuration_document = serde_json::json!({
         "model_directories": [discovery_root],
         "persistent_prompt_cache_enabled": false,
-        "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": 2_048,
-            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2_048,
-        },
     });
+    apply_prompt_chunking(&mut configuration_document, prompt_chunking);
     if diagnostics_enabled() || attribution_enabled {
         // Attribution adds host synchronization to every forward and info
         // logging adds I/O, so a diagnostic or evidence run explains where

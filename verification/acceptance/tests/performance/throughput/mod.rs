@@ -39,6 +39,9 @@ mod qwen3_5_moe;
 mod qwen3_5_moe_vision;
 
 #[cfg(feature = "performance_throughput")]
+mod streaming_scoreboard;
+
+#[cfg(feature = "performance_throughput")]
 mod support;
 
 #[cfg(feature = "performance_throughput")]

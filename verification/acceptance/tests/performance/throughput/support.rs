@@ -47,7 +47,7 @@ use crate::performance_throughput::historical_record::{
 };
 use crate::performance_throughput::machine_specs::MachineSpecs;
 pub(crate) use crate::performance_throughput::worker_environment::{
-    diagnostics_enabled, perf_worker_environment,
+    PromptChunking, diagnostics_enabled, perf_worker_environment,
 };
 
 pub(crate) const MAXIMUM_MODEL_MEMORY_BYTES: u64 = 36 * (1 << 30);
@@ -116,6 +116,8 @@ pub(crate) struct ThroughputJourney {
     pub(crate) temperature_thousandths: u16,
     pub(crate) maximum_mlx_memory_bytes: Option<u64>,
     pub(crate) attribution_enabled: bool,
+    /// Which prompt chunk size the worker serves with.
+    pub(crate) prompt_chunking: PromptChunking,
     pub(crate) journey_timeout: Duration,
     /// The measured model's directory when the journey locates it itself
     /// (an environment-addressed pack); `None` resolves the model id through
@@ -156,6 +158,7 @@ impl ThroughputJourney {
             temperature_thousandths,
             maximum_mlx_memory_bytes: None,
             attribution_enabled: false,
+            prompt_chunking: PromptChunking::MeasurementLane,
             journey_timeout: JOURNEY_TIMEOUT,
             model_directory: None,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
@@ -175,6 +178,12 @@ pub(crate) struct JourneyRunOutcome {
     pub(crate) measured_budget_exhausted: bool,
     pub(crate) budget_exhausted_stage: Option<MemoryCellBudgetExhaustedStage>,
     pub(crate) final_health_snapshot: WorkerHealthSnapshot,
+    /// The worker's health between the warmup and the measured completion.
+    /// Session counters only ever accumulate, so a lane that reports what the
+    /// measured completion alone read from storage subtracts this snapshot's
+    /// counters from the final one. `None` when no warmup ran or it did not
+    /// finish.
+    pub(crate) health_snapshot_after_warmup: Option<WorkerHealthSnapshot>,
     /// The last active-request progress observed by the background sampler,
     /// which survives cancellation: a cancelled generation clears the health
     /// snapshot's progress, so a cell that died mid-prefill still reports its
@@ -308,7 +317,35 @@ pub(crate) async fn run_throughput_journey(
     measurement
 }
 
+/// Reads the measured completion's rates from the worker's performance log.
+/// A completion that ran out of budget wrote no sample, so its rates are
+/// reported as the shortfall; any other missing sample is a broken lane.
+fn measured_completion_measurement(
+    model_id: &str,
+    journey: &ThroughputJourney,
+    logging_directory: &std::path::Path,
+    measured_completion_ordinal_in_worker: u32,
+    measured_budget_exhausted: bool,
+) -> ThroughputMeasurement {
+    let mut measurement = match read_measured_completion(
+        &logging_directory.join("performance.jsonl"),
+        model_id,
+        journey.decode_expert_cache_policy,
+        measured_completion_ordinal_in_worker,
+    ) {
+        Some(measurement) => measurement,
+        None if measured_budget_exhausted => budget_exhausted_measurement(model_id, journey),
+        None => panic!("the measured completion should produce a performance sample"),
+    };
+    if journey.attribution_enabled {
+        measurement.decode_cache_diagnostic_evidence =
+            read_decode_cache_diagnostic_evidence(logging_directory, MEASURED_REQUEST_ID);
+    }
+    measurement
+}
+
 mod journey_stages;
+mod progress_report;
 
 use journey_stages::{
     JourneyCompletions, apply_journey_overrides, budget_exhausted_measurement,
@@ -337,9 +374,13 @@ pub(crate) async fn measure_throughput(
         logging_directory,
         model_policy_catalog,
         mut worker_startup_configuration,
-    ) = perf_worker_environment(model_id, &model_directory, journey.attribution_enabled);
+    ) = perf_worker_environment(
+        model_id,
+        &model_directory,
+        journey.attribution_enabled,
+        journey.prompt_chunking,
+    );
     apply_journey_overrides(&mut worker_startup_configuration, journey);
-    let performance_log_path = logging_directory.join("performance.jsonl");
     fs::create_dir_all(&logging_directory)
         .expect("the throughput performance log directory should be created");
 
@@ -386,6 +427,7 @@ pub(crate) async fn measure_throughput(
         measured_completed,
         measured_output_text,
         measured_completion_ordinal_in_worker,
+        health_snapshot_after_warmup,
     } = journey_completions;
     let budget_exhausted_stage =
         resolve_budget_exhausted_stage(warmup_completed, measured_completed);
@@ -402,26 +444,20 @@ pub(crate) async fn measure_throughput(
         .shutdown()
         .await
         .expect("the measured worker should terminate and be reaped");
-    let mut measurement = match read_measured_completion(
-        &performance_log_path,
+    let mut measurement = measured_completion_measurement(
         model_id,
-        journey.decode_expert_cache_policy,
+        journey,
+        &logging_directory,
         measured_completion_ordinal_in_worker,
-    ) {
-        Some(measurement) => measurement,
-        None if measured_budget_exhausted => budget_exhausted_measurement(model_id, journey),
-        None => panic!("the measured completion should produce a performance sample"),
-    };
+        measured_budget_exhausted,
+    );
     measurement.measured_output_text = measured_output_text;
-    if journey.attribution_enabled {
-        measurement.decode_cache_diagnostic_evidence =
-            read_decode_cache_diagnostic_evidence(&logging_directory, MEASURED_REQUEST_ID);
-    }
     JourneyRunOutcome {
         measurement,
         measured_budget_exhausted,
         budget_exhausted_stage,
         final_health_snapshot,
+        health_snapshot_after_warmup,
         last_observed_active_request_progress,
         logging_directory,
     }

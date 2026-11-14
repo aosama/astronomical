@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, RuntimeModelPolicy, WorkerHandle,
+    WorkerHealthSnapshot,
 };
 use astronomical_ipc_protocol::{ChatImageInput, RequestId, WorkerStartupConfiguration};
 use tokio::time::sleep;
@@ -98,6 +99,7 @@ pub(super) fn budget_exhausted_outcome(
         measured_budget_exhausted: true,
         budget_exhausted_stage: Some(exhausted_stage),
         final_health_snapshot: WorkerHandle::unavailable().worker_health_snapshot(),
+        health_snapshot_after_warmup: None,
         last_observed_active_request_progress: None,
         logging_directory,
     }
@@ -182,6 +184,7 @@ pub(super) fn spawn_progress_sampler(
                 .worker_health_snapshot()
                 .active_request_progress;
             if let Some(active_request_progress) = sampled_active_request_progress {
+                super::progress_report::print_progress_line(&active_request_progress);
                 let mut preserved_progress = match sampler_progress_slot.lock() {
                     Ok(guarded_slot) => guarded_slot,
                     Err(poisoned_lock) => poisoned_lock.into_inner(),
@@ -289,6 +292,21 @@ pub(super) fn take_preserved_progress(
     }
 }
 
+/// The worker's health once a warmup has finished, for lanes that report a
+/// session counter for the measured completion alone. A single-request lane
+/// runs no warmup, and a warmup that ran out of budget is not a boundary to
+/// measure from, so both yield `None`.
+fn health_snapshot_after_completed_warmup(
+    worker_handle: &WorkerHandle,
+    journey: &ThroughputJourney,
+    warmup_completed: bool,
+) -> Option<WorkerHealthSnapshot> {
+    if !warmup_completed || journey.warmup_output_tokens == 0 {
+        return None;
+    }
+    Some(worker_handle.worker_health_snapshot())
+}
+
 /// The two completions' outcomes the driver's outcome assembly needs.
 pub(super) struct JourneyCompletions {
     pub(super) warmup_completed: bool,
@@ -299,6 +317,9 @@ pub(super) struct JourneyCompletions {
     /// with no in-worker warmup. The durable record carries it so cold and
     /// warmed worker rates can never be compared as one series again.
     pub(super) measured_completion_ordinal_in_worker: u32,
+    /// The worker's health once the warmup finished and before the measured
+    /// completion starts; `None` without a completed warmup.
+    pub(super) health_snapshot_after_warmup: Option<WorkerHealthSnapshot>,
 }
 
 /// Runs the warmup (unless the journey is a single-request lane) and then the
@@ -355,6 +376,8 @@ pub(super) async fn drive_journey_completions(
     };
     let mut measured_output_text = None;
     let mut measured_completed = false;
+    let health_snapshot_after_warmup =
+        health_snapshot_after_completed_warmup(worker_handle, journey, warmup_completed);
     if warmup_completed {
         eprintln!("[performance-throughput] measured model={model_id}");
         let measured_request = BudgetedCompletionRequest {
@@ -388,5 +411,6 @@ pub(super) async fn drive_journey_completions(
         measured_completed,
         measured_output_text,
         measured_completion_ordinal_in_worker,
+        health_snapshot_after_warmup,
     }
 }

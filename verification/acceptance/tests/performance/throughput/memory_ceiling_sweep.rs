@@ -312,6 +312,7 @@ fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
         temperature_thousandths: TEMPERATURE_THOUSANDTHS,
         maximum_mlx_memory_bytes: Some(configured_maximum_mlx_memory_bytes),
         attribution_enabled: true,
+        prompt_chunking: throughput_support::PromptChunking::MeasurementLane,
         journey_timeout: MEMORY_CELL_SERVING_BUDGET,
         model_directory: None,
         diagnostic_qwen3_5_engine_override:
