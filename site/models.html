@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Models | Astronomical</title>
+    <meta name="description" content="The models Astronomical has checked, each with a button that opens it in the app on your Mac.">
+    <meta name="theme-color" content="#141517">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Models you can open in Astronomical">
+    <meta property="og:description" content="Chat, coding, picture and speech models that Astronomical has checked, each one click away from your Mac.">
+    <meta property="og:url" content="https://getastronomical.com/models.html">
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./doc.css">
+    <style>
+      /* This page only: the list of models and the button beside each one. */
+      .models-body { max-width: 860px; }
+      .model-list { margin: 8px 0 0; padding: 0; list-style: none; }
+      .model-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; padding: 20px 0; border-top: 1px solid var(--line); }
+      .model-identity { flex: 999 1 340px; min-width: 0; }
+      .model-name { margin: 0; color: var(--silver); font-family: var(--mono); font-size: 1rem; overflow-wrap: anywhere; }
+      .model-summary { margin: 4px 0 0; }
+      .model-facts { margin: 4px 0 0; color: var(--mist) !important; font-size: 0.9375rem !important; }
+      .model-open { flex: 0 0 auto; }
+      .models-note { padding: 18px 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--ground-raised); }
+      .models-note p { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Astronomical home">
+        <img src="./assets/mark.svg" alt="" width="32" height="32">
+        <span>astronomical</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="./index.html">Home</a>
+        <a href="./local-api.html">Local API</a>
+        <a href="./support.html">Support</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="doc shell">
+        <div class="doc-body models-body">
+          <p class="eyebrow">Models</p>
+          <h1>Open a model in Astronomical</h1>
+          <p>These are the models Astronomical has checked. Each one downloads once, then runs entirely on your Mac. Press <strong>Open in Astronomical</strong> beside a model and the app opens on that model, with a button to download it.</p>
+
+          <div class="models-note">
+            <p><strong>You need Astronomical 0.2.105 or later</strong> on an Apple silicon Mac for the buttons to work. If nothing happens when you press one, <a data-latest-disk-image href="https://github.com/aosama/astronomical/releases/latest">download Astronomical for Mac</a> first.</p>
+          </div>
+
+          <div id="model-catalog" aria-live="polite">
+            <p id="model-catalog-status">Loading the list of models…</p>
+          </div>
+
+          <h2>Good to know</h2>
+          <ul>
+            <li><strong>Nothing downloads from this page.</strong> A button only opens the app. You confirm the download there.</li>
+            <li><strong>Sizes are the space a model takes on disk.</strong> The app tells you how well each one runs within the memory you allow.</li>
+            <li><strong>Each model has its own license,</strong> shown on its Hugging Face page. It must allow what you intend to do.</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand" href="./index.html">
+        <img src="./assets/mark.svg" alt="" width="26" height="26">
+        <span>astronomical</span>
+      </a>
+      <p>Local language, vision, and image models for Apple silicon.</p>
+      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./local-api.html">Local API</a><a href="./index.html#reports">Field notes</a><a href="https://discord.gg/dc4E6r4WD">Discord</a></div>
+    </footer>
+
+    <script src="./assets/release-feed.js"></script>
+    <script src="./assets/models-page.js"></script>
+  </body>
+</html>
