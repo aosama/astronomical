@@ -180,33 +180,33 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         &memory_evidence.final_status,
     );
 
-    // --- Measured assertion 8: decode warming grows with decode evidence
-    // (issue #512). The handoff sizes warm tables before any decode forward
-    // exists, against the conservative no-evidence fallback; every completed
-    // decode forward re-sizes them. The handoff seating happens inside the
-    // first decode advance (announced in the generation phase with its own
-    // snapshot, by design — prompt processing detaches its streamed pages
-    // per chunk), so the seated baseline is the FIRST sample of the
-    // generation window (the first *recorded* sample: the sampler drops
-    // zero and non-increasing values), and the during-generation payload
-    // must exceed it by a real margin instead of churning at the handoff
-    // size. ---
-    let seated_expert_payload_bytes = memory_evidence
-        .generation_expert_payload_bytes
-        .first()
+    // --- Measured assertion 8: the reply phase keeps more experts than the
+    // prompt phase could (issue #512). Reading a prompt needs one layer's
+    // working memory for a whole chunk and writing a reply needs it for one
+    // token, so the handoff has room to seat more. The handoff used to seat
+    // against a conservative no-evidence fallback and grow as decode
+    // forwards were measured, and this assertion watched that growth. Since
+    // every prompt layer finishes before the next begins (issue #2221) the
+    // fallback is small, the handoff seats its whole budget at once, and
+    // nothing is left to grow during generation. The step up from the
+    // prompt phase to the reply phase is what shows the reply budget is
+    // used. The sampler records increases only, so each window's last
+    // sample is its peak. ---
+    let peak_prompt_expert_payload_bytes = memory_evidence
+        .retained_expert_payload_bytes
+        .last()
         .copied()
-        .expect("generation must observe the handoff-seated expert payload");
+        .unwrap_or(0);
     let peak_generation_expert_payload_bytes = memory_evidence
         .generation_expert_payload_bytes
-        .iter()
+        .last()
         .copied()
-        .max()
         .expect("generation must observe the expert payload at least once");
-    let decode_warming_growth_bytes =
-        peak_generation_expert_payload_bytes.saturating_sub(seated_expert_payload_bytes);
+    let reply_phase_gain_bytes =
+        peak_generation_expert_payload_bytes.saturating_sub(peak_prompt_expert_payload_bytes);
     assert!(
-        decode_warming_growth_bytes > 500_000_000,
-        "decode warming must grow the retained expert payload beyond the seated level with decode-phase evidence; seated={seated_expert_payload_bytes} peak_generation={peak_generation_expert_payload_bytes} growth={decode_warming_growth_bytes}"
+        reply_phase_gain_bytes > 500_000_000,
+        "the reply phase must keep more experts than the prompt phase; prompt_peak={peak_prompt_expert_payload_bytes} generation_peak={peak_generation_expert_payload_bytes} gain={reply_phase_gain_bytes}"
     );
 
     // --- Structural assertion 7: exactly one generation attribution report ---
@@ -242,9 +242,8 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         reuse_counters.route_observation_stored_record_count;
 
     // Diagnostic output: useful for debugging but not asserted. The prompt
-    // window records nothing by design (streamed pages detach per chunk), so
-    // a zero here is the expected healthy value; a nonzero value would mean
-    // prefill started retaining expert payload.
+    // window records each increase of the experts kept while the prompt is
+    // read.
     let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home.path());
     let decode_streamed_layer_indices = decode_streamed_layer_indices(isolated_worker_home.path());
     let prompt_window_payload_increments = memory_evidence.retained_expert_payload_bytes.len();
@@ -282,7 +281,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          mem_unseated_entitlement_gb={:.2} \
          mem_unexplained_gb={:.2} \
          mem_owner_overrun_gb={:.2} \
-         decode_warming_growth_gb={:.2} \
+         reply_phase_gain_gb={:.2} \
          decode_streamed_layer_count={} \
          prompt_window_payload_increments={} \
          average_prefill_tok_per_second={average_prefill_tokens_per_second:.2} \
@@ -303,7 +302,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         reuse_counters.memory_ceiling_utilization_unseated_expert_entitlement_bytes as f64 / 1e9,
         reuse_counters.memory_ceiling_utilization_unexplained_headroom_bytes as f64 / 1e9,
         reuse_counters.memory_ceiling_utilization_owner_overrun_bytes as f64 / 1e9,
-        decode_warming_growth_bytes as f64 / 1e9,
+        reply_phase_gain_bytes as f64 / 1e9,
         decode_streamed_layer_indices.len(),
         prompt_window_payload_increments,
         completed_stream.model_text.len(),

@@ -327,9 +327,9 @@ impl Qwen3_5Model {
             }
         })?;
         let decoder_layer_count = self.config.layer_count() as usize;
-        // Multi-token prefill may submit completed layer groups so macOS can
-        // schedule other graphics work between command buffers. Paged experts
-        // additionally benefit because completed streamed pages can detach.
+        // A multi-token forward finishes each layer before the next
+        // (`LayerSubmission::PromptLayer`), so the interval resolved here
+        // only ever paces a one-token forward's command buffers.
         let graph_submission_layer_interval =
             usize::try_from(astronomical_ipc_protocol::graph_submission_layer_interval(
                 token_count,
@@ -341,7 +341,7 @@ impl Qwen3_5Model {
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
             ))
             .unwrap_or(0);
-        let mut previous_dense_layer_output = None;
+        let mut previous_layer_output = None;
         for layer_index in 0..decoder_layer_count {
             // A dense model's streamer supplies its layers: a kept layer, or
             // one read from the SSD for this forward alone.
@@ -379,7 +379,7 @@ impl Qwen3_5Model {
                     request_decoder_state,
                     boundary_checkpoint_collector.as_deref(),
                 ),
-                &mut previous_dense_layer_output,
+                &mut previous_layer_output,
                 LayerGroupSubmission {
                     completed_layer_count: layer_index + 1,
                     decoder_layer_count,

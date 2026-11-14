@@ -1,6 +1,6 @@
 //! Contracts for layer submission: configured groups submit never with no
 //! interval, at each multiple of the interval, and never after the final
-//! layer; a dense layer submits on its own by forward size.
+//! layer; every layer of a prompt forward submits on its own.
 
 use super::{LayerGroupSubmission, LayerSubmission};
 
@@ -39,11 +39,11 @@ fn should_never_submit_without_an_interval() {
 fn should_submit_every_dense_layer_alone_in_a_prompt_forward() {
     assert_eq!(
         LayerSubmission::for_layer(true, true, 561),
-        LayerSubmission::DensePromptLayer
+        LayerSubmission::PromptLayer
     );
     assert_eq!(
         LayerSubmission::for_layer(true, false, 561),
-        LayerSubmission::DensePromptLayer
+        LayerSubmission::PromptLayer
     );
 }
 
@@ -51,7 +51,7 @@ fn should_submit_every_dense_layer_alone_in_a_prompt_forward() {
 fn should_treat_a_two_token_forward_as_a_prompt_forward() {
     assert_eq!(
         LayerSubmission::for_layer(true, false, 2),
-        LayerSubmission::DensePromptLayer
+        LayerSubmission::PromptLayer
     );
 }
 
@@ -68,11 +68,23 @@ fn should_submit_only_streamed_dense_layers_in_a_one_token_forward() {
 }
 
 #[test]
-fn should_leave_sparse_layers_to_configured_groups() {
+fn should_submit_every_sparse_layer_alone_in_a_prompt_forward() {
     assert_eq!(
         LayerSubmission::for_layer(false, false, 561),
-        LayerSubmission::ConfiguredGroup
+        LayerSubmission::PromptLayer
     );
+    assert_eq!(
+        LayerSubmission::for_layer(false, false, 2),
+        LayerSubmission::PromptLayer
+    );
+    assert_eq!(
+        LayerSubmission::for_layer(false, true, 2),
+        LayerSubmission::PromptLayer
+    );
+}
+
+#[test]
+fn should_leave_a_sparse_layer_to_configured_groups_in_a_one_token_forward() {
     assert_eq!(
         LayerSubmission::for_layer(false, false, 1),
         LayerSubmission::ConfiguredGroup

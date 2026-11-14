@@ -58,9 +58,9 @@ pub enum PerformanceOperation {
     ForcedThinkingTransitionTokenArrayConstruction,
     PrefillStateAsyncEvaluationSubmission,
     PrefillStateGraphicsProcessorCompletionWait,
-    /// Waiting for the previous streamed dense layer before the next is read,
-    /// which bounds the streamed layers in flight to two (issue #1985).
-    StreamedDenseLayerCompletionWait,
+    /// Waiting for the previous layer before the next is submitted, which
+    /// bounds the layers in flight to two (issues #1985 and #2221).
+    PreviousLayerCompletionWait,
     PrefillLinearAttentionGraphicsProcessorCompletionWait,
     PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait,
     PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait,
@@ -227,7 +227,7 @@ impl PerformanceOperation {
         Self::ForcedThinkingTransitionTokenArrayConstruction,
         Self::PrefillStateAsyncEvaluationSubmission,
         Self::PrefillStateGraphicsProcessorCompletionWait,
-        Self::StreamedDenseLayerCompletionWait,
+        Self::PreviousLayerCompletionWait,
         Self::PrefillLinearAttentionGraphicsProcessorCompletionWait,
         Self::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait,
         Self::PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait,
@@ -413,7 +413,7 @@ impl PerformanceOperation {
             Self::PrefillStateGraphicsProcessorCompletionWait => {
                 "prefill_state_graphics_processor_completion_wait"
             }
-            Self::StreamedDenseLayerCompletionWait => "streamed_dense_layer_completion_wait",
+            Self::PreviousLayerCompletionWait => "previous_layer_completion_wait",
             Self::PrefillLinearAttentionGraphicsProcessorCompletionWait => {
                 "prefill_linear_attention_graphics_processor_completion_wait"
             }

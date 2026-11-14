@@ -1,9 +1,16 @@
 //! When a forward submits completed decoder layers to the GPU.
 //!
-//! Multi-token prefill may submit completed layer groups at a configured
-//! interval so macOS can schedule other graphics work between command buffers.
-//! A dense model's layers submit one at a time instead, so a forward holds no
-//! more than the dense layer plan reserved (issue #1985).
+//! A prompt forward finishes each layer before it starts the next, for every
+//! model. Building the graph runs far ahead of the GPU, so without that wait
+//! the weights and activations of many layers are alive at once: measured on
+//! three sparse models, one 4,096-token chunk rose 3.7 to 6.5 GB above what
+//! was held around it without the wait and 2.0 to 2.7 GB with it, and
+//! prompts were read 5 to 23 percent faster (issue #2221). The dense path
+//! adopted the rule first (issue #1985).
+//!
+//! A one-token forward has tiny activations: a streamed dense layer keeps two
+//! reads in flight, and everything else submits at a configured interval so
+//! macOS can schedule other graphics work between command buffers.
 
 use mlx_bridge::MlxArray;
 
@@ -46,14 +53,14 @@ pub(crate) struct CompletedLayerRoots<'layer> {
 /// How one completed decoder layer reaches the GPU.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum LayerSubmission {
-    /// A sparse model's layer, or a kept dense layer in a one-token forward:
+    /// A layer in a one-token forward that is not a streamed dense layer:
     /// only a configured layer group submits it.
     ConfiguredGroup,
-    /// A dense layer in a multi-token forward: its working memory is the
-    /// plan's largest term, so the previous layer finishes before it starts,
-    /// and a streamed layer's read starts before that wait so it still
-    /// overlaps the previous layer's compute.
-    DensePromptLayer,
+    /// Any layer in a multi-token forward: its working memory is the
+    /// largest term of the forward, so the previous layer finishes before
+    /// it starts. A streamed dense layer's read starts before that wait so
+    /// it still overlaps the previous layer's compute.
+    PromptLayer,
     /// A streamed dense layer in a one-token forward: its activations are
     /// tiny, so it starts at once and the forward waits for the streamed
     /// layer before it, which keeps two read layers in flight.
@@ -67,7 +74,7 @@ impl LayerSubmission {
         forward_token_count: i32,
     ) -> Self {
         match (is_dense_layer, is_streamed_layer, forward_token_count > 1) {
-            (true, _, true) => Self::DensePromptLayer,
+            (_, _, true) => Self::PromptLayer,
             (true, true, false) => Self::StreamedDecodeLayer,
             _ => Self::ConfiguredGroup,
         }
@@ -81,21 +88,21 @@ impl Qwen3_5Model {
         &self,
         forward_layer_weights: &ForwardLayerWeights<'_>,
         completed_layer: CompletedLayerRoots<'_>,
-        previous_dense_layer_output: &mut Option<MlxArray>,
+        previous_layer_output: &mut Option<MlxArray>,
         layer_group_submission: LayerGroupSubmission,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let hidden_states = completed_layer.layer_output;
         match forward_layer_weights.submission(layer_group_submission) {
-            LayerSubmission::DensePromptLayer => self.submit_dense_prompt_layer(
+            LayerSubmission::PromptLayer => self.submit_prompt_layer(
                 forward_layer_weights,
                 completed_layer,
-                previous_dense_layer_output,
+                previous_layer_output,
                 performance_attribution,
             ),
             LayerSubmission::StreamedDecodeLayer => self.submit_streamed_decode_layer(
                 hidden_states,
-                previous_dense_layer_output,
+                previous_layer_output,
                 performance_attribution,
             ),
             LayerSubmission::ConfiguredGroup if layer_group_submission.is_due() => {
@@ -109,7 +116,7 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Starts a streamed layer's read, waits for the previous dense layer,
+    /// Starts a streamed dense layer's read, waits for the previous layer,
     /// then submits this one with its convolution state.
     ///
     /// Submitting before the wait let two layers' activations coexist, and
@@ -125,11 +132,11 @@ impl Qwen3_5Model {
     /// whole convolution input: measured, active memory climbed about 20 MB
     /// per such layer at 1,246 tokens and the forward peaked 2.2 GB above
     /// its weights at 4,096 tokens, against 683 MB for one layer.
-    fn submit_dense_prompt_layer(
+    fn submit_prompt_layer(
         &self,
         forward_layer_weights: &ForwardLayerWeights<'_>,
         completed_layer: CompletedLayerRoots<'_>,
-        previous_dense_layer_output: &mut Option<MlxArray>,
+        previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let layer_output = completed_layer.layer_output;
@@ -140,12 +147,12 @@ impl Qwen3_5Model {
                 .append_array_references(&mut streamed_weight_arrays);
             self.runtime.async_eval_arrays(&streamed_weight_arrays)?;
         }
-        self.wait_for_previous_dense_layer(previous_dense_layer_output, performance_attribution)?;
+        self.wait_for_previous_layer(previous_layer_output, performance_attribution)?;
         let mut layer_roots = vec![layer_output];
         layer_roots.extend(completed_layer.convolution_state);
         layer_roots.extend(completed_layer.boundary_checkpoint_states);
         self.runtime.async_eval_arrays(&layer_roots)?;
-        *previous_dense_layer_output = Some(layer_output.retain()?);
+        *previous_layer_output = Some(layer_output.retain()?);
         Ok(())
     }
 
@@ -159,26 +166,26 @@ impl Qwen3_5Model {
     fn submit_streamed_decode_layer(
         &self,
         streamed_layer_output: &MlxArray,
-        previous_dense_layer_output: &mut Option<MlxArray>,
+        previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         self.runtime.async_eval_arrays(&[streamed_layer_output])?;
-        let mut previous_layer_output =
-            previous_dense_layer_output.replace(streamed_layer_output.retain()?);
-        self.wait_for_previous_dense_layer(&mut previous_layer_output, performance_attribution)
+        let mut layer_before_this_one =
+            previous_layer_output.replace(streamed_layer_output.retain()?);
+        self.wait_for_previous_layer(&mut layer_before_this_one, performance_attribution)
     }
 
-    fn wait_for_previous_dense_layer(
+    fn wait_for_previous_layer(
         &self,
-        previous_dense_layer_output: &mut Option<MlxArray>,
+        previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        let Some(previous_layer_output) = previous_dense_layer_output.take() else {
+        let Some(submitted_layer_output) = previous_layer_output.take() else {
             return Ok(());
         };
         performance_attribution.measure_operation(
-            PerformanceOperation::StreamedDenseLayerCompletionWait,
-            |_performance_attribution| self.runtime.evaluate_arrays(&[&previous_layer_output]),
+            PerformanceOperation::PreviousLayerCompletionWait,
+            |_performance_attribution| self.runtime.evaluate_arrays(&[&submitted_layer_output]),
         )?;
         Ok(())
     }
