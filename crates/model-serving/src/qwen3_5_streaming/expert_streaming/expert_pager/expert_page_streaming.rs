@@ -67,6 +67,7 @@ impl Qwen3_5ExpertPager {
         self.ensure_session_process_io_baseline();
         let read_elapsed_before_load_nanoseconds = self
             .session_read_metrics
+            .borrow()
             .snapshot()
             .total_read_elapsed_nanoseconds;
         let mut loaded_tensors = performance_attribution
@@ -128,6 +129,7 @@ impl Qwen3_5ExpertPager {
         };
         let read_elapsed_after_load_nanoseconds = self
             .session_read_metrics
+            .borrow()
             .snapshot()
             .total_read_elapsed_nanoseconds;
         let page_read_elapsed_nanoseconds = read_elapsed_after_load_nanoseconds

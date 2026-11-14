@@ -176,6 +176,27 @@ fn should_keep_the_largest_step_peak_of_each_phase_apart() {
 }
 
 #[test]
+fn should_never_fall_below_a_working_memory_probed_before_the_first_step() {
+    let mut observer = observer();
+    observer.record_probed_working_memory(READING, 2 * GIBIBYTE);
+    let reading = observer.observe_step(reading_step(8 * GIBIBYTE, 0));
+    assert!(reading.accounts.working_memory_is_measured);
+    assert_eq!(
+        reading.accounts.working_memory_bytes,
+        2 * GIBIBYTE,
+        "the step measured one gibibyte, less than the probe"
+    );
+    assert_eq!(reading.probed_working_memory_bytes, Some(2 * GIBIBYTE));
+}
+
+#[test]
+fn should_report_no_probed_working_memory_when_nothing_was_probed() {
+    let mut observer = observer();
+    let reading = observer.observe_step(reading_step(8 * GIBIBYTE, 0));
+    assert_eq!(reading.probed_working_memory_bytes, None);
+}
+
+#[test]
 fn should_express_the_kept_share_in_thousandths() {
     assert_eq!(kept_share_permille(0, 1_000), Some(0));
     assert_eq!(kept_share_permille(899, 1_000), Some(899));

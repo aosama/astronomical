@@ -99,7 +99,7 @@ pub struct Qwen3_5ExpertPager {
     /// Always-on lock-free positional-read aggregate attached to every
     /// expert-source reader of this engine load, even when diagnostics
     /// attribution (which owns a private per-request aggregate) is disabled.
-    pub(super) session_read_metrics: Arc<PositionalFileReadMetrics>,
+    pub(super) session_read_metrics: RefCell<Arc<PositionalFileReadMetrics>>,
     /// Process-attributed physical disk I/O sampled once before the first
     /// expert read of this engine load, so the session physical-read figure
     /// measures the expert-streaming era only. `Err` keeps a failed sample as

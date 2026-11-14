@@ -90,7 +90,7 @@ impl Qwen3_5ExpertPager {
             // page prices its decode peak.
             decode_tokens_multiply_packed_pages: std::cell::Cell::new(false),
             session_counters: RefCell::new(ExpertStreamingSessionCounters::default()),
-            session_read_metrics: Arc::new(PositionalFileReadMetrics::default()),
+            session_read_metrics: RefCell::new(Arc::new(PositionalFileReadMetrics::default())),
             session_process_io_baseline: RefCell::new(None),
         })
     }

@@ -1,7 +1,11 @@
 //! Span tiling for layer-major prefill: spans must start at zero, follow one
 //! another without gaps or overlaps, never be empty, and cover every token.
+//! Only the span that ends a prompt records its expert routes boosted.
 
-use super::{LayerMajorSpan, even_layer_major_spans, validate_layer_major_spans};
+use super::{
+    LayerMajorSpan, LayerPass, even_layer_major_spans, span_demand_weight,
+    validate_layer_major_spans,
+};
 
 fn span(start_token: usize, end_token: usize) -> LayerMajorSpan {
     LayerMajorSpan {
@@ -74,4 +78,54 @@ fn should_make_one_span_when_the_prompt_fits_in_one() {
 #[test]
 fn should_make_no_span_for_an_empty_prompt() {
     assert!(even_layer_major_spans(0, 256).is_empty());
+}
+
+fn layer_pass(starting_position_tokens: u32, last_span_ends_the_prompt: bool) -> LayerPass {
+    LayerPass {
+        layer_index: 0,
+        starting_position_tokens,
+        last_span_ends_the_prompt,
+    }
+}
+
+#[test]
+fn should_boost_the_span_that_ends_the_prompt_by_the_tokens_before_it() {
+    // 8,192 tokens came before a last span of 2,048: each of its tokens
+    // stands for four earlier ones.
+    assert_eq!(
+        span_demand_weight(layer_pass(0, true), &span(8_192, 10_240), true),
+        4
+    );
+}
+
+#[test]
+fn should_count_tokens_restored_before_the_first_span_as_earlier_tokens() {
+    assert_eq!(
+        span_demand_weight(layer_pass(4_096, true), &span(4_096, 6_144), true),
+        4
+    );
+}
+
+#[test]
+fn should_record_every_earlier_span_plainly() {
+    assert_eq!(
+        span_demand_weight(layer_pass(0, true), &span(0, 4_096), false),
+        1
+    );
+}
+
+#[test]
+fn should_record_a_last_span_plainly_when_more_of_the_prompt_follows() {
+    assert_eq!(
+        span_demand_weight(layer_pass(0, false), &span(8_192, 10_240), true),
+        1
+    );
+}
+
+#[test]
+fn should_record_a_whole_prompt_in_one_span_plainly() {
+    assert_eq!(
+        span_demand_weight(layer_pass(0, true), &span(0, 900), true),
+        1
+    );
 }

@@ -175,7 +175,7 @@ impl Qwen3_5Model {
         self.wait_for_previous_layer(&mut layer_before_this_one, performance_attribution)
     }
 
-    fn wait_for_previous_layer(
+    pub(super) fn wait_for_previous_layer(
         &self,
         previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,

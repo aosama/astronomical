@@ -397,11 +397,7 @@ impl Qwen3_5Model {
                     Qwen3_5MoEPagedExecutionMode::ProductionDefault
                 )
             {
-                self.issue_prefill_complete_layer_prefetch(
-                    layer_index,
-                    token_count,
-                    performance_attribution,
-                );
+                self.read_next_chunk_layer_ahead(layer_index, token_count, performance_attribution);
             }
         }
         self.discard_prefill_complete_layer_prefetch();

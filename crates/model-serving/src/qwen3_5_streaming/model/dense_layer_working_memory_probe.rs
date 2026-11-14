@@ -9,21 +9,13 @@
 use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
+use super::layer_probe_shape::LayerProbeShape;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::bound_weight_dtype_flow::embedded_hidden_state_dtype;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
-
-/// The forward shape the engine will serve, which the probe reproduces.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DenseLayerProbeShape {
-    /// The largest prefill chunk the engine's chunk sizer will submit.
-    pub prefill_chunk_token_count: usize,
-    /// The attention slab granularity requests allocate state with.
-    pub full_attention_kv_state_growth_tokens: i32,
-}
 
 impl Qwen3_5Model {
     /// The largest transient either layer kind's forward adds at the probe
@@ -33,7 +25,7 @@ impl Qwen3_5Model {
     /// much does not depend on the values.
     pub(crate) fn measure_dense_layer_working_memory(
         &self,
-        probe_shape: DenseLayerProbeShape,
+        probe_shape: LayerProbeShape,
     ) -> Result<u64, Qwen3_5ExecutionError> {
         let mut working_memory_bytes = 0_u64;
         for probe_layer_index in self.probe_layer_indexes() {
@@ -45,26 +37,10 @@ impl Qwen3_5Model {
         Ok(working_memory_bytes)
     }
 
-    /// The first linear-attention layer and the first full-attention layer.
-    fn probe_layer_indexes(&self) -> Vec<usize> {
-        let layer_count = self.config.layer_count() as usize;
-        let mut probe_layer_indexes = Vec::with_capacity(2);
-        for wants_full_attention in [false, true] {
-            for layer_index in 0..layer_count {
-                if self.config.decoder_layer_is_full_attention(layer_index) == wants_full_attention
-                {
-                    probe_layer_indexes.push(layer_index);
-                    break;
-                }
-            }
-        }
-        probe_layer_indexes
-    }
-
     fn measure_one_layer_working_memory(
         &self,
         layer_index: usize,
-        probe_shape: DenseLayerProbeShape,
+        probe_shape: LayerProbeShape,
     ) -> Result<u64, Qwen3_5ExecutionError> {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
             return Ok(0);

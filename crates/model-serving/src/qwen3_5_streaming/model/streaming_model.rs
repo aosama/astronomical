@@ -53,6 +53,13 @@ pub struct Qwen3_5StreamingModel {
     /// streams reads is observed as Resident.
     pub(super) request_expert_storage_read_tally:
         super::request_expert_storage_read_tally::RequestExpertStorageReadTally,
+    /// One expert layer's prompt working memory, measured at load; `None`
+    /// for a dense model and when the probe could not run.
+    pub(crate) probed_prompt_layer_working_memory: Cell<
+        Option<
+            crate::qwen3_5_streaming::model::expert_layer_working_memory_probe::ProbedPromptLayerWorkingMemory,
+        >,
+    >,
     /// The memory ledger watching this model, opened at the first completed
     /// forward (issue #2221). It decides nothing yet.
     pub(crate) memory_ledger_observer:
@@ -64,10 +71,9 @@ pub struct Qwen3_5StreamingModel {
     /// expert demand after the forward's completion evaluation.
     pub(crate) deferred_expert_demand:
         RefCell<crate::qwen3_5_streaming::model::deferred_expert_demand::DeferredExpertDemandCollector>,
-    /// The one complete layer a prefill chunk read ahead of its route.
-    pub(crate) prefill_complete_layer_prefetch: RefCell<
-        Option<crate::qwen3_5_streaming::model::prefill_complete_layer_prefetch::PrefetchedCompleteLayer>,
-    >,
+    /// The complete expert pages a prompt forward has in hand.
+    pub(crate) prompt_expert_pages_in_hand:
+        crate::qwen3_5_streaming::model::held_prompt_expert_layer::PromptExpertPagesInHand,
     /// Layers whose prefill completion read the ceiling already refused.
     /// Remembering the refusal stops every later chunk from re-reading the
     /// unseated remainder and then the experts already in RAM.

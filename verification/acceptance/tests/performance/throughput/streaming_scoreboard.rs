@@ -151,6 +151,7 @@ struct LedgerScoreboardReading {
     largest_kept_over_capacity_bytes: u64,
     largest_reading_step_peak_beyond_held_bytes: u64,
     largest_writing_step_peak_beyond_held_bytes: u64,
+    probed_working_memory_bytes: Option<u64>,
     lowest_kept_share_while_reading_permille: Option<u32>,
     working_memory_bytes: u64,
     kept_weight_capacity_bytes: u64,
@@ -266,6 +267,7 @@ fn ledger_scoreboard_reading(
             .largest_reading_step_peak_beyond_held_bytes,
         largest_writing_step_peak_beyond_held_bytes: ledger_snapshot
             .largest_writing_step_peak_beyond_held_bytes,
+        probed_working_memory_bytes: ledger_snapshot.probed_working_memory_bytes,
         lowest_kept_share_while_reading_permille: ledger_snapshot
             .lowest_kept_share_while_reading_permille,
         working_memory_bytes: ledger_snapshot.working_memory_bytes,

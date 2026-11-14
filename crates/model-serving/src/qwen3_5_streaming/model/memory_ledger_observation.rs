@@ -44,6 +44,21 @@ impl Qwen3_5Model {
         }
     }
 
+    /// Opens the observer with what was measured at load.
+    fn open_memory_ledger_observer(&self, limit_bytes: u64) -> Option<LedgerObserver> {
+        let mut ledger_observer =
+            LedgerObserver::new(limit_bytes, self.memory_ledger_shape()).ok()?;
+        if let Some(probed_working_memory) = self.probed_prompt_layer_working_memory.get() {
+            ledger_observer.record_probed_working_memory(
+                LedgerPhase::ReadingPrompt {
+                    span_token_count: probed_working_memory.span_token_count,
+                },
+                probed_working_memory.working_memory_bytes,
+            );
+        }
+        Some(ledger_observer)
+    }
+
     /// Reports one completed forward to the ledger.
     pub(crate) fn observe_completed_forward_in_memory_ledger(
         &self,
@@ -84,8 +99,7 @@ impl Qwen3_5Model {
         };
         let mut memory_ledger_observer = self.memory_ledger_observer.borrow_mut();
         if memory_ledger_observer.is_none() {
-            *memory_ledger_observer =
-                LedgerObserver::new(limit_bytes, self.memory_ledger_shape()).ok();
+            *memory_ledger_observer = self.open_memory_ledger_observer(limit_bytes);
         }
         if let Some(ledger_observer) = memory_ledger_observer.as_mut() {
             let ledger_reading = ledger_observer.observe_step(observed_step);

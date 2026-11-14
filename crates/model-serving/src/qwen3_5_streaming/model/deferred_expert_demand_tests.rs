@@ -27,8 +27,8 @@ fn route_of(expert_ids: &[u32]) -> MlxArray {
 fn should_queue_routes_in_layer_order_and_return_their_identifiers_on_take() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
-    collector.retain_layer_route(3, EXPERT_CAPACITY, &route_of(&[7, 9]));
-    collector.retain_layer_route(4, EXPERT_CAPACITY, &route_of(&[1, 255]));
+    collector.retain_layer_route(3, EXPERT_CAPACITY, &route_of(&[7, 9]), 1);
+    collector.retain_layer_route(4, EXPERT_CAPACITY, &route_of(&[1, 255]), 1);
     assert_eq!(collector.pending_layer_count(), 2);
     assert_eq!(collector.pending_route_array_refs().count(), 2);
 
@@ -58,7 +58,7 @@ fn should_queue_routes_in_layer_order_and_return_their_identifiers_on_take() {
 fn should_discard_every_pending_route() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
-    collector.retain_layer_route(0, EXPERT_CAPACITY, &route_of(&[0]));
+    collector.retain_layer_route(0, EXPERT_CAPACITY, &route_of(&[0]), 1);
     collector.discard_pending_layer_routes();
     assert_eq!(collector.pending_layer_count(), 0);
     assert_eq!(collector.pending_route_array_refs().count(), 0);
@@ -79,7 +79,7 @@ fn should_keep_the_retained_route_alive_after_the_caller_drops_its_array() {
     let mut collector = DeferredExpertDemandCollector::default();
     {
         let transient_route = route_of(&[42, 43]);
-        collector.retain_layer_route(1, EXPERT_CAPACITY, &transient_route);
+        collector.retain_layer_route(1, EXPERT_CAPACITY, &transient_route, 1);
     }
     let pending_layer_routes = collector.take_pending_layer_routes();
     assert_eq!(
@@ -96,7 +96,13 @@ fn should_keep_the_retained_route_alive_after_the_caller_drops_its_array() {
 fn should_queue_a_resident_route_once_with_its_avoided_read_baseline() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
-    collector.retain_resident_layer_route(6, EXPERT_CAPACITY, &route_of(&[3, 3, 9]), 855_638_016);
+    collector.retain_resident_layer_route(
+        6,
+        EXPERT_CAPACITY,
+        &route_of(&[3, 3, 9]),
+        855_638_016,
+        1,
+    );
     assert_eq!(collector.pending_layer_count(), 1);
     let pending_layer_routes = collector.take_pending_layer_routes();
     assert_eq!(
@@ -110,10 +116,26 @@ fn should_queue_a_resident_route_once_with_its_avoided_read_baseline() {
 fn should_owe_no_avoided_read_for_a_plain_demand_route() {
     let _runtime = initialize_test_runtime();
     let mut collector = DeferredExpertDemandCollector::default();
-    collector.retain_layer_route(6, EXPERT_CAPACITY, &route_of(&[3, 9]));
+    collector.retain_layer_route(6, EXPERT_CAPACITY, &route_of(&[3, 9]), 1);
     let pending_layer_routes = collector.take_pending_layer_routes();
     assert_eq!(
         pending_layer_routes[0].resident_layer_payload_byte_count,
         None
     );
+}
+
+#[test]
+#[serial]
+fn should_keep_each_route_with_the_prompt_weight_it_was_built_under() {
+    let _runtime = initialize_test_runtime();
+    let mut collector = DeferredExpertDemandCollector::default();
+    collector.retain_layer_route(2, EXPERT_CAPACITY, &route_of(&[5]), 1);
+    collector.retain_layer_route(2, EXPERT_CAPACITY, &route_of(&[5]), 4);
+    collector.retain_resident_layer_route(3, EXPERT_CAPACITY, &route_of(&[8]), 1_024, 7);
+    let recorded_weights: Vec<u64> = collector
+        .take_pending_layer_routes()
+        .iter()
+        .map(|pending_layer_route| pending_layer_route.prefill_demand_assignment_weight)
+        .collect();
+    assert_eq!(recorded_weights, vec![1, 4, 7]);
 }

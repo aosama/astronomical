@@ -201,3 +201,26 @@ fn wide_streamed_native_weights(
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
     }
 }
+
+#[test]
+fn should_forget_the_reads_made_while_the_model_loaded() {
+    let mut cache = WarmExpertSlotTableCache::new(2);
+    cache.record_disk_load(512, 2);
+    cache.forget_disk_loads_made_while_loading();
+    let statistics = cache.statistics();
+    assert_eq!(statistics.disk_page_load_count, 0);
+    assert_eq!(statistics.disk_batch_load_count, 0);
+
+    // Reads made afterwards count from zero.
+    cache.record_disk_load(256, 1);
+    let statistics = cache.statistics();
+    assert_eq!(statistics.disk_page_load_count, 256);
+    assert_eq!(statistics.disk_batch_load_count, 1);
+}
+
+#[test]
+fn should_leave_a_cache_that_read_nothing_at_zero_reads() {
+    let mut cache = WarmExpertSlotTableCache::new(1);
+    cache.forget_disk_loads_made_while_loading();
+    assert_eq!(cache.statistics().disk_page_load_count, 0);
+}

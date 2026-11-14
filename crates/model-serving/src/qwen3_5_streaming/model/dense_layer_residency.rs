@@ -13,7 +13,7 @@ use astronomical_memory_policy::residency::{
 use super::Qwen3_5Model;
 use super::dense_layer_counts::{KeptLayerReplan, kept_layer_count_after_replan};
 use super::dense_layer_streamer::DENSE_STREAMING_LAYER_SLOT_COUNT;
-use super::dense_layer_working_memory_probe::DenseLayerProbeShape;
+use super::layer_probe_shape::LayerProbeShape;
 use crate::MlxRamBudgetMeasurement;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::DecoderLayerResidency;
@@ -44,7 +44,7 @@ impl Qwen3_5Model {
     /// memory at `probe_shape` and keeps the layers that fit beside it.
     pub(crate) fn materialize_target_weights_and_plan_dense_layers(
         &self,
-        probe_shape: DenseLayerProbeShape,
+        probe_shape: LayerProbeShape,
     ) -> Result<(), Qwen3_5ExecutionError> {
         self.materialize_target_weights()?;
         self.plan_dense_layer_residency(probe_shape, None).map(drop)
@@ -60,7 +60,7 @@ impl Qwen3_5Model {
     #[doc(hidden)]
     pub fn plan_dense_layer_residency(
         &self,
-        probe_shape: DenseLayerProbeShape,
+        probe_shape: LayerProbeShape,
         resident_layer_count_override: Option<usize>,
     ) -> Result<Option<DenseLayerResidencyPlan>, Qwen3_5ExecutionError> {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
@@ -184,7 +184,7 @@ impl Qwen3_5Model {
     /// admission reserves the same amount the plan left room for.
     fn record_dense_working_memory_in_budget(
         &self,
-        probe_shape: DenseLayerProbeShape,
+        probe_shape: LayerProbeShape,
         working_memory_bytes: u64,
     ) {
         self.mlx_ram_budget

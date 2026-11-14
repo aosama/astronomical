@@ -255,6 +255,10 @@ pub struct WorkerMemoryLedgerSnapshot {
     /// around it, and the same for one reply step.
     pub largest_reading_step_peak_beyond_held_bytes: u64,
     pub largest_writing_step_peak_beyond_held_bytes: u64,
+    /// The working memory of one layer step measured at load; `None` when
+    /// nothing was probed.
+    #[serde(default)]
+    pub probed_working_memory_bytes: Option<u64>,
     /// The emptiest the kept weights were against the capacity while a
     /// prompt was read, in thousandths.
     pub lowest_kept_share_while_reading_permille: Option<u32>,

@@ -176,7 +176,7 @@ impl Qwen3_5Model {
             retained_experts,
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
-            prefill_complete_layer_prefetch: RefCell::default(),
+            prompt_expert_pages_in_hand: Default::default(),
             prefill_layer_completion_refused: RefCell::default(),
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),
@@ -185,6 +185,7 @@ impl Qwen3_5Model {
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
             request_expert_storage_read_tally: Default::default(),
             memory_ledger_observer: RefCell::new(None),
+            probed_prompt_layer_working_memory: std::cell::Cell::new(None),
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
         })

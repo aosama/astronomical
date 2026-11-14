@@ -40,6 +40,20 @@ impl Qwen3_5ExpertPager {
             .record_avoided_complete_layer_source_bytes(payload_bytes);
     }
 
+    /// Starts the session's statistics afresh, once the model has finished
+    /// loading.
+    ///
+    /// The statistics describe serving. Loading measures one layer step of
+    /// each kind through the ordinary read path
+    /// (`expert_layer_working_memory_probe`), and those reads would
+    /// otherwise count as a request's: the session then reported more bytes
+    /// requested than every request's own report added up to.
+    pub(crate) fn begin_serving_session(&self) {
+        *self.session_counters.borrow_mut() = ExpertStreamingSessionCounters::default();
+        *self.session_read_metrics.borrow_mut() = Arc::new(PositionalFileReadMetrics::default());
+        *self.session_process_io_baseline.borrow_mut() = None;
+    }
+
     /// Samples the process I/O baseline once, before the first expert read of
     /// this engine load. The session's physical-read figure is the delta from
     /// this baseline, so model-artifact loading that precedes expert streaming
@@ -74,7 +88,7 @@ impl Qwen3_5ExpertPager {
     /// When attribution is enabled its private per-request aggregate keeps
     /// report deltas exact, and this session aggregate still accumulates.
     pub(crate) fn session_expert_read_metrics(&self) -> Arc<PositionalFileReadMetrics> {
-        Arc::clone(&self.session_read_metrics)
+        Arc::clone(&self.session_read_metrics.borrow())
     }
 
     /// Pure: session counters plus read totals, without topology.
@@ -84,7 +98,7 @@ impl Qwen3_5ExpertPager {
 
     /// Pure: the session read totals as plain numbers.
     pub(crate) fn session_read_totals(&self) -> (u64, u64, u64) {
-        let read_metrics_snapshot = self.session_read_metrics.snapshot();
+        let read_metrics_snapshot = self.session_read_metrics.borrow().snapshot();
         (
             read_metrics_snapshot.read_call_count,
             read_metrics_snapshot.read_byte_count,
