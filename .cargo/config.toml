@@ -298,7 +298,12 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo xtask app smoke-test --app-bundle PATH [--real-model MODEL_ID]`
 # launches a built bundle in isolation, then starts its menu-bar agent the
 # way macOS does at login (service label as the first launch argument, root
-# working directory) and requires the agent to bring the engine up.
+# working directory) and requires the agent to bring the engine up. A
+# store bundle is supported: its engine is started only through its agent,
+# and the bundle should sit in the Applications folder, because from a build
+# folder its sandboxed agent did not reach the engine. A store bundle carries
+# no `astronomical` terminal command, which cannot be sandboxed, and both of
+# its applications carry the privacy manifest.
 # `cargo xtask release create-dmg --app-bundle PATH --output PATH` builds the
 # drag-to-Applications image and `cargo xtask release validate-dmg --dmg PATH`
 # proves a notarized image's install journey; `cargo xtask release

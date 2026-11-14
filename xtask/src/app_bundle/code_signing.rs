@@ -14,8 +14,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::application_group::{application_group_entitlements, application_group_identifier};
-use super::build_steps::RUST_EXECUTABLE_NAMES;
-use super::channel_profile::{APPLICATION_EXECUTABLE_NAME, ChannelProfile, SandboxPolicy};
+use super::channel_profile::{
+    APPLICATION_EXECUTABLE_NAME, ChannelProfile, SandboxPolicy, TERMINAL_COMMAND_EXECUTABLE_NAME,
+};
 use super::tool_command::run_quiet_tool;
 
 /// Sparkle's nested code, innermost first.
@@ -84,7 +85,9 @@ pub(crate) fn signing_plan(
         signing_request,
         application_entitlements,
     ));
-    for (executable_name, executable_entitlements) in executable_entitlements(is_app_store) {
+    for (executable_name, executable_entitlements) in
+        executable_entitlements(signing_request.channel_profile, is_app_store)
+    {
         signing_invocations.push(invocation(
             signing_request,
             contents_path.join("MacOS").join(executable_name),
@@ -172,9 +175,14 @@ fn agent_signing_invocations(
 
 /// The main app carries the sandbox profile, as the agent does; the daemon
 /// and worker the agent spawns join its sandbox through inherited
-/// entitlements. The CLI runs from the user's terminal, never spawned by a
-/// sandboxed process, so it stays bare.
-fn executable_entitlements(is_app_store: bool) -> Vec<(&'static str, SignedEntitlements)> {
+/// entitlements. The terminal command runs from the user's terminal, never
+/// spawned by a sandboxed process, so it could only be signed bare; a
+/// sandboxed channel therefore does not bundle it at all, and every
+/// executable of a store bundle ends up sandboxed.
+fn executable_entitlements(
+    channel_profile: &ChannelProfile,
+    is_app_store: bool,
+) -> Vec<(&'static str, SignedEntitlements)> {
     let mut executable_entitlements = vec![(
         APPLICATION_EXECUTABLE_NAME,
         if is_app_store {
@@ -183,8 +191,8 @@ fn executable_entitlements(is_app_store: bool) -> Vec<(&'static str, SignedEntit
             SignedEntitlements::Preserved
         },
     )];
-    for executable_name in RUST_EXECUTABLE_NAMES {
-        let joins_sandbox = is_app_store && executable_name != "astronomical";
+    for executable_name in channel_profile.bundled_rust_executable_names() {
+        let joins_sandbox = is_app_store && executable_name != TERMINAL_COMMAND_EXECUTABLE_NAME;
         executable_entitlements.push((
             executable_name,
             if joins_sandbox {

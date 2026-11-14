@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use super::channel_profile::AGENT_EXECUTABLE_NAME;
+use super::channel_profile::{AGENT_EXECUTABLE_NAME, Channel, ChannelProfile, SandboxPolicy};
 use super::login_launch_check::check_login_launch_starts_engine;
 use super::tool_command::run_quiet_tool;
 
@@ -36,6 +36,11 @@ pub(crate) struct SmokeTestRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BundleInstanceIdentity {
     pub(crate) channel_name: String,
+    /// The engine instance the channel runs, which the engine reports as its
+    /// channel: `stable` for a store bundle, whose channel is `app-store`.
+    pub(crate) runtime_instance_name: String,
+    /// A sandboxed bundle's engine can be started only by its agent.
+    pub(crate) is_sandboxed: bool,
     pub(crate) daemon_port: u64,
     pub(crate) application_version: String,
     pub(crate) build_commit: String,
@@ -54,13 +59,23 @@ pub(crate) fn run_smoke_test(
         ));
     }
     let log_directory = smoke_test_log_directory()?;
-    check_directly_launched_instance(
-        repository_root,
-        smoke_test_request,
-        &instance_identity,
-        &daemon_base_url,
-        &log_directory,
-    )?;
+    if instance_identity.is_sandboxed {
+        // The engine of a sandboxed bundle is signed to inherit its sandbox
+        // from the agent that starts it. Started directly it would run
+        // outside any sandbox and write state where the real build never
+        // does, so only the agent-driven launch below is exercised.
+        println!(
+            "[app-smoke-test] step=daemon status=skipped reason=sandboxed-engine-starts-only-from-its-agent"
+        );
+    } else {
+        check_directly_launched_instance(
+            repository_root,
+            smoke_test_request,
+            &instance_identity,
+            &daemon_base_url,
+            &log_directory,
+        )?;
+    }
     // Runs only once the directly launched daemon has exited: the agent
     // starts an engine only when the channel's endpoint is unoccupied.
     check_login_launch_starts_engine(
@@ -91,7 +106,7 @@ fn check_directly_launched_instance(
         &smoke_test_request
             .bundle_path
             .join("Contents/MacOS/astronomicald"),
-        &["--instance", &instance_identity.channel_name],
+        &["--instance", &instance_identity.runtime_instance_name],
         &log_directory.join("daemon.log"),
     )?;
     let smoke_result = exercise_running_instance(
@@ -142,7 +157,7 @@ pub(crate) fn status_identity_problem(
 ) -> Option<String> {
     let application_document = &status_document["application"];
     let reports_bundle_identity = application_document["channel"].as_str()
-        == Some(instance_identity.channel_name.as_str())
+        == Some(instance_identity.runtime_instance_name.as_str())
         && application_document["version"].as_str()
             == Some(instance_identity.application_version.as_str())
         && application_document["commit"].as_str() == Some(instance_identity.build_commit.as_str());
@@ -168,8 +183,24 @@ pub(crate) fn instance_identity_from_plist(
     ) else {
         return Err("the bundle plist lacks its channel, port, version, or commit".to_owned());
     };
+    bundle_instance_identity(channel_name, daemon_port, application_version, build_commit)
+}
+
+/// The identity a bundle of `channel_name` must report, with what the
+/// channel implies: the engine instance it runs and whether it is sandboxed.
+/// An unknown channel name is refused, since nothing is known about it.
+fn bundle_instance_identity(
+    channel_name: &str,
+    daemon_port: u64,
+    application_version: &str,
+    build_commit: &str,
+) -> Result<BundleInstanceIdentity, String> {
+    let channel = Channel::from_channel_name(channel_name)?;
     Ok(BundleInstanceIdentity {
         channel_name: channel_name.to_owned(),
+        runtime_instance_name: channel.runtime_instance_name().to_owned(),
+        is_sandboxed: ChannelProfile::for_channel(channel).sandbox_policy
+            == SandboxPolicy::AppStoreSandbox,
         daemon_port,
         application_version: application_version.to_owned(),
         build_commit: build_commit.to_owned(),

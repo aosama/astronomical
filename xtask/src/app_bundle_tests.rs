@@ -10,7 +10,7 @@ use super::code_signing::{SigningRequest, signing_plan};
 use super::command::{AppCommand, DevOpenPlacement, PlistSubject, parse_app_command};
 use super::dev_pipeline::DevPipelinePaths;
 use super::icon_cache::cached_icon_file_name;
-use super::info_plist::{escape_xml_text, render_info_plist};
+use super::info_plist::{escape_xml_text, render_agent_info_plist, render_info_plist};
 use super::instance_control::{InstanceAction, status_report_lines};
 use super::native_metallib::metallib_store_path;
 use super::running_instance::open_bundle_arguments;
@@ -119,6 +119,33 @@ fn should_render_app_store_plist_without_sparkle_or_state_directory() {
     assert!(!plist_text.contains("SUPublicEDKey"));
     assert!(!plist_text.contains("AstronomicalStateDirectoryName"));
     assert!(plist_text.contains("<key>AstronomicalBuildDirty</key><false/>"));
+}
+
+/// App Store Connect refuses a Mac app with no category, so every channel's
+/// main app names the decided one; the agent is a helper and names none.
+#[test]
+fn should_name_the_developer_tools_category_in_every_main_app_plist_only() {
+    for channel in [Channel::Development, Channel::Stable, Channel::AppStore] {
+        let channel_profile = ChannelProfile::for_channel(channel);
+        let application_plist_text = render_info_plist(
+            &channel_profile,
+            &sample_build_identity(false),
+            "https://example-owner.github.io/astronomical/appcast.xml",
+        );
+        let agent_plist_text =
+            render_agent_info_plist(&channel_profile, &sample_build_identity(false));
+
+        assert!(
+            application_plist_text.contains(
+                "<key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>"
+            ),
+            "{channel:?}"
+        );
+        assert!(
+            !agent_plist_text.contains("LSApplicationCategoryType"),
+            "{channel:?}"
+        );
+    }
 }
 
 #[cfg(target_os = "macos")]

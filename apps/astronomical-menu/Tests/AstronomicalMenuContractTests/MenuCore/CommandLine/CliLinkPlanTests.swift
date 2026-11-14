@@ -27,10 +27,30 @@ final class CliLinkPlanTests: XCTestCase {
     XCTAssertEqual(action, .notSupportedForChannel)
   }
 
-  func test_should_give_stable_and_app_store_channels_the_public_command_name() {
+  func test_should_give_only_the_stable_channel_the_public_command_name() {
     XCTAssertEqual(CliLinkPlan.linkName(for: .stable), "astronomical")
-    XCTAssertEqual(CliLinkPlan.linkName(for: .appStore), "astronomical")
+    XCTAssertNil(CliLinkPlan.linkName(for: .appStore))
     XCTAssertNil(CliLinkPlan.linkName(for: .development))
+  }
+
+  /// The store bundle carries no terminal command, so the store build must
+  /// neither install a link nor repair one a direct install left behind,
+  /// even when that link dangles into an Astronomical bundle.
+  func test_should_never_touch_the_public_command_on_the_app_store_channel() {
+    let missingLinkAction = CliLinkPlan.decide(
+      status: status(exists: false),
+      channel: .appStore,
+      bundleCliPath: bundleCliPath)
+    let danglingOwnedLinkAction = CliLinkPlan.decide(
+      status: status(
+        exists: true, isSymlink: true,
+        destination: "/Applications/Astronomical.app/Contents/MacOS/astronomical",
+        destinationExists: false),
+      channel: .appStore,
+      bundleCliPath: bundleCliPath)
+
+    XCTAssertEqual(missingLinkAction, .notSupportedForChannel)
+    XCTAssertEqual(danglingOwnedLinkAction, .notSupportedForChannel)
   }
 
   func test_should_plan_a_fresh_install_for_a_missing_destination() {

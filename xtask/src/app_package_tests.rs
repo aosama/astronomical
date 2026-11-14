@@ -107,14 +107,14 @@ fn should_sign_unsigned_stable_candidates_ad_hoc() {
 }
 
 #[test]
-fn should_assign_app_store_entitlements_and_keep_the_cli_bare() {
+fn should_assign_app_store_entitlements_and_sign_no_terminal_command() {
     let signing_invocations =
         plan_for(Channel::AppStore, Some(DEVELOPER_ID)).expect("an identity is supplied");
 
     assert_eq!(
         signing_invocations.len(),
-        7,
-        "the agent and its bundle, four executables, and the bundle; no Sparkle"
+        6,
+        "the agent and its bundle, three executables, and the bundle; no Sparkle, no terminal command"
     );
     // Rendered beside the bundle at signing time, because it names the app
     // group of this signing's team.
@@ -147,9 +147,53 @@ fn should_assign_app_store_entitlements_and_keep_the_cli_bare() {
         invocation_arguments_for(&signing_invocations, "Astronomical.app")
             .ends_with(&application_entitlements)
     );
+    // The terminal command could only be signed without the sandbox, so a
+    // store bundle has none to sign (issue #2183).
+    for signing_invocation in &signing_invocations {
+        assert!(
+            !signing_invocation
+                .code_object_path
+                .ends_with("MacOS/astronomical"),
+            "{signing_invocation:?}"
+        );
+    }
+}
+
+#[test]
+fn should_keep_signing_the_terminal_command_bare_for_the_direct_channels() {
+    let signing_invocations =
+        plan_for(Channel::Stable, Some(DEVELOPER_ID)).expect("an identity is supplied");
+
+    let terminal_command_arguments =
+        invocation_arguments_for(&signing_invocations, "MacOS/astronomical");
+
     assert!(
-        invocation_arguments_for(&signing_invocations, "MacOS/astronomical")
-            .ends_with("--preserve-metadata=entitlements")
+        !terminal_command_arguments.contains("--entitlements "),
+        "{terminal_command_arguments}"
+    );
+}
+
+#[test]
+fn should_bundle_the_terminal_command_for_every_channel_but_the_store() {
+    assert_eq!(
+        ChannelProfile::for_channel(Channel::Stable).bundled_rust_executable_names(),
+        [
+            "astronomicald",
+            "astronomical-inference-worker",
+            "astronomical"
+        ]
+    );
+    assert_eq!(
+        ChannelProfile::for_channel(Channel::Development).bundled_rust_executable_names(),
+        [
+            "astronomicald",
+            "astronomical-inference-worker",
+            "astronomical"
+        ]
+    );
+    assert_eq!(
+        ChannelProfile::for_channel(Channel::AppStore).bundled_rust_executable_names(),
+        ["astronomicald", "astronomical-inference-worker"]
     );
 }
 
@@ -469,6 +513,59 @@ fn should_accept_only_a_daemon_serving_the_bundle_identity() {
         instance_identity_from_plist(&serde_json::json!({"AstronomicalChannel": "stable"}))
             .is_err()
     );
+}
+
+/// A store bundle's channel is `app-store`, but its engine is the Stable
+/// instance and says so; the smoke test once passed the channel name to the
+/// engine, which refused it (issue #2190).
+#[test]
+fn should_expect_the_stable_instance_from_a_sandboxed_store_bundle() {
+    let store_identity = instance_identity_from_plist(&serde_json::json!({
+        "AstronomicalChannel": "app-store",
+        "AstronomicalDaemonPort": 6732,
+        "CFBundleShortVersionString": "0.2.88",
+        "AstronomicalBuildCommit": "49af41bd9bba"
+    }))
+    .expect("the plist names its instance identity");
+    let stable_engine_status = serde_json::json!({"application": {"channel": "stable", "version": "0.2.88", "commit": "49af41bd9bba"}});
+    let misnamed_engine_status = serde_json::json!({"application": {"channel": "app-store", "version": "0.2.88", "commit": "49af41bd9bba"}});
+
+    assert_eq!(store_identity.runtime_instance_name, "stable");
+    assert!(store_identity.is_sandboxed);
+    assert_eq!(
+        status_identity_problem(&stable_engine_status, &store_identity),
+        None
+    );
+    assert!(status_identity_problem(&misnamed_engine_status, &store_identity).is_some());
+}
+
+#[test]
+fn should_map_each_direct_channel_to_its_own_unsandboxed_instance() {
+    let stable_identity = bundle_instance_identity();
+    let development_identity = instance_identity_from_plist(&serde_json::json!({
+        "AstronomicalChannel": "development",
+        "AstronomicalDaemonPort": 6733,
+        "CFBundleShortVersionString": "0.2.88",
+        "AstronomicalBuildCommit": "49af41bd9bba"
+    }))
+    .expect("the plist names its instance identity");
+
+    assert_eq!(stable_identity.runtime_instance_name, "stable");
+    assert!(!stable_identity.is_sandboxed);
+    assert_eq!(development_identity.runtime_instance_name, "development");
+    assert!(!development_identity.is_sandboxed);
+}
+
+#[test]
+fn should_refuse_a_bundle_whose_plist_names_an_unknown_channel() {
+    let unknown_channel_result = instance_identity_from_plist(&serde_json::json!({
+        "AstronomicalChannel": "nightly",
+        "AstronomicalDaemonPort": 6732,
+        "CFBundleShortVersionString": "0.2.88",
+        "AstronomicalBuildCommit": "49af41bd9bba"
+    }));
+
+    assert!(unknown_channel_result.is_err());
 }
 
 #[test]

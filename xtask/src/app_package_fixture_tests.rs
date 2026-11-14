@@ -50,6 +50,7 @@ fn assembled_fixture_bundle(channel: Channel) -> (tempfile::TempDir, PathBuf) {
         "third-party/RUST_DEPENDENCY_NOTICES",
         "mlx.metallib",
         "icon.icns",
+        "scripts/internal/privacy/PrivacyInfo.xcprivacy",
     ] {
         write_fixture_file(&fixture_root.join(notice_path), "notice", false);
     }
@@ -192,6 +193,78 @@ fn should_report_a_missing_metallib_executable_bit_and_stray_sparkle() {
         store_problems
             .contains(&"an App Store bundle must not embed Sparkle or its license".to_owned()),
         "{store_problems:?}"
+    );
+}
+
+/// Both applications of a store bundle carry the privacy manifest, a direct
+/// bundle carries none, and a store bundle that lost one is refused.
+#[test]
+fn should_require_the_privacy_manifest_in_both_store_applications_only() {
+    let manifest_relative_paths = [
+        "Contents/Resources/PrivacyInfo.xcprivacy",
+        "Contents/Library/LoginItems/Astronomical Agent.app/Contents/Resources/PrivacyInfo.xcprivacy",
+    ];
+    let (_store_fixture_directory, store_bundle_path) = assembled_fixture_bundle(Channel::AppStore);
+    let (_stable_fixture_directory, stable_bundle_path) = assembled_fixture_bundle(Channel::Stable);
+    for manifest_relative_path in manifest_relative_paths {
+        assert!(
+            store_bundle_path.join(manifest_relative_path).is_file(),
+            "{manifest_relative_path}"
+        );
+        assert!(
+            !stable_bundle_path.join(manifest_relative_path).exists(),
+            "{manifest_relative_path}"
+        );
+    }
+    std::fs::remove_file(store_bundle_path.join(manifest_relative_paths[1]))
+        .expect("remove the agent's manifest");
+
+    let store_problems = layout_problems(
+        &store_bundle_path,
+        &ChannelProfile::for_channel(Channel::AppStore),
+    );
+
+    assert_eq!(
+        store_problems,
+        ["the menu-bar agent of an App Store bundle is missing its privacy manifest"]
+    );
+}
+
+/// A store bundle is refused when a terminal command is found in it, and a
+/// direct bundle is refused when its terminal command is missing.
+#[test]
+fn should_refuse_a_terminal_command_in_the_store_bundle_and_require_it_elsewhere() {
+    let (_store_fixture_directory, store_bundle_path) = assembled_fixture_bundle(Channel::AppStore);
+    let store_profile = ChannelProfile::for_channel(Channel::AppStore);
+    let terminal_command_path = store_bundle_path.join("Contents/MacOS/astronomical");
+    assert!(
+        !terminal_command_path.exists(),
+        "assembly must leave the terminal command out of a store bundle"
+    );
+    write_fixture_file(&terminal_command_path, "binary", true);
+
+    let store_problems = layout_problems(&store_bundle_path, &store_profile);
+
+    assert!(
+        store_problems.contains(
+            &"this channel's bundle must not carry the terminal command, which cannot be sandboxed"
+                .to_owned()
+        ),
+        "{store_problems:?}"
+    );
+
+    let (_stable_fixture_directory, stable_bundle_path) = assembled_fixture_bundle(Channel::Stable);
+    std::fs::remove_file(stable_bundle_path.join("Contents/MacOS/astronomical"))
+        .expect("remove the terminal command");
+
+    let stable_problems = layout_problems(
+        &stable_bundle_path,
+        &ChannelProfile::for_channel(Channel::Stable),
+    );
+
+    assert!(
+        stable_problems.contains(&"bundled executable is unavailable: astronomical".to_owned()),
+        "{stable_problems:?}"
     );
 }
 
