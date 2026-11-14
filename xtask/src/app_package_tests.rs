@@ -13,6 +13,7 @@ use super::code_signing::{
     APPLICATION_ENTITLEMENTS_PATH, INHERITED_ENTITLEMENTS_PATH, SigningRequest, signing_plan,
 };
 use super::command::{AppCommand, parse_app_command};
+use super::info_plist::EXPORT_DECLARATION_KEY;
 use super::package_pipeline::{PackageRequest, disposable_reentry_arguments};
 use super::release_build_steps::release_cargo_arguments;
 use super::smoke_test::{
@@ -345,6 +346,17 @@ fn plist_document_for(channel: Channel, is_dirty: bool) -> serde_json::Value {
         for sparkle_key in ["SUFeedURL", "SUPublicEDKey", "SUEnableAutomaticChecks"] {
             plist_document[sparkle_key] = serde_json::json!("present");
         }
+    }
+    with_export_answer(plist_document, channel)
+}
+
+/// Only a store bundle is uploaded, so only its plist carries the answer.
+fn with_export_answer(
+    mut plist_document: serde_json::Value,
+    channel: Channel,
+) -> serde_json::Value {
+    if channel == Channel::AppStore {
+        plist_document[EXPORT_DECLARATION_KEY] = serde_json::json!(false);
     }
     plist_document
 }

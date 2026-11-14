@@ -10,7 +10,9 @@
 //! without building anything.
 
 use super::build_identity::BuildIdentity;
-use super::channel_profile::{AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile};
+use super::channel_profile::{
+    AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, SandboxPolicy,
+};
 
 /// The primary App Store category of the product. It was first Developer
 /// Tools (issue #492) and became Productivity when the store listing was
@@ -53,6 +55,7 @@ pub(crate) fn render_info_plist(
         channel_profile.chat_url_scheme,
     ));
     push_string(&mut plist_text, "CFBundlePackageType", "APPL");
+    push_export_declaration(&mut plist_text, channel_profile);
     // App Store Connect refuses a Mac app without a category, and the same
     // key files a direct install under Productivity in Launchpad.
     push_string(
@@ -123,6 +126,21 @@ fn push_bundle_keys(
     );
     push_string(plist_text, "LSMinimumSystemVersion", "14.0");
     push_string(plist_text, "CFBundleIconFile", "Astronomical.icns");
+}
+
+/// The export-compliance answer App Store Connect otherwise asks by hand for
+/// every uploaded build. `false` records the account holder's declaration of
+/// 2026-11-14: the app uses only standard encryption (HTTPS for model
+/// downloads, and hashing) and is not distributed in France. It must be
+/// revisited if the app's use of encryption changes or France is added to
+/// its availability. Only the store build is uploaded, so only it carries
+/// the key.
+pub(crate) const EXPORT_DECLARATION_KEY: &str = "ITSAppUsesNonExemptEncryption";
+
+fn push_export_declaration(plist_text: &mut String, channel_profile: &ChannelProfile) {
+    if channel_profile.sandbox_policy == SandboxPolicy::AppStoreSandbox {
+        push_boolean(plist_text, EXPORT_DECLARATION_KEY, false);
+    }
 }
 
 /// Updates are verified before extraction and the feed itself must be
