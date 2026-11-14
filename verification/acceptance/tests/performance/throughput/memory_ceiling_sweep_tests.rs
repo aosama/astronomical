@@ -224,6 +224,7 @@ fn journey_run_outcome_with_budget_stage(
         budget_exhausted_stage,
         final_health_snapshot: astronomical_daemon::WorkerHandle::unavailable()
             .worker_health_snapshot(),
+        health_snapshot_after_warmup: None,
         last_observed_active_request_progress: None,
         logging_directory: logging_directory.to_path_buf(),
     }

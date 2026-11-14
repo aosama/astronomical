@@ -57,6 +57,10 @@ pub enum ThroughputJourneyKind {
     /// lines stay in the same series. Forced-engine diagnostic runs are never
     /// appended, so this kind only ever holds production engine choices.
     ResidentMemoryCeilingProbe,
+    /// One row of the streaming scoreboard (issue #2221). Those rows are
+    /// taken at the product's default prompt chunk and are written to their
+    /// own file, never to this history.
+    StreamingScoreboard,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]

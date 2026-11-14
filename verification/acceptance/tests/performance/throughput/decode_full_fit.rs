@@ -41,6 +41,7 @@ async fn should_complete_decode_residency_at_37_gigabytes_after_multi_chunk_pref
         temperature_thousandths: 1_000,
         maximum_mlx_memory_bytes: Some(sparse_decode_full_fit::MEMORY_CEILING_BYTES),
         attribution_enabled: true,
+        prompt_chunking: support::PromptChunking::MeasurementLane,
         journey_timeout: Duration::from_secs(110),
         model_directory: Some(model_directory),
         diagnostic_qwen3_5_engine_override:
