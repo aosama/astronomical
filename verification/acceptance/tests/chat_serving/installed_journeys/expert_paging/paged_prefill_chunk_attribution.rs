@@ -102,7 +102,7 @@ async fn attribute_paged_prefill_chunks() {
     // request-stable pin/stream contract before the first chunk executes.
     let mut request_open_attribution = PerformanceAttribution::enabled();
     qwen3_5_model
-        .refresh_phase_aware_expert_residency_plan_for_tests(
+        .enter_memory_phase_for_tests(
             astronomical_model_serving::MemoryPhase::Prefill,
             u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
             u64::try_from(PREFILL_CHUNK_TOKENS).unwrap_or(u64::MAX),
@@ -127,7 +127,7 @@ async fn attribute_paged_prefill_chunks() {
         // (context position grows, learned reserves change); replicating that
         // here keeps the probe faithful to serving behavior.
         qwen3_5_model
-            .refresh_phase_aware_expert_residency_plan_for_tests(
+            .enter_memory_phase_for_tests(
                 astronomical_model_serving::MemoryPhase::Prefill,
                 u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
                 u64::try_from(chunk_end - chunk_start).unwrap_or(u64::MAX),

@@ -10,7 +10,7 @@
 use crate::phase::MemoryPhase;
 use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
-    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError,
+    CurrentExpertLayerResidency, ExpertLayerState, ExpertResidencyPlanError,
     RetainedExpertPageClass, plan_expert_residency,
 };
 
@@ -110,18 +110,9 @@ fn should_preserve_every_seated_generation_page_when_the_seating_ceiling_covers_
     let plan = plan_expert_residency(MemoryPhase::Decode, 70, &geometries, &current_residencies)
         .expect("a seating ceiling at the retained total must plan");
 
-    assert_eq!(
-        plan.layer_targets[0],
-        ExpertLayerResidencyTarget::PreserveComplete
-    );
-    assert_eq!(
-        plan.layer_targets[1],
-        ExpertLayerResidencyTarget::PreservePartial
-    );
-    assert_eq!(
-        plan.layer_targets[2],
-        ExpertLayerResidencyTarget::PreservePartial
-    );
+    assert_eq!(plan.layer_states[0], ExpertLayerState::Kept);
+    assert_eq!(plan.layer_states[1], ExpertLayerState::Hot);
+    assert_eq!(plan.layer_states[2], ExpertLayerState::Hot);
     assert_eq!(plan.expected_preserved_bytes, 70);
 }
 
@@ -155,11 +146,8 @@ fn should_stream_every_layer_when_the_budget_cannot_hold_even_one_routed_floor()
 
     assert!(plan.is_low_budget_partial_mode);
     assert_eq!(
-        plan.layer_targets,
-        vec![
-            ExpertLayerResidencyTarget::StreamOperationLocal,
-            ExpertLayerResidencyTarget::StreamOperationLocal,
-        ]
+        plan.layer_states,
+        vec![ExpertLayerState::Absent, ExpertLayerState::Absent,]
     );
     assert_eq!(plan.maximum_new_retained_bytes, 0);
 }

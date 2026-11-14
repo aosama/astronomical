@@ -41,8 +41,7 @@ use crate::reclamation::whole_table_reclamation_target_bytes;
 use crate::recovery::ForwardRecoveryPolicy;
 use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
-    ExpertLayerResidencyTarget, plan_expert_residency, publish_request_stable_residency_plan,
-    retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
+    ExpertLayerState, plan_expert_residency, retained_resident_ceiling_after_budget_refresh,
 };
 
 /// Sparse decoder layers of the incident artifact (40-layer model, 2 dense).
@@ -106,105 +105,8 @@ fn should_pin_exactly_the_affordable_complete_layers_for_the_incident_geometry()
         (0..33).collect::<Vec<_>>(),
         "uniform incremental cost must pin the lowest 33 decoder indexes"
     );
-    assert_eq!(
-        plan.layer_targets[33],
-        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-    );
-    assert_eq!(
-        plan.layer_targets[37],
-        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-    );
-}
-
-#[test]
-fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
-    // Before the fix (issue #1278), the stabilized request plan mapped every
-    // streamed-role layer to AdmitCompleteOnMandatoryRead while budgeting
-    // zero new retained bytes: the commit gate then authorized complete-layer
-    // adoption offers whose 855,638,016-byte pages the composed budget could
-    // never seat. The plan must resolve a streamed layer to admit-on-read
-    // only while the leftover budget can actually seat its complete page.
-    let opening_plan = plan_expert_residency(
-        MemoryPhase::Prefill,
-        COMPOSED_LEFTOVER_BUDGET_BYTES,
-        &incident_geometry(),
-        &[],
-    )
-    .expect("the incident geometry should plan against the incident budget");
-    let (request_residency, stabilized_plan) = publish_request_stable_residency_plan(
-        MemoryPhase::Prefill,
-        None,
-        opening_plan,
-        &[],
-        0,
-        &incident_geometry(),
-    );
-
-    let request_residency =
-        request_residency.expect("Prefill publication must freeze a request contract");
-    assert_eq!(request_residency.pinned_complete_layer_indexes().len(), 33);
-    for (layer_index, layer_target) in stabilized_plan
-        .layer_targets
-        .iter()
-        .enumerate()
-        .take(SPARSE_LAYER_COUNT)
-        .skip(33)
-    {
-        assert_eq!(
-            *layer_target,
-            ExpertLayerResidencyTarget::StreamOperationLocal,
-            "streamed-role layer {layer_index} must stream operation-local when the leftover budget cannot seat its page"
-        );
-        assert!(
-            !should_commit_mandatory_complete_layer(39, true, Some(*layer_target),),
-            "the commit gate must refuse layer {layer_index}: 33 pinned claims leave {} bytes, one page is {}",
-            COMPOSED_LEFTOVER_BUDGET_BYTES - 33 * COMPLETE_LAYER_PAYLOAD_BYTES,
-            COMPLETE_LAYER_PAYLOAD_BYTES
-        );
-    }
-
-    // A leftover that holds the pinned claims plus streamed pages keeps
-    // admit-on-read for exactly as many streamed layers as it can seat: the
-    // retention win for already-materialized pages survives the fix where
-    // the budget makes it real.
-    let richer_budget_bytes = 35 * COMPLETE_LAYER_PAYLOAD_BYTES;
-    let richer_opening = plan_expert_residency(
-        MemoryPhase::Prefill,
-        richer_budget_bytes,
-        &incident_geometry(),
-        &[],
-    )
-    .expect("the richer budget should pin 35 complete layers");
-    let (_richer_residency, richer_plan) = publish_request_stable_residency_plan(
-        MemoryPhase::Prefill,
-        None,
-        richer_opening,
-        &[],
-        0,
-        &incident_geometry(),
-    );
-    assert_eq!(
-        richer_plan.complete_layer_targets.len(),
-        34,
-        "the routed floors for all 38 layers consume one layer of the richer budget"
-    );
-    assert_eq!(
-        richer_plan.layer_targets[34],
-        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
-        "the single leftover page after 34 pinned claims admits the first streamed layer"
-    );
-    for layer_target in richer_plan
-        .layer_targets
-        .iter()
-        .take(SPARSE_LAYER_COUNT)
-        .skip(35)
-    {
-        assert_eq!(
-            *layer_target,
-            ExpertLayerResidencyTarget::StreamOperationLocal,
-            "every further streamed layer exceeds the leftover and must stream operation-local"
-        );
-    }
+    assert_eq!(plan.layer_states[33], ExpertLayerState::Hot);
+    assert_eq!(plan.layer_states[37], ExpertLayerState::Hot);
 }
 
 #[test]

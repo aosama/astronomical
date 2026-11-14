@@ -1,8 +1,8 @@
 //! Beside-source tests for the pure foundation-and-overlay planning stages.
 
 use crate::residency::{
-    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
-    ExpertResidencyPlanError, RetainedExpertPageClass,
+    CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerState, ExpertResidencyPlanError,
+    RetainedExpertPageClass,
 };
 
 use super::{
@@ -240,11 +240,8 @@ fn should_charge_only_the_missing_bytes_when_promoting_over_a_smaller_elastic_pa
     .expect("the charges should not overflow");
 
     assert_eq!(
-        accounting.layer_targets,
-        vec![
-            ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead,
-            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
-        ]
+        accounting.layer_states,
+        vec![ExpertLayerState::Kept, ExpertLayerState::Hot,]
     );
     assert_eq!(accounting.preserved_bytes, 20);
     assert_eq!(accounting.new_retained_bytes, 40);
@@ -267,10 +264,7 @@ fn should_preserve_the_full_elastic_page_and_charge_only_its_floor_overlap() {
     )
     .expect("the charges should not overflow");
 
-    assert_eq!(
-        accounting.layer_targets,
-        vec![ExpertLayerResidencyTarget::PreservePartial]
-    );
+    assert_eq!(accounting.layer_states, vec![ExpertLayerState::Hot]);
     assert_eq!(accounting.preserved_bytes, 30);
     assert_eq!(accounting.new_retained_bytes, 0);
 }
@@ -289,10 +283,7 @@ fn should_count_the_reserved_floor_of_a_released_complete_layer_as_preserved() {
     )
     .expect("the charges should not overflow");
 
-    assert_eq!(
-        accounting.layer_targets,
-        vec![ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit]
-    );
+    assert_eq!(accounting.layer_states, vec![ExpertLayerState::Absent]);
     assert_eq!(accounting.preserved_bytes, 20);
     assert_eq!(accounting.new_retained_bytes, 0);
 }

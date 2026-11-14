@@ -6,8 +6,7 @@ use astronomical_memory_policy::{
     phase::MemoryPhase,
     residency::{
         CurrentExpertLayerResidency, ExpertLayerGeometry, RetainedExpertPageClass,
-        complete_layer_indexes_required_before_decode, plan_expert_residency,
-        publish_request_stable_residency_plan,
+        kept_layer_indexes_to_seat_before_reply, plan_expert_residency,
     },
 };
 
@@ -81,16 +80,6 @@ fn fake_seating() -> FakeDecodeExpertSeating {
 #[test]
 fn should_complete_and_materialize_partial_prefill_pages_before_decode() {
     let (geometries, partial_pages) = partial_prefill_fixture();
-    let prefill_plan = plan_expert_residency(MemoryPhase::Prefill, 80, &geometries, &partial_pages)
-        .expect("prefill must stay below complete fit");
-    let (prefill_contract, _) = publish_request_stable_residency_plan(
-        MemoryPhase::Prefill,
-        None,
-        prefill_plan,
-        &partial_pages,
-        0,
-        &geometries,
-    );
     let generation_plan = plan_expert_residency(
         MemoryPhase::GenerationPreparation,
         120,
@@ -98,19 +87,10 @@ fn should_complete_and_materialize_partial_prefill_pages_before_decode() {
         &partial_pages,
     )
     .expect("the decode phase fits the complete expert payload");
-    let (generation_contract, generation_plan) = publish_request_stable_residency_plan(
-        MemoryPhase::GenerationPreparation,
-        prefill_contract.as_ref(),
-        generation_plan,
-        &partial_pages,
-        0,
-        &geometries,
-    );
-    assert!(generation_contract.is_none());
     let selected_layer_indexes = complete_layers_within_decode_warm_budget(
         &geometries,
         &partial_pages,
-        &complete_layer_indexes_required_before_decode(&generation_plan),
+        &kept_layer_indexes_to_seat_before_reply(&generation_plan, &partial_pages),
         60,
     );
     assert_eq!(selected_layer_indexes, vec![0, 1, 2]);

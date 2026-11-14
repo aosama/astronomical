@@ -35,8 +35,7 @@ use astronomical_runtime_integration::{
 };
 
 use crate::{
-    GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceOperation,
-    last_prefill_chunk_demand_weight,
+    GeneratedToken, InferenceEngineError, PerformanceOperation, last_prefill_chunk_demand_weight,
 };
 
 use super::completed_forward_memory;
@@ -69,7 +68,6 @@ impl Qwen3_5EngineState {
         else {
             return Ok(None);
         };
-        self.refresh_prefill_residency_plan(active_request)?;
         log_prefill_attempt(
             request_id,
             prefill_start,
@@ -221,24 +219,6 @@ impl Qwen3_5EngineState {
             active_request.can_use_persistent_prompt_cache,
             persistent_prompt_cache_block_token_count,
         )
-    }
-
-    /// Refreshes the phase-aware expert residency plan for the prefill phase.
-    /// The activation reserve is operation-scoped (issue #644): the residency
-    /// plan must survive the largest chunk this request can still attempt,
-    /// not the whole prompt's imagined workspace. Mirrors the inlined block.
-    fn refresh_prefill_residency_plan(
-        &mut self,
-        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-    ) -> Result<(), InferenceEngineError> {
-        self.model
-            .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-            .refresh_phase_aware_expert_residency_plan(
-                MemoryPhase::Prefill,
-                &mut active_request.performance_attribution,
-            )
-            .map_err(qwen3_5_runtime_error)
     }
 
     /// Opens the request's one demand-evidence window for prefill and sets the

@@ -7,18 +7,19 @@ use crate::memory::SessionStreamingPhase;
 use crate::memory::decode_seating::{DecodeExpertSeating, seat_and_materialize_complete_layers};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
-use crate::{
-    PerformanceAttribution, PerformanceCounter, complete_layer_indexes_required_before_decode,
-};
+use crate::{PerformanceAttribution, PerformanceCounter, kept_layer_indexes_to_seat_before_reply};
 
 impl Qwen3_5Model {
-    /// Complete-layer indexes `memory/` requires seated before decode.
-    pub(crate) fn planned_complete_layer_indexes_to_seat_before_decode(&self) -> Vec<usize> {
-        self.active_expert_residency_plan
-            .borrow()
-            .as_ref()
-            .map(complete_layer_indexes_required_before_decode)
-            .unwrap_or_default()
+    /// Layers the reply's plan keeps whole that the cache does not hold
+    /// whole yet: the ones to read in before the first reply token.
+    pub(crate) fn expert_layers_to_seat_before_reply(&self) -> Vec<usize> {
+        let current_residencies = self.current_expert_layer_residencies();
+        match self.active_expert_residency_plan.borrow().as_ref() {
+            Some(residency_plan) => {
+                kept_layer_indexes_to_seat_before_reply(residency_plan, &current_residencies)
+            }
+            None => Vec::new(),
+        }
     }
 
     fn has_seated_complete_layer(&self, layer_index: usize, expert_capacity: usize) -> bool {

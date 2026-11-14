@@ -3,12 +3,9 @@ use std::path::PathBuf;
 use super::prefill_complete_layer_prefetch::{
     largest_prefill_prefetchable_complete_source_payload_bytes, layer_plan_allows_prefill_prefetch,
     next_prefill_prefetch_layer_index, prefill_chunk_routes_complete_layer,
-    prefill_complete_layer_stream_slot_bytes, residency_target_allows_prefill_prefetch,
+    prefill_complete_layer_stream_slot_bytes,
 };
-use crate::{
-    ExpertLayerResidencyTarget, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
-    SafetensorsDtype,
-};
+use crate::{QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype};
 
 const PREFILL_CHUNK_TOKEN_COUNT: i32 = 2_048;
 const SINGLE_DECODE_TOKEN_COUNT: i32 = 1;
@@ -110,24 +107,6 @@ fn should_never_prefetch_for_a_decode_token_or_an_invalid_shape() {
     assert!(!prefill_chunk_routes_complete_layer(0, 8, 256));
     assert!(!prefill_chunk_routes_complete_layer(-4, 8, 256));
     assert!(!prefill_chunk_routes_complete_layer(2_048, 8, 0));
-}
-
-#[test]
-fn should_refuse_prefetch_only_for_layers_the_plan_is_releasing() {
-    assert!(!residency_target_allows_prefill_prefetch(Some(
-        ExpertLayerResidencyTarget::ReleasePartial
-    )));
-    assert!(!residency_target_allows_prefill_prefetch(Some(
-        ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-    )));
-    for streaming_target in [
-        None,
-        Some(ExpertLayerResidencyTarget::StreamOperationLocal),
-        Some(ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead),
-        Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead),
-    ] {
-        assert!(residency_target_allows_prefill_prefetch(streaming_target));
-    }
 }
 
 #[test]

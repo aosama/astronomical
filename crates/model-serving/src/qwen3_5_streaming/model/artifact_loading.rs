@@ -179,7 +179,6 @@ impl Qwen3_5Model {
             prompt_expert_pages_in_hand: Default::default(),
             prefill_layer_completion_refused: RefCell::default(),
             active_expert_residency_plan: RefCell::new(None),
-            request_expert_residency: RefCell::new(None),
             paged_forward_missing_route_collector:
                 crate::qwen3_5_streaming::PagedForwardMissingRouteCollector,
             hot_expert_warm_slot_count: std::cell::Cell::new(0),

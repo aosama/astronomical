@@ -1,9 +1,8 @@
 use crate::phase::MemoryPhase;
 use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
-    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError,
-    RetainedExpertPageClass, complete_layer_indexes_required_before_decode, plan_expert_residency,
-    publish_request_stable_residency_plan, should_commit_mandatory_complete_layer,
+    CurrentExpertLayerResidency, ExpertLayerState, ExpertResidencyPlanError,
+    RetainedExpertPageClass, kept_layer_indexes_to_seat_before_reply, plan_expert_residency,
 };
 
 fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
@@ -49,9 +48,9 @@ fn should_target_every_layer_complete_when_the_composed_budget_fits_the_model() 
 
     assert_eq!(plan.complete_layer_targets, vec![0, 1, 2]);
     assert!(
-        plan.layer_targets.iter().all(|target| {
-            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        })
+        plan.layer_states
+            .iter()
+            .all(|target| { *target == ExpertLayerState::Kept })
     );
     assert_eq!(plan.maximum_new_retained_bytes, 120);
 }
@@ -67,14 +66,8 @@ fn should_preserve_existing_complete_layers_before_selecting_new_targets() {
     .expect("one complete layer plus routed floors should fit");
 
     assert_eq!(plan.complete_layer_targets, vec![1]);
-    assert_eq!(
-        plan.layer_targets[1],
-        ExpertLayerResidencyTarget::PreserveComplete
-    );
-    assert_eq!(
-        plan.layer_targets[0],
-        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-    );
+    assert_eq!(plan.layer_states[1], ExpertLayerState::Kept);
+    assert_eq!(plan.layer_states[0], ExpertLayerState::Hot);
     assert_eq!(plan.reserved_routed_overlay_bytes, 0);
 }
 
@@ -89,10 +82,7 @@ fn should_reserve_one_model_derived_routed_page_for_each_incomplete_layer() {
     .expect("complete foundation and routed floors should fit");
 
     assert_eq!(plan.complete_layer_targets, vec![0]);
-    assert_eq!(
-        plan.layer_targets[1],
-        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-    );
+    assert_eq!(plan.layer_states[1], ExpertLayerState::Hot);
     assert_eq!(plan.reserved_routed_overlay_bytes, 0);
 }
 
@@ -131,11 +121,11 @@ fn should_use_low_budget_partial_mode_when_routed_floors_do_not_fit() {
     .expect("one fitting page should survive low-budget mode");
 
     assert_eq!(
-        plan.layer_targets,
+        plan.layer_states,
         vec![
-            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
-            ExpertLayerResidencyTarget::PreservePartial,
-            ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+            ExpertLayerState::Hot,
+            ExpertLayerState::Hot,
+            ExpertLayerState::Hot,
         ]
     );
 }
@@ -151,10 +141,7 @@ fn should_preserve_a_fitting_partial_page_without_exact_set_equality() {
     )
     .expect("routed floors should preserve an already useful partial page");
 
-    assert_eq!(
-        plan.layer_targets[1],
-        ExpertLayerResidencyTarget::PreservePartial
-    );
+    assert_eq!(plan.layer_states[1], ExpertLayerState::Hot);
     assert_eq!(plan.expected_preserved_bytes, 20);
 }
 
@@ -164,9 +151,9 @@ fn should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence() 
         .expect("routed floors should fit exactly");
 
     assert!(
-        plan.layer_targets.iter().all(|target| {
-            *target == ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead
-        })
+        plan.layer_states
+            .iter()
+            .all(|target| { *target == ExpertLayerState::Hot })
     );
     assert!(plan.complete_layer_targets.is_empty());
 }
@@ -186,63 +173,9 @@ fn should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_th
         "empty post-demote topology must not plan zero complete layers when leftover fits them"
     );
     assert!(
-        plan.layer_targets.iter().any(|target| {
-            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        })
-    );
-}
-
-// Issue #339: a Prefill plan republished after a mid-prefill demotion must name
-// the complete layers its ceiling admits, and the request-stable contract must
-// keep naming them. That is what lets the prefill stream hand each freshly
-// streamed complete layer to retained ownership instead of dropping it and
-// making decode seating read the identical payload again.
-#[test]
-fn should_name_every_admissible_complete_layer_after_a_prefill_demotion() {
-    let layer_geometries = uniform_geometry(3);
-    let complete_model_payload_bytes = layer_geometries
-        .iter()
-        .map(|geometry| geometry.complete_layer_payload_bytes)
-        .sum::<u64>();
-    let candidate_plan = plan_expert_residency(
-        MemoryPhase::Prefill,
-        complete_model_payload_bytes,
-        &layer_geometries,
-        &[],
-    )
-    .expect("a Prefill ceiling that fits the complete model must plan every complete layer");
-
-    assert_eq!(candidate_plan.complete_layer_targets, vec![0, 1, 2]);
-    assert!(
-        candidate_plan.layer_targets.iter().all(|target| {
-            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        })
-    );
-
-    let (opened_residency, opened_plan) = publish_request_stable_residency_plan(
-        MemoryPhase::Prefill,
-        None,
-        candidate_plan,
-        &[],
-        0,
-        &layer_geometries,
-    );
-    let opened_residency = opened_residency.expect("Prefill must open a request contract");
-
-    assert_eq!(
-        opened_residency.pinned_complete_layer_indexes(),
-        vec![0, 1, 2]
-    );
-    assert!(
-        opened_plan.layer_targets.iter().all(|target| {
-            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-        })
-    );
-    assert!(
-        opened_plan
-            .layer_targets
+        plan.layer_states
             .iter()
-            .all(|target| { should_commit_mandatory_complete_layer(2_048, true, Some(*target)) })
+            .any(|target| { *target == ExpertLayerState::Kept })
     );
 }
 
@@ -291,7 +224,7 @@ fn should_require_unseated_complete_layers_to_be_loaded_before_decode() {
         &[],
     )
     .expect("leftover budget should name complete layers after an empty demote");
-    let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+    let layer_indexes = kept_layer_indexes_to_seat_before_reply(&plan, &[]);
 
     assert_eq!(layer_indexes, plan.complete_layer_targets);
     assert!(!layer_indexes.is_empty());
@@ -306,7 +239,7 @@ fn should_not_require_already_preserved_complete_layers_to_be_loaded_again() {
         &[complete_residency(1)],
     )
     .expect("one preserved complete layer should plan without a seating pass");
-    let layer_indexes = complete_layer_indexes_required_before_decode(&plan);
+    let layer_indexes = kept_layer_indexes_to_seat_before_reply(&plan, &[complete_residency(1)]);
 
     assert!(!layer_indexes.contains(&1));
 }
@@ -340,10 +273,7 @@ fn should_release_complete_layers_only_for_the_remaining_exact_deficit() {
     .expect("routed floors should consume the full ceiling");
 
     assert!(plan.complete_layer_targets.is_empty());
-    assert_eq!(
-        plan.layer_targets[2],
-        ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
-    );
+    assert_eq!(plan.layer_states[2], ExpertLayerState::Absent);
 }
 
 #[test]

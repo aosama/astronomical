@@ -293,7 +293,7 @@ fn assert_parity_with_planned_layers_kept(
     let mut planned_boundaries = Vec::with_capacity(2);
     for reads_one_layer_at_a_time in [false, true] {
         streaming_model
-            .refresh_phase_aware_expert_residency_plan_for_tests(
+            .enter_memory_phase_for_tests(
                 MemoryPhase::Prefill,
                 u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
                 u64::try_from(CHUNK_TOKEN_COUNT).unwrap_or(u64::MAX),

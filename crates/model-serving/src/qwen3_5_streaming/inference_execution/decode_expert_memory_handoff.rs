@@ -9,7 +9,7 @@
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{InferenceEngineError, MemoryPhase, PerformanceOperation};
+use crate::{InferenceEngineError, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
@@ -38,25 +38,21 @@ impl Qwen3_5EngineState {
             active_request.performance_attribution.measure_operation(
                 PerformanceOperation::GenerationPreparation,
                 |performance_attribution| {
-                    model.refresh_phase_aware_expert_residency_plan(
-                        MemoryPhase::GenerationPreparation,
-                        performance_attribution,
-                    )
+                    model.plan_expert_layer_states_for_reply(performance_attribution)
                 },
             );
         if let Err(residency_preparation_error) = residency_preparation_result {
-            // Residency planning is an accelerator, not a correctness gate. A
-            // missing plan makes every uncovered route operation-local, which is
+            // The plan is an accelerator, not a correctness gate. Without
+            // one no extra layer is read in at the reply's start, which is
             // slower but preserves exact model execution and the user's request.
-            model.clear_phase_aware_expert_residency_plan();
+            model.forget_expert_layer_states();
             tracing::warn!(
                 request_id = request_id.value(),
                 error = %residency_preparation_error,
                 "continued decode with operation-local expert streaming after optional residency planning failed"
             );
         }
-        let planned_complete_layer_indexes_to_seat =
-            model.planned_complete_layer_indexes_to_seat_before_decode();
+        let planned_complete_layer_indexes_to_seat = model.expert_layers_to_seat_before_reply();
         // The warm floor must survive seating, so seating is capped to the
         // budget the floor leaves free BEFORE any layer streams: otherwise
         // the handoff streams complete layers it immediately evicts below.

@@ -117,7 +117,7 @@ impl Qwen3_5Model {
         if should_commit_multi_token_union_as_complete_layer(
             spans_token_count,
             true,
-            self.expert_residency_target(layer_index),
+            self.expert_layer_state(layer_index),
             expert_capacity,
             expert_capacity,
         ) && self.adopt_held_layer_into_cache(retained_experts, layer_index, &manifest, &weights)

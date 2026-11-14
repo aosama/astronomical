@@ -67,7 +67,7 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        model.clear_phase_aware_expert_residency_plan();
+        model.forget_expert_layer_states();
         // A fresh request observes a fresh SSD-read tally so the label
         // emitted across this request's lifecycle reflects only this
         // request's expert storage reads (issue #1533).

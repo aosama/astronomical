@@ -4,7 +4,7 @@ use thiserror::Error;
 /// Lifetime and eviction priority of one retained expert page.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RetainedExpertPageClass {
-    /// A complete layer pinned until an exact deficit requires reclamation.
+    /// A layer held whole; it goes last when the capacity shrinks.
     StableCompleteLayer,
     /// Routed pages that yield before complete layers.
     ElasticRoutedExperts,
@@ -30,26 +30,20 @@ pub struct CurrentExpertLayerResidency {
     pub covered_weighted_demand: u64,
 }
 
-/// One disposition per sparse decoder layer. Execution enacts the target
-/// without introducing a second residency policy.
+/// Where one sparse decoder layer should end up while a reply is written.
+///
+/// What to do about a layer follows from this and from what the cache holds
+/// now: a layer that should be kept and is not yet whole is read in; one
+/// that should be hot keeps the experts tokens route to; one that should be
+/// absent keeps nothing new.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ExpertLayerResidencyTarget {
-    PreserveComplete,
-    /// Retain the complete payload when the execution-required read loads it.
-    PromoteCompleteOnMandatoryRead,
-    PreservePartial,
-    AdmitPartialOnMandatoryRouteRead,
-    StreamOperationLocal,
-    ReleasePartial,
-    /// Drop this seated complete layer's whole table. "Exact deficit" names the
-    /// planner's aggregate byte accounting, not a per-layer partial keep: the
-    /// enactment removes every expert of the layer (issue #1522), and only
-    /// while idle, because prefill would stream the layer back on the next
-    /// chunk (`should_enact_planned_expert_release`).
-    ReleaseCompleteForExactDeficit,
-    /// A mandatory multi-token read already materialized the complete payload;
-    /// keep it when admission funds it rather than re-reading next chunk.
-    AdmitCompleteOnMandatoryRead,
+pub enum ExpertLayerState {
+    /// Every expert of the layer stays in memory.
+    Kept,
+    /// The experts the router keeps choosing stay in memory.
+    Hot,
+    /// Nothing of the layer is kept; what a token needs is read for it.
+    Absent,
 }
 
 /// One deterministic topology plan that never commands eager source reads.
@@ -58,7 +52,7 @@ pub struct ExpertResidencyPlan {
     pub phase: MemoryPhase,
     pub retained_expert_ceiling_bytes: u64,
     pub complete_layer_targets: Vec<usize>,
-    pub layer_targets: Vec<ExpertLayerResidencyTarget>,
+    pub layer_states: Vec<ExpertLayerState>,
     pub reserved_routed_overlay_bytes: u64,
     pub expected_preserved_bytes: u64,
     pub maximum_new_retained_bytes: u64,
