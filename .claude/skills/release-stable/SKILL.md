@@ -105,8 +105,16 @@ cargo xtask app dev
 `cargo xtask app dev` starts the chat app, the menu-bar agent and the engine in the same second, which is how every person's launch after an update goes. Take a screenshot of the Development chat window within a few seconds: the composer must show the chat model selector, the sidebar must list earlier conversations, and the window must show no failure text. Then open the app menu and confirm it lists "Check for Updates…". A window that fails this check blocks the release. Every automated test starts with an engine already running, so this is the only gate that sees a window that opened before its engine; 0.2.97 and 0.2.98 shipped with an empty model list for exactly that reason.
 
 4. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe.
-5. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
-6. Prepare the release:
+5. Build the Mac App Store bundle from this same commit, so a direct release never goes out while the store channel is broken:
+
+```sh
+cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"; echo EXIT=$?
+```
+
+`DISTRIBUTION_IDENTITY` is the Keychain identity whose quoted name starts with `Apple Distribution:` (section 8 lists the store credentials). The build uploads nothing and changes nothing in the worktree. It ends with the store bundle check: both applications sandboxed, the engine and worker inheriting, no Sparkle, no terminal command, the privacy manifest, the export declaration, and an engine that belongs to this commit. A nonzero exit stops the release here, before any tag exists; fix the cause through its own pull request and start this section again. If this Mac has no distribution identity, stop and tell the user: do not skip the step. Section 8 builds the bundle again from the tag for the upload itself; this run only proves the channel still builds.
+
+6. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
+7. Prepare the release:
 
 ```sh
 cargo xtask release prepare-signed \
@@ -127,7 +135,7 @@ Validate `target/releases/${TAG}` without changing it:
 - Appcast XML is valid and contains `$VERSION`, a build number greater than the previous release, macOS `14.0` and above, `arm64`, the exact GitHub release URL, an enclosure Ed25519 signature, and a signed-feed envelope.
 - The prepared directory contains exactly the DMG, copied Markdown notes, `appcast.xml`, and `release-manifest.json`.
 
-Report only the version, commit, artifact names, sizes, digests, and validation outcomes. Ask the user to approve publication, unless they already approved this release in advance; either way, report these results. Do not push the tag or mutate GitHub release state until approved.
+Report only the version, commit, artifact names, sizes, digests, and validation outcomes, including the outcome of section 3's store bundle build. Ask the user to approve publication, unless they already approved this release in advance; either way, report these results. Do not push the tag or mutate GitHub release state until approved.
 
 ## 5. Publish the reviewed bytes
 
