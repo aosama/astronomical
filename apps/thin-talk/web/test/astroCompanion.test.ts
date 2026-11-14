@@ -144,7 +144,7 @@ test("should_keep_the_ready_screen_when_the_person_returns_after_downloading_her
   await waitForStep("download");
   await waitFor(() => isPresent("astro-download"), "the Download button");
   element<HTMLButtonElement>("astro-download").click();
-  await waitFor(() => astroSays() === "The model is ready.", "the ready line");
+  await waitFor(() => astroSays() === "It is on this Mac now and works without the internet.", "the ready line");
   window.dispatchEvent(new Event("focus"));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(overlay().hidden, false, "the screen that says the model is ready stays until the person moves on");
@@ -169,7 +169,7 @@ test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async (
   assert.equal(element("astro-continue").textContent, "Continue in the background");
   assert.match(element("astro-download-next").textContent ?? "", /Ask a question/);
   await waitFor(() => element("astro-download-size").textContent === "1.9 of 5.6 GB", "progress");
-  await waitFor(() => astroSays() === "The model is ready.", "the ready line");
+  await waitFor(() => astroSays() === "It is on this Mac now and works without the internet.", "the ready line");
   await waitFor(() => document.getElementById("empty-state-notice")?.textContent === "", "chat to become ready");
   assert.equal(element("astro-download").textContent, "Start chatting");
   assert.equal(isPresent("astro-continue"), false, "one way forward once the model is ready");
