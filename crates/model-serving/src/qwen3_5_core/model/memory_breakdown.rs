@@ -18,7 +18,7 @@ use super::Qwen3_5ModelBase;
 
 /// What one engine model holds in MLX memory, and the breakdown built on it.
 pub(crate) trait Qwen3_5MemoryOwnership {
-    /// The base both engines share: the vision tower and the RAM budget.
+    /// The base both engines share: the vision tower and the memory facts.
     fn model_base(&self) -> &Qwen3_5ModelBase;
 
     /// Expert weight bytes this engine currently holds in MLX memory.
@@ -30,16 +30,16 @@ pub(crate) trait Qwen3_5MemoryOwnership {
     /// The memory governor's accounts in the shape the ceiling-utilization
     /// split is composed against, so the split shows what is really set
     /// aside (issue #2221). `None` until the engine's governor has opened.
-    fn governed_ram_budget_snapshot(&self) -> Option<crate::memory::MlxRamBudgetSnapshot>;
+    fn governed_memory_reserve_snapshot(&self) -> Option<crate::memory::MemoryReserveSnapshot>;
 
     /// The reserves the split is composed against. Before the governor
     /// opens nothing has been measured, so only the weights are set aside.
-    fn ram_budget_snapshot(&self) -> crate::memory::MlxRamBudgetSnapshot {
-        match self.governed_ram_budget_snapshot() {
+    fn memory_reserve_snapshot(&self) -> crate::memory::MemoryReserveSnapshot {
+        match self.governed_memory_reserve_snapshot() {
             Some(governed_budget_snapshot) => governed_budget_snapshot,
-            None => crate::memory::MlxRamBudgetSnapshot::with_only_weights_set_aside(
+            None => crate::memory::MemoryReserveSnapshot::with_only_weights_set_aside(
                 self.model_base()
-                    .mlx_ram_budget
+                    .memory_facts
                     .borrow()
                     .mlx_active_memory_ceiling_bytes(),
                 self.held_model_core_payload_bytes(),
@@ -95,7 +95,7 @@ pub(crate) trait Qwen3_5MemoryOwnership {
     /// Composes the ceiling-utilization split for one measured instant (issue #510).
     ///
     /// The reserves come from whatever decides them for this engine
-    /// (`ram_budget_snapshot`), so the published split and the
+    /// (`memory_reserve_snapshot`), so the published split and the
     /// engine's own decisions can never drift apart. Callers pass the
     /// breakdown reconciled from the same measurement, keeping every term
     /// pinned to one instant.
@@ -105,7 +105,7 @@ pub(crate) trait Qwen3_5MemoryOwnership {
         active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.ram_budget_snapshot(),
+            self.memory_reserve_snapshot(),
             mlx_active_memory_bytes,
             active_breakdown,
         )
@@ -120,7 +120,7 @@ pub(crate) trait Qwen3_5MemoryOwnership {
         finalized_active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.ram_budget_snapshot(),
+            self.memory_reserve_snapshot(),
             mlx_active_memory_bytes,
             finalized_active_breakdown,
         )

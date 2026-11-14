@@ -113,8 +113,8 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
         Qwen3_5StreamingModel::resident_model_payload_byte_count(self)
     }
 
-    fn governed_ram_budget_snapshot(&self) -> Option<crate::memory::MlxRamBudgetSnapshot> {
-        self.ram_budget_snapshot_from_governor(self.held_expert_payload_bytes())
+    fn governed_memory_reserve_snapshot(&self) -> Option<crate::memory::MemoryReserveSnapshot> {
+        self.memory_reserve_snapshot_from_governor(self.held_expert_payload_bytes())
     }
 }
 

@@ -1,12 +1,12 @@
 use crate::admission::complete_residency::{
     CompleteResidencyDecision, CompleteResidencyRequirements,
 };
-use crate::budget::ram_values::MlxRamBudgetModelGeometry;
+use crate::model_memory::memory_values::ModelMemoryGeometry;
 use crate::residency::CompleteResidencyHeadroomBoundary;
 use crate::vocabulary::MemoryBoundary;
 
-fn sparse_geometry() -> MlxRamBudgetModelGeometry {
-    MlxRamBudgetModelGeometry {
+fn sparse_geometry() -> ModelMemoryGeometry {
+    ModelMemoryGeometry {
         model_core_payload_bytes: 100,
         complete_expert_payload_bytes: 1_000,
         largest_complete_expert_layer_bytes: 50,
@@ -17,7 +17,7 @@ fn sparse_geometry() -> MlxRamBudgetModelGeometry {
 
 #[test]
 fn should_return_no_paging_ceiling_when_the_artifact_has_no_headroom_gap() {
-    let geometry_without_experts = MlxRamBudgetModelGeometry {
+    let geometry_without_experts = ModelMemoryGeometry {
         complete_expert_payload_bytes: 0,
         ..sparse_geometry()
     };

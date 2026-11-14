@@ -30,7 +30,7 @@ use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_model_serving::{
     CompleteResidencyHeadroomBoundary, GeneratedToken, InferenceEngine, Qwen3_5ArtifactValidator,
     Qwen3_5InferenceRequest, Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
-    Qwen3_5StreamingEngine, mlx_ram_budget_model_geometry_from_validated_artifact,
+    Qwen3_5StreamingEngine, model_memory_geometry_from_validated_artifact,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
@@ -121,7 +121,7 @@ fn paging_ceiling_bytes(model_directory: &Path, paging_depth: PagingDepth) -> u6
         .validate(model_directory, u32::from(OUTPUT_TOKEN_COUNT))
         .expect("the configured sparse artifact should validate");
     let (model_geometry, required_headroom_bytes) =
-        mlx_ram_budget_model_geometry_from_validated_artifact(&validated_artifact, model_directory)
+        model_memory_geometry_from_validated_artifact(&validated_artifact, model_directory)
             .expect("the sparse artifact should expose its RAM geometry");
     let residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
         model_geometry,

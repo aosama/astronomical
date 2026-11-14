@@ -50,9 +50,6 @@ impl UserConfigFile {
                 prefill_graph_submission_layer_interval: Some(
                     crate::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
                 ),
-                experimental_ssd_paging_prefill_graph_submission_layer_interval: Some(
-                    crate::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-                ),
                 ..ChunkingConfigFile::default()
             }),
             models: BTreeMap::new(),

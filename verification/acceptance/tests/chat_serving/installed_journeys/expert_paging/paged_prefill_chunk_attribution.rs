@@ -21,7 +21,7 @@ use std::time::Duration;
 use astronomical_model_serving::{
     CompleteResidencyHeadroomBoundary, PerformanceAttribution, PerformanceCounter,
     PerformanceOperation, Qwen3_5ArtifactValidator, Qwen3_5StreamingModel,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    model_memory_geometry_from_validated_artifact,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -55,11 +55,8 @@ async fn attribute_paged_prefill_chunks() {
         .expect("the configured sparse artifact should validate");
     let qwen3_5_config = validated_artifact.config().clone();
     let (model_geometry, required_headroom_bytes) =
-        mlx_ram_budget_model_geometry_from_validated_artifact(
-            &validated_artifact,
-            &model_directory,
-        )
-        .expect("the sparse artifact should expose disk RAM geometry");
+        model_memory_geometry_from_validated_artifact(&validated_artifact, &model_directory)
+            .expect("the sparse artifact should expose disk RAM geometry");
     let residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
         model_geometry,
         required_headroom_bytes,

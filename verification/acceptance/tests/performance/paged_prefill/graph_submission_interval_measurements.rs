@@ -1,20 +1,21 @@
 //! **Performance measurement — run on demand, not in regression runs.**
 //! Run with `cargo measure-paging-submission-intervals --configuration PATH`
-//! when choosing the `experimental_ssd_paging_*_graph_submission_layer_interval`
-//! defaults; the regression lane (`cargo test-acceptance`) does not build this
+//! when choosing the `experimental_ssd_paging_generation_graph_submission_layer_interval`
+//! default; the regression lane (`cargo test-acceptance`) does not build this
 //! target's measurements.
 //!
 //! Graph-submission layer intervals while experts stream from SSD.
 //!
 //! The interval is how many decoder layers accumulate before the forward is
-//! handed to the graphics processor. One cell measures one pair of intervals,
-//! taken from the `paging_experiment` object of the configuration file, so a
-//! sweep is several runs that differ only in that object:
+//! handed to the graphics processor. It applies to one-token forwards only: a
+//! prompt forward finishes every layer before the next by rule (issue #2221).
+//! One cell measures one interval, taken from the `paging_experiment` object
+//! of the configuration file, so a sweep is several runs that differ only in
+//! that object:
 //!
 //! ```json
 //! {"paging_experiment": {"maximum_mlx_memory_gigabytes": 14,
 //!   "streaming_prompt_processing_chunk_tokens": 4096,
-//!   "prefill_graph_submission_layer_interval": 1,
 //!   "generation_graph_submission_layer_interval": 3}}
 //! ```
 //!
@@ -41,11 +42,8 @@
 //! - Generation interval at 20 GiB (decode read about 26 GB): 1, 3 and 6
 //!   decoded at 60.0 to 60.6 tok/s, and no intermediate submission at 56.8,
 //!   twice. Submitting inside the forward is worth six percent there.
-//! - Prefill interval at 14 GiB: 1 averaged 2,190 tok/s over six runs and 2
-//!   averaged 2,050 over two. At 20 GiB both were about 2,300. Peak memory was
-//!   the same for every interval at each ceiling.
 //!
-//! The defaults (prefill 1, generation 3) therefore stay as they are.
+//! The default of 3 therefore stays as it is.
 
 use std::{fs, path::Path};
 
@@ -278,10 +276,9 @@ fn report_and_check(
     // field by field without rerunning them.
     println!("[graph-submission-interval] expert_stats={expert_stats}");
     println!(
-        "[graph-submission-interval] ceiling_gib={} chunk_tokens={} prefill_interval={} generation_interval={} prompt_tokens={} completion_tokens={} prefill_tokens_per_second={:.1} decode_tokens_per_second={:.2} peak_gb={:.2} expert_memory_mode={} resident_expert_payload_gb={:.2} complete_expert_payload_gb={:.2} prefill_source_gb={:.2} decode_source_gb={:.2}",
+        "[graph-submission-interval] ceiling_gib={} chunk_tokens={} generation_interval={} prompt_tokens={} completion_tokens={} prefill_tokens_per_second={:.1} decode_tokens_per_second={:.2} peak_gb={:.2} expert_memory_mode={} resident_expert_payload_gb={:.2} complete_expert_payload_gb={:.2} prefill_source_gb={:.2} decode_source_gb={:.2}",
         paging_experiment.maximum_mlx_memory_gigabytes,
         paging_experiment.streaming_prompt_processing_chunk_tokens,
-        paging_experiment.prefill_graph_submission_layer_interval,
         paging_experiment.generation_graph_submission_layer_interval,
         measured_completion.prompt_token_count,
         measured_completion.completion_token_count,
@@ -337,8 +334,6 @@ fn write_configuration(
     let chunking = &mut configuration_document["chunking"];
     chunking["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"] =
         json!(paging_experiment.streaming_prompt_processing_chunk_tokens);
-    chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"] =
-        json!(paging_experiment.prefill_graph_submission_layer_interval);
     chunking["experimental_ssd_paging_generation_graph_submission_layer_interval"] =
         json!(paging_experiment.generation_graph_submission_layer_interval);
     let state_directory = worker_home.join(".astronomical-dev");

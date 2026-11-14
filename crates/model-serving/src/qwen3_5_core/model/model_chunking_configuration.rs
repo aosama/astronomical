@@ -11,8 +11,6 @@ pub struct Qwen3_5ModelChunkingConfiguration {
     pub(crate) full_attention_key_value_growth_tokens: i32,
     /// Resident multi-token prefill command-buffer interval. Zero is one lazy tape.
     pub(crate) prefill_graph_submission_layer_interval: u32,
-    /// SSD-paged multi-token prefill command-buffer interval. Zero is one lazy tape.
-    pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     /// Experimental one-token layer interval used only during solid-state-drive paging.
     pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 }
@@ -21,7 +19,6 @@ impl Qwen3_5ModelChunkingConfiguration {
     pub fn new(
         full_attention_key_value_growth_tokens: u32,
         prefill_graph_submission_layer_interval: u32,
-        experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
         experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         if full_attention_key_value_growth_tokens == 0 {
@@ -37,7 +34,6 @@ impl Qwen3_5ModelChunkingConfiguration {
                 description: "full-attention key/value growth tokens exceed the Int32 range",
             })?,
             prefill_graph_submission_layer_interval,
-            experimental_ssd_paging_prefill_graph_submission_layer_interval,
             experimental_ssd_paging_generation_graph_submission_layer_interval,
         })
     }

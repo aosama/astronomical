@@ -3,8 +3,8 @@
 use std::{fs, path::Path, time::Duration};
 
 use astronomical_model_serving::{
-    CompleteResidencyHeadroomBoundary, MlxRamBudgetModelGeometry, Qwen3_5ArtifactValidator,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    CompleteResidencyHeadroomBoundary, ModelMemoryGeometry, Qwen3_5ArtifactValidator,
+    model_memory_geometry_from_validated_artifact,
 };
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -435,9 +435,9 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
 
 pub(super) struct SparseArtifactResidencyGeometry {
     pub(super) complete_residency_with_headroom_bytes: u64,
-    /// The measured geometry the RAM budget (and therefore the request-time
+    /// The measured geometry the memory governor (and therefore the request-time
     /// activation reserve) is composed from.
-    pub(super) model_geometry: MlxRamBudgetModelGeometry,
+    pub(super) model_geometry: ModelMemoryGeometry,
 }
 
 pub(super) fn measure_sparse_artifact_residency_geometry(
@@ -447,7 +447,7 @@ pub(super) fn measure_sparse_artifact_residency_geometry(
         .validate(model_directory, MAXIMUM_OUTPUT_TOKEN_COUNT)
         .expect("the configured sparse artifact should validate");
     let (model_geometry, required_headroom_bytes) =
-        mlx_ram_budget_model_geometry_from_validated_artifact(&validated_artifact, model_directory)
+        model_memory_geometry_from_validated_artifact(&validated_artifact, model_directory)
             .expect("the configured sparse artifact should expose disk RAM geometry");
     let complete_residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
         model_geometry,
@@ -593,7 +593,7 @@ fn attribution_counter(report: &Value, counter_identifier: &str) -> u64 {
 /// measures the real figure at load; three times the largest expert layer
 /// has been ample for the models these journeys load.
 pub(super) const fn prompt_chunk_working_memory_allowance_bytes(
-    model_geometry: &MlxRamBudgetModelGeometry,
+    model_geometry: &ModelMemoryGeometry,
 ) -> u64 {
     model_geometry
         .largest_complete_expert_layer_bytes

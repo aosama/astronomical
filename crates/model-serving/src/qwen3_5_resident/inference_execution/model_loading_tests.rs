@@ -11,7 +11,6 @@ fn worker_chunking_configuration_with(growth_tokens: u32) -> WorkerChunkingConfi
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 512,
         full_attention_key_value_growth_tokens: growth_tokens,
         prefill_graph_submission_layer_interval: 4,
-        experimental_ssd_paging_prefill_graph_submission_layer_interval: 4,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
         prompt_cache_block_tokens: None,
         prompt_cache_common_prefix_stride_blocks: 2,

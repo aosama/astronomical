@@ -235,14 +235,15 @@ pub use memory::{
     EnginePlacement, ExpertLayerState, ExpertMemoryAdmissionError, ExpertResidencyPlan,
     ExpertResidencyPlanError, MeasuredExpertLayerPayload, MemoryBoundary,
     MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements, MemoryCeilingUtilization,
-    MemoryPhase, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-    RamBudgetGeometryError, ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection,
-    ResidentPromotionBlocker, ResidentPromotionDecision, RetainedExpertPageClass,
-    RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements, RotatingAdmissionError,
-    StreamingEngineRequirement, StreamingStartupResidencyFacts, VISIBLE_ANSWER_RESERVE_TOKENS,
-    bounded_output_reservation_token_count, classify_expert_memory_mode,
-    decode_warm_floor_eviction_indexes, effective_mlx_memory_ceiling_after_wired_claim,
-    effective_mlx_memory_ceiling_bytes, floor_raise_limit_bytes, floor_raised_ceiling_bytes,
+    MemoryPhase, MemoryReserveSnapshot, ModelMemoryFacts, ModelMemoryFactsError,
+    ModelMemoryGeometry, ModelMemoryGeometryError, ResidentForwardAdmissionDecision,
+    ResidentForwardAdmissionRejection, ResidentPromotionBlocker, ResidentPromotionDecision,
+    RetainedExpertPageClass, RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
+    RotatingAdmissionError, StreamingEngineRequirement, StreamingStartupResidencyFacts,
+    VISIBLE_ANSWER_RESERVE_TOKENS, bounded_output_reservation_token_count,
+    classify_expert_memory_mode, decode_warm_floor_eviction_indexes,
+    effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
+    floor_raise_limit_bytes, floor_raised_ceiling_bytes,
     geometry_safe_minimum_mlx_memory_ceiling_bytes, hot_expert_warm_slot_count,
     kept_layer_indexes_to_seat_before_reply, machine_ceiling_from_physical_ram_bytes,
     minimum_decode_warm_slot_count, observed_expert_memory_mode,
@@ -313,9 +314,9 @@ pub use persistent_cache::{
 
 pub use qwen3_5_core::artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
-    Qwen3_5RamBudgetGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
-    expert_layer_plans_for_validated_artifact,
-    mlx_ram_budget_model_geometry_from_validated_artifact, qwen3_5_language_tensor_profiles,
+    Qwen3_5MemoryGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
+    expert_layer_plans_for_validated_artifact, model_memory_geometry_from_validated_artifact,
+    qwen3_5_language_tensor_profiles,
 };
 
 // Restored public surface: these items are the API the crate's own integration

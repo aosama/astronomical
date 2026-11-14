@@ -272,7 +272,7 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the target tokenizer should construct");
 
-    let model_chunking = Qwen3_5ModelChunkingConfiguration::new(256, 0, 1, 0)
+    let model_chunking = Qwen3_5ModelChunkingConfiguration::new(256, 0, 0)
         .expect("the proof chunking configuration should validate");
     let mut disabled_attribution = PerformanceAttribution::disabled();
     let mut target_model = Qwen3_5ResidentModel::load_with_performance_attribution(

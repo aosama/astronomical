@@ -1,4 +1,4 @@
-use crate::budget::ram_values::MlxRamBudgetModelGeometry;
+use crate::model_memory::memory_values::ModelMemoryGeometry;
 
 /// Bootstrap context reserve a cold engine holds before any live measurement (1 GB SI).
 const GEOMETRY_FLOOR_BOOTSTRAP_CONTEXT_RESERVE_BYTES: u64 = 1_000_000_000;
@@ -13,7 +13,7 @@ const GEOMETRY_FLOOR_BOOTSTRAP_CONTEXT_RESERVE_BYTES: u64 = 1_000_000_000;
 /// the pager can reclaim it.
 #[must_use]
 pub const fn geometry_safe_minimum_mlx_memory_ceiling_bytes(
-    model_geometry: &MlxRamBudgetModelGeometry,
+    model_geometry: &ModelMemoryGeometry,
 ) -> u64 {
     model_geometry
         .model_core_payload_bytes

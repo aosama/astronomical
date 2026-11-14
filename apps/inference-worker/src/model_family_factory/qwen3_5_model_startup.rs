@@ -16,10 +16,10 @@ use astronomical_model_serving::{
     CompleteResidencyRequirements, EnginePlacement, ModelFamilyInferenceEngine,
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation, PersistentPromptCacheDiskStoreConfig,
-    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5RamBudgetGeometryError,
+    Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5MemoryGeometryError,
     Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5StreamingEngine,
     Qwen3_5StreamingPromptProcessingChunkSizer, ValidatedQwen3_5Artifact,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    model_memory_geometry_from_validated_artifact,
 };
 
 use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
@@ -312,7 +312,7 @@ fn select_startup_engine(
     match engine_selection {
         Qwen3_5EngineSelection::Automatic(diagnostic_engine_override) => {
             match model_loading_performance_attribution.measure_operation(
-                PerformanceOperation::ArtifactRamBudgetGeometry,
+                PerformanceOperation::ArtifactMemoryGeometry,
                 |_performance_attribution| {
                     select_qwen3_5_engine_from_artifact(
                         validated_artifact,
@@ -561,12 +561,12 @@ fn select_qwen3_5_engine_from_artifact(
     active_memory_limit_bytes: usize,
 ) -> Result<(Qwen3_5SelectedEngine, EnginePlacement), Qwen3_5ModelStartupError> {
     let (model_geometry, required_headroom_bytes) =
-        match mlx_ram_budget_model_geometry_from_validated_artifact(
+        match model_memory_geometry_from_validated_artifact(
             validated_artifact,
             model_directory_path,
         ) {
             Ok(geometry) => geometry,
-            Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => {
+            Err(Qwen3_5MemoryGeometryError::NotSparseMixtureOfExperts) => {
                 let engine_placement = super::qwen3_5_dense_engine_placement::place_dense_artifact(
                     validated_artifact,
                     model_directory_path,

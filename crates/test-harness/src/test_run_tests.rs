@@ -53,10 +53,6 @@ fn should_reject_zero_experiment_token_counts_and_layer_intervals() {
             ..PagingExperimentCase::default()
         },
         PagingExperimentCase {
-            prefill_graph_submission_layer_interval: 0,
-            ..PagingExperimentCase::default()
-        },
-        PagingExperimentCase {
             generation_graph_submission_layer_interval: 0,
             ..PagingExperimentCase::default()
         },

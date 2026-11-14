@@ -207,7 +207,7 @@ pub struct WorkerMlxMemorySnapshot {
     pub context_state_payload_bytes: u64,
     /// Reason-tagged split of the ceiling's unused headroom at this instant
     /// (issue #510), composed by the same budget owner the engine acts on.
-    /// `None` from engines without a composed RAM budget.
+    /// `None` from engines without a memory governor.
     #[serde(default)]
     pub memory_ceiling_utilization: Option<WorkerMemoryCeilingUtilizationSnapshot>,
     /// The memory ledger's view of the same instant (issue #2221). `None`

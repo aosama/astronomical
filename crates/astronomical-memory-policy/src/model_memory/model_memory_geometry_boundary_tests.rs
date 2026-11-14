@@ -1,9 +1,9 @@
 //! Boundary, negative, and happy-path tests for measured RAM-budget
 //! geometry composition.
 
-use crate::budget::ram_geometry::{
-    MeasuredExpertLayerPayload, RamBudgetGeometryError,
-    mlx_ram_budget_model_geometry_from_measured_layer_facts,
+use crate::model_memory::model_memory_geometry::{
+    MeasuredExpertLayerPayload, ModelMemoryGeometryError,
+    model_memory_geometry_from_measured_layer_facts,
 };
 
 #[test]
@@ -12,7 +12,7 @@ fn should_compose_geometry_and_headroom_from_measured_layer_facts() {
     // headroom must take the measured transient because it exceeds the
     // zero floor a bare expert-only geometry would suggest.
     let (model_geometry, required_headroom_bytes) =
-        mlx_ram_budget_model_geometry_from_measured_layer_facts(
+        model_memory_geometry_from_measured_layer_facts(
             &[
                 MeasuredExpertLayerPayload::new(100, 3),
                 MeasuredExpertLayerPayload::new(40, 4),
@@ -38,7 +38,7 @@ fn should_reserve_the_ceiling_of_the_largest_routed_page_when_payloads_do_not_di
     // top-2 page is at least ceil(100 * 2 / 3) = 67 bytes; a floor-rounded
     // 66 under-reserves the decode stream slot and the geometry-safe
     // minimum ceiling, letting admission accept a page that cannot fit.
-    let (model_geometry, _) = mlx_ram_budget_model_geometry_from_measured_layer_facts(
+    let (model_geometry, _) = model_memory_geometry_from_measured_layer_facts(
         &[MeasuredExpertLayerPayload::new(100, 3)],
         100,
         2,
@@ -57,7 +57,7 @@ fn should_reserve_the_ceiling_of_the_largest_routed_page_when_payloads_do_not_di
 fn should_clamp_the_routed_page_to_one_complete_layer_when_top_k_exceeds_capacity() {
     // Asking for more experts per token than a layer holds selects the
     // whole layer: the routed page equals the complete payload exactly.
-    let (model_geometry, _) = mlx_ram_budget_model_geometry_from_measured_layer_facts(
+    let (model_geometry, _) = model_memory_geometry_from_measured_layer_facts(
         &[MeasuredExpertLayerPayload::new(100, 3)],
         100,
         10,
@@ -70,7 +70,7 @@ fn should_clamp_the_routed_page_to_one_complete_layer_when_top_k_exceeds_capacit
 
 #[test]
 fn should_reserve_no_routed_page_when_no_expert_is_routed_per_token() {
-    let (model_geometry, _) = mlx_ram_budget_model_geometry_from_measured_layer_facts(
+    let (model_geometry, _) = model_memory_geometry_from_measured_layer_facts(
         &[MeasuredExpertLayerPayload::new(100, 3)],
         100,
         0,
@@ -85,7 +85,7 @@ fn should_reserve_no_routed_page_when_no_expert_is_routed_per_token() {
 fn should_compose_without_panicking_when_a_layer_reports_zero_expert_capacity() {
     // A zero-capacity layer contradicts a nonzero payload, but the composer
     // must fail safe (a zero page reserve), never divide by zero.
-    let (model_geometry, _) = mlx_ram_budget_model_geometry_from_measured_layer_facts(
+    let (model_geometry, _) = model_memory_geometry_from_measured_layer_facts(
         &[MeasuredExpertLayerPayload::new(100, 0)],
         100,
         2,
@@ -98,18 +98,18 @@ fn should_compose_without_panicking_when_a_layer_reports_zero_expert_capacity() 
 
 #[test]
 fn should_reject_an_empty_layer_fact_table_as_not_sparse() {
-    let composition_error = mlx_ram_budget_model_geometry_from_measured_layer_facts(&[], 100, 2, 0)
+    let composition_error = model_memory_geometry_from_measured_layer_facts(&[], 100, 2, 0)
         .expect_err("no sparse layers must fail closed");
 
     assert_eq!(
         composition_error,
-        RamBudgetGeometryError::NotSparseMixtureOfExperts
+        ModelMemoryGeometryError::NotSparseMixtureOfExperts
     );
 }
 
 #[test]
 fn should_reject_layer_facts_whose_expert_payloads_overflow() {
-    let composition_error = mlx_ram_budget_model_geometry_from_measured_layer_facts(
+    let composition_error = model_memory_geometry_from_measured_layer_facts(
         &[
             MeasuredExpertLayerPayload::new(u64::MAX, 4),
             MeasuredExpertLayerPayload::new(1, 4),
@@ -122,7 +122,7 @@ fn should_reject_layer_facts_whose_expert_payloads_overflow() {
 
     assert_eq!(
         composition_error,
-        RamBudgetGeometryError::ExpertPayloadOverflow
+        ModelMemoryGeometryError::ExpertPayloadOverflow
     );
 }
 
@@ -132,7 +132,7 @@ fn should_floor_the_model_core_at_zero_when_the_total_undercounts_the_expert_pay
     // today the composer clamps the core to zero rather than failing, which
     // this test pins so a future fail-closed tightening is a conscious
     // contract change.
-    let (model_geometry, _) = mlx_ram_budget_model_geometry_from_measured_layer_facts(
+    let (model_geometry, _) = model_memory_geometry_from_measured_layer_facts(
         &[MeasuredExpertLayerPayload::new(140, 4)],
         50,
         2,
@@ -145,7 +145,7 @@ fn should_floor_the_model_core_at_zero_when_the_total_undercounts_the_expert_pay
 
 #[test]
 fn should_expose_measured_layer_facts_through_accessors() {
-    use crate::budget::ram_geometry::MeasuredExpertLayerPayload;
+    use crate::model_memory::model_memory_geometry::MeasuredExpertLayerPayload;
     let measured_layer = MeasuredExpertLayerPayload::new(408, 6);
     assert_eq!(measured_layer.complete_payload_bytes(), 408);
     assert_eq!(measured_layer.expert_capacity(), 6);

@@ -4,7 +4,7 @@ use super::{
     dense_model_memory_shape, larger_of_what_was_measured, ledger_phase_for,
     sparse_model_memory_shape,
 };
-use crate::{MemoryPhase, MlxRamBudgetModelGeometry};
+use crate::{MemoryPhase, ModelMemoryGeometry};
 
 #[test]
 fn should_govern_a_prompt_forward_as_reading_at_its_token_count() {
@@ -45,7 +45,7 @@ fn should_cap_an_absurd_token_count_instead_of_wrapping() {
 
 #[test]
 fn should_describe_a_sparse_model_by_its_experts_and_two_layer_slots() {
-    let model_shape = sparse_model_memory_shape(MlxRamBudgetModelGeometry {
+    let model_shape = sparse_model_memory_shape(ModelMemoryGeometry {
         model_core_payload_bytes: 2_600,
         complete_expert_payload_bytes: 34_000,
         largest_complete_expert_layer_bytes: 860,

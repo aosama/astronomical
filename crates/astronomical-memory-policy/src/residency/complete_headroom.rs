@@ -3,7 +3,7 @@
 //! Callers supply artifact geometry and the startup headroom policy already
 //! decided. This module does not know model ids or gigabyte souvenirs.
 
-use crate::budget::ram_values::MlxRamBudgetModelGeometry;
+use crate::model_memory::memory_values::ModelMemoryGeometry;
 
 /// Static complete-residency projection plus the extra bytes a forward still needs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -20,7 +20,7 @@ impl CompleteResidencyHeadroomBoundary {
     /// Composes the boundary from validated payload geometry and policy headroom.
     #[must_use]
     pub const fn from_model_geometry(
-        geometry: MlxRamBudgetModelGeometry,
+        geometry: ModelMemoryGeometry,
         required_headroom_bytes: u64,
     ) -> Self {
         Self {

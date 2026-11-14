@@ -5,7 +5,7 @@
 //! names ("all memory management code lives in the memory package"). It is a
 //! deliberate dependency-graph fact: it depends on nothing graphics-processor
 //! related, so its tests build and run in the integration lane in a fraction of a
-//! second and a budget or residency change never pulls in the MLX bindings.
+//! second and a ledger or residency change never pulls in the MLX bindings.
 //!
 //! The layering contract (`cargo xtask check-architecture`) fails if a MLX
 //! dependency is
@@ -26,21 +26,19 @@
 //!   quantized expert manifests stay in `astronomical-model-serving` — they
 //!   embed model-family configuration types.
 //! - `phase` — the one lifecycle phase type (`MemoryPhase`).
-//! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`,
-//!   `MemoryAdmissionDecision`): every rejection names its boundary.
-//! - `reclamation` — what must yield, by how much (`ExpertReclamationPlan`,
-//!   the admission error vocabulary `ExpertMemoryAdmissionError`, and the
-//!   reclamation arithmetic).
-//! - `memory_equation` — the checked stable, peak, and recovery equation
-//!   shared by request and per-forward admission.
-//! - `forward_admission` — typed resident retry, streaming, and paged reclaim
-//!   decisions for one forward.
+//! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`):
+//!   every rejection names its boundary.
+//! - `reclamation` — the checked arithmetic for replacing kept experts with
+//!   a complete set at load, and its error vocabulary
+//!   (`ExpertMemoryAdmissionError`).
+//! - `forward_admission` — the in-memory engine's typed answer for one
+//!   forward: run it, or say why the request moves to the streaming engine.
 //! - `placement` — the typed engine-placement lifecycle: startup selection,
 //!   request demotion with its typed cause, and the bounded re-promotion
 //!   gate back to the resident engine.
-//! - `budget` — how many bytes this phase owns or needs (`MlxRamBudget`
-//!   composition, learned activation evidence, adaptive growth guards,
-//!   measured model geometry).
+//! - `model_memory` — the facts a memory governor is opened with: the limit
+//!   a model runs under and its measured geometry (`ModelMemoryFacts`), and
+//!   the snapshot the status breakdown is composed against.
 //! - `ceiling` — may the worker raise or lower the live ceiling right now,
 //!   and what ownership must move first.
 //! - `ledger` — the one owner of the whole limit: named accounts that always
@@ -49,8 +47,6 @@
 //!   requests against the ledger without a model.
 //! - `geometry_floor` — the smallest servable ceiling derived from validated
 //!   artifact geometry, independent of the ceiling that produced the load.
-//! - `recovery` — what happens after an allocation failure mid-forward:
-//!   which retry is legal and what workspace it needs.
 //! - `residency` — where each sparse layer's experts live for one request:
 //!   layer targets, page classes, seating plans, foundation overlay, and
 //!   plan validation.
@@ -58,12 +54,12 @@
 //!   configuration and the machine bound.
 
 pub mod admission;
-pub mod budget;
 pub mod ceiling;
 pub mod expert_paging;
 pub mod forward_admission;
 pub mod geometry_floor;
 pub mod ledger;
+pub mod model_memory;
 pub mod neural_engine_admission;
 pub mod neural_engine_program_memory_watch;
 pub mod phase;

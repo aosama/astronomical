@@ -34,11 +34,7 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         .expect("chunking configuration should resolve");
 
     assert_eq!(chunking.full_attention_key_value_growth_tokens(), 192);
-    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
-    assert_eq!(
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
-        2
-    );
+    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 2);
     assert_eq!(
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         0
@@ -50,10 +46,6 @@ fn should_resolve_every_user_configured_chunking_boundary() {
     let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
     assert_eq!(
         persisted_chunking["prefill_graph_submission_layer_interval"],
-        0
-    );
-    assert_eq!(
-        persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
         2
     );
 }
@@ -76,10 +68,6 @@ fn should_default_omitted_graph_submission_intervals() {
         .expect("chunking configuration should resolve");
 
     assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
-    assert_eq!(
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
-        1
-    );
     assert_eq!(
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
         3
@@ -148,37 +136,7 @@ fn should_resolve_the_prefill_stage_attribution_opt_in() {
 }
 
 #[test]
-fn should_keep_resident_and_ssd_prefill_graph_intervals_independent() {
-    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-    write_config(
-        temporary_home_directory.path(),
-        r#"{
-          "chunking": {
-            "prefill_graph_submission_layer_interval": 0,
-            "experimental_ssd_paging_prefill_graph_submission_layer_interval": 2,
-            "experimental_ssd_paging_generation_graph_submission_layer_interval": 3
-          }
-        }"#,
-    );
-
-    let chunking = AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-        .expect("independent graph intervals should load")
-        .chunking()
-        .expect("chunking should resolve");
-
-    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
-    assert_eq!(
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval(),
-        2
-    );
-    assert_eq!(
-        chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
-        3
-    );
-}
-
-#[test]
-fn should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field() {
+fn should_load_a_saved_file_that_still_names_the_retired_ssd_prefill_interval() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
     write_config(
         temporary_home_directory.path(),
@@ -186,23 +144,33 @@ fn should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field() {
           "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": 2048,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048,
-            "prefill_graph_submission_layer_interval": 1,
+            "prefill_graph_submission_layer_interval": 0,
+            "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 3
           }
         }"#,
     );
 
-    AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-        .expect("the legacy single prefill interval should load");
+    let chunking = AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+        .expect("a file saved before the setting was retired should load")
+        .chunking()
+        .expect("chunking should resolve");
 
+    assert_eq!(chunking.prefill_graph_submission_layer_interval(), 0);
+    assert_eq!(
+        chunking.experimental_ssd_paging_generation_graph_submission_layer_interval(),
+        3
+    );
     let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
+    assert!(
+        persisted_chunking
+            .get("experimental_ssd_paging_prefill_graph_submission_layer_interval")
+            .is_none(),
+        "the retired setting must be removed from the saved file"
+    );
     assert_eq!(
         persisted_chunking["prefill_graph_submission_layer_interval"],
         0
-    );
-    assert_eq!(
-        persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
-        1
     );
     // 2,048 is the retired SSD-paged default, so load carries it forward.
     assert_eq!(

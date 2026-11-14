@@ -6,29 +6,29 @@
 //! only carries the two facts both engines read when they open it and when
 //! they report status before it has opened.
 
-use crate::budget::ram_values::{MlxRamBudgetError, MlxRamBudgetModelGeometry};
+use crate::model_memory::memory_values::{ModelMemoryFactsError, ModelMemoryGeometry};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MlxRamBudget {
+pub struct ModelMemoryFacts {
     mlx_active_memory_ceiling_bytes: u64,
-    model_geometry: MlxRamBudgetModelGeometry,
+    model_geometry: ModelMemoryGeometry,
 }
 
-impl MlxRamBudget {
+impl ModelMemoryFacts {
     /// Fails for a zero limit, under which nothing can run.
     pub const fn new(
         mlx_active_memory_ceiling_bytes: u64,
-        model_geometry: MlxRamBudgetModelGeometry,
-    ) -> Result<Self, MlxRamBudgetError> {
+        model_geometry: ModelMemoryGeometry,
+    ) -> Result<Self, ModelMemoryFactsError> {
         Self::with_positive_limit(mlx_active_memory_ceiling_bytes, model_geometry)
     }
 
     const fn with_positive_limit(
         mlx_active_memory_ceiling_bytes: u64,
-        model_geometry: MlxRamBudgetModelGeometry,
-    ) -> Result<Self, MlxRamBudgetError> {
+        model_geometry: ModelMemoryGeometry,
+    ) -> Result<Self, ModelMemoryFactsError> {
         if mlx_active_memory_ceiling_bytes == 0 {
-            return Err(MlxRamBudgetError::InvalidCeiling);
+            return Err(ModelMemoryFactsError::InvalidCeiling);
         }
         Ok(Self {
             mlx_active_memory_ceiling_bytes,
@@ -40,9 +40,9 @@ impl MlxRamBudget {
     pub const fn update_mlx_active_memory_ceiling_bytes(
         &mut self,
         mlx_active_memory_ceiling_bytes: u64,
-    ) -> Result<(), MlxRamBudgetError> {
+    ) -> Result<(), ModelMemoryFactsError> {
         if mlx_active_memory_ceiling_bytes == 0 {
-            return Err(MlxRamBudgetError::InvalidCeiling);
+            return Err(ModelMemoryFactsError::InvalidCeiling);
         }
         self.mlx_active_memory_ceiling_bytes = mlx_active_memory_ceiling_bytes;
         Ok(())
@@ -54,11 +54,11 @@ impl MlxRamBudget {
     }
 
     #[must_use]
-    pub const fn model_geometry(&self) -> MlxRamBudgetModelGeometry {
+    pub const fn model_geometry(&self) -> ModelMemoryGeometry {
         self.model_geometry
     }
 }
 
 #[cfg(test)]
-#[path = "ram_tests.rs"]
+#[path = "model_memory_facts_tests.rs"]
 mod tests;

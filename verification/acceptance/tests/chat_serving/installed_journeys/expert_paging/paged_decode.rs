@@ -6,7 +6,7 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_model_serving::{
     CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    model_memory_geometry_from_validated_artifact,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 use serde_json::Value;
@@ -43,7 +43,7 @@ async fn should_serve_romeo_twice_while_paging_without_exceeding_the_ram_ceiling
         assert_eq!(validated_artifact.model_id(), model_id());
         let model_id = validated_artifact.model_id().to_owned();
         let (model_geometry, required_headroom_bytes) =
-            mlx_ram_budget_model_geometry_from_validated_artifact(
+            model_memory_geometry_from_validated_artifact(
                 &validated_artifact,
                 &model_directory,
             )

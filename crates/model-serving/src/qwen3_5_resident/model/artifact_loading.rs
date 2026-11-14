@@ -9,9 +9,7 @@ use crate::qwen3_5_core::model::loading_pipeline::{
     BoundLanguageArtifact, InvariantLinearScales, ModelKernelVerdicts, bind_language_artifact,
     load_invariant_linear_scales, load_model_kernel_verdicts,
 };
-use crate::{
-    MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
-};
+use crate::{ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5ModelBase;
 use super::Qwen3_5ResidentModel;
@@ -116,7 +114,7 @@ impl Qwen3_5ResidentModel {
             query_normalization_scale_weight,
             key_normalization_scale_weight,
         } = load_invariant_linear_scales(&runtime, &config)?;
-        let mlx_ram_budget = build_resident_mlx_ram_budget(
+        let memory_facts = build_resident_model_memory_facts(
             &runtime,
             &config,
             &weights,
@@ -132,7 +130,7 @@ impl Qwen3_5ResidentModel {
                 decoder_cache_layout,
                 weights,
                 vision_model,
-                mlx_ram_budget: std::cell::RefCell::new(mlx_ram_budget),
+                memory_facts: std::cell::RefCell::new(memory_facts),
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
@@ -238,14 +236,14 @@ fn load_resident_expert_layer_plans(
 /// Assembles the limit and geometry this engine runs under from the
 /// model-core payload and the expert layer plans.
 #[allow(clippy::too_many_arguments)]
-fn build_resident_mlx_ram_budget(
+fn build_resident_model_memory_facts(
     runtime: &MlxRuntime,
     config: &crate::Qwen3_5Config,
     weights: &Qwen3_5Weights,
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
     decoder_cache_layout: &crate::DecoderCacheLayout,
-) -> Result<MlxRamBudget, Qwen3_5ExecutionError> {
+) -> Result<ModelMemoryFacts, Qwen3_5ExecutionError> {
     let model_core_payload_bytes =
         crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
             weights,
@@ -298,13 +296,13 @@ fn build_resident_mlx_ram_budget(
             Ok(largest_page_bytes.max(u64::try_from(routed_page_bytes).unwrap_or(u64::MAX)))
         },
     )?;
-    MlxRamBudget::new(
+    ModelMemoryFacts::new(
         u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "MLX active memory ceiling exceeds the u64 range",
             }
         })?,
-        MlxRamBudgetModelGeometry {
+        ModelMemoryGeometry {
             model_core_payload_bytes,
             complete_expert_payload_bytes,
             largest_complete_expert_layer_bytes,
@@ -318,7 +316,7 @@ fn build_resident_mlx_ram_budget(
         },
     )
     .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-        description: "MLX RAM budget requires a positive active-memory ceiling",
+        description: "the MLX memory limit must be positive",
     })
 }
 

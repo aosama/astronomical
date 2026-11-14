@@ -15,7 +15,6 @@ const BYTES_PER_GIGABYTE: u64 = 1 << 30;
 pub struct PagingExperimentCase {
     pub maximum_mlx_memory_gigabytes: u64,
     pub streaming_prompt_processing_chunk_tokens: u32,
-    pub prefill_graph_submission_layer_interval: u32,
     pub generation_graph_submission_layer_interval: u32,
 }
 
@@ -24,7 +23,6 @@ impl Default for PagingExperimentCase {
         Self {
             maximum_mlx_memory_gigabytes: 32,
             streaming_prompt_processing_chunk_tokens: 2_048,
-            prefill_graph_submission_layer_interval: 1,
             generation_graph_submission_layer_interval: 1,
         }
     }
@@ -43,7 +41,6 @@ impl PagingExperimentCase {
     fn validate(&self) -> Result<(), String> {
         self.maximum_mlx_memory_bytes()?;
         if self.streaming_prompt_processing_chunk_tokens == 0
-            || self.prefill_graph_submission_layer_interval == 0
             || self.generation_graph_submission_layer_interval == 0
         {
             return Err(

@@ -217,7 +217,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let fixedSsdStreamingPromptProcessingChunkSizeTokens: UInt32
   let fullAttentionKeyValueGrowthTokens: UInt32
   let prefillGraphSubmissionLayerInterval: UInt32
-  let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32
   let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32
   let promptCacheBlockTokens: UInt32?
   // The speculation block length crosses the wire absent (not null) when a
@@ -237,7 +236,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case fixedSsdStreamingPromptProcessingChunkSizeTokens = "fixed_ssd_streaming_prompt_processing_chunk_size_tokens"
     case fullAttentionKeyValueGrowthTokens = "full_attention_key_value_growth_tokens"
     case prefillGraphSubmissionLayerInterval = "prefill_graph_submission_layer_interval"
-    case experimentalSsdPagingPrefillGraphSubmissionLayerInterval = "experimental_ssd_paging_prefill_graph_submission_layer_interval"
     case experimentalSsdPagingGenerationGraphSubmissionLayerInterval = "experimental_ssd_paging_generation_graph_submission_layer_interval"
     case promptCacheBlockTokens = "prompt_cache_block_tokens"
     case speculativeDecodingBlockLength = "speculative_decoding_block_length"
@@ -259,8 +257,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       UInt32.self, forKey: .fullAttentionKeyValueGrowthTokens)
     prefillGraphSubmissionLayerInterval = try container.decode(
       UInt32.self, forKey: .prefillGraphSubmissionLayerInterval)
-    experimentalSsdPagingPrefillGraphSubmissionLayerInterval = try container.decode(
-      UInt32.self, forKey: .experimentalSsdPagingPrefillGraphSubmissionLayerInterval)
     experimentalSsdPagingGenerationGraphSubmissionLayerInterval = try container.decode(
       UInt32.self,
       forKey: .experimentalSsdPagingGenerationGraphSubmissionLayerInterval)

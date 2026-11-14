@@ -16,7 +16,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
-use crate::{DecoderCacheLayout, MlxRamBudget};
+use crate::{DecoderCacheLayout, ModelMemoryFacts};
 
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 
@@ -33,7 +33,7 @@ pub struct Qwen3_5ModelBase {
     pub(crate) disk_embedding_rows: Option<super::disk_embedding_rows::Qwen3_5DiskEmbeddingRows>,
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
-    pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
+    pub(crate) memory_facts: RefCell<ModelMemoryFacts>,
 
     pub(crate) gated_delta_kernel: Option<MlxMetalKernel>,
     pub(crate) gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
@@ -87,10 +87,10 @@ impl Qwen3_5ModelBase {
         &self.runtime
     }
 
-    /// Returns the single-source MLX RAM budget owner.
+    /// Returns the limit this model runs under and its measured geometry.
     #[must_use]
-    pub fn mlx_ram_budget(&self) -> std::cell::Ref<'_, MlxRamBudget> {
-        self.mlx_ram_budget.borrow()
+    pub fn memory_facts(&self) -> std::cell::Ref<'_, ModelMemoryFacts> {
+        self.memory_facts.borrow()
     }
 
     pub(crate) fn sorted_expert_weighted_sum_kernel(

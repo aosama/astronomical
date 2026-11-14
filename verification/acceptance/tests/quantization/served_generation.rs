@@ -20,7 +20,6 @@ const MAXIMUM_OUTPUT_TOKENS: u32 = 4_096;
 /// the resident engine.
 const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
-const SSD_PAGING_PREFILL_LAYER_INTERVAL: u32 = 1;
 const SSD_PAGING_GENERATION_LAYER_INTERVAL: u32 = 3;
 
 /// Validates the artifact through the daemon's own validator, loads it as a
@@ -37,7 +36,6 @@ pub(crate) fn generate_greedy_continuation(artifact_directory: &Path) -> String 
     let chunking = Qwen3_5ModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-        SSD_PAGING_PREFILL_LAYER_INTERVAL,
         SSD_PAGING_GENERATION_LAYER_INTERVAL,
     )
     .expect("the production chunking tuple is valid");

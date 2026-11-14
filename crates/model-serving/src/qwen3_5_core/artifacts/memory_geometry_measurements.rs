@@ -2,7 +2,7 @@
 //!
 //! This adapter reads SafeTensors headers through the existing expert-layer
 //! planner and maps the plans into the measured layer facts that
-//! `memory/mlx_ram_budget_geometry.rs` consumes. The byte arithmetic itself is
+//! `memory/model_memory_geometry.rs` consumes. The byte arithmetic itself is
 //! owned by `memory`; this file only measures. It does not load weights onto
 //! the GPU and does not invent gigabyte souvenirs.
 
@@ -10,17 +10,17 @@ use std::path::Path;
 
 use thiserror::Error;
 
-use crate::MlxRamBudgetModelGeometry;
+use crate::ModelMemoryGeometry;
 use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::memory::{
-    MeasuredExpertLayerPayload, RamBudgetGeometryError,
-    mlx_ram_budget_model_geometry_from_measured_layer_facts,
+    MeasuredExpertLayerPayload, ModelMemoryGeometryError,
+    model_memory_geometry_from_measured_layer_facts,
 };
 use crate::qwen3_5_core::artifacts::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
 
 /// Why disk-only RAM measurements could not be composed for this artifact.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum Qwen3_5RamBudgetGeometryError {
+pub enum Qwen3_5MemoryGeometryError {
     #[error("this Qwen3.5 artifact has no sparse expert payload")]
     NotSparseMixtureOfExperts,
     #[error("expert layer plans could not be read from the validated artifact")]
@@ -30,23 +30,23 @@ pub enum Qwen3_5RamBudgetGeometryError {
 }
 
 /// Returns payload geometry and startup complete-residency headroom for one artifact.
-pub fn mlx_ram_budget_model_geometry_from_validated_artifact(
+pub fn model_memory_geometry_from_validated_artifact(
     validated_artifact: &ValidatedQwen3_5Artifact,
     model_directory: &Path,
-) -> Result<(MlxRamBudgetModelGeometry, u64), Qwen3_5RamBudgetGeometryError> {
+) -> Result<(ModelMemoryGeometry, u64), Qwen3_5MemoryGeometryError> {
     if validated_artifact.config().feed_forward_architecture()
         != Qwen3_5FeedForwardArchitecture::MixtureOfExperts
     {
-        return Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts);
+        return Err(Qwen3_5MemoryGeometryError::NotSparseMixtureOfExperts);
     }
     let layer_plans = super::atlas_expert_layer_plans::expert_layer_plans_for_validated_artifact(
         validated_artifact,
         model_directory,
     )
-    .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)?;
+    .map_err(|_| Qwen3_5MemoryGeometryError::ExpertLayerPlan)?;
     let measured_layer_payloads = measured_layer_payloads(&layer_plans)?;
     let complete_residency_transient_bytes = complete_residency_transient_bytes(&layer_plans)?;
-    mlx_ram_budget_model_geometry_from_measured_layer_facts(
+    model_memory_geometry_from_measured_layer_facts(
         &measured_layer_payloads,
         validated_artifact.total_payload_bytes(),
         usize::try_from(validated_artifact.config().experts_per_token()).unwrap_or(usize::MAX),
@@ -57,14 +57,14 @@ pub fn mlx_ram_budget_model_geometry_from_validated_artifact(
 
 fn measured_layer_payloads(
     layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<Vec<MeasuredExpertLayerPayload>, Qwen3_5RamBudgetGeometryError> {
+) -> Result<Vec<MeasuredExpertLayerPayload>, Qwen3_5MemoryGeometryError> {
     layer_plans
         .iter()
         .map(|layer_plan| {
             Ok(MeasuredExpertLayerPayload::new(
                 layer_plan
                     .complete_expert_payload_byte_count()
-                    .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?,
+                    .map_err(|_| Qwen3_5MemoryGeometryError::ExpertPayloadOverflow)?,
                 layer_plan.expert_capacity,
             ))
         })
@@ -78,13 +78,13 @@ fn measured_layer_payloads(
 /// reserve a meaningful floor.
 fn complete_residency_transient_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<u64, Qwen3_5RamBudgetGeometryError> {
+) -> Result<u64, Qwen3_5MemoryGeometryError> {
     #[cfg(feature = "direct-mlx")]
     {
         super::expert_gate_up_fusion_plan::maximum_expert_gate_up_fusion_transient_payload_bytes(
             layer_plans,
         )
-        .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)
+        .map_err(|_| Qwen3_5MemoryGeometryError::ExpertLayerPlan)
     }
     #[cfg(not(feature = "direct-mlx"))]
     {
@@ -94,19 +94,19 @@ fn complete_residency_transient_bytes(
                 Ok(largest_layer_bytes.max(
                     layer_plan
                         .complete_expert_payload_byte_count()
-                        .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow)?,
+                        .map_err(|_| Qwen3_5MemoryGeometryError::ExpertPayloadOverflow)?,
                 ))
             })
     }
 }
 
-fn map_composer_error(composer_error: RamBudgetGeometryError) -> Qwen3_5RamBudgetGeometryError {
+fn map_composer_error(composer_error: ModelMemoryGeometryError) -> Qwen3_5MemoryGeometryError {
     match composer_error {
-        RamBudgetGeometryError::NotSparseMixtureOfExperts => {
-            Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts
+        ModelMemoryGeometryError::NotSparseMixtureOfExperts => {
+            Qwen3_5MemoryGeometryError::NotSparseMixtureOfExperts
         }
-        RamBudgetGeometryError::ExpertPayloadOverflow => {
-            Qwen3_5RamBudgetGeometryError::ExpertPayloadOverflow
+        ModelMemoryGeometryError::ExpertPayloadOverflow => {
+            Qwen3_5MemoryGeometryError::ExpertPayloadOverflow
         }
     }
 }

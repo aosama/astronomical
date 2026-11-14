@@ -46,7 +46,6 @@ const APPEND_FOLLOW_UP_TOKEN_COUNT: usize = 5_000;
 const HIGH_RAM_APPEND_FOLLOW_UP_TOKEN_COUNT: usize = 16_000;
 /// Far above the 53 tok/s Pi stall, far below a fully resident warm suffix.
 const MINIMUM_HIGH_RAM_APPEND_PREFILL_TOKENS_PER_SECOND: f64 = 200.0;
-const PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
 /// Stable Development decode interval: eval every third layer so a one-token
 /// routed page can detach without a host launch after every decoder index.
 const PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
@@ -186,7 +185,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     };
     let timeout_duration = SSD_JOURNEY_TIMEOUT;
     eprintln!(
-        "{LOG_MARKER} request=journey status=start timeout_seconds={} artifact_payload_bytes={artifact_payload_bytes} artifact_payload_gb={:.3} allocated_mlx_memory_bytes={allocated_mlx_memory_bytes} allocated_mlx_memory_gb={:.3} initial_prompt_tokens={initial_prompt_token_count} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} paging_graph_submission_layer_interval={PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL} persistent_prompt_cache_enabled=true",
+        "{LOG_MARKER} request=journey status=start timeout_seconds={} artifact_payload_bytes={artifact_payload_bytes} artifact_payload_gb={:.3} allocated_mlx_memory_bytes={allocated_mlx_memory_bytes} allocated_mlx_memory_gb={:.3} initial_prompt_tokens={initial_prompt_token_count} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} persistent_prompt_cache_enabled=true",
         timeout_duration.as_secs(),
         artifact_payload_bytes as f64 / 1_000_000_000.0,
         allocated_mlx_memory_bytes as f64 / 1_000_000_000.0,

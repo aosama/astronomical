@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use astronomical_model_serving::{
     ExpertMemoryAdmissionError, InferenceEngineError, Qwen3_5ArtifactValidationError,
-    Qwen3_5RamBudgetGeometryError, Qwen3_5ResidentPromptProcessingChunkSizerError,
+    Qwen3_5MemoryGeometryError, Qwen3_5ResidentPromptProcessingChunkSizerError,
     Qwen3_5StreamingPromptProcessingChunkSizerError, Qwen3_5TokenizerError,
 };
 use thiserror::Error;
@@ -28,7 +28,7 @@ pub enum Qwen3_5ModelStartupError {
     ArtifactRamGeometry {
         model_directory: PathBuf,
         #[source]
-        source: Qwen3_5RamBudgetGeometryError,
+        source: Qwen3_5MemoryGeometryError,
     },
     #[error("failed to decide Qwen3.5 complete residency at {model_directory:?}")]
     CompleteResidencyDecision {

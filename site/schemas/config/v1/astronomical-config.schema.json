@@ -19,7 +19,7 @@
         {"title": "Limits", "description": "Ceilings for this model that sit below what the model file allows.", "settings": ["limits.maximum_context_tokens"]},
         {"title": "Prompt processing", "description": "How a prompt is split into pieces while the model reads it. These trade memory for speed.", "tier": "advanced", "settings": ["chunking.fixed_prompt_processing_chunk_size_tokens", "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens", "chunking.prefill_graph_submission_layer_interval", "chunking.full_attention_key_value_growth_tokens"]},
         {"title": "Prompt cache blocks", "description": "How a prompt is divided when it is stored in the prompt cache.", "tier": "advanced", "settings": ["chunking.prompt_cache_block_tokens", "chunking.prompt_cache_common_prefix_stride_blocks"]},
-        {"title": "SSD streaming", "description": "Used only while part of a model is read from the SSD because it does not fit in memory.", "tier": "advanced", "settings": ["chunking.experimental_ssd_paging_generation_graph_submission_layer_interval", "chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval"]},
+        {"title": "SSD streaming", "description": "Used only while part of a model is read from the SSD because it does not fit in memory.", "tier": "advanced", "settings": ["chunking.experimental_ssd_paging_generation_graph_submission_layer_interval"]},
         {"title": "Speculative decoding", "description": "Drafting several tokens at once with a small helper model, when one is installed beside this model.", "tier": "advanced", "settings": ["chunking.speculative_decoding_block_length_tokens"]},
         {"title": "Experimental", "description": "Features still being proven. They can change or go away.", "tier": "advanced", "settings": ["chunking.experimental_neural_engine_prefill_enabled", "chunking.experimental_in_memory_prefix_adoption_enabled"]},
         {"title": "Diagnostics", "description": "Measurement modes for investigating speed. They slow the model down, so leave them off in normal use.", "tier": "diagnostic", "note": "Slows serving. Leave off.", "settings": ["chunking.experimental_decode_stage_attribution_enabled", "chunking.experimental_prefill_stage_attribution_enabled"]}
@@ -211,16 +211,6 @@
           "description": "Decoder-layer interval between multi-token prefill graph submissions while sparse experts are fully resident; zero keeps one lazy tape per chunk.",
           "x-astronomical-unit": "layers",
           "x-astronomical-explanation": "While reading a prompt, how many of the model's layers are computed before the work is handed to the graphics processor. 0 hands over one whole piece at a time, which is usually fastest when the model fits in memory.",
-          "x-astronomical-apply-mode": "model-reload"
-        },
-        "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
-          "title": "SSD prefill submission interval",
-          "type": "integer",
-          "minimum": 0,
-          "default": 1,
-          "description": "Experimental decoder-layer interval between multi-token prefill graph submissions while sparse experts stream from SSD; zero keeps one lazy tape per chunk.",
-          "x-astronomical-unit": "layers",
-          "x-astronomical-explanation": "The same hand-over interval for reading a prompt, used only while part of the model is read from the SSD. Smaller numbers keep less of the model in memory at once.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "experimental_ssd_paging_generation_graph_submission_layer_interval": {

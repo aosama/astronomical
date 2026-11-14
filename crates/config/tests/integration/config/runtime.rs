@@ -57,7 +57,7 @@ fn should_create_minimal_v1_config_document_on_first_run() {
     let first_run_documents = load_first_run_documents();
     let generated_config = &first_run_documents.generated_config;
 
-    let expected_generated_fields: [(&str, serde_json::Value); 6] = [
+    let expected_generated_fields: [(&str, serde_json::Value); 5] = [
         (
             "/$schema",
             serde_json::json!("./astronomical-config.schema.json"),
@@ -71,10 +71,6 @@ fn should_create_minimal_v1_config_document_on_first_run() {
         (
             "/chunking/prefill_graph_submission_layer_interval",
             serde_json::json!(0),
-        ),
-        (
-            "/chunking/experimental_ssd_paging_prefill_graph_submission_layer_interval",
-            serde_json::json!(1),
         ),
     ];
     for (json_pointer, expected_value) in expected_generated_fields {

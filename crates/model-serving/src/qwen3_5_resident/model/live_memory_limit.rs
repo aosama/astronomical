@@ -18,7 +18,7 @@ use super::Qwen3_5ResidentModel;
 impl Qwen3_5ResidentModel {
     pub(crate) fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
         Ok(geometry_safe_minimum_mlx_memory_ceiling_bytes(
-            &self.mlx_ram_budget().model_geometry(),
+            &self.memory_facts().model_geometry(),
         ))
     }
 
