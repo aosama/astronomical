@@ -16,18 +16,11 @@ use std::process::Command;
 use super::application_group::{APPLICATION_GROUP_PLIST_KEY, APPLICATION_GROUPS_ENTITLEMENT_KEY};
 use super::build_identity::BuildIdentity;
 use super::channel_profile::{
-    AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, SandboxPolicy,
+    AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, DAEMON_EXECUTABLE_NAME,
+    SandboxPolicy, TERMINAL_COMMAND_EXECUTABLE_NAME, WORKER_EXECUTABLE_NAME,
 };
 use super::tool_command::run_quiet_tool;
 
-/// The executables of the main bundle's `Contents/MacOS`; the agent's lives
-/// in its own nested bundle and is checked there.
-const BUNDLED_EXECUTABLE_NAMES: [&str; 4] = [
-    APPLICATION_EXECUTABLE_NAME,
-    "astronomicald",
-    "astronomical-inference-worker",
-    "astronomical",
-];
 const REQUIRED_RESOURCE_NAMES: [&str; 4] = [
     "LICENSE",
     "THIRD_PARTY_NOTICES",
@@ -244,17 +237,46 @@ fn agent_layout_problems(bundle_path: &Path, channel_profile: &ChannelProfile) -
     vec!["the menu-bar agent's executable is unavailable".to_owned()]
 }
 
-/// Files that must, or for the App Store must not, be in the bundle.
-pub(crate) fn layout_problems(bundle_path: &Path, channel_profile: &ChannelProfile) -> Vec<String> {
-    let contents_path = bundle_path.join("Contents");
-    let mut layout_problems = agent_layout_problems(bundle_path, channel_profile);
-    for executable_name in BUNDLED_EXECUTABLE_NAMES {
-        if !is_executable_file(&contents_path.join("MacOS").join(executable_name)) {
-            layout_problems.push(format!(
+/// The executables of the main bundle's `Contents/MacOS`; the agent's lives
+/// in its own nested bundle and is checked there. A channel that does not
+/// bundle the terminal command must not carry one either: a stray copy in a
+/// store bundle is an executable outside the sandbox, which App Store
+/// Connect refuses.
+fn executable_layout_problems(
+    macos_directory: &Path,
+    channel_profile: &ChannelProfile,
+) -> Vec<String> {
+    let mut executable_problems = Vec::new();
+    let mut required_executable_names = vec![APPLICATION_EXECUTABLE_NAME];
+    required_executable_names.extend(channel_profile.bundled_rust_executable_names());
+    for executable_name in required_executable_names {
+        if !is_executable_file(&macos_directory.join(executable_name)) {
+            executable_problems.push(format!(
                 "bundled executable is unavailable: {executable_name}"
             ));
         }
     }
+    if !channel_profile.bundles_terminal_command
+        && macos_directory
+            .join(TERMINAL_COMMAND_EXECUTABLE_NAME)
+            .exists()
+    {
+        executable_problems.push(
+            "this channel's bundle must not carry the terminal command, which cannot be sandboxed"
+                .to_owned(),
+        );
+    }
+    executable_problems
+}
+
+/// Files that must, or for the App Store must not, be in the bundle.
+pub(crate) fn layout_problems(bundle_path: &Path, channel_profile: &ChannelProfile) -> Vec<String> {
+    let contents_path = bundle_path.join("Contents");
+    let mut layout_problems = agent_layout_problems(bundle_path, channel_profile);
+    layout_problems.extend(executable_layout_problems(
+        &contents_path.join("MacOS"),
+        channel_profile,
+    ));
     for resource_name in REQUIRED_RESOURCE_NAMES {
         if !is_non_empty_file(&contents_path.join("Resources").join(resource_name)) {
             layout_problems.push(format!(
@@ -485,11 +507,11 @@ fn check_signatures(bundle_path: &Path, channel_profile: &ChannelProfile) -> Res
         ),
         (agent_executable.clone(), sandbox_entitlement_keys),
         (
-            macos_directory.join("astronomicald"),
+            macos_directory.join(DAEMON_EXECUTABLE_NAME),
             vec!["com.apple.security.inherit"],
         ),
         (
-            macos_directory.join("astronomical-inference-worker"),
+            macos_directory.join(WORKER_EXECUTABLE_NAME),
             vec!["com.apple.security.inherit"],
         ),
     ])?;

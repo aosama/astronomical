@@ -8,7 +8,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::build_steps::RUST_EXECUTABLE_NAMES;
 use super::channel_profile::{AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile};
 use super::tool_command::run_quiet_tool;
 
@@ -37,7 +36,7 @@ impl BundleInputs {
     ) -> Self {
         let swift_build_directory = repository_root.join("apps/astronomical-menu/.build");
         let mut rust_executables = Vec::new();
-        for executable_name in RUST_EXECUTABLE_NAMES {
+        for executable_name in channel_profile.bundled_rust_executable_names() {
             rust_executables.push((
                 executable_name,
                 rust_executable_directory.join(executable_name),

@@ -19,13 +19,6 @@ use super::tool_command::{run_quiet_tool, run_tool};
 /// The Cargo profile in the workspace manifest tuned for the edit loop.
 pub(crate) const APP_DEV_CARGO_PROFILE: &str = "app-dev";
 
-/// The executables the bundle carries in `Contents/MacOS`.
-pub(crate) const RUST_EXECUTABLE_NAMES: [&str; 3] = [
-    "astronomicald",
-    "astronomical-inference-worker",
-    "astronomical",
-];
-
 /// Pre-warms the machine-wide native build store, so the Rust build script
 /// finds MLX already compiled and never invokes CMake. Called in-process:
 /// the prewarm command is part of this same xtask binary, and it streams the

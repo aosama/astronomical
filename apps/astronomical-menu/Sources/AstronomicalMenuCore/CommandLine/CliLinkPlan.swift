@@ -32,11 +32,15 @@ enum CliLinkAction: Equatable {
 enum CliLinkPlan {
   /// Stable owns the public name `astronomical`. Development builds may not
   /// install it: two apps competing for one public command would make the
-  /// resolved daemon depend on install order.
+  /// resolved daemon depend on install order. The store build has no command
+  /// to link: its bundle leaves the command out, because an executable run
+  /// from the terminal cannot join the app's sandbox, and a sandboxed app
+  /// could not write the link anyway. Returning nil also keeps a store build
+  /// from "repairing" a direct install's link at launch (issue #2183).
   static func linkName(for channel: ApplicationChannel) -> String? {
     switch channel {
-    case .stable, .appStore: "astronomical"
-    case .development: nil
+    case .stable: "astronomical"
+    case .development, .appStore: nil
     }
   }
 

@@ -195,6 +195,44 @@ fn should_report_a_missing_metallib_executable_bit_and_stray_sparkle() {
     );
 }
 
+/// A store bundle is refused when a terminal command is found in it, and a
+/// direct bundle is refused when its terminal command is missing.
+#[test]
+fn should_refuse_a_terminal_command_in_the_store_bundle_and_require_it_elsewhere() {
+    let (_store_fixture_directory, store_bundle_path) = assembled_fixture_bundle(Channel::AppStore);
+    let store_profile = ChannelProfile::for_channel(Channel::AppStore);
+    let terminal_command_path = store_bundle_path.join("Contents/MacOS/astronomical");
+    assert!(
+        !terminal_command_path.exists(),
+        "assembly must leave the terminal command out of a store bundle"
+    );
+    write_fixture_file(&terminal_command_path, "binary", true);
+
+    let store_problems = layout_problems(&store_bundle_path, &store_profile);
+
+    assert!(
+        store_problems.contains(
+            &"this channel's bundle must not carry the terminal command, which cannot be sandboxed"
+                .to_owned()
+        ),
+        "{store_problems:?}"
+    );
+
+    let (_stable_fixture_directory, stable_bundle_path) = assembled_fixture_bundle(Channel::Stable);
+    std::fs::remove_file(stable_bundle_path.join("Contents/MacOS/astronomical"))
+        .expect("remove the terminal command");
+
+    let stable_problems = layout_problems(
+        &stable_bundle_path,
+        &ChannelProfile::for_channel(Channel::Stable),
+    );
+
+    assert!(
+        stable_problems.contains(&"bundled executable is unavailable: astronomical".to_owned()),
+        "{stable_problems:?}"
+    );
+}
+
 /// The v0.2.88 leak: a git-ignored Playwright folder inside the Thin Talk
 /// web resources was copied whole into the shipped bundle.
 #[test]

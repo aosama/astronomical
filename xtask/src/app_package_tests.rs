@@ -107,14 +107,14 @@ fn should_sign_unsigned_stable_candidates_ad_hoc() {
 }
 
 #[test]
-fn should_assign_app_store_entitlements_and_keep_the_cli_bare() {
+fn should_assign_app_store_entitlements_and_sign_no_terminal_command() {
     let signing_invocations =
         plan_for(Channel::AppStore, Some(DEVELOPER_ID)).expect("an identity is supplied");
 
     assert_eq!(
         signing_invocations.len(),
-        7,
-        "the agent and its bundle, four executables, and the bundle; no Sparkle"
+        6,
+        "the agent and its bundle, three executables, and the bundle; no Sparkle, no terminal command"
     );
     // Rendered beside the bundle at signing time, because it names the app
     // group of this signing's team.
@@ -147,9 +147,53 @@ fn should_assign_app_store_entitlements_and_keep_the_cli_bare() {
         invocation_arguments_for(&signing_invocations, "Astronomical.app")
             .ends_with(&application_entitlements)
     );
+    // The terminal command could only be signed without the sandbox, so a
+    // store bundle has none to sign (issue #2183).
+    for signing_invocation in &signing_invocations {
+        assert!(
+            !signing_invocation
+                .code_object_path
+                .ends_with("MacOS/astronomical"),
+            "{signing_invocation:?}"
+        );
+    }
+}
+
+#[test]
+fn should_keep_signing_the_terminal_command_bare_for_the_direct_channels() {
+    let signing_invocations =
+        plan_for(Channel::Stable, Some(DEVELOPER_ID)).expect("an identity is supplied");
+
+    let terminal_command_arguments =
+        invocation_arguments_for(&signing_invocations, "MacOS/astronomical");
+
     assert!(
-        invocation_arguments_for(&signing_invocations, "MacOS/astronomical")
-            .ends_with("--preserve-metadata=entitlements")
+        !terminal_command_arguments.contains("--entitlements "),
+        "{terminal_command_arguments}"
+    );
+}
+
+#[test]
+fn should_bundle_the_terminal_command_for_every_channel_but_the_store() {
+    assert_eq!(
+        ChannelProfile::for_channel(Channel::Stable).bundled_rust_executable_names(),
+        [
+            "astronomicald",
+            "astronomical-inference-worker",
+            "astronomical"
+        ]
+    );
+    assert_eq!(
+        ChannelProfile::for_channel(Channel::Development).bundled_rust_executable_names(),
+        [
+            "astronomicald",
+            "astronomical-inference-worker",
+            "astronomical"
+        ]
+    );
+    assert_eq!(
+        ChannelProfile::for_channel(Channel::AppStore).bundled_rust_executable_names(),
+        ["astronomicald", "astronomical-inference-worker"]
     );
 }
 
