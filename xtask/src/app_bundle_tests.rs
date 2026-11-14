@@ -124,7 +124,7 @@ fn should_render_app_store_plist_without_sparkle_or_state_directory() {
 /// App Store Connect refuses a Mac app with no category, so every channel's
 /// main app names the decided one; the agent is a helper and names none.
 #[test]
-fn should_name_the_developer_tools_category_in_every_main_app_plist_only() {
+fn should_name_the_productivity_category_in_every_main_app_plist_only() {
     for channel in [Channel::Development, Channel::Stable, Channel::AppStore] {
         let channel_profile = ChannelProfile::for_channel(channel);
         let application_plist_text = render_info_plist(
@@ -137,7 +137,7 @@ fn should_name_the_developer_tools_category_in_every_main_app_plist_only() {
 
         assert!(
             application_plist_text.contains(
-                "<key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>"
+                "<key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>"
             ),
             "{channel:?}"
         );
