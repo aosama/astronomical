@@ -17,12 +17,15 @@ use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
 use super::forward_layer_weights::ForwardLayerWeights;
-use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
-use super::prefill_complete_layer_prefetch::PartlyKeptLayers;
-use crate::qwen3_5_core::decoder::{
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+pub(crate) use super::layer_major_prefill_run::LayerMajorPrefillRun;
+use super::layer_major_prefill_run::rewind_to_failed_span;
+use super::layer_major_span_redo::UnconfirmedSpans;
+use super::layer_major_span_state::{
+    SpanState, completed_checkpoints, layer_snapshot_arrays, record_end_state_snapshot,
+    span_collector,
 };
+use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
+use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{DecoderCacheState, PerformanceAttribution, RequestDecoderStateStack};
@@ -76,13 +79,6 @@ pub(crate) struct LayerMajorPrefillOutcome {
     pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 }
 
-/// The per-span bookkeeping that lives across the layer loop.
-struct SpanState {
-    hidden_states: Option<MlxArray>,
-    collector: Option<Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector>,
-    end_state_snapshot: Option<HashMap<String, MlxArray>>,
-}
-
 /// Bytes per element of the widest floating activation MLX produces, used
 /// only if the model's own hidden-state dtype cannot be read.
 const WIDEST_ACTIVATION_ELEMENT_BYTES: usize = 4;
@@ -92,6 +88,15 @@ impl Qwen3_5Model {
     /// with fewer layers kept than it has.
     pub(crate) fn streams_dense_layers(&self) -> bool {
         self.dense_streaming_slot_reservation_bytes() > 0
+    }
+
+    /// Whether a prompt of several spans runs one layer over all of them
+    /// before the next layer: any model that may read a layer from storage,
+    /// so that the layer is read once for the prompt and not once per span.
+    /// An expert model qualifies whatever its cache keeps at the moment,
+    /// because what it keeps changes while it serves.
+    pub(crate) fn reads_prompts_one_layer_at_a_time(&self) -> bool {
+        self.streams_dense_layers() || self.expert_pager.is_some()
     }
 
     /// Bytes one token's hidden state occupies between decoder layers, read
@@ -125,6 +130,32 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<LayerMajorPrefillOutcome, Qwen3_5ExecutionError> {
+        let mut layer_major_prefill_run = self.begin_layer_major_prefill(
+            token_ids,
+            starting_position_tokens,
+            layer_major_prefill_request,
+        )?;
+        loop {
+            if let Some(layer_major_prefill_outcome) = self.advance_layer_major_prefill(
+                &mut layer_major_prefill_run,
+                request_decoder_state,
+                performance_attribution,
+            )? {
+                return Ok(layer_major_prefill_outcome);
+            }
+        }
+    }
+
+    /// Embeds the spans and leaves the prefill ready to run its first layer.
+    ///
+    /// The prefill then advances one layer per call, so whoever drives it
+    /// can report progress and stop between layers.
+    pub(crate) fn begin_layer_major_prefill(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        layer_major_prefill_request: LayerMajorPrefillRequest<'_>,
+    ) -> Result<LayerMajorPrefillRun, Qwen3_5ExecutionError> {
         let LayerMajorPrefillRequest {
             spans,
             checkpoint_contract,
@@ -132,26 +163,99 @@ impl Qwen3_5Model {
         } = layer_major_prefill_request;
         validate_layer_major_spans(token_ids.len(), spans)?;
         self.discard_expert_state_of_an_unfinished_prompt();
-        let mut span_states =
-            self.embed_layer_major_spans(token_ids, spans, checkpoint_contract)?;
-        let every_layer_outcome = self.run_every_layer_over_spans(
-            starting_position_tokens,
+        let span_states = self.embed_layer_major_spans(token_ids, spans, checkpoint_contract)?;
+        self.begin_prompt_layer_measurement();
+        Ok(LayerMajorPrefillRun {
+            spans: spans.to_vec(),
+            checkpoint_contract,
             should_materialize_logits,
-            spans,
-            &mut span_states,
+            starting_position_tokens,
+            span_states,
+            previous_layer_output: None,
+            completed_layer_count: 0,
+            next_span_index: 0,
+            unconfirmed_spans: UnconfirmedSpans::default(),
+            is_rewound_to_failed_span: false,
+            span_to_fail_once: None,
+        })
+    }
+
+    /// Runs the next layer over every span. `Ok(None)` while layers remain;
+    /// the outcome once the last layer has run and the prompt's state has
+    /// been evaluated. A failure leaves no expert page in hand and no route
+    /// pending: a failed prompt's routes are not demand. An expert model's
+    /// failed layer is also put back to where its oldest unconfirmed span
+    /// began, so advancing again runs that span again and nothing before it
+    /// (`LayerMajorPrefillRun::can_run_failed_span_again`).
+    pub(crate) fn advance_layer_major_prefill(
+        &self,
+        layer_major_prefill_run: &mut LayerMajorPrefillRun,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<LayerMajorPrefillOutcome>, Qwen3_5ExecutionError> {
+        let advance_outcome = self.advance_layer_major_prefill_unguarded(
+            layer_major_prefill_run,
             request_decoder_state,
             performance_attribution,
         );
-        // Whether the layers finished or one failed, no expert page may
-        // outlive the prompt in the slots that hold it, and a failed
-        // prompt's routes are not demand.
-        if let Err(layer_error) = every_layer_outcome {
+        if advance_outcome.is_err() {
             self.discard_expert_state_of_an_unfinished_prompt();
-            return Err(layer_error);
+            rewind_to_failed_span(layer_major_prefill_run, request_decoder_state);
         }
+        advance_outcome
+    }
+
+    fn advance_layer_major_prefill_unguarded(
+        &self,
+        layer_major_prefill_run: &mut LayerMajorPrefillRun,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<LayerMajorPrefillOutcome>, Qwen3_5ExecutionError> {
+        let layer_count = self.config.layer_count() as usize;
+        if std::mem::take(&mut layer_major_prefill_run.is_rewound_to_failed_span) {
+            // The failure ended the measurement of the layer in flight.
+            self.begin_prompt_layer_measurement();
+        }
+        if layer_major_prefill_run.completed_layer_count < layer_count {
+            self.run_layer_over_remaining_spans(
+                LayerPass {
+                    layer_index: layer_major_prefill_run.completed_layer_count,
+                    starting_position_tokens: layer_major_prefill_run.starting_position_tokens,
+                    last_span_ends_the_prompt: layer_major_prefill_run.should_materialize_logits,
+                },
+                layer_major_prefill_run,
+                request_decoder_state,
+                performance_attribution,
+            )?;
+            layer_major_prefill_run.completed_layer_count += 1;
+            if layer_major_prefill_run.completed_layer_count < layer_count {
+                return Ok(None);
+            }
+        }
+        self.finish_layer_major_prefill(
+            layer_major_prefill_run,
+            request_decoder_state,
+            performance_attribution,
+        )
+        .map(Some)
+    }
+
+    /// After the last layer: lets the expert pages go, builds the logits
+    /// the caller asked for, and evaluates the prompt's state.
+    fn finish_layer_major_prefill(
+        &self,
+        layer_major_prefill_run: &mut LayerMajorPrefillRun,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<LayerMajorPrefillOutcome, Qwen3_5ExecutionError> {
+        self.end_prompt_layer_measurement();
         self.release_held_prompt_expert_layer();
         self.discard_prefill_complete_layer_prefetch();
-        let final_logits = match (should_materialize_logits, span_states.last()) {
+        let spans = &layer_major_prefill_run.spans;
+        let final_logits = match (
+            layer_major_prefill_run.should_materialize_logits,
+            layer_major_prefill_run.span_states.last(),
+        ) {
             (
                 true,
                 Some(SpanState {
@@ -177,7 +281,11 @@ impl Qwen3_5Model {
         self.evaluate_arrays_resolving_paged_routes(&evaluation_roots, performance_attribution)?;
         Ok(LayerMajorPrefillOutcome {
             final_logits,
-            boundary_checkpoints: completed_checkpoints(spans, span_states, checkpoint_contract)?,
+            boundary_checkpoints: completed_checkpoints(
+                spans,
+                std::mem::take(&mut layer_major_prefill_run.span_states),
+                layer_major_prefill_run.checkpoint_contract,
+            )?,
         })
     }
 
@@ -252,7 +360,8 @@ impl Qwen3_5Model {
     /// a failed or cancelled attempt leaves behind. Recording such a route
     /// would count a discarded forward as demand, and reading it would
     /// evaluate a graph that already failed.
-    fn discard_expert_state_of_an_unfinished_prompt(&self) {
+    pub(crate) fn discard_expert_state_of_an_unfinished_prompt(&self) {
+        self.end_prompt_layer_measurement();
         self.release_held_prompt_expert_layer();
         self.discard_prefill_complete_layer_prefetch();
         self.deferred_expert_demand
@@ -260,129 +369,103 @@ impl Qwen3_5Model {
             .discard_pending_layer_routes();
     }
 
-    /// Runs the decoder layers in order, each over every span.
-    fn run_every_layer_over_spans(
-        &self,
-        starting_position_tokens: u32,
-        last_span_ends_the_prompt: bool,
-        spans: &[LayerMajorSpan],
-        span_states: &mut [SpanState],
-        request_decoder_state: &mut RequestDecoderStateStack,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<(), Qwen3_5ExecutionError> {
-        let mut previous_layer_output = None;
-        for layer_index in 0..self.config.layer_count() as usize {
-            self.run_layer_over_spans(
-                LayerPass {
-                    layer_index,
-                    starting_position_tokens,
-                    last_span_ends_the_prompt,
-                },
-                spans,
-                span_states,
-                request_decoder_state,
-                &mut previous_layer_output,
-                performance_attribution,
-            )?;
-        }
-        Ok(())
-    }
-
-    /// Runs one decoder layer over every span in order, reading a streamed
-    /// layer once for all of them.
-    fn run_layer_over_spans(
+    /// Runs one decoder layer over its remaining spans in order, reading a
+    /// streamed layer once for all of them. Every span remains, except
+    /// after a failure put the layer back to the span that failed.
+    fn run_layer_over_remaining_spans(
         &self,
         layer_pass: LayerPass,
-        spans: &[LayerMajorSpan],
-        span_states: &mut [SpanState],
+        layer_major_prefill_run: &mut LayerMajorPrefillRun,
         request_decoder_state: &mut RequestDecoderStateStack,
-        previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let forward_layer_weights = self.forward_layer_weights(layer_pass.layer_index)?;
-        let spans_token_count =
-            i32::try_from(spans.last().map_or(0, |last_span| last_span.end_token))
-                .unwrap_or(i32::MAX);
+        let span_count = layer_major_prefill_run.spans.len();
+        let spans_token_count = i32::try_from(
+            layer_major_prefill_run
+                .spans
+                .last()
+                .map_or(0, |last_span| last_span.end_token),
+        )
+        .unwrap_or(i32::MAX);
         self.hold_prompt_expert_layer(
             layer_pass.layer_index,
             spans_token_count,
             performance_attribution,
         );
-        for (span_index, (span, span_state)) in spans.iter().zip(span_states.iter_mut()).enumerate()
-        {
+        let first_span_index = layer_major_prefill_run.next_span_index;
+        for span_index in first_span_index..span_count {
             self.set_prefill_demand_assignment_weight_for_residency(span_demand_weight(
                 layer_pass,
-                span,
-                span_index + 1 == spans.len(),
+                &layer_major_prefill_run.spans[span_index],
+                span_index + 1 == span_count,
             ));
+            self.remember_span_start(
+                layer_pass.layer_index,
+                span_index,
+                layer_major_prefill_run,
+                request_decoder_state,
+            )?;
             self.run_and_submit_span(
                 layer_pass,
                 &forward_layer_weights,
-                span,
-                span_state,
+                &layer_major_prefill_run.spans[span_index],
+                &mut layer_major_prefill_run.span_states[span_index],
                 request_decoder_state,
-                previous_layer_output,
+                &mut layer_major_prefill_run.previous_layer_output,
                 performance_attribution,
             )?;
+            layer_major_prefill_run.fail_marked_span_once(layer_pass.layer_index, span_index)?;
+            // Submitting this span waited for the one before it.
+            layer_major_prefill_run
+                .unconfirmed_spans
+                .confirm_all_but_newest();
+            layer_major_prefill_run.next_span_index = span_index + 1;
             self.read_next_expert_layer_ahead_after_first_span(
-                span_index,
+                span_index - first_span_index,
                 layer_pass.layer_index,
                 spans_token_count,
                 performance_attribution,
             );
         }
+        let pages_in_hand = self.expert_pages_in_hand_bytes();
         self.release_held_prompt_expert_layer();
-        self.record_finished_expert_layer_routes(previous_layer_output, performance_attribution)
+        self.record_finished_expert_layer_routes(
+            &mut layer_major_prefill_run.previous_layer_output,
+            performance_attribution,
+        )?;
+        layer_major_prefill_run.unconfirmed_spans.confirm_all();
+        layer_major_prefill_run.next_span_index = 0;
+        self.govern_completed_prompt_layer(
+            pages_in_hand,
+            request_decoder_state.payload_byte_count(),
+        );
+        Ok(())
     }
 
-    /// After an expert layer's last span: waits for the layer and records
-    /// its spans' routes as prompt demand.
-    ///
-    /// A route is a slice of the table the router ranks every expert in, a
-    /// kilobyte per token on a 256-expert layer, and holding the slice holds
-    /// the table. Left for the wait that ends the prompt, every layer's
-    /// tables stayed alive together: measured on a 10,240-token prompt,
-    /// memory rose 10 MB with each layer, 0.4 GB by the last. Recorded
-    /// here, they free as each layer finishes.
-    ///
-    /// The wait is the one the next layer's first span would make anyway. A
-    /// dense model has no routes and keeps building the next layer's graph
-    /// while this one computes.
-    fn record_finished_expert_layer_routes(
+    /// Keeps what a span finds as it begins, so the span can be run again
+    /// if MLX cannot fit it. Only for an expert model: it waits for every
+    /// layer, so a failure is reported inside the layer that caused it and
+    /// what the span found is still evaluated state.
+    fn remember_span_start(
         &self,
-        previous_layer_output: &mut Option<MlxArray>,
-        performance_attribution: &mut PerformanceAttribution,
+        layer_index: usize,
+        span_index: usize,
+        layer_major_prefill_run: &mut LayerMajorPrefillRun,
+        request_decoder_state: &RequestDecoderStateStack,
     ) -> Result<(), Qwen3_5ExecutionError> {
         if self.retained_experts.is_none() {
             return Ok(());
         }
-        self.wait_for_previous_layer(previous_layer_output, performance_attribution)?;
-        self.record_deferred_expert_demand(performance_attribution);
-        Ok(())
-    }
-
-    /// Reads the next streamed expert layer ahead once this layer's first
-    /// span is submitted.
-    ///
-    /// That submission waited for the previous layer, so its page is gone
-    /// and at most two are alive: this layer's and the one read here while
-    /// this layer computes. Reading any earlier would hold three.
-    fn read_next_expert_layer_ahead_after_first_span(
-        &self,
-        submitted_span_index: usize,
-        layer_index: usize,
-        spans_token_count: i32,
-        performance_attribution: &mut PerformanceAttribution,
-    ) {
-        if submitted_span_index != 0 {
-            return;
-        }
-        self.issue_prefill_complete_layer_prefetch(
-            layer_index,
-            spans_token_count,
-            PartlyKeptLayers::Included,
-            performance_attribution,
-        );
+        layer_major_prefill_run
+            .unconfirmed_spans
+            .remember_span_start(
+                layer_index,
+                span_index,
+                &layer_major_prefill_run.span_states,
+                request_decoder_state,
+                layer_major_prefill_run.previous_layer_output.as_ref(),
+            )
     }
 
     /// Runs one span through one layer and submits it with the state and
@@ -520,106 +603,6 @@ fn span_demand_weight(layer_pass: LayerPass, span: &LayerMajorSpan, is_last_span
         u64::from(layer_pass.starting_position_tokens).saturating_add(span.start_token as u64),
         span.token_count() as u64,
     )
-}
-
-/// One linear-attention layer's arrays within an end-state snapshot.
-fn layer_snapshot_arrays(
-    end_state_snapshot: &HashMap<String, MlxArray>,
-    layer_index: usize,
-) -> Vec<&MlxArray> {
-    let layer_tensor_prefix = format!("layer_{layer_index}_linear.");
-    end_state_snapshot
-        .iter()
-        .filter(|(tensor_name, _)| tensor_name.starts_with(&layer_tensor_prefix))
-        .map(|(_, snapshot_tensor)| snapshot_tensor)
-        .collect()
-}
-
-/// A span's checkpoint collector, when it has boundaries strictly inside it.
-fn span_collector(
-    span: &LayerMajorSpan,
-    checkpoint_contract: Option<LayerMajorCheckpointContract>,
-) -> Result<Option<Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector>, Qwen3_5ExecutionError>
-{
-    let Some(checkpoint_contract) = checkpoint_contract else {
-        return Ok(None);
-    };
-    if span.interior_boundary_tokens.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(
-        Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
-            span.interior_boundary_tokens.clone(),
-            checkpoint_contract.boundary_tensor_count,
-            checkpoint_contract.block_token_count,
-        )?,
-    ))
-}
-
-/// Keeps one linear-attention layer's state as a span leaves it: the same
-/// arrays a chunk ending there publishes from its final state.
-fn record_end_state_snapshot(
-    end_state_snapshot: &mut HashMap<String, MlxArray>,
-    layer_index: usize,
-    layer_state: &DecoderCacheState,
-) -> Result<(), Qwen3_5ExecutionError> {
-    let DecoderCacheState::Composite {
-        convolution,
-        recurrent,
-    } = layer_state
-    else {
-        return Ok(());
-    };
-    let (Some(convolution_state), Some(recurrent_state)) = (convolution.state(), recurrent.state())
-    else {
-        return Err(Qwen3_5ExecutionError::InvalidRequestDecoderState {
-            layer_index,
-            description: "a linear-attention layer left a span without its state",
-        });
-    };
-    end_state_snapshot.insert(
-        format!("layer_{layer_index}_linear.convolution"),
-        convolution_state.retain()?,
-    );
-    end_state_snapshot.insert(
-        format!("layer_{layer_index}_linear.gated_delta_recurrent"),
-        recurrent_state.retain()?,
-    );
-    Ok(())
-}
-
-/// Every span's checkpoints, moved to positions relative to the first span.
-///
-/// An end-state snapshot must hold the full tensor layout, as a collector's
-/// checkpoints must.
-fn completed_checkpoints(
-    spans: &[LayerMajorSpan],
-    span_states: Vec<SpanState>,
-    checkpoint_contract: Option<LayerMajorCheckpointContract>,
-) -> Result<Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
-    let expected_tensor_count =
-        checkpoint_contract.map_or(0, |contract| contract.boundary_tensor_count);
-    let mut boundary_checkpoints = Vec::new();
-    for (span, span_state) in spans.iter().zip(span_states) {
-        if let Some(collector) = span_state.collector {
-            for mut boundary_checkpoint in collector.complete()? {
-                boundary_checkpoint.completed_prefill_chunk_tokens += span.start_token;
-                boundary_checkpoints.push(boundary_checkpoint);
-            }
-        }
-        if let Some(recurrent_snapshot_tensors) = span_state.end_state_snapshot {
-            if recurrent_snapshot_tensors.len() != expected_tensor_count {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "a layer-major end-state snapshot lacks part of the decoder-cache tensor layout",
-                });
-            }
-            boundary_checkpoints.push(Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
-                completed_prefill_chunk_tokens: span.end_token,
-                recurrent_snapshot_tensors,
-            });
-        }
-    }
-    Ok(boundary_checkpoints)
 }
 
 /// Spans of `span_token_count` tokens, the last one shorter.

@@ -68,6 +68,7 @@ where
         prompt_work_reuse: WorkerPromptWorkReuse,
         persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
         neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
+        prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
         Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
@@ -115,8 +116,14 @@ where
                     .min(required_prompt_processing_token_count),
                 total_tokens: required_prompt_processing_token_count,
                 elapsed_millis: active_generation.prefill_elapsed_millis,
-                forward_prefill_chunk_elapsed_millis: Some(forward_prefill_chunk_elapsed_millis),
-                completed_prefill_chunk_tokens: Some(completed_prefill_chunk_tokens),
+                // A layer of a prompt read one layer at a time completes no
+                // chunk: it carries layers done, not a chunk's measurements.
+                forward_prefill_chunk_elapsed_millis: prompt_layer_progress
+                    .is_none()
+                    .then_some(forward_prefill_chunk_elapsed_millis),
+                completed_prefill_chunk_tokens: prompt_layer_progress
+                    .is_none()
+                    .then_some(completed_prefill_chunk_tokens),
                 mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
                     super::output::worker_memory_snapshot(
                         MlxMemorySnapshotSource::Prefill,
@@ -125,6 +132,7 @@ where
                 }),
                 expert_residency: expert_residency_telemetry
                     .map(super::output::worker_expert_residency_snapshot),
+                prompt_layer_progress,
             })
             .await?;
         Ok(Some(active_generation))
@@ -197,6 +205,7 @@ where
             completed_prefill_chunk_tokens: None,
             mlx_memory_snapshot: None,
             expert_residency: None,
+            prompt_layer_progress: None,
         })
         .await?;
     Ok(())

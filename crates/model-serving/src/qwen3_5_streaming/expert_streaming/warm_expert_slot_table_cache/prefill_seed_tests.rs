@@ -9,7 +9,7 @@ use serial_test::serial;
 fn should_complete_a_cold_prefill_union_seed_using_only_missing_experts() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
 
     let seeded_expert_ids: Vec<usize> = (0..3).collect();
     let seeded_weights = streamed_weights_for_expert_count(&runtime, seeded_expert_ids.len());

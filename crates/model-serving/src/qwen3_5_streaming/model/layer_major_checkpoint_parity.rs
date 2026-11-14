@@ -37,9 +37,32 @@ impl Qwen3_5Model {
         block_token_count: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
     ) -> Result<Vec<PublishedBoundarySnapshot>, Qwen3_5ExecutionError> {
+        let (published_boundaries, _) = self.prefill_layer_major_redoing_failed_spans(
+            token_ids,
+            chunk_token_count,
+            block_token_count,
+            None,
+            request_decoder_state,
+        )?;
+        Ok(published_boundaries)
+    }
+
+    /// The same prefill with the span at `span_to_fail_once`, as (layer,
+    /// span), failed once after it is submitted and then run again, the
+    /// way the engine redoes a span MLX could not fit. Returns the
+    /// boundaries and how many spans were run again.
+    #[doc(hidden)]
+    pub fn prefill_layer_major_redoing_failed_spans(
+        &self,
+        token_ids: &[u32],
+        chunk_token_count: usize,
+        block_token_count: usize,
+        span_to_fail_once: Option<(usize, usize)>,
+        request_decoder_state: &mut RequestDecoderStateStack,
+    ) -> Result<(Vec<PublishedBoundarySnapshot>, usize), Qwen3_5ExecutionError> {
         let (group_token_ids, spans) =
             planned_spans(token_ids, chunk_token_count, block_token_count)?;
-        let layer_major_outcome = self.prefill_layer_major(
+        let mut layer_major_prefill_run = self.begin_layer_major_prefill(
             group_token_ids,
             0,
             LayerMajorPrefillRequest {
@@ -50,9 +73,26 @@ impl Qwen3_5Model {
                 }),
                 should_materialize_logits: false,
             },
-            request_decoder_state,
-            &mut PerformanceAttribution::disabled(),
         )?;
+        if let Some((layer_index, span_index)) = span_to_fail_once {
+            layer_major_prefill_run.fail_span_once_for_tests(layer_index, span_index);
+        }
+        let mut redone_span_count = 0;
+        let layer_major_outcome = loop {
+            let advance_outcome = self.advance_layer_major_prefill(
+                &mut layer_major_prefill_run,
+                request_decoder_state,
+                &mut PerformanceAttribution::disabled(),
+            );
+            match advance_outcome {
+                Ok(Some(layer_major_outcome)) => break layer_major_outcome,
+                Ok(None) => {}
+                Err(_) if layer_major_prefill_run.can_run_failed_span_again() => {
+                    redone_span_count += 1;
+                }
+                Err(advance_error) => return Err(advance_error),
+            }
+        };
         let mut boundary_checkpoints = layer_major_outcome.boundary_checkpoints;
         push_final_state_boundary(
             &mut boundary_checkpoints,
@@ -60,7 +100,10 @@ impl Qwen3_5Model {
             block_token_count,
             request_decoder_state,
         )?;
-        self.host_snapshots(boundary_checkpoints)
+        Ok((
+            self.host_snapshots(boundary_checkpoints)?,
+            redone_span_count,
+        ))
     }
 
     /// Prefills the same planned spans one chunk at a time, as the engine

@@ -34,14 +34,8 @@ pub(super) struct PrefillChunkPlan {
     /// applicable.
     pub(super) persistent_prompt_cache_block_token_count: Option<usize>,
 
-    /// Workspace bytes needed for direct prompt-cache publication.
-    pub(super) direct_publication_workspace_bytes: usize,
-
     /// Combined temporary workspace reservation.
     pub(super) exact_temporary_workspace_bytes: usize,
-
-    /// Adaptive-RAM growth context derived from this plan's decisions.
-    pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
 
     /// The context the completed forward's memory is recorded under: the
     /// admission context, or one span's for a layer-major group.
@@ -54,8 +48,8 @@ pub(super) struct PrefillChunkPlan {
 
 impl Qwen3_5EngineState {
     /// The spans a layer-major prefill would run from `prefill_start`, for a
-    /// text request on a dense model that streams layers and has not had a
-    /// layer-major prefill fail.
+    /// text request on a model that reads layers from storage and has not
+    /// had a layer-major prefill fail.
     pub(super) fn layer_major_span_plan_for(
         &self,
         active_request: &Qwen3_5EngineRequest,
@@ -65,7 +59,7 @@ impl Qwen3_5EngineState {
         let model = self.model.as_ref()?;
         if active_request.engine_extension.layer_major_prefill_declined
             || active_request.has_visual_inputs
-            || !model.streams_dense_layers()
+            || !model.reads_prompts_one_layer_at_a_time()
         {
             return None;
         }
@@ -172,9 +166,7 @@ impl Qwen3_5EngineState {
             all_completed_prefill_chunk_tokens,
             intermediate_completed_prefill_chunk_tokens,
             persistent_prompt_cache_block_token_count,
-            direct_publication_workspace_bytes,
             exact_temporary_workspace_bytes,
-            adaptive_ram_growth_context,
             observed_growth_context,
             layer_major_span_plan,
         })

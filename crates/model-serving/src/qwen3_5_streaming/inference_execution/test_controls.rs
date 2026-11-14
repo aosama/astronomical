@@ -166,6 +166,44 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
+    /// Has the next prompt that is read one layer at a time fail the span at
+    /// (`layer_index`, `span_index`) once after it is submitted, the way MLX
+    /// reports a span it could not fit.
+    #[doc(hidden)]
+    pub async fn fail_prompt_span_once_for_tests(
+        &self,
+        layer_index: usize,
+        span_index: usize,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.prompt_span_to_fail_once_for_tests =
+                Some((layer_index, span_index));
+            Ok(())
+        })
+        .await
+    }
+
+    /// Steps that hit the memory limit and redo attempts made since the
+    /// model loaded, in that order.
+    #[doc(hidden)]
+    pub async fn memory_redo_counts_for_tests(&self) -> Result<(u64, u64), InferenceEngineError> {
+        let (redo_counts_sender, redo_counts_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let memory_redo_counts = qwen_inference_execution
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("no model is loaded to count redos for"))?
+                .memory_redo_counts();
+            redo_counts_sender
+                .send(memory_redo_counts)
+                .map_err(|_| fatal_engine_error("redo counts receiver stopped unexpectedly"))
+        })
+        .await?;
+        redo_counts_receiver
+            .recv()
+            .map_err(|_| fatal_engine_error("redo counts owner operation returned no response"))
+    }
+
     /// Disables adaptive growth guarding and its memory sampling for benchmarks.
     #[doc(hidden)]
     pub async fn disable_adaptive_ram_growth_memory_guard_for_tests(

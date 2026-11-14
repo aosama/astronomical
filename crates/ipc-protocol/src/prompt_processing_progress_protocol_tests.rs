@@ -1,6 +1,7 @@
 use crate::{
     MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
-    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerPromptLayerProgress,
+    WorkerPromptProcessingPhase,
 };
 use tokio::io::duplex;
 
@@ -36,6 +37,7 @@ async fn should_round_trip_prefill_progress_event() {
             expert_capacity: 256,
             layer_seating: crate::ExpertLayerSeatingCounts::default(),
         }),
+        prompt_layer_progress: None,
     };
 
     assert_round_tripped_worker_event(worker_event).await;
@@ -53,6 +55,7 @@ async fn should_round_trip_prefill_progress_before_the_first_completed_forward()
         completed_prefill_chunk_tokens: None,
         mlx_memory_snapshot: None,
         expert_residency: None,
+        prompt_layer_progress: None,
     };
 
     assert_round_tripped_worker_event(worker_event).await;
@@ -74,4 +77,24 @@ async fn assert_round_tripped_worker_event(worker_event: WorkerEvent) {
             .expect("the prompt-processing progress event should decode"),
         Some(worker_event)
     );
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn should_round_trip_layers_done_for_a_prompt_read_one_layer_at_a_time() {
+    assert_round_tripped_worker_event(WorkerEvent::PrefillProgress {
+        request_id: RequestId::new(83),
+        prompt_processing_phase: WorkerPromptProcessingPhase::Target,
+        processed_tokens: 0,
+        total_tokens: 10_240,
+        elapsed_millis: 0,
+        forward_prefill_chunk_elapsed_millis: None,
+        completed_prefill_chunk_tokens: None,
+        mlx_memory_snapshot: None,
+        expert_residency: None,
+        prompt_layer_progress: Some(WorkerPromptLayerProgress {
+            completed_layer_count: 22,
+            layer_count: 40,
+        }),
+    })
+    .await;
 }

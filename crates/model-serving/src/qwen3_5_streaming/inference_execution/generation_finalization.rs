@@ -15,19 +15,14 @@ use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 
 impl Qwen3_5EngineState {
-    /// A request that never reached decode still ends its prefill
-    /// memory-recovery freeze here, so the next request starts unfrozen.
-    fn lift_prefill_memory_recovery_freeze_at_finalization(&self) {
+    /// Closes the request with the memory governor: its stored state is
+    /// gone, and the cache may keep what the idle model has room for.
+    fn govern_request_end_at_finalization(&self, request_id: u64) {
         if let Some(model) = self.model.as_ref() {
-            model.lift_prefill_memory_recovery_freeze();
-        }
-    }
-
-    /// Closes the request in the memory ledger that watches this engine, so
-    /// its next reading starts a new request's worst-case tally.
-    fn finish_request_in_memory_ledger_at_finalization(&self, request_id: u64) {
-        if let Some(model) = self.model.as_ref() {
-            model.finish_request_in_memory_ledger(request_id);
+            // A request that ends while a prompt is being read one layer at
+            // a time leaves that prompt's pages in hand and routes pending.
+            model.discard_expert_state_of_an_unfinished_prompt();
+            model.govern_request_end(request_id);
         }
     }
 
@@ -57,8 +52,7 @@ impl Qwen3_5EngineState {
             return Ok(None);
         };
         let mlx_memory_snapshot = model
-            .runtime()
-            .memory_snapshot()
+            .memory_snapshot_with_forward_peak()
             .map_err(super::qwen3_5_runtime_error)?;
         let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
             .map_err(|_| {
@@ -152,27 +146,21 @@ impl Qwen3_5EngineState {
         // the routed-expert distribution is model-and-domain knowledge, not
         // request state, so an identical or similar next ask serves from RAM
         // instead of re-reading its experts (issue #955). The next request's
-        // prefill admission still arbitrates these bytes on demand through the
-        // request-pressure freeze and exact reclamation when it is tight.
-        let resumed_after_request_memory_pressure = self
-            .model
-            .as_ref()
-            .is_some_and(|model| model.resume_expert_retention_after_request_memory_pressure());
-        self.lift_prefill_memory_recovery_freeze_at_finalization();
+        // start gives the cache its capacity for that prompt, and the cache
+        // gives back only what no longer fits.
         self.keep_planned_dense_layers_at_finalization(request_id.value());
-        self.finish_request_in_memory_ledger_at_finalization(request_id.value());
+        self.govern_request_end_at_finalization(request_id.value());
         if let Some(model) = self.model.as_ref() {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();
             tracing::info!(
                 request_id = request_id.value(),
-                resumed_after_request_memory_pressure,
                 expert_memory_mode = ?model.expert_memory_mode(),
                 retained_expert_payload_bytes =
                     expert_weight_memory_cache_statistics.resident_payload_byte_count,
                 maximum_retained_expert_payload_bytes =
                     expert_weight_memory_cache_statistics.maximum_resident_payload_byte_count,
-                "released request-pressure expert retention and kept warm tables for the next request"
+                "kept the expert cache for the next request"
             );
         }
         // `release_request_memory` synchronizes the model stream before clearing
@@ -211,7 +199,7 @@ impl Qwen3_5EngineState {
         let expert_memory_mode = Some(model.observed_expert_memory_mode());
         let mlx_memory_telemetry = match performance_attribution.measure_operation(
             PerformanceOperation::FinalizedMlxMemorySnapshot,
-            |_performance_attribution| model.runtime().memory_snapshot(),
+            |_performance_attribution| model.memory_snapshot_with_forward_peak(),
         ) {
             Ok(mlx_memory_snapshot) => match (
                 u64::try_from(mlx_memory_snapshot.active_memory_bytes()),

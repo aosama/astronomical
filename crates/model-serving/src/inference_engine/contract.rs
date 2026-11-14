@@ -514,6 +514,9 @@ pub enum GeneratedToken {
         persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
         /// Where this chunk ran, when the model has Neural Engine programs attached.
         neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
+        /// Present while a prompt is read one layer at a time: how many
+        /// layers are done. Such an event reports no finished tokens.
+        prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
     },
     /// A confirmed prompt phase is about to begin before its blocking model work.
     PromptProcessingPhaseStarted {

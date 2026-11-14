@@ -1,52 +1,13 @@
-//! Reclamation and ceiling enforcement for the retained expert slot-table
-//! cache: request-pressure freezes, whole-table eviction order, and the
-//! effective-ceiling arithmetic the insert path and the residency planner
-//! share.
+//! Capacity enforcement for the retained expert slot-table cache: the
+//! whole-table eviction order and the admission check the insert path uses.
 
 use mlx_bridge::MlxArray;
 
 use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, RetainedExpertReclamation};
-use crate::memory::RetainedExpertPageClass;
 
 use super::WarmExpertSlotTableCache;
 
 impl WarmExpertSlotTableCache {
-    pub fn limit_for_request_pressure(&mut self, reclamation_target_bytes: u64) -> bool {
-        let pressure_maximum = self
-            .resident_payload_bytes
-            .saturating_sub(reclamation_target_bytes);
-        self.limit_for_request_pressure_to_maximum(pressure_maximum)
-    }
-
-    pub fn limit_for_request_pressure_to_maximum(
-        &mut self,
-        pressure_maximum_resident_payload_bytes: u64,
-    ) -> bool {
-        self.request_pressure_maximum_resident_payload_bytes =
-            Some(pressure_maximum_resident_payload_bytes);
-        self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
-    }
-
-    /// Freezes retention at zero after a prefill memory recovery, evicting
-    /// every retained table now. The freeze holds until a chunk has measured
-    /// the real workspace or decode begins. Returns whether any table was
-    /// released.
-    pub fn freeze_for_prefill_memory_recovery(&mut self) -> bool {
-        self.is_frozen_for_prefill_memory_recovery = true;
-        self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
-    }
-
-    /// Lifts the prefill memory-recovery freeze. Returns whether one was set.
-    pub fn lift_prefill_memory_recovery_freeze(&mut self) -> bool {
-        std::mem::replace(&mut self.is_frozen_for_prefill_memory_recovery, false)
-    }
-
-    pub fn resume_after_request_pressure(&mut self) -> bool {
-        self.request_pressure_maximum_resident_payload_bytes
-            .take()
-            .is_some()
-    }
-
     #[must_use]
     pub fn statistics(&self) -> ExpertWeightMemoryCacheStatistics {
         let occupied_layer_count = self
@@ -63,7 +24,7 @@ impl WarmExpertSlotTableCache {
         ExpertWeightMemoryCacheStatistics {
             entry_count: total_expert_count,
             resident_payload_byte_count: self.resident_payload_bytes,
-            maximum_resident_payload_byte_count: self.effective_maximum_resident_payload_bytes(),
+            maximum_resident_payload_byte_count: self.capacity_bytes,
             eviction_count: self.eviction_count,
             disk_page_load_count: self.disk_page_load_count,
             disk_batch_load_count: self.disk_batch_load_count,
@@ -77,23 +38,10 @@ impl WarmExpertSlotTableCache {
         }
     }
 
-    /// Returns the plan-composed long-lived ceiling (without any request-
-    /// pressure override). Hot-expert warming must respect this too: the
-    /// composer already subtracted activation workspace, context reserve, and
-    /// the stream slot from the active ceiling when composing it.
+    /// How many bytes of experts the cache may keep.
     #[must_use]
-    pub(crate) fn normal_maximum_resident_payload_bytes(&self) -> u64 {
-        self.normal_maximum_resident_payload_bytes
-    }
-
-    /// Payload of tables that already hold every expert of their decoder index.
-    #[must_use]
-    pub(crate) fn complete_layer_payload_bytes(&self, expert_capacity: usize) -> u64 {
-        self.topology_snapshot(expert_capacity)
-            .iter()
-            .filter(|residency| residency.class == RetainedExpertPageClass::StableCompleteLayer)
-            .map(|residency| residency.payload_bytes)
-            .fold(0_u64, u64::saturating_add)
+    pub(crate) const fn capacity_bytes(&self) -> u64 {
+        self.capacity_bytes
     }
 
     pub(crate) fn append_resident_array_references<'weights>(
@@ -108,7 +56,7 @@ impl WarmExpertSlotTableCache {
     pub(super) fn can_admit(&self, new_payload_bytes: u64) -> bool {
         self.resident_payload_bytes
             .saturating_add(new_payload_bytes)
-            <= self.effective_maximum_resident_payload_bytes()
+            <= self.capacity_bytes
     }
 
     fn evict_least_used_table(&mut self) -> bool {
@@ -143,16 +91,16 @@ impl WarmExpertSlotTableCache {
         self.remove_layer(layer_index)
     }
 
-    pub(super) fn reclaim_to_effective_ceiling(&mut self) -> RetainedExpertReclamation {
+    pub(super) fn trim_to_capacity(&mut self) -> RetainedExpertReclamation {
         let mut released_bytes = 0_u64;
         let mut released_count = 0_usize;
         tracing::debug!(
             resident_payload_bytes = self.resident_payload_bytes,
-            effective_maximum = self.effective_maximum_resident_payload_bytes(),
+            capacity_bytes = self.capacity_bytes,
             table_count = self.tables_by_layer.iter().filter(|t| t.is_some()).count(),
-            "reclaim_to_effective_ceiling starting"
+            "trim_to_capacity starting"
         );
-        while self.resident_payload_bytes > self.effective_maximum_resident_payload_bytes() {
+        while self.resident_payload_bytes > self.capacity_bytes {
             let before = self.resident_payload_bytes;
             if !self.evict_least_used_table() {
                 break;
@@ -167,7 +115,7 @@ impl WarmExpertSlotTableCache {
                 released_bytes,
                 resident_payload_bytes = self.resident_payload_bytes,
                 table_count = self.tables_by_layer.iter().filter(|t| t.is_some()).count(),
-                "reclaim_to_effective_ceiling evicted tables"
+                "trim_to_capacity evicted tables"
             );
         }
         RetainedExpertReclamation {
@@ -176,32 +124,5 @@ impl WarmExpertSlotTableCache {
             released_complete_layer_count: 0,
             released_complete_payload_bytes: 0,
         }
-    }
-
-    pub(super) fn effective_maximum_resident_payload_bytes(&self) -> u64 {
-        effective_retained_expert_ceiling_bytes(
-            self.is_frozen_for_prefill_memory_recovery,
-            self.request_pressure_maximum_resident_payload_bytes,
-            self.normal_maximum_resident_payload_bytes,
-        )
-    }
-}
-
-/// Pure: the retained-expert ceiling in force. The prefill memory-recovery
-/// freeze outranks every other cap; otherwise a request-pressure override
-/// replaces the normal ceiling.
-const fn effective_retained_expert_ceiling_bytes(
-    is_frozen_for_prefill_memory_recovery: bool,
-    request_pressure_maximum_resident_payload_bytes: Option<u64>,
-    normal_maximum_resident_payload_bytes: u64,
-) -> u64 {
-    if is_frozen_for_prefill_memory_recovery {
-        return 0;
-    }
-    match request_pressure_maximum_resident_payload_bytes {
-        Some(request_pressure_maximum_resident_payload_bytes) => {
-            request_pressure_maximum_resident_payload_bytes
-        }
-        None => normal_maximum_resident_payload_bytes,
     }
 }

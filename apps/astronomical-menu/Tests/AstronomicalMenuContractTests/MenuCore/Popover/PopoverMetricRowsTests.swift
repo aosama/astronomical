@@ -24,6 +24,16 @@ final class PopoverMetricRowsTests: XCTestCase {
       """)
   }
 
+  private func layerProgressStatus(
+    processedTokens: UInt32, totalTokens: UInt32, completedLayers: UInt32, totalLayers: UInt32,
+    elapsedMilliseconds: UInt64 = 1000
+  ) throws -> DaemonStatusDocument {
+    try statusDocument(
+      """
+      {"status":"ready","activity":"prompt_processing","ready_model_id":"Ornith-9B","progress":{"phase":"target","processed_tokens":\(processedTokens),"total_tokens":\(totalTokens),"elapsed_ms":\(elapsedMilliseconds),"completed_layers":\(completedLayers),"total_layers":\(totalLayers)}}
+      """)
+  }
+
   private func imageStatus(phase: String) throws -> DaemonStatusDocument {
     try statusDocument(
       """
@@ -65,6 +75,43 @@ final class PopoverMetricRowsTests: XCTestCase {
     XCTAssertTrue(longPrefill.showsProgressBar)
     XCTAssertEqual(longPrefill.progressTitle, "55% · 54321 / 98765 tokens")
     assertOneMetricLineTall(longPrefill)
+  }
+
+  func test_should_follow_layers_and_show_only_the_total_while_a_prompt_is_read_layer_by_layer()
+    throws
+  {
+    let layerByLayer = try layerProgressStatus(
+      processedTokens: 0, totalTokens: 98_765, completedLayers: 22, totalLayers: 40)
+    XCTAssertEqual(layerByLayer.progressTitle, "55% · 98765 tokens")
+    XCTAssertEqual(layerByLayer.progressCompletedUnitCount, 22)
+    XCTAssertEqual(layerByLayer.progressTotalUnitCount, 40)
+    XCTAssertEqual(layerByLayer.menuBarTitle, "Prompt 55%")
+    XCTAssertTrue(layerByLayer.showsProgressBar)
+    assertOneMetricLineTall(layerByLayer)
+  }
+
+  func test_should_estimate_the_time_left_from_the_layers_done() throws {
+    let halfway = try layerProgressStatus(
+      processedTokens: 0, totalTokens: 10_000, completedLayers: 10, totalLayers: 40,
+      elapsedMilliseconds: 2000)
+    XCTAssertEqual(halfway.elapsedTimeTitle, "2.0 s / 6.0 s")
+    let notStarted = try layerProgressStatus(
+      processedTokens: 0, totalTokens: 10_000, completedLayers: 0, totalLayers: 40)
+    XCTAssertEqual(notStarted.elapsedTimeTitle, "1.0 s / Calculating")
+    XCTAssertEqual(notStarted.progressTitle, "0% · 10000 tokens")
+  }
+
+  func test_should_count_tokens_again_once_the_last_layer_has_read_them() throws {
+    let finished = try layerProgressStatus(
+      processedTokens: 10_000, totalTokens: 10_000, completedLayers: 40, totalLayers: 40)
+    XCTAssertEqual(finished.progressTitle, "100% · 10000 / 10000 tokens")
+    XCTAssertEqual(finished.progressCompletedUnitCount, 10_000)
+  }
+
+  func test_should_ignore_a_layer_count_of_zero() throws {
+    let noLayers = try layerProgressStatus(
+      processedTokens: 500, totalTokens: 1_000, completedLayers: 0, totalLayers: 0)
+    XCTAssertEqual(noLayers.progressTitle, "50% · 500 / 1000 tokens")
   }
 
   func test_should_truncate_rather_than_wrap_a_title_wider_than_the_row() throws {

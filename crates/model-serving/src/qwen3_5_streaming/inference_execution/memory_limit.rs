@@ -39,8 +39,7 @@ impl Qwen3_5EngineState {
             ));
         };
         let mlx_memory_snapshot_before_adjustment = model
-            .runtime()
-            .memory_snapshot()
+            .memory_snapshot_with_forward_peak()
             .map_err(super::qwen3_5_runtime_error)?;
         let expert_memory_mode_before_adjustment = model.expert_memory_mode();
         let adjustment_started_at = Instant::now();
@@ -56,8 +55,7 @@ impl Qwen3_5EngineState {
         self.memory_limits = updated_mlx_memory_limits;
 
         let mlx_memory_snapshot_after_adjustment = model
-            .runtime()
-            .memory_snapshot()
+            .memory_snapshot_with_forward_peak()
             .map_err(super::qwen3_5_runtime_error)?;
         let (active_memory_bytes, allocator_cache_memory_bytes, peak_memory_bytes) =
             snapshot_memory_triple(&mlx_memory_snapshot_after_adjustment)?;

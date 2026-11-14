@@ -26,7 +26,7 @@ use serial_test::serial;
 fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let routed_expert_set_by_token: [Vec<usize>; 8] = [
         vec![1, 2],
         vec![2, 3],
@@ -92,7 +92,7 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
     // (a retired table or a fill source) towers over the CPU allocator's
     // per-array size-class rounding this suite-mode assertion must tolerate.
     let mut cache = WarmExpertSlotTableCache::new(1);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     // Other suite tests share the process-global runtime; sample this test's
     // own baseline after settling the allocator so only its allocations count.
     // The stream sync is mandatory: a committed Metal command buffer captures

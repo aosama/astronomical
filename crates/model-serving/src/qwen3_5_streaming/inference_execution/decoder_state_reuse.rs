@@ -208,7 +208,6 @@ impl Qwen3_5EngineState {
             complete_block_count,
             performance_attribution,
         )?;
-        model.resume_expert_retention_after_request_memory_pressure();
         Ok(last_restored_persistent_prompt_cache_block_key)
     }
 

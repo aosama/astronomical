@@ -1,12 +1,6 @@
-use crate::{InferenceEngineError, PagedForwardAdmissionDecision, Qwen3_5ExecutionError};
-
-use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
+use crate::{InferenceEngineError, Qwen3_5ExecutionError};
 
 pub(super) enum PromptPrefillChunkAttemptError {
-    AdaptiveMemoryLimitExceeded {
-        decision: PagedForwardAdmissionDecision,
-        reason: String,
-    },
     ActiveMemoryLimitExceeded {
         active_memory_bytes: usize,
         attempted_allocation_bytes: usize,
@@ -21,29 +15,6 @@ pub(super) enum PromptPrefillChunkAttemptError {
 impl From<InferenceEngineError> for PromptPrefillChunkAttemptError {
     fn from(inference_engine_error: InferenceEngineError) -> Self {
         Self::Engine(inference_engine_error)
-    }
-}
-
-impl From<AdaptiveRamGrowthMemoryAdmissionError> for PromptPrefillChunkAttemptError {
-    fn from(admission_error: AdaptiveRamGrowthMemoryAdmissionError) -> Self {
-        match admission_error {
-            AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
-                decision: decision @ PagedForwardAdmissionDecision::Reject { .. },
-                reason,
-            } => Self::AdaptiveMemoryLimitExceeded { decision, reason },
-            AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission { decision, reason } => {
-                Self::Engine(
-                    crate::qwen3_5_streaming::model::memory_admission::invalid_request_error(
-                        format!(
-                            "unexpected paged forward admission decision {decision:?}: {reason}"
-                        ),
-                    ),
-                )
-            }
-            AdaptiveRamGrowthMemoryAdmissionError::Engine(inference_engine_error) => {
-                Self::Engine(inference_engine_error)
-            }
-        }
     }
 }
 

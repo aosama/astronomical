@@ -2,6 +2,7 @@ mod cold_file_cache;
 mod compact_prefill;
 mod decode_residency_attribution;
 mod decode_retention;
+mod failed_span_redo;
 mod no_replay;
 mod paged_decode;
 mod paged_prefill_chunk_attribution;

@@ -18,8 +18,9 @@
 //!    error).
 //! 2. During prompt processing, the status endpoint reports at least two
 //!    distinct `active_memory_bytes` values in the `mlx_memory_snapshot`.
-//! 3. At least one snapshot is observed with `processed_tokens` >= 2,000
-//!    during prompt processing.
+//! 3. At least one snapshot is observed with the prompt at least 40% read
+//!    during prompt processing: by layers finished when the prompt is read
+//!    one layer at a time, and by tokens otherwise.
 //! 4. The snapshot source during prompt processing is `"prefill"`.
 //! 5. Peak memory stays within the 32 GB ceiling plus a 1% tolerance.
 
@@ -47,7 +48,8 @@ const PROMPT_TOKEN_COUNT: usize = 5_000;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 256;
 const THINKING_BUDGET_TOKEN_COUNT: u32 = 128;
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
-const MINIMUM_PROCESSED_TOKENS_FOR_PROGRESS: u64 = 2_000;
+/// 2,000 of the 5,000 prompt tokens, in thousandths of the prompt.
+const MINIMUM_PROMPT_PROGRESS_PERMILLE: u64 = 400;
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
@@ -129,15 +131,14 @@ async fn run_mlx_memory_progress_rest_journey() {
         memory_progress_evidence.prefill_active_memory_bytes
     );
     // Acceptance criterion 3: at least one snapshot observed during prompt
-    // processing shows processed_tokens >= 2,000. This proves the bar
+    // processing shows the prompt at least 40% read. This proves the bar
     // updates while the model is actively processing a meaningful portion of
     // the prompt, not just at the start.
-    let maximum_observed_prefill_tokens = memory_progress_evidence
-        .maximum_prefill_processed_tokens
-        .unwrap_or(0);
+    let furthest_prompt_progress_permille =
+        memory_progress_evidence.furthest_prompt_progress_permille;
     assert!(
-        maximum_observed_prefill_tokens >= MINIMUM_PROCESSED_TOKENS_FOR_PROGRESS,
-        "at least one prefill snapshot should report >= {MINIMUM_PROCESSED_TOKENS_FOR_PROGRESS} processed tokens, but the maximum observed was {maximum_observed_prefill_tokens}"
+        furthest_prompt_progress_permille >= MINIMUM_PROMPT_PROGRESS_PERMILLE,
+        "at least one prefill snapshot should show the prompt >= {MINIMUM_PROMPT_PROGRESS_PERMILLE} thousandths read, but the furthest observed was {furthest_prompt_progress_permille}"
     );
     // Acceptance criterion 4: the snapshot source during prompt processing is
     // "prefill". This confirms the bar attribution comes from the correct
@@ -166,18 +167,34 @@ async fn run_mlx_memory_progress_rest_journey() {
         "[mlx-memory-progress] status=success prompt_tokens={PROMPT_TOKEN_COUNT} \
          maximum_mlx_memory_bytes={MAXIMUM_MLX_MEMORY_BYTES} \
          prefill_observation_count={observed_prefill_memory_updates} \
-         maximum_prefill_tokens={maximum_observed_prefill_tokens} \
+         furthest_prompt_progress_permille={furthest_prompt_progress_permille} \
          peak_active_memory_bytes={peak_memory_bytes} \
          output_characters={}",
         completed_stream.model_text.len(),
     );
 }
 
+/// How far a prompt has been read, in thousandths: layers finished when the
+/// engine reads it one layer at a time, tokens read otherwise.
+fn prompt_progress_permille(progress_document: &serde_json::Value) -> u64 {
+    let total_layers = progress_document["total_layers"].as_u64().unwrap_or(0);
+    if total_layers > 0 {
+        let completed_layers = progress_document["completed_layers"].as_u64().unwrap_or(0);
+        return completed_layers * 1_000 / total_layers;
+    }
+    let total_tokens = progress_document["total_tokens"].as_u64().unwrap_or(0);
+    if total_tokens == 0 {
+        return 0;
+    }
+    progress_document["processed_tokens"].as_u64().unwrap_or(0) * 1_000 / total_tokens
+}
+
 struct MlxMemoryProgressEvidence {
     /// Active-memory bytes from each prefill snapshot, in observation order.
     prefill_active_memory_bytes: Vec<u64>,
-    /// Maximum processed_tokens seen during prompt_processing activity.
-    maximum_prefill_processed_tokens: Option<u64>,
+    /// How far the prompt was read in the furthest prefill snapshot, in
+    /// thousandths.
+    furthest_prompt_progress_permille: u64,
     /// Whether at least one snapshot had source "prefill".
     observed_prefill_source: bool,
     /// Highest active_memory_bytes seen across all observations.
@@ -190,7 +207,7 @@ async fn observe_mlx_memory_progress(
     let deadline = Instant::now() + SSD_JOURNEY_TIMEOUT;
     let mut observed_active_request = false;
     let mut prefill_active_memory_bytes: Vec<u64> = Vec::new();
-    let mut maximum_prefill_processed_tokens: Option<u64> = None;
+    let mut furthest_prompt_progress_permille = 0_u64;
     let mut observed_prefill_source = false;
     let mut peak_active_memory_bytes: Option<u64> = None;
     let mut last_status_log_at = Instant::now() - STATUS_LOG_INTERVAL;
@@ -209,9 +226,6 @@ async fn observe_mlx_memory_progress(
             let active_memory_bytes = status_document["mlx_memory_snapshot"]["active_memory_bytes"]
                 .as_u64()
                 .unwrap_or(0);
-            let processed_tokens = status_document["progress"]["processed_tokens"]
-                .as_u64()
-                .unwrap_or(0);
             if snapshot_source == "prefill" {
                 crate::support::memory_utilization_parity::assert_status_memory_ceiling_utilization_closes(
                     &status_document,
@@ -222,10 +236,8 @@ async fn observe_mlx_memory_progress(
                 if active_memory_bytes > current_peak {
                     peak_active_memory_bytes = Some(active_memory_bytes);
                 }
-                let current_max = maximum_prefill_processed_tokens.unwrap_or(0);
-                if processed_tokens > current_max {
-                    maximum_prefill_processed_tokens = Some(processed_tokens);
-                }
+                furthest_prompt_progress_permille = furthest_prompt_progress_permille
+                    .max(prompt_progress_permille(&status_document["progress"]));
             }
         }
         // Also track the decode phase for peak memory.
@@ -261,7 +273,7 @@ async fn observe_mlx_memory_progress(
             }
             return MlxMemoryProgressEvidence {
                 prefill_active_memory_bytes,
-                maximum_prefill_processed_tokens,
+                furthest_prompt_progress_permille,
                 observed_prefill_source,
                 peak_active_memory_bytes,
             };

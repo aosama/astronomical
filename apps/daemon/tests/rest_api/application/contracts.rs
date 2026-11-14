@@ -408,6 +408,7 @@ async fn should_report_completed_prefill_chunk_tokens_for_prompt_processing_prog
         elapsed_millis: 0,
         request_started_at: tokio::time::Instant::now(),
         completed_prefill_chunk_tokens: Some(2_048),
+        prompt_layer_progress: None,
     });
     let application = build_application(executor);
     let response = application
@@ -435,6 +436,44 @@ async fn should_report_completed_prefill_chunk_tokens_for_prompt_processing_prog
 }
 
 #[tokio::test]
+async fn should_report_layers_done_while_a_prompt_is_read_one_layer_at_a_time() {
+    let mut executor = ScriptedExecutor::ready(Vec::new());
+    executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
+    executor.health_snapshot.active_request_progress = Some(ActiveRequestProgress::Prefill {
+        prompt_processing_phase: astronomical_ipc_protocol::WorkerPromptProcessingPhase::Target,
+        processed_tokens: 0,
+        total_tokens: 10_240,
+        elapsed_millis: 0,
+        request_started_at: tokio::time::Instant::now(),
+        completed_prefill_chunk_tokens: None,
+        prompt_layer_progress: Some(astronomical_ipc_protocol::WorkerPromptLayerProgress {
+            completed_layer_count: 22,
+            layer_count: 40,
+        }),
+    });
+    let application = build_application(executor);
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the status request should be valid"),
+        )
+        .await
+        .expect("the application should return a response");
+    let status_body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("the status body should be readable");
+    let status_document: serde_json::Value =
+        serde_json::from_slice(&status_body).expect("the status body should contain JSON");
+
+    assert_eq!(status_document["progress"]["processed_tokens"], 0);
+    assert_eq!(status_document["progress"]["total_tokens"], 10_240);
+    assert_eq!(status_document["progress"]["completed_layers"], 22);
+    assert_eq!(status_document["progress"]["total_layers"], 40);
+}
+
+#[tokio::test]
 async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement() {
     let mut executor = ScriptedExecutor::ready(Vec::new());
     executor.health_snapshot.activity = WorkerActivity::PromptProcessing;
@@ -445,6 +484,7 @@ async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement
         elapsed_millis: 0,
         request_started_at: tokio::time::Instant::now(),
         completed_prefill_chunk_tokens: None,
+        prompt_layer_progress: None,
     });
     let application = build_application(executor);
     let response = application
@@ -469,4 +509,10 @@ async fn should_omit_completed_prefill_chunk_tokens_before_the_first_measurement
             .is_none(),
         "initial progress must not claim a chunk size before the engine measures one"
     );
+    assert!(
+        status_document["progress"]
+            .get("completed_layers")
+            .is_none()
+    );
+    assert!(status_document["progress"].get("total_layers").is_none());
 }

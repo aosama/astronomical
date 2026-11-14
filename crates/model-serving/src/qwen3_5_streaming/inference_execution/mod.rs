@@ -5,13 +5,14 @@ mod context_memory_admission;
 mod decode_expert_memory_handoff;
 mod decoder_state_reuse;
 pub(crate) mod engine_request;
+pub(in crate::qwen3_5_streaming) mod forward_memory_baseline;
 pub(in crate::qwen3_5_streaming) mod generated_token_emission;
 mod generation_finalization;
 mod generation_request_validation;
 mod initial_context_memory_admission;
 mod inject_input_tokens;
+mod layer_at_a_time_prefill;
 pub(crate) mod layer_major_span_plan;
-pub(in crate::qwen3_5_streaming) mod memory_admission;
 mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
@@ -20,11 +21,8 @@ mod persistent_prompt_cache_visual_identity;
 mod prefill_advance;
 mod prefill_chunk_planning;
 mod prefill_execution_context;
-mod prefill_expert_refill;
 mod prefill_forward_dispatch;
-mod prefill_memory_admission;
 mod prefill_memory_recovery;
-mod prefill_staging_yield;
 mod prompt_cache_capture_engine;
 mod prompt_prefill;
 mod prompt_prefill_errors;
@@ -229,6 +227,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             maximum_position_count,
             hard_maximum_position_count,
             model: None,
+            prompt_span_to_fail_once_for_tests: None,
             persistent_prompt_cache_model_contract: None,
             persistent_visual_embedding_model_contract: None,
             persistent_prompt_cache: None,
@@ -268,6 +267,9 @@ pub struct Qwen3_5InferenceExecution {
     /// above is advisory and advertised unchanged.
     hard_maximum_position_count: usize,
     pub(crate) model: Option<Qwen3_5Model>,
+    /// A span, as (layer, span), that the next layer-at-a-time prompt fails
+    /// once on purpose; set only by a test.
+    pub(super) prompt_span_to_fail_once_for_tests: Option<(usize, usize)>,
     pub(crate) persistent_prompt_cache_model_contract: Option<PersistentPromptCacheModelContract>,
     pub(crate) persistent_visual_embedding_model_contract:
         Option<PersistentVisualEmbeddingModelContract>,

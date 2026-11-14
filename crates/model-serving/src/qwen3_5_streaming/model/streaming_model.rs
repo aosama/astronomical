@@ -60,10 +60,9 @@ pub struct Qwen3_5StreamingModel {
             crate::qwen3_5_streaming::model::expert_layer_working_memory_probe::ProbedPromptLayerWorkingMemory,
         >,
     >,
-    /// The memory ledger watching this model, opened at the first completed
-    /// forward (issue #2221). It decides nothing yet.
-    pub(crate) memory_ledger_observer:
-        RefCell<Option<astronomical_memory_policy::ledger::LedgerObserver>>,
+    /// The memory governor and what this engine holds from it (issue
+    /// #2221).
+    pub(crate) governed_memory: crate::qwen3_5_streaming::model::memory_governance::GovernedMemory,
     /// Decode route capture for the expert-predictor program: lazy pending
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation: RefCell<RouteObservationCollector>,
@@ -114,6 +113,43 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
         // Named explicitly: method syntax would fall through to the base's
         // count, which includes the streamed layers, if this were renamed.
         Qwen3_5StreamingModel::resident_model_payload_byte_count(self)
+    }
+
+    fn request_ram_budget_snapshot(
+        &self,
+        phase: crate::MemoryPhase,
+        context_token_count: u64,
+        operation_token_count: u64,
+    ) -> crate::memory::MlxRamBudgetSnapshot {
+        match self.governed_ram_budget_snapshot(self.held_expert_payload_bytes()) {
+            Some(governed_budget_snapshot) => governed_budget_snapshot,
+            None => self.base.mlx_ram_budget.borrow().plan(
+                phase,
+                context_token_count,
+                operation_token_count,
+                0,
+            ),
+        }
+    }
+
+    fn between_request_ram_budget_snapshot(
+        &self,
+        live_context_state_payload_bytes: u64,
+    ) -> crate::memory::MlxRamBudgetSnapshot {
+        match self.governed_ram_budget_snapshot(self.held_expert_payload_bytes()) {
+            Some(governed_budget_snapshot) => governed_budget_snapshot,
+            None => self
+                .base
+                .mlx_ram_budget
+                .borrow()
+                .plan_holding_live_context_state(
+                    crate::MemoryPhase::Decode,
+                    0,
+                    1,
+                    0,
+                    live_context_state_payload_bytes,
+                ),
+        }
     }
 }
 
@@ -166,45 +202,6 @@ impl Qwen3_5StreamingModel {
         self.retained_experts
             .as_ref()
             .is_some_and(|retained_experts| retained_experts.borrow_mut().remove_layer(layer_index))
-    }
-
-    /// Returns phase-correct sparse loading workspace for forward admission.
-    pub(crate) fn expert_page_reservation_bytes_for_forward(
-        &self,
-        forward_token_count: usize,
-    ) -> Result<u64, Qwen3_5ExecutionError> {
-        let Some(expert_pager) = self.expert_pager.as_ref() else {
-            return Ok(0);
-        };
-        if forward_token_count > 1 {
-            // Multi-token forwards stream the chunk's routed-expert union,
-            // whose size is bounded by the assignment count (chunk tokens ×
-            // experts per token) clamped to the expert capacity — never the
-            // complete layer. Router output is lazy at admission time, so the
-            // bound stands in for the actual union (issue #1422).
-            //
-            // No multi-layer multiplication, safety factors, or caps here.
-            // Colibri reserves nothing: its expert cache is one cap that the
-            // cache itself enforces, and an expert already resident simply
-            // stops costing admission. Our equivalent levers are the warm
-            // cache's own ceiling reclamation and the PreserveComplete rule
-            // that stops seated layers from re-charging the budget — both
-            // measured working. Inflating this reservation to model the tape
-            // only made admission evict the very tables residency had seated
-            // (the 2026-10-24 oscillation: resident layers 10 → 9 → 8 across
-            // chunks while ~19.6 GB of the paid ceiling sat unused).
-            return Ok(expert_pager.maximum_routed_expert_page_bytes(
-                forward_token_count
-                    .saturating_mul(usize::try_from(self.config.experts_per_token()).unwrap_or(1)),
-                true,
-            )?);
-        }
-        // One decode token: with the fused kernel the page is never decoded,
-        // so the reservation is its packed source bytes.
-        Ok(expert_pager.maximum_routed_expert_page_bytes(
-            usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX),
-            !expert_pager.decode_tokens_multiply_packed_pages(),
-        )?)
     }
 
     /// Executes one prompt chunk, injecting visual embeddings at image_pad positions.

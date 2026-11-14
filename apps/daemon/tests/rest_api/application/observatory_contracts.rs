@@ -77,6 +77,7 @@ async fn should_expose_prefill_progress_with_processed_and_total_tokens_when_act
         elapsed_millis: 800,
         request_started_at: Instant::now(),
         completed_prefill_chunk_tokens: Some(1_024),
+        prompt_layer_progress: None,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
     let response = application
@@ -116,6 +117,7 @@ async fn should_advance_live_prefill_elapsed_time_before_the_first_completed_for
         elapsed_millis: 0,
         request_started_at: Instant::now() - Duration::from_millis(250),
         completed_prefill_chunk_tokens: None,
+        prompt_layer_progress: None,
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
 

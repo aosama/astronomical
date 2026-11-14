@@ -6,8 +6,12 @@
 //! any way those change the arithmetic shows up here. Each question is asked twice,
 //! because a second ask reuses whatever the first left behind.
 //!
-//! Two questions, because each catches what the other cannot:
+//! Three questions, because each catches what the others cannot:
 //! - a long prompt answered greedily, where the top token has to survive paging;
+//! - a prompt of three spans, read one layer at a time, whose first paged ask has one
+//!   span fail the way MLX reports a span it could not fit. The engine must run that
+//!   span again, once, keep most of what it had in memory, and give the same answer
+//!   (issue #2221);
 //! - a short prompt answered with a fixed seed. A seeded draw flips on logit changes far
 //!   smaller than greedy ever sees, and a short prompt is one prefill chunk small enough
 //!   that MLX picks its quantized expert kernel by the size of the page it is handed
@@ -31,6 +35,9 @@ use astronomical_runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
 use tokio::{process::Command, time::timeout};
 
+use super::failed_span_redo::{
+    RedoCost, arm_span_failure, assert_one_span_was_redone_cheaply, redo_cost_since,
+};
 use crate::serving_acceptance::support::performance_attribution::{
     GenerationSampling, counter_amount, create_attributed_engine, generation_report_for_request,
     load_engine_with_progress, read_attribution_report_documents, run_generation_with_sampling,
@@ -53,6 +60,8 @@ struct ParityQuestion {
     generation_sampling: GenerationSampling,
     first_request_id: RequestId,
     second_request_id: RequestId,
+    /// The span, as (layer, span), the first paged ask fails once on purpose.
+    span_to_fail_once: Option<(usize, usize)>,
 }
 
 const LONG_GREEDY_QUESTION: ParityQuestion = ParityQuestion {
@@ -61,6 +70,18 @@ const LONG_GREEDY_QUESTION: ParityQuestion = ParityQuestion {
     generation_sampling: GenerationSampling::Greedy,
     first_request_id: RequestId::new(96_200),
     second_request_id: RequestId::new(96_201),
+    span_to_fail_once: None,
+};
+
+/// Three spans of the prefill chunk. The second span of the third layer fails, which
+/// puts that layer back to its first span because that one was not confirmed yet.
+const REDONE_SPAN_QUESTION: ParityQuestion = ParityQuestion {
+    name: "three_span_greedy_with_a_redone_span",
+    prompt_token_count: 2_560,
+    generation_sampling: GenerationSampling::Greedy,
+    first_request_id: RequestId::new(96_204),
+    second_request_id: RequestId::new(96_205),
+    span_to_fail_once: Some((2, 1)),
 };
 
 /// 48 tokens route 384 assignments, under four per expert of a 256-expert layer.
@@ -70,9 +91,14 @@ const SHORT_SEEDED_QUESTION: ParityQuestion = ParityQuestion {
     generation_sampling: GenerationSampling::Seeded,
     first_request_id: RequestId::new(96_202),
     second_request_id: RequestId::new(96_203),
+    span_to_fail_once: None,
 };
 
-const PARITY_QUESTIONS: [ParityQuestion; 2] = [LONG_GREEDY_QUESTION, SHORT_SEEDED_QUESTION];
+const PARITY_QUESTIONS: [ParityQuestion; 3] = [
+    LONG_GREEDY_QUESTION,
+    SHORT_SEEDED_QUESTION,
+    REDONE_SPAN_QUESTION,
+];
 
 /// The first and second answer to one question.
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -247,8 +273,40 @@ async fn ask_paged_twice(
     }
 }
 
+/// Asks one question twice. A question that names a span to fail has that span fail on
+/// its first ask, and what running it again cost is returned with the answers.
+async fn ask_paged_twice_counting_redos(
+    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    question: ParityQuestion,
+    prompt_token_ids: &[u32],
+    end_of_sequence_token_ids: &[u32],
+) -> (AnswerPair, Option<RedoCost>) {
+    let Some(span_to_fail_once) = question.span_to_fail_once else {
+        let answer_pair = ask_paged_twice(
+            qwen3_5_engine,
+            question,
+            prompt_token_ids,
+            end_of_sequence_token_ids,
+        )
+        .await;
+        return (answer_pair, None);
+    };
+    let redo_baseline = arm_span_failure(qwen3_5_engine, span_to_fail_once).await;
+    let answer_pair = ask_paged_twice(
+        qwen3_5_engine,
+        question,
+        prompt_token_ids,
+        end_of_sequence_token_ids,
+    )
+    .await;
+    let redo_cost = redo_cost_since(qwen3_5_engine, redo_baseline).await;
+    (answer_pair, Some(redo_cost))
+}
+
 struct PagedRun {
     answer_pairs: Vec<AnswerPair>,
+    /// What the question that fails a span cost.
+    redo_cost: Option<RedoCost>,
     first_expert_bytes_read: u64,
     expert_memory_mode: Option<ExpertMemoryMode>,
 }
@@ -274,17 +332,17 @@ async fn ask_paged(model_directory: &Path, ceiling_bytes: u64) -> PagedRun {
         .await
         .expect("the loaded model should expose its expert mode");
     let mut answer_pairs = Vec::with_capacity(PARITY_QUESTIONS.len());
+    let mut redo_cost = None;
     for question in PARITY_QUESTIONS {
-        let prompt_token_ids = parity_prompt_token_ids(model_directory, question);
-        answer_pairs.push(
-            ask_paged_twice(
-                &mut qwen3_5_engine,
-                question,
-                &prompt_token_ids,
-                &end_of_sequence_token_ids,
-            )
-            .await,
-        );
+        let (answer_pair, question_redo_cost) = ask_paged_twice_counting_redos(
+            &mut qwen3_5_engine,
+            question,
+            &parity_prompt_token_ids(model_directory, question),
+            &end_of_sequence_token_ids,
+        )
+        .await;
+        answer_pairs.push(answer_pair);
+        redo_cost = redo_cost.or(question_redo_cost);
     }
     let attribution_documents = read_attribution_report_documents(&attribution_log_path);
     let first_report = generation_report_for_request(
@@ -293,6 +351,7 @@ async fn ask_paged(model_directory: &Path, ceiling_bytes: u64) -> PagedRun {
     );
     PagedRun {
         answer_pairs,
+        redo_cost,
         first_expert_bytes_read: counter_amount(first_report, "positional_file_read_byte_count"),
         expert_memory_mode,
     }
@@ -469,7 +528,17 @@ async fn prove_paging_keeps_the_answer(paging_depth: PagingDepth, depth_name: &s
         );
         assert_question_parity(question, resident_answer_pair, paged_answer_pair);
     }
-    eprintln!("[paged-resident-parity] status=success depth={depth_name}");
+    let redo_cost = paged_run
+        .redo_cost
+        .as_ref()
+        .expect("one question fails a span on purpose");
+    assert_one_span_was_redone_cheaply(redo_cost, depth_name);
+    eprintln!(
+        "[paged-resident-parity] status=success depth={depth_name} redone_spans={} kept_expert_gb_before={:.2} kept_expert_gb_after={:.2}",
+        redo_cost.redo_attempt_count,
+        redo_cost.kept_expert_bytes_before as f64 / 1e9,
+        redo_cost.kept_expert_bytes_after as f64 / 1e9,
+    );
 }
 
 /// Not a journey of its own: the parity journeys run this in a child process and read

@@ -29,10 +29,7 @@ pub use model::{
     Qwen3_5TargetForwardOutput as Qwen3_5StreamingTargetForwardOutput,
 };
 #[cfg(feature = "direct-mlx")]
-pub(crate) use model::{
-    PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
-    reclaim_retained_payload_for_request_memory_pressure,
-};
+pub(crate) use model::{PagedForwardMissingRouteCollector, PagedRouteValidationOutcome};
 #[cfg(feature = "direct-mlx")]
 pub use model::{
     Qwen3_5MoECachedPlusStreamedPageRoute, Qwen3_5MoEPagedExecutionMode,

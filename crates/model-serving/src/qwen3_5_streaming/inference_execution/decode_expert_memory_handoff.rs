@@ -1,20 +1,22 @@
 //! Prepares pager-backed expert retention for decode after prompt prefill.
 //!
-//! Prefill can temporarily cap retained pages to protect prompt-processing
-//! headroom. Leaving that request-scoped cap in place would prevent decode from
-//! using its available memory to retain routed experts. Reconciliation is
-//! best-effort because missing routes remain correct through operation-local
-//! streaming.
+//! Entering the reply phase is one event for the memory governor: a reply
+//! step needs far less working memory than a prompt step, so the expert
+//! cache's capacity rises (issue #2221). This file then fills that capacity:
+//! whole layers the plan chose, and hot-expert slots on the layers left.
+//! Filling is best-effort because missing routes remain correct through
+//! operation-local streaming.
 
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase, PerformanceOperation};
+use crate::{InferenceEngineError, MemoryPhase, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5EngineState {
-    /// Reconciles retained ownership with the leftover ceiling after prefill.
+    /// Tells the memory governor the reply begins, then fills the capacity
+    /// it answers with.
     ///
     /// Call this exactly once, after the last prefill chunk has synchronized and
     /// cleaned allocator storage, and before the first decode forward. The
@@ -29,21 +31,7 @@ impl Qwen3_5EngineState {
                 "Qwen3.5 engine lost its loaded model",
             ));
         };
-        // Prefill pressure protects the remaining prompt by installing a
-        // temporary retained-page ceiling. That cap must die here. Decode uses
-        // a smaller activation footprint, so the leftover composed budget is
-        // the user's real grant again. Leaving the cap in place was the bug
-        // that kept generation at about one gigabyte of experts.
-        let resumed_after_prefill_memory_pressure =
-            model.resume_expert_retention_after_request_memory_pressure();
-        // Decode's small footprint ends the prefill memory-recovery freeze.
-        model.lift_prefill_memory_recovery_freeze();
-        if resumed_after_prefill_memory_pressure {
-            tracing::info!(
-                request_id = request_id.value(),
-                "released prefill request-pressure expert retention ceiling before decode"
-            );
-        }
+        model.govern_reply_start();
         let context_token_count =
             u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
         let residency_preparation_result =
@@ -52,8 +40,6 @@ impl Qwen3_5EngineState {
                 |performance_attribution| {
                     model.refresh_phase_aware_expert_residency_plan(
                         MemoryPhase::GenerationPreparation,
-                        context_token_count,
-                        1,
                         performance_attribution,
                     )
                 },
@@ -74,15 +60,10 @@ impl Qwen3_5EngineState {
         // The warm floor must survive seating, so seating is capped to the
         // budget the floor leaves free BEFORE any layer streams: otherwise
         // the handoff streams complete layers it immediately evicts below.
-        let complete_layer_indexes_to_seat = if self.adaptive_ram_growth_guard_enabled {
-            cap_complete_layer_seating_to_decode_warm_floor(
-                &self.adaptive_ram_growth_guard,
-                model,
-                &planned_complete_layer_indexes_to_seat,
-            )
-        } else {
-            planned_complete_layer_indexes_to_seat.clone()
-        };
+        let complete_layer_indexes_to_seat = cap_complete_layer_seating_to_decode_warm_floor(
+            model,
+            &planned_complete_layer_indexes_to_seat,
+        );
         match model.seat_complete_layers_before_decode(
             &complete_layer_indexes_to_seat,
             &mut active_request.performance_attribution,
@@ -119,23 +100,17 @@ impl Qwen3_5EngineState {
             resident_expert_payload_bytes = expert_statistics.resident_payload_byte_count,
             "generation preparation seated leftover complete layers before decode"
         );
-        let hot_expert_warm_slot_count = if self.adaptive_ram_growth_guard_enabled {
-            // Complete-layer seating may have consumed the retained budget
-            // before warm tables were sized; enforce the distributed floor
-            // first so the slot count below sees a budget that can actually
-            // warm every unseated layer (issue #373's mixed serving depends
-            // on nonzero tables to matter at all).
-            enforce_decode_warm_slot_floor(
-                request_id,
-                &self.adaptive_ram_growth_guard,
-                model,
-                usize::try_from(model.config.experts_per_token()).unwrap_or(1),
-            );
-            let expert_statistics = model.expert_weight_memory_cache_statistics();
-            decode_warm_slot_count(&self.adaptive_ram_growth_guard, model, expert_statistics)
-        } else {
-            0
-        };
+        // Complete-layer seating may have used the capacity before the hot
+        // tables were sized; enforce the distributed floor first so the slot
+        // count below sees room that can warm every unseated layer (issue
+        // #373's mixed serving depends on nonzero tables to matter at all).
+        enforce_decode_warm_slot_floor(
+            request_id,
+            model,
+            usize::try_from(model.config.experts_per_token()).unwrap_or(1),
+        );
+        let hot_expert_warm_slot_count =
+            decode_warm_slot_count(model, model.expert_weight_memory_cache_statistics());
         model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
         tracing::info!(
             request_id = request_id.value(),
@@ -146,31 +121,23 @@ impl Qwen3_5EngineState {
     }
 }
 
-/// Sizes the hot-expert warm tables from the adaptive growth guard's
-/// current headroom (issue #372, resized per decode step for issue #512).
+/// Sizes the hot-expert tables from the room the cache has left (issue
+/// #372).
 ///
-/// The memory left after current active ownership, the phase's learned
-/// transients, and one routed page, divided across the sparse layers that
-/// warming may cover. Rich machines warm at the full policy capacity;
-/// memory-tight machines warm narrower or not at all, because on them the
-/// warm tables would compete with the paging machinery for the same bytes
-/// and the eviction/re-stream cycle is net-negative.
+/// The cache's capacity for the reply phase, less what it already keeps,
+/// divided across the sparse layers the tables may cover. With room to
+/// spare the tables run at the full policy size; with little they run
+/// narrower or not at all, because tables that do not fit would only be
+/// evicted and read again.
 ///
-/// Issue #512: this runs at the decode handoff AND on every decode step.
-/// Sizing only at the handoff froze the warm tables at the first request's
-/// conservative fallback reserve, because no decode-phase transient
-/// evidence exists before the first decode token; decode forwards then
-/// proved their transients are small, but the frozen slot count kept the
-/// warm tables churning at a few experts per layer while entitlement sat
-/// unclaimed. Resizing as evidence accumulates lets warming grow into the
-/// entitlement the guard's decode evidence supports.
+/// This runs at the reply's start and after every reply step, so the tables
+/// follow the capacity as the governor's reply-step measurement settles
+/// (issue #512).
 pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
-    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     model: &Qwen3_5Model,
     expert_statistics: crate::ExpertWeightMemoryCacheStatistics,
 ) -> usize {
-    let warm_budget_bytes =
-        decode_warm_budget_bytes_from_snapshot(adaptive_ram_growth_guard, model, expert_statistics);
+    let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
     let Some(layer_geometry) = decode_warm_layer_geometry(model) else {
         return 0;
     };
@@ -182,8 +149,8 @@ pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
     let unseated_sparse_layer_count = layer_geometry
         .sparse_layer_count
         .saturating_sub(complete_layer_count);
-    // The warm capacity scales down to what the guard's headroom affords
-    // across the unseated layers; zero disables warming.
+    // The warm capacity scales down to what the room left in the cache
+    // affords across the unseated layers; zero disables warming.
     let budget_affordable_capacity = budget_affordable_slot_count(
         warm_budget_bytes,
         layer_geometry.per_expert_payload_bytes,
@@ -261,59 +228,18 @@ fn budget_affordable_slot_count(
     usize::try_from(affordable_slots).unwrap_or(usize::MAX)
 }
 
-/// The warm budget under the tighter of the guard's and the plan's ceilings.
+/// What the cache may still take in: the capacity the memory governor set
+/// for the reply phase, less what the cache already keeps.
 ///
-/// Shared by the warm-slot floor enforcement and the slot-count sizing so
-/// both decisions see byte-identical headroom for one memory snapshot.
+/// Every sizing decision in this file reads the room through this one
+/// function, so they agree.
 fn decode_warm_budget_bytes(
-    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
-    model: &Qwen3_5Model,
-    active_memory_bytes: usize,
-    resident_payload_byte_count: u64,
-) -> u64 {
-    let routed_expert_page_reservation_bytes = model
-        .expert_page_reservation_bytes_for_forward(1)
-        .unwrap_or(u64::MAX);
-    let warm_retention_ceiling_bytes = adaptive_ram_growth_guard
-        .hot_expert_retention_ceiling_bytes(
-            // GenerationPreparation budgets like decode (see
-            // memory/budget/phase.rs), and the forwards warming reserves
-            // for are decode forwards, so the decode phase's own learned
-            // workspace is the right reserve basis here too.
-            crate::MemoryPhase::Decode,
-            active_memory_bytes,
-            resident_payload_byte_count,
-            usize::try_from(routed_expert_page_reservation_bytes).unwrap_or(usize::MAX),
-        );
-    // The plan-composed ceiling already subtracted the composer's
-    // activation workspace and context reserve; the warm budget is what
-    // remains under the tighter of the two ceilings.
-    let plan_retained_ceiling_bytes = model.retained_expert_normal_ceiling_bytes();
-    warm_retention_ceiling_bytes
-        .min(plan_retained_ceiling_bytes)
-        .saturating_sub(resident_payload_byte_count)
-}
-
-/// The warm budget read from the live memory snapshot, or zero when no
-/// snapshot is available.
-///
-/// Every warm-sizing decision in this file reads the budget through this
-/// one door so they see byte-identical headroom for one snapshot and none
-/// of them silently invents a different missing-snapshot fallback.
-fn decode_warm_budget_bytes_from_snapshot(
-    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     model: &Qwen3_5Model,
     expert_statistics: crate::ExpertWeightMemoryCacheStatistics,
 ) -> u64 {
-    let Ok(memory_snapshot) = model.runtime().memory_snapshot() else {
-        return 0;
-    };
-    decode_warm_budget_bytes(
-        adaptive_ram_growth_guard,
-        model,
-        memory_snapshot.active_memory_bytes(),
-        expert_statistics.resident_payload_byte_count,
-    )
+    model
+        .kept_expert_capacity_bytes()
+        .saturating_sub(expert_statistics.resident_payload_byte_count)
 }
 
 /// Evicts the coldest complete layers until the warm budget can seat the
@@ -331,7 +257,6 @@ fn decode_warm_budget_bytes_from_snapshot(
 /// actually routes to seated the longest.
 fn enforce_decode_warm_slot_floor(
     request_id: RequestId,
-    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     model: &Qwen3_5Model,
     experts_per_token: usize,
 ) {
@@ -345,8 +270,7 @@ fn enforce_decode_warm_slot_floor(
         return;
     }
     let expert_statistics = model.expert_weight_memory_cache_statistics();
-    let warm_budget_bytes =
-        decode_warm_budget_bytes_from_snapshot(adaptive_ram_growth_guard, model, expert_statistics);
+    let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
     let retained_topology_snapshot = match model.retained_experts.as_ref() {
         Some(retained_experts) => retained_experts
             .borrow()
@@ -383,7 +307,6 @@ fn enforce_decode_warm_slot_floor(
 /// residency plan's later refreshes can still seat them if decode evidence
 /// ever frees the budget.
 fn cap_complete_layer_seating_to_decode_warm_floor(
-    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     model: &Qwen3_5Model,
     planned_complete_layer_indexes_to_seat: &[usize],
 ) -> Vec<usize> {
@@ -412,8 +335,7 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
                 )
             });
     let expert_statistics = model.expert_weight_memory_cache_statistics();
-    let warm_budget_bytes =
-        decode_warm_budget_bytes_from_snapshot(adaptive_ram_growth_guard, model, expert_statistics);
+    let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
     crate::memory::decode_seating::complete_layers_within_decode_warm_budget(
         &geometries,
         &current_residencies,

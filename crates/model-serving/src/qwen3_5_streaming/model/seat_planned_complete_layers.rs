@@ -104,23 +104,6 @@ impl DecodeExpertSeating for ModelDecodeExpertSeating<'_> {
 }
 
 impl Qwen3_5Model {
-    /// Bytes already held as complete layers. Decode leftover publication floors
-    /// here so a poisoned activation measurement cannot evict pages this request
-    /// already paid to read.
-    pub(crate) fn seated_complete_layer_payload_bytes(&self) -> u64 {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
-            return 0;
-        };
-        let expert_capacity = self
-            .expert_pager
-            .as_ref()
-            .and_then(|expert_pager| expert_pager.layer_plans().first())
-            .map_or(0, |layer_plan| layer_plan.expert_capacity);
-        retained_experts
-            .borrow()
-            .complete_layer_payload_bytes(expert_capacity)
-    }
-
     /// Evaluates seated complete-layer weights so the next MLX snapshot includes
     /// them. Decode handoff seating adopts lazy pages; without this eval the first
     /// generate token materializes those pages, admission records them as

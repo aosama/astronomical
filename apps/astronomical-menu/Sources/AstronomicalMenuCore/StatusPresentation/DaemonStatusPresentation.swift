@@ -147,6 +147,11 @@ extension DaemonStatusDocument {
       }
       return tokenCountTitle
     }
+    // A prompt read one layer at a time has no finished tokens to count until its last layer, so
+    // the title shows how far the layers have got and how long the prompt is.
+    if progress.isCountedInLayers {
+      return "\(progress.completionPercentageTitle) · \(progress.totalUnitCount) tokens"
+    }
     let tokenCountTitle = "\(progress.completedUnitCount) / \(progress.totalUnitCount) tokens"
     return "\(progress.completionPercentageTitle) · \(tokenCountTitle)"
   }
@@ -167,6 +172,14 @@ extension DaemonStatusDocument {
       && progress.phase != "generation_preparation"
     else {
       return String(format: "%.1f s", elapsedSeconds)
+    }
+    if progress.isCountedInLayers {
+      let completionFraction = progress.completionFraction
+      guard completionFraction > 0 else {
+        return String(format: "%.1f s / Calculating", elapsedSeconds)
+      }
+      let estimatedRemainingSeconds = elapsedSeconds * (1 - completionFraction) / completionFraction
+      return String(format: "%.1f s / %.1f s", elapsedSeconds, estimatedRemainingSeconds)
     }
     guard progress.completedUnitCount > 0 else {
       return String(format: "%.1f s / Calculating", elapsedSeconds)
@@ -198,10 +211,16 @@ extension DaemonStatusDocument {
 
   var progressCompletedUnitCount: UInt32 {
     guard let progress else { return 0 }
+    if progress.isCountedInLayers, let completedLayerCount = progress.completedLayerCount {
+      return completedLayerCount
+    }
     return progress.completedUnitCount
   }
   var progressTotalUnitCount: UInt32 {
     guard let progress else { return 1 }
+    if progress.isCountedInLayers, let totalLayerCount = progress.totalLayerCount {
+      return max(1, totalLayerCount)
+    }
     return max(1, progress.totalUnitCount)
   }
 

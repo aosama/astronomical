@@ -72,12 +72,77 @@ async fn assert_checkpoint_parity() {
         &qwen3_5_config,
         &prompt_token_ids,
     );
+    assert_parity_after_a_span_is_run_again(
+        &streaming_model,
+        &qwen3_5_config,
+        &prompt_token_ids,
+        &streamed_boundaries,
+    );
     assert_parity_with_planned_layers_kept(
         &streaming_model,
         &qwen3_5_config,
         &prompt_token_ids,
         &streamed_boundaries,
     );
+}
+
+/// A span that fails is run again and nothing before it is (issue #2221).
+///
+/// The engine redoes a span MLX could not fit. Here a span is failed on
+/// purpose after it is submitted: once the second span of an early layer,
+/// which puts the layer back to its first span because that one was not
+/// confirmed yet, and once the first span of the last layer. Either way the
+/// published state must be the undisturbed prefill's bit for bit, and the
+/// only experts read twice are the failed layer's.
+fn assert_parity_after_a_span_is_run_again(
+    streaming_model: &Qwen3_5StreamingModel,
+    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    prompt_token_ids: &[u32],
+    streamed_boundaries: &PublishedBoundaries,
+) {
+    let layer_count = qwen3_5_config.layer_count() as usize;
+    let experts_read_without_a_failure =
+        u64::from(qwen3_5_config.layer_count()) * u64::from(qwen3_5_config.expert_count());
+    for (failed_layer_index, failed_span_index) in [(1, 1), (layer_count - 1, 0)] {
+        let expert_reads = ExpertReadCount::starting(streaming_model);
+        let (redone_boundaries, redone_span_count) = streaming_model
+            .prefill_layer_major_redoing_failed_spans(
+                prompt_token_ids,
+                CHUNK_TOKEN_COUNT,
+                BLOCK_TOKEN_COUNT,
+                Some((failed_layer_index, failed_span_index)),
+                &mut crate::common::standard_request_decoder_state(qwen3_5_config),
+            )
+            .expect("a prefill whose failed span is run again should finish");
+        assert_eq!(
+            redone_span_count, 1,
+            "one failed span must cost one redo: layer={failed_layer_index} span={failed_span_index}"
+        );
+        assert!(
+            bit_patterns(&redone_boundaries) == bit_patterns(streamed_boundaries),
+            "running a failed span again must publish the undisturbed state bit for bit: layer={failed_layer_index} span={failed_span_index}"
+        );
+        assert_eq!(
+            expert_reads.since(streaming_model),
+            experts_read_without_a_failure + u64::from(qwen3_5_config.expert_count()),
+            "only the failed layer's experts are read again: layer={failed_layer_index} span={failed_span_index}"
+        );
+    }
+    let (undisturbed_boundaries, redone_span_count) = streaming_model
+        .prefill_layer_major_redoing_failed_spans(
+            prompt_token_ids,
+            CHUNK_TOKEN_COUNT,
+            BLOCK_TOKEN_COUNT,
+            Some((layer_count, 0)),
+            &mut crate::common::standard_request_decoder_state(qwen3_5_config),
+        )
+        .expect("a prefill with no span to fail should finish");
+    assert_eq!(
+        redone_span_count, 0,
+        "a span the prompt does not have cannot fail, so nothing is run again"
+    );
+    assert!(bit_patterns(&undisturbed_boundaries) == bit_patterns(streamed_boundaries));
+    eprintln!("[expert-layer-at-a-time-parity] progress=span-redo layers_failed=2 redone_spans=2");
 }
 
 type PublishedBoundaries = Vec<(usize, std::collections::BTreeMap<String, Vec<f32>>)>;

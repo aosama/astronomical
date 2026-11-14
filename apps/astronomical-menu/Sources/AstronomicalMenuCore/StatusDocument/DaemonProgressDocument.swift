@@ -16,6 +16,10 @@ extension DaemonStatusDocument {
     let totalUnitCount: UInt32
     let elapsedMilliseconds: UInt64
     let unit: Unit
+    /// Present while a prompt is read one layer at a time. No token is finished until the last
+    /// layer has read the whole prompt, so the daemon reports how many layers are done.
+    let completedLayerCount: UInt32?
+    let totalLayerCount: UInt32?
 
     enum CodingKeys: String, CodingKey {
       case phase
@@ -24,6 +28,8 @@ extension DaemonStatusDocument {
       case completedSteps = "completed_steps"
       case totalSteps = "total_steps"
       case elapsedMilliseconds = "elapsed_ms"
+      case completedLayers = "completed_layers"
+      case totalLayers = "total_layers"
     }
 
     init(from decoder: Decoder) throws {
@@ -35,6 +41,8 @@ extension DaemonStatusDocument {
       let totalTokens = try container.decodeIfPresent(UInt32.self, forKey: .totalTokens)
       let completedSteps = try container.decodeIfPresent(UInt32.self, forKey: .completedSteps)
       let totalSteps = try container.decodeIfPresent(UInt32.self, forKey: .totalSteps)
+      completedLayerCount = try container.decodeIfPresent(UInt32.self, forKey: .completedLayers)
+      totalLayerCount = try container.decodeIfPresent(UInt32.self, forKey: .totalLayers)
 
       switch (processedTokens, totalTokens, completedSteps, totalSteps) {
       case let (.some(completedTokenCount), .some(totalTokenCount), .none, .none):
@@ -58,6 +66,8 @@ extension DaemonStatusDocument {
       var container = encoder.container(keyedBy: CodingKeys.self)
       try container.encode(phase, forKey: .phase)
       try container.encode(elapsedMilliseconds, forKey: .elapsedMilliseconds)
+      try container.encodeIfPresent(completedLayerCount, forKey: .completedLayers)
+      try container.encodeIfPresent(totalLayerCount, forKey: .totalLayers)
       switch unit {
       case .tokens:
         try container.encode(completedUnitCount, forKey: .processedTokens)
@@ -68,12 +78,26 @@ extension DaemonStatusDocument {
       }
     }
 
+    /// Whether completion is counted in layers: the prompt's tokens are not all read yet and the
+    /// daemon reported layers. Once the last layer finishes, every token is read at once and the
+    /// token counts say so.
+    var isCountedInLayers: Bool {
+      unit == .tokens && completedUnitCount < totalUnitCount && completedLayerCount != nil
+        && (totalLayerCount ?? 0) > 0
+    }
+
+    /// Completion from 0 to 1: layers done while a prompt is read one layer at a time, units done
+    /// otherwise.
+    var completionFraction: Double {
+      if isCountedInLayers, let completedLayerCount, let totalLayerCount {
+        return Double(min(completedLayerCount, totalLayerCount)) / Double(totalLayerCount)
+      }
+      guard totalUnitCount > 0 else { return 0 }
+      return Double(min(completedUnitCount, totalUnitCount)) / Double(totalUnitCount)
+    }
+
     var completionPercentageTitle: String {
-      guard totalUnitCount > 0 else { return "0%" }
-      let boundedCompletedUnitCount = min(completedUnitCount, totalUnitCount)
-      let completionPercentage =
-        Double(boundedCompletedUnitCount) / Double(totalUnitCount) * 100
-      return "\(Int(completionPercentage.rounded(.down)))%"
+      "\(Int((completionFraction * 100).rounded(.down)))%"
     }
 
     var hasCompletedDenoising: Bool {

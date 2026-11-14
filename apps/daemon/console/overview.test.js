@@ -36,6 +36,39 @@ test("should_count_prompt_tokens_read_and_clamp_the_bar_while_reading_the_prompt
     assert.equal(nowPresentation.fillPercent, 100);
 });
 
+test("should_follow_layers_and_show_the_prompt_length_while_it_is_read_layer_by_layer", () => {
+    const scriptContext = createConsoleContext();
+    scriptContext.neuralEnginePhaseSuffix = () => "";
+    const nowPresentation = evaluate(scriptContext, "overviewNowPresentation(statusForTest)", {
+        statusForTest: { ready_model_id: "chat-model", progress: { phase: "target", processed_tokens: 0, total_tokens: 98765, elapsed_ms: 2000, completed_layers: 22, total_layers: 40 } }
+    });
+
+    assert.equal(nowPresentation.detail, "55% · 98,765 prompt tokens · 2.0 s");
+    assert.equal(nowPresentation.fillPercent, 55);
+});
+
+test("should_count_prompt_tokens_again_once_the_last_layer_has_read_them", () => {
+    const scriptContext = createConsoleContext();
+    scriptContext.neuralEnginePhaseSuffix = () => "";
+    const nowPresentation = evaluate(scriptContext, "overviewNowPresentation(statusForTest)", {
+        statusForTest: { ready_model_id: "chat-model", progress: { phase: "target", processed_tokens: 10000, total_tokens: 10000, elapsed_ms: 2000, completed_layers: 40, total_layers: 40 } }
+    });
+
+    assert.equal(nowPresentation.detail, "10,000 of 10,000 prompt tokens read · 5000 tok/s · 2.0 s");
+    assert.equal(nowPresentation.fillPercent, 100);
+});
+
+test("should_ignore_a_layer_count_of_zero_while_reading_the_prompt", () => {
+    const scriptContext = createConsoleContext();
+    scriptContext.neuralEnginePhaseSuffix = () => "";
+    const nowPresentation = evaluate(scriptContext, "overviewNowPresentation(statusForTest)", {
+        statusForTest: { ready_model_id: "chat-model", progress: { phase: "target", processed_tokens: 500, total_tokens: 1000, elapsed_ms: 1000, completed_layers: 0, total_layers: 0 } }
+    });
+
+    assert.equal(nowPresentation.detail, "500 of 1,000 prompt tokens read · 500 tok/s · 1.0 s");
+    assert.equal(nowPresentation.fillPercent, 50);
+});
+
 test("should_not_show_placeholder_tokens_while_preparing_to_write", () => {
     const nowPresentation = evaluate(createConsoleContext(), "overviewNowPresentation(statusForTest)", {
         statusForTest: { ready_model_id: "chat-model", progress: { phase: "generation_preparation", processed_tokens: 0, total_tokens: 1, elapsed_ms: 1200 } }

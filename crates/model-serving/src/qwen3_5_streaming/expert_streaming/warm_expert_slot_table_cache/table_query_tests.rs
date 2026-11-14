@@ -9,7 +9,7 @@ use serial_test::serial;
 fn should_report_route_missing_non_resident_and_occupied_experts_per_table() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(2);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights_for_expert_count(&runtime, 2);
     cache
         .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
@@ -53,7 +53,7 @@ fn should_report_real_demand_coverage_from_the_recorded_routing_evidence() {
     let mut cache = WarmExpertSlotTableCache::new(1);
     // Production ceilings are set by the residency plan refresh; the tests
     // set a generous ceiling except the budget-refusal case.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights_for_expert_count(&runtime, 2);
 
     cache
