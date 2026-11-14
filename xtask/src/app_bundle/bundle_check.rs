@@ -539,15 +539,24 @@ fn check_signatures(bundle_path: &Path, channel_profile: &ChannelProfile) -> Res
         (agent_executable.clone(), sandbox_entitlement_keys),
         (
             macos_directory.join(DAEMON_EXECUTABLE_NAME),
-            vec!["com.apple.security.inherit"],
+            INHERITED_SANDBOX_ENTITLEMENT_KEYS.to_vec(),
         ),
         (
             macos_directory.join(WORKER_EXECUTABLE_NAME),
-            vec!["com.apple.security.inherit"],
+            INHERITED_SANDBOX_ENTITLEMENT_KEYS.to_vec(),
         ),
     ])?;
     check_no_sparkle_linkage(&[application_executable, agent_executable])
 }
+
+/// What the engine and the worker must be signed with. App Store Connect
+/// refuses an executable that only inherits: validation of the first store
+/// package failed with error 90296 until both keys were present. The pair
+/// means "sandboxed, with the sandbox of the application that started me".
+const INHERITED_SANDBOX_ENTITLEMENT_KEYS: [&str; 2] = [
+    "com.apple.security.app-sandbox",
+    "com.apple.security.inherit",
+];
 
 /// Every listed executable must carry every entitlement listed with it.
 fn check_entitlements(
