@@ -62,6 +62,9 @@ pub struct MlxMemoryTelemetry {
     /// (issue #510). `None` when the owner that composes the budget split did
     /// not participate in this measurement, for example image engines.
     pub memory_ceiling_utilization: Option<MemoryCeilingUtilization>,
+    /// The memory ledger's view of the request this measurement belongs to
+    /// (issue #2221). `None` from engines the ledger does not watch yet.
+    pub memory_ledger_reading: Option<astronomical_memory_policy::ledger::LedgerReading>,
 }
 
 impl MlxMemoryTelemetry {
@@ -79,6 +82,7 @@ impl MlxMemoryTelemetry {
             active_memory_breakdown,
             expert_residency_telemetry: None,
             memory_ceiling_utilization: None,
+            memory_ledger_reading: None,
         }
     }
 
@@ -89,6 +93,17 @@ impl MlxMemoryTelemetry {
         memory_ceiling_utilization: MemoryCeilingUtilization,
     ) -> Self {
         self.memory_ceiling_utilization = Some(memory_ceiling_utilization);
+        self
+    }
+
+    /// Attaches the memory ledger's latest reading, when the ledger watches
+    /// the engine that took this measurement.
+    #[must_use]
+    pub const fn with_memory_ledger_reading(
+        mut self,
+        memory_ledger_reading: Option<astronomical_memory_policy::ledger::LedgerReading>,
+    ) -> Self {
+        self.memory_ledger_reading = memory_ledger_reading;
         self
     }
 

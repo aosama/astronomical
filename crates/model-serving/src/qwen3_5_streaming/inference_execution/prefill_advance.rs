@@ -692,5 +692,6 @@ fn prefill_mlx_memory_telemetry_from_snapshot(
         chunk_token_count,
         active_memory_bytes,
         active_memory_breakdown,
-    )))
+    ))
+    .with_memory_ledger_reading(model.latest_memory_ledger_reading()))
 }

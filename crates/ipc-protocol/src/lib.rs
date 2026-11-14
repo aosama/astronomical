@@ -103,8 +103,8 @@ pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, RequestId, WorkerCommand,
     WorkerDenseLayerResidency, WorkerEvent, WorkerExpertLayerTopology,
     WorkerExpertResidencySnapshot, WorkerExpertStreamingStats,
-    WorkerMemoryCeilingUtilizationSnapshot, WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase,
-    WorkerPromptWorkReuse,
+    WorkerMemoryCeilingUtilizationSnapshot, WorkerMemoryLedgerSnapshot, WorkerMlxMemorySnapshot,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;

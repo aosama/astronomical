@@ -136,6 +136,24 @@ struct StreamingScoreboardRow {
     measured_reply_storage_read_bytes: Option<u64>,
     unexplained_headroom_bytes: u64,
     owner_overrun_bytes: u64,
+    /// What the memory ledger saw over the measured request; `None` from a
+    /// worker whose engine the ledger does not watch.
+    memory_ledger: Option<LedgerScoreboardReading>,
+}
+
+/// The memory ledger's worst readings over the measured request, and the
+/// accounts it ended with.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+struct LedgerScoreboardReading {
+    observed_step_count: u64,
+    largest_unaccounted_bytes: u64,
+    largest_overcounted_bytes: u64,
+    largest_kept_over_capacity_bytes: u64,
+    largest_reading_step_peak_beyond_held_bytes: u64,
+    largest_writing_step_peak_beyond_held_bytes: u64,
+    lowest_kept_share_while_reading_permille: Option<u32>,
+    working_memory_bytes: u64,
+    kept_weight_capacity_bytes: u64,
 }
 
 async fn run_scoreboard_cell(model_id: &str, limit_gibibytes: u64) {
@@ -227,7 +245,32 @@ fn compose_scoreboard_row(
         measured_reply_storage_read_bytes: storage_reads.map(|reads| reads.reply_read_bytes),
         unexplained_headroom_bytes: memory_reading.unexplained_headroom_bytes,
         owner_overrun_bytes: memory_reading.owner_overrun_bytes,
+        memory_ledger: ledger_scoreboard_reading(final_health),
     }
+}
+
+fn ledger_scoreboard_reading(
+    final_health: &WorkerHealthSnapshot,
+) -> Option<LedgerScoreboardReading> {
+    let ledger_snapshot = final_health
+        .latest_mlx_memory_snapshot
+        .as_ref()?
+        .memory_ledger
+        .as_ref()?;
+    Some(LedgerScoreboardReading {
+        observed_step_count: ledger_snapshot.observed_step_count,
+        largest_unaccounted_bytes: ledger_snapshot.largest_unaccounted_bytes,
+        largest_overcounted_bytes: ledger_snapshot.largest_overcounted_bytes,
+        largest_kept_over_capacity_bytes: ledger_snapshot.largest_kept_over_capacity_bytes,
+        largest_reading_step_peak_beyond_held_bytes: ledger_snapshot
+            .largest_reading_step_peak_beyond_held_bytes,
+        largest_writing_step_peak_beyond_held_bytes: ledger_snapshot
+            .largest_writing_step_peak_beyond_held_bytes,
+        lowest_kept_share_while_reading_permille: ledger_snapshot
+            .lowest_kept_share_while_reading_permille,
+        working_memory_bytes: ledger_snapshot.working_memory_bytes,
+        kept_weight_capacity_bytes: ledger_snapshot.kept_weight_capacity_bytes,
+    })
 }
 
 /// The memory figures of the worker's last published MLX snapshot; all zero

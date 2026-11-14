@@ -138,10 +138,7 @@ impl Qwen3_5Model {
             query_normalization_scale_weight,
             key_normalization_scale_weight,
         } = load_invariant_linear_scales(&runtime, &config)?;
-        let StreamingExpertBudgetOutcome {
-            mlx_ram_budget,
-            fused_jangtq2_gathered_projection_kernel,
-        } = build_streaming_expert_budget(
+        let streaming_expert_budget = build_streaming_expert_budget(
             &runtime,
             &config,
             &weights,
@@ -160,7 +157,7 @@ impl Qwen3_5Model {
                 weights,
                 disk_embedding_rows,
                 vision_model,
-                mlx_ram_budget: RefCell::new(mlx_ram_budget),
+                mlx_ram_budget: RefCell::new(streaming_expert_budget.mlx_ram_budget),
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
@@ -187,7 +184,9 @@ impl Qwen3_5Model {
                 crate::qwen3_5_streaming::PagedForwardMissingRouteCollector,
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
             request_expert_storage_read_tally: Default::default(),
-            fused_jangtq2_gathered_projection_kernel,
+            memory_ledger_observer: RefCell::new(None),
+            fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
+                .fused_jangtq2_gathered_projection_kernel,
         })
     }
 }

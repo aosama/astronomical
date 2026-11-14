@@ -122,6 +122,7 @@ where
                         model_core_payload_bytes: 0,
                         context_state_payload_bytes: 0,
                         memory_ceiling_utilization: None,
+                        memory_ledger: None,
                     }),
                 })
                 .await?;
@@ -367,6 +368,7 @@ where
                 model_core_payload_bytes: 96_000_000,
                 context_state_payload_bytes: 0,
                 memory_ceiling_utilization: None,
+                memory_ledger: None,
             }),
         })
         .await

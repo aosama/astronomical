@@ -20,6 +20,7 @@ use astronomical_runtime_integration::MlxMemorySnapshot;
 
 use crate::qwen3_5_streaming::model;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
+use crate::qwen3_5_streaming::model::memory_ledger_observation::CompletedForwardMemoryReadings;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
@@ -153,6 +154,20 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
         );
         model::record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
     }
+    model.observe_completed_forward_in_memory_ledger(CompletedForwardMemoryReadings {
+        memory_phase: adaptive_ram_growth_context.memory_phase(),
+        forward_token_count: adaptive_ram_growth_context.forward_token_count(),
+        context_token_count: request_context_extent.context_token_count,
+        live_context_state_payload_bytes: request_context_extent.live_context_state_payload_bytes,
+        active_bytes_before_forward: u64::try_from(active_memory_bytes_before_growth)
+            .unwrap_or(u64::MAX),
+        active_bytes_after_forward: u64::try_from(
+            memory_snapshot_after_growth.active_memory_bytes(),
+        )
+        .unwrap_or(u64::MAX),
+        peak_bytes_during_forward: u64::try_from(memory_snapshot_after_growth.peak_memory_bytes())
+            .unwrap_or(u64::MAX),
+    });
     Ok(CompletedForwardMemoryObservation {
         mlx_memory_snapshot: memory_snapshot_after_growth,
     })

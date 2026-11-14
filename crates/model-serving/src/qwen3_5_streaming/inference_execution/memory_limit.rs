@@ -192,7 +192,8 @@ fn adjustment_telemetry(
             active_memory_bytes,
             active_memory_breakdown,
         ),
-    );
+    )
+    .with_memory_ledger_reading(model.latest_memory_ledger_reading());
     (expert_residency, mlx_memory_telemetry)
 }
 

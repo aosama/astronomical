@@ -19,11 +19,14 @@
 //! - `accounts` — the accounts at one instant and the rule that composes them.
 //! - `memory_ledger` — the owner: the events that change the accounts.
 //! - `reconciliation` — the ledger compared with what MLX reports.
+//! - `observation` — the ledger watching an engine that still decides for
+//!   itself.
 
 pub mod accounts;
 pub mod lease;
 pub mod memory_ledger;
 pub mod model_shape;
+pub mod observation;
 pub mod phase;
 pub mod reconciliation;
 pub mod working_memory;
@@ -32,6 +35,7 @@ pub use accounts::LedgerAccounts;
 pub use lease::{LeaseId, LeasePurpose};
 pub use memory_ledger::{MemoryLedger, MemoryLedgerError};
 pub use model_shape::ModelMemoryShape;
+pub use observation::{LedgerObserver, LedgerReading, ObservedStep};
 pub use phase::LedgerPhase;
 pub use reconciliation::{HeldMemory, LedgerReconciliation};
 pub use working_memory::{WorkingMemoryMeasurements, WorkingMemoryReserve};
