@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { assertFocusOn, assertNoElement, waitFor } from "./support/dom";
 import { ENGINE_PATIENCE } from "../src/astro/EngineWatch";
-import { bootJourney, MET_ASTRO_PROFILE, sendUserMessage, waitUntilReady } from "./support/journey";
+import { bootJourney, MET_ASTRO_PROFILE, OWN_STATE_DIRECTORY, sendUserMessage, waitUntilReady } from "./support/journey";
 import type { Journey } from "./support/journey";
 
 // The get-started journey and Astro's home, driven the way a person would: through the
@@ -367,6 +367,31 @@ test("should_offer_a_restart_when_the_engine_never_starts_and_wait_again", async
     await waitForStep("engineStarting");
     daemon.modelsUnreachable = false;
     await waitForStep("download");
+  } finally {
+    Object.assign(ENGINE_PATIENCE, savedPatience);
+  }
+});
+
+test("should_tell_a_newcomer_another_copy_is_running_and_go_on_once_it_quits", async () => {
+  const savedPatience = { ...ENGINE_PATIENCE };
+  ENGINE_PATIENCE.askEveryMilliseconds = 10;
+  // Long enough that only the engine's own answer can end the wait: the
+  // screen must not sit on "Starting up" until patience runs out.
+  ENGINE_PATIENCE.silentAfterMilliseconds = 60_000;
+  try {
+    // The other install's engine answers on the shared address and already
+    // has a chat model, which must not be read as this app's.
+    const { daemon, host } = bootNewcomer({ canRestartEngine: true, engineStateDirectory: "~/.astronomical" });
+    await getStarted();
+    await waitForStep("engineSilent");
+    assert.equal(document.querySelector(".get-started__headline")?.textContent, "Astronomical is already running");
+    assert.match(astroSays(), /Another copy of Astronomical is already running on this Mac/);
+    assert.equal(element("astro-engine-retry").textContent, "Try again", "restarting this app's engine cannot free the address");
+    assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing is downloaded into the other copy");
+    daemon.reportedStateDirectory = OWN_STATE_DIRECTORY;
+    element<HTMLButtonElement>("astro-engine-retry").click();
+    assert.equal(host.receivedActions.some((action) => action["action"] === "restartEngine"), false);
+    await waitFor(() => overlay().hidden, "the journey to finish with this app's own chat model");
   } finally {
     Object.assign(ENGINE_PATIENCE, savedPatience);
   }

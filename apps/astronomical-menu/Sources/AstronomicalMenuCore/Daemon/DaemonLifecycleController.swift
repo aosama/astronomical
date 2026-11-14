@@ -134,6 +134,7 @@ enum DaemonLifecycleError: LocalizedError {
   case bundledDaemonUnavailable
   case unownedDaemonDidNotStop
   case existingDaemonNotReady(String)
+  case anotherCopyIsRunning
   case daemonExitedBeforeReady(String, String?)
   case readinessTimedOut(String)
 
@@ -145,6 +146,11 @@ enum DaemonLifecycleError: LocalizedError {
       return "The bundled server executable is unavailable"
     case .unownedDaemonDidNotStop:
       return "The existing server did not stop; quit it and retry"
+    case .anotherCopyIsRunning:
+      // Written for someone who installed both the direct download and the
+      // App Store version and does not know they share one local address.
+      return
+        "Another copy of Astronomical is already running on this Mac, and only one can run at a time. Quit the other one, and this one starts by itself"
     case let .existingDaemonNotReady(configurationFileLabel):
       return "A server is running but is not ready with the effective configuration. Check or reveal \(configurationFileLabel), then retry"
     case let .daemonExitedBeforeReady(configurationFileLabel, failureExplanation):
@@ -256,6 +262,12 @@ final class DaemonLifecycleController {
   }
 
   func restartDaemon() async throws -> String {
+    // Restart stops whatever answers on the address first. Another install's
+    // engine is not this app's to stop, and the person pressing Restart is
+    // owed the reason in plain words rather than a refused shutdown.
+    if await daemonClient.anotherInstallIsAnswering() {
+      throw DaemonLifecycleError.anotherCopyIsRunning
+    }
     if await daemonClient.healthIsAvailable() {
       try await daemonClient.requestShutdown()
       for _ in 0..<unownedDaemonStopPollCount where await daemonClient.healthIsAvailable() {
@@ -388,6 +400,11 @@ final class DaemonLifecycleController {
     let readinessDeadline = readinessClock.now.advanced(by: readinessTimeout)
     while readinessClock.now < readinessDeadline {
       if await daemonClient.expectedInstanceIsHealthy() { return }
+      // Another install's engine never becomes this app's, so the wait ends
+      // at once with the reason instead of running out the readiness budget.
+      if await daemonClient.anotherInstallIsAnswering() {
+        throw DaemonLifecycleError.anotherCopyIsRunning
+      }
       try await Task.sleep(for: readinessPollInterval)
     }
     if await daemonClient.expectedInstanceIsHealthy() { return }

@@ -1,4 +1,5 @@
 import { makeButton, makeElement, setSiblingsInert } from "./AstroDom";
+import { OTHER_COPY_RUNNING_NOTICE } from "../OtherCopyAnsweredError";
 import type { AstroLibrary } from "./AstroLibrary";
 import { AstroMoment, astroLine } from "./AstroLines";
 import { ChatModelDownloadPanel } from "./ChatModelDownloadPanel";
@@ -154,10 +155,23 @@ export class GetStartedView {
     this.controls.append(waitingDots, note);
     const silenceTimer = setTimeout(() => this.advance(() => this.journey.engineStayedSilent()), ENGINE_PATIENCE.silentAfterMilliseconds);
     this.openPanels.push({ dispose: () => clearTimeout(silenceTimer) });
-    void this.engineWatch.ask();
+    void this.engineWatch.ask().then(() => this.stopWaitingOnAnotherCopy());
+  }
+
+  /** Another copy's engine will not become this app's by waiting, so the
+   * screen says so at once and does not sit on "Starting up" for the whole
+   * patience of a slow start. */
+  private stopWaitingOnAnotherCopy(): void {
+    if (this.engineWatch.otherCopyIsRunning && this.journey.step === GetStartedStep.ENGINE_STARTING) {
+      this.advance(() => this.journey.engineStayedSilent());
+    }
   }
 
   private renderEngineSilent(): void {
+    if (this.engineWatch.otherCopyIsRunning) {
+      this.renderOtherCopyRunning();
+      return;
+    }
     this.say("The engine didn't start", AstroMoment.ENGINE_WONT_START);
     const restartEngine = this.restartEngine;
     const retryButton = makeButton(this.document, "astro-engine-retry", restartEngine !== null ? "Restart the engine" : "Try again", false);
@@ -169,6 +183,20 @@ export class GetStartedView {
     skipButton.addEventListener("click", () => this.skip());
     const statusNote = makeElement(this.document, "p", "astro-screen__note", "The local server on this Mac didn't answer. The Astronomical icon in the menu bar shows its status.");
     this.controls.append(this.actionRow(retryButton, skipButton), statusNote);
+  }
+
+  /** Two installs share one local address. Restarting this app's engine
+   * cannot help while the other copy holds it, so the screen offers only to
+   * look again. */
+  private renderOtherCopyRunning(): void {
+    this.headline.textContent = "Astronomical is already running";
+    this.line.textContent = OTHER_COPY_RUNNING_NOTICE;
+    const retryButton = makeButton(this.document, "astro-engine-retry", "Try again", false);
+    retryButton.addEventListener("click", () => this.advance(() => this.journey.retryEngine()));
+    const skipButton = makeButton(this.document, "astro-skip", "Skip for now", true);
+    skipButton.addEventListener("click", () => this.skip());
+    const whichCopyNote = makeElement(this.document, "p", "astro-screen__note", "This happens when both the direct download and the App Store version are installed. Keep whichever you prefer; they do not share models or chats.");
+    this.controls.append(this.actionRow(retryButton, skipButton), whichCopyNote);
   }
 
   private renderDownload(): void {

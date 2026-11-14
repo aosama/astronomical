@@ -95,7 +95,7 @@ test("should_show_the_failure_notice_instead_of_a_transcript_when_the_handshake_
   await waitFor(() => {
     const notice = document.querySelector<HTMLElement>("#empty-state-notice");
     const noticeText: string | null | undefined = notice?.textContent;
-    return (noticeText != null ? noticeText : "").includes("runtime channel");
+    return (noticeText != null ? noticeText : "").includes("Another copy of Astronomical is already running");
   }, "the failure notice to appear");
   assert.equal(host.fileCount(), 0, "no session is written when the daemon is unreachable");
 }, { timeout: 30_000 });

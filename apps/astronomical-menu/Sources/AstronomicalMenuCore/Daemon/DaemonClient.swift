@@ -26,6 +26,22 @@ extension DaemonClient {
       && statusDocument.workerRuntimeFeatureConfigurationApplied
       && statusDocument.configuration?.isEffective == true
   }
+
+  /// Whether the engine answering on this app's address is another install's.
+  /// The direct download and the App Store version use one address and keep
+  /// their files apart, so with both installed the second to start meets the
+  /// first one's engine. That is not a failed start, and waiting for it to
+  /// become "ready" would never end.
+  func anotherInstallIsAnswering() async -> Bool {
+    do {
+      _ = try await fetchStatus()
+      return false
+    } catch let clientError as DaemonClientError {
+      return clientError.namesAnotherInstall
+    } catch {
+      return false
+    }
+  }
 }
 
 struct LocalDaemonClient: DaemonClient {
@@ -51,7 +67,8 @@ struct LocalDaemonClient: DaemonClient {
       // A menu cannot safely control a process until the process proves which
       // isolated state and endpoint contract it owns.
       throw DaemonClientError.wrongInstance(
-        expected: applicationIdentity.channel.runtimeInstanceName, connected: "unidentified")
+        expected: applicationIdentity.channel.runtimeInstanceName,
+        connected: DaemonClientError.unidentifiedInstanceLabel)
     }
     guard connectedChannel == applicationIdentity.channel.runtimeInstanceName else {
       throw DaemonClientError.wrongInstance(
@@ -213,6 +230,19 @@ enum DaemonClientError: LocalizedError {
   case serverRejected(String)
   case wrongInstance(expected: String, connected: String)
   case wrongStateDirectory(expected: String, connected: String)
+
+  /// True when an Astronomical engine answered and said it is not this
+  /// app's. An answer that names no channel is some other program on the
+  /// address, which quitting another copy of Astronomical would not fix.
+  var namesAnotherInstall: Bool {
+    switch self {
+    case let .wrongInstance(_, connected): connected != DaemonClientError.unidentifiedInstanceLabel
+    case .wrongStateDirectory: true
+    case .invalidEndpoint, .responseTooLarge, .unexpectedResponse, .serverRejected: false
+    }
+  }
+
+  static let unidentifiedInstanceLabel = "unidentified"
 
   var errorDescription: String? {
     switch self {

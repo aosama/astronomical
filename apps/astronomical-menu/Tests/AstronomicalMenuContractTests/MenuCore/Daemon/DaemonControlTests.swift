@@ -42,6 +42,83 @@ final class DaemonControlTests: XCTestCase {
   }
 
   @MainActor
+  func test_should_say_another_copy_is_running_when_its_engine_holds_the_address() async throws {
+    let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/bin/sleep")
+    defer { testContext.removeTemporaryDirectory() }
+    // The direct download's engine answers the App Store version's helper:
+    // same channel name, another folder.
+    let otherInstallClient = FixedAnswerDaemonClient(
+      statusFailure: DaemonClientError.wrongStateDirectory(
+        expected: "~/Library/Group Containers/EXAMPLE.astronomical/Astronomical",
+        connected: "~/.astronomical"),
+      isExpectedInstanceHealthy: false)
+    let daemonLifecycleController = testContext.makeController(
+      daemonClient: otherInstallClient, daemonArguments: ["30"], readinessTimeout: .seconds(30))
+    let startClock = ContinuousClock()
+    let startInstant = startClock.now
+
+    do {
+      try await daemonLifecycleController.startDaemonIfNeeded()
+      XCTFail("Another install's engine must not be accepted as this app's")
+    } catch let lifecycleError as DaemonLifecycleError {
+      guard case .anotherCopyIsRunning = lifecycleError else {
+        return XCTFail("Expected the other-copy explanation, received \(lifecycleError)")
+      }
+      XCTAssertEqual(
+        lifecycleError.errorDescription,
+        "Another copy of Astronomical is already running on this Mac, and only one can run at a time. Quit the other one, and this one starts by itself"
+      )
+    }
+    XCTAssertLessThan(
+      startInstant.duration(to: startClock.now), .seconds(10),
+      "the reason is given at once, not after the readiness budget runs out")
+    XCTAssertFalse(daemonLifecycleController.ownsDaemon, "no second engine is started against a held address")
+  }
+
+  @MainActor
+  func test_should_refuse_to_restart_over_another_copys_engine() async throws {
+    let testContext = try DaemonLifecycleTestContext(daemonExecutablePath: "/bin/sleep")
+    defer { testContext.removeTemporaryDirectory() }
+    let otherInstallClient = FixedAnswerDaemonClient(
+      statusFailure: DaemonClientError.wrongStateDirectory(expected: "a", connected: "b"),
+      isExpectedInstanceHealthy: false)
+    let daemonLifecycleController = testContext.makeController(
+      daemonClient: otherInstallClient, daemonArguments: ["30"], readinessTimeout: .milliseconds(30))
+
+    do {
+      _ = try await daemonLifecycleController.restartDaemon()
+      XCTFail("Restart must not act on another install's engine")
+    } catch let lifecycleError as DaemonLifecycleError {
+      guard case .anotherCopyIsRunning = lifecycleError else {
+        return XCTFail("Expected the other-copy explanation, received \(lifecycleError)")
+      }
+    }
+    XCTAssertFalse(daemonLifecycleController.ownsDaemon)
+  }
+
+  func test_should_name_another_install_only_when_an_astronomical_engine_said_so() {
+    XCTAssertTrue(DaemonClientError.wrongStateDirectory(expected: "a", connected: "b").namesAnotherInstall)
+    XCTAssertTrue(DaemonClientError.wrongInstance(expected: "stable", connected: "development").namesAnotherInstall)
+    XCTAssertFalse(
+      DaemonClientError.wrongInstance(
+        expected: "stable", connected: DaemonClientError.unidentifiedInstanceLabel
+      ).namesAnotherInstall,
+      "some other program on the address is not a second copy of Astronomical")
+    XCTAssertFalse(DaemonClientError.unexpectedResponse.namesAnotherInstall)
+    XCTAssertFalse(DaemonClientError.serverRejected("busy").namesAnotherInstall)
+  }
+
+  func test_should_not_report_another_install_for_this_apps_own_engine_or_a_silent_one() async {
+    let ownEngineIsAnswering = await FixedAnswerDaemonClient().anotherInstallIsAnswering()
+    let silentEngineIsAnswering = await FixedAnswerDaemonClient(
+      statusFailure: URLError(.cannotConnectToHost)
+    ).anotherInstallIsAnswering()
+
+    XCTAssertFalse(ownEngineIsAnswering)
+    XCTAssertFalse(silentEngineIsAnswering)
+  }
+
+  @MainActor
   func test_should_allow_an_existing_daemon_to_finish_starting() async throws {
     let testContext = try DaemonLifecycleTestContext(
       daemonExecutablePath: "/does-not-exist/astronomicald")

@@ -35,6 +35,11 @@ export class EngineWatch {
     this.library = library;
   }
 
+  /** Whether the engine that last answered belongs to another install. */
+  public get otherCopyIsRunning(): boolean {
+    return this.library.otherCopyIsRunning;
+  }
+
   /** True or false when the engine answers; null when it cannot be reached. */
   public async ask(): Promise<boolean | null> {
     if (this.askInFlight !== null) {

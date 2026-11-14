@@ -1,4 +1,5 @@
 import { AppConfig } from "./AppConfig";
+import { OtherCopyAnsweredError } from "./OtherCopyAnsweredError";
 import { ChatCompletionChunk } from "./ChatCompletionChunk";
 import type { ChatCompletionRequestBody } from "./ChatCompletionRequestBody";
 import type { ImageGenerationRequestBody } from "./ImageGenerationRequestBody";
@@ -65,8 +66,8 @@ export class DaemonClient {
   }
 
   /** Verifies this window is talking to the matching daemon instance,
-   * returning its status text. Throws when the endpoint answers with a
-   * different runtime channel or state directory. */
+   * returning its status text. Throws OtherCopyAnsweredError when the
+   * endpoint answers with a different runtime channel or state directory. */
   public async handshake(): Promise<string> {
     const bodyText = await this.requestText("/v1/status");
     let status: DaemonStatus;
@@ -78,7 +79,7 @@ export class DaemonClient {
     const matchesChannel = status.channel === this.config.expectedChannel;
     const matchesStateDirectory = status.stateDirectory === this.config.expectedStateDirectory;
     if (!matchesChannel || !matchesStateDirectory) {
-      throw new Error("This app must connect to its own runtime channel and state directory.");
+      throw new OtherCopyAnsweredError();
     }
     const reportedStatus = status.status;
     return reportedStatus != null ? reportedStatus : "unknown";
