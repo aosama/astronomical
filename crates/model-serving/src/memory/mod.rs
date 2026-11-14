@@ -21,8 +21,11 @@
 //!   These names are wire-visible and must never gain a second answer.
 //! - **1 lifecycle phase** — `MemoryPhase` (in `astronomical-memory-policy`,
 //!   re-exported here): `Prefill`, `GenerationPreparation`, `Decode`,
-//!   `Idle`. Budget composition treats `GenerationPreparation` as
-//!   `Decode`-equivalent; the growth guard only observes `Prefill`/`Decode`.
+//!   `Idle`. The residency planner treats `GenerationPreparation` like
+//!   `Decode`.
+//! - **1 owner of the limit** — the memory governor
+//!   (`astronomical-memory-policy::ledger`). Each engine opens one, tells
+//!   it what happens and applies the capacity it answers with.
 //! - **3 layer states** — when a reply begins, `residency` plans one
 //!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or
 //!   `Absent`. What to do about a layer follows from its state and from
@@ -33,11 +36,8 @@
 //! # The naming constitution
 //!
 //! 1. Every file answers exactly one question, via one suffix: `_admission`
-//!    (may this operation begin?), `_budget` (how many bytes does this phase
-//!    own or need?), `_reclamation` (what must yield, by how much?),
-//!    `_recovery` (what happens after an allocation failure mid-flight?),
-//!    `_telemetry` (what did the runtime measure?), `_mode` (where does
-//!    expert payload live right now?).
+//!    (may this operation begin?), `_telemetry` (what did the runtime
+//!    measure?), `_mode` (where does expert payload live right now?).
 //! 2. The `Mlx` prefix marks true MLX coupling only.
 //! 3. One lifecycle phase type (see `phase.rs`).
 //! 4. Subpackages group by concern; crate-root re-exports keep consumer paths
@@ -84,9 +84,8 @@ pub use astronomical_memory_policy::ceiling::{
     MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
 };
 pub use budget::{
-    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetModelGeometry,
-    MlxRamBudgetSnapshot, RamBudgetGeometryError,
-    mlx_ram_budget_model_geometry_from_measured_layer_facts,
+    MeasuredExpertLayerPayload, MemoryReserveSnapshot, ModelMemoryFacts, ModelMemoryFactsError,
+    ModelMemoryGeometry, ModelMemoryGeometryError, model_memory_geometry_from_measured_layer_facts,
 };
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};

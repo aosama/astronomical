@@ -210,9 +210,9 @@ fn capture_streaming_startup_residency_facts(
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<StreamingStartupResidencyFacts>, InferenceEngineError> {
     let startup_geometry_result = model_loading_performance_attribution.measure_operation(
-        PerformanceOperation::ArtifactRamBudgetGeometry,
+        PerformanceOperation::ArtifactMemoryGeometry,
         |_performance_attribution| {
-            crate::mlx_ram_budget_model_geometry_from_validated_artifact(
+            crate::model_memory_geometry_from_validated_artifact(
                 validated_artifact,
                 &engine_state.model_directory,
             )
@@ -227,15 +227,15 @@ fn capture_streaming_startup_residency_facts(
 /// none.
 fn startup_residency_facts_from_geometry(
     startup_geometry_result: Result<
-        (crate::MlxRamBudgetModelGeometry, u64),
-        crate::Qwen3_5RamBudgetGeometryError,
+        (crate::ModelMemoryGeometry, u64),
+        crate::Qwen3_5MemoryGeometryError,
     >,
     validated_artifact: &ValidatedQwen3_5Artifact,
 ) -> Result<Option<StreamingStartupResidencyFacts>, InferenceEngineError> {
     let (startup_geometry, startup_complete_residency_headroom_bytes) =
         match startup_geometry_result {
             Ok(startup_geometry) => startup_geometry,
-            Err(crate::Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => {
+            Err(crate::Qwen3_5MemoryGeometryError::NotSparseMixtureOfExperts) => {
                 return dense_startup_residency_facts(validated_artifact).map(Some);
             }
             Err(geometry_error) => {
@@ -280,7 +280,7 @@ fn with_loaded_sequence_state_rate(
     if startup_residency_facts.complete_expert_payload_bytes == 0 {
         startup_residency_facts.sequence_state_bytes_per_token = model
             .base
-            .mlx_ram_budget()
+            .memory_facts()
             .model_geometry()
             .sequence_state_bytes_per_token;
     }

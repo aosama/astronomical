@@ -6,7 +6,7 @@ use thiserror::Error;
 
 /// Immutable inputs known once a model is loaded against one ceiling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MlxRamBudgetModelGeometry {
+pub struct ModelMemoryGeometry {
     /// Non-expert resident model payload (language core, optional vision).
     pub model_core_payload_bytes: u64,
     /// Bytes required if every sparse expert is fully resident.
@@ -14,7 +14,7 @@ pub struct MlxRamBudgetModelGeometry {
     /// One complete sparse layer; reserved as the streaming workspace.
     pub largest_complete_expert_layer_bytes: u64,
     /// Largest top-K page used by one-token decode: the sound ceiling-rounded
-    /// lower bound derived from aggregate layer facts (see `budget/ram_geometry`).
+    /// lower bound derived from aggregate layer facts (see `budget/model_memory_geometry`).
     pub largest_routed_expert_page_bytes: u64,
     /// Persistent decoder-state bytes added by one more prompt token.
     pub sequence_state_bytes_per_token: u64,
@@ -22,7 +22,7 @@ pub struct MlxRamBudgetModelGeometry {
 
 /// One composed RAM split for a planned operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MlxRamBudgetSnapshot {
+pub struct MemoryReserveSnapshot {
     /// Total MLX active-memory ceiling for this plan.
     pub mlx_active_memory_ceiling_bytes: u64,
     /// Non-expert model core already charged against the ceiling.
@@ -40,7 +40,7 @@ pub struct MlxRamBudgetSnapshot {
 }
 
 /// Live measurement that refines context-window reserve and activation headroom.
-impl MlxRamBudgetSnapshot {
+impl MemoryReserveSnapshot {
     /// The memory ledger's accounts in this shape.
     ///
     /// Working memory, the margin and any lease are one reserve to a
@@ -83,9 +83,9 @@ impl MlxRamBudgetSnapshot {
     }
 }
 
-/// Invalid configuration for the RAM budget owner.
+/// A limit under which nothing can run.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum MlxRamBudgetError {
-    #[error("MLX RAM budget requires a positive active-memory ceiling")]
+pub enum ModelMemoryFactsError {
+    #[error("the MLX memory limit must be positive")]
     InvalidCeiling,
 }

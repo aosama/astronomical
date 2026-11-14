@@ -2,17 +2,17 @@
 //!
 //! Family measurement adapters read disk manifests and supply per-layer payload
 //! facts here; this module owns the byte arithmetic that turns those facts into
-//! the composed `MlxRamBudgetModelGeometry` and the startup complete-residency
+//! the composed `ModelMemoryGeometry` and the startup complete-residency
 //! headroom requirement. No artifact, SafeTensors, or family type appears here.
 
 use thiserror::Error;
 
-use super::ram_values::MlxRamBudgetModelGeometry;
+use super::memory_values::ModelMemoryGeometry;
 use crate::reclamation;
 
 /// Why RAM-budget geometry could not be composed from measured layer facts.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
-pub enum RamBudgetGeometryError {
+pub enum ModelMemoryGeometryError {
     #[error("this artifact has no sparse expert payload")]
     NotSparseMixtureOfExperts,
     #[error("expert payload accounting overflowed")]
@@ -53,23 +53,23 @@ impl MeasuredExpertLayerPayload {
 /// `complete_residency_transient_bytes` is the transient payload the measurement
 /// owner expects to coexist with complete residency (for example the largest
 /// resident gate-up fusion); it feeds the activation-headroom requirement.
-pub fn mlx_ram_budget_model_geometry_from_measured_layer_facts(
+pub fn model_memory_geometry_from_measured_layer_facts(
     measured_layer_payloads: &[MeasuredExpertLayerPayload],
     total_model_payload_bytes: u64,
     experts_per_token: usize,
     complete_residency_transient_bytes: u64,
-) -> Result<(MlxRamBudgetModelGeometry, u64), RamBudgetGeometryError> {
+) -> Result<(ModelMemoryGeometry, u64), ModelMemoryGeometryError> {
     let mut complete_expert_payload_bytes = 0_u64;
     let mut largest_complete_expert_layer_bytes = 0_u64;
     for layer_payload in measured_layer_payloads {
         complete_expert_payload_bytes = complete_expert_payload_bytes
             .checked_add(layer_payload.complete_payload_bytes)
-            .ok_or(RamBudgetGeometryError::ExpertPayloadOverflow)?;
+            .ok_or(ModelMemoryGeometryError::ExpertPayloadOverflow)?;
         largest_complete_expert_layer_bytes =
             largest_complete_expert_layer_bytes.max(layer_payload.complete_payload_bytes);
     }
     if complete_expert_payload_bytes == 0 {
-        return Err(RamBudgetGeometryError::NotSparseMixtureOfExperts);
+        return Err(ModelMemoryGeometryError::NotSparseMixtureOfExperts);
     }
     let largest_routed_expert_page_bytes =
         largest_routed_expert_page_bytes(measured_layer_payloads, experts_per_token)?;
@@ -81,7 +81,7 @@ pub fn mlx_ram_budget_model_geometry_from_measured_layer_facts(
             0,
         );
     Ok((
-        MlxRamBudgetModelGeometry {
+        ModelMemoryGeometry {
             model_core_payload_bytes,
             complete_expert_payload_bytes,
             largest_complete_expert_layer_bytes,
@@ -103,7 +103,7 @@ pub fn mlx_ram_budget_model_geometry_from_measured_layer_facts(
 fn largest_routed_expert_page_bytes(
     measured_layer_payloads: &[MeasuredExpertLayerPayload],
     experts_per_token: usize,
-) -> Result<u64, RamBudgetGeometryError> {
+) -> Result<u64, ModelMemoryGeometryError> {
     measured_layer_payloads
         .iter()
         .try_fold(0_u64, |largest_page_bytes, layer_payload| {

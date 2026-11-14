@@ -6,7 +6,7 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_model_serving::{
     CompleteResidencyHeadroomBoundary, InferenceEngine,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    model_memory_geometry_from_validated_artifact,
 };
 use tokio::time::timeout;
 
@@ -28,7 +28,7 @@ async fn should_not_claim_complete_residency_when_activation_headroom_does_not_f
             .validate(&model_directory, 20_480)
             .expect("the configured sparse artifact should validate");
         let (model_geometry, required_headroom_bytes) =
-            mlx_ram_budget_model_geometry_from_validated_artifact(
+            model_memory_geometry_from_validated_artifact(
                 &validated_artifact,
                 &model_directory,
             )

@@ -1,13 +1,14 @@
 //! REST acceptance: the follow-up-turn admission journey on the paged large
 //! sparse MoE streaming model.
 //!
-//! Production failed exactly here (2026-10-10): a long first turn taught the
-//! adaptive RAM budget chunk-shaped activation observations, and the follow-up
-//! turn in the same conversation was rejected five times with `generation
-//! context exceeds available GPU wired memory` because admission inflated a
-//! smaller-scope observation by the chunk ratio and capped the reserve at the
-//! whole ceiling. This journey replays that user journey against the same
-//! artifact class under a paged ceiling and requires both turns to complete.
+//! Production failed exactly here (2026-10-10): after a long first turn the
+//! follow-up turn in the same conversation was rejected five times with
+//! `generation context exceeds available GPU wired memory`, because the
+//! estimator of the time scaled a figure learned from a smaller step up by
+//! the chunk ratio and held the whole limit in reserve. The streaming engine
+//! no longer refuses a request for memory (issue #2221). This journey replays
+//! that user journey against the same artifact class under a paged limit and
+//! requires both turns to complete.
 
 use std::fs;
 use std::path::Path;

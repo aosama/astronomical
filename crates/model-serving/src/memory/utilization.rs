@@ -26,7 +26,7 @@
 //! # Accounting identity
 //!
 //! The budget owner composes the expert entitlement as a documented subtraction
-//! (`memory/budget/ram.rs`), so the identity below is not re-derived here — it
+//! (`memory/model_memory/model_memory_facts.rs`), so the identity below is not re-derived here — it
 //! is the same split, rearranged as "reserved minus actually used" per owner:
 //!
 //! ```text
@@ -39,7 +39,7 @@
 //!
 //! This module observes. It never decides residency.
 
-use crate::memory::MlxRamBudgetSnapshot;
+use crate::memory::MemoryReserveSnapshot;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 
 /// The reason-tagged split of one MLX ceiling's unused headroom.
@@ -75,7 +75,7 @@ impl MemoryCeilingUtilization {
     /// subtraction and the entitlement keeps the identity exact.
     #[must_use]
     pub fn compose(
-        budget_snapshot: MlxRamBudgetSnapshot,
+        budget_snapshot: MemoryReserveSnapshot,
         active_memory_bytes: u64,
         active_breakdown: MlxActiveMemoryBreakdown,
     ) -> Self {
@@ -161,9 +161,9 @@ mod tests {
     fn budget_snapshot(
         ceiling_bytes: u64,
         retained_expert_budget_bytes: u64,
-    ) -> MlxRamBudgetSnapshot {
+    ) -> MemoryReserveSnapshot {
         let non_expert_bytes = ceiling_bytes - retained_expert_budget_bytes;
-        MlxRamBudgetSnapshot {
+        MemoryReserveSnapshot {
             mlx_active_memory_ceiling_bytes: ceiling_bytes,
             model_core_payload_bytes: 2_600_000_000,
             context_window_reserve_bytes: 2_000_000_000,
@@ -282,7 +282,7 @@ mod tests {
         let routed_page_slot_bytes = 16_482_100;
         let decode_transient_reserve_bytes =
             decode_activation_reserve_bytes + routed_page_slot_bytes;
-        let budget = MlxRamBudgetSnapshot {
+        let budget = MemoryReserveSnapshot {
             mlx_active_memory_ceiling_bytes: 25 * GIGABYTE,
             model_core_payload_bytes,
             context_window_reserve_bytes: GIGABYTE,

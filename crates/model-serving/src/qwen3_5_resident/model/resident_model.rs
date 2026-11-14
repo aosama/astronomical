@@ -55,14 +55,14 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qw
         self.base.resident_model_payload_byte_count()
     }
 
-    fn governed_ram_budget_snapshot(&self) -> Option<crate::memory::MlxRamBudgetSnapshot> {
+    fn governed_memory_reserve_snapshot(&self) -> Option<crate::memory::MemoryReserveSnapshot> {
         let memory_governor = self.memory_governor.borrow();
         let accounts = memory_governor.as_ref()?.accounts();
         // The ledger counts every weight as fixed; the breakdown shows the
         // experts apart from the rest of the model.
         let held_expert_payload_bytes = self.held_expert_payload_bytes();
         let mut budget_snapshot =
-            crate::memory::MlxRamBudgetSnapshot::from_ledger_accounts(&accounts);
+            crate::memory::MemoryReserveSnapshot::from_ledger_accounts(&accounts);
         budget_snapshot.model_core_payload_bytes = budget_snapshot
             .model_core_payload_bytes
             .saturating_sub(held_expert_payload_bytes);

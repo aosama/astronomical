@@ -5,9 +5,9 @@ pub(crate) mod atlas_artifact;
 pub(crate) mod atlas_expert_layer_plans;
 #[cfg(feature = "direct-mlx")]
 pub mod expert_gate_up_fusion_plan;
+mod memory_geometry_measurements;
 mod optiq_metadata_validation;
 pub mod quantized_expert_layer_plan;
-mod ram_budget_measurements;
 mod shard_index;
 pub(crate) mod tensor_spec;
 mod validated_artifact;
@@ -26,11 +26,11 @@ pub(crate) use crate::expert_paging::{
 };
 pub use artifact::{Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator};
 pub use atlas_expert_layer_plans::expert_layer_plans_for_validated_artifact;
+pub use memory_geometry_measurements::{
+    Qwen3_5MemoryGeometryError, model_memory_geometry_from_validated_artifact,
+};
 pub use quantized_expert_layer_plan::{
     build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
-};
-pub use ram_budget_measurements::{
-    Qwen3_5RamBudgetGeometryError, mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 pub use shard_index::{MAXIMUM_INDEX_BYTES, Qwen3_5ArtifactError, Qwen3_5ShardIndex};
 pub use tensor_spec::qwen3_5_language_tensor_profiles;

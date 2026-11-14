@@ -12,7 +12,7 @@ use astronomical_memory_policy::ledger::{
 };
 
 use super::Qwen3_5Model;
-use crate::{MemoryPhase, MlxRamBudgetModelGeometry};
+use crate::{MemoryPhase, ModelMemoryGeometry};
 
 /// Layers in flight while a sparse model's prompt is read: the one being
 /// multiplied and the one read ahead of it.
@@ -63,7 +63,7 @@ impl Qwen3_5Model {
     /// What this model occupies and could keep, from the geometry measured
     /// at load.
     fn memory_ledger_shape(&self) -> ModelMemoryShape {
-        let model_geometry = self.mlx_ram_budget().model_geometry();
+        let model_geometry = self.memory_facts().model_geometry();
         match self.dense_layer_streamer.as_ref() {
             Some(dense_layer_streamer) => dense_model_memory_shape(
                 model_geometry.model_core_payload_bytes,
@@ -77,7 +77,7 @@ impl Qwen3_5Model {
     /// Opens the governor once loading has measured what it can, and gives
     /// the cache its first capacity.
     pub(crate) fn open_memory_governor(&self) {
-        let limit_bytes = self.mlx_ram_budget().mlx_active_memory_ceiling_bytes();
+        let limit_bytes = self.memory_facts().mlx_active_memory_ceiling_bytes();
         let Ok(mut memory_governor) = MemoryGovernor::new(limit_bytes, self.memory_ledger_shape())
         else {
             tracing::warn!("the memory governor could not open under a zero limit");
@@ -168,7 +168,7 @@ impl Qwen3_5Model {
         // reported as this request's until its first forward begins.
         self.begin_measuring_a_new_forward();
         let prompt_context_bytes = prompt_token_count.saturating_mul(
-            self.mlx_ram_budget()
+            self.memory_facts()
                 .model_geometry()
                 .sequence_state_bytes_per_token,
         );
@@ -497,7 +497,7 @@ impl Qwen3_5Model {
     /// Tells the governor the limit MLX has installed. A zero limit is
     /// refused and the governor keeps the one it had.
     fn follow_installed_limit(&self, memory_governor: &mut MemoryGovernor) {
-        let installed_limit_bytes = self.mlx_ram_budget().mlx_active_memory_ceiling_bytes();
+        let installed_limit_bytes = self.memory_facts().mlx_active_memory_ceiling_bytes();
         if installed_limit_bytes != memory_governor.accounts().limit_bytes {
             let _ = memory_governor.change_limit(installed_limit_bytes);
         }
@@ -511,17 +511,17 @@ impl Qwen3_5Model {
     /// A dense model's kept layers count as
     /// model core in the breakdown, so they move from the kept-weight
     /// budget to the core here.
-    pub(crate) fn ram_budget_snapshot_from_governor(
+    pub(crate) fn memory_reserve_snapshot_from_governor(
         &self,
         held_expert_payload_bytes: u64,
-    ) -> Option<crate::memory::MlxRamBudgetSnapshot> {
+    ) -> Option<crate::memory::MemoryReserveSnapshot> {
         let memory_governor = self.governed_memory.governor.borrow();
         let accounts = memory_governor.as_ref()?.accounts();
         let kept_core_layer_bytes = self
             .reclaimable_retained_payload_bytes()
             .saturating_sub(held_expert_payload_bytes);
         let mut budget_snapshot =
-            crate::memory::MlxRamBudgetSnapshot::from_ledger_accounts(&accounts);
+            crate::memory::MemoryReserveSnapshot::from_ledger_accounts(&accounts);
         budget_snapshot.model_core_payload_bytes = budget_snapshot
             .model_core_payload_bytes
             .saturating_add(kept_core_layer_bytes);
@@ -590,7 +590,7 @@ const fn larger_of_what_was_measured(
 /// A sparse model's shape: its experts are what may be kept or streamed.
 /// Reading a prompt holds whole layers in flight; writing a reply holds only
 /// the experts one token chose.
-fn sparse_model_memory_shape(model_geometry: MlxRamBudgetModelGeometry) -> ModelMemoryShape {
+fn sparse_model_memory_shape(model_geometry: ModelMemoryGeometry) -> ModelMemoryShape {
     ModelMemoryShape {
         core_weight_bytes: model_geometry.model_core_payload_bytes,
         streamable_weight_bytes: model_geometry.complete_expert_payload_bytes,

@@ -27,7 +27,7 @@ struct LiveMemoryObservation {
 impl Qwen3_5Model {
     pub(crate) fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
         Ok(geometry_safe_minimum_mlx_memory_ceiling_bytes(
-            &self.mlx_ram_budget().model_geometry(),
+            &self.memory_facts().model_geometry(),
         ))
     }
 
@@ -240,12 +240,12 @@ impl Qwen3_5Model {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
-        self.mlx_ram_budget
+        self.memory_facts
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
-            .map_err(|mlx_ram_budget_error| {
+            .map_err(|model_memory_facts_error| {
                 super::super::inference_execution::fatal_engine_error(
-                    mlx_ram_budget_error.to_string(),
+                    model_memory_facts_error.to_string(),
                 )
             })?;
         // The governor follows the installed limit, and the expert cache or
@@ -270,19 +270,19 @@ impl Qwen3_5Model {
         Ok(())
     }
 
-    /// Moves the RAM budget and the memory governor to the new ceiling, then
+    /// Moves the memory facts and the memory governor to the new ceiling, then
     /// reads back the dense layers the governor now has room for: a raise
     /// the resident engine cannot use yet still lets this one keep more.
     fn apply_live_ceiling_to_budget_and_dense_layers(
         &self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
-        self.mlx_ram_budget
+        self.memory_facts
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
-            .map_err(|mlx_ram_budget_error| {
+            .map_err(|model_memory_facts_error| {
                 super::super::inference_execution::fatal_engine_error(
-                    mlx_ram_budget_error.to_string(),
+                    model_memory_facts_error.to_string(),
                 )
             })?;
         self.govern_limit_change();

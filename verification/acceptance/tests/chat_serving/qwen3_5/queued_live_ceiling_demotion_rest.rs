@@ -15,8 +15,8 @@ use super::automatic_engine_selection_rest::prompt_chunk_working_memory_allowanc
 use std::{fs, path::Path};
 
 use astronomical_model_serving::{
-    CompleteResidencyHeadroomBoundary, MlxRamBudgetModelGeometry, Qwen3_5ArtifactValidator,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    CompleteResidencyHeadroomBoundary, ModelMemoryGeometry, Qwen3_5ArtifactValidator,
+    model_memory_geometry_from_validated_artifact,
 };
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -192,7 +192,7 @@ const DEMOTION_MARGIN_BELOW_ARTIFACT_BYTES: u64 = 4_000_000_000;
 struct SparseArtifactResidencyGeometry {
     complete_residency_with_headroom_bytes: u64,
     /// The measured geometry the request-time activation reserve composes from.
-    model_geometry: MlxRamBudgetModelGeometry,
+    model_geometry: ModelMemoryGeometry,
 }
 
 fn measure_sparse_artifact_residency_geometry(
@@ -202,7 +202,7 @@ fn measure_sparse_artifact_residency_geometry(
         .validate(model_directory, MAXIMUM_OUTPUT_TOKEN_COUNT)
         .expect("the configured sparse artifact should validate");
     let (model_geometry, required_headroom_bytes) =
-        mlx_ram_budget_model_geometry_from_validated_artifact(&validated_artifact, model_directory)
+        model_memory_geometry_from_validated_artifact(&validated_artifact, model_directory)
             .expect("the configured sparse artifact should expose disk RAM geometry");
     let complete_residency_boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
         model_geometry,

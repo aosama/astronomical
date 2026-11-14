@@ -15,9 +15,7 @@ use crate::qwen3_5_core::model::loading_pipeline::{
 use crate::qwen3_5_streaming;
 use crate::qwen3_5_streaming::Qwen3_5ExpertPager;
 use crate::qwen3_5_streaming::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer;
-use crate::{
-    MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
-};
+use crate::{ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5Model;
 use super::Qwen3_5ModelBase;
@@ -78,7 +76,7 @@ impl Qwen3_5Model {
     /// artifact, builds the streaming expert runtime (pager, warm slot table,
     /// sorted-reduction kernel), derives the decoder cache layout, collects
     /// the capability-verdict kernels and invariant scales, and assembles the
-    /// RAM budget with the fused-kernel verdict.
+    /// memory facts with the fused-kernel verdict.
     pub(crate) fn load_with_performance_attribution_and_decode_expert_cache_policy(
         runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,
@@ -157,7 +155,7 @@ impl Qwen3_5Model {
                 weights,
                 disk_embedding_rows,
                 vision_model,
-                mlx_ram_budget: RefCell::new(streaming_expert_budget.mlx_ram_budget),
+                memory_facts: RefCell::new(streaming_expert_budget.memory_facts),
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
@@ -410,16 +408,16 @@ fn load_streaming_expert_runtime(
     ))
 }
 
-/// The streaming RAM budget plus the fused jangtq2 verdict that the model
+/// The streaming memory facts plus the fused jangtq2 verdict that the model
 /// struct also carries.
 struct StreamingExpertBudgetOutcome {
-    mlx_ram_budget: MlxRamBudget,
+    memory_facts: ModelMemoryFacts,
     fused_jangtq2_gathered_projection_kernel: Option<
         astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
     >,
 }
 
-/// Assembles the streaming engine's RAM budget. Mirrors the payload math,
+/// Assembles the limit and geometry the streaming engine runs under. Mirrors the payload math,
 /// fused-kernel verdict, routed-page sizing, and the prefill read-ahead slot
 /// of the inlined loader, in the same order.
 #[allow(clippy::too_many_arguments)]
@@ -485,13 +483,13 @@ fn build_streaming_expert_budget(
                 true,
             )
         })?;
-    let mlx_ram_budget = MlxRamBudget::new(
+    let memory_facts = ModelMemoryFacts::new(
         u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "MLX active memory ceiling exceeds the u64 range",
             }
         })?,
-        MlxRamBudgetModelGeometry {
+        ModelMemoryGeometry {
             model_core_payload_bytes,
             complete_expert_payload_bytes,
             largest_complete_expert_layer_bytes,
@@ -505,10 +503,10 @@ fn build_streaming_expert_budget(
         },
     )
     .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-        description: "MLX RAM budget requires a positive active-memory ceiling",
+        description: "the MLX memory limit must be positive",
     })?;
     Ok(StreamingExpertBudgetOutcome {
-        mlx_ram_budget,
+        memory_facts,
         fused_jangtq2_gathered_projection_kernel,
     })
 }

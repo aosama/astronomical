@@ -60,7 +60,7 @@ pub fn expert_layer_plans_for_validated_artifact(
 
 /// Every decoder layer's plan for any sparse checkpoint: from the Atlas
 /// manifest when the model has one, from the shard index otherwise. Both the
-/// loader and the RAM budget call this, so they always agree on the plans.
+/// loader and the memory geometry call this, so they always agree on the plans.
 pub(crate) fn build_expert_layer_plans(
     model_dir: &Path,
     expert_atlas: Option<&AtlasManifest>,

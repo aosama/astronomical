@@ -24,7 +24,6 @@ pub enum PerformanceOperation {
     PromptTokenization,
     GenerationOutputDecoderInitialization,
     MemoryAdmissionSnapshot,
-    AdaptiveRamGrowthMemoryAdmission,
     LinearAttentionGraphConstruction,
     FullAttentionGraphConstruction,
     PersistentPromptCacheCausalInputPlanning,
@@ -151,7 +150,7 @@ pub enum PerformanceOperation {
     PreviousTokenPrefetch,
     CompiledElementwiseGraphConstruction,
     ExpertLayerPlanConstruction,
-    ArtifactRamBudgetGeometry,
+    ArtifactMemoryGeometry,
     ResidentToStreamingRetry,
     /// One speculative round's parallel draft block pass: embedding, the
     /// six-layer trunk, the language-model head, and the proposal readback.
@@ -193,7 +192,6 @@ impl PerformanceOperation {
         Self::PromptTokenization,
         Self::GenerationOutputDecoderInitialization,
         Self::MemoryAdmissionSnapshot,
-        Self::AdaptiveRamGrowthMemoryAdmission,
         Self::LinearAttentionGraphConstruction,
         Self::FullAttentionGraphConstruction,
         Self::PersistentPromptCacheCausalInputPlanning,
@@ -310,7 +308,7 @@ impl PerformanceOperation {
         Self::PreviousTokenPrefetch,
         Self::CompiledElementwiseGraphConstruction,
         Self::ExpertLayerPlanConstruction,
-        Self::ArtifactRamBudgetGeometry,
+        Self::ArtifactMemoryGeometry,
         Self::ResidentToStreamingRetry,
         Self::SpeculativeDraftBlockPass,
         Self::SpeculativeRoundStateCheckpoint,
@@ -345,7 +343,6 @@ impl PerformanceOperation {
                 "generation_output_decoder_initialization"
             }
             Self::MemoryAdmissionSnapshot => "memory_admission_snapshot",
-            Self::AdaptiveRamGrowthMemoryAdmission => "adaptive_ram_growth_memory_admission",
             Self::LinearAttentionGraphConstruction => "linear_attention_graph_construction",
             Self::FullAttentionGraphConstruction => "full_attention_graph_construction",
             Self::PersistentPromptCacheCausalInputPlanning => {
@@ -545,7 +542,7 @@ impl PerformanceOperation {
             Self::CompiledElementwiseGraphConstruction => "compiled_elementwise_graph_construction",
             Self::ExpertLayerPlanConstruction => "expert_layer_plan_construction",
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
-            Self::ArtifactRamBudgetGeometry => "artifact_ram_budget_geometry",
+            Self::ArtifactMemoryGeometry => "artifact_memory_geometry",
             Self::ResidentToStreamingRetry => "resident_to_streaming_retry",
             Self::SpeculativeDraftBlockPass => "speculative_draft_block_pass",
             Self::SpeculativeRoundStateCheckpoint => "speculative_round_state_checkpoint",

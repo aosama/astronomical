@@ -313,8 +313,7 @@ impl Qwen3_5ResidentModel {
         })?;
         let decoder_layer_count = self.config.layer_count() as usize;
         // Multi-token prefill may submit completed layer groups so macOS can
-        // schedule other graphics work between command buffers. Paged experts
-        // additionally benefit because completed streamed pages can detach.
+        // schedule other graphics work between command buffers.
         let graph_submission_layer_interval =
             usize::try_from(astronomical_ipc_protocol::graph_submission_layer_interval(
                 token_count,

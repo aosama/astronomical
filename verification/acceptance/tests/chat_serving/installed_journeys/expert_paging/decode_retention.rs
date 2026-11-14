@@ -12,7 +12,7 @@ use std::time::Duration;
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 use astronomical_model_serving::{
     CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    model_memory_geometry_from_validated_artifact,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 use serial_test::serial;
@@ -45,7 +45,7 @@ async fn should_not_restream_expert_pages_on_a_warm_paged_request() {
             .validate(&model_directory, u32::from(OUTPUT_TOKEN_COUNT))
             .expect("the sparse artifact should validate for the retention contract");
         let (model_geometry, required_headroom_bytes) =
-            mlx_ram_budget_model_geometry_from_validated_artifact(
+            model_memory_geometry_from_validated_artifact(
                 &validated_artifact,
                 &model_directory,
             )
