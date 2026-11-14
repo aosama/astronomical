@@ -529,6 +529,10 @@ fn check_signatures(bundle_path: &Path, channel_profile: &ChannelProfile) -> Res
         "com.apple.security.app-sandbox",
         "com.apple.security.network.client",
         "com.apple.security.network.server",
+        // Without this macOS shows no Open or Save dialog at all: attaching
+        // a photo or a file, saving a picture and exporting a conversation
+        // did nothing in the first store build (issue #2198).
+        "com.apple.security.files.user-selected.read-write",
         APPLICATION_GROUPS_ENTITLEMENT_KEY,
     ];
     check_entitlements(&[
