@@ -62,8 +62,9 @@ final class ChatLaunchIdentityTests: XCTestCase {
 
   func test_should_present_the_app_store_channel_as_the_stable_conversation_identity() {
     // The App Store channel has no state directory name of its own; the chat
-    // surface falls back to the Stable conversation channel's directory, which
-    // is the identity the bundled Stable daemon advertises.
+    // surface falls back to the Stable conversation channel's name for its
+    // own session files. What the engine advertises is checked separately,
+    // through the expected state directory label.
     let mapped = ChatLaunchIdentity.chatIdentity(from: menuIdentity(channel: .appStore))
 
     XCTAssertEqual(mapped.channel, .stable)
