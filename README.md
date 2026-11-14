@@ -1,6 +1,6 @@
 # Astronomical
 
-<a href="https://github.com/aosama/astronomical/releases/download/v0.2.105/Astronomical-0.2.105-macOS-arm64.dmg"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/dc4E6r4WD"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
+<a href="https://github.com/aosama/astronomical/releases/download/v0.2.105/Astronomical-0.2.105-macOS-arm64.dmg"><img src="site/assets/download-for-mac.svg" alt="Download for Mac" width="170" height="34" style="vertical-align:middle"></a> <a href="https://discord.gg/E8a5qmhRhr"><img src="site/assets/discord.svg" alt="Discord" width="162" height="34" style="vertical-align:middle"></a>
 
 **Run large AI models privately on your Mac, including models bigger than the memory you can spare.**
 
@@ -66,7 +66,7 @@ Run `astronomical --help` for the full list.
 - [Building and developing](docs/development.md): build from source and run the tests.
 - [Product story and engineering reports](https://getastronomical.com/) on the website.
 - [Measured: a 22 GB model under a 12 GB memory ceiling](https://getastronomical.com/reports/memory-ceiling-throughput/), with a short video and the limits of the measurement.
-- [Discord](https://discord.gg/dc4E6r4WD) for questions and help, and the [support page](https://getastronomical.com/support.html).
+- [Discord](https://discord.gg/E8a5qmhRhr) for questions and help, and the [support page](https://getastronomical.com/support.html).
 
 ## Contributing
 

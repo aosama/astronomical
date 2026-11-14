@@ -165,6 +165,7 @@ Require all of the following before reporting success:
 - Public Pages appcast is the exact prepared signed appcast.
 - Every public "Download for Mac" button passes the download button checklist below.
 - The `Announce release on Discord` workflow run for this release succeeded. Publishing the release starts it; it posts the notes to the Discord server's releases channel under the project's name and logo, so no release link is pasted there by hand. If it failed, run it again from the Actions tab with the tag as input.
+- The Discord invite linked from the README and the website still works. Read the invite code from the README's Discord link and look it up: `curl -s "https://discord.com/api/v10/invites/CODE?with_expiration=true"` must name the server and show `"expires_at": null`. An invite made with Discord's defaults expires after 30 days, and an expired one fails silently for every newcomer; if it has expired, the server owner creates one set to never expire and the links are updated through a pull request.
 - Release issue is explicitly closed after the appcast PR merge, Pages deployment, and public-byte verification. A `Refs #N` maintenance PR does not close it automatically.
 - Local `main` equals remote `main` and the tracked worktree is clean.
 - The ignored `target/releases/${TAG}` evidence directory remains intact.

@@ -8,7 +8,7 @@ Astronomical keeps its settings in one file, `config.json`, in its state folder.
 
 The app creates the file the first time it starts, with a second file beside it, `astronomical-config.schema.json`, that describes every setting. Editors that understand JSON Schema use it to check your edits as you type.
 
-A small file looks like this:
+A small file looks like this. Keep the `$schema` line: the app refuses a file that states its `schema_version` without it, and does not start.
 
     {
       "$schema": "./astronomical-config.schema.json",
