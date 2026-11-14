@@ -68,7 +68,26 @@ pub struct AstronomicalInstancePaths {
     state_directory: PathBuf,
     default_bind_address: SocketAddr,
     is_standard_state_directory: bool,
+    state_directory_label: StateDirectoryLabel,
 }
+
+/// How status names the state directory to the applications that check they
+/// reached their own engine.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StateDirectoryLabel {
+    /// A standard location, written from `~` so status never carries the
+    /// user's absolute home directory.
+    HomeRelative(String),
+    /// A caller-chosen directory, which no installed application expects.
+    Custom,
+}
+
+/// The label of a state directory no installed application expects.
+pub const CUSTOM_STATE_DIRECTORY_LABEL: &str = "custom";
+/// Where the sandbox maps Application Support, written from `~`.
+const APPLICATION_SUPPORT_LABEL_ROOT: &str = "~/Library/Application Support";
+/// Where macOS keeps every app group container, written from `~`.
+const APPLICATION_GROUP_CONTAINERS_LABEL_ROOT: &str = "~/Library/Group Containers";
 
 impl AstronomicalInstancePaths {
     pub fn for_current_user(
@@ -146,6 +165,7 @@ impl AstronomicalInstancePaths {
         Self::for_state_directory_with_standard_endpoint(
             home_directory.into().join(state_directory_name),
             runtime_instance,
+            format!("~/{state_directory_name}"),
         )
     }
 
@@ -185,16 +205,9 @@ impl AstronomicalInstancePaths {
         application_support_directory: impl Into<PathBuf>,
         runtime_instance: AstronomicalRuntimeInstance,
     ) -> Self {
-        let state_directory_name = match runtime_instance {
-            AstronomicalRuntimeInstance::Stable => APPLICATION_SUPPORT_STABLE_DIRECTORY_NAME,
-            AstronomicalRuntimeInstance::Development => {
-                APPLICATION_SUPPORT_DEVELOPMENT_DIRECTORY_NAME
-            }
-        };
-        Self::for_state_directory_with_standard_endpoint(
-            application_support_directory
-                .into()
-                .join(state_directory_name),
+        Self::for_container_state_root(
+            application_support_directory.into(),
+            APPLICATION_SUPPORT_LABEL_ROOT,
             runtime_instance,
         )
     }
@@ -214,13 +227,45 @@ impl AstronomicalInstancePaths {
         application_group_container: impl Into<PathBuf>,
         runtime_instance: AstronomicalRuntimeInstance,
     ) -> Self {
-        Self::for_application_support_directory(application_group_container, runtime_instance)
+        let application_group_container = application_group_container.into();
+        // The container's folder is named after the group, which carries the
+        // signing team, so the label can only be read off the path it was given.
+        let label_root = match application_group_container.file_name() {
+            Some(group_folder_name) => format!(
+                "{APPLICATION_GROUP_CONTAINERS_LABEL_ROOT}/{}",
+                group_folder_name.to_string_lossy()
+            ),
+            None => APPLICATION_GROUP_CONTAINERS_LABEL_ROOT.to_owned(),
+        };
+        Self::for_container_state_root(application_group_container, &label_root, runtime_instance)
+    }
+
+    /// The Application Support layout, shared by a container's own
+    /// Application Support and an app group container: the same directory
+    /// names beneath either root, labeled with the root's `~` form.
+    fn for_container_state_root(
+        state_root_directory: PathBuf,
+        label_root: &str,
+        runtime_instance: AstronomicalRuntimeInstance,
+    ) -> Self {
+        let state_directory_name = match runtime_instance {
+            AstronomicalRuntimeInstance::Stable => APPLICATION_SUPPORT_STABLE_DIRECTORY_NAME,
+            AstronomicalRuntimeInstance::Development => {
+                APPLICATION_SUPPORT_DEVELOPMENT_DIRECTORY_NAME
+            }
+        };
+        Self::for_state_directory_with_standard_endpoint(
+            state_root_directory.join(state_directory_name),
+            runtime_instance,
+            format!("{label_root}/{state_directory_name}"),
+        )
     }
 
     #[must_use]
     fn for_state_directory_with_standard_endpoint(
         state_directory: PathBuf,
         runtime_instance: AstronomicalRuntimeInstance,
+        home_relative_label: String,
     ) -> Self {
         let default_bind_address = runtime_instance.loopback_socket_addr();
         Self {
@@ -228,6 +273,7 @@ impl AstronomicalInstancePaths {
             state_directory,
             default_bind_address,
             is_standard_state_directory: true,
+            state_directory_label: StateDirectoryLabel::HomeRelative(home_relative_label),
         }
     }
 
@@ -244,6 +290,7 @@ impl AstronomicalInstancePaths {
             state_directory,
             default_bind_address,
             is_standard_state_directory: false,
+            state_directory_label: StateDirectoryLabel::Custom,
         }
     }
 
@@ -257,6 +304,7 @@ impl AstronomicalInstancePaths {
             state_directory,
             default_bind_address,
             is_standard_state_directory: false,
+            state_directory_label: StateDirectoryLabel::Custom,
         }
     }
 
@@ -278,6 +326,19 @@ impl AstronomicalInstancePaths {
     #[must_use]
     pub const fn is_standard_state_directory(&self) -> bool {
         self.is_standard_state_directory
+    }
+
+    /// What status reports as this instance's state directory. The chat app
+    /// and the menu-bar agent compare it with the location they expect, so it
+    /// names where the state really is: a store build's engine that reported
+    /// the direct build's dot-folder was refused by its own agent and
+    /// restarted every few seconds (issue #2188).
+    #[must_use]
+    pub fn state_directory_label(&self) -> &str {
+        match &self.state_directory_label {
+            StateDirectoryLabel::HomeRelative(home_relative_label) => home_relative_label,
+            StateDirectoryLabel::Custom => CUSTOM_STATE_DIRECTORY_LABEL,
+        }
     }
 
     /// Prevents a standard Stable or Development instance from adopting the

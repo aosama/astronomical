@@ -51,11 +51,11 @@ struct LocalDaemonClient: DaemonClient {
       // A menu cannot safely control a process until the process proves which
       // isolated state and endpoint contract it owns.
       throw DaemonClientError.wrongInstance(
-        expected: applicationIdentity.channel.rawValue, connected: "unidentified")
+        expected: applicationIdentity.channel.runtimeInstanceName, connected: "unidentified")
     }
-    guard connectedChannel == applicationIdentity.channel.rawValue else {
+    guard connectedChannel == applicationIdentity.channel.runtimeInstanceName else {
       throw DaemonClientError.wrongInstance(
-        expected: applicationIdentity.channel.rawValue, connected: connectedChannel)
+        expected: applicationIdentity.channel.runtimeInstanceName, connected: connectedChannel)
     }
     guard statusDocument.application?.stateDirectory == applicationIdentity.expectedServerStateDirectory else {
       let connectedStateDirectory: String

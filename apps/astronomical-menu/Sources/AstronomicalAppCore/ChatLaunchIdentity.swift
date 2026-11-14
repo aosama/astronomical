@@ -6,7 +6,11 @@ import ThinTalkCore
 /// directory during its handshake, so this mapping has to agree exactly with
 /// what the bundled daemon advertises for the same instance. The App Store
 /// build presents the Stable product identity (see ApplicationChannel), so it
-/// maps to the Stable conversation channel.
+/// maps to the Stable conversation channel. Its engine keeps its state in the
+/// app group container, not the home dot-folder, so the expected state
+/// directory label is handed over from the one definition the menu-bar agent
+/// also checks against; two definitions let the chat window and the agent
+/// disagree about the same engine (issue #2188).
 enum ChatLaunchIdentity {
   static func chatIdentity(
     from applicationIdentity: ApplicationIdentity
@@ -21,7 +25,8 @@ enum ChatLaunchIdentity {
       version: applicationIdentity.version,
       buildNumber: applicationIdentity.buildNumber,
       commit: applicationIdentity.commit,
-      isDirty: applicationIdentity.isDirty)
+      isDirty: applicationIdentity.isDirty,
+      expectedServerStateDirectory: applicationIdentity.expectedServerStateDirectory)
   }
 
   /// Only the App Store build has no bundled name. The fallback follows the chat

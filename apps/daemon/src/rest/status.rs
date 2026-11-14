@@ -9,24 +9,7 @@ use axum::{
 
 pub(crate) async fn status_check(State(application_state): State<ApplicationState>) -> Response {
     let build_identity = ApplicationBuildIdentity::current();
-    let runtime_instance = application_state
-        .runtime_config_resolver
-        .as_ref()
-        .and_then(|runtime_config_resolver| {
-            runtime_config_resolver.instance_paths().runtime_instance()
-        })
-        .unwrap_or(astronomical_config::AstronomicalRuntimeInstance::Development);
-    let is_standard_state_directory = application_state
-        .runtime_config_resolver
-        .as_ref()
-        .map(|runtime_config_resolver| {
-            runtime_config_resolver
-                .instance_paths()
-                .is_standard_state_directory()
-        })
-        .unwrap_or(false);
-    let state_directory_label =
-        state_directory_label(is_standard_state_directory, runtime_instance);
+    let (runtime_instance, state_directory_label) = reported_instance_identity(&application_state);
     // Activity is daemon-derived so the worker protocol stays focused on
     // generation data instead of duplicating phase-state events.
     let worker_health_snapshot = application_state
@@ -80,20 +63,26 @@ pub(crate) async fn status_check(State(application_state): State<ApplicationStat
     Json(status_json).into_response()
 }
 
-/// Pure: the user-facing state-directory label follows the runtime channel
-/// when the daemon runs in its standard directory; a custom directory is
-/// labeled as such regardless of channel.
-fn state_directory_label(
-    is_standard_state_directory: bool,
-    runtime_instance: astronomical_config::AstronomicalRuntimeInstance,
-) -> &'static str {
-    match (is_standard_state_directory, runtime_instance) {
-        (true, astronomical_config::AstronomicalRuntimeInstance::Stable) => "~/.astronomical",
-        (true, astronomical_config::AstronomicalRuntimeInstance::Development) => {
-            "~/.astronomical-dev"
-        }
-        (false, _) => "custom",
-    }
+/// The instance and state-directory label status reports. The label comes
+/// from the instance paths, which know where the state really is; a daemon
+/// without a resolver (a test harness) reports a Development instance in a
+/// custom directory, which no installed application accepts as its own.
+fn reported_instance_identity(
+    application_state: &ApplicationState,
+) -> (astronomical_config::AstronomicalRuntimeInstance, String) {
+    let Some(runtime_config_resolver) = application_state.runtime_config_resolver.as_ref() else {
+        return (
+            astronomical_config::AstronomicalRuntimeInstance::Development,
+            astronomical_config::CUSTOM_STATE_DIRECTORY_LABEL.to_owned(),
+        );
+    };
+    let instance_paths = runtime_config_resolver.instance_paths();
+    (
+        instance_paths
+            .runtime_instance()
+            .unwrap_or(astronomical_config::AstronomicalRuntimeInstance::Development),
+        instance_paths.state_directory_label().to_owned(),
+    )
 }
 
 /// Pure: the client-facing expert-memory mode labels.
