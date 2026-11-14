@@ -585,3 +585,23 @@ fn should_require_an_advertised_model_and_assistant_output_for_the_real_model_pr
         &serde_json::json!({"choices": [{"message": {"content": ""}}]})
     ));
 }
+
+/// App Store Connect refuses a helper that only inherits its sandbox: the
+/// first store package failed validation with error 90296 until the engine
+/// and the worker also declared the sandbox itself. Exactly these two keys
+/// are allowed, because any further entitlement on an inheriting helper makes
+/// macOS refuse to start it.
+#[test]
+fn should_sign_spawned_store_helpers_as_sandboxed_and_inheriting_and_nothing_else() {
+    let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the xtask crate sits in the repository root");
+    let inherited_entitlements_text =
+        std::fs::read_to_string(repository_root.join(INHERITED_ENTITLEMENTS_PATH))
+            .expect("the inherited entitlements file is checked in");
+
+    assert!(inherited_entitlements_text.contains("<key>com.apple.security.app-sandbox</key>"));
+    assert!(inherited_entitlements_text.contains("<key>com.apple.security.inherit</key>"));
+    assert_eq!(inherited_entitlements_text.matches("<key>").count(), 2);
+    assert_eq!(inherited_entitlements_text.matches("<true/>").count(), 2);
+}
