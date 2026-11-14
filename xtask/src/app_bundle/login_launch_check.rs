@@ -149,9 +149,10 @@ pub(crate) fn wait_for_agent_started_engine(
         }
         if wait_started_at.elapsed() >= HEALTH_WAIT {
             return Err(format!(
-                "the menu-bar agent did not start the engine within {}s of a login-style launch; read {}",
+                "the menu-bar agent did not start the engine within {}s of a login-style launch; read {}{}",
                 HEALTH_WAIT.as_secs(),
-                agent_log_path.display()
+                agent_log_path.display(),
+                sandboxed_location_hint(instance_identity)
             ));
         }
         if last_progress_at.elapsed() >= PROGRESS_INTERVAL {
@@ -168,6 +169,17 @@ pub(crate) fn wait_for_agent_started_engine(
     match status_identity_problem(&status_document, instance_identity) {
         Some(identity_problem) => Err(identity_problem),
         None => Ok(()),
+    }
+}
+
+/// A sandboxed bundle run from a build folder did not start its engine in
+/// the first store run, while the same bundle did from the Applications
+/// folder (issue #2182), so a timeout on such a bundle says where to try it.
+pub(crate) fn sandboxed_location_hint(instance_identity: &BundleInstanceIdentity) -> &'static str {
+    if instance_identity.is_sandboxed {
+        "; a sandboxed bundle may be unable to reach its engine outside the Applications folder, so copy it there and run the smoke test on that copy"
+    } else {
+        ""
     }
 }
 

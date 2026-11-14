@@ -515,6 +515,59 @@ fn should_accept_only_a_daemon_serving_the_bundle_identity() {
     );
 }
 
+/// A store bundle's channel is `app-store`, but its engine is the Stable
+/// instance and says so; the smoke test once passed the channel name to the
+/// engine, which refused it (issue #2190).
+#[test]
+fn should_expect_the_stable_instance_from_a_sandboxed_store_bundle() {
+    let store_identity = instance_identity_from_plist(&serde_json::json!({
+        "AstronomicalChannel": "app-store",
+        "AstronomicalDaemonPort": 6732,
+        "CFBundleShortVersionString": "0.2.88",
+        "AstronomicalBuildCommit": "49af41bd9bba"
+    }))
+    .expect("the plist names its instance identity");
+    let stable_engine_status = serde_json::json!({"application": {"channel": "stable", "version": "0.2.88", "commit": "49af41bd9bba"}});
+    let misnamed_engine_status = serde_json::json!({"application": {"channel": "app-store", "version": "0.2.88", "commit": "49af41bd9bba"}});
+
+    assert_eq!(store_identity.runtime_instance_name, "stable");
+    assert!(store_identity.is_sandboxed);
+    assert_eq!(
+        status_identity_problem(&stable_engine_status, &store_identity),
+        None
+    );
+    assert!(status_identity_problem(&misnamed_engine_status, &store_identity).is_some());
+}
+
+#[test]
+fn should_map_each_direct_channel_to_its_own_unsandboxed_instance() {
+    let stable_identity = bundle_instance_identity();
+    let development_identity = instance_identity_from_plist(&serde_json::json!({
+        "AstronomicalChannel": "development",
+        "AstronomicalDaemonPort": 6733,
+        "CFBundleShortVersionString": "0.2.88",
+        "AstronomicalBuildCommit": "49af41bd9bba"
+    }))
+    .expect("the plist names its instance identity");
+
+    assert_eq!(stable_identity.runtime_instance_name, "stable");
+    assert!(!stable_identity.is_sandboxed);
+    assert_eq!(development_identity.runtime_instance_name, "development");
+    assert!(!development_identity.is_sandboxed);
+}
+
+#[test]
+fn should_refuse_a_bundle_whose_plist_names_an_unknown_channel() {
+    let unknown_channel_result = instance_identity_from_plist(&serde_json::json!({
+        "AstronomicalChannel": "nightly",
+        "AstronomicalDaemonPort": 6732,
+        "CFBundleShortVersionString": "0.2.88",
+        "AstronomicalBuildCommit": "49af41bd9bba"
+    }));
+
+    assert!(unknown_channel_result.is_err());
+}
+
 #[test]
 fn should_require_an_advertised_model_and_assistant_output_for_the_real_model_probe() {
     let models_document = serde_json::json!({"data": [{"id": "qwen-fixture"}]});

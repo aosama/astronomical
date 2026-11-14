@@ -43,6 +43,17 @@ impl Channel {
         }
     }
 
+    /// The engine instance this channel runs, which is what the engine names
+    /// in its status. The engine knows two; the store build distributes the
+    /// Stable one. Mirrors `runtimeInstanceName` in the Swift
+    /// `ApplicationChannel`.
+    pub(crate) fn runtime_instance_name(self) -> &'static str {
+        match self {
+            Self::Development => "development",
+            Self::Stable | Self::AppStore => "stable",
+        }
+    }
+
     pub(crate) fn as_channel_name(self) -> &'static str {
         match self {
             Self::Development => "development",

@@ -6,7 +6,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use super::login_launch_check::{
-    LoginLaunchPlan, login_launch_command, login_launch_plan, wait_for_agent_started_engine,
+    LoginLaunchPlan, login_launch_command, login_launch_plan, sandboxed_location_hint,
+    wait_for_agent_started_engine,
 };
 use super::smoke_test::BundleInstanceIdentity;
 
@@ -19,6 +20,8 @@ const UNOCCUPIED_ENDPOINT: &str = "http://127.0.0.1:9";
 fn sample_instance_identity() -> BundleInstanceIdentity {
     BundleInstanceIdentity {
         channel_name: "stable".to_owned(),
+        runtime_instance_name: "stable".to_owned(),
+        is_sandboxed: false,
         daemon_port: 9,
         application_version: "0.2.88".to_owned(),
         build_commit: "49af41bd9bba".to_owned(),
@@ -138,4 +141,15 @@ fn should_stop_waiting_for_the_engine_once_the_agent_has_exited() {
 
     assert!(wait_error.contains("exited after a login-style launch without starting the engine"));
     assert!(wait_started_at.elapsed().as_secs() < 10);
+}
+
+/// Only a sandboxed bundle's timeout points at the Applications folder; a
+/// direct bundle starts its engine from anywhere, so the hint would mislead.
+#[test]
+fn should_hint_at_the_applications_folder_only_for_a_sandboxed_bundle() {
+    let mut sandboxed_identity = sample_instance_identity();
+    sandboxed_identity.is_sandboxed = true;
+
+    assert!(sandboxed_location_hint(&sandboxed_identity).contains("Applications folder"));
+    assert_eq!(sandboxed_location_hint(&sample_instance_identity()), "");
 }
