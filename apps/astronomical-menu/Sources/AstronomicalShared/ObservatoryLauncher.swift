@@ -17,6 +17,40 @@ public enum ObservatoryLauncher {
       NSApp.presentError(error)
     }
   }
+
+  /// Opens a page as `open` does, but first waits for the engine to answer.
+  ///
+  /// A link can be what starts the app. The engine then needs a moment before
+  /// it serves any page, and a browser opened sooner shows "cannot connect",
+  /// which reads as a broken app to someone who has just clicked a link. The
+  /// wait is bounded: after it, the page opens anyway, so a slow start still
+  /// ends in a page the person can reload.
+  public static func openOnceEngineAnswers(path: String, applicationIdentity: ApplicationIdentity) {
+    Task { @MainActor in
+      if let statusURL = try? applicationIdentity.endpointURL(path: "/v1/status") {
+        await waitUntilReachable(statusURL)
+      }
+      open(path: path, applicationIdentity: applicationIdentity)
+    }
+  }
+
+  private static func waitUntilReachable(_ statusURL: URL) async {
+    var statusRequest = URLRequest(url: statusURL)
+    statusRequest.timeoutInterval = 1
+    for _ in 0..<engineAnswerAttemptLimit {
+      if let (_, statusResponse) = try? await URLSession.shared.data(for: statusRequest),
+        (statusResponse as? HTTPURLResponse)?.statusCode == 200
+      {
+        return
+      }
+      try? await Task.sleep(nanoseconds: engineAnswerRetryNanoseconds)
+    }
+  }
+
+  /// Forty tries half a second apart: about twenty seconds, longer than a
+  /// cold start of the engine takes.
+  private static let engineAnswerAttemptLimit = 40
+  private static let engineAnswerRetryNanoseconds: UInt64 = 500_000_000
 }
 
 enum ObservatoryLaunchError: LocalizedError {

@@ -145,3 +145,11 @@
 @media (prefers-reduced-motion: reduce) {
     .download-models-download-progress-fill, .download-models-row-name::before { transition: none; }
 }
+
+/* A model opened from a link sits above everything else on the page, in the
+   accent outline the recommended starter card uses, so it reads as the thing
+   the person came for. */
+.download-models-linked { display: flex; flex-direction: column; gap: 10px; padding: 22px; border: 1px solid var(--accent); border-radius: var(--radius); background: var(--surface); }
+.download-models-linked-title { margin: 0; color: var(--ink); font-size: var(--text-lg); font-weight: var(--weight-strong); }
+.download-models-linked-lede { margin: 0; color: var(--ink-2); font-size: var(--text-md); }
+.download-models-linked-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 6px; }

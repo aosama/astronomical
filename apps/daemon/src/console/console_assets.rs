@@ -16,6 +16,7 @@ const DOWNLOAD_MODELS_JS: &str = include_str!("../../console/download-models.js"
 const DOWNLOAD_MODELS_RENDER_JS: &str = include_str!("../../console/download-models-render.js");
 const DOWNLOAD_MODELS_GROUPS_JS: &str = include_str!("../../console/download-models-groups.js");
 const DOWNLOAD_MODELS_ROW_JS: &str = include_str!("../../console/download-models-row.js");
+const DOWNLOAD_MODELS_LINKED_JS: &str = include_str!("../../console/download-models-linked.js");
 const DOWNLOAD_MODELS_INSTALLED_JS: &str =
     include_str!("../../console/download-models-installed.js");
 const DOWNLOAD_MODELS_REMOVAL_JS: &str = include_str!("../../console/download-models-removal.js");
@@ -86,6 +87,10 @@ where
         )
         .route("/download-models-row.js", get(download_models_row_script))
         .route(
+            "/download-models-linked.js",
+            get(download_models_linked_script),
+        )
+        .route(
             "/download-models-installed.js",
             get(download_models_installed_script),
         )
@@ -137,6 +142,10 @@ pub(crate) async fn download_models_groups_script() -> Response {
 
 pub(crate) async fn download_models_row_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_ROW_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn download_models_linked_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_LINKED_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn download_models_installed_script() -> Response {

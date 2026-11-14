@@ -106,6 +106,14 @@ To start a coding agent already pointed at the running app for one session:
 
 Settings for other apps are on the [local API page](https://getastronomical.com/local-api.html).
 
+## Linking to a model
+
+A web page or a model card can link straight to one model:
+
+    astronomical://models/huggingface/OWNER/NAME
+
+Opening that link starts Astronomical and shows Observatory's **Models** page with that model at the top and its own **Get** button. Nothing downloads until you press **Get**. The link only offers models from Astronomical's hand-picked list; for any other model, the page says it is not in the list.
+
 ## The same things, in engineering terms
 
 For readers who want the precise vocabulary:

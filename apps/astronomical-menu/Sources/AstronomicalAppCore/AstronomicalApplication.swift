@@ -137,6 +137,12 @@ public final class AstronomicalApplication: NSObject, NSApplicationDelegate {
       chatWindowController.conversationActions.saveNextExportWithoutAsking(into: exportFolder)
       return
     }
+    if let huggingfaceModelID = ModelLink.huggingfaceModelID(from: openedURL, channel: applicationIdentity.channel) {
+      ObservatoryLauncher.openOnceEngineAnswers(
+        path: ModelLink.observatoryPath(huggingfaceModelID: huggingfaceModelID),
+        applicationIdentity: applicationIdentity)
+      return
+    }
     guard let applicationLink = ApplicationLink.parse(openedURL, channel: applicationIdentity.channel) else { return }
     switch applicationLink {
     case .chat: chatWindowController.showChatWindow()

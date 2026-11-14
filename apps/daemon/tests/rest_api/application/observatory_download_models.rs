@@ -116,3 +116,31 @@ async fn should_serve_the_embedded_download_models_javascript() {
     .await
     .expect("the Download Models script journey must finish within five seconds");
 }
+
+// The page names this script in a tag of its own, so a route that is missing
+// would leave a linked model silently unshown instead of failing loudly.
+#[tokio::test]
+async fn should_serve_the_embedded_linked_model_javascript() {
+    timeout(Duration::from_secs(5), async {
+        let application =
+            astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
+        let response = application
+            .oneshot(
+                Request::builder()
+                    .uri("/download-models-linked.js")
+                    .body(Body::empty())
+                    .expect("the download-models-linked.js request should be valid"),
+            )
+            .await
+            .expect("the application should return the linked-model script");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let response_body = to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .expect("the linked-model script should be readable");
+        let script_text = String::from_utf8_lossy(&response_body);
+        assert!(script_text.contains("readDownloadModelsLinkedModelId"));
+    })
+    .await
+    .expect("the linked-model script journey must finish within five seconds");
+}

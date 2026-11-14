@@ -54,6 +54,9 @@ function wireDownloadModelsCatalog() {
         return Promise.resolve("unavailable");
     }
     wireDownloadModelsControls();
+    if (typeof window !== "undefined" && window.location) {
+        downloadModelsLinkedModelId = readDownloadModelsLinkedModelId(window.location.search);
+    }
     downloadModelsCatalogLoadPromise = loadDownloadModelsCatalog(catalogContainer);
     if (typeof setInterval === "function" && downloadModelsPollingTimer === null) {
         downloadModelsPollingTimer = setInterval(refreshDownloadModelsDownloadState, 1_000);
@@ -115,6 +118,7 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         downloadModelsSearchQuery,
         downloadModelsActiveFilter,
         downloadModelsExpandedModelId,
+        downloadModelsLinkedModelId,
         downloadModelsMeasuredBytesPerSecond,
         downloadModelsServingCeilingBytes,
         downloadModelsCeilingIsUserLimit,
