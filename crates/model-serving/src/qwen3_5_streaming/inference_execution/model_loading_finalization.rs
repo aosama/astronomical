@@ -41,19 +41,18 @@ impl Qwen3_5EngineState {
         mlx_memory_snapshot: Option<astronomical_runtime_integration::MlxMemorySnapshot>,
         failure_description: Option<String>,
     ) -> Result<(), InferenceEngineError> {
+        let measured_prompt_working_memory_bytes = self.model.as_ref().and_then(
+            crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_working_memory_bytes,
+        );
         let Some(performance_attribution_report) = model_loading_performance_attribution
             .finish_model_loading(ModelLoadingPerformanceAttributionMetadata {
                 outcome,
                 model_id,
                 model_revision,
-                prefill_transient_observation_completed: self
-                    .adaptive_ram_growth_guard
-                    .has_completed_growth_observation(crate::MemoryPhase::Prefill),
-                prefill_observed_transient_high_water_bytes: u64::try_from(
-                    self.adaptive_ram_growth_guard
-                        .observed_transient_high_water_bytes(crate::MemoryPhase::Prefill),
-                )
-                .unwrap_or(u64::MAX),
+                prefill_transient_observation_completed: measured_prompt_working_memory_bytes
+                    .is_some(),
+                prefill_observed_transient_high_water_bytes: measured_prompt_working_memory_bytes
+                    .unwrap_or(0),
                 total_artifact_payload_bytes,
                 resident_model_payload_bytes,
                 model_shard_count,

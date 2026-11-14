@@ -10,13 +10,12 @@ use astronomical_ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
 
 use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, GeneratedToken,
-    InferenceEngineError, PerformanceAttributionOutcome, PerformanceOperation,
+    GeneratedToken, InferenceEngineError, PerformanceAttributionOutcome, PerformanceOperation,
 };
 
 use super::completed_forward_memory::{
-    CompletedForwardMemoryObservation, capture_completed_forward_memory_observation,
-    collect_completed_forward_memory_snapshot, record_completed_adaptive_ram_growth,
+    CompletedForwardMemoryObservation, MeasuredForward,
+    capture_completed_forward_memory_observation, measure_completed_forward,
 };
 use super::generated_token_emission;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
@@ -87,8 +86,8 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
-        // Keep model borrows operation-local because memory admission may reclaim
-        // retained pages through `&mut self`.
+        // Keep model borrows operation-local because the steps below take
+        // `&mut self`.
         if let Some(prefill_progress) =
             self.advance_prompt_prefill_if_pending(request_id, active_request)?
         {
@@ -163,7 +162,6 @@ impl Qwen3_5EngineState {
                 active_request,
                 &current_generated_token,
                 current_generated_token_id,
-                adaptive_decode_ram_growth_context(),
             )?;
 
         let generated_token_emission = match early_structured_emission.take() {
@@ -236,11 +234,7 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let completed_forward_memory = if self.adaptive_ram_growth_guard_enabled {
-            Some(capture_completed_forward_memory_observation(model)?)
-        } else {
-            None
-        };
+        let completed_forward_memory = Some(capture_completed_forward_memory_observation(model)?);
         let generated_token_emission = self.build_generated_token_emission(
             model,
             active_request,
@@ -321,10 +315,10 @@ impl Qwen3_5EngineState {
         Ok(forced_generated_token)
     }
 
-    /// Decodes the first token from the final prompt token under the decode
-    /// admission baseline, records the route observation, and files the
-    /// completed-forward memory evidence. Mirrors the inlined first-decode
-    /// arm, including the first-token decode seam log.
+    /// Decodes the first token from the final prompt token, records the
+    /// route observation, and reports the forward's measured memory to the
+    /// governor. Mirrors the inlined first-decode arm, including the
+    /// first-token decode seam log.
     fn decode_first_token_from_final_prompt(
         &mut self,
         request_id: RequestId,
@@ -333,14 +327,7 @@ impl Qwen3_5EngineState {
         first_decode_forward_started_at: &mut Option<Instant>,
     ) -> Result<MlxArray, InferenceEngineError> {
         let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
-        let adaptive_ram_growth_context =
-            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged);
-        let admitted_baseline =
-            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
+        let memory_baseline = self.begin_forward_memory_measurement()?;
         let model = self
             .model
             .as_ref()
@@ -383,36 +370,26 @@ impl Qwen3_5EngineState {
             final_prompt_token_id,
             &mut active_request.performance_attribution,
         );
-        record_completed_adaptive_ram_growth(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context
-                .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
-            true,
+        measure_completed_forward(
             model,
-            active_request.request_context_extent(),
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
+            MeasuredForward::reply_token(),
+            active_request.request_decoder_state.payload_byte_count(),
+            memory_baseline.active_memory_bytes,
             &mut active_request.performance_attribution,
         )?;
         Ok(first_generated_token)
     }
 
-    /// Records the decode-phase memory ceiling utilization and bounds retained
-    /// expert ownership before warming. Hot-expert warming (issue #372) must
-    /// never take the adaptive growth guard's headroom: the learned transient
-    /// reserve is what the next forward's admission needs, so warming
-    /// self-regulates and yields tables back under pressure. Mirrors the
-    /// inlined block.
+    /// Records the decode-phase memory ceiling utilization. Hot-expert
+    /// warming (issue #372) stays inside the capacity the memory governor
+    /// gives the cache, which already leaves a reply step its working
+    /// memory.
     fn warm_hot_experts_and_record_utilization(
         &self,
         model: &Qwen3_5Model,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) {
-        if self.adaptive_ram_growth_guard_enabled
-            && let Ok(memory_snapshot) = model.memory_snapshot_with_forward_peak()
-        {
+        if let Ok(memory_snapshot) = model.memory_snapshot_with_forward_peak() {
             // Issue #507: record why the ceiling is not fully in use at this
             // step, alongside the warming cap that decides it. Without the
             // split, an idle gigabyte cannot be told apart from a reserve
@@ -438,22 +415,15 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// Runs the next decode forward under a fresh admission baseline and
-    /// collects the completed-forward memory snapshot. Mirrors the inlined
-    /// admission + forward + collection sequence.
+    /// Runs the next decode forward from a fresh memory baseline and
+    /// measures it when it completes.
     fn decode_next_token_and_collect_memory(
         &mut self,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         current_generated_token: &MlxArray,
         current_generated_token_id: u32,
-        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
-        let admitted_baseline =
-            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
+        let memory_baseline = self.begin_forward_memory_measurement()?;
         let model = self
             .model
             .as_ref()
@@ -488,17 +458,11 @@ impl Qwen3_5EngineState {
             );
             next_generated_token
         };
-        let completed_forward_memory = collect_completed_forward_memory_snapshot(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context
-                .with_execution_profile(AdaptiveRamGrowthExecutionProfile::Paged),
-            true,
+        let completed_forward_memory = measure_completed_forward(
             model,
-            active_request.request_context_extent(),
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
+            MeasuredForward::reply_token(),
+            active_request.request_decoder_state.payload_byte_count(),
+            memory_baseline.active_memory_bytes,
             &mut active_request.performance_attribution,
         )?;
         Ok((next_generated_token, completed_forward_memory))
@@ -508,9 +472,4 @@ impl Qwen3_5EngineState {
 pub(super) enum ActiveRequestAdvance {
     Continue(GeneratedToken),
     Complete(GeneratedToken),
-}
-
-/// The decode admission context for one streaming decode step.
-fn adaptive_decode_ram_growth_context() -> AdaptiveRamGrowthContext {
-    AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged)
 }

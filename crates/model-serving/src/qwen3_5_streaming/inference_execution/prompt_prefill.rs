@@ -19,12 +19,12 @@ use crate::{PerformanceCounter, Qwen3_5PersistentPromptCacheBoundaryCheckpoint};
 
 /// Outcome of executing one prompt-processing chunk.
 pub(super) struct PromptPrefillChunkOutcome {
-    pub(super) active_memory_bytes_before_growth: usize,
-    pub(super) retained_expert_payload_bytes_before_growth: u64,
-    pub(super) streamed_expert_page_bytes_before_growth: u64,
+    /// What MLX held when the forward began.
+    pub(super) active_memory_bytes_before_forward: usize,
     pub(super) forward_chunk_elapsed_millis: u64,
-    pub(super) adaptive_ram_growth_context: crate::AdaptiveRamGrowthContext,
-    pub(super) exact_temporary_workspace_bytes: usize,
+    /// The tokens the forward's memory is measured under: the chunk's, or
+    /// one span's for a group read one layer at a time.
+    pub(super) measured_forward_token_count: usize,
     pub(super) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 }
 
@@ -39,15 +39,14 @@ impl Qwen3_5EngineState {
         // Phase 1: pure decision logic — no side effects.
         let plan =
             self.plan_prompt_prefill_chunk(active_request, prefill_start, prefill_end, None)?;
-        // Counted before admission, so a declined layer-major group counts one
+        // Counted before the forward, so a declined layer-major group counts one
         // attempt; its chunks then count again as they run.
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::PrefillChunkCount, 1);
 
         // Phase 2: what is held before the forward, for measuring it.
-        let memory_baseline =
-            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
+        let memory_baseline = self.begin_forward_memory_measurement()?;
 
         // Phase 3: dispatch the target model's prompt forward.
         let forward_started_at = std::time::Instant::now();
@@ -81,15 +80,9 @@ impl Qwen3_5EngineState {
         )?;
 
         Ok(PromptPrefillChunkOutcome {
-            active_memory_bytes_before_growth: memory_baseline.active_memory_bytes,
-            retained_expert_payload_bytes_before_growth: memory_baseline
-                .retained_expert_payload_bytes,
-            streamed_expert_page_bytes_before_growth: memory_baseline.streamed_expert_page_bytes,
+            active_memory_bytes_before_forward: memory_baseline.active_memory_bytes,
             forward_chunk_elapsed_millis: forward_elapsed.as_millis() as u64,
-            adaptive_ram_growth_context: plan
-                .observed_growth_context
-                .with_execution_profile(crate::AdaptiveRamGrowthExecutionProfile::Paged),
-            exact_temporary_workspace_bytes: plan.exact_temporary_workspace_bytes,
+            measured_forward_token_count: plan.measured_forward_token_count,
             boundary_checkpoints,
         })
     }

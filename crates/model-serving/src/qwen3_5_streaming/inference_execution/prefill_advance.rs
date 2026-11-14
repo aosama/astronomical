@@ -7,7 +7,8 @@
 //! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
 //!    A layer-major group is the run of such chunks, each still clamped, so
 //!    it may publish several blocks, each from the state its chunk left.
-//! 3. Execute that unchanged chunk under adaptive memory admission.
+//! 3. Execute that unchanged chunk and report what it measured to the memory
+//!    governor.
 //! 4. Publish required prompt-cache state before advancing the in-memory cursor.
 //! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
@@ -154,11 +155,8 @@ impl Qwen3_5EngineState {
         )?;
         self.record_completed_forward_memory(
             active_request,
-            prompt_prefill_chunk_outcome.adaptive_ram_growth_context,
-            prompt_prefill_chunk_outcome.active_memory_bytes_before_growth,
-            prompt_prefill_chunk_outcome.retained_expert_payload_bytes_before_growth,
-            prompt_prefill_chunk_outcome.exact_temporary_workspace_bytes,
-            prompt_prefill_chunk_outcome.streamed_expert_page_bytes_before_growth,
+            prompt_prefill_chunk_outcome.measured_forward_token_count,
+            prompt_prefill_chunk_outcome.active_memory_bytes_before_forward,
         )?;
         Ok(Some(self.prefill_progress_token(
             active_request,
@@ -437,36 +435,22 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
-    /// Records one completed forward's memory evidence for adaptive RAM
-    /// growth. Every completed forward is valid model-local transient
-    /// evidence: cache boundaries and terminal tails deliberately produce
-    /// smaller chunks; discarding them would let a long request complete real
-    /// prefill work without ever teaching admission about its workspace.
-    /// Mirrors the inlined collection call.
-    #[allow(clippy::too_many_arguments)]
+    /// Measures one completed prompt forward and tells the memory governor.
     fn record_completed_forward_memory(
         &mut self,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-        adaptive_ram_growth_context: crate::AdaptiveRamGrowthContext,
-        active_memory_bytes_before_growth: usize,
-        retained_expert_payload_bytes_before_growth: u64,
-        exact_temporary_workspace_bytes: usize,
-        streamed_expert_page_bytes_before_growth: u64,
+        measured_forward_token_count: usize,
+        active_memory_bytes_before_forward: usize,
     ) -> Result<(), InferenceEngineError> {
         let model = self
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        completed_forward_memory::collect_completed_forward_memory_snapshot(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context,
-            true,
+        completed_forward_memory::measure_completed_forward(
             model,
-            active_request.request_context_extent(),
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            exact_temporary_workspace_bytes,
-            streamed_expert_page_bytes_before_growth,
+            completed_forward_memory::MeasuredForward::prompt(measured_forward_token_count),
+            active_request.request_decoder_state.payload_byte_count(),
+            active_memory_bytes_before_forward,
             &mut active_request.performance_attribution,
         )?;
         Ok(())

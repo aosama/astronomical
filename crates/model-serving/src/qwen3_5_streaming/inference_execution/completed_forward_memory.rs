@@ -1,59 +1,57 @@
 //! Post-forward MLX sampling: what a forward left in memory and how high it
 //! peaked.
 //!
-//! The memory governor is told about every completed forward
-//! (`govern_completed_forward`) and is the only thing that changes how much
-//! the expert cache may keep (issue #2221). The learned growth guard and the
-//! RAM budget are still fed here because the context admission and the dense
-//! layer plan read them; they decide nothing about the expert cache.
+//! The memory governor is told about every completed forward and answers
+//! with how much the kept weights may hold (issue #2221). Nothing else is
+//! learned here: the working memory a step needs is what the governor
+//! measured, not an estimate fitted to earlier forwards.
 //!
 //! The sequence:
 //!
 //! 1. Sample active and peak MLX bytes under attribution.
-//! 2. Feed the growth guard and the RAM budget.
-//! 3. Tell the governor, which answers with the cache's capacity.
-//! 4. In the reply phase, resize the hot-expert tables to that capacity.
-//!
-//! A disabled growth guard uses `usize::MAX` as its sentinel baseline. In
-//! that case callers may still request a telemetry sample, but nothing is
-//! fed and the governor is not told.
+//! 2. Tell the governor, which applies the capacity it answers with.
+//! 3. In the reply phase, resize the hot-expert tables to that capacity.
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model::memory_governance::CompletedForwardMemoryReadings;
-use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
-    MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
-    measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
-};
+use crate::{InferenceEngineError, MemoryPhase, PerformanceAttribution, PerformanceOperation};
 
 use super::qwen3_5_runtime_error;
 
 /// A memory observation whose raw MLX snapshot is captured at one owner-thread
-/// instant, before any learning or reclamation this path may trigger. The
-/// residency claim paired with this snapshot is derived from the reconciled
-/// breakdown of this exact snapshot at emission time, so a promotion or demote
-/// can never publish a claim that disagrees with its own measurement (issue
-/// #337).
+/// instant. The residency claim paired with this snapshot is derived from the
+/// reconciled breakdown of this exact snapshot at emission time, so a claim
+/// can never disagree with its own measurement (issue #337).
 #[derive(Debug)]
 pub(in crate::qwen3_5_streaming) struct CompletedForwardMemoryObservation {
     pub(in crate::qwen3_5_streaming) mlx_memory_snapshot: MlxMemorySnapshot,
 }
 
-/// How much decoder context the active request owns when a forward completes.
-///
-/// The post-forward budget refresh reserves context for the request's whole
-/// sequence, not for the forward that just ran: a one-token decode forward
-/// would otherwise reserve one token of context while the request's KV cache
-/// holds thousands, letting the retained-expert ceiling grow into memory the
-/// live context already occupies.
+/// Which forward was measured: its phase and how many tokens it ran.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::qwen3_5_streaming) struct RequestContextExtent {
-    /// Tokens the request's context spans once the next forward runs.
-    pub(in crate::qwen3_5_streaming) context_token_count: u64,
-    /// Exact payload of the request's live decoder state, read from tensor shapes.
-    pub(in crate::qwen3_5_streaming) live_context_state_payload_bytes: u64,
+pub(in crate::qwen3_5_streaming) struct MeasuredForward {
+    pub(in crate::qwen3_5_streaming) memory_phase: MemoryPhase,
+    pub(in crate::qwen3_5_streaming) forward_token_count: usize,
+}
+
+impl MeasuredForward {
+    /// A prompt forward over `forward_token_count` tokens.
+    pub(in crate::qwen3_5_streaming) const fn prompt(forward_token_count: usize) -> Self {
+        Self {
+            memory_phase: MemoryPhase::Prefill,
+            forward_token_count,
+        }
+    }
+
+    /// One reply token through every layer.
+    pub(in crate::qwen3_5_streaming) const fn reply_token() -> Self {
+        Self {
+            memory_phase: MemoryPhase::Decode,
+            forward_token_count: 1,
+        }
+    }
 }
 
 /// Captures the raw MLX snapshot at one instant.
@@ -68,189 +66,55 @@ pub(in crate::qwen3_5_streaming) fn capture_completed_forward_memory_observation
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-/// Collects post-forward MLX telemetry and records adaptive learning when enabled.
+/// Samples MLX after a forward, tells the memory governor what the forward
+/// measured, and returns the sample.
 ///
-/// The returned snapshot is also used for user-visible memory telemetry. Returning
-/// the exact sample used for learning prevents status from presenting a different
-/// instant than the one that changed expert-retention policy.
-pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
-    adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
-    adaptive_ram_growth_context: AdaptiveRamGrowthContext,
-    should_retain_adaptive_ram_growth_observation: bool,
+/// The returned snapshot is also used for user-visible memory telemetry.
+/// Returning the exact sample the governor was told about prevents status
+/// from presenting a different instant than the one that moved the kept
+/// weights' capacity.
+pub(in crate::qwen3_5_streaming) fn measure_completed_forward(
     model: &Qwen3_5Model,
-    request_context_extent: RequestContextExtent,
-    active_memory_bytes_before_growth: usize,
-    retained_expert_payload_bytes_before_growth: u64,
-    exact_temporary_workspace_bytes: usize,
-    streamed_expert_page_bytes_before_growth: u64,
+    measured_forward: MeasuredForward,
+    live_context_state_payload_bytes: u64,
+    active_memory_bytes_before_forward: usize,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
-    // The snapshot is captured under attribution so the published pair describes
-    // one instant: the residency claim is derived from this exact snapshot's
-    // reconciled breakdown when the emission is built. Learning and reclamation
-    // below may demote or retune expert ownership; the next observation captures
-    // that state on its own.
     let observation = performance_attribution.measure_operation(
         PerformanceOperation::CompletedForwardMemorySnapshot,
         |_performance_attribution| capture_completed_forward_memory_observation(model),
     )?;
-    if active_memory_bytes_before_growth == usize::MAX {
-        return Ok(observation);
-    }
-    let memory_snapshot_after_growth = observation.mlx_memory_snapshot;
-    // Mandatory expert pages promoted by this forward: the countervalue delta
-    // of the request's logical streaming payload counter. They are expert-page
-    // spike ownership, not activation, so both learning sites exclude them
-    // (issue #691).
-    // A dense model's streamed layers sit in the peak the same way: weight
-    // bytes the slot reservation covers, never activation.
-    let promoted_expert_page_stream_bytes = performance_attribution
-        .expert_streaming_payload_byte_count()
-        .saturating_sub(streamed_expert_page_bytes_before_growth)
-        .saturating_add(model.dense_streaming_slot_reservation_bytes());
-    let retained_expert_payload_bytes_after_growth = model
-        .expert_weight_memory_cache_statistics()
-        .resident_payload_byte_count;
-    let retained_expert_payload_growth_bytes = retained_expert_payload_bytes_after_growth
-        .saturating_sub(retained_expert_payload_bytes_before_growth);
-
-    adaptive_ram_growth_guard.record_completed_growth_excluding_expert_page_stream(
-        adaptive_ram_growth_context,
-        should_retain_adaptive_ram_growth_observation,
-        active_memory_bytes_before_growth,
-        memory_snapshot_after_growth.active_memory_bytes(),
-        memory_snapshot_after_growth.peak_memory_bytes(),
-        exact_temporary_workspace_bytes,
-        retained_expert_payload_growth_bytes,
-        promoted_expert_page_stream_bytes,
-    );
-
-    // Expert paging needs the phase high-water even when this exact context will
-    // not be retained. This prevents warm layers from consuming activation space
-    // already proven necessary by another context in the same phase.
-    let phase_observed_transient_high_water_bytes = adaptive_ram_growth_guard
-        .observed_transient_high_water_bytes(adaptive_ram_growth_context.memory_phase());
-    model.update_expert_pager_transient_high_water_bytes(
-        u64::try_from(phase_observed_transient_high_water_bytes).unwrap_or(u64::MAX),
-    );
-
-    if should_retain_adaptive_ram_growth_observation {
-        let context_observed_transient_high_water_bytes = adaptive_ram_growth_guard
-            .observed_transient_high_water_bytes_for_context(adaptive_ram_growth_context);
-        record_composed_ram_budget_measurement(
-            adaptive_ram_growth_context,
-            model,
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            context_observed_transient_high_water_bytes,
-            exact_temporary_workspace_bytes,
-            &memory_snapshot_after_growth,
-            promoted_expert_page_stream_bytes,
-        );
-    }
+    let memory_snapshot_after_forward = &observation.mlx_memory_snapshot;
     model.govern_completed_forward(CompletedForwardMemoryReadings {
-        memory_phase: adaptive_ram_growth_context.memory_phase(),
-        forward_token_count: adaptive_ram_growth_context.forward_token_count(),
-        live_context_state_payload_bytes: request_context_extent.live_context_state_payload_bytes,
-        active_bytes_before_forward: u64::try_from(active_memory_bytes_before_growth)
+        memory_phase: measured_forward.memory_phase,
+        forward_token_count: measured_forward.forward_token_count,
+        live_context_state_payload_bytes,
+        active_bytes_before_forward: u64::try_from(active_memory_bytes_before_forward)
             .unwrap_or(u64::MAX),
         active_bytes_after_forward: u64::try_from(
-            memory_snapshot_after_growth.active_memory_bytes(),
+            memory_snapshot_after_forward.active_memory_bytes(),
         )
         .unwrap_or(u64::MAX),
-        peak_bytes_during_forward: u64::try_from(memory_snapshot_after_growth.peak_memory_bytes())
+        peak_bytes_during_forward: u64::try_from(memory_snapshot_after_forward.peak_memory_bytes())
             .unwrap_or(u64::MAX),
     });
-    Ok(CompletedForwardMemoryObservation {
-        mlx_memory_snapshot: memory_snapshot_after_growth,
-    })
-}
-
-#[allow(clippy::too_many_arguments)]
-/// Records adaptive learning for a completed operation that needs no snapshot result.
-pub(in crate::qwen3_5_streaming) fn record_completed_adaptive_ram_growth(
-    adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
-    adaptive_ram_growth_context: AdaptiveRamGrowthContext,
-    should_retain_adaptive_ram_growth_observation: bool,
-    model: &Qwen3_5Model,
-    request_context_extent: RequestContextExtent,
-    active_memory_bytes_before_growth: usize,
-    retained_expert_payload_bytes_before_growth: u64,
-    exact_temporary_workspace_bytes: usize,
-    streamed_expert_page_bytes_before_growth: u64,
-    performance_attribution: &mut PerformanceAttribution,
-) -> Result<(), InferenceEngineError> {
-    if active_memory_bytes_before_growth == usize::MAX {
-        return Ok(());
+    if measured_forward.memory_phase == MemoryPhase::Decode {
+        resize_hot_expert_tables_to_the_capacity(model);
     }
-    collect_completed_forward_memory_snapshot(
-        adaptive_ram_growth_guard,
-        adaptive_ram_growth_context,
-        should_retain_adaptive_ram_growth_observation,
-        model,
-        request_context_extent,
-        active_memory_bytes_before_growth,
-        retained_expert_payload_bytes_before_growth,
-        exact_temporary_workspace_bytes,
-        streamed_expert_page_bytes_before_growth,
-        performance_attribution,
-    )?;
-    Ok(())
+    Ok(observation)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn record_composed_ram_budget_measurement(
-    adaptive_ram_growth_context: AdaptiveRamGrowthContext,
-    model: &Qwen3_5Model,
-    active_memory_bytes_before_growth: usize,
-    retained_expert_payload_bytes_before_growth: u64,
-    observed_transient_high_water_bytes: usize,
-    exact_temporary_workspace_bytes: usize,
-    memory_snapshot_after_growth: &MlxMemorySnapshot,
-    promoted_expert_page_stream_bytes: u64,
-) {
-    let mlx_ram_budget_phase = adaptive_ram_growth_context.memory_phase();
-    let retained_expert_payload_bytes_after_growth = model
-        .expert_weight_memory_cache_statistics()
-        .resident_payload_byte_count;
-    let measured_context_and_activation_bytes =
-        measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
-            u64::try_from(active_memory_bytes_before_growth).unwrap_or(u64::MAX),
-            u64::try_from(memory_snapshot_after_growth.peak_memory_bytes()).unwrap_or(u64::MAX),
-            retained_expert_payload_bytes_before_growth,
-            retained_expert_payload_bytes_after_growth,
-            promoted_expert_page_stream_bytes,
-        );
-    model
-        .mlx_ram_budget_mut()
-        .record_measurement(MlxRamBudgetMeasurement {
-            phase: mlx_ram_budget_phase,
-            forward_token_count: u64::try_from(adaptive_ram_growth_context.forward_token_count())
-                .unwrap_or(u64::MAX),
-            measured_context_and_activation_bytes,
-            observed_activation_headroom_bytes: u64::try_from(observed_transient_high_water_bytes)
-                .unwrap_or(u64::MAX),
-            exact_temporary_workspace_bytes: u64::try_from(exact_temporary_workspace_bytes)
-                .unwrap_or(u64::MAX),
-        });
-
-    // Issue #512: resize the hot-expert warm tables as decode evidence
-    // accumulates. The decode handoff sizes them before any decode forward
-    // exists, against the conservative no-decode-evidence fallback, and the
-    // slot count bounds every later insert. Decode forwards prove their
-    // transients are small within a few tokens; a frozen slot count kept the
-    // warm tables churning at that first conservative size while the plan
-    // ceiling admitted gigabytes more. Every completed decode forward
-    // re-sizes here, on both the plain and the multi-token-prediction paths,
-    // so warming grows into the entitlement the fresh evidence supports.
-    if adaptive_ram_growth_context.memory_phase() == MemoryPhase::Decode {
-        let decoded_warm_slot_count = super::decode_expert_memory_handoff::decode_warm_slot_count(
-            model,
-            model.expert_weight_memory_cache_statistics(),
-        );
-        if decoded_warm_slot_count != model.hot_expert_warm_slot_count() {
-            model.set_hot_expert_warm_slot_count(decoded_warm_slot_count);
-        }
+/// Issue #512: the hot-expert tables are sized at the reply's start, before
+/// any reply step has been measured. The governor's reply-step measurement
+/// settles within a few tokens and the capacity rises with it; a slot count
+/// frozen at the first size kept the tables churning while the capacity
+/// admitted gigabytes more. Every completed reply step re-sizes here.
+fn resize_hot_expert_tables_to_the_capacity(model: &Qwen3_5Model) {
+    let hot_expert_warm_slot_count = super::decode_expert_memory_handoff::decode_warm_slot_count(
+        model,
+        model.expert_weight_memory_cache_statistics(),
+    );
+    if hot_expert_warm_slot_count != model.hot_expert_warm_slot_count() {
+        model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
     }
 }

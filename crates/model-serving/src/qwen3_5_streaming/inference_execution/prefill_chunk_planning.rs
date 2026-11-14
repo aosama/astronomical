@@ -1,19 +1,16 @@
 //! Pre-forward decision logic for a single prompt-processing chunk.
 //!
 //! This module computes cache eligibility, checkpoint boundaries, workspace
-//! projection, and adaptive-RAM growth context without side effects.
+//! projection, and the token count the forward is measured under, without
+//! side effects.
 
-use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile,
-    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
-};
+use crate::persistent_prompt_cache_boundary_completed_prefill_chunk_tokens;
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::layer_major_span_plan::LayerMajorSpanPlan;
-use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-/// Immutable decisions computed before memory admission and forward execution.
+/// Immutable decisions computed before a prompt forward runs.
 ///
 /// Every field is a pure function of the request state and the model config.
 /// Nothing here triggers GPU work or mutable engine state.
@@ -34,12 +31,10 @@ pub(super) struct PrefillChunkPlan {
     /// applicable.
     pub(super) persistent_prompt_cache_block_token_count: Option<usize>,
 
-    /// Combined temporary workspace reservation.
-    pub(super) exact_temporary_workspace_bytes: usize,
-
-    /// The context the completed forward's memory is recorded under: the
-    /// admission context, or one span's for a layer-major group.
-    pub(super) observed_growth_context: AdaptiveRamGrowthContext,
+    /// The tokens the completed forward's memory is measured under: the
+    /// chunk's, or one span's for a group read one layer at a time, whose
+    /// peak is one span's working memory and never the whole group's.
+    pub(super) measured_forward_token_count: usize,
 
     /// The spans a dense model runs layer by layer, when this forward
     /// covers several chunks at once.
@@ -81,11 +76,10 @@ impl Qwen3_5EngineState {
         )
     }
 
-    /// Compute all pre-admission decisions for a prompt-processing chunk.
+    /// Compute every decision a prompt-processing chunk needs before it runs.
     ///
-    /// Returns a plan that feeds into `execute_prompt_prefill_chunk`'s
-    /// admission and forward phases. This method performs no GPU work and
-    /// no mutable engine state changes.
+    /// Returns a plan that feeds into `execute_prompt_prefill_chunk`. This
+    /// method performs no GPU work and no mutable engine state changes.
     pub(super) fn plan_prompt_prefill_chunk(
         &self,
         active_request: &Qwen3_5EngineRequest,
@@ -93,10 +87,6 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
         layer_major_span_plan: Option<LayerMajorSpanPlan>,
     ) -> Result<PrefillChunkPlan, PromptPrefillChunkAttemptError> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let prefill_token_count = prefill_end - prefill_start;
         let (all_completed_prefill_chunk_tokens, persistent_prompt_cache_block_token_count) =
             self.planned_prompt_cache_boundaries(active_request, prefill_start, prefill_end)?;
@@ -108,66 +98,17 @@ impl Qwen3_5EngineState {
             intermediate_completed_prefill_chunk_tokens.pop();
         }
 
-        let boundary_checkpoint_workspace_bytes = boundary_checkpoint_workspace_bytes(
-            model,
-            intermediate_completed_prefill_chunk_tokens.len(),
-        )?;
-
-        let direct_publication_workspace_bytes = if !all_completed_prefill_chunk_tokens.is_empty() {
-            self.persistent_prompt_cache
-                .as_ref()
-                .map(|persistent_prompt_cache| {
-                    persistent_prompt_cache
-                        .model_contract_ref()
-                        .direct_publication_workspace_bytes()
-                })
-                .unwrap_or(0)
-        } else {
-            0
-        };
-
-        let exact_temporary_workspace_bytes = boundary_checkpoint_workspace_bytes
-            .checked_add(direct_publication_workspace_bytes)
-            .and_then(|workspace_bytes| {
-                workspace_bytes.checked_add(layer_major_hidden_state_bytes(
-                    model,
-                    layer_major_span_plan.as_ref(),
-                ))
-            })
-            .ok_or_else(|| {
-                super::fatal_engine_error("prompt-cache publication workspace bytes overflowed")
-            })?;
-
-        // The real chunk token count, not zero: admission derives its
-        // routed-expert reservation and its exact-context transient key from
-        // this value, and a zero made every chunk reserve a single
-        // decode-token page while the forward actually held the streamed
-        // union page of every non-resident sparse layer (the
-        // back-to-back-request ceiling breach of 2026-10-24). A layer-major
-        // group admits its whole token count, which sizes its context growth.
-        let adaptive_ram_growth_context =
-            self.prefill_growth_context(active_request, prefill_token_count);
-        // Its peak, though, is one span's working memory beside the hidden
-        // states the workspace already names; recorded under the group's
-        // count it would scale every smaller chunk's reserve down from a
-        // peak that never belonged to that many tokens.
-        let observed_growth_context =
-            layer_major_span_plan
-                .as_ref()
-                .map_or(adaptive_ram_growth_context, |span_plan| {
-                    self.prefill_growth_context(
-                        active_request,
-                        span_plan.largest_span_token_count(),
-                    )
-                });
+        let measured_forward_token_count = layer_major_span_plan.as_ref().map_or(
+            prefill_token_count,
+            LayerMajorSpanPlan::largest_span_token_count,
+        );
 
         Ok(PrefillChunkPlan {
             prefill_token_count,
             all_completed_prefill_chunk_tokens,
             intermediate_completed_prefill_chunk_tokens,
             persistent_prompt_cache_block_token_count,
-            exact_temporary_workspace_bytes,
-            observed_growth_context,
+            measured_forward_token_count,
             layer_major_span_plan,
         })
     }
@@ -208,65 +149,4 @@ impl Qwen3_5EngineState {
             Some(persistent_prompt_cache_block_token_count),
         ))
     }
-
-    fn prefill_growth_context(
-        &self,
-        active_request: &Qwen3_5EngineRequest,
-        forward_token_count: usize,
-    ) -> AdaptiveRamGrowthContext {
-        AdaptiveRamGrowthContext::prefill(
-            forward_token_count,
-            Qwen3_5PrefillExecutionContext::new(
-                active_request.visual_embeddings.is_some(),
-                AdaptiveRamGrowthExecutionProfile::Paged,
-                self.persistent_prompt_cache.is_some()
-                    && active_request.can_use_persistent_prompt_cache,
-            )
-            .context_identifier_flags(),
-            active_request.visual_embeddings.is_some(),
-            AdaptiveRamGrowthExecutionProfile::Paged,
-        )
-    }
-}
-
-/// The snapshots a forward holds until publication, one per boundary it
-/// captures before its end.
-fn boundary_checkpoint_workspace_bytes(
-    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
-    intermediate_boundary_count: usize,
-) -> Result<usize, PromptPrefillChunkAttemptError> {
-    if intermediate_boundary_count == 0 {
-        return Ok(0);
-    }
-    Ok(model
-        .decoder_cache_layout()
-        .boundary_snapshot_payload_byte_count()
-        .map_err(|error| {
-            super::fatal_engine_error(format!(
-                "failed to project boundary checkpoint workspace: {error}"
-            ))
-        })?
-        .checked_mul(intermediate_boundary_count)
-        .ok_or_else(|| {
-            super::fatal_engine_error("boundary checkpoint workspace bytes overflowed")
-        })?)
-}
-
-/// Hidden states a layer-major prefill holds between layers: every span's,
-/// plus the output of the span being computed. A chunk's forward never
-/// holds more than its own, which the measured working memory covers.
-fn layer_major_hidden_state_bytes(
-    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
-    layer_major_span_plan: Option<&LayerMajorSpanPlan>,
-) -> usize {
-    let Some(layer_major_span_plan) = layer_major_span_plan else {
-        return 0;
-    };
-    let group_token_count = layer_major_span_plan
-        .spans
-        .last()
-        .map_or(0, |last_span| last_span.end_token);
-    group_token_count
-        .saturating_add(layer_major_span_plan.largest_span_token_count())
-        .saturating_mul(model.hidden_state_bytes_per_token())
 }

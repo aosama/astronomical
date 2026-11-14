@@ -3,11 +3,11 @@ mod cached_plus_streamed_page_route;
 #[cfg(feature = "direct-mlx")]
 mod deferred_expert_demand;
 #[cfg(feature = "direct-mlx")]
-mod dense_layer_admission;
-#[cfg(feature = "direct-mlx")]
 mod dense_layer_counts;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_measurement;
+#[cfg(feature = "direct-mlx")]
+mod dense_layer_payload;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod dense_layer_reads;
 #[cfg(all(test, feature = "direct-mlx"))]
@@ -110,9 +110,10 @@ mod forward_attribution_generation;
 #[cfg(feature = "direct-mlx")]
 mod forward_graph;
 #[cfg(feature = "direct-mlx")]
-mod live_memory_limit;
+mod governed_leases;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod memory_admission;
+mod live_memory_limit;
+pub(crate) mod request_refusal;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]

@@ -14,7 +14,6 @@ impl Qwen3_5EngineState {
     pub(crate) fn release_request_memory(
         &self,
         request_id: RequestId,
-        should_capture_memory_snapshot: bool,
     ) -> Option<MlxMemorySnapshot> {
         let model = self.model.as_ref()?;
         if let Err(allocator_cache_error) = model
@@ -23,9 +22,6 @@ impl Qwen3_5EngineState {
         {
             tracing::warn!(request_id = request_id.value(), error = %allocator_cache_error,
                 "failed to release reclaimable MLX request memory");
-            return None;
-        }
-        if !should_capture_memory_snapshot {
             return None;
         }
         match model.runtime().memory_snapshot() {

@@ -69,14 +69,14 @@ async fn assert_dense_streaming_logit_parity() {
         let mut answers_by_streaming_variant = Vec::with_capacity(KEPT_LAYER_COUNTS.len() * 2);
         for kept_layer_count in KEPT_LAYER_COUNTS {
             streaming_model
-                .plan_dense_layer_residency(
+                .probe_dense_layers(
                     LayerProbeShape {
                         prefill_chunk_token_count: PREFILL_CHUNK_TOKEN_COUNT,
                         full_attention_kv_state_growth_tokens: PREFILL_CHUNK_TOKEN_COUNT as i32,
                     },
                     Some(kept_layer_count),
                 )
-                .expect("the dense layers should plan");
+                .expect("the dense layers should be probed");
             answers_by_streaming_variant.push((
                 format!("{kept_layer_count} kept layers, chunk by chunk"),
                 greedy_answer(&qwen3_5_config, &prompt_token_ids, &dense_forward),

@@ -16,7 +16,7 @@ use crate::decoder_cache::DecoderCacheLayout;
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::text::sampler;
-use crate::qwen3_5_streaming::model::memory_admission;
+use crate::qwen3_5_streaming::model::request_refusal;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 /// The cache-derived starting cursor of a generation session: what the
@@ -57,9 +57,8 @@ impl Qwen3_5EngineState {
         mut inference_request: Qwen3_5InferenceRequest,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
         let request_id = inference_request.request_id();
-        let configured_maximum_output_tokens = inference_request.max_output_tokens();
         let taken_performance_attribution = inference_request.take_performance_attribution();
-        let mut performance_attribution =
+        let performance_attribution =
             self.ensure_no_active_generation(&inference_request, taken_performance_attribution)?;
         let reserved_context_tokens =
             self.validate_generation_request_and_resolve_reserved_context(&inference_request)?;
@@ -74,14 +73,9 @@ impl Qwen3_5EngineState {
         // request's expert storage reads (issue #1533).
         model.begin_request_expert_storage_read_observation();
         let decoder_cache_layout = model.decoder_cache_layout().clone();
-        self.admit_initial_generation_context_or_record_rejection(
-            request_id,
-            configured_maximum_output_tokens,
-            reserved_context_tokens,
-            inference_request.input_token_ids().len(),
-            self.persistent_prompt_cache.is_some() && !inference_request.has_visual_embeddings(),
-            &mut performance_attribution,
-        )?;
+        // No request is refused for memory (issue #1902): the governor sets
+        // the prompt's stored state aside and the kept weights give back
+        // what that displaces.
         self.govern_request_start(&inference_request);
         // Everything below can still fail; a request that never starts must
         // not leave the memory governor holding its prompt's stored state.
@@ -162,7 +156,7 @@ impl Qwen3_5EngineState {
             natural_reasoning_end_token_ids,
         )
         .map_err(|source| {
-            memory_admission::invalid_request_error(format!(
+            request_refusal::invalid_request_error(format!(
                 "invalid Qwen3.5 thinking-budget configuration: {source}"
             ))
         })
@@ -184,7 +178,7 @@ impl Qwen3_5EngineState {
         let random_state = self.resolve_sampling_random_state(sampling_strategy)?;
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
         let image_pad_token_id = inference_request.image_pad_token_id().ok_or_else(|| {
-            memory_admission::invalid_request_error(
+            request_refusal::invalid_request_error(
                 "generation request is missing the image-pad token ID",
             )
         })?;
@@ -313,7 +307,7 @@ impl Qwen3_5EngineState {
             ));
         }
         if prompt_image_pad_token_count != visual_embedding_row_count {
-            return Err(memory_admission::invalid_request_error(
+            return Err(request_refusal::invalid_request_error(
                 "image pad token count does not match visual embedding row count",
             ));
         }
@@ -454,7 +448,7 @@ impl Qwen3_5EngineState {
                 image_pad_token_id,
             )
             .map_err(|visual_embedding_suffix_plan_error| {
-                memory_admission::invalid_request_error(format!(
+                request_refusal::invalid_request_error(format!(
                     "visual embedding suffix planning failed: {visual_embedding_suffix_plan_error}"
                 ))
             })?;

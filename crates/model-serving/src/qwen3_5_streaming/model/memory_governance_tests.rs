@@ -1,6 +1,9 @@
 use astronomical_memory_policy::ledger::LedgerPhase;
 
-use super::{dense_model_memory_shape, ledger_phase_for, sparse_model_memory_shape};
+use super::{
+    dense_model_memory_shape, larger_of_what_was_measured, ledger_phase_for,
+    sparse_model_memory_shape,
+};
 use crate::{MemoryPhase, MlxRamBudgetModelGeometry};
 
 #[test]
@@ -75,4 +78,21 @@ fn should_describe_a_dense_model_with_no_streamed_layers_as_having_nothing_to_ke
 fn should_saturate_instead_of_wrapping_on_absurd_layer_sizes() {
     let model_shape = dense_model_memory_shape(0, &[u64::MAX, 5], 0);
     assert_eq!(model_shape.streamable_weight_bytes, u64::MAX);
+}
+
+#[test]
+fn should_take_the_larger_of_two_measurements() {
+    assert_eq!(larger_of_what_was_measured(Some(3), Some(7)), Some(7));
+    assert_eq!(larger_of_what_was_measured(Some(7), Some(3)), Some(7));
+}
+
+#[test]
+fn should_take_the_only_measurement_there_is() {
+    assert_eq!(larger_of_what_was_measured(Some(5), None), Some(5));
+    assert_eq!(larger_of_what_was_measured(None, Some(5)), Some(5));
+}
+
+#[test]
+fn should_report_nothing_measured_when_neither_exists() {
+    assert_eq!(larger_of_what_was_measured(None, None), None);
 }

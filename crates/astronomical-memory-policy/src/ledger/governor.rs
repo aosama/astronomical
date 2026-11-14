@@ -189,6 +189,14 @@ impl MemoryGovernor {
         capacity_of(self.ledger.accounts())
     }
 
+    /// What the capacity would be in `phase` with everything else as it
+    /// stands. A question only: nothing changes. A holder that pays to fill
+    /// itself asks this before filling room a coming phase would take back.
+    pub fn capacity_while(&self, phase: LedgerPhase) -> KeptWeightCapacity {
+        let mut ledger_in_that_phase = self.ledger.clone();
+        capacity_of(ledger_in_that_phase.enter_phase(phase))
+    }
+
     /// The reading of the most recent measured step.
     #[must_use]
     pub const fn latest_reading(&self) -> Option<LedgerReading> {
