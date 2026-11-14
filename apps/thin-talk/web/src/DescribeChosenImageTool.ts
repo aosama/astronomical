@@ -18,8 +18,14 @@ const DEFAULT_IMAGE_QUESTION = "Describe this image in detail.";
 export class DescribeChosenImageTool implements ConversationTool {
   public readonly name = "describe_image";
   public readonly label = "Describe an image";
+  // The wording decides whether the picker opens at all. With "Asks the user
+  // to choose an image…" alone, the starter model (Ornith 9B, 4-bit) answered
+  // "please choose an image" in words and never called the tool in 8 of 16
+  // tries; told when to use it and to call it straight away, it called the
+  // tool in 15 of 16. The engine cannot force a tool call, so the description
+  // is the only lever.
   public readonly description =
-    "Asks the user to choose an image (PNG or JPEG) on this Mac and returns a description of it, answering the question if one is given.";
+    "Opens a picker so the user can choose an image (PNG or JPEG) on this Mac, and returns a description of it, answering the question if one is given. Use it whenever the user wants you to look at, describe or answer questions about a photo or picture of theirs. Call it straight away: only this tool can open the picker, so never ask the user in words to choose or send the image first.";
   public readonly parameters: ToolParametersSchema = {
     type: "object",
     properties: { question: { type: "string", description: "What to find out about the image; a general description when omitted." } },
