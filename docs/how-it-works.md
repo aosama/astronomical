@@ -17,12 +17,12 @@ Many large models are built as a *mixture of experts*. The model holds a large n
 Astronomical uses that. It does not need the whole model in memory at once, only the parts in use.
 
 - **You choose one memory limit.** On a 32 GB Mac, for example, a limit of 16 GB leaves room for macOS and your other apps.
-- **Experts are read from the SSD when needed.** When the whole model does not fit under your limit, Astronomical loads only the experts the model picks for the next word.
+- **Experts are read from the SSD when needed.** When the whole model does not fit under your limit, Astronomical keeps as many experts in memory as the limit allows and reads the others from the SSD when the model picks them.
 - **A model that fits stays fully in memory.** That is the fastest way to run it, so Astronomical does it whenever it is safe.
-- **It switches by itself.** A long conversation needs more memory. If that pushes a model over your limit, Astronomical moves the experts to SSD reading. When the model is idle and fits again, it moves them back. You never pick a mode.
+- **It switches by itself.** A long conversation needs more memory. If that pushes a model over your limit, Astronomical starts reading experts from the SSD. When the model is idle and fits again, it goes back to keeping everything in memory. You never pick a mode.
 - **You can see what it is doing.** The menu-bar item shows your memory limit, whether the model is in memory or being read from the SSD, how memory is being used, how much room is left, how busy the graphics chip is, how far along your prompt is, and how much earlier work was reused.
 
-The switch is all or nothing: a model's experts are either all in memory or all read from the SSD, never a mix of the two.
+While a model is read from the SSD, the experts it uses most stay in memory, up to your limit. Astronomical never refuses a model because the limit is small; a smaller limit means more reading and a slower reply.
 
 ### What still has to fit
 
@@ -42,8 +42,8 @@ The part of Astronomical that runs the model is written specifically for Apple s
 | What Astronomical does | What you get |
 | --- | --- |
 | Keeps a model fully in memory when it fits, and reads from the SSD when it does not | The best speed your memory limit allows, with no setting to tune. |
-| Works out how much memory the next step needs before starting it | Memory is checked before it is used, and only as much is freed as the next step needs. |
-| Reads a long prompt in pieces of a set size, made smaller only when memory requires it | Predictable memory use, and no time spent on trial runs while you wait. |
+| Measures how much memory a step of work needs, when the model loads and again at every step | Memory is set aside from what was measured, not guessed, and everything left under your limit holds experts. |
+| Reads a long prompt in pieces of a set size, one layer of the model at a time | Predictable memory use: each part of the model is read from the SSD once per prompt, and the piece size is never changed while you wait. |
 | Saves its work on a prompt to the SSD | When a new request starts with text it has seen before, it picks up from there. This also covers images it has already looked at. The space used is capped. |
 | Chooses each next word on the graphics chip | Less waiting between the graphics chip and the rest of the Mac while it writes. |
 | Groups work by expert | Less scattered work for the graphics chip on larger prompts. |
@@ -120,8 +120,8 @@ For readers who want the precise vocabulary:
 
 - The serving path is written in Rust and C++ and runs on Apple MLX through MLX-C.
 - "Read from the SSD" is sparse-expert paging: router-selected expert pages move into MLX memory on demand. "Fully in memory" is expert residency in contiguous arrays. The mode always describes the complete sparse payload.
-- "Works out how much memory the next step needs" is adaptive memory admission: it projects context growth and observed transient work before allocating.
-- "Pieces of a set size" is deterministic prompt chunking, with exact terminal remainders and a bounded reduction when memory capacity requires it.
+- "Measures how much memory a step needs" is the memory ledger: one owner of the whole limit with named accounts for the fixed weights, the conversation's stored state, one step's working memory, the weights being read and a small margin. What is left is the capacity for kept experts. The ledger is checked against what MLX reports at every layer boundary. [One request, start to finish](memory-walkthrough.md) follows it through a request.
+- "Pieces of a set size, one layer at a time" is deterministic prompt spans read layer by layer, with exact terminal remainders. A step that still hits the limit is run again once with more room set aside; the span size is not reduced.
 - "Saved prompt work" is the persistent prompt store: validated prompt state, recurrent snapshots and projected image embeddings in a bounded SSD store.
 - "Chooses each next word on the graphics chip" is GPU-native sampling, submitting one token ahead to avoid host synchronization.
 - "Groups work by expert" is sorted mixture-of-experts execution: larger routing batches are grouped by expert, and one ordering is reused across projections.

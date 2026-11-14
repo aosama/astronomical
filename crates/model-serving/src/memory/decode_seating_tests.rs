@@ -2,12 +2,9 @@ use super::decode_seating::{
     DecodeExpertSeating, complete_layers_within_decode_warm_budget,
     seat_and_materialize_complete_layers,
 };
-use astronomical_memory_policy::{
-    phase::MemoryPhase,
-    residency::{
-        CurrentExpertLayerResidency, ExpertLayerGeometry, RetainedExpertPageClass,
-        kept_layer_indexes_to_seat_before_reply, plan_expert_residency,
-    },
+use astronomical_memory_policy::residency::{
+    CurrentExpertLayerResidency, ExpertLayerGeometry, RetainedExpertPageClass,
+    kept_layer_indexes_to_seat_before_reply, plan_expert_residency,
 };
 
 struct FakeDecodeExpertSeating {
@@ -80,13 +77,8 @@ fn fake_seating() -> FakeDecodeExpertSeating {
 #[test]
 fn should_complete_and_materialize_partial_prefill_pages_before_decode() {
     let (geometries, partial_pages) = partial_prefill_fixture();
-    let generation_plan = plan_expert_residency(
-        MemoryPhase::GenerationPreparation,
-        120,
-        &geometries,
-        &partial_pages,
-    )
-    .expect("the decode phase fits the complete expert payload");
+    let generation_plan = plan_expert_residency(120, &geometries, &partial_pages)
+        .expect("the decode phase fits the complete expert payload");
     let selected_layer_indexes = complete_layers_within_decode_warm_budget(
         &geometries,
         &partial_pages,

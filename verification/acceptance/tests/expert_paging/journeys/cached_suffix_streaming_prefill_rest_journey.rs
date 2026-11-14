@@ -110,9 +110,9 @@ fn journey_kind_label(kind: StreamingPrefillJourneyKind) -> &'static str {
 enum StreamingPrefillJourneyKind {
     HalfModelReread,
     HighRamResponsiveSuffix,
-    /// Tight ceiling that forces the OOM-retry-reread stall on the first
-    /// prefill chunk. Promoting two missing layers exceeds the budget and
-    /// the retry re-reads them from SSD before OOMing again.
+    /// A limit so tight that the prompt once stalled: a span hit the limit,
+    /// was retried, re-read its layers from the SSD and hit the limit
+    /// again. The request must be served without that stall.
     TightCeiling,
 }
 

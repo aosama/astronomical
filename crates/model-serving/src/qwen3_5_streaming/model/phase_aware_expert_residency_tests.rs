@@ -3,19 +3,12 @@
 //! pagers.
 
 use super::count_layers_in_state;
-use crate::{ExpertLayerState, ExpertResidencyPlan, MemoryPhase};
+use crate::{ExpertLayerState, ExpertResidencyPlan};
 
 fn plan_with(layer_states: Vec<ExpertLayerState>) -> ExpertResidencyPlan {
     ExpertResidencyPlan {
-        phase: MemoryPhase::GenerationPreparation,
-        retained_expert_ceiling_bytes: 0,
         complete_layer_targets: Vec::new(),
         layer_states,
-        reserved_routed_overlay_bytes: 0,
-        expected_preserved_bytes: 0,
-        maximum_new_retained_bytes: 0,
-        deterministic_release_order: Vec::new(),
-        is_low_budget_partial_mode: false,
     }
 }
 

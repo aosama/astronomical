@@ -1,4 +1,3 @@
-use crate::phase::MemoryPhase;
 use thiserror::Error;
 
 /// Lifetime and eviction priority of one retained expert page.
@@ -46,18 +45,30 @@ pub enum ExpertLayerState {
     Absent,
 }
 
-/// One deterministic topology plan that never commands eager source reads.
+/// Where each layer's experts live while a reply is written. `layer_states`
+/// has one entry per layer; `complete_layer_targets` lists the layers to
+/// keep whole, in layer order.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExpertResidencyPlan {
-    pub phase: MemoryPhase,
-    pub retained_expert_ceiling_bytes: u64,
     pub complete_layer_targets: Vec<usize>,
     pub layer_states: Vec<ExpertLayerState>,
-    pub reserved_routed_overlay_bytes: u64,
-    pub expected_preserved_bytes: u64,
-    pub maximum_new_retained_bytes: u64,
-    pub deterministic_release_order: Vec<usize>,
-    pub is_low_budget_partial_mode: bool,
+}
+
+impl ExpertResidencyPlan {
+    /// A plan from one state per layer.
+    #[must_use]
+    pub fn from_layer_states(layer_states: Vec<ExpertLayerState>) -> Self {
+        let mut complete_layer_targets = Vec::new();
+        for (layer_index, layer_state) in layer_states.iter().enumerate() {
+            if *layer_state == ExpertLayerState::Kept {
+                complete_layer_targets.push(layer_index);
+            }
+        }
+        Self {
+            complete_layer_targets,
+            layer_states,
+        }
+    }
 }
 
 /// Structural input defect that must stop planning before ownership changes.

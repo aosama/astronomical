@@ -1,10 +1,6 @@
 //! Structural status, configuration, and attribution evidence for the round trip.
 
-use std::{
-    fs,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-};
+use std::{fs, net::SocketAddr, path::Path};
 
 use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
 use serde_json::{Value, json};
@@ -44,36 +40,6 @@ pub(super) fn write_round_trip_config(
             .expect("the live-ceiling round-trip configuration should serialize"),
     )
     .expect("the live-ceiling round-trip configuration should be written");
-}
-
-/// The mid-streaming raise journey needs the exact condition from issue #337:
-/// a persistent prompt cache feeding a growing conversation, so the request-time
-/// context reserve grows past the residency raise margin while the ceiling is live.
-pub(super) fn write_mid_streaming_raise_config(
-    isolated_worker_home: &Path,
-    model_directory: &Path,
-    initial_mlx_memory_ceiling_bytes: u64,
-) {
-    let mid_streaming_instance_paths = instance_paths(isolated_worker_home);
-    let configuration_directory = mid_streaming_instance_paths.state_directory();
-    fs::create_dir(&configuration_directory)
-        .expect("the mid-streaming raise configuration directory should be created");
-    let configuration_document = json!({
-        "model_directories": [model_directory],
-        "maximum_mlx_memory_gb": initial_mlx_memory_ceiling_bytes
-            / BYTES_PER_MARKETED_GIGABYTE,
-        "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
-        "persistent_prompt_cache_enabled": true,
-        "performance_attribution_enabled": true,
-        "logging": {"level": "debug", "retained_files": 2},
-        "chunking": {"fixed_prompt_processing_chunk_size_tokens": 2_048},
-    });
-    fs::write(
-        configuration_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the mid-streaming raise configuration should serialize"),
-    )
-    .expect("the mid-streaming raise configuration should be written");
 }
 
 pub(super) async fn wait_for_idle_status(server_address: SocketAddr, request_label: &str) -> Value {
@@ -127,6 +93,28 @@ pub(super) fn assert_resident_status(status_document: &Value, expected_ceiling_b
     assert_eq!(
         memory_bytes(status_document, "expert_payload_bytes"),
         resident_expert_payload_bytes
+    );
+}
+
+/// The expert payload the status page reports as kept in memory.
+pub(super) fn kept_expert_payload_bytes(status_document: &Value) -> u64 {
+    memory_bytes(status_document, "expert_payload_bytes")
+}
+
+/// After a turn under a limit that holds every expert while idle: the
+/// status is consistent and at least nine tenths of the experts are still
+/// in memory, whichever engine served the turn.
+pub(super) fn assert_most_experts_stay_in_memory(
+    status_document: &Value,
+    expected_ceiling_bytes: u64,
+    complete_expert_payload_bytes: u64,
+) {
+    assert_common_idle_status(status_document, expected_ceiling_bytes);
+    let kept_expert_payload_bytes = kept_expert_payload_bytes(status_document);
+    assert!(
+        kept_expert_payload_bytes >= complete_expert_payload_bytes / 10 * 9,
+        "a turn under a limit that holds every expert while idle must leave at least 90% of them in memory: kept={kept_expert_payload_bytes} complete={complete_expert_payload_bytes} mode={}",
+        status_document["expert_memory_mode"]
     );
 }
 
@@ -227,10 +215,6 @@ pub(super) fn read_generation_evidence(
                     attribution_report,
                     "positional_file_read_byte_count",
                 ),
-                decode_seating_streamed_complete_payload_bytes: attribution_counter(
-                    attribution_report,
-                    "expert_residency_decode_seating_streamed_complete_payload_bytes",
-                ),
             }
         })
         .collect()
@@ -296,14 +280,6 @@ pub(super) fn expert_reporting_gap_bytes(status_document: &Value) -> Option<(u64
     ))
 }
 
-pub(super) fn assert_expert_reporting_consistency(status_document: &Value, sample_label: &str) {
-    if let Some((claimed, measured)) = expert_reporting_gap_bytes(status_document) {
-        panic!(
-            "{sample_label} reported contradictory expert residency: claimed={claimed} measured={measured} status={status_document}"
-        );
-    }
-}
-
 pub(super) async fn wait_for_settled_resident_status(
     server_address: SocketAddr,
     request_label: &str,
@@ -360,81 +336,4 @@ pub(super) struct GenerationEvidence {
     pub(super) model_revision: String,
     pub(super) prompt_token_count: u64,
     pub(super) expert_source_read_bytes: u64,
-    /// Complete-layer payload the decode seating pass streamed from storage for
-    /// this request. Issue #339 requires this to stay at zero: prefill already
-    /// streamed those layers, so seating them again is a second read of the
-    /// same bytes in one request.
-    pub(super) decode_seating_streamed_complete_payload_bytes: u64,
-}
-
-pub(super) fn acceptance_evidence_root() -> PathBuf {
-    crate::support::acceptance_evidence::acceptance_evidence_root("live-memory-ceiling-round-trip")
-}
-
-pub(super) use crate::support::artifact_bytes::artifact_directory_regular_file_bytes;
-
-pub(super) fn spawn_status_consistency_sampler(
-    server_address: std::net::SocketAddr,
-) -> (
-    tokio::task::JoinHandle<()>,
-    std::sync::Arc<std::sync::Mutex<Option<String>>>,
-) {
-    use std::sync::{Arc, Mutex};
-    use tokio::time::interval;
-
-    use crate::support::serving_rest::get_json_endpoint;
-
-    use super::{LOG_MARKER, STATUS_CONSISTENCY_SAMPLE_INTERVAL};
-
-    let first_reporting_violation = Arc::new(Mutex::new(None::<String>));
-    let sampler_violation = Arc::clone(&first_reporting_violation);
-    let status_sampler = tokio::spawn(async move {
-        let mut sampling_interval = interval(STATUS_CONSISTENCY_SAMPLE_INTERVAL);
-        let mut sample_count = 0_u64;
-        sampling_interval.tick().await;
-        loop {
-            sampling_interval.tick().await;
-            sample_count += 1;
-            let status_document = get_json_endpoint(server_address, "/v1/status").await;
-            let snapshot_expert_payload_bytes =
-                status_document["mlx_memory_snapshot"]["expert_payload_bytes"]
-                    .as_u64()
-                    .unwrap_or(0);
-            let claimed_resident_payload_bytes =
-                status_document["expert_residency"]["resident_expert_payload_bytes"].as_u64();
-            if sample_count % 5 == 0 {
-                eprintln!(
-                    "{LOG_MARKER} phase=status_sample status=progress sample={sample_count} expert_memory_mode={} measured_expert_payload_gb={:.3} claimed_resident_payload_gb={}",
-                    status_document["expert_memory_mode"]
-                        .as_str()
-                        .unwrap_or("unavailable"),
-                    snapshot_expert_payload_bytes as f64 / 1_000_000_000.0,
-                    claimed_resident_payload_bytes
-                        .map(|claimed| format!("{:.3}", claimed as f64 / 1_000_000_000.0))
-                        .unwrap_or_else(|| "none".to_owned()),
-                );
-            }
-            if let Some(claimed) = claimed_resident_payload_bytes {
-                let reporting_gap_bytes = claimed.abs_diff(snapshot_expert_payload_bytes);
-                if reporting_gap_bytes > EXPERT_REPORTING_CONSISTENCY_TOLERANCE_BYTES {
-                    let mut violation_slot = sampler_violation
-                        .lock()
-                        .expect("the status consistency violation slot should lock");
-                    if violation_slot.is_none() {
-                        *violation_slot = Some(format!(
-                            "claimed_resident_payload_bytes={claimed} measured_expert_payload_bytes={snapshot_expert_payload_bytes} expert_memory_mode={} snapshot_source={} status={status_document}",
-                            status_document["expert_memory_mode"]
-                                .as_str()
-                                .unwrap_or("unavailable"),
-                            status_document["mlx_memory_snapshot"]["source"]
-                                .as_str()
-                                .unwrap_or("unavailable"),
-                        ));
-                    }
-                    break;
-                }
-            }
-        }
-    });
-    (status_sampler, first_reporting_violation)
 }

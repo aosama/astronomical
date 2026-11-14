@@ -3,7 +3,6 @@ use super::{
     kept_layer_indexes_to_seat_before_reply, plan_expert_residency,
     should_commit_mandatory_complete_layer, should_complete_partial_layer_on_prefill_read,
 };
-use crate::phase::MemoryPhase;
 
 fn partial_layer_fixture() -> (Vec<ExpertLayerGeometry>, Vec<CurrentExpertLayerResidency>) {
     let geometries = (0..3)
@@ -30,49 +29,34 @@ fn partial_layer_fixture() -> (Vec<ExpertLayerGeometry>, Vec<CurrentExpertLayerR
 #[test]
 fn should_complete_every_partial_page_at_the_exact_generation_boundary() {
     let (geometries, partial_pages) = partial_layer_fixture();
-    for phase in [MemoryPhase::GenerationPreparation, MemoryPhase::Decode] {
-        let published_plan = plan_expert_residency(phase, 120, &geometries, &partial_pages)
-            .expect("the complete payload fits exactly");
-        assert_eq!(
-            kept_layer_indexes_to_seat_before_reply(&published_plan, &partial_pages),
-            vec![0, 1, 2]
-        );
-        for layer_index in &published_plan.complete_layer_targets {
-            let target = published_plan.layer_states[*layer_index];
-            assert!(should_commit_mandatory_complete_layer(1, true, target));
-            assert!(should_complete_partial_layer_on_prefill_read(
-                true,
-                target,
-                partial_pages[*layer_index].retained_expert_ids.len(),
-                geometries[*layer_index].expert_capacity,
-            ));
-        }
-        assert_eq!(published_plan.expected_preserved_bytes, 60);
-        assert_eq!(published_plan.maximum_new_retained_bytes, 60);
-        assert_eq!(
-            published_plan.expected_preserved_bytes + published_plan.maximum_new_retained_bytes,
-            120
-        );
+    let published_plan = plan_expert_residency(120, &geometries, &partial_pages)
+        .expect("the complete payload fits exactly");
+    assert_eq!(
+        kept_layer_indexes_to_seat_before_reply(&published_plan, &partial_pages),
+        vec![0, 1, 2]
+    );
+    for layer_index in &published_plan.complete_layer_targets {
+        let target = published_plan.layer_states[*layer_index];
+        assert!(should_commit_mandatory_complete_layer(1, true, target));
+        assert!(should_complete_partial_layer_on_prefill_read(
+            true,
+            target,
+            partial_pages[*layer_index].retained_expert_ids.len(),
+            geometries[*layer_index].expert_capacity,
+        ));
     }
 }
 
 #[test]
 fn should_complete_only_the_affordable_partial_pages_one_byte_below_the_generation_boundary() {
     let (geometries, partial_pages) = partial_layer_fixture();
-    for phase in [MemoryPhase::GenerationPreparation, MemoryPhase::Decode] {
-        let plan = plan_expert_residency(phase, 119, &geometries, &partial_pages)
-            .expect("existing pages fit without funding the complete payload");
-        assert_eq!(
-            kept_layer_indexes_to_seat_before_reply(&plan, &partial_pages),
-            vec![0, 1]
-        );
-        assert_eq!(plan.expected_preserved_bytes, 60);
-        assert_eq!(plan.layer_states[2], ExpertLayerState::Hot);
-        assert_eq!(
-            plan.expected_preserved_bytes + plan.maximum_new_retained_bytes,
-            119
-        );
-    }
+    let plan = plan_expert_residency(119, &geometries, &partial_pages)
+        .expect("existing pages fit without funding the complete payload");
+    assert_eq!(
+        kept_layer_indexes_to_seat_before_reply(&plan, &partial_pages),
+        vec![0, 1]
+    );
+    assert_eq!(plan.layer_states[2], ExpertLayerState::Hot);
 }
 
 fn mixed_precision_generation_fixture()
@@ -126,13 +110,8 @@ fn should_seat_unretained_complete_layers_from_generation_leftover_below_full_fi
     // Full fit is 260; preserved is 125, so 134 leftover funds the 15-byte
     // partial completion and one 60-byte unretained layer while still
     // reserving the last layer's 30-byte routed floor, not two layers.
-    let plan = plan_expert_residency(
-        MemoryPhase::GenerationPreparation,
-        259,
-        &geometries,
-        &current_pages,
-    )
-    .expect("generation below full fit preserves and completes");
+    let plan = plan_expert_residency(259, &geometries, &current_pages)
+        .expect("generation below full fit preserves and completes");
     assert_eq!(plan.complete_layer_targets, vec![0, 1, 2, 3]);
     assert_eq!(
         kept_layer_indexes_to_seat_before_reply(&plan, &current_pages),
@@ -148,8 +127,6 @@ fn should_seat_unretained_complete_layers_from_generation_leftover_below_full_fi
             ExpertLayerState::Hot,
         ]
     );
-    assert_eq!(plan.expected_preserved_bytes, 125);
-    assert_eq!(plan.maximum_new_retained_bytes, 134);
 }
 
 #[test]
@@ -158,24 +135,14 @@ fn should_seat_the_last_unretained_layer_when_the_leftover_equals_its_payload_ex
     // Preserved 125 + completion 15 + one layer 60 + the 30-byte routed
     // floor still owed to the last unretained layer = 230: the boundary byte
     // count funds exactly two promotions and nothing more.
-    let plan = plan_expert_residency(
-        MemoryPhase::GenerationPreparation,
-        230,
-        &geometries,
-        &current_pages,
-    )
-    .expect("generation boundary plan");
+    let plan =
+        plan_expert_residency(230, &geometries, &current_pages).expect("generation boundary plan");
     assert_eq!(
         kept_layer_indexes_to_seat_before_reply(&plan, &current_pages),
         vec![2, 3]
     );
-    let one_byte_short = plan_expert_residency(
-        MemoryPhase::GenerationPreparation,
-        229,
-        &geometries,
-        &current_pages,
-    )
-    .expect("generation one byte short plan");
+    let one_byte_short = plan_expert_residency(229, &geometries, &current_pages)
+        .expect("generation one byte short plan");
     assert_eq!(
         kept_layer_indexes_to_seat_before_reply(&one_byte_short, &current_pages),
         vec![2]
@@ -185,13 +152,8 @@ fn should_seat_the_last_unretained_layer_when_the_leftover_equals_its_payload_ex
 #[test]
 fn should_not_promote_any_layer_when_preserved_pages_consume_the_generation_ceiling() {
     let (geometries, current_pages) = mixed_precision_generation_fixture();
-    let plan = plan_expert_residency(
-        MemoryPhase::GenerationPreparation,
-        139,
-        &geometries,
-        &current_pages,
-    )
-    .expect("generation plan with 14 leftover bytes");
+    let plan = plan_expert_residency(139, &geometries, &current_pages)
+        .expect("generation plan with 14 leftover bytes");
     assert!(kept_layer_indexes_to_seat_before_reply(&plan, &current_pages).is_empty());
     assert_eq!(plan.layer_states[2], ExpertLayerState::Hot);
     assert!(

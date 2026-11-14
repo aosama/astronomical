@@ -1,4 +1,3 @@
-use crate::phase::MemoryPhase;
 use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
     CurrentExpertLayerResidency, ExpertLayerState, RetainedExpertPageClass,
@@ -189,17 +188,10 @@ fn should_promote_every_partial_prefill_page_when_generation_payload_fits() {
             covered_weighted_demand: 4,
         },
     ];
-    let generation_plan = plan_expert_residency(
-        MemoryPhase::GenerationPreparation,
-        120,
-        &geometries,
-        &prefill_routed_pages,
-    )
-    .expect("generation leftover should keep every prefill routed page");
+    let generation_plan = plan_expert_residency(120, &geometries, &prefill_routed_pages)
+        .expect("generation leftover should keep every prefill routed page");
 
     assert_eq!(generation_plan.complete_layer_targets, vec![0, 1, 2]);
-    assert_eq!(generation_plan.expected_preserved_bytes, 60);
-    assert_eq!(generation_plan.maximum_new_retained_bytes, 60);
     assert!(
         generation_plan
             .layer_states

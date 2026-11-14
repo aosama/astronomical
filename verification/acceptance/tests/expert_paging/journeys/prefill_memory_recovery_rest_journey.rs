@@ -1,27 +1,24 @@
-//! Prefill memory recovery must serve the request, not fail it (issue #1729).
+//! A long prompt on the largest model must be served and must use the
+//! memory it was given (issues #1729 and #2221).
 //!
-//! On the largest sparse model at a 37 GiB ceiling, the default 4,096-token
-//! prefill chunk exceeds the MLX active-memory limit while prefill seats
-//! complete expert layers. Recovery sheds every retained expert and freezes
-//! retention at zero, so the retry streams experts and fits. The freeze used
-//! to be undone by the retry's first residency-plan refresh: the retry
-//! re-seated every complete layer, failed again, and the user saw "configured
-//! prefill chunk of 4096 tokens exceeded the MLX active-memory limit". This
-//! journey sends the same 7,053-token prompt twice with the default chunking
-//! (the first reply's decode seats the residency the second prefill meets)
-//! and asserts both requests are served.
+//! Two things went wrong here before the memory governor existed. At a
+//! 37 GiB limit a prompt span could not fit beside the experts the previous
+//! reply had kept, and the person saw "configured prefill chunk of 4096
+//! tokens exceeded the MLX active-memory limit". The first journey sends the
+//! same 7,053-token prompt twice with the default chunking (the first reply
+//! keeps the experts the second prompt meets) and asserts both requests are
+//! served.
 //!
 //! Serving the request is not the whole promise. A long prompt once read
-//! most of itself with nothing kept in memory: on this model at a 32 GiB
-//! ceiling the engine sat at about 3.7 GB while every layer was re-read from
-//! storage, and the person saw a slow first request that used a tenth of
-//! the memory they had granted. The second journey sends a short request
-//! and then a long one, as a coding agent does, and asserts that memory in
-//! use is above half the ceiling while the long prompt is still being read.
-//! The prompt is read one layer at a time (issue #2221), so "still being
-//! read" is counted in layers finished. It runs with everyday settings
-//! (prompt cache on, performance attribution off), because that is where
-//! people meet this.
+//! most of itself with nothing kept in memory: at a 32 GiB limit the engine
+//! sat at about 3.7 GB while every layer was read from storage again, and
+//! the person saw a slow first request that used a tenth of the memory they
+//! had granted. The second journey sends a short request and then a long
+//! one, as a coding agent does, and asserts that memory in use is above
+//! half the limit while the long prompt is still being read. The prompt is
+//! read one layer at a time, so "still being read" is counted in layers
+//! finished. It runs with everyday settings (prompt cache on, performance
+//! attribution off), because that is where people meet this.
 
 use std::{fs, path::Path};
 

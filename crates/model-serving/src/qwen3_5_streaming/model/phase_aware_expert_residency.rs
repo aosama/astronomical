@@ -133,7 +133,6 @@ impl Qwen3_5StreamingModel {
                 PerformanceOperation::ExpertResidencyPlanning,
                 |_performance_attribution| {
                     plan_expert_residency(
-                        MemoryPhase::GenerationPreparation,
                         kept_expert_capacity_bytes,
                         &layer_geometries,
                         &current_residencies,
@@ -154,9 +153,6 @@ impl Qwen3_5StreamingModel {
             held_whole_layer_count = seated_complete_layer_count(&current_residencies),
             hot_layer_count = count_layers_in_state(&residency_plan, ExpertLayerState::Hot),
             absent_layer_count = count_layers_in_state(&residency_plan, ExpertLayerState::Absent),
-            expected_preserved_bytes = residency_plan.expected_preserved_bytes,
-            maximum_new_retained_bytes = residency_plan.maximum_new_retained_bytes,
-            is_low_budget_partial_mode = residency_plan.is_low_budget_partial_mode,
             "planned the expert layer states for the reply"
         );
         *self.active_expert_residency_plan.borrow_mut() = Some(residency_plan);
