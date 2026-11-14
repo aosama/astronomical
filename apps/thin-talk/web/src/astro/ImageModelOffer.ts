@@ -23,15 +23,18 @@ export class ImageModelOffer {
   private readonly document: Document;
   private readonly library: AstroLibrary;
   private readonly onDeclined: () => void;
+  private readonly onReady: () => void;
   private readonly status: HTMLElement;
   private readonly idPrefix: string;
   private stopListening: (() => void) | null = null;
 
-  public constructor(document: Document, idPrefix: string, library: AstroLibrary, onDeclined: () => void) {
+  /** `onReady` runs once, when a download started from this offer lands. */
+  public constructor(document: Document, idPrefix: string, library: AstroLibrary, onDeclined: () => void, onReady: () => void = () => {}) {
     this.document = document;
     this.idPrefix = idPrefix;
     this.library = library;
     this.onDeclined = onDeclined;
+    this.onReady = onReady;
     this.element = makeElement(document, "div", "image-model-offer");
     this.status = makeElement(document, "p", "image-model-offer__status", "");
     this.status.setAttribute("role", "status");
@@ -84,6 +87,8 @@ export class ImageModelOffer {
     }
     if (progress.phase === ModelDownloadPhase.READY) {
       getButton.hidden = true;
+      this.dispose();
+      this.onReady();
     }
   }
 }

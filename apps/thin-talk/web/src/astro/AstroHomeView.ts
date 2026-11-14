@@ -110,7 +110,7 @@ export class AstroHomeView {
   private async chooseIdea(idea: HomeIdea): Promise<void> {
     const profile = this.profile;
     if (profile !== null && idea.needsImageModel && !(await this.library.hasImageModel())) {
-      this.offerImageModel(profile);
+      this.offerImageModel(profile, idea.prompt);
       return;
     }
     this.onStarterPrompt(idea.prompt);
@@ -125,7 +125,7 @@ export class AstroHomeView {
     }
     const card = skillCard(kind);
     if (kind === SkillCardKind.PICTURES && !(await this.library.hasImageModel())) {
-      this.offerImageModel(profile);
+      this.offerImageModel(profile, card.starterPrompt);
       return;
     }
     this.replaceFollowUp(null, makeElement(this.document, "p", "astro-home__reply", astroLine(card.reply, profile.nickname)));
@@ -157,8 +157,17 @@ export class AstroHomeView {
     await downloadPanel.loadOffer();
   }
 
-  private offerImageModel(profile: AstroProfile): void {
-    const imageModelOffer = new ImageModelOffer(this.document, ID_PREFIX, this.library, () => this.replaceFollowUp(null));
+  /** `promptOnceReady` is what the person was about to ask when the offer
+   * interrupted them. It goes into the message field when the image model
+   * lands, so the download ends where they left off; without it they came
+   * back to an empty field and had to pick the idea a second time. */
+  private offerImageModel(profile: AstroProfile, promptOnceReady: string | null): void {
+    const fillPromptOnceReady = (): void => {
+      if (promptOnceReady !== null) {
+        this.onStarterPrompt(promptOnceReady);
+      }
+    };
+    const imageModelOffer = new ImageModelOffer(this.document, ID_PREFIX, this.library, () => this.replaceFollowUp(null), fillPromptOnceReady);
     const reply = makeElement(this.document, "p", "astro-home__reply", astroLine(AstroMoment.NEEDS_IMAGE_MODEL, profile.nickname));
     this.replaceFollowUp(imageModelOffer, reply, imageModelOffer.element);
     void imageModelOffer.loadOffer();

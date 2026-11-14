@@ -256,6 +256,24 @@ test("should_offer_the_image_model_from_a_drawing_idea_when_none_is_installed", 
   assert.equal(daemon.chatRequestBody(), null);
 });
 
+test("should_fill_the_message_field_with_the_drawing_idea_once_the_offered_image_model_lands", async () => {
+  const { daemon } = bootJourney(undefined, {
+    astroProfile: MET_ASTRO_PROFILE,
+    libraryCatalog: STARTER_CATALOG,
+    libraryDownloadSequence: [{ state: "idle", huggingface_id: null, bytes_completed: 0, bytes_total: 0, error_code: null }],
+    installsWhenDownloadFinishes: { huggingfaceID: IMAGE_MODEL_ID, model: { id: "starter-image-4bit", supported_endpoints: ["/v1/images/generations"] } },
+  });
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  await waitUntilReady();
+  element<HTMLButtonElement>("astro-home-idea-3").click();
+  await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
+  assert.equal(composerField().value, "", "nothing is filled in while the model is missing");
+  element<HTMLButtonElement>("astro-home-get-image-model").click();
+  await waitFor(() => composerField().value === "Draw a poster of a rocket launch", "the idea to return once the model is here");
+  assert.deepEqual(daemon.requestedLibraryDownloads, [IMAGE_MODEL_ID]);
+  assert.equal(daemon.chatRequestBody(), null, "the idea is prepared, not sent");
+});
+
 test("should_fill_the_message_field_from_a_drawing_idea_when_an_image_model_is_installed", async () => {
   const installedModels = [
     { id: "starter-chat-4bit" },
