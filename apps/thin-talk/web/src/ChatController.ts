@@ -19,7 +19,7 @@ import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { StallWatchdog } from "./StallWatchdog";
 import { ToolStep, ToolStepState } from "./ToolStep";
-import { describeLoadFailure, loadNoticeText } from "./LoadNotice";
+import { describeLoadFailure, loadNoticeAsksForAction, loadNoticeText } from "./LoadNotice";
 import { OtherCopyAnsweredError } from "./OtherCopyAnsweredError";
 import type { LoadPhase } from "./LoadNotice";
 
@@ -661,7 +661,8 @@ export class ChatController {
           toolSteps: message.toolSteps,
         }),
     );
-    const snapshot: TranscriptSnapshot = { messages, notice: loadNoticeText(this.loadPhase, this.loadFailureMessage) };
+    const noticeAsksForAction = loadNoticeAsksForAction(this.loadPhase, this.loadFailureMessage);
+    const snapshot: TranscriptSnapshot = { messages, notice: loadNoticeText(this.loadPhase, this.loadFailureMessage), noticeAsksForAction };
     return snapshot;
   }
 

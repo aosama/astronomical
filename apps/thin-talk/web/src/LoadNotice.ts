@@ -1,5 +1,6 @@
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
+import { OTHER_COPY_RUNNING_NOTICE } from "./OtherCopyAnsweredError";
 
 /** How the chat surface discovered its models at startup. */
 export type LoadPhase = "idle" | "loading" | "ready" | "empty" | "failed";
@@ -16,6 +17,14 @@ export function describeLoadFailure(error: unknown): string {
     return WAITING_FOR_ENGINE_NOTICE;
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Whether the load notice tells the person to do something before the
+ * window can work. Only another copy holding the engine's address does: Send
+ * does nothing until they quit it, so the reason must not sit in small
+ * print. A wait that ends by itself is not theirs to act on. */
+export function loadNoticeAsksForAction(loadPhase: LoadPhase, loadFailureMessage: string): boolean {
+  return loadPhase === "failed" && loadFailureMessage === OTHER_COPY_RUNNING_NOTICE;
 }
 
 /** The line the empty conversation shows for each load phase, or null once

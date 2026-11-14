@@ -246,14 +246,17 @@ test("should_list_the_models_by_itself_once_a_silent_engine_starts_answering", a
     const { controller, daemon } = bootControllerWithEngine();
     let listedModelCount = 0;
     let notice: string | null = null;
+    let silentEngineNoticeAsksForAction: boolean | undefined;
     controller.subscribe((state) => {
       listedModelCount = state.composer.models.length;
       notice = state.transcript.notice;
+      silentEngineNoticeAsksForAction = state.transcript.noticeAsksForAction;
     });
     daemon.modelsUnreachable = true;
     await controller.load();
     assert.equal(listedModelCount, 0, "a silent engine lists no model");
     assert.equal(notice, WAITING_FOR_ENGINE_NOTICE, "the window says it is waiting, not the browser's error text");
+    assert.equal(silentEngineNoticeAsksForAction, false, "a wait that ends by itself stays in quiet print");
 
     daemon.modelsUnreachable = false;
 
@@ -335,21 +338,25 @@ test("should_say_another_copy_is_running_and_carry_on_once_it_lets_go_of_the_add
     const { controller, daemon } = bootControllerWithEngine();
     let listedModelCount = 0;
     let notice: string | null = null;
+    let noticeAsksForAction: boolean | undefined;
     controller.subscribe((state) => {
       listedModelCount = state.composer.models.length;
       notice = state.transcript.notice;
+      noticeAsksForAction = state.transcript.noticeAsksForAction;
     });
     // The direct download and the App Store version share one address but
     // keep their files apart, so the other copy reports another folder.
     daemon.reportedStateDirectory = "~/.astronomical";
     await controller.load();
     assert.equal(notice, OTHER_COPY_RUNNING_NOTICE, "the window explains it in plain words");
+    assert.equal(noticeAsksForAction, true, "only the person can end this, so the notice is drawn to be read");
     assert.equal(listedModelCount, 0, "the other copy's models are not shown as this one's");
 
     daemon.reportedStateDirectory = "~/.astronomical-dev";
 
     await waitFor(() => listedModelCount > 0, "the models to appear once this app's own engine answers");
     assert.equal(notice, null);
+    assert.equal(noticeAsksForAction, false);
   });
 }, { timeout: 30_000 });
 
