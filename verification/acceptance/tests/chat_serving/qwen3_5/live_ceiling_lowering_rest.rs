@@ -9,11 +9,12 @@
 //! the expert storage reads that phase actually performed (issue #1533). This
 //! is the user-facing behavior behind the Settings "Maximum model RAM" control.
 
+use super::automatic_engine_selection_rest::prompt_chunk_working_memory_allowance_bytes;
 use std::{fs, path::Path};
 
 use astronomical_model_serving::{
-    CompleteResidencyHeadroomBoundary, MemoryPhase, MlxRamBudget, MlxRamBudgetModelGeometry,
-    Qwen3_5ArtifactValidator, mlx_ram_budget_model_geometry_from_validated_artifact,
+    CompleteResidencyHeadroomBoundary, MlxRamBudgetModelGeometry, Qwen3_5ArtifactValidator,
+    mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -164,23 +165,16 @@ async fn start_resident_ceiling_journey() -> ResidentCeilingJourney {
     let artifact_payload_bytes = artifact_payload_bytes(&model_directory);
     let residency_geometry = measure_sparse_artifact_residency_geometry(&model_directory);
     // The ceiling purchases complete residency, the resident phases' context,
-    // and the analytic prefill activation floor of one configured chunk, so
-    // every resident request fits by construction and never forks to the
-    // streaming engine on its own.
-    let bootstrap_ram_budget = MlxRamBudget::new(
-        residency_geometry.complete_residency_with_headroom_bytes,
-        residency_geometry.model_geometry,
-    )
-    .expect("the resident artifact geometry should compose a bootstrap RAM budget");
+    // and an allowance for one prompt chunk's working memory, so every
+    // request fits and none moves to the streaming engine on its own.
     let resident_memory_ceiling_bytes = residency_geometry
         .complete_residency_with_headroom_bytes
         .saturating_add(context_memory_reservation_bytes(
             &model_directory,
             RESIDENT_PHASE_CONTEXT_TOKEN_COUNT,
         ))
-        .saturating_add(bootstrap_ram_budget.activation_headroom_bytes(
-            MemoryPhase::Prefill,
-            u64::from(FIXED_PREFILL_CHUNK_SIZE_TOKENS),
+        .saturating_add(prompt_chunk_working_memory_allowance_bytes(
+            &residency_geometry.model_geometry,
         ));
     assert!(
         resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,

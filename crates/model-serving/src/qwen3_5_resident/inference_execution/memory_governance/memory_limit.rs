@@ -23,13 +23,6 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
     )
 }
 
-/// Wraps one adaptive-RAM-growth ceiling-update failure as a fatal engine error.
-fn adaptive_ram_growth_ceiling_update_error(
-    adaptive_ram_growth_guard_error: impl std::fmt::Display,
-) -> InferenceEngineError {
-    super::fatal_engine_error(adaptive_ram_growth_guard_error.to_string())
-}
-
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn update_mlx_memory_limit(
         &mut self,
@@ -57,12 +50,8 @@ impl Qwen3_5EngineState {
         let adjustment_started_at = Instant::now();
         let (minimum_mlx_memory_ceiling_bytes, updated_mlx_memory_limits) =
             model.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)?;
-        self.adaptive_ram_growth_guard
-            .update_active_memory_ceiling_bytes(
-                updated_mlx_memory_limits.active_memory_limit_bytes(),
-            )
-            .map_err(adaptive_ram_growth_ceiling_update_error)?;
         self.memory_limits = updated_mlx_memory_limits;
+        model.govern_limit_change(updated_mlx_memory_limits.active_memory_limit_bytes() as u64);
 
         let mlx_memory_snapshot_after_adjustment = model
             .runtime()

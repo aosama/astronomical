@@ -151,10 +151,9 @@ impl Qwen3_5EngineState {
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
             PerformanceOperation::MlxAllocatorCacheCleanup,
-            |_performance_attribution| {
-                self.release_request_memory(request_id, self.adaptive_ram_growth_guard_enabled)
-            },
+            |_performance_attribution| self.release_request_memory(request_id),
         );
+        self.govern_request_end();
         let generation_finalization = self.collect_generation_finalization(
             &mut performance_attribution,
             mlx_memory_snapshot
@@ -393,13 +392,11 @@ impl Qwen3_5EngineState {
                 model_id,
                 model_revision,
                 prefill_transient_observation_completed: self
-                    .adaptive_ram_growth_guard
-                    .has_completed_growth_observation(crate::MemoryPhase::Prefill),
-                prefill_observed_transient_high_water_bytes: u64::try_from(
-                    self.adaptive_ram_growth_guard
-                        .observed_transient_high_water_bytes(crate::MemoryPhase::Prefill),
-                )
-                .unwrap_or(u64::MAX),
+                    .measured_prompt_chunk_working_memory_bytes()
+                    .is_some(),
+                prefill_observed_transient_high_water_bytes: self
+                    .measured_prompt_chunk_working_memory_bytes()
+                    .unwrap_or(0),
                 request_id: request_id.value(),
                 configured_maximum_output_tokens,
                 mlx_active_memory_bytes: mlx_memory_snapshot

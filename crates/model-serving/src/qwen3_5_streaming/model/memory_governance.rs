@@ -508,13 +508,10 @@ impl Qwen3_5Model {
     /// against, so what the status page shows as reserved is what is really
     /// set aside.
     ///
-    /// Working memory, the margin and any lease are one reserve to a reader:
-    /// room held for work in progress. Room left once every streamable
-    /// weight is kept has no owner and is reported as a fixed reserve
-    /// instead of as unexplained. A dense model's kept layers count as
+    /// A dense model's kept layers count as
     /// model core in the breakdown, so they move from the kept-weight
     /// budget to the core here.
-    pub(crate) fn governed_ram_budget_snapshot(
+    pub(crate) fn ram_budget_snapshot_from_governor(
         &self,
         held_expert_payload_bytes: u64,
     ) -> Option<crate::memory::MlxRamBudgetSnapshot> {
@@ -523,22 +520,15 @@ impl Qwen3_5Model {
         let kept_core_layer_bytes = self
             .reclaimable_retained_payload_bytes()
             .saturating_sub(held_expert_payload_bytes);
-        Some(crate::memory::MlxRamBudgetSnapshot {
-            mlx_active_memory_ceiling_bytes: accounts.limit_bytes,
-            model_core_payload_bytes: accounts
-                .core_weight_bytes
-                .saturating_add(kept_core_layer_bytes),
-            context_window_reserve_bytes: accounts.context_bytes,
-            activation_headroom_bytes: accounts
-                .working_memory_bytes
-                .saturating_add(accounts.margin_bytes)
-                .saturating_add(accounts.lease_bytes),
-            complete_layer_stream_slot_bytes: accounts.stream_slot_bytes,
-            other_fixed_bytes: accounts.unassigned_bytes,
-            retained_expert_budget_bytes: accounts
-                .kept_weight_capacity_bytes
-                .saturating_sub(kept_core_layer_bytes),
-        })
+        let mut budget_snapshot =
+            crate::memory::MlxRamBudgetSnapshot::from_ledger_accounts(&accounts);
+        budget_snapshot.model_core_payload_bytes = budget_snapshot
+            .model_core_payload_bytes
+            .saturating_add(kept_core_layer_bytes);
+        budget_snapshot.retained_expert_budget_bytes = budget_snapshot
+            .retained_expert_budget_bytes
+            .saturating_sub(kept_core_layer_bytes);
+        Some(budget_snapshot)
     }
 
     /// The working memory one prompt step needs, as far as it has been

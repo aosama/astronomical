@@ -1,16 +1,12 @@
 //! Pre-forward decision logic for a single prompt-processing chunk.
 //!
 //! This module computes cache eligibility, checkpoint boundaries, workspace
-//! projection, and adaptive-RAM growth context without side effects.
+//! projection without side effects.
 
-use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile,
-    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
-};
+use crate::persistent_prompt_cache_boundary_completed_prefill_chunk_tokens;
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
-use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 /// Immutable decisions computed before memory admission and forward execution.
 ///
@@ -38,9 +34,6 @@ pub(super) struct PrefillChunkPlan {
 
     /// Combined temporary workspace reservation.
     pub(super) exact_temporary_workspace_bytes: usize,
-
-    /// Adaptive-RAM growth context derived from this plan's decisions.
-    pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
 }
 
 impl Qwen3_5EngineState {
@@ -128,24 +121,6 @@ impl Qwen3_5EngineState {
             .checked_add(direct_publication_workspace_bytes)
 .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::prompt_cache_publication_workspace_bytes_overflowed_error)?;
 
-        let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
-            // The real chunk token count, not zero: admission keys its
-            // exact-context transient evidence on this value, and a zero
-            // mislabeled every chunk as a token-less context (the streaming
-            // family additionally derives its routed-expert reservation from
-            // this count).
-            prefill_token_count,
-            Qwen3_5PrefillExecutionContext::new(
-                active_request.visual_embeddings.is_some(),
-                AdaptiveRamGrowthExecutionProfile::Resident,
-                self.persistent_prompt_cache.is_some()
-                    && active_request.can_use_persistent_prompt_cache,
-            )
-            .context_identifier_flags(),
-            active_request.visual_embeddings.is_some(),
-            AdaptiveRamGrowthExecutionProfile::Resident,
-        );
-
         Ok(PrefillChunkPlan {
             prefill_token_count,
             all_completed_prefill_chunk_tokens,
@@ -153,7 +128,6 @@ impl Qwen3_5EngineState {
             persistent_prompt_cache_block_token_count,
             direct_publication_workspace_bytes,
             exact_temporary_workspace_bytes,
-            adaptive_ram_growth_context,
         })
     }
 }

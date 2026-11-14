@@ -196,7 +196,6 @@ fn scoreboard_journey(limit_bytes: u64) -> ThroughputJourney {
         model_directory: None,
         diagnostic_qwen3_5_engine_override:
             astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
-        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
     }
 }
 

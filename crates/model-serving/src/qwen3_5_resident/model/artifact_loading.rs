@@ -152,6 +152,7 @@ impl Qwen3_5ResidentModel {
             resident_expert_weights: None,
             // Programs load after the weights are materialized, if at all.
             neural_engine_mlp_prefill: None,
+            memory_governor: std::cell::RefCell::new(None),
         })
     }
 }
@@ -234,9 +235,8 @@ fn load_resident_expert_layer_plans(
     })
 }
 
-/// Assembles the resident engine's RAM budget from the model-core payload and
-/// the expert layer plans' geometry. Mirrors the payload folds and budget
-/// construction of the inlined loader.
+/// Assembles the limit and geometry this engine runs under from the
+/// model-core payload and the expert layer plans.
 #[allow(clippy::too_many_arguments)]
 fn build_resident_mlx_ram_budget(
     runtime: &MlxRuntime,

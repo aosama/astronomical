@@ -76,11 +76,6 @@ pub struct WorkerStartupConfiguration {
     /// Diagnostic-only engine override; never read from the user configuration.
     #[serde(default)]
     pub diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
-    /// Diagnostic-only replacement for the resident Qwen3.5 engine's static
-    /// three-layer prefill activation floor; `None` keeps the production floor.
-    /// Never read from the user configuration.
-    #[serde(default)]
-    pub diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
     pub logging_directory: PathBuf,
     pub logging_level: WorkerLogLevel,
     pub retained_log_file_count: usize,

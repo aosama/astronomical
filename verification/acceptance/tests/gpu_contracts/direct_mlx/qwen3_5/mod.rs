@@ -1,6 +1,5 @@
 mod allocation_checkpoint;
 mod attention_prefill_performance;
-mod context_memory_admission;
 mod convolution_prefill_performance;
 mod convolution_state;
 mod dflash_proof_scenario;
@@ -18,6 +17,7 @@ mod prompt_cache_restore_reconstruction_probe;
 mod quantized_matmul_partition_parity;
 mod quantized_matmul_prefill_performance;
 mod request_decoder_state;
+mod restore_workspace;
 mod sampler;
 mod vision_padding_cache;
 mod vision_padding_fusion_probe;

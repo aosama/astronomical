@@ -485,7 +485,7 @@ fn build_streaming_expert_budget(
                 true,
             )
         })?;
-    let mut mlx_ram_budget = MlxRamBudget::new(
+    let mlx_ram_budget = MlxRamBudget::new(
         u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "MLX active memory ceiling exceeds the u64 range",
@@ -507,32 +507,6 @@ fn build_streaming_expert_budget(
     .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
         description: "MLX RAM budget requires a positive active-memory ceiling",
     })?;
-    if let Some(expert_pager) = expert_pager {
-        // A multi-token forward decodes the complete-layer page it
-        // multiplies, so the prefill plan must keep that page's peak
-        // (packed source plus decoded output) out of the expert budget;
-        // the packed-source slot alone seated experts into the decode's
-        // space and every chunk had to reclaim a layer before it could run.
-        // The second slot funds the one complete layer a chunk reads ahead
-        // of its route while earlier layers compute
-        // (`prefill_complete_layer_prefetch`). That prefetch is only issued
-        // for pages multiplied without a transient decode, so it holds the
-        // packed source alone, and only of layers it can pick: codebook
-        // layers are never eligible in prefill, so an all-codebook bundle
-        // reserves no read-ahead bytes at all. Charging it the full
-        // decoded peak instead doubled a 5.74 GB JANGTQ2 slot to 11.48 GB
-        // and cut 122B prefill throughput nearly in two (measured
-        // 2026-10-24: 134 versus 232–273 tokens per second).
-        mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(
-            super::prefill_complete_layer_prefetch::prefill_complete_layer_stream_slot_bytes(
-                expert_pager.maximum_expert_page_bytes(),
-                super::prefill_complete_layer_prefetch::largest_prefill_prefetchable_complete_source_payload_bytes(
-                    expert_pager.layer_plans(),
-                )
-                .map_err(qwen3_5_streaming::expert_streaming::ExpertPagingError::from)?,
-            ),
-        );
-    }
     Ok(StreamingExpertBudgetOutcome {
         mlx_ram_budget,
         fused_jangtq2_gathered_projection_kernel,

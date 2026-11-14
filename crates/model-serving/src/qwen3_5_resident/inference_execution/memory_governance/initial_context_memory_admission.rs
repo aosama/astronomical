@@ -1,16 +1,14 @@
-//! Initial generation-context admission for one Qwen3.5 request.
-//!
-//! Workspace composition and demote-or-admit live in `memory/`. This module
-//! measures request facts and records a rejection when the request cannot fit.
+//! Whether a request's whole context fits, asked before the first forward.
 
-use crate::qwen3_5_resident::model::memory_admission;
+use crate::qwen3_5_resident::model::request_errors;
 use crate::{
-    AdaptiveRamGrowthExecutionProfile, InferenceEngineError, MemoryPhase, PerformanceAttribution,
-    PerformanceAttributionOutcome, request_context_temporary_workspace_bytes,
+    InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
+    StreamingEngineRequirement,
 };
 use astronomical_ipc_protocol::RequestId;
 
 use super::Qwen3_5EngineState;
+use super::forward_memory::fixed_weight_bytes;
 
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn admit_initial_generation_context_or_record_rejection(
@@ -18,17 +16,13 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
         configured_maximum_output_tokens: u16,
         total_context_tokens: usize,
-        prompt_token_count: usize,
-        can_use_persistent_prompt_cache: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
-        match self.validate_initial_generation_context_memory_admission(
-            total_context_tokens,
-            prompt_token_count,
-            can_use_persistent_prompt_cache,
-            performance_attribution,
-        ) {
-            Ok(()) => Ok(()),
+        match self.require_request_context_to_fit(total_context_tokens) {
+            Ok(()) => {
+                self.govern_request_start(self.live_retained_context_state_payload_bytes());
+                Ok(())
+            }
             Err(context_admission_error) => {
                 self.record_generation_performance_attribution(
                     std::mem::replace(performance_attribution, PerformanceAttribution::disabled()),
@@ -43,91 +37,49 @@ impl Qwen3_5EngineState {
         }
     }
 
-    pub(super) fn validate_initial_generation_context_memory_admission(
-        &mut self,
-        total_context_tokens: usize,
-        prompt_token_count: usize,
-        can_use_persistent_prompt_cache: bool,
-        _performance_attribution: &mut PerformanceAttribution,
+    /// Whether a request whose context reaches `context_token_count` tokens
+    /// fits beside every weight, asked of the memory governor before the
+    /// request changes any state.
+    ///
+    /// The stored state is taken as the larger of what MLX holds beyond the
+    /// weights now and what the whole context will occupy. What is held now
+    /// is either a prefix this request continues from, which the context
+    /// figure already contains, or state the request replaces.
+    pub(in crate::qwen3_5_resident::inference_execution) fn require_request_context_to_fit(
+        &self,
+        context_token_count: usize,
     ) -> Result<(), InferenceEngineError> {
-        let context_growth_bytes = total_context_tokens
+        let whole_context_bytes = context_token_count
             .checked_mul(self.context_memory_reservation_bytes_per_token)
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generation_context_memory_reservation_overflowed_error)?;
-        let (prefill_activation_workspace_bytes, complete_experts_are_resident) = {
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
-            let complete_experts_are_resident = model.resident_expert_weights.is_some();
-            let ram_budget = model.mlx_ram_budget();
-            // The activation reserve belongs to one forward, so it is sized
-            // by the planned chunk bound, never the total context length.
-            // Sizing it from the context multiplied a chunk-shaped learned
-            // observation into a reserve several times the ceiling and
-            // rejected every later request (issue #690); the planned chunk
-            // size is the same operation scope `plan()` already resolves
-            // (issue #644), and each mode's own forwards record evidence at
-            // that mode's operation scope, so the learned budget follows the
-            // mode that actually runs (measured 2026-10-10).
-            //
-            // Resident forwards reserve it exactly like paged forwards:
-            // the seated expert snapshot does not pre-pay the chunk's
-            // transient activation working set. Measured 2026-10-16 with
-            // the 8-bit resident shape under a wired budget (issue #1297):
-            // 2048-token chunks transiently held 2.0-2.27 GB that a
-            // zero-workspace projection never saw, so a long prompt
-            // admitted near the ceiling drove its live footprint across the
-            // wired budget and the GPU failed the command buffer fatally.
-            // The honest reserve sends such projections down the demote
-            // path (partial release or fork to the streaming family)
-            // instead of into a fatal execution window.
-            let planned_prefill_operation_token_count = u64::try_from(
-                self.prompt_processing_chunk_sizer
-                    .prompt_processing_operation_bound_tokens(),
-            )
-            .unwrap_or(u64::MAX);
-            let prefill_activation_workspace_bytes =
-                usize::try_from(ram_budget.activation_headroom_bytes(
-                    MemoryPhase::Prefill,
-                    planned_prefill_operation_token_count,
-                ))
-                .map_err(super::super::generation_session_lifecycle::generation_error_constructors::prefill_activation_workspace_exceeds_platform_range_error)?;
-            (
-                prefill_activation_workspace_bytes,
-                complete_experts_are_resident,
-            )
-        };
-        let temporary_workspace_reservation_bytes = request_context_temporary_workspace_bytes(
-            complete_experts_are_resident,
-            context_growth_bytes,
-            0,
-            0,
-            prefill_activation_workspace_bytes,
-        )
-        .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generation_context_workspace_reservation_overflowed_error)?;
-        crate::memory::log_generation_context_workspace_reservation(
-            total_context_tokens,
-            prompt_token_count,
-            can_use_persistent_prompt_cache,
-            self.context_memory_reservation_bytes_per_token,
-            0,
-            0,
-            prefill_activation_workspace_bytes,
-            temporary_workspace_reservation_bytes,
-            0,
-        );
         let model = self
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
-        memory_admission::validate_context_memory_admission(
+        let memory_governor = model.memory_governor.borrow();
+        let Some(memory_governor) = memory_governor.as_ref() else {
+            return Ok(());
+        };
+        let active_bytes = model
+            .runtime()
+            .memory_snapshot()
+            .map_err(super::qwen3_5_runtime_error)?
+            .active_memory_bytes() as u64;
+        let stored_state_bytes = active_bytes
+            .saturating_sub(fixed_weight_bytes(model))
+            .max(whole_context_bytes as u64);
+        let prompt_chunk_accounts =
+            memory_governor.accounts_while(self.serving_prompt_chunk_phase(), stored_state_bytes);
+        if prompt_chunk_accounts.shortfall_bytes == 0 {
+            return Ok(());
+        }
+        Err(request_errors::resident_capacity_error(
             model,
-            self.memory_limits,
-            self.context_memory_reservation_bytes_per_token,
-            total_context_tokens,
-            temporary_workspace_reservation_bytes,
-            0,
-        )?;
-        Ok(())
+            StreamingEngineRequirement::RequestContextShortfall {
+                shortfall_bytes: usize::try_from(prompt_chunk_accounts.shortfall_bytes)
+                    .unwrap_or(usize::MAX),
+            },
+            "generation context exceeds available GPU wired memory",
+        ))
     }
 }

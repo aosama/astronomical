@@ -67,6 +67,21 @@ impl MemoryLedger {
         })
     }
 
+    /// The accounts as they would stand in `phase` with `context_bytes` of
+    /// stored state and everything else as it is. A question only: nothing
+    /// changes.
+    #[must_use]
+    pub fn accounts_while(&self, phase: LedgerPhase, context_bytes: u64) -> LedgerAccounts {
+        compose_accounts(AccountInputs {
+            limit_bytes: self.limit_bytes,
+            model_shape: self.model_shape,
+            context_bytes,
+            phase,
+            working_memory_reserve: self.working_memory.reserve_for(phase),
+            lease_bytes: self.leases.held_bytes(),
+        })
+    }
+
     #[must_use]
     pub const fn phase(&self) -> LedgerPhase {
         self.phase
@@ -89,6 +104,12 @@ impl MemoryLedger {
 
     /// A request starts with this much stored state to hold.
     pub fn start_request(&mut self, context_bytes: u64) -> LedgerAccounts {
+        self.context_bytes = context_bytes;
+        self.accounts()
+    }
+
+    /// The stored state is now exactly this, by the engine's own count.
+    pub fn settle_context(&mut self, context_bytes: u64) -> LedgerAccounts {
         self.context_bytes = context_bytes;
         self.accounts()
     }

@@ -8,7 +8,7 @@ use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::persistent_cache::counters::PersistentPromptCacheCounters;
 use crate::{
-    AdaptiveRamGrowthGuard, GenerationFinalization, InferenceEngineError, PerformanceAttribution,
+    GenerationFinalization, InferenceEngineError, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PersistentPromptCacheDiskStore,
     PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
     PersistentVisualEmbeddingModelContract, build_persistent_prompt_cache_stats_event,
@@ -24,13 +24,6 @@ use super::speculative_decode_lifecycle::engine_draft_runtime::Qwen3_5Speculativ
 pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) active_request:
         Option<Qwen3_5EngineRequest>,
-    pub(in crate::qwen3_5_resident::inference_execution) adaptive_ram_growth_guard:
-        AdaptiveRamGrowthGuard,
-    pub(in crate::qwen3_5_resident::inference_execution) adaptive_ram_growth_guard_enabled: bool,
-    /// Diagnostic replacement for the static prefill activation floor applied to
-    /// the loaded model's RAM budget; `None` keeps the production floor.
-    pub(in crate::qwen3_5_resident::inference_execution) diagnostic_prefill_activation_floor_bytes:
-        Option<u64>,
     pub(in crate::qwen3_5_resident::inference_execution) persistent_prompt_cache_disk_store_config:
         Option<PersistentPromptCacheDiskStoreConfig>,
     pub(crate) persistent_prompt_cache_counters: PersistentPromptCacheCounters,

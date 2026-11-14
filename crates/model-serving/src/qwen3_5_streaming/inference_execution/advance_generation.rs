@@ -394,19 +394,9 @@ impl Qwen3_5EngineState {
             // step, alongside the warming cap that decides it. Without the
             // split, an idle gigabyte cannot be told apart from a reserve
             // held for context growth.
-            let decode_context_token_count = u64::try_from(
-                active_request
-                    .input_token_ids
-                    .len()
-                    .saturating_add(usize::from(active_request.generated_token_count)),
-            )
-            .unwrap_or(u64::MAX);
             let decode_active_memory_bytes =
                 u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX);
             model.record_memory_ceiling_utilization(
-                crate::MemoryPhase::Decode,
-                decode_context_token_count,
-                1,
                 &active_request.request_decoder_state,
                 0,
                 decode_active_memory_bytes,

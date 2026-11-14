@@ -1,34 +1,8 @@
-use crate::budget::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
-};
-use crate::forward_admission::PagedForwardAdmissionDecision;
 use crate::reclamation::{
-    ExpertMemoryAdmissionError, ExpertReclamationPlan,
-    complete_residency_exceeds_ceiling_with_activation_headroom,
-    expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure,
+    ExpertMemoryAdmissionError, complete_residency_exceeds_ceiling_with_activation_headroom,
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes,
-    should_retry_fixed_forward_after_expert_reclamation,
 };
-
-fn paged_forward_projection(
-    stable_projected_bytes: usize,
-    peak_projected_bytes: usize,
-    active_memory_ceiling_bytes: usize,
-) -> crate::budget::AdaptiveRamGrowthProjection {
-    AdaptiveRamGrowthGuard::new(active_memory_ceiling_bytes)
-        .expect("valid ceiling")
-        .project_growth_for_context(
-            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged),
-            stable_projected_bytes,
-            0,
-            0,
-            0,
-            peak_projected_bytes.saturating_sub(stable_projected_bytes),
-        )
-        .expect("the projection should fit the platform range")
-}
 
 #[test]
 fn should_project_complete_residency_as_replacement() {
@@ -61,99 +35,4 @@ fn should_reserve_activation_headroom_before_complete_residency() {
         39_000_000_000,
         3_600_000_000,
     ));
-}
-
-#[test]
-fn should_reclaim_only_the_expert_bytes_needed_by_a_fixed_forward() {
-    assert_eq!(
-        expert_reclamation_bytes_to_fit_fixed_forward(
-            30_000_000_000,
-            25_000_000_000,
-            32_000_000_000,
-            4_000_000_000,
-        ),
-        2_000_000_000
-    );
-    assert_eq!(
-        expert_reclamation_bytes_to_fit_fixed_forward(
-            20_000_000_000,
-            10_000_000_000,
-            32_000_000_000,
-            4_000_000_000,
-        ),
-        0
-    );
-}
-
-#[test]
-fn should_include_active_transients_in_failed_forward_workspace() {
-    assert_eq!(
-        fixed_forward_workspace_after_allocation_failure(
-            36_000_000_000,
-            38_000_000_000,
-            800_000_000,
-            1_000_000_000,
-        ),
-        2_800_000_000
-    );
-}
-
-#[test]
-fn should_retry_once_only_after_the_reclamation_target_was_released() {
-    assert!(should_retry_fixed_forward_after_expert_reclamation(
-        false, 1_000, 700, 300,
-    ));
-    assert!(!should_retry_fixed_forward_after_expert_reclamation(
-        true, 1_000, 700, 300,
-    ));
-    assert!(!should_retry_fixed_forward_after_expert_reclamation(
-        false, 1_000, 800, 300,
-    ));
-}
-
-#[test]
-fn should_choose_the_largest_memory_boundary_deficit() {
-    let plan = ExpertReclamationPlan::for_projected_memory(110, 130, 125, 100, 120, 15);
-    assert_eq!(plan.required_reclamation_bytes(), 10);
-    assert_eq!(plan.reclamation_target_bytes(), 10);
-    assert_eq!(plan.unresolved_shortfall_bytes(), 0);
-    assert!(plan.can_satisfy_every_memory_boundary());
-}
-
-#[test]
-fn should_report_unresolved_reclamation_shortfall() {
-    let plan = ExpertReclamationPlan::for_projected_memory(140, 150, 145, 100, 120, 20);
-    assert_eq!(plan.required_reclamation_bytes(), 40);
-    assert_eq!(plan.reclamation_target_bytes(), 20);
-    assert_eq!(plan.unresolved_shortfall_bytes(), 20);
-    assert!(!plan.can_satisfy_every_memory_boundary());
-}
-
-#[test]
-fn should_keep_reclaiming_paged_experts_while_peak_still_misses_and_payload_remains() {
-    let forward_projection = paged_forward_projection(90, 111, 100);
-    assert_eq!(
-        PagedForwardAdmissionDecision::for_paged_forward(&forward_projection, 50, Some(true)),
-        PagedForwardAdmissionDecision::ReclaimRetainedExperts { target_bytes: 10 },
-    );
-}
-
-#[test]
-fn should_stop_paged_expert_reclamation_when_a_pass_releases_nothing() {
-    let forward_projection = paged_forward_projection(90, 111, 100);
-    assert_eq!(
-        PagedForwardAdmissionDecision::for_paged_forward(&forward_projection, 50, Some(false)),
-        PagedForwardAdmissionDecision::Reject {
-            unresolved_shortfall_bytes: 10
-        },
-    );
-}
-
-#[test]
-fn should_admit_once_stable_and_peak_fit_after_paged_expert_reclamation() {
-    let fitting = paged_forward_projection(90, 100, 100);
-    assert_eq!(
-        PagedForwardAdmissionDecision::for_paged_forward(&fitting, 50, Some(true)),
-        PagedForwardAdmissionDecision::Admit,
-    );
 }

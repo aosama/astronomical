@@ -113,41 +113,8 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
         Qwen3_5StreamingModel::resident_model_payload_byte_count(self)
     }
 
-    fn request_ram_budget_snapshot(
-        &self,
-        phase: crate::MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
-    ) -> crate::memory::MlxRamBudgetSnapshot {
-        match self.governed_ram_budget_snapshot(self.held_expert_payload_bytes()) {
-            Some(governed_budget_snapshot) => governed_budget_snapshot,
-            None => self.base.mlx_ram_budget.borrow().plan(
-                phase,
-                context_token_count,
-                operation_token_count,
-                0,
-            ),
-        }
-    }
-
-    fn between_request_ram_budget_snapshot(
-        &self,
-        live_context_state_payload_bytes: u64,
-    ) -> crate::memory::MlxRamBudgetSnapshot {
-        match self.governed_ram_budget_snapshot(self.held_expert_payload_bytes()) {
-            Some(governed_budget_snapshot) => governed_budget_snapshot,
-            None => self
-                .base
-                .mlx_ram_budget
-                .borrow()
-                .plan_holding_live_context_state(
-                    crate::MemoryPhase::Decode,
-                    0,
-                    1,
-                    0,
-                    live_context_state_payload_bytes,
-                ),
-        }
+    fn governed_ram_budget_snapshot(&self) -> Option<crate::memory::MlxRamBudgetSnapshot> {
+        self.ram_budget_snapshot_from_governor(self.held_expert_payload_bytes())
     }
 }
 

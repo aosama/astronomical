@@ -308,7 +308,6 @@ impl Qwen3_5EngineState {
                 super::prefill_advance::prefill_mlx_memory_telemetry_from_snapshot(
                     model,
                     active_request,
-                    0,
                     mlx_memory_snapshot,
                 )?,
             ),

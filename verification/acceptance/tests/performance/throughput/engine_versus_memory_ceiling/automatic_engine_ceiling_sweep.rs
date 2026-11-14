@@ -43,7 +43,6 @@ macro_rules! automatic_engine_ceiling_cell {
             measure_summarization_throughput(
                 AUTOMATIC_ENGINE_SWEEP_CEILING_GIGABYTES[$sweep_ceiling_index],
                 WorkerDiagnosticQwen3_5EngineOverride::Automatic,
-                None,
             );
         }
     };

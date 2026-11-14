@@ -1,9 +1,8 @@
 use std::path::PathBuf;
 
 use super::prefill_complete_layer_prefetch::{
-    largest_prefill_prefetchable_complete_source_payload_bytes, layer_plan_allows_prefill_prefetch,
-    next_prefill_prefetch_layer_index, prefill_chunk_routes_complete_layer,
-    prefill_complete_layer_stream_slot_bytes,
+    layer_plan_allows_prefill_prefetch, next_prefill_prefetch_layer_index,
+    prefill_chunk_routes_complete_layer,
 };
 use crate::{QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype};
 
@@ -50,45 +49,6 @@ fn layer_plan_storing(projection_parameters: &[(&str, &[&str])]) -> QuantizedExp
 
 const AFFINE_PARAMETERS: &[&str] = &["weight", "scales", "biases"];
 const CODEBOOK_PARAMETERS: &[&str] = &["tq2_packed", "tq2_scales"];
-
-/// Forward-time page peak of the 122B JANGTQ2 model (packed plus decoded).
-const JANGTQ2_FORWARD_TIME_EXPERT_PAGE_PEAK_BYTES: u64 = 5_740_429_312;
-
-#[test]
-fn should_charge_the_read_ahead_layer_its_packed_source_not_the_decoded_peak() {
-    let packed_source_bytes = 700_000_000;
-
-    let stream_slot_bytes = prefill_complete_layer_stream_slot_bytes(
-        JANGTQ2_FORWARD_TIME_EXPERT_PAGE_PEAK_BYTES,
-        packed_source_bytes,
-    );
-
-    assert_eq!(
-        stream_slot_bytes,
-        JANGTQ2_FORWARD_TIME_EXPERT_PAGE_PEAK_BYTES + packed_source_bytes
-    );
-    // The regression this pins: doubling the decoded peak reserved 11.48 GB.
-    assert!(stream_slot_bytes < JANGTQ2_FORWARD_TIME_EXPERT_PAGE_PEAK_BYTES * 2);
-}
-
-#[test]
-fn should_reserve_two_whole_layers_when_pages_need_no_decode() {
-    // Plain MLX quantized layers multiply their packed page directly, so the
-    // forward-time peak equals the packed source and both slots are equal.
-    assert_eq!(
-        prefill_complete_layer_stream_slot_bytes(855_638_016, 855_638_016),
-        1_711_276_032
-    );
-}
-
-#[test]
-fn should_saturate_instead_of_overflowing_the_stream_slot() {
-    assert_eq!(
-        prefill_complete_layer_stream_slot_bytes(u64::MAX, 1),
-        u64::MAX
-    );
-    assert_eq!(prefill_complete_layer_stream_slot_bytes(0, 0), 0);
-}
 
 #[test]
 fn should_treat_a_full_prefill_chunk_as_routing_every_expert() {
@@ -220,63 +180,4 @@ fn should_allow_prefill_prefetch_for_a_native_bfloat16_layer() {
         PREFILL_CHUNK_TOKEN_COUNT,
         false
     ));
-}
-
-/// Each fixture tensor holds 8 bytes per expert across 4 experts.
-const FIXTURE_TENSOR_COMPLETE_PAYLOAD_BYTES: u64 = 32;
-
-#[test]
-fn should_reserve_no_read_ahead_slot_for_an_all_codebook_bundle() {
-    let codebook_layer_plan = layer_plan_storing(&[
-        ("gate_proj", CODEBOOK_PARAMETERS),
-        ("up_proj", CODEBOOK_PARAMETERS),
-        ("down_proj", CODEBOOK_PARAMETERS),
-    ]);
-
-    assert_eq!(
-        largest_prefill_prefetchable_complete_source_payload_bytes(&[
-            codebook_layer_plan.clone(),
-            codebook_layer_plan,
-        ])
-        .expect("fictional codebook geometry should be valid"),
-        0
-    );
-}
-
-#[test]
-fn should_size_the_read_ahead_slot_from_the_largest_prefetchable_layer_only() {
-    // The codebook layer is the largest on disk but can never be read ahead,
-    // so it must not set the slot size.
-    let large_codebook_layer_plan = layer_plan_storing(&[
-        (
-            "gate_proj",
-            &["tq2_packed", "tq2_scales", "tq2_extra_one", "tq2_extra_two"],
-        ),
-        ("up_proj", CODEBOOK_PARAMETERS),
-        ("down_proj", CODEBOOK_PARAMETERS),
-    ]);
-    let small_affine_layer_plan = layer_plan_storing(&[("gate_proj", AFFINE_PARAMETERS)]);
-    let larger_affine_layer_plan = layer_plan_storing(&[
-        ("gate_proj", AFFINE_PARAMETERS),
-        ("up_proj", AFFINE_PARAMETERS),
-    ]);
-
-    assert_eq!(
-        largest_prefill_prefetchable_complete_source_payload_bytes(&[
-            large_codebook_layer_plan,
-            small_affine_layer_plan,
-            larger_affine_layer_plan,
-        ])
-        .expect("fictional mixed geometry should be valid"),
-        6 * FIXTURE_TENSOR_COMPLETE_PAYLOAD_BYTES
-    );
-}
-
-#[test]
-fn should_reserve_no_read_ahead_slot_for_a_model_without_expert_layers() {
-    assert_eq!(
-        largest_prefill_prefetchable_complete_source_payload_bytes(&[])
-            .expect("an empty layer list has no geometry to overflow"),
-        0
-    );
 }

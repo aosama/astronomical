@@ -1,7 +1,7 @@
 //! Precomputed visual-embedding shape validation for one generation session.
 
 use crate::InferenceEngineError;
-use crate::qwen3_5_resident::model::memory_admission;
+use crate::qwen3_5_resident::model::request_errors;
 
 /// Which precomputed visual-embedding rule failed. The split into two
 /// validation calls preserves the established check order: the row-count
@@ -22,7 +22,7 @@ impl VisualEmbeddingValidationError {
             Self::EmptyVisualEmbeddings => {
                 super::fatal_engine_error("image request has empty visual embeddings")
             }
-            Self::ImagePadTokenCountMismatch => memory_admission::invalid_request_error(
+            Self::ImagePadTokenCountMismatch => request_errors::invalid_request_error(
                 "image pad token count does not match visual embedding row count",
             ),
             Self::HiddenBufferSizeMismatch => super::fatal_engine_error(

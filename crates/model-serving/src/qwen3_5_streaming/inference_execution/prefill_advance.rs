@@ -317,10 +317,6 @@ impl Qwen3_5EngineState {
         // their previous parent, allowing restart to reproduce valid state.
         active_request.advance_position(prefill_token_count)?;
         active_request.prefill_cursor = prefill_end;
-        model.learn_context_state_payload(
-            active_request.next_position_tokens,
-            &active_request.request_decoder_state,
-        );
         Ok(())
     }
 
@@ -444,7 +440,6 @@ impl Qwen3_5EngineState {
             Some(mlx_memory_snapshot) => Some(prefill_mlx_memory_telemetry_from_snapshot(
                 model,
                 active_request,
-                prefill_token_count,
                 mlx_memory_snapshot,
             )?),
             None => None,
@@ -482,7 +477,6 @@ impl Qwen3_5EngineState {
 pub(super) fn prefill_mlx_memory_telemetry_from_snapshot(
     model: &Qwen3_5Model,
     active_request: &Qwen3_5EngineRequest,
-    prefill_token_count: usize,
     mlx_memory_snapshot: MlxMemorySnapshot,
 ) -> Result<crate::memory::telemetry::MlxMemoryTelemetry, InferenceEngineError> {
     let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
@@ -499,9 +493,6 @@ pub(super) fn prefill_mlx_memory_telemetry_from_snapshot(
         })?;
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
         .map_err(|_| fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
-    let prompt_token_count =
-        u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
-    let chunk_token_count = u64::try_from(prefill_token_count).unwrap_or(u64::MAX);
     Ok(crate::memory::telemetry::MlxMemoryTelemetry::new(
         active_memory_bytes,
         allocator_cache_memory_bytes,
@@ -515,16 +506,10 @@ pub(super) fn prefill_mlx_memory_telemetry_from_snapshot(
         model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
     )
     // Issue #510: the prefill progress sample carries the same
-    // utilization split, planned against the full prompt so the
-    // context reserve reflects the request the user submitted.
-    // The activation reserve is operation-scoped (issue #644):
-    // it plans this chunk's own workspace, not the prompt.
-    .with_memory_ceiling_utilization(model.memory_ceiling_utilization_for_breakdown(
-        crate::MemoryPhase::Prefill,
-        prompt_token_count,
-        chunk_token_count,
-        active_memory_bytes,
-        active_memory_breakdown,
-    ))
+    // utilization split, composed from the memory governor's accounts.
+    .with_memory_ceiling_utilization(
+        model
+            .memory_ceiling_utilization_for_breakdown(active_memory_bytes, active_memory_breakdown),
+    )
     .with_memory_ledger_reading(model.latest_memory_ledger_reading()))
 }

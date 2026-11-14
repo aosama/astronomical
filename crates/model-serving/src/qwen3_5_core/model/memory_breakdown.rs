@@ -27,40 +27,24 @@ pub(crate) trait Qwen3_5MemoryOwnership {
     /// Text weight bytes, other than experts, this engine keeps in memory.
     fn held_model_core_payload_bytes(&self) -> u64;
 
-    /// The reserves the ceiling-utilization split is composed against while
-    /// a request runs. An engine whose limit a memory governor owns answers
-    /// with the governor's accounts, so the split shows what is really set
-    /// aside (issue #2221); otherwise it is the budget's plan.
-    fn request_ram_budget_snapshot(
-        &self,
-        phase: crate::MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
-    ) -> crate::memory::MlxRamBudgetSnapshot {
-        self.model_base().mlx_ram_budget.borrow().plan(
-            phase,
-            context_token_count,
-            operation_token_count,
-            0,
-        )
-    }
+    /// The memory governor's accounts in the shape the ceiling-utilization
+    /// split is composed against, so the split shows what is really set
+    /// aside (issue #2221). `None` until the engine's governor has opened.
+    fn governed_ram_budget_snapshot(&self) -> Option<crate::memory::MlxRamBudgetSnapshot>;
 
-    /// The same between requests, with `live_context_state_payload_bytes`
-    /// of decoder state still held.
-    fn between_request_ram_budget_snapshot(
-        &self,
-        live_context_state_payload_bytes: u64,
-    ) -> crate::memory::MlxRamBudgetSnapshot {
-        self.model_base()
-            .mlx_ram_budget
-            .borrow()
-            .plan_holding_live_context_state(
-                crate::MemoryPhase::Decode,
-                0,
-                1,
-                0,
-                live_context_state_payload_bytes,
-            )
+    /// The reserves the split is composed against. Before the governor
+    /// opens nothing has been measured, so only the weights are set aside.
+    fn ram_budget_snapshot(&self) -> crate::memory::MlxRamBudgetSnapshot {
+        match self.governed_ram_budget_snapshot() {
+            Some(governed_budget_snapshot) => governed_budget_snapshot,
+            None => crate::memory::MlxRamBudgetSnapshot::with_only_weights_set_aside(
+                self.model_base()
+                    .mlx_ram_budget
+                    .borrow()
+                    .mlx_active_memory_ceiling_bytes(),
+                self.held_model_core_payload_bytes(),
+            ),
+        }
     }
 
     #[must_use]
@@ -111,41 +95,32 @@ pub(crate) trait Qwen3_5MemoryOwnership {
     /// Composes the ceiling-utilization split for one measured instant (issue #510).
     ///
     /// The reserves come from whatever decides them for this engine
-    /// (`request_ram_budget_snapshot`), so the published split and the
+    /// (`ram_budget_snapshot`), so the published split and the
     /// engine's own decisions can never drift apart. Callers pass the
     /// breakdown reconciled from the same measurement, keeping every term
     /// pinned to one instant.
     fn memory_ceiling_utilization_for_breakdown(
         &self,
-        phase: crate::MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
         mlx_active_memory_bytes: u64,
         active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.request_ram_budget_snapshot(phase, context_token_count, operation_token_count),
+            self.ram_budget_snapshot(),
             mlx_active_memory_bytes,
             active_breakdown,
         )
     }
 
-    /// Composes the split for a sample taken between requests.
-    ///
-    /// Plans the next request's decode budget from a fresh context while the
-    /// context owner keeps the retained live prefix it still holds; the
-    /// finalized breakdown's context term is exactly that prefix payload.
-    /// Planning against a zero-byte context instead would promise the retained
-    /// prefix's bytes to the next request a second time.
+    /// Composes the split for a sample taken between requests. The governor
+    /// keeps a prefix retained for the next turn on its stored-state
+    /// account, so the same accounts serve.
     fn between_request_memory_ceiling_utilization_for_breakdown(
         &self,
         mlx_active_memory_bytes: u64,
         finalized_active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.between_request_ram_budget_snapshot(
-                finalized_active_breakdown.context_state_payload_bytes,
-            ),
+            self.ram_budget_snapshot(),
             mlx_active_memory_bytes,
             finalized_active_breakdown,
         )
@@ -161,9 +136,6 @@ pub(crate) trait Qwen3_5MemoryOwnership {
     /// that, so the peak is read back before re-recording the whole split.
     fn record_memory_ceiling_utilization(
         &self,
-        phase: crate::MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
         request_decoder_state: &RequestDecoderStateStack,
         additional_context_state_payload_bytes: u64,
         mlx_active_memory_bytes: u64,
@@ -175,13 +147,8 @@ pub(crate) trait Qwen3_5MemoryOwnership {
             mlx_active_memory_bytes,
             0,
         );
-        let utilization = self.memory_ceiling_utilization_for_breakdown(
-            phase,
-            context_token_count,
-            operation_token_count,
-            mlx_active_memory_bytes,
-            active_breakdown,
-        );
+        let utilization = self
+            .memory_ceiling_utilization_for_breakdown(mlx_active_memory_bytes, active_breakdown);
         let previous_peak_unused_headroom_bytes = performance_attribution
             .counter_value(PerformanceCounter::MemoryCeilingUtilizationUnusedHeadroomBytes);
         if utilization.unused_headroom_bytes < previous_peak_unused_headroom_bytes {

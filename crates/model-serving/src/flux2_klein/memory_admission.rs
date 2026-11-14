@@ -3,9 +3,6 @@
 #[cfg(feature = "direct-mlx")]
 use thiserror::Error;
 
-#[cfg(feature = "direct-mlx")]
-use crate::memory::{MlxRamBudget, MlxRamBudgetModelGeometry};
-
 #[cfg(any(test, feature = "direct-mlx"))]
 /// Validated payload and transient byte owners supplied by artifact/runtime measurements.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,19 +131,10 @@ impl Flux2KleinMemoryAdmission {
         mlx_active_memory_ceiling_bytes: u64,
         geometry: &Flux2KleinMemoryGeometry,
     ) -> Result<Flux2KleinResidencyPlan, Flux2KleinMemoryAdmissionError> {
-        let budget = MlxRamBudget::with_bootstrap_context_window_reserve_bytes(
-            mlx_active_memory_ceiling_bytes,
-            MlxRamBudgetModelGeometry {
-                model_core_payload_bytes: 0,
-                complete_expert_payload_bytes: 0,
-                largest_complete_expert_layer_bytes: 0,
-                largest_routed_expert_page_bytes: 0,
-                sequence_state_bytes_per_token: 0,
-            },
-            0,
-        )
-        .map_err(|_| Flux2KleinMemoryAdmissionError::InvalidCeiling)?;
-        let ceiling_bytes = budget.mlx_active_memory_ceiling_bytes();
+        if mlx_active_memory_ceiling_bytes == 0 {
+            return Err(Flux2KleinMemoryAdmissionError::InvalidCeiling);
+        }
+        let ceiling_bytes = mlx_active_memory_ceiling_bytes;
         let execution_peaks = minimum_execution_peaks(geometry)?;
 
         ensure_fits(execution_peaks.streamed_text_peak_bytes, ceiling_bytes)?;

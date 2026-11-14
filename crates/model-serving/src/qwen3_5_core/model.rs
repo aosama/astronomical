@@ -28,6 +28,8 @@ pub(crate) mod memory_breakdown;
 pub(crate) mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod output_gate_engine;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod probe_token_ids;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) use base::Qwen3_5ModelBase;

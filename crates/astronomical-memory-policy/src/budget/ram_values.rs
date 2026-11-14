@@ -1,12 +1,7 @@
-//! Value vocabulary for the MLX RAM budget owner.
-//!
-//! These types are the immutable inputs and composed outputs of the budget
-//! composition in [`ram.rs`](./ram.rs): model geometry measured once at load,
-//! the per-plan snapshot, one live measurement sample, and the construction
-//! error. Keeping them beside the owner separates *what flows through the
-//! budget* from *how the budget learns and composes*.
+//! Value types for a model's memory facts: the geometry measured once at
+//! load, the snapshot the status breakdown is composed against, and the
+//! construction error.
 
-use crate::phase::MemoryPhase;
 use thiserror::Error;
 
 /// Immutable inputs known once a model is loaded against one ceiling.
@@ -45,19 +40,47 @@ pub struct MlxRamBudgetSnapshot {
 }
 
 /// Live measurement that refines context-window reserve and activation headroom.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MlxRamBudgetMeasurement {
-    /// Execution class whose activation high-water this sample may raise.
-    pub phase: MemoryPhase,
-    /// Tokens this forward processed. It keys prefill activation learning and
-    /// sizes the per-token sequence state the forward itself appended.
-    pub forward_token_count: u64,
-    /// Measured request-owned persistent and transient bytes above model core.
-    pub measured_context_and_activation_bytes: u64,
-    /// Transient-only high-water independently learned by forward admission.
-    pub observed_activation_headroom_bytes: u64,
-    /// Explicit operation workspace already reserved by forward admission.
-    pub exact_temporary_workspace_bytes: u64,
+impl MlxRamBudgetSnapshot {
+    /// The memory ledger's accounts in this shape.
+    ///
+    /// Working memory, the margin and any lease are one reserve to a
+    /// reader: room held for work in progress. Room left once every
+    /// streamable weight is kept has no owner and is reported as a fixed
+    /// reserve instead of as unexplained.
+    #[must_use]
+    pub const fn from_ledger_accounts(accounts: &crate::ledger::LedgerAccounts) -> Self {
+        Self {
+            mlx_active_memory_ceiling_bytes: accounts.limit_bytes,
+            model_core_payload_bytes: accounts.core_weight_bytes,
+            context_window_reserve_bytes: accounts.context_bytes,
+            activation_headroom_bytes: accounts
+                .working_memory_bytes
+                .saturating_add(accounts.margin_bytes)
+                .saturating_add(accounts.lease_bytes),
+            complete_layer_stream_slot_bytes: accounts.stream_slot_bytes,
+            other_fixed_bytes: accounts.unassigned_bytes,
+            retained_expert_budget_bytes: accounts.kept_weight_capacity_bytes,
+        }
+    }
+
+    /// Before anything has been measured: the weights that are always in
+    /// memory, and the rest of the limit with no owner yet.
+    #[must_use]
+    pub const fn with_only_weights_set_aside(
+        mlx_active_memory_ceiling_bytes: u64,
+        model_core_payload_bytes: u64,
+    ) -> Self {
+        Self {
+            mlx_active_memory_ceiling_bytes,
+            model_core_payload_bytes,
+            context_window_reserve_bytes: 0,
+            activation_headroom_bytes: 0,
+            complete_layer_stream_slot_bytes: 0,
+            other_fixed_bytes: mlx_active_memory_ceiling_bytes
+                .saturating_sub(model_core_payload_bytes),
+            retained_expert_budget_bytes: 0,
+        }
+    }
 }
 
 /// Invalid configuration for the RAM budget owner.

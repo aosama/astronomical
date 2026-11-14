@@ -38,12 +38,6 @@ impl Qwen3_5EngineState {
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::GeneratedTokenCount, 1);
-        // The decode forward that produced this token has completed and
-        // advanced the position, so the decoder state is the live context.
-        model.learn_context_state_payload(
-            active_request.next_position_tokens,
-            &active_request.request_decoder_state,
-        );
 
         let was_already_in_visible_answer = !active_request.is_inside_thinking();
         let is_reasoning_token =
@@ -133,13 +127,6 @@ fn decode_mlx_memory_telemetry_from_completed_forward(
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
         super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error,
     )?;
-    let visible_context_token_count = u64::try_from(
-        active_request
-            .input_token_ids
-            .len()
-            .saturating_add(usize::from(active_request.generated_token_count)),
-    )
-    .unwrap_or(u64::MAX);
     // The breakdown reconciles the snapshot captured at one instant by
     // the observation owner, and the residency claim is derived from
     // that same breakdown, so this pair can never straddle a promotion
@@ -156,11 +143,11 @@ fn decode_mlx_memory_telemetry_from_completed_forward(
     // Issue #510: publish the same utilization split the decode
     // attribution records, so the live status shows why the
     // ceiling is not fully in use while generation runs.
-    .with_memory_ceiling_utilization(model.memory_ceiling_utilization_for_breakdown(
-        crate::MemoryPhase::Decode,
-        visible_context_token_count,
-        1,
-        mlx_active_memory_bytes,
-        active_memory_breakdown,
-    )))
+    .with_memory_ceiling_utilization(
+        model.memory_ceiling_utilization_for_breakdown(
+            mlx_active_memory_bytes,
+            active_memory_breakdown,
+        ),
+    )
+    .with_memory_ledger_reading(model.latest_memory_ledger_reading()))
 }

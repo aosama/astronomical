@@ -1,13 +1,13 @@
 use crate::ResidentForwardAdmissionRejection;
 use crate::{InferenceEngineError, Qwen3_5ExecutionError};
 
-use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
+use super::forward_memory::ForwardAdmissionError;
 
 pub(super) enum PromptPrefillChunkAttemptError {
-    /// The adaptive RAM growth guard rejected this chunk. The typed rejection
-    /// says whether a smaller chunk of the same prompt may still run resident
-    /// or which shortfall requires the streaming engine.
-    AdaptiveForwardAdmissionRejected {
+    /// The memory governor found that this chunk does not fit. The typed
+    /// rejection says which shortfall moves the request to the streaming
+    /// engine.
+    ForwardAdmissionRejected {
         rejection: ResidentForwardAdmissionRejection,
         reason: String,
     },
@@ -28,13 +28,13 @@ impl From<InferenceEngineError> for PromptPrefillChunkAttemptError {
     }
 }
 
-impl From<AdaptiveRamGrowthMemoryAdmissionError> for PromptPrefillChunkAttemptError {
-    fn from(admission_error: AdaptiveRamGrowthMemoryAdmissionError) -> Self {
+impl From<ForwardAdmissionError> for PromptPrefillChunkAttemptError {
+    fn from(admission_error: ForwardAdmissionError) -> Self {
         match admission_error {
-            AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission { rejection, reason } => {
-                Self::AdaptiveForwardAdmissionRejected { rejection, reason }
+            ForwardAdmissionError::Rejected { rejection, reason } => {
+                Self::ForwardAdmissionRejected { rejection, reason }
             }
-            AdaptiveRamGrowthMemoryAdmissionError::Engine(inference_engine_error) => {
+            ForwardAdmissionError::Engine(inference_engine_error) => {
                 Self::Engine(inference_engine_error)
             }
         }

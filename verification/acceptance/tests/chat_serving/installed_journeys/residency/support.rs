@@ -73,7 +73,6 @@ pub(super) fn construct_resident_engine(
             think_end_token_id,
             model_directory,
             crate::common::standard_worker_chunking_configuration(),
-            false,
             astronomical_model_serving::PerformanceAttribution::disabled(),
             astronomical_model_serving::PerformanceAttributionLog::disabled(),
         )

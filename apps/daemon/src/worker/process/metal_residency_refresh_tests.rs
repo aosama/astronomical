@@ -20,7 +20,6 @@ fn startup_configuration(is_refresh_enabled: bool) -> WorkerStartupConfiguration
         performance_attribution_enabled: false,
         decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
         diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
-        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
         logging_directory: PathBuf::from("logs"),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,

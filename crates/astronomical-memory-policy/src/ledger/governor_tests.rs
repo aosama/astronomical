@@ -201,6 +201,78 @@ fn should_answer_no_capacity_for_a_phase_nothing_has_measured() {
 }
 
 #[test]
+fn should_take_a_stored_state_that_grew_shrank_or_emptied_as_it_is() {
+    let mut governor = governor();
+    let _ = governor.record_probe(READING, GIBIBYTE);
+    let capacity_with_two = governor.settle_context(2 * GIBIBYTE);
+    assert_eq!(governor.accounts().context_bytes, 2 * GIBIBYTE);
+    let capacity_with_one = governor.settle_context(GIBIBYTE);
+    assert_eq!(governor.accounts().context_bytes, GIBIBYTE);
+    assert_eq!(
+        capacity_with_one.bytes(),
+        capacity_with_two.bytes() + GIBIBYTE,
+        "state that went away is room again"
+    );
+    let _ = governor.settle_context(0);
+    assert_eq!(governor.accounts().context_bytes, 0);
+}
+
+#[test]
+fn should_show_a_step_that_fits_as_having_no_shortfall() {
+    let mut governor = governor();
+    let _ = governor.record_probe(READING, GIBIBYTE);
+    let accounts = governor.accounts_while(READING, GIBIBYTE);
+    assert_eq!(accounts.shortfall_bytes, 0);
+    assert_eq!(accounts.stable_shortfall_bytes(), 0);
+    assert_eq!(accounts.context_bytes, GIBIBYTE);
+    assert_eq!(
+        governor.accounts().context_bytes,
+        0,
+        "asking changes nothing"
+    );
+}
+
+#[test]
+fn should_tell_stored_state_that_cannot_fit_from_working_memory_that_cannot() {
+    let mut governor = governor();
+    let _ = governor.record_probe(READING, 2 * GIBIBYTE);
+    // 3 core + 12 stored + 2 working + 1 slots is over the 16 limit, but
+    // what stays after the step (3 + 12 + the margin) is not.
+    let peak_only = governor.accounts_while(READING, 12 * GIBIBYTE);
+    assert!(peak_only.shortfall_bytes > 0);
+    assert_eq!(peak_only.stable_shortfall_bytes(), 0);
+    let stable_too = governor.accounts_while(READING, 14 * GIBIBYTE);
+    assert!(stable_too.stable_shortfall_bytes() > 0);
+}
+
+#[test]
+fn should_report_no_working_memory_shortfall_for_a_phase_nothing_has_measured() {
+    let governor = governor();
+    let accounts = governor.accounts_while(READING, 11 * GIBIBYTE);
+    assert!(!accounts.working_memory_is_measured);
+    assert_eq!(accounts.shortfall_bytes, 0);
+}
+
+#[test]
+fn should_report_a_shortfall_for_a_model_with_nothing_to_stream() {
+    let everything_fixed = ModelMemoryShape {
+        core_weight_bytes: 10 * GIBIBYTE,
+        streamable_weight_bytes: 0,
+        ..model_shape()
+    };
+    let mut governor =
+        MemoryGovernor::new(LIMIT_BYTES, everything_fixed).expect("the limit is not zero");
+    let _ = governor.record_probe(READING, 2 * GIBIBYTE);
+    assert_eq!(
+        governor.accounts_while(READING, GIBIBYTE).shortfall_bytes,
+        0
+    );
+    let over_the_limit = governor.accounts_while(READING, 5 * GIBIBYTE);
+    assert!(over_the_limit.shortfall_bytes > 0);
+    assert_eq!(over_the_limit.stable_shortfall_bytes(), 0);
+}
+
+#[test]
 fn should_lease_the_known_shortfall_when_it_is_more_than_as_much_again() {
     let mut governor = governor();
     let _ = governor.record_probe(READING, GIBIBYTE);

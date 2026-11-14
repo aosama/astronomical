@@ -93,16 +93,12 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         if self.generated_token_will_be_terminal(active_request, current_generated_token_id) {
-            let completed_forward_memory = if self.adaptive_ram_growth_guard_enabled {
-                Some(capture_completed_forward_memory_observation(model)?)
-            } else {
-                None
-            };
+            let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
             let generated_token_emission = self.build_generated_token_emission(
                 model,
                 active_request,
                 current_generated_token_id,
-                completed_forward_memory.as_ref(),
+                Some(&completed_forward_memory),
             )?;
             return Ok(ActiveRequestAdvance::Complete(
                 generated_token_emission.generated_token,

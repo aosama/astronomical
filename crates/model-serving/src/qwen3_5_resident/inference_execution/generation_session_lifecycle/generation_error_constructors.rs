@@ -6,7 +6,7 @@
 //! closures stays provably behavior-preserving.
 
 use crate::InferenceEngineError;
-use crate::qwen3_5_resident::model::memory_admission;
+use crate::qwen3_5_resident::model::request_errors;
 
 pub(in crate::qwen3_5_resident::inference_execution) fn engine_lost_loaded_model_error()
 -> InferenceEngineError {
@@ -15,7 +15,7 @@ pub(in crate::qwen3_5_resident::inference_execution) fn engine_lost_loaded_model
 
 pub(in crate::qwen3_5_resident::inference_execution) fn missing_image_pad_token_id_error()
 -> InferenceEngineError {
-    memory_admission::invalid_request_error("generation request is missing the image-pad token ID")
+    request_errors::invalid_request_error("generation request is missing the image-pad token ID")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn visual_embedding_model_contract_not_loaded_error()
@@ -25,12 +25,12 @@ pub(in crate::qwen3_5_resident::inference_execution) fn visual_embedding_model_c
 
 pub(in crate::qwen3_5_resident::inference_execution) fn thinking_budget_output_reservation_overflow_error()
 -> InferenceEngineError {
-    memory_admission::invalid_request_error("thinking-budget output reservation overflowed")
+    request_errors::invalid_request_error("thinking-budget output reservation overflowed")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_token_count_overflow_error()
 -> InferenceEngineError {
-    memory_admission::invalid_request_error("generation context token count overflowed")
+    request_errors::invalid_request_error("generation context token count overflowed")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn mlx_active_memory_bytes_exceed_u64_range_error(
@@ -108,20 +108,18 @@ pub(in crate::qwen3_5_resident::inference_execution) fn context_memory_reservati
 
 pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_memory_reservation_overflowed_error()
 -> InferenceEngineError {
-    memory_admission::invalid_request_error("generation context memory reservation overflowed")
+    request_errors::invalid_request_error("generation context memory reservation overflowed")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn prefill_activation_workspace_exceeds_platform_range_error(
     _try_from_error: std::num::TryFromIntError,
 ) -> InferenceEngineError {
-    memory_admission::invalid_request_error(
-        "prefill activation workspace exceeds the platform range",
-    )
+    request_errors::invalid_request_error("prefill activation workspace exceeds the platform range")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn generation_context_workspace_reservation_overflowed_error()
 -> InferenceEngineError {
-    memory_admission::invalid_request_error("generation context workspace reservation overflowed")
+    request_errors::invalid_request_error("generation context workspace reservation overflowed")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn current_mlx_memory_ceiling_exceeds_u64_range_error(

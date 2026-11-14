@@ -3,6 +3,7 @@ mod compact_prefill;
 mod decode_residency_attribution;
 mod decode_retention;
 mod failed_span_redo;
+mod in_memory_ledger_reconciliation;
 mod no_replay;
 mod paged_decode;
 mod paged_prefill_chunk_attribution;

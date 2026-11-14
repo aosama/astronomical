@@ -17,7 +17,7 @@ use crate::decoder_cache::DecoderCacheLayout;
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::text::sampler;
-use crate::qwen3_5_resident::model::memory_admission;
+use crate::qwen3_5_resident::model::request_errors;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 /// The prompt-side identity of a generation session: token list, image-pad
@@ -105,7 +105,7 @@ impl Qwen3_5EngineState {
             natural_reasoning_end_token_ids,
         )
         .map_err(|source| {
-            memory_admission::invalid_request_error(format!(
+            request_errors::invalid_request_error(format!(
                 "invalid Qwen3.5 thinking-budget configuration: {source}"
             ))
         })?;
@@ -130,8 +130,6 @@ impl Qwen3_5EngineState {
             request_id,
             configured_maximum_output_tokens,
             reserved_context_tokens,
-            inference_request.input_token_ids().len(),
-            self.persistent_prompt_cache.is_some() && !inference_request.has_visual_embeddings(),
             &mut performance_attribution,
         )?;
         // Everything below can still fail: `?` now returns from this function
@@ -506,7 +504,7 @@ impl Qwen3_5EngineState {
                 image_pad_token_id,
             )
             .map_err(|visual_embedding_suffix_plan_error| {
-                memory_admission::invalid_request_error(format!(
+                request_errors::invalid_request_error(format!(
                     "visual embedding suffix planning failed: {visual_embedding_suffix_plan_error}"
                 ))
             })?;

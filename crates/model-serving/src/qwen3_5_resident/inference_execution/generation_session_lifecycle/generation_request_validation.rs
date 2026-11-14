@@ -10,7 +10,7 @@ use crate::{
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_core::text;
-use crate::qwen3_5_resident::model::memory_admission;
+use crate::qwen3_5_resident::model::request_errors;
 
 impl Qwen3_5EngineState {
     pub(super) fn validate_generation_request_and_resolve_reserved_context(
@@ -37,7 +37,7 @@ impl Qwen3_5EngineState {
                 forced_transition_token_ids,
                 self.think_end_token_id,
             ) {
-                return Err(memory_admission::invalid_request_error(
+                return Err(request_errors::invalid_request_error(
                     "thinking budget requires a model-owned transition ending with the model thinking marker",
                 ));
             }
@@ -49,7 +49,7 @@ impl Qwen3_5EngineState {
                 super::generation_error_constructors::thinking_budget_output_reservation_overflow_error,
             )?;
             if usize::from(inference_request.max_output_tokens()) < minimum_bounded_output_tokens {
-                return Err(memory_admission::invalid_request_error(format!(
+                return Err(request_errors::invalid_request_error(format!(
                     "output-token budget must reserve {minimum_bounded_output_tokens} positions for the thinking allowance, forced transition, and final answer"
                 )));
             }
@@ -69,7 +69,7 @@ impl Qwen3_5EngineState {
             inference_request.natural_reasoning_end_token_ids(),
             self.vocabulary_size,
         ) {
-            return Err(memory_admission::invalid_request_error(
+            return Err(request_errors::invalid_request_error(
                 "thinking-budget configuration contains a token outside the model vocabulary",
             ));
         }
@@ -82,7 +82,7 @@ impl Qwen3_5EngineState {
                 super::generation_error_constructors::generation_context_token_count_overflow_error,
             )?;
         if total_context_tokens > self.hard_maximum_position_count {
-            return Err(memory_admission::invalid_request_error(
+            return Err(request_errors::invalid_request_error(
                 "generation context exceeds the model maximum position count",
             ));
         }
@@ -97,8 +97,9 @@ impl Qwen3_5EngineState {
         // reserve, never the caller's full output budget: a 65,535-token budget with a
         // 16,384-token thinking allowance pinned ~1.3 GB of KV that never materialized
         // and forced a per-turn warm-expert reclaim in long agent conversations
-        // (2026-10-16 incident). Beyond-reserve output grows lazily under the
-        // per-step growth guard. Position limits above stay on the true total.
+        // (2026-10-16 incident). Output beyond the reserve grows as it is
+        // written, and every reply step is asked of the memory governor
+        // before it runs. Position limits above stay on the true total.
         let output_reservation_token_count = bounded_output_reservation_token_count(
             maximum_output_token_count,
             thinking_budget_token_count,

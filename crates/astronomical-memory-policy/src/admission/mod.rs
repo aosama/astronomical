@@ -18,26 +18,17 @@ mod allocation_boundary_tests;
 #[cfg(test)]
 mod context_boundary_tests;
 #[cfg(test)]
-mod context_workspace_boundary_tests;
-#[cfg(test)]
 mod expert_memory_admission_tests;
 #[cfg(test)]
 mod retained_prefix_policy_tests;
 #[cfg(test)]
 mod rotating_admission_tests;
 
-pub use allocation::{
-    AllocationAdmissionDecision, AllocationAdmissionObservation,
-    retained_expert_payload_capacity_bytes,
-};
+pub use allocation::{AllocationAdmissionDecision, AllocationAdmissionObservation};
 pub use complete_residency::{CompleteResidencyDecision, CompleteResidencyRequirements};
 pub use context::{
-    ContextAdmissionRequirements, VISIBLE_ANSWER_RESERVE_TOKENS,
-    bounded_output_reservation_token_count, combined_persistent_growth_bytes,
-    persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
-    safe_minimum_active_memory_ceiling_bytes,
-    seated_complete_expert_request_peak_active_memory_bytes,
-    seated_complete_expert_request_temporary_workspace_bytes,
+    VISIBLE_ANSWER_RESERVE_TOKENS, bounded_output_reservation_token_count,
+    persistent_context_restore_workspace_bytes, safe_minimum_active_memory_ceiling_bytes,
 };
 pub use retained_prefix::{RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements};
 pub use rotating::{

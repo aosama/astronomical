@@ -48,20 +48,17 @@ pub(super) const BYTES_PER_GIGABYTE: u64 = 1 << 30;
 ///
 /// Every cell carries the production probe kind, but only automatic-engine
 /// runs reach the durable history: the throughput runner skips the append for
-/// any forced engine or overridden prefill floor, so a diagnostic run is never
+/// any forced engine, so a diagnostic run is never
 /// read back as what the production engine choice delivers at that ceiling.
 pub(super) fn measure_summarization_throughput(
     assigned_ceiling_gigabytes: u64,
     engine_override: WorkerDiagnosticQwen3_5EngineOverride,
-    resident_prefill_activation_floor_bytes: Option<u64>,
 ) {
     let mut journey = summarization_journey(
         ThroughputJourneyKind::ResidentMemoryCeilingProbe,
         assigned_ceiling_gigabytes,
     );
     journey.diagnostic_qwen3_5_engine_override = engine_override;
-    journey.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes =
-        resident_prefill_activation_floor_bytes;
     let measured_throughput = throughput_support::run_journey_with_timeout(
         support::resident_sparse_moe_model_id(),
         journey,
