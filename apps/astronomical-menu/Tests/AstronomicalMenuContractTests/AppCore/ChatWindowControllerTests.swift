@@ -21,7 +21,7 @@ final class ChatWindowControllerTests: XCTestCase {
 
     let window = try XCTUnwrap(chatWindow(), "showing chat must present the chat window")
     XCTAssertTrue(window.isVisible, "the chat window must actually be on screen")
-    XCTAssertEqual(window.title, "Thin Talk Development")
+    XCTAssertEqual(window.title, "Astronomical Development")
   }
 
   /// A rebuild in the middle of other work must not take the screen: the
@@ -198,6 +198,6 @@ final class ChatWindowControllerTests: XCTestCase {
   // after close, so earlier tests leave dead windows behind; the window this
   // test just presented is always the most recently created match.
   private func chatWindow() -> NSWindow? {
-    NSApp.windows.last { $0.title == "Thin Talk Development" }
+    NSApp.windows.last { $0.title == "Astronomical Development" }
   }
 }

@@ -48,7 +48,7 @@ export class AppConfig {
   /** What this window calls itself. Mirrors ThinTalkApplicationIdentity.windowTitle,
    * so the sidebar agrees with the title bar about which instance this is. */
   public get applicationTitle(): string {
-    return this.expectedChannel === "development" ? "Thin Talk Development" : "Thin Talk";
+    return this.expectedChannel === "development" ? "Astronomical Development" : "Astronomical";
   }
 
   /** Reads and validates the host-injected config, throwing when the host did

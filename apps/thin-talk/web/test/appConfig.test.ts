@@ -11,16 +11,16 @@ function configForChannel(expectedChannel: string): AppConfig {
 }
 
 test("should_name_development_in_the_application_title", () => {
-  assert.equal(configForChannel("development").applicationTitle, "Thin Talk Development");
+  assert.equal(configForChannel("development").applicationTitle, "Astronomical Development");
 });
 
 test("should_keep_the_plain_application_title_for_stable", () => {
-  assert.equal(configForChannel("stable").applicationTitle, "Thin Talk");
+  assert.equal(configForChannel("stable").applicationTitle, "Astronomical");
 });
 
 test("should_not_claim_development_for_a_channel_it_does_not_recognize", () => {
-  assert.equal(configForChannel("app-store").applicationTitle, "Thin Talk");
-  assert.equal(configForChannel("DEVELOPMENT").applicationTitle, "Thin Talk");
+  assert.equal(configForChannel("app-store").applicationTitle, "Astronomical");
+  assert.equal(configForChannel("DEVELOPMENT").applicationTitle, "Astronomical");
 });
 
 function injectedConfig(titlebarInset: unknown): unknown {

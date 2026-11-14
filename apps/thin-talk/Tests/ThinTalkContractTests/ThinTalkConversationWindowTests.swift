@@ -21,7 +21,7 @@ final class ThinTalkConversationWindowTests: XCTestCase {
     XCTAssertTrue(window.styleMask.contains(.fullSizeContentView))
     XCTAssertTrue(window.titlebarAppearsTransparent)
     XCTAssertEqual(window.titleVisibility, .hidden)
-    XCTAssertEqual(window.title, "Thin Talk Development", "the title still names the window for the Window menu")
+    XCTAssertEqual(window.title, "Astronomical Development", "the title still names the window for the Window menu")
   }
 
   func test_should_frame_the_window_with_a_unified_toolbar_and_no_tabs() throws {

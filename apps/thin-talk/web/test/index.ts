@@ -6,6 +6,7 @@
 // the other window-reading modules bind to at import time.
 import "./support/globals";
 import "./appConfig.test";
+import "./productName.test";
 import "./sessionBridge.test";
 import "./sessionDocument.test";
 import "./sessionPreferences.test";

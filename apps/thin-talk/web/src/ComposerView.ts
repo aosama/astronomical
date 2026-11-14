@@ -5,7 +5,7 @@ import { ModelPanelView } from "./ModelPanelView";
 /** Who the field's hint names while an answer streams, when Astro is hidden.
  * A message sent then is read as soon as the model can take it, after the
  * current reply or its tool calls, and the hint says who reads it. */
-const DEFAULT_ASSISTANT_NAME = "Thin Talk";
+const DEFAULT_ASSISTANT_NAME = "Astronomical";
 const MAX_FIELD_HEIGHT_PX = 160;
 const FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX = 2;
 
@@ -29,8 +29,8 @@ export class ComposerView {
   /** The markup's own wording, which the Focus switch restores. */
   private readonly markupPlaceholder: string;
   /** The name the queueing hint gives the assistant. It follows the idle
-   * hint: a field that says "Ask Astro anything" must not turn into "Thin
-   * Talk reads it next" the moment an answer starts. */
+   * hint: a field that says "Ask Astro anything" must not turn into
+   * "Astronomical reads it next" the moment an answer starts. */
   private assistantName: string = DEFAULT_ASSISTANT_NAME;
   private readonly banner: HTMLElement;
   private readonly bannerMessage: HTMLElement;
@@ -131,7 +131,7 @@ export class ComposerView {
   public setIdlePlaceholder(idlePlaceholder: string): void {
     this.idlePlaceholder = idlePlaceholder;
     // VoiceOver reads the field's label, not its placeholder, so the label
-    // follows the idle words; otherwise it hears "Message Thin Talk" on a
+    // follows the idle words; otherwise it hears "Message Astronomical" on a
     // field that shows "Ask Astro anything".
     this.field.setAttribute("aria-label", idlePlaceholder);
     this.refreshControls();

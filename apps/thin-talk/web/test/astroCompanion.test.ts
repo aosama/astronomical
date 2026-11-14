@@ -230,7 +230,7 @@ test("should_hide_and_bring_back_astro_with_the_focus_switch", async () => {
   window.__thintalkCommands?.run({ name: "toggleAstro" });
   assert.equal(isPresent("astro-home"), false);
   assert.equal(document.getElementById("empty-state")?.classList.contains("empty-state--astro"), false, "the classic title is back");
-  assert.equal(composerField().placeholder, "Message Thin Talk");
+  assert.equal(composerField().placeholder, "Message Astronomical");
   assert.equal((host.astroProfile as Record<string, unknown>)["isAstroShown"], false);
   window.__thintalkCommands?.run({ name: "toggleAstro" });
   assert.equal(isPresent("astro-home"), true);
@@ -416,11 +416,11 @@ function recordPlaceholders(): string[] {
 }
 
 // The field says "Ask Astro anything" while idle, so it must not start calling
-// the same assistant "Thin Talk" the moment an answer begins to stream.
+// the same assistant "Astronomical" the moment an answer begins to stream.
 test("should_name_the_same_assistant_in_the_hint_while_an_answer_streams", async () => {
   const journeys = [
     { astroProfile: MET_ASTRO_PROFILE, queueingHint: "Add a message; Astro reads it next", idleHint: "Ask Astro anything" },
-    { astroProfile: { ...MET_ASTRO_PROFILE, isAstroShown: false }, queueingHint: "Add a message; Thin Talk reads it next", idleHint: "Message Thin Talk" },
+    { astroProfile: { ...MET_ASTRO_PROFILE, isAstroShown: false }, queueingHint: "Add a message; Astronomical reads it next", idleHint: "Message Astronomical" },
   ];
   for (const journey of journeys) {
     const { host } = bootJourney(undefined, { astroProfile: journey.astroProfile });

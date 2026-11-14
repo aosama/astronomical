@@ -160,7 +160,10 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   /// Names the channel on screen, because the two channels' windows otherwise look
   /// identical and it was impossible to tell which instance a chat was talking to.
   /// Stable keeps the plain name, since it is the product people install.
-  public var windowTitle: String { channel == .development ? "Thin Talk Development" : "Thin Talk" }
+  /// The name is the product's, not this module's: "Thin Talk" is never
+  /// introduced to the person, so a window carrying it in the Window menu
+  /// and Mission Control read as some other program (issue #2204).
+  public var windowTitle: String { channel == .development ? "Astronomical Development" : "Astronomical" }
 }
 
 /// An endpoint path the identity cannot turn into a daemon URL.

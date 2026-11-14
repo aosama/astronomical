@@ -157,7 +157,7 @@ function canChatWithCatalogModel(catalogRow) {
 
 function createDownloadModelsOpenInChatButton() {
     const openInChatButton = createDownloadModelsElement(
-        "button", "button button-secondary download-models-open-in-chat", "Open in Thin Talk"
+        "button", "button button-secondary download-models-open-in-chat", "Chat with this model"
     );
     openInChatButton.type = "button";
     openInChatButton.addEventListener("click", openThinTalkFromDownloadModels);
