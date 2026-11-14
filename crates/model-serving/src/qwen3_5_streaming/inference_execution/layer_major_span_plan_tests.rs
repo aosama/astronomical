@@ -55,9 +55,22 @@ fn should_run_configured_chunks_to_the_end_without_the_cache() {
 }
 
 #[test]
-fn should_leave_a_one_span_prompt_to_the_chunk_path() {
-    assert_eq!(layer_major_span_plan(0, 1000, CHUNK_TOKENS, None), None);
-    assert_eq!(layer_major_span_plan(0, 4096, CHUNK_TOKENS, None), None);
+fn should_plan_one_span_for_a_prompt_that_fits_one() {
+    let short_prompt_plan =
+        layer_major_span_plan(0, 1000, CHUNK_TOKENS, None).expect("a short prompt is one span");
+    assert_eq!(
+        short_prompt_plan.spans,
+        vec![span(0, 1000, Vec::new(), false)]
+    );
+    assert_eq!(short_prompt_plan.group_end_token, 1000);
+    let full_span_plan = layer_major_span_plan(0, 4096, CHUNK_TOKENS, None)
+        .expect("a prompt of exactly one span is one span");
+    assert_eq!(full_span_plan.spans, vec![span(0, 4096, Vec::new(), false)]);
+}
+
+#[test]
+fn should_plan_nothing_when_no_token_remains() {
+    assert_eq!(layer_major_span_plan(1000, 1000, CHUNK_TOKENS, None), None);
 }
 
 #[test]
@@ -112,11 +125,12 @@ fn should_start_with_a_one_token_span_from_a_cursor_one_short_of_a_block() {
 }
 
 #[test]
-fn should_run_to_the_prompt_end_from_a_block_cursor_when_one_span_remains() {
-    assert_eq!(
-        layer_major_span_plan(1792, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS)),
-        None
-    );
+fn should_plan_the_one_span_left_from_a_block_cursor_up_to_the_tail_capture() {
+    let span_plan = layer_major_span_plan(1792, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS))
+        .expect("the span that remains is a plan of one span");
+
+    assert_eq!(span_plan.spans, vec![span(0, 2557, vec![1792], false)]);
+    assert_eq!(span_plan.group_end_token, 4349);
 }
 
 #[test]

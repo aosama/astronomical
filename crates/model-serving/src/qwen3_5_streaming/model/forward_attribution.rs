@@ -8,7 +8,7 @@ use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecu
 use super::Qwen3_5Model;
 use super::forward_contract;
 use super::visual_embedding_injection;
-use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
+use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
     Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
@@ -16,16 +16,6 @@ use crate::qwen3_5_core::decoder::{
 
 pub(crate) struct Qwen3_5BoundaryCheckpointPrefillOutcome {
     pub(crate) consumed_visual_embedding_count: usize,
-    pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
-}
-
-/// Outcome of a terminal prefill that produces both boundary checkpoints and logits.
-///
-/// Unlike intermediate checkpointed prefill, the terminal chunk needs the vocabulary
-/// head to produce first-token logits. This single-forward outcome carries both the
-/// cache checkpoints and the logits needed for first-token seeding.
-pub(crate) struct Qwen3_5TerminalCheckpointPrefillOutcome {
-    pub(crate) target_forward_output: Qwen3_5TargetForwardOutput,
     pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 }
 
@@ -275,57 +265,6 @@ impl Qwen3_5Model {
                 PagedRouteValidationOutcome::CompleteHit => {
                     return Ok(Qwen3_5BoundaryCheckpointPrefillOutcome {
                         consumed_visual_embedding_count: 0,
-                        boundary_checkpoints: boundary_checkpoint_collector.complete()?,
-                    });
-                }
-            }
-        }
-        Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "paged route replay exceeded the sparse-layer safety bound",
-        })
-    }
-
-    /// Terminal prefill with boundary checkpoints and vocabulary logits.
-    ///
-    /// Unlike intermediate checkpointed prefill, the terminal chunk needs the
-    /// vocabulary head to produce first-token logits. This builds the full forward
-    /// graph (with lm_head) while also collecting boundary checkpoints, so the
-    /// terminal chunk is a single forward pass instead of a prefix+tail split.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn terminal_prefill_chunk_with_boundary_checkpoints_and_performance_attribution(
-        &self,
-        token_ids: &[u32],
-        starting_position_tokens: u32,
-        request_decoder_state: &mut RequestDecoderStateStack,
-        completed_prefill_chunk_tokens: Vec<usize>,
-        checkpoint_interval_token_count: usize,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Qwen3_5TerminalCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
-        let maximum_paged_route_replay_attempts = 1;
-        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
-            let mut boundary_checkpoint_collector =
-                Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
-                    completed_prefill_chunk_tokens.clone(),
-                    self.decoder_cache_layout.boundary_tensor_count(),
-                    checkpoint_interval_token_count,
-                )?;
-            let target_forward_output = self.build_target_forward_graph(
-                token_ids,
-                starting_position_tokens,
-                request_decoder_state,
-                Some(&mut boundary_checkpoint_collector),
-                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
-                performance_attribution,
-            )?;
-            match self.evaluate_terminal_prefill_state_with_performance_attribution(
-                target_forward_output.final_logits(),
-                request_decoder_state,
-                Some(&boundary_checkpoint_collector),
-                performance_attribution,
-            )? {
-                PagedRouteValidationOutcome::CompleteHit => {
-                    return Ok(Qwen3_5TerminalCheckpointPrefillOutcome {
-                        target_forward_output,
                         boundary_checkpoints: boundary_checkpoint_collector.complete()?,
                     });
                 }

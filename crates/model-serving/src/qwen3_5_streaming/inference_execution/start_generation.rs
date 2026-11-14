@@ -584,7 +584,6 @@ impl Qwen3_5EngineState {
             engine_extension: StreamingRequestExtension {
                 has_opened_prefill_demand_window: false,
                 reserved_context_tokens,
-                layer_major_prefill_declined: false,
                 layer_at_a_time_prefill: None,
             },
         });

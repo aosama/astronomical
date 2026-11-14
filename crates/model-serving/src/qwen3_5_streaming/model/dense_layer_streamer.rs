@@ -182,18 +182,6 @@ impl Qwen3_5DenseLayerStreamer {
             ))
     }
 
-    /// Bytes streamed layers occupy in a forward with the current kept
-    /// count: none while every layer is kept, one slot when one layer
-    /// streams, both slots otherwise.
-    pub(crate) fn streaming_slot_bytes_in_use(&self) -> u64 {
-        self.largest_layer_payload_bytes()
-            .saturating_mul(streaming_slot_count_in_use(
-                self.layer_payload_bytes.len(),
-                self.kept_layer_count(),
-                DENSE_STREAMING_LAYER_SLOT_COUNT,
-            ))
-    }
-
     /// The bytes one streamed layer occupies while it is read and used.
     pub(crate) fn largest_layer_payload_bytes(&self) -> u64 {
         let mut largest_layer_payload_bytes = 0_u64;

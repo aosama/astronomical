@@ -111,7 +111,9 @@ test-dense-checkpoint-parity = "run -p xtask -- test-run --package astronomical-
 # streamed and with the planned layers kept, must publish identical
 # prompt-cache boundary state, and one layer at a time must read every
 # expert exactly once. A span failed on purpose and run again must leave
-# the same state and read only its own layer again. About forty seconds.
+# the same state and read only its own layer again. A prompt with stand-in
+# image embeddings, one image split across two spans, must publish the same
+# state both ways. About fifty seconds.
 test-expert-layer-at-a-time-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_publish_the_chunk_path_prompt_cache_state_reading_experts_one_layer_at_a_time"
 
 # Dense prompt forward memory (issue #1985): one streamed_dense prompt forward,

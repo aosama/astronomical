@@ -1,17 +1,15 @@
-//! Prefill that runs each dense decoder layer over every span of a prompt
-//! before the next layer (issue #1985).
+//! Reading a prompt one layer at a time: each decoder layer runs over
+//! every span of the prompt before the next layer (issues #1985 and #2221).
 //!
-//! Chunk by chunk, a dense model that streams its layers reads every
-//! streamed layer once per chunk; with the prompt cache's 1,792-token blocks
-//! a 10,000-token prompt read each one six times. Here the spans are the
-//! ones the chunk-by-chunk engine would run, with the same prompt-cache
-//! checkpoints, and only the loop order changes: one layer runs over every
-//! span, then the next is read. Within a layer each span still sees the
-//! previous span's state, and across layers each span sees its own input, so
-//! every kernel runs on the same tokens with the same inputs and the result
-//! is bit-identical to running the spans as chunks.
-
-use std::collections::HashMap;
+//! A layer read from storage is then read once for the whole prompt, not
+//! once per span. The spans are cut at the configured size and at the
+//! prompt cache's boundaries, with the same checkpoints a span-by-span
+//! forward would leave, and only the loop order differs: one layer runs
+//! over every span, then the next is read. Within a layer each span still
+//! sees the previous span's state, and across layers each span sees its
+//! own input, so every kernel runs on the same tokens with the same inputs
+//! and the result is bit-identical to running each span through all the
+//! layers in turn, which the parity contracts hold it to.
 
 use mlx_bridge::MlxArray;
 
@@ -22,7 +20,6 @@ use super::layer_major_prefill_run::rewind_to_failed_span;
 use super::layer_major_span_redo::UnconfirmedSpans;
 use super::layer_major_span_state::{
     SpanState, completed_checkpoints, layer_snapshot_arrays, record_end_state_snapshot,
-    span_collector,
 };
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
@@ -46,7 +43,7 @@ pub(crate) struct LayerMajorSpan {
 }
 
 impl LayerMajorSpan {
-    const fn token_count(&self) -> usize {
+    pub(super) const fn token_count(&self) -> usize {
         self.end_token - self.start_token
     }
 }
@@ -68,10 +65,23 @@ pub(crate) struct LayerMajorPrefillRequest<'spans> {
     /// Whether the last span ends the prompt, so its logits seed the first
     /// generated token.
     pub(crate) should_materialize_logits: bool,
+    /// The request's images, when it has any.
+    pub(crate) visual_inputs: Option<LayerMajorVisualInputs<'spans>>,
+}
+
+/// The projected image embeddings a prompt's image-pad tokens stand for.
+#[derive(Clone, Copy)]
+pub(crate) struct LayerMajorVisualInputs<'request> {
+    pub(crate) visual_embeddings: &'request MlxArray,
+    /// Embedding rows earlier forwards of this request already consumed.
+    pub(crate) consumed_visual_embedding_count: usize,
+    pub(crate) image_pad_token_id: u32,
 }
 
 /// What a layer-major prefill leaves for the engine.
 pub(crate) struct LayerMajorPrefillOutcome {
+    /// Image embedding rows the prompt's spans consumed.
+    pub(crate) consumed_visual_embedding_count: usize,
     /// Float32 logits of the last token when the caller asked for them.
     pub(crate) final_logits: Option<MlxArray>,
     /// Checkpoints at boundaries before the last span's end, in order, with
@@ -84,21 +94,6 @@ pub(crate) struct LayerMajorPrefillOutcome {
 const WIDEST_ACTIVATION_ELEMENT_BYTES: usize = 4;
 
 impl Qwen3_5Model {
-    /// Whether a forward reads any decoder layer from the SSD: a dense model
-    /// with fewer layers kept than it has.
-    pub(crate) fn streams_dense_layers(&self) -> bool {
-        self.dense_streaming_slot_reservation_bytes() > 0
-    }
-
-    /// Whether a prompt of several spans runs one layer over all of them
-    /// before the next layer: any model that may read a layer from storage,
-    /// so that the layer is read once for the prompt and not once per span.
-    /// An expert model qualifies whatever its cache keeps at the moment,
-    /// because what it keeps changes while it serves.
-    pub(crate) fn reads_prompts_one_layer_at_a_time(&self) -> bool {
-        self.streams_dense_layers() || self.expert_pager.is_some()
-    }
-
     /// Bytes one token's hidden state occupies between decoder layers, read
     /// from the shape and dtype of a one-token array, which MLX sizes
     /// without allocating it.
@@ -160,10 +155,12 @@ impl Qwen3_5Model {
             spans,
             checkpoint_contract,
             should_materialize_logits,
+            visual_inputs,
         } = layer_major_prefill_request;
         validate_layer_major_spans(token_ids.len(), spans)?;
         self.discard_expert_state_of_an_unfinished_prompt();
-        let span_states = self.embed_layer_major_spans(token_ids, spans, checkpoint_contract)?;
+        let (span_states, consumed_visual_embedding_count) =
+            self.embed_layer_major_spans(token_ids, spans, checkpoint_contract, visual_inputs)?;
         self.begin_prompt_layer_measurement();
         Ok(LayerMajorPrefillRun {
             spans: spans.to_vec(),
@@ -171,6 +168,7 @@ impl Qwen3_5Model {
             should_materialize_logits,
             starting_position_tokens,
             span_states,
+            consumed_visual_embedding_count,
             previous_layer_output: None,
             completed_layer_count: 0,
             next_span_index: 0,
@@ -280,6 +278,8 @@ impl Qwen3_5Model {
         // reply token to record as reply demand.
         self.evaluate_arrays_resolving_paged_routes(&evaluation_roots, performance_attribution)?;
         Ok(LayerMajorPrefillOutcome {
+            consumed_visual_embedding_count: layer_major_prefill_run
+                .consumed_visual_embedding_count,
             final_logits,
             boundary_checkpoints: completed_checkpoints(
                 spans,
@@ -309,6 +309,7 @@ impl Qwen3_5Model {
                 spans: &spans,
                 checkpoint_contract: None,
                 should_materialize_logits: true,
+                visual_inputs: None,
             },
             request_decoder_state,
             &mut PerformanceAttribution::disabled(),
@@ -318,42 +319,6 @@ impl Qwen3_5Model {
             .ok_or(Qwen3_5ExecutionError::InvalidInput {
                 description: "a layer-major prefill of a prompt produced no logits",
             })
-    }
-
-    /// Looks up each span's embeddings and opens its checkpoint collector.
-    fn embed_layer_major_spans(
-        &self,
-        token_ids: &[u32],
-        spans: &[LayerMajorSpan],
-        checkpoint_contract: Option<LayerMajorCheckpointContract>,
-    ) -> Result<Vec<SpanState>, Qwen3_5ExecutionError> {
-        let mut span_states = Vec::with_capacity(spans.len());
-        for span in spans {
-            let span_token_ids = &token_ids[span.start_token..span.end_token];
-            let signed_token_ids = span_token_ids
-                .iter()
-                .map(|token_id| {
-                    i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                        description: "token ID exceeds the MLX int32 range",
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let span_token_count = i32::try_from(span.token_count()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "a layer-major span exceeds the MLX int32 range",
-                }
-            })?;
-            let token_indices = self
-                .runtime
-                .array_from_i32(&signed_token_ids, &[1, span_token_count])?;
-            span_states.push(SpanState {
-                hidden_states: Some(self.embedding_lookup(&token_indices)?),
-                collector: span_collector(span, checkpoint_contract)?,
-                end_state_snapshot: (span.ends_at_inner_boundary && checkpoint_contract.is_some())
-                    .then(HashMap::new),
-            });
-        }
-        Ok(span_states)
     }
 
     /// Drops the expert pages in hand and the routes not yet recorded: what

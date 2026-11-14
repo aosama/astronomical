@@ -19,6 +19,8 @@ pub(crate) struct LayerMajorPrefillRun {
     pub(super) should_materialize_logits: bool,
     pub(super) starting_position_tokens: u32,
     pub(super) span_states: Vec<SpanState>,
+    /// Image embedding rows the spans consumed when they were embedded.
+    pub(super) consumed_visual_embedding_count: usize,
     pub(super) previous_layer_output: Option<MlxArray>,
     pub(super) completed_layer_count: usize,
     /// The span the layer in flight runs next: zero, except after a failed
