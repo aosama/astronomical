@@ -25,6 +25,7 @@ import { runConversationMenu } from "./ConversationMenuFlow";
 import { ChatController } from "./ChatController";
 import { AppShell } from "./AppShell";
 import { WindowChrome } from "./WindowChrome";
+import { refreshOnReturnToWindow } from "./WindowReturnRefresh";
 import { HostCommandRouter } from "./HostCommandRouter";
 import { hostCommandHandlers } from "./HostCommandWiring";
 import { AstroCompanion } from "./astro/AstroCompanion";
@@ -269,6 +270,10 @@ export function bootChatClient(): AppShell {
   new HostCommandRouter(
     hostCommandHandlers({ controller, transcript, composerField, host, windowChrome, astro, exportLauncher }),
   ).install(window);
+  refreshOnReturnToWindow(window, document, () => {
+    void controller.refreshChatModels();
+    void controller.refreshImageModels();
+  });
   void controller.load();
   void astro.start();
   return shell;
