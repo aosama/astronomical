@@ -16,6 +16,7 @@ pub mod ram;
 pub mod ram_activation;
 pub mod ram_geometry;
 pub mod ram_values;
+pub mod streamed_page_peak_share;
 pub mod transient_workspace_reserve;
 
 #[cfg(test)]
@@ -49,4 +50,5 @@ pub use ram_geometry::{
 pub use ram_values::{
     MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
 };
+pub use streamed_page_peak_share::promoted_expert_page_bytes_within_forward_peak;
 pub use transient_workspace_reserve::{TransientWorkspaceObservation, TransientWorkspaceReserve};

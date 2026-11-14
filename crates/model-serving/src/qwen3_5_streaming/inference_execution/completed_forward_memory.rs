@@ -25,7 +25,7 @@ use crate::{
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
     RetainedExpertReclamation,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
-    retained_resident_ceiling_after_budget_refresh,
+    promoted_expert_page_bytes_within_forward_peak, retained_resident_ceiling_after_budget_refresh,
 };
 
 use super::qwen3_5_runtime_error;
@@ -100,21 +100,19 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
         return Ok(observation);
     }
     let memory_snapshot_after_growth = observation.mlx_memory_snapshot;
-    // Mandatory expert pages promoted by this forward: the countervalue delta
-    // of the request's logical streaming payload counter. They are expert-page
-    // spike ownership, not activation, so both learning sites exclude them
-    // (issue #691).
-    // A dense model's streamed layers sit in the peak the same way: weight
-    // bytes the slot reservation covers, never activation.
-    let promoted_expert_page_stream_bytes = performance_attribution
-        .expert_streaming_payload_byte_count()
-        .saturating_sub(streamed_expert_page_bytes_before_growth)
-        .saturating_add(model.dense_streaming_slot_reservation_bytes());
     let retained_expert_payload_bytes_after_growth = model
         .expert_weight_memory_cache_statistics()
         .resident_payload_byte_count;
     let retained_expert_payload_growth_bytes = retained_expert_payload_bytes_after_growth
         .saturating_sub(retained_expert_payload_bytes_before_growth);
+    let promoted_expert_page_stream_bytes = promoted_expert_page_bytes_within_completed_forward(
+        model,
+        adaptive_ram_growth_context,
+        streamed_expert_page_bytes_before_growth,
+        retained_expert_payload_growth_bytes,
+        active_memory_bytes_before_growth,
+        &memory_snapshot_after_growth,
+    );
 
     adaptive_ram_growth_guard.record_completed_growth_excluding_expert_page_stream(
         adaptive_ram_growth_context,
@@ -156,6 +154,58 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
     Ok(CompletedForwardMemoryObservation {
         mlx_memory_snapshot: memory_snapshot_after_growth,
     })
+}
+
+/// The expert-weight bytes this forward's peak owes to streaming, which both
+/// learning sites exclude so they are never taken for activation workspace
+/// (issue #691).
+///
+/// What the forward streamed is the delta of the request's storage-read
+/// tally, which counts whether or not performance attribution is on. A dense
+/// model's streamed layers sit in the peak the same way and are covered by
+/// its slot reservation. The released part is bounded by the reservation the
+/// forward's admission makes for streamed weights; the policy function
+/// explains why (issue #2218).
+fn promoted_expert_page_bytes_within_completed_forward(
+    model: &Qwen3_5Model,
+    adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+    streamed_expert_page_bytes_before_growth: u64,
+    retained_expert_payload_growth_bytes: u64,
+    active_memory_bytes_before_growth: usize,
+    memory_snapshot_after_growth: &MlxMemorySnapshot,
+) -> u64 {
+    let streamed_expert_weight_bytes = model
+        .request_expert_storage_read_byte_count()
+        .saturating_sub(streamed_expert_page_bytes_before_growth)
+        .saturating_add(model.dense_streaming_slot_reservation_bytes());
+    // A reservation that cannot be computed gives nothing back, so released
+    // pages count as workspace: the learned reserve errs large, which only
+    // keeps fewer layers, never runs out of memory.
+    let forward_page_reservation_bytes = model
+        .streamed_weight_reservation_bytes_for_forward(
+            adaptive_ram_growth_context.forward_token_count(),
+        )
+        .unwrap_or(0);
+    let promoted_expert_page_stream_bytes = promoted_expert_page_bytes_within_forward_peak(
+        streamed_expert_weight_bytes,
+        retained_expert_payload_growth_bytes,
+        forward_page_reservation_bytes,
+    );
+    // The raw readings behind one learning step. With these a log alone
+    // answers "what did this forward teach, and why" for any ceiling.
+    tracing::debug!(
+        memory_phase = ?adaptive_ram_growth_context.memory_phase(),
+        forward_token_count = adaptive_ram_growth_context.forward_token_count(),
+        active_memory_bytes_before_growth,
+        active_memory_bytes_after_growth = memory_snapshot_after_growth.active_memory_bytes(),
+        peak_memory_bytes = memory_snapshot_after_growth.peak_memory_bytes(),
+        streamed_expert_weight_bytes,
+        retained_expert_payload_growth_bytes,
+        forward_page_reservation_bytes,
+        promoted_expert_page_stream_bytes,
+        "measured a completed forward for workspace learning"
+    );
+    promoted_expert_page_stream_bytes
 }
 
 #[allow(clippy::too_many_arguments)]

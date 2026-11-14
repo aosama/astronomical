@@ -73,9 +73,8 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
 pub(in crate::qwen3_5_streaming) struct AdaptiveRamGrowthAdmissionBaseline {
     pub(in crate::qwen3_5_streaming) active_memory_bytes: usize,
     pub(in crate::qwen3_5_streaming) retained_expert_payload_bytes: u64,
-    /// Cumulative logical expert-streaming payload bytes at admission commit.
-    /// The delta to this request's value after the forward is that forward's
-    /// mandatory expert-page stream (issue #691).
+    /// The request's storage-read tally at admission commit. The delta to its
+    /// value after the forward is what that forward streamed (issue #691).
     pub(in crate::qwen3_5_streaming) streamed_expert_page_bytes: u64,
     /// Evidence level that composed the admitted projection, exported so
     /// performance attribution can attribute reserve inflation to its source.
@@ -116,14 +115,13 @@ impl Qwen3_5EngineState {
         let performance_attribution_measures_admission = performance_attribution.is_enabled();
         let admitted_baseline = performance_attribution.measure_operation(
             PerformanceOperation::AdaptiveRamGrowthMemoryAdmission,
-            |performance_attribution| {
+            |_performance_attribution| {
                 self.begin_adaptive_ram_growth(
                     adaptive_ram_growth_context,
                     request_decoder_state,
                     additional_persistent_state_growth_bytes,
                     exact_temporary_workspace_bytes,
                     performance_attribution_measures_admission,
-                    performance_attribution,
                 )
             },
         )?;
@@ -163,7 +161,6 @@ impl Qwen3_5EngineState {
         additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
         should_log_memory_decision: bool,
-        performance_attribution: &PerformanceAttribution,
     ) -> Result<AdaptiveRamGrowthAdmissionBaseline, AdaptiveRamGrowthMemoryAdmissionError> {
         let admission_inputs = self.capture_admission_ownership_snapshot(
             adaptive_ram_growth_context,
@@ -197,16 +194,18 @@ impl Qwen3_5EngineState {
         }
         self.limit_retention_and_reset_peak(&mut admission)?;
         // Return the exact pre-forward baselines used by post-forward learning:
-        // active memory, retained payload, and the cumulative expert-streaming
-        // counter whose later delta is this forward's promoted page bytes
-        // (issue #691). `usize::MAX` is reserved by the disabled guard.
+        // active memory, retained payload, and the request's storage-read
+        // tally, whose later delta is what this forward streamed (issues #691,
+        // #2218). `usize::MAX` is reserved by the disabled guard.
         Ok(AdaptiveRamGrowthAdmissionBaseline {
             active_memory_bytes: admission
                 .memory_snapshot_before_growth
                 .active_memory_bytes(),
             retained_expert_payload_bytes: admission.retained_expert_payload_bytes_before_growth,
-            streamed_expert_page_bytes: performance_attribution
-                .expert_streaming_payload_byte_count(),
+            streamed_expert_page_bytes: self.model.as_ref().map_or(
+                0,
+                crate::qwen3_5_streaming::model::Qwen3_5Model::request_expert_storage_read_byte_count,
+            ),
             transient_reserve_source: Some(admission.forward_projection.transient_reserve_source()),
             unreserved_headroom_bytes: u64::try_from(
                 admission
