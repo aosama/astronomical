@@ -164,6 +164,7 @@ Require all of the following before reporting success:
 - GitHub release `$TAG` is public and is the latest Stable release.
 - Public Pages appcast is the exact prepared signed appcast.
 - Every public "Download for Mac" button passes the download button checklist below.
+- The Discord invite linked from the README and the website still works. Read the invite code from the README's Discord link and look it up: `curl -s "https://discord.com/api/v10/invites/CODE?with_expiration=true"` must name the server and show `"expires_at": null`. An invite made with Discord's defaults expires after 30 days, and an expired one fails silently for every newcomer; if it has expired, the server owner creates one set to never expire and the links are updated through a pull request.
 - Release issue is explicitly closed after the appcast PR merge, Pages deployment, and public-byte verification. A `Refs #N` maintenance PR does not close it automatically.
 - Local `main` equals remote `main` and the tracked worktree is clean.
 - The ignored `target/releases/${TAG}` evidence directory remains intact.
