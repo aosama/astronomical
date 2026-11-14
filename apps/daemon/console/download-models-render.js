@@ -29,6 +29,8 @@ function createDownloadModelsPageSections(catalogRows) {
             ? createDownloadModelsInstalledSection(installedRows, activeDownloadRow)
             : createDownloadModelsFirstVisitSection(catalogRows)
     ];
+    const linkedSection = createDownloadModelsLinkedSection(catalogRows);
+    if (linkedSection) pageSections.unshift(linkedSection);
     const removalNotice = createDownloadModelsRemovalNotice(catalogRows);
     if (removalNotice) pageSections.push(removalNotice);
     pageSections.push(createDownloadModelsAddSection(downloadModelsRowsInPageOrder(catalogRows)));
