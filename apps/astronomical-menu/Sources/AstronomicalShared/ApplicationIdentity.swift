@@ -8,6 +8,12 @@ public enum ApplicationChannel: String, Equatable, Sendable {
   // The App Store build is the Stable product distributed through the store,
   // so it presents the Stable product identity.
   public var displayName: String { self == .development ? "Development" : "Stable" }
+  // The engine knows two runtime instances and names the one it runs in its
+  // status. The store build is a way of distributing Stable, not a third
+  // instance, so it starts and expects the Stable one. Comparing the engine's
+  // answer with the channel name instead made a store build's agent refuse
+  // its own engine and restart it every few seconds (issue #2188).
+  public var runtimeInstanceName: String { self == .development ? "development" : "stable" }
   public var stateDirectoryName: String? {
     switch self {
     case .stable: ".astronomical"
@@ -237,7 +243,7 @@ public struct ApplicationIdentity: Equatable, Sendable {
   public func daemonArguments(
     groupContainerURL: GroupContainerResolver = ApplicationIdentity.systemGroupContainerURL
   ) -> [String] {
-    let instanceArguments = ["--instance", channel == .development ? "development" : "stable"]
+    let instanceArguments = ["--instance", channel.runtimeInstanceName]
     guard let applicationGroupContainerURL = applicationGroupContainerURL(groupContainerURL: groupContainerURL)
     else { return instanceArguments }
     return instanceArguments + ["--application-group-container", applicationGroupContainerURL.path]

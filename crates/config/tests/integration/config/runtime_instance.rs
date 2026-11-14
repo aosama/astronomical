@@ -441,3 +441,92 @@ fn should_serve_group_container_state_as_the_standard_instance() {
     assert!(!custom_paths.is_standard_state_directory());
     assert_eq!(custom_paths.default_bind_address().port(), 0);
 }
+
+/// The chat app and the menu-bar agent accept an engine only when status
+/// names the state directory they expect, so each standard location must be
+/// labeled with where it really is (issue #2188).
+#[test]
+fn should_label_each_standard_state_directory_with_its_real_location() {
+    let direct_stable_paths = AstronomicalInstancePaths::for_home_directory(
+        PathBuf::from("/Users/example"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let direct_development_paths = AstronomicalInstancePaths::for_home_directory(
+        PathBuf::from("/Users/example"),
+        AstronomicalRuntimeInstance::Development,
+    );
+    let application_support_paths = AstronomicalInstancePaths::for_application_support_directory(
+        PathBuf::from("/Users/example/Library/Application Support"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let group_container_paths = AstronomicalInstancePaths::for_application_group_container(
+        PathBuf::from("/Users/example/Library/Group Containers/TEAM123456.astronomical"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert_eq!(
+        direct_stable_paths.state_directory_label(),
+        "~/.astronomical"
+    );
+    assert_eq!(
+        direct_development_paths.state_directory_label(),
+        "~/.astronomical-dev"
+    );
+    assert_eq!(
+        application_support_paths.state_directory_label(),
+        "~/Library/Application Support/Astronomical"
+    );
+    assert_eq!(
+        group_container_paths.state_directory_label(),
+        "~/Library/Group Containers/TEAM123456.astronomical/Astronomical"
+    );
+}
+
+/// The label never carries the absolute home directory, whatever the
+/// container path it was built from.
+#[test]
+fn should_keep_the_absolute_home_directory_out_of_the_state_directory_label() {
+    let group_container_paths = AstronomicalInstancePaths::for_application_group_container(
+        PathBuf::from("/Users/example/Library/Group Containers/TEAM123456.astronomical"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert!(
+        !group_container_paths
+            .state_directory_label()
+            .contains("/Users/example")
+    );
+}
+
+/// A caller-chosen directory is one no installed application expects, so it
+/// is labeled as custom for either instance and for no instance at all.
+#[test]
+fn should_label_a_caller_chosen_state_directory_as_custom() {
+    let custom_stable_paths = AstronomicalInstancePaths::for_state_directory(
+        PathBuf::from("/somewhere/else"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let explicit_paths = AstronomicalInstancePaths::for_explicit_state_directory(
+        PathBuf::from("/somewhere/else"),
+        std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
+    );
+
+    assert_eq!(custom_stable_paths.state_directory_label(), "custom");
+    assert_eq!(explicit_paths.state_directory_label(), "custom");
+}
+
+/// A group container given as a bare root has no folder name to read; the
+/// label then names the containers folder alone and still ends in the state
+/// directory.
+#[test]
+fn should_label_a_group_container_without_a_folder_name() {
+    let rootless_group_paths = AstronomicalInstancePaths::for_application_group_container(
+        PathBuf::from("/"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert_eq!(
+        rootless_group_paths.state_directory_label(),
+        "~/Library/Group Containers/Astronomical"
+    );
+}

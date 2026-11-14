@@ -31,6 +31,13 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   public let buildNumber: String
   public let commit: String
   public let isDirty: Bool
+  /// A privacy-safe, home-relative label for the connected channel's state
+  /// directory, never the caller's absolute home directory. The chat client
+  /// compares it with what the engine reports. A direct build's engine keeps
+  /// its state in the home dot-folder this identity names; a store build's
+  /// keeps it in an app group container, which the host application knows
+  /// and passes in.
+  public let expectedServerStateDirectory: String
 
   public static func current(bundle: Bundle = .main) -> ThinTalkApplicationIdentity {
     let rawChannel = bundle.object(forInfoDictionaryKey: "AstronomicalChannel") as? String
@@ -108,11 +115,17 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
     version: String,
     buildNumber: String,
     commit: String,
-    isDirty: Bool
+    isDirty: Bool,
+    expectedServerStateDirectory: String? = nil
   ) {
     self.channel = channel
     self.daemonPort = daemonPort
     self.stateDirectoryName = stateDirectoryName
+    if let expectedServerStateDirectory {
+      self.expectedServerStateDirectory = expectedServerStateDirectory
+    } else {
+      self.expectedServerStateDirectory = "~/\(stateDirectoryName)"
+    }
     self.version = version
     self.buildNumber = buildNumber
     self.commit = commit
@@ -148,10 +161,6 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   /// identical and it was impossible to tell which instance a chat was talking to.
   /// Stable keeps the plain name, since it is the product people install.
   public var windowTitle: String { channel == .development ? "Thin Talk Development" : "Thin Talk" }
-
-  /// A privacy-safe, home-relative label for the connected channel's state
-  /// directory, never the caller's absolute home directory.
-  public var expectedServerStateDirectory: String { "~/\(stateDirectoryName)" }
 }
 
 /// An endpoint path the identity cannot turn into a daemon URL.

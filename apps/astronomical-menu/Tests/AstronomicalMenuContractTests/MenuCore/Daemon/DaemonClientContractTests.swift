@@ -196,6 +196,72 @@ final class DaemonClientContractTests: XCTestCase {
     }
   }
 
+  /// The store build runs the Stable instance with its state in the app group
+  /// container. Its agent must accept exactly that engine; when it expected a
+  /// channel named "app-store" it refused its own engine and restarted it
+  /// every few seconds (issue #2188). The label is the one the engine's
+  /// instance paths produce for the same fictional container.
+  func test_should_accept_the_stable_engine_in_the_group_container_for_the_store_build() async throws {
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: statusBody(
+        stateDirectory: "~/Library/Group Containers/TEAM123456.astronomical/Astronomical"))
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let storeClient = LocalDaemonClient(
+      applicationIdentity: storeIdentity(applicationGroupIdentifier: "TEAM123456.astronomical"),
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
+    )
+
+    let statusDocument = try await storeClient.fetchStatus()
+
+    XCTAssertEqual(statusDocument.status, "ready")
+  }
+
+  /// A store build without an app group keeps its state in its own
+  /// container's Application Support, and expects the engine to say so.
+  func test_should_accept_the_stable_engine_in_application_support_for_a_store_build_without_a_group()
+    async throws
+  {
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200,
+      responseBody: statusBody(stateDirectory: "~/Library/Application Support/Astronomical"))
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let storeClient = LocalDaemonClient(
+      applicationIdentity: storeIdentity(applicationGroupIdentifier: nil),
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
+    )
+
+    let statusDocument = try await storeClient.fetchStatus()
+
+    XCTAssertEqual(statusDocument.status, "ready")
+  }
+
+  /// The direct app's engine answers on the same port as the store build's.
+  /// The state directory is what tells the two installs apart, so the store
+  /// agent must refuse it and never control another install's engine.
+  func test_should_reject_the_direct_stable_engine_for_the_store_build() async {
+    StubDaemonURLProtocol.statusResponseConfiguration = .init(
+      statusCode: 200, responseBody: statusBody(stateDirectory: "~/.astronomical"))
+    defer { StubDaemonURLProtocol.statusResponseConfiguration = nil }
+    let storeClient = LocalDaemonClient(
+      applicationIdentity: storeIdentity(applicationGroupIdentifier: "TEAM123456.astronomical"),
+      urlSession: URLSession(configuration: StubDaemonURLProtocol.urlSessionConfiguration())
+    )
+
+    do {
+      _ = try await storeClient.fetchStatus()
+      XCTFail("The store build must not adopt the direct app's engine")
+    } catch let clientError as DaemonClientError {
+      guard case let .wrongStateDirectory(expectedStateDirectory, connectedStateDirectory) = clientError
+      else { return XCTFail("Expected a state directory refusal, got \(clientError)") }
+      XCTAssertEqual(
+        expectedStateDirectory, "~/Library/Group Containers/TEAM123456.astronomical/Astronomical")
+      XCTAssertEqual(connectedStateDirectory, "~/.astronomical")
+    } catch {
+      XCTFail("Expected a daemon client error, got \(error)")
+    }
+  }
+
   func test_should_reject_an_unidentified_server_for_every_runtime_instance() async {
     StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
@@ -381,6 +447,29 @@ final class DaemonClientContractTests: XCTestCase {
     _ = try await localDaemonClient.updateMaximumMlxMemoryGigabytes(32)
 
     XCTAssertEqual(StubDaemonURLProtocol.receivedRequestTimeoutInterval, 120)
+  }
+
+  private func storeIdentity(applicationGroupIdentifier: String?) -> ApplicationIdentity {
+    ApplicationIdentity(
+      channel: .appStore,
+      daemonPort: ApplicationChannel.appStore.defaultDaemonPort,
+      stateDirectoryName: nil,
+      version: "0.2.0",
+      buildNumber: "100",
+      commit: "abcdef1",
+      isDirty: false,
+      applicationGroupIdentifier: applicationGroupIdentifier
+    )
+  }
+
+  /// A ready Stable engine's status naming `stateDirectory`.
+  private func statusBody(stateDirectory: String) -> Data {
+    Data(
+      """
+      {"application":{"version":"0.2.0","build_number":100,"commit":"abcdef1","is_dirty":false,\
+      "channel":"stable","channel_display_name":"Stable","state_directory":"\(stateDirectory)"},\
+      "status":"ready","activity":"idle"}
+      """.utf8)
   }
 
   private func applicationIdentity(channel: ApplicationChannel) -> ApplicationIdentity {
