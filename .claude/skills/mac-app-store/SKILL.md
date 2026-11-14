@@ -165,15 +165,22 @@ The API key's private half is a `.p8` file in `~/.appstoreconnect/private_keys/`
 
 ### Replacing a build that is waiting for review
 
-Each step marked "ask" waits for the account holder.
+Each step marked "ask" waits for the account holder. One yes to "replace the build and resubmit" covers the three asks below; a yes to less does not.
 
-1. Ask, then remove the version from review on the app record.
-2. Build, test on screen, package and validate the new build.
-3. Ask, then upload it.
+1. Build, test on screen, package and validate the new build.
+2. Ask, then upload it, and wait until App Store Connect lists the build as valid. Doing this before the next step keeps the version in the review queue while Apple processes the build; on 2026-11-14 the version was out of the queue for about two minutes.
+3. Ask, then remove the version from review.
 4. Select the new build on the version. Update the review notes if entitlements or behaviour changed.
-5. Ask, then submit again.
+5. Ask, then submit again, and read the record back: status, attached build, notes, release type.
 
 A build number can be used once per version, so the new build must come from a later commit.
+
+Through the App Store Connect API these are: `PATCH reviewSubmissions/{id}` with `canceled: true` to remove from review; `PATCH appStoreVersions/{id}/relationships/build` to select the build; `PATCH appStoreReviewDetails/{id}` for the notes; then `POST reviewSubmissions` (platform `MAC_OS`), `POST reviewSubmissionItems` with the version, and `PATCH reviewSubmissions/{id}` with `submitted: true`.
+
+Apple emails the account holder at each step. Two of them read worse than they are:
+
+- **"Developer Rejected"** means the developer removed the version from review. It is not a decision by App Review.
+- **A delivery notice with ITMS-90889** is the TestFlight warning from the table above.
 
 ## When Apple answers
 

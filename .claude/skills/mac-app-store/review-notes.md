@@ -28,10 +28,7 @@ The field cannot be saved until the review contact is filled in. The contact is 
 
 ## State on the record
 
-The notes saved with the first submission differ from the text above in two places. Bring them in line when the build under review is replaced:
-
-- They lack the "User-selected files" line, because that entitlement was added after submission.
-- Their "Model files are data" paragraph says a few optional models are Core ML model packages. That reads as if such packages were downloaded. They are not: the experimental Neural Engine setting writes them on the Mac, as the paragraph above now says.
+Since the resubmission of 2026-11-14 (build 2313), the notes on the record match the text above, with two small differences in form: the record uses capital-letter headings in place of bold ones, and its "To review quickly" paragraph adds that the smallest chat model on the Models page is under 1 GB. Before editing, read the notes from the record and change that text, so nothing saved there is lost.
 
 ## Questions a reviewer may raise
 
