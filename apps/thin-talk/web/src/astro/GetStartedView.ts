@@ -177,12 +177,21 @@ export class GetStartedView {
         this.line.textContent = astroLine(moment, "");
       },
       isShowing: () => this.isOpen && this.journey.step === GetStartedStep.DOWNLOAD,
-      onChatModelArrived: () => this.journey.chatModelArrived(),
+      onChatModelArrived: () => this.chatModelArrived(),
       onContinue: () => this.advance(() => this.journey.leaveDownload()),
     });
     this.controls.append(downloadPanel.element);
     this.openPanels.push(downloadPanel);
     void this.focusDownloadWhenOffered(downloadPanel);
+  }
+
+  /** A headline that still says "Download a model" over a finished download
+   * reads as one more thing to do, so it changes while the screen is on show. */
+  private chatModelArrived(): void {
+    this.journey.chatModelArrived();
+    if (this.isOpen && this.journey.step === GetStartedStep.DOWNLOAD) {
+      this.headline.textContent = "Your model is ready";
+    }
   }
 
   /** The panel draws its buttons only once it has read the catalog, after
