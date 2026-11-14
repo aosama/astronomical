@@ -59,7 +59,7 @@ fn load_backbone() -> LoadedBackbone {
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the tokenizer should load from the validated artifact");
     let model_chunking =
-        Qwen3_5ModelChunkingConfiguration::new(FULL_ATTENTION_KV_GROWTH_TOKENS, 0, 1, 3)
+        Qwen3_5ModelChunkingConfiguration::new(FULL_ATTENTION_KV_GROWTH_TOKENS, 0, 3)
             .expect("the standard chunking tuple should be valid");
     let memory_limits =
         MlxMemoryLimits::new(TEST_MLX_MEMORY_CEILING_BYTES, TEST_MLX_MEMORY_CEILING_BYTES)

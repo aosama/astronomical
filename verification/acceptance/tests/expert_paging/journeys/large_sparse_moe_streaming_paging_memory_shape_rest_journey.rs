@@ -313,13 +313,10 @@ fn write_acceptance_config(
     let maximum_mlx_memory_gb = paging_experiment.maximum_mlx_memory_gigabytes;
     let streaming_prompt_processing_chunk_tokens =
         paging_experiment.streaming_prompt_processing_chunk_tokens;
-    let prefill_graph_submission_layer_interval =
-        paging_experiment.prefill_graph_submission_layer_interval;
     let generation_graph_submission_layer_interval =
         paging_experiment.generation_graph_submission_layer_interval;
     eprintln!(
         "[paging-memory-shape] status=cell maximum_mlx_memory_gb={maximum_mlx_memory_gb} streaming_prompt_processing_chunk_tokens={streaming_prompt_processing_chunk_tokens} \
-prefill_graph_submission_layer_interval={prefill_graph_submission_layer_interval} \
 generation_graph_submission_layer_interval={generation_graph_submission_layer_interval}"
     );
     fs::write(
@@ -354,7 +351,6 @@ fn paging_experiment_configuration(
             "fixed_prompt_processing_chunk_size_tokens": paging_experiment.streaming_prompt_processing_chunk_tokens,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": paging_experiment.streaming_prompt_processing_chunk_tokens,
             "prefill_graph_submission_layer_interval": 0,
-            "experimental_ssd_paging_prefill_graph_submission_layer_interval": paging_experiment.prefill_graph_submission_layer_interval,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": paging_experiment.generation_graph_submission_layer_interval,
         },
     })

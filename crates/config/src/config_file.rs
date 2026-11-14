@@ -63,7 +63,10 @@ pub(crate) fn parse_and_validate_v1(
     Ok(user_config_file)
 }
 
-const RETIRED_CHUNKING_FIELD_NAMES: [&str; 3] = [
+const RETIRED_CHUNKING_FIELD_NAMES: [&str; 4] = [
+    // A streamed prompt finishes every layer before the next by rule since
+    // issue #2221, so this interval no longer paces anything.
+    "experimental_ssd_paging_prefill_graph_submission_layer_interval",
     "speculative_prefill_draft_forward_tokens",
     "experimental_quantized_kv_cache_enabled",
     "experimental_fused_moe_decode_enabled",
@@ -195,21 +198,6 @@ fn persist_mandatory_chunking_fields(
     ) {
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens =
             Some(crate::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS);
-        should_persist = true;
-    }
-    if chunking
-        .experimental_ssd_paging_prefill_graph_submission_layer_interval
-        .is_none()
-    {
-        // The former prefill_graph_submission_layer_interval owned SSD-paged
-        // prefill; resident submission was hardcoded to zero. Split the value
-        // once so later resident edits cannot change paging, and vice versa.
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval =
-            Some(chunking.prefill_graph_submission_layer_interval.unwrap_or(
-                crate::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            ));
-        chunking.prefill_graph_submission_layer_interval =
-            Some(crate::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL);
         should_persist = true;
     }
     if !should_persist {

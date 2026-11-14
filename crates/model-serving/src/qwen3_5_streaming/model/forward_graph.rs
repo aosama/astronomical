@@ -336,8 +336,6 @@ impl Qwen3_5Model {
                 true,
                 self.chunking.prefill_graph_submission_layer_interval,
                 self.chunking
-                    .experimental_ssd_paging_prefill_graph_submission_layer_interval,
-                self.chunking
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
             ))
             .unwrap_or(0);

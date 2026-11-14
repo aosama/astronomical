@@ -68,11 +68,6 @@
           "configured": null,
           "default": 4,
           "effective": 4
-        },
-        "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
-          "configured": null,
-          "default": 1,
-          "effective": 1
         }
       },
       "maximum_context_tokens": {
@@ -160,7 +155,6 @@
           "fixed_prompt_processing_chunk_size_tokens": 2048,
           "full_attention_key_value_growth_tokens": 256,
           "prefill_graph_submission_layer_interval": 0,
-          "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
           "prompt_cache_block_tokens": null,
           "prompt_cache_common_prefix_stride_blocks": 4,
           "experimental_decode_stage_attribution_enabled": false,

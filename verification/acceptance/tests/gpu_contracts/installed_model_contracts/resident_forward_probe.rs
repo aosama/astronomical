@@ -58,7 +58,6 @@ const INCIDENT_EFFECTIVE_MLX_CEILING_BYTES: usize = 36 * 1_073_741_824;
 /// the resident engine; the raw forwards must run with the same shapes.
 const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
-const SSD_PAGING_PREFILL_LAYER_INTERVAL: u32 = 1;
 const SSD_PAGING_GENERATION_LAYER_INTERVAL: u32 = 3;
 
 const PROBE_TIMEOUT_SECONDS: u64 = 240;
@@ -104,7 +103,6 @@ async fn drive_raw_resident_model_forwards() {
     let model_chunking = Qwen3_5ModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-        SSD_PAGING_PREFILL_LAYER_INTERVAL,
         SSD_PAGING_GENERATION_LAYER_INTERVAL,
     )
     .expect("the production standard chunking tuple should be valid");

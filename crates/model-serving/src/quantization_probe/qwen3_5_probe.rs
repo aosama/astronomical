@@ -37,7 +37,6 @@ mod module_swaps;
 /// resident engine, so probes run the shapes a served request runs.
 const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
-const SSD_PAGING_PREFILL_LAYER_INTERVAL: u32 = 1;
 const SSD_PAGING_GENERATION_LAYER_INTERVAL: u32 = 3;
 
 /// The validator's output budget; a probe never decodes, so any positive
@@ -141,7 +140,6 @@ fn load_resident_model(
     let chunking = probe_step(Qwen3_5ModelChunkingConfiguration::new(
         FULL_ATTENTION_KV_GROWTH_TOKENS,
         PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-        SSD_PAGING_PREFILL_LAYER_INTERVAL,
         SSD_PAGING_GENERATION_LAYER_INTERVAL,
     ))?;
     let runtime = mlx_step(

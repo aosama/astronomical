@@ -319,7 +319,6 @@ fn resolve_model_chunking_configuration(
     Qwen3_5ModelChunkingConfiguration::new(
         chunking.full_attention_key_value_growth_tokens,
         chunking.prefill_graph_submission_layer_interval,
-        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval,
         chunking.experimental_ssd_paging_generation_graph_submission_layer_interval,
     )
     .map_err(|configuration_error| {

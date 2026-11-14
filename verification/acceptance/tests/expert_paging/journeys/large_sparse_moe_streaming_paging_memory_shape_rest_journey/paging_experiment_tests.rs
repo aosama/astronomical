@@ -12,10 +12,6 @@ fn should_preserve_the_default_paging_experiment_cell() {
         2_048
     );
     assert_eq!(
-        configuration_document["chunking"]["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
-        1
-    );
-    assert_eq!(
         configuration_document["chunking"]["experimental_ssd_paging_generation_graph_submission_layer_interval"],
         1
     );
@@ -30,7 +26,6 @@ fn should_use_each_explicit_paging_experiment_input_without_ambient_overrides() 
     let paging_experiment = PagingExperimentCase {
         maximum_mlx_memory_gigabytes: 28,
         streaming_prompt_processing_chunk_tokens: 1_024,
-        prefill_graph_submission_layer_interval: 2,
         generation_graph_submission_layer_interval: 3,
     };
     let configuration_document =
@@ -44,10 +39,6 @@ fn should_use_each_explicit_paging_experiment_input_without_ambient_overrides() 
     assert_eq!(
         configuration_document["chunking"]["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
         1_024
-    );
-    assert_eq!(
-        configuration_document["chunking"]["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
-        2
     );
     assert_eq!(
         configuration_document["chunking"]["experimental_ssd_paging_generation_graph_submission_layer_interval"],

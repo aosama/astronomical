@@ -68,11 +68,6 @@
           "configured": null,
           "default": 4,
           "effective": null
-        },
-        "experimental_ssd_paging_prefill_graph_submission_layer_interval": {
-          "configured": null,
-          "default": 1,
-          "effective": null
         }
       },
       "maximum_context_tokens": {

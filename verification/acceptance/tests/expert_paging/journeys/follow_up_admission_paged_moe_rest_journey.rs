@@ -266,7 +266,6 @@ fn write_follow_up_admission_config(
             "fixed_prompt_processing_chunk_size_tokens": RESIDENT_CHUNK_TOKENS,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": SSD_STREAMING_CHUNK_TOKENS,
             "prefill_graph_submission_layer_interval": 0,
-            "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 1,
         },
     });

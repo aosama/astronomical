@@ -90,7 +90,6 @@ pub(crate) fn standard_worker_chunking_configuration()
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
         full_attention_key_value_growth_tokens: 256,
         prefill_graph_submission_layer_interval: 0,
-        experimental_ssd_paging_prefill_graph_submission_layer_interval: 1,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
         prompt_cache_block_tokens: None,
         prompt_cache_common_prefix_stride_blocks: 4,
@@ -105,7 +104,7 @@ pub(crate) fn standard_worker_chunking_configuration()
 #[allow(dead_code)]
 pub(crate) fn standard_qwen3_5_model_chunking_configuration()
 -> astronomical_model_serving::Qwen3_5ModelChunkingConfiguration {
-    astronomical_model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 1, 3)
+    astronomical_model_serving::Qwen3_5ModelChunkingConfiguration::new(256, 0, 3)
         .expect("the standard test model chunking configuration should be valid")
 }
 

@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 
 use super::{
     LOG_MARKER, MAXIMUM_OUTPUT_TOKEN_COUNT, PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
-    PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL, PREFILL_CHUNK_TOKEN_COUNT,
+    PREFILL_CHUNK_TOKEN_COUNT,
 };
 
 /// Builds realistic tool-control pressure without coupling acceptance to one client.
@@ -57,7 +57,6 @@ pub(super) fn write_interaction_config(
             "fixed_prompt_processing_chunk_size_tokens": PREFILL_CHUNK_TOKEN_COUNT,
             "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": PREFILL_CHUNK_TOKEN_COUNT,
             "prefill_graph_submission_layer_interval": 0,
-            "experimental_ssd_paging_prefill_graph_submission_layer_interval": PAGING_GRAPH_SUBMISSION_LAYER_INTERVAL,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
         },
     });

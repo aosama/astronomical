@@ -14,8 +14,6 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) prefill_graph_submission_layer_interval: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) experimental_ssd_paging_prefill_graph_submission_layer_interval: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_ssd_paging_generation_graph_submission_layer_interval: Option<u32>,
     #[serde(
         default,
@@ -53,7 +51,6 @@ pub struct ConfiguredChunkingFields {
     pub fixed_ssd_streaming_prompt_processing_chunk_size_tokens: bool,
     pub full_attention_key_value_growth_tokens: bool,
     pub prefill_graph_submission_layer_interval: bool,
-    pub experimental_ssd_paging_prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
     pub prompt_cache_block_tokens: bool,
     pub prompt_cache_common_prefix_stride_blocks: bool,
@@ -95,9 +92,6 @@ impl ChunkingConfigFile {
                 .is_some(),
             prefill_graph_submission_layer_interval: self
                 .prefill_graph_submission_layer_interval
-                .is_some(),
-            experimental_ssd_paging_prefill_graph_submission_layer_interval: self
-                .experimental_ssd_paging_prefill_graph_submission_layer_interval
                 .is_some(),
             experimental_ssd_paging_generation_graph_submission_layer_interval: self
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
@@ -142,9 +136,6 @@ impl ChunkingConfigFile {
             prefill_graph_submission_layer_interval: model
                 .prefill_graph_submission_layer_interval
                 .or(global.prefill_graph_submission_layer_interval),
-            experimental_ssd_paging_prefill_graph_submission_layer_interval: model
-                .experimental_ssd_paging_prefill_graph_submission_layer_interval
-                .or(global.experimental_ssd_paging_prefill_graph_submission_layer_interval),
             experimental_ssd_paging_generation_graph_submission_layer_interval: model
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .or(global.experimental_ssd_paging_generation_graph_submission_layer_interval),
@@ -208,14 +199,6 @@ pub const fn should_materialize_ssd_streaming_chunk_default(
         }
     }
 }
-/// Multi-token prefill submits every decoder layer while experts stream from
-/// SSD because that was the fastest setting measured, not because it saves
-/// memory: on the 4-bit sparse model (10,240-token prompt, 4,096-token
-/// chunks) an interval of 1 gave about 2,190 tok/s against 2,050 for 2 at a
-/// 14 GiB ceiling and matched 2 at 20 GiB, and peak memory was the same for
-/// both. Re-measure with `cargo measure-paging-submission-intervals` before
-/// changing it.
-pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
 /// One-token decode submits every third layer while experts stream from SSD.
 /// The exact value is not sensitive on the 4-bit sparse model: 1, 2, 3, 4
 /// and 6 decoded within two percent of each other at a 14 GiB ceiling (about
@@ -239,7 +222,6 @@ pub struct ChunkingConfig {
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: u32,
     full_attention_key_value_growth_tokens: u32,
     prefill_graph_submission_layer_interval: u32,
-    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     prompt_cache_block_tokens: Option<u32>,
     prompt_cache_common_prefix_stride_blocks: u32,
@@ -278,9 +260,6 @@ impl ChunkingConfig {
             prefill_graph_submission_layer_interval: configured
                 .prefill_graph_submission_layer_interval
                 .unwrap_or(DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
-            experimental_ssd_paging_prefill_graph_submission_layer_interval: configured
-                .experimental_ssd_paging_prefill_graph_submission_layer_interval
-                .unwrap_or(DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
             experimental_ssd_paging_generation_graph_submission_layer_interval: configured
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .unwrap_or(
@@ -374,11 +353,6 @@ impl ChunkingConfig {
     }
 
     #[must_use]
-    pub const fn experimental_ssd_paging_prefill_graph_submission_layer_interval(&self) -> u32 {
-        self.experimental_ssd_paging_prefill_graph_submission_layer_interval
-    }
-
-    #[must_use]
     pub const fn experimental_ssd_paging_generation_graph_submission_layer_interval(&self) -> u32 {
         self.experimental_ssd_paging_generation_graph_submission_layer_interval
     }
@@ -449,8 +423,6 @@ impl Default for ChunkingConfig {
             full_attention_key_value_growth_tokens: DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
             prefill_graph_submission_layer_interval:
                 DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            experimental_ssd_paging_prefill_graph_submission_layer_interval:
-                DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
             experimental_ssd_paging_generation_graph_submission_layer_interval:
                 DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
             prompt_cache_block_tokens: None,

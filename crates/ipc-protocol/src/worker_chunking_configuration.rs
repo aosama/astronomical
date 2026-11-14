@@ -17,9 +17,6 @@ pub struct WorkerChunkingConfiguration {
     /// Decoder-layer interval between multi-token prefill command buffers while
     /// sparse experts are fully resident. Zero keeps one lazy tape per chunk.
     pub prefill_graph_submission_layer_interval: u32,
-    /// Decoder-layer interval between multi-token prefill command buffers while
-    /// sparse experts stream from SSD. Zero keeps one lazy tape per chunk.
-    pub experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     /// Experimental decoder-layer interval for one-token solid-state-drive paging.
     ///
     /// Zero disables intermediate generation submission. Ignored while experts
@@ -53,27 +50,23 @@ pub struct WorkerChunkingConfiguration {
 
 /// Returns the command-buffer submission interval for one forward.
 ///
-/// Resident multi-token prefill uses `prefill_graph_submission_layer_interval`
-/// (default zero: one lazy tape). Resident one-token generation stays at zero.
-/// SSD-paged prefill and decode use the experimental_ssd_paging_* intervals.
+/// With every weight in memory, a multi-token prefill uses
+/// `prefill_graph_submission_layer_interval` (default zero: one lazy tape)
+/// and one-token generation stays at zero. While weights stream from the
+/// SSD, a multi-token forward finishes every layer before the next by rule,
+/// so no interval applies to it, and one-token generation uses the
+/// experimental_ssd_paging_generation interval.
 #[must_use]
 pub const fn graph_submission_layer_interval(
     token_count: i32,
     sparse_experts_are_paged: bool,
     prefill_graph_submission_layer_interval: u32,
-    experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
 ) -> u32 {
-    if !sparse_experts_are_paged {
-        if token_count == 1 {
-            return 0;
-        }
-        return prefill_graph_submission_layer_interval;
-    }
-    if token_count == 1 {
-        experimental_ssd_paging_generation_graph_submission_layer_interval
-    } else {
-        experimental_ssd_paging_prefill_graph_submission_layer_interval
+    match (sparse_experts_are_paged, token_count == 1) {
+        (false, true) | (true, false) => 0,
+        (false, false) => prefill_graph_submission_layer_interval,
+        (true, true) => experimental_ssd_paging_generation_graph_submission_layer_interval,
     }
 }
 
@@ -89,7 +82,6 @@ impl WorkerChunkingConfiguration {
             token_count,
             sparse_experts_are_paged,
             self.prefill_graph_submission_layer_interval,
-            self.experimental_ssd_paging_prefill_graph_submission_layer_interval,
             self.experimental_ssd_paging_generation_graph_submission_layer_interval,
         )
     }

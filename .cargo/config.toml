@@ -487,9 +487,9 @@ measure-unattributed-cold-prefill = "run -p xtask -- test-run --package astronom
 
 # One cell of the SSD-paging graph-submission interval comparison on the
 # 4-bit sparse model: append --configuration PATH whose `paging_experiment`
-# object sets the ceiling, the streaming chunk and the prefill and generation
-# intervals (the measurement file's header shows the shape). Run it once per
-# interval pair; each run prints one `[graph-submission-interval]` line.
+# object sets the ceiling, the streaming chunk and the generation interval
+# (the measurement file's header shows the shape). Run it once per interval;
+# each run prints one `[graph-submission-interval]` line.
 measure-paging-submission-intervals = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter should_measure_serving_rates_for_the_configured_graph_submission_intervals"
 
 # FLUX.2 Klein REST journeys on real models, for both the BF16 build and the

@@ -64,7 +64,6 @@ struct ChunkingConfigurationSummary {
     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: ConfigurationValue<u32>,
     full_attention_key_value_growth_tokens: ConfigurationValue<u32>,
     prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
-    experimental_ssd_paging_prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
     experimental_ssd_paging_generation_graph_submission_layer_interval: ConfigurationValue<u32>,
     prompt_cache_block_tokens: NullableConfigurationValue<u32>,
     prompt_cache_common_prefix_stride_blocks: ConfigurationValue<u32>,
@@ -270,16 +269,6 @@ fn chunking_summary(
             astronomical_config::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
             effective_chunking
                 .map(|chunking| chunking.prefill_graph_submission_layer_interval),
-        ),
-        experimental_ssd_paging_prefill_graph_submission_layer_interval: reported_chunking_configuration_value(
-            configured_fields.experimental_ssd_paging_prefill_graph_submission_layer_interval,
-            configured_chunking.map(|chunking| {
-                chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval
-            }),
-            astronomical_config::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            effective_chunking.map(|chunking| {
-                chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval
-            }),
         ),
         experimental_ssd_paging_generation_graph_submission_layer_interval: reported_chunking_configuration_value(
             configured_fields.experimental_ssd_paging_generation_graph_submission_layer_interval,
