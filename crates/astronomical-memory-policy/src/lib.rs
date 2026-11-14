@@ -43,6 +43,10 @@
 //!   measured model geometry).
 //! - `ceiling` — may the worker raise or lower the live ceiling right now,
 //!   and what ownership must move first.
+//! - `ledger` — the one owner of the whole limit: named accounts that always
+//!   add up, with the kept-weight capacity as the remainder (issue #2221).
+//!   Its tests include `simulation`, a scripted engine that replays whole
+//!   requests against the ledger without a model.
 //! - `geometry_floor` — the smallest servable ceiling derived from validated
 //!   artifact geometry, independent of the ceiling that produced the load.
 //! - `recovery` — what happens after an allocation failure mid-forward:
@@ -59,6 +63,7 @@ pub mod ceiling;
 pub mod expert_paging;
 pub mod forward_admission;
 pub mod geometry_floor;
+pub mod ledger;
 pub mod memory_equation;
 pub mod neural_engine_admission;
 pub mod neural_engine_program_memory_watch;
@@ -82,6 +87,9 @@ pub use placement::{
     should_promote_demoted_streaming_engine_to_resident,
 };
 pub use residency::observed_expert_memory_mode;
+
+#[cfg(test)]
+mod simulation;
 
 #[cfg(test)]
 mod adaptive_ram_growth_execution_profile_tests;
