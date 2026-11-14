@@ -65,6 +65,12 @@ export class FakeDaemon {
   private libraryDownloadPollCount = 0;
   private readonly readyLibraryModelIDs = new Set<string>();
 
+  /** A chat model arrives without this window asking for it, as when the
+   * person downloads one on the Models page in their browser. */
+  public installChatModelFromElsewhere(): void {
+    this.installedModels.push(defaultFakeModel());
+  }
+
   public constructor(options: FakeDaemonOptions) {
     this.options = options;
     const configuredModels: unknown[] | undefined = options.models;

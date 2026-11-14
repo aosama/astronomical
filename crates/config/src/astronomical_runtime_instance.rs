@@ -69,6 +69,9 @@ pub struct AstronomicalInstancePaths {
     default_bind_address: SocketAddr,
     is_standard_state_directory: bool,
     state_directory_label: StateDirectoryLabel,
+    /// True when the state lives in an App Sandbox location (a container's
+    /// Application Support or an app group container).
+    keeps_state_in_app_container: bool,
 }
 
 /// How status names the state directory to the applications that check they
@@ -166,6 +169,7 @@ impl AstronomicalInstancePaths {
             home_directory.into().join(state_directory_name),
             runtime_instance,
             format!("~/{state_directory_name}"),
+            false,
         )
     }
 
@@ -258,6 +262,7 @@ impl AstronomicalInstancePaths {
             state_root_directory.join(state_directory_name),
             runtime_instance,
             format!("{label_root}/{state_directory_name}"),
+            true,
         )
     }
 
@@ -266,6 +271,7 @@ impl AstronomicalInstancePaths {
         state_directory: PathBuf,
         runtime_instance: AstronomicalRuntimeInstance,
         home_relative_label: String,
+        keeps_state_in_app_container: bool,
     ) -> Self {
         let default_bind_address = runtime_instance.loopback_socket_addr();
         Self {
@@ -274,6 +280,7 @@ impl AstronomicalInstancePaths {
             default_bind_address,
             is_standard_state_directory: true,
             state_directory_label: StateDirectoryLabel::HomeRelative(home_relative_label),
+            keeps_state_in_app_container,
         }
     }
 
@@ -291,6 +298,7 @@ impl AstronomicalInstancePaths {
             default_bind_address,
             is_standard_state_directory: false,
             state_directory_label: StateDirectoryLabel::Custom,
+            keeps_state_in_app_container: false,
         }
     }
 
@@ -305,6 +313,7 @@ impl AstronomicalInstancePaths {
             default_bind_address,
             is_standard_state_directory: false,
             state_directory_label: StateDirectoryLabel::Custom,
+            keeps_state_in_app_container: false,
         }
     }
 
@@ -326,6 +335,15 @@ impl AstronomicalInstancePaths {
     #[must_use]
     pub const fn is_standard_state_directory(&self) -> bool {
         self.is_standard_state_directory
+    }
+
+    /// True for the Mac App Store build, whose engine runs inside the App
+    /// Sandbox and can open only its own container. Settings that name a
+    /// folder elsewhere on the Mac cannot work there, and callers use this to
+    /// stop offering them.
+    #[must_use]
+    pub const fn keeps_state_in_app_container(&self) -> bool {
+        self.keeps_state_in_app_container
     }
 
     /// What status reports as this instance's state directory. The chat app

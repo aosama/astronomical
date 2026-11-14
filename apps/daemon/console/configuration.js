@@ -27,6 +27,7 @@ const configurationEditorState = {
     isBusy: false,
     neuralEngineStatusDocument: null,
     stateDirectory: null,
+    unavailableSettingPaths: [],
 };
 let configurationFeedbackTimer = null;
 
@@ -161,6 +162,7 @@ async function loadConfigurationDocument() {
         }
         const snapshot = await response.json();
         configurationEditorState.schema = snapshot.schema;
+        configurationEditorState.unavailableSettingPaths = snapshot.unavailable_settings || [];
         configurationEditorState.documentDigest = snapshot.document_digest;
         configurationEditorState.discoveredModels = await fetchConfigurationDiscoveredModels();
         if (snapshot.document === null) {

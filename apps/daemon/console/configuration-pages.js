@@ -26,7 +26,8 @@ function clearConfigurationPages() {
 function renderSettingsPage() {
     const groupsContainer = document.getElementById("settings-groups");
     groupsContainer.replaceChildren();
-    const groups = configurationPageGroups(configurationEditorState.schema, "settings");
+    const groups = configurationPageGroups(configurationEditorState.schema, "settings",
+        configurationEditorState.unavailableSettingPaths);
     for (const group of groups) {
         groupsContainer.append(renderConfigurationGroup(group,
             { modelIdentifier: CONFIGURATION_ALL_MODELS_SCOPE, isLoadedModel: false }));

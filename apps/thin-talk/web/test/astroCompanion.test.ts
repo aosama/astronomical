@@ -94,6 +94,30 @@ test("should_show_a_saved_name_as_text_never_as_markup", async () => {
   assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, <b>Bo</b>");
 });
 
+test("should_end_the_journey_when_the_person_returns_with_a_model_downloaded_on_the_models_page", async () => {
+  const { daemon } = bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  element<HTMLButtonElement>("astro-other-model").click();
+  daemon.installChatModelFromElsewhere();
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => overlay().hidden, "the get-started journey to end");
+  assert.deepEqual(daemon.requestedLibraryDownloads, [], "the first download is not started for someone who chose another model");
+});
+
+test("should_keep_offering_the_download_when_the_person_returns_and_no_model_is_installed", async () => {
+  bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  window.dispatchEvent(new Event("focus"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(overlay().hidden, false);
+  assert.equal(overlay().dataset.step, "download");
+  assert.equal(element("astro-download").textContent, "Download");
+});
+
 test("should_offer_the_recommended_model_by_name_and_size_with_one_download_button", async () => {
   const { daemon, host } = bootNewcomer({ models: [] });
   await getStarted();
@@ -108,6 +132,23 @@ test("should_offer_the_recommended_model_by_name_and_size_with_one_download_butt
   assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads until Download is pressed");
   element<HTMLButtonElement>("astro-other-model").click();
   assert.ok(host.receivedActions.some((action) => JSON.stringify(action).includes("openExternal") && JSON.stringify(action).includes("/download-models")), "the Models page opens for a different model");
+});
+
+test("should_keep_the_ready_screen_when_the_person_returns_after_downloading_here", async () => {
+  bootNewcomer({
+    models: [],
+    libraryDownloadSequence: [{ state: "idle", huggingface_id: null, bytes_completed: 0, bytes_total: 0, error_code: null }],
+    installsWhenDownloadFinishes: { huggingfaceID: CHAT_MODEL_ID, model: { id: "starter-chat-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"] } },
+  });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  element<HTMLButtonElement>("astro-download").click();
+  await waitFor(() => astroSays() === "It is on this Mac now and works without the internet.", "the ready line");
+  window.dispatchEvent(new Event("focus"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(overlay().hidden, false, "the screen that says the model is ready stays until the person moves on");
+  assert.equal(element("astro-download").textContent, "Start chatting");
 });
 
 test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async () => {
@@ -128,7 +169,7 @@ test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async (
   assert.equal(element("astro-continue").textContent, "Continue in the background");
   assert.match(element("astro-download-next").textContent ?? "", /Ask a question/);
   await waitFor(() => element("astro-download-size").textContent === "1.9 of 5.6 GB", "progress");
-  await waitFor(() => astroSays() === "The model is ready.", "the ready line");
+  await waitFor(() => astroSays() === "It is on this Mac now and works without the internet.", "the ready line");
   await waitFor(() => document.getElementById("empty-state-notice")?.textContent === "", "chat to become ready");
   assert.equal(element("astro-download").textContent, "Start chatting");
   assert.equal(isPresent("astro-continue"), false, "one way forward once the model is ready");
@@ -213,6 +254,24 @@ test("should_offer_the_image_model_from_a_drawing_idea_when_none_is_installed", 
   await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
   assert.equal(composerField().value, "", "a prompt that can only fail is not offered");
   assert.equal(daemon.chatRequestBody(), null);
+});
+
+test("should_fill_the_message_field_with_the_drawing_idea_once_the_offered_image_model_lands", async () => {
+  const { daemon } = bootJourney(undefined, {
+    astroProfile: MET_ASTRO_PROFILE,
+    libraryCatalog: STARTER_CATALOG,
+    libraryDownloadSequence: [{ state: "idle", huggingface_id: null, bytes_completed: 0, bytes_total: 0, error_code: null }],
+    installsWhenDownloadFinishes: { huggingfaceID: IMAGE_MODEL_ID, model: { id: "starter-image-4bit", supported_endpoints: ["/v1/images/generations"] } },
+  });
+  await waitFor(() => isPresent("astro-home"), "Astro's home");
+  await waitUntilReady();
+  element<HTMLButtonElement>("astro-home-idea-3").click();
+  await waitFor(() => isPresent("astro-home-get-image-model"), "the image model offer");
+  assert.equal(composerField().value, "", "nothing is filled in while the model is missing");
+  element<HTMLButtonElement>("astro-home-get-image-model").click();
+  await waitFor(() => composerField().value === "Draw a poster of a rocket launch", "the idea to return once the model is here");
+  assert.deepEqual(daemon.requestedLibraryDownloads, [IMAGE_MODEL_ID]);
+  assert.equal(daemon.chatRequestBody(), null, "the idea is prepared, not sent");
 });
 
 test("should_fill_the_message_field_from_a_drawing_idea_when_an_image_model_is_installed", async () => {

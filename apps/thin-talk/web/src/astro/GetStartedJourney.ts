@@ -78,6 +78,15 @@ export class GetStartedJourney {
     this.moveFrom(GetStartedStep.DOWNLOAD, GetStartedStep.FINISHED);
   }
 
+  /** A chat model turned up while the person was away from the window, for
+   * example downloaded on the Models page that "Choose a different model"
+   * opens. The download screen has nothing left to ask, so the journey ends;
+   * staying would offer a download to someone who already has a model. */
+  public chatModelFoundElsewhere(): void {
+    this.hasChatModel = true;
+    this.moveFrom(GetStartedStep.DOWNLOAD, GetStartedStep.FINISHED);
+  }
+
   /** Escape and "Skip for now" work from every screen. */
   public skip(): void {
     this.currentStep = GetStartedStep.FINISHED;

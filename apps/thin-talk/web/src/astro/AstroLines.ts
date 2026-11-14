@@ -39,7 +39,9 @@ const LINES: Record<AstroMoment, (nickname: string) => string> = {
   [AstroMoment.WELCOME]: () => "Astronomical runs AI models privately on this Mac. Its assistant is called Astro.",
   [AstroMoment.NEEDS_CHAT_MODEL]: () => "Download a chat model to get started. It's a one-time download.",
   [AstroMoment.DOWNLOADING]: () => "Downloading. You can keep going while it runs.",
-  [AstroMoment.MODEL_READY]: () => "The model is ready.",
+  // Shown under a headline that already says the model is ready, so it adds
+  // what a newcomer does not know yet instead of repeating the headline.
+  [AstroMoment.MODEL_READY]: () => "It is on this Mac now and works without the internet.",
   [AstroMoment.DOWNLOAD_FAILED]: () => "The download stopped. Try again?",
   [AstroMoment.LIBRARY_BUSY]: () => "Another download is running. Try again when it finishes.",
   [AstroMoment.SKILL_CHAT]: () => "Chat is ready. A question is in the message field.",

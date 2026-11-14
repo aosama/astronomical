@@ -94,6 +94,8 @@ It says which model each entry is used for, why an entry is not used, or that it
 
 Both pages are generated from the version 1 schema; its `x-astronomical-layout` member arranges them.
 
+The Mac App Store version runs inside the macOS App Sandbox, which lets it open only its own storage. It keeps models, downloads and compiled programs there, so its **Settings** page has no **Locations** section and the three folder settings have no effect in that version.
+
 ## Unloading an idle model
 
 A loaded model is unloaded after it has gone unused for `idle_model_unload_seconds` (60 by default). That frees its memory for the rest of your Mac, and the next request loads it again. Set it to 0 to keep a model loaded until you ask for a different one. A change made on the **Settings** page applies at once.

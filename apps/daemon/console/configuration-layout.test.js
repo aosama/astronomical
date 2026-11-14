@@ -320,3 +320,33 @@ test("should_hide_show_or_hover_the_reset_arrow_by_how_the_value_relates_to_its_
     assert.equal(call("configurationResetArrowState", 4, 4), "is-hover-only");
     assert.equal(call("configurationResetArrowState", "/models", undefined), "is-visible");
 });
+
+const FOLDER_SETTING_PATHS = [
+    "runtime.model_directories",
+    "runtime.model_download_directory",
+    "runtime.neural_engine_program_directory",
+];
+
+test("should_leave_out_a_group_whose_settings_the_instance_cannot_honour", () => {
+    const groups = call("configurationPageGroups", bundledSchema, "settings", FOLDER_SETTING_PATHS);
+
+    assert.deepEqual(groups.map((group) => group.title), ["Memory", "Prompt cache", "Diagnostics"],
+        "no Locations group, and the folder settings do not reappear under Other");
+});
+
+test("should_keep_the_rest_of_a_group_when_only_some_of_its_settings_are_unavailable", () => {
+    const groups = call("configurationPageGroups", bundledSchema, "settings", ["runtime.model_directories"]);
+    const locationsGroup = groups.find((group) => group.title === "Locations");
+
+    assert.deepEqual(locationsGroup.descriptors.map((descriptor) => descriptor.path.join(".")),
+        ["runtime.model_download_directory", "runtime.neural_engine_program_directory"]);
+});
+
+test("should_show_every_group_when_nothing_is_unavailable_or_the_list_names_no_real_setting", () => {
+    for (const unavailableSettingPaths of [undefined, [], ["runtime.setting_that_does_not_exist"]]) {
+        const groupTitlesShown = call("configurationPageGroups", bundledSchema, "settings", unavailableSettingPaths)
+            .map((group) => group.title);
+
+        assert.deepEqual(groupTitlesShown, ["Memory", "Locations", "Prompt cache", "Diagnostics"]);
+    }
+});

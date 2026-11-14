@@ -81,3 +81,18 @@ test("should_say_the_engine_stayed_silent_and_wait_again_after_a_retry", () => {
   journey.engineAnswered(false);
   assert.equal(journey.step, GetStartedStep.DOWNLOAD, "a late answer still moves a silent journey on");
 });
+
+test("should_finish_from_the_download_step_when_a_chat_model_turns_up_from_elsewhere", () => {
+  const journey = new GetStartedJourney({ hasChatModel: false });
+  journey.begin();
+  journey.chatModelFoundElsewhere();
+  assert.equal(journey.step, GetStartedStep.FINISHED);
+});
+
+test("should_not_leave_the_welcome_when_a_chat_model_turns_up_before_the_person_began", () => {
+  const journey = new GetStartedJourney({ hasChatModel: false });
+  journey.chatModelFoundElsewhere();
+  assert.equal(journey.step, GetStartedStep.WELCOME, "the welcome is still the first screen");
+  journey.begin();
+  assert.equal(journey.step, GetStartedStep.FINISHED, "and with a model here there is no download step");
+});

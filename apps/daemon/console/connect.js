@@ -57,18 +57,32 @@ function connectionApiBaseUrl(consoleOrigin) {
     return `${authority}/v1`;
 }
 
+const CONNECTION_CHAT_ENDPOINT = "/v1/chat/completions";
+
+// This page connects coding agents, which need a model that can chat. A picture
+// or voice model in the list, or worse in a copyable sample, gives a
+// configuration that fails on its first request. A model that does not say
+// which endpoints it serves is kept: hiding it would be a guess.
+function advertisedModelCanChat(advertisedModel) {
+    const supportedEndpoints = advertisedModel && advertisedModel.supported_endpoints;
+    return !Array.isArray(supportedEndpoints) || supportedEndpoints.includes(CONNECTION_CHAT_ENDPOINT);
+}
+
 function connectionModelIdentifiers(modelsResponse) {
     const advertisedModels = (modelsResponse && modelsResponse.data) || [];
     return advertisedModels
+        .filter(advertisedModelCanChat)
         .map((advertisedModel) => advertisedModel && advertisedModel.id)
         .filter((modelIdentifier) => typeof modelIdentifier === "string" && modelIdentifier.length > 0);
 }
 
 // The samples follow the model this console has already selected, so the value a
 // user copies matches the one the Chat and Model views are showing instead of an
-// arbitrary entry of the advertised list.
+// arbitrary entry of the advertised list. A selected model that is not in the
+// list is one that cannot chat (the console had just drawn a picture, say), so
+// the samples fall back to the first model that can.
 function connectionModelIdentifier({ modelIdentifiers, selectedModelIdentifier }) {
-    if (typeof selectedModelIdentifier === "string" && selectedModelIdentifier.length > 0) {
+    if (modelIdentifiers.includes(selectedModelIdentifier)) {
         return selectedModelIdentifier;
     }
     return modelIdentifiers.length > 0
@@ -82,7 +96,7 @@ function connectionModelGuidanceText({ modelIdentifiers, selectedModelIdentifier
     if (modelIdentifiers.length === 0) {
         return CONNECTION_MODEL_GUIDANCE_WITHOUT_MODELS;
     }
-    const sampleProvenance = selectedModelIdentifier
+    const sampleProvenance = modelIdentifiers.includes(selectedModelIdentifier)
         ? "The samples below use the model this console has selected"
         : "The samples below use the first advertised model";
     return `${sampleProvenance}, and any identifier in this list works. ${CONNECTION_MODEL_LIST_SENTENCE}`;

@@ -530,3 +530,31 @@ fn should_label_a_group_container_without_a_folder_name() {
         "~/Library/Group Containers/Astronomical"
     );
 }
+
+/// Only the two App Sandbox locations count as an app container: a sandboxed
+/// engine cannot open folders elsewhere, so callers ask this before offering
+/// folder settings. Direct and caller-chosen locations are not sandboxed.
+#[test]
+fn should_report_an_app_container_only_for_the_sandbox_locations() {
+    let group_container_paths = AstronomicalInstancePaths::for_application_group_container(
+        PathBuf::from("/Users/example/Library/Group Containers/TEAM123456.astronomical"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let application_support_paths = AstronomicalInstancePaths::for_application_support_directory(
+        PathBuf::from("/Users/example/Library/Application Support"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let direct_paths = AstronomicalInstancePaths::for_home_directory(
+        PathBuf::from("/Users/example"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let custom_paths = AstronomicalInstancePaths::for_state_directory(
+        PathBuf::from("/somewhere/else"),
+        AstronomicalRuntimeInstance::Development,
+    );
+
+    assert!(group_container_paths.keeps_state_in_app_container());
+    assert!(application_support_paths.keeps_state_in_app_container());
+    assert!(!direct_paths.keeps_state_in_app_container());
+    assert!(!custom_paths.keeps_state_in_app_container());
+}

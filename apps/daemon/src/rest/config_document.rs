@@ -28,6 +28,29 @@ struct ConfigDocumentResponse {
     read_error: Option<String>,
     document_digest: Option<String>,
     schema: serde_json::Value,
+    /// Settings this instance cannot honour, as paths in the document. The
+    /// console leaves them off its pages.
+    unavailable_settings: &'static [&'static str],
+}
+
+/// The settings that name a folder of the person's choosing. A sandboxed
+/// engine can open only its own container, so offering them in the Mac App
+/// Store build would be offering something that cannot work (issue #2187
+/// tracks giving the store build a folder picker instead).
+const FOLDER_SETTINGS: [&str; 3] = [
+    "runtime.model_directories",
+    "runtime.model_download_directory",
+    "runtime.neural_engine_program_directory",
+];
+
+fn unavailable_settings(
+    instance_paths: &astronomical_config::AstronomicalInstancePaths,
+) -> &'static [&'static str] {
+    if instance_paths.keeps_state_in_app_container() {
+        &FOLDER_SETTINGS
+    } else {
+        &[]
+    }
 }
 
 #[derive(Deserialize)]
@@ -128,6 +151,7 @@ pub(crate) async fn read_config_document(
         read_error: snapshot.read_error,
         document_digest: snapshot.document_digest,
         schema,
+        unavailable_settings: unavailable_settings(runtime_config_resolver.instance_paths()),
     })
     .into_response()
 }
@@ -244,3 +268,7 @@ pub(crate) async fn reset_config_document(
     };
     reload_after_write(application_state, document_digest).await
 }
+
+#[cfg(test)]
+#[path = "config_document_tests.rs"]
+mod config_document_tests;

@@ -192,6 +192,38 @@ Section 6 step 3 is where the README link is set. Repair a failing link through 
 
 Tell the user that Astronomical `$VERSION` is available through the normal public release and Sparkle channels. Do not acquire it for them; they will receive it through the ordinary user journey.
 
+## 8. Ship the same version to the Mac App Store
+
+The store version is the same product built as a sandboxed channel. Do this stage after section 7 succeeds, from the release tag, so both channels carry one version number. It never changes the direct release.
+
+Three steps need the user's word each time, and nothing else in this stage does: uploading a build, submitting for review, and releasing to the public. Ask in the chat; approval for a direct release does not cover them.
+
+Store credentials, besides the map above:
+
+- **Distribution identity:** the Keychain identity whose quoted name starts with `Apple Distribution:`.
+- **Installer identity:** the one whose quoted name starts with `3rd Party Mac Developer Installer:`.
+- **App Store Connect API key:** the key's private half lives in `~/.appstoreconnect/private_keys/AuthKey_<KEY ID>.p8`. The Key ID is in that file name; the Issuer ID is on the Users and Access, Integrations page of App Store Connect. Never copy the private key anywhere else or print it.
+
+Steps:
+
+1. Build the store bundle from the clean release tag: `cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"`. The bundle check refuses a bundle with an unsandboxed executable, a terminal command, a missing privacy manifest, or missing entitlements.
+2. Prove it runs sandboxed. Stop the installed Stable app first (check it is idle; the two share a port), copy the bundle into the Applications folder under another name, and run `cargo xtask app smoke-test --app-bundle "/Applications/<that name>.app"`. From a build folder a sandboxed agent cannot reach its engine, so the smoke test must run on the Applications copy. Move the copy to the Trash and reopen Stable afterwards.
+3. Package it: `cargo xtask release app-store-pkg --app-bundle PATH --installer-identity "$INSTALLER_IDENTITY"`.
+4. Ask Apple to validate it: `cargo xtask release app-store-upload --package PATH --api-key KEY_ID --api-issuer ISSUER_ID`. Validation sends nothing permanent. Fix every error it reports before going on. One warning is expected until provisioning profiles exist: 90889, which only concerns TestFlight.
+5. **Ask the user, then upload:** the same command with `--upload`. An uploaded build cannot be withdrawn, and a build number can be used once per version. Processing takes roughly ten to thirty minutes before the build can be selected.
+6. On the app record in App Store Connect, create the new version with the release's version number, write "What's New" from the release notes in plain words, and select the uploaded build. Screenshots carry over from the previous version; replace them only when the app looks different.
+7. **Ask the user, then submit for review.** Keep release set to manual.
+8. When Apple answers: on approval, install the approved build from the store on a Mac account that has never run the store version and reach a first reply before asking the user whether to release; on rejection, record Apple's reasons on the release issue and open one issue per reason.
+
+Rules for the app record that must not change by accident:
+
+- **Availability excludes the European Union.** The account holder has declared to Apple that they do not distribute there. When availability is edited, all 27 member states stay unticked, automatic availability in future countries stays off, and "distribution in France" is answered "No".
+- **Listing text and screenshots** promise only what works in the sandboxed build. Before adding a promise, do it on screen in the store build.
+- **The privacy answer is "Data Not Collected".** It must change in the same release as any feature that sends data anywhere.
+- **Entitlements are part of the review.** A new entitlement needs a sentence in the review notes saying why.
+
+To replace a build that is already waiting for review, remove the version from review on the app record first, then repeat steps 1 to 7 with the new build.
+
 ## Failure rules
 
 - Before tag push: fix the cause, remove only an invalid `target/releases/${TAG}` after explicit user approval, recreate the local tag only if its commit is wrong, and prepare again.
