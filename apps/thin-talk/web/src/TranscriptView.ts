@@ -16,6 +16,10 @@ const COPIED_CONFIRMATION_MILLISECONDS = 1500;
 export interface TranscriptSnapshot {
   messages: readonly TranscriptMessage[];
   notice: string | null;
+  /** True when the notice tells the person to do something before the
+   * window can work (quit another copy), so it is drawn to be read. Other
+   * notices describe a wait that ends by itself and stay quiet. */
+  noticeAsksForAction?: boolean;
 }
 
 /**
@@ -140,6 +144,8 @@ export class TranscriptView {
         const configuredNotice: string | null = snapshot.notice;
         this.emptyStateNotice.textContent = configuredNotice != null ? configuredNotice : "";
       }
+      const asksForAction = snapshot.messages.length === 0 && snapshot.notice != null && snapshot.noticeAsksForAction === true;
+      this.emptyStateNotice.classList.toggle("empty-state__notice--asks", asksForAction);
     }
     this.scheduleFlush();
   }

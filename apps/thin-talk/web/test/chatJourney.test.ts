@@ -97,6 +97,11 @@ test("should_show_the_failure_notice_instead_of_a_transcript_when_the_handshake_
     const noticeText: string | null | undefined = notice?.textContent;
     return (noticeText != null ? noticeText : "").includes("Another copy of Astronomical is already running");
   }, "the failure notice to appear");
+  assert.equal(
+    document.querySelector("#empty-state-notice")?.classList.contains("empty-state__notice--asks"),
+    true,
+    "a notice the person must act on is drawn to be read",
+  );
   assert.equal(host.fileCount(), 0, "no session is written when the daemon is unreachable");
 }, { timeout: 30_000 });
 

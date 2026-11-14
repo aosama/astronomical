@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ChatFailure } from "../src/ChatFailure";
 import { ChatFailureKind } from "../src/ChatFailureKind";
-import { WAITING_FOR_ENGINE_NOTICE, describeLoadFailure, loadNoticeText } from "../src/LoadNotice";
+import { WAITING_FOR_ENGINE_NOTICE, describeLoadFailure, loadNoticeAsksForAction, loadNoticeText } from "../src/LoadNotice";
+import { OTHER_COPY_RUNNING_NOTICE } from "../src/OtherCopyAnsweredError";
 
 test("should_say_the_window_is_looking_while_idle_or_loading", () => {
   assert.equal(loadNoticeText("idle", ""), "Looking for a chat model on this Mac.");
@@ -28,4 +29,11 @@ test("should_describe_an_engine_that_is_not_answering_as_waiting", () => {
 test("should_keep_any_other_failure_message_and_stringify_non_errors", () => {
   assert.equal(describeLoadFailure(new Error("disk full")), "disk full");
   assert.equal(describeLoadFailure("plain text"), "plain text");
+});
+
+test("should_ask_the_person_to_act_only_when_another_copy_holds_the_address", () => {
+  assert.equal(loadNoticeAsksForAction("failed", OTHER_COPY_RUNNING_NOTICE), true);
+  assert.equal(loadNoticeAsksForAction("failed", WAITING_FOR_ENGINE_NOTICE), false, "a wait that ends by itself is not theirs to act on");
+  assert.equal(loadNoticeAsksForAction("failed", ""), false);
+  assert.equal(loadNoticeAsksForAction("ready", OTHER_COPY_RUNNING_NOTICE), false, "a stale message never outlives a load that succeeded");
 });
