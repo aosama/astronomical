@@ -30,12 +30,16 @@ use super::engine_request::Qwen3_5EngineRequest;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 
-/// One recovery per request: after it, retained experts stay frozen at zero
-/// until the decode handoff, so a second failure means the prompt's own
-/// workspace does not fit and retrying again could only loop.
+/// One recovery per request while retention is frozen: after it, retained
+/// experts stay at zero, so a second failure means the prompt's own workspace
+/// does not fit and retrying again could only loop.
 pub(super) const MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST: u8 = 1;
 
 /// Decides whether a prefill memory failure may be recovered.
+///
+/// The allowed count comes from the request's refill state
+/// (`PostRecoveryExpertRefill::allowed_recovery_attempt_count`): one
+/// recovery, and one more while a refill is active.
 ///
 /// Image requests stay terminal: their uploaded visual embeddings cover only
 /// the prompt suffix planned at request start, so re-seeding to a different
@@ -43,9 +47,9 @@ pub(super) const MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST: u8 = 1;
 pub(super) fn should_attempt_prefill_memory_recovery(
     completed_recovery_attempt_count: u8,
     has_visual_inputs: bool,
+    allowed_recovery_attempt_count: u8,
 ) -> bool {
-    !has_visual_inputs
-        && completed_recovery_attempt_count < MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST
+    !has_visual_inputs && completed_recovery_attempt_count < allowed_recovery_attempt_count
 }
 
 impl Qwen3_5EngineState {
@@ -63,6 +67,13 @@ impl Qwen3_5EngineState {
             .engine_extension
             .completed_prefill_memory_recovery_attempt_count
             .saturating_add(1);
+        active_request.engine_extension.post_recovery_expert_refill = active_request
+            .engine_extension
+            .post_recovery_expert_refill
+            .after_recovery();
+        active_request
+            .engine_extension
+            .planned_prefill_workspace_bytes_at_recovery = self.planned_prefill_workspace_bytes();
         let model = self
             .model
             .as_ref()
@@ -137,9 +148,11 @@ impl Qwen3_5EngineState {
         active_request.last_restored_persistent_prompt_cache_block_key =
             restored_last_persistent_prompt_cache_block_key;
         // Restore lifts any request-pressure freeze when its own load memory is
-        // gone, so re-freeze retention at zero: the rest of prefill streams
-        // experts from storage, which is slower but cannot repeat the failure
-        // that residency just caused. The decode handoff lifts this freeze.
+        // gone, so re-freeze retention at zero: the retry streams experts
+        // from storage, which is slower but cannot repeat the failure that
+        // residency just caused. The freeze lifts once a chunk has measured
+        // the real workspace (`prefill_expert_refill`), or at the decode
+        // handoff.
         self.model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?

@@ -15,9 +15,16 @@ pub(crate) struct StreamingRequestExtension {
     /// Context tokens admitted at request start; prefill memory recovery
     /// re-seeds the persistent prompt cache against this same total.
     pub(in crate::qwen3_5_streaming) reserved_context_tokens: usize,
-    /// Prefill memory recoveries already spent; bounds recovery to one so a
+    /// Prefill memory recoveries already spent; bounds recovery so a
     /// genuinely oversized prompt still fails instead of looping.
     pub(in crate::qwen3_5_streaming) completed_prefill_memory_recovery_attempt_count: u8,
+    /// Whether expert layers were put back in memory after a recovery, which
+    /// happens at most once and earns one further recovery if it overflows.
+    pub(in crate::qwen3_5_streaming) post_recovery_expert_refill:
+        super::prefill_expert_refill::PostRecoveryExpertRefill,
+    /// The prefill workspace reserve in force when a chunk last ran out of
+    /// memory. A refill needs a later measurement to have raised it.
+    pub(in crate::qwen3_5_streaming) planned_prefill_workspace_bytes_at_recovery: u64,
     /// Set when a layer-major prefill did not fit, so this request's prompt
     /// runs chunk by chunk from then on (issue #1985).
     pub(in crate::qwen3_5_streaming) layer_major_prefill_declined: bool,

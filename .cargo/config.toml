@@ -498,6 +498,16 @@ test-prism-hadamard-performance = "run -p xtask -- test-run --package astronomic
 test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
 test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack --ignored"
 
+# Prefill memory recovery on the largest sparse model (issues #1729, #2217):
+# two real-model REST journeys. One sends a prompt whose first full chunk runs
+# out of memory at a 37 GiB ceiling and requires both requests to be served.
+# The other sends a short request and then a long one at 32 GiB with everyday
+# settings and requires memory in use to be back above half the ceiling while
+# the long prompt is still being read. Needs the GPU free and the model that
+# registry/e2e_test_model_names.json names as largest_sparse_moe_streaming in
+# a folder the Development configuration lists.
+test-prefill-memory-recovery = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging --test expert_paging --release --ignored --filter prefill_memory_recovery_rest_journey"
+
 # `astronomical launch claude` end to end (issue #891): a real daemon on the
 # configured small dense model, the launch verb's preparation, and a headless
 # Claude Code turn. Needs Claude Code on PATH; prints per-stage [timing].
