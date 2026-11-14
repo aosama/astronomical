@@ -73,7 +73,7 @@ fn reported_instance_identity(
     let Some(runtime_config_resolver) = application_state.runtime_config_resolver.as_ref() else {
         return (
             astronomical_config::AstronomicalRuntimeInstance::Development,
-            "custom".to_owned(),
+            astronomical_config::CUSTOM_STATE_DIRECTORY_LABEL.to_owned(),
         );
     };
     let instance_paths = runtime_config_resolver.instance_paths();

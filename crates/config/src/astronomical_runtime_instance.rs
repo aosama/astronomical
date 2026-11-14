@@ -83,7 +83,7 @@ enum StateDirectoryLabel {
 }
 
 /// The label of a state directory no installed application expects.
-const CUSTOM_STATE_DIRECTORY_LABEL: &str = "custom";
+pub const CUSTOM_STATE_DIRECTORY_LABEL: &str = "custom";
 /// Where the sandbox maps Application Support, written from `~`.
 const APPLICATION_SUPPORT_LABEL_ROOT: &str = "~/Library/Application Support";
 /// Where macOS keeps every app group container, written from `~`.

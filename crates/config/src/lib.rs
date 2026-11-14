@@ -25,7 +25,9 @@ mod neural_engine_program_cache;
 mod prompt_cache_config;
 mod resolved_model_config;
 
-pub use astronomical_runtime_instance::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+pub use astronomical_runtime_instance::{
+    AstronomicalInstancePaths, AstronomicalRuntimeInstance, CUSTOM_STATE_DIRECTORY_LABEL,
+};
 pub use chunking_config::{
     ChunkingConfig, ConfiguredChunkingFields,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
