@@ -34,6 +34,9 @@ mod app_bundle_link_tests;
 #[path = "app_bundle_tests.rs"]
 mod app_bundle_tests;
 #[cfg(test)]
+#[path = "app_export_declaration_tests.rs"]
+mod app_export_declaration_tests;
+#[cfg(test)]
 #[path = "app_login_launch_check_tests.rs"]
 mod app_login_launch_check_tests;
 #[cfg(test)]

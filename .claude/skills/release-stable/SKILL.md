@@ -196,6 +196,8 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 
 The store version is the same product built as a sandboxed channel. Do this stage after section 7 succeeds, from the release tag, so both channels carry one version number. It never changes the direct release.
 
+Read the `mac-app-store` skill (`.claude/skills/mac-app-store/SKILL.md`) before the first step. It holds the detail behind each step here: the decisions already made for the app record, how to run and try the sandboxed build on screen, what Apple's validation has said before, and how to work on the App Store Connect pages.
+
 Three steps need the user's word each time, and nothing else in this stage does: uploading a build, submitting for review, and releasing to the public. Ask in the chat; approval for a direct release does not cover them.
 
 Store credentials, besides the map above:
@@ -206,8 +208,8 @@ Store credentials, besides the map above:
 
 Steps:
 
-1. Build the store bundle from the clean release tag: `cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"`. The bundle check refuses a bundle with an unsandboxed executable, a terminal command, a missing privacy manifest, or missing entitlements.
-2. Prove it runs sandboxed. Stop the installed Stable app first (check it is idle; the two share a port), copy the bundle into the Applications folder under another name, and run `cargo xtask app smoke-test --app-bundle "/Applications/<that name>.app"`. From a build folder a sandboxed agent cannot reach its engine, so the smoke test must run on the Applications copy. Move the copy to the Trash and reopen Stable afterwards.
+1. Build the store bundle from the clean release tag: `cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"`. The bundle check refuses a bundle with an unsandboxed executable, a terminal command, a missing privacy manifest, missing entitlements, or a missing export declaration.
+2. Prove it runs sandboxed. Stop the installed Stable app first (check it is idle; the two share a port), copy the bundle into the Applications folder under another name, and run `cargo xtask app smoke-test --app-bundle "/Applications/<that name>.app"`. From a build folder a sandboxed agent cannot reach its engine, so the smoke test must run on the Applications copy. Then try each promise of the listing on screen, following the table in the `mac-app-store` skill; the smoke test does not open a file dialog. Move the copy to the Trash and reopen Stable afterwards.
 3. Package it: `cargo xtask release app-store-pkg --app-bundle PATH --installer-identity "$INSTALLER_IDENTITY"`.
 4. Ask Apple to validate it: `cargo xtask release app-store-upload --package PATH --api-key KEY_ID --api-issuer ISSUER_ID`. Validation sends nothing permanent. Fix every error it reports before going on. One warning is expected until provisioning profiles exist: 90889, which only concerns TestFlight.
 5. **Ask the user, then upload:** the same command with `--upload`. An uploaded build cannot be withdrawn, and a build number can be used once per version. Processing takes roughly ten to thirty minutes before the build can be selected.

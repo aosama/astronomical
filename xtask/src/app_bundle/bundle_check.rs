@@ -20,6 +20,7 @@ use super::channel_profile::{
     AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, DAEMON_EXECUTABLE_NAME,
     SandboxPolicy, TERMINAL_COMMAND_EXECUTABLE_NAME, WORKER_EXECUTABLE_NAME,
 };
+use super::info_plist::EXPORT_DECLARATION_KEY;
 use super::tool_command::run_quiet_tool;
 
 const REQUIRED_RESOURCE_NAMES: [&str; 4] = [
@@ -437,7 +438,27 @@ pub(crate) fn plist_identity_problems(
         ));
     }
     sparkle_key_problems(plist_document, channel_profile, &mut identity_problems);
+    export_declaration_problems(plist_document, channel_profile, &mut identity_problems);
     identity_problems
+}
+
+/// A store bundle must carry the export-compliance answer, or App Store
+/// Connect holds every upload until someone answers its questions by hand.
+/// A value other than `false` would be a different declaration from the one
+/// the account holder made, so it is refused too.
+fn export_declaration_problems(
+    plist_document: &serde_json::Value,
+    channel_profile: &ChannelProfile,
+    identity_problems: &mut Vec<String>,
+) {
+    if channel_profile.sandbox_policy != SandboxPolicy::AppStoreSandbox {
+        return;
+    }
+    if plist_document[EXPORT_DECLARATION_KEY].as_bool() != Some(false) {
+        identity_problems.push(format!(
+            "an App Store bundle must declare {EXPORT_DECLARATION_KEY} as false"
+        ));
+    }
 }
 
 fn sparkle_key_problems(
