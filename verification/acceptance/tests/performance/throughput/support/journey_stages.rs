@@ -42,8 +42,6 @@ pub(super) fn apply_journey_overrides(
     worker_startup_configuration.decode_expert_cache_policy = journey.decode_expert_cache_policy;
     worker_startup_configuration.diagnostic_qwen3_5_engine_override =
         journey.diagnostic_qwen3_5_engine_override;
-    worker_startup_configuration.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes =
-        journey.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes;
 }
 
 /// A budget-exhausted completion wrote no performance-log sample, so its

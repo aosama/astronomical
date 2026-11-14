@@ -27,6 +27,10 @@ pub struct Qwen3_5ResidentModel {
     /// on the GPU.
     pub(crate) neural_engine_mlp_prefill:
         Option<crate::qwen3_5_resident::neural_engine_mlp_prefill::NeuralEngineMlpPrefill>,
+    /// The owner of this model's memory ledger, opened once the model has
+    /// loaded and its working memory has been measured.
+    pub(crate) memory_governor:
+        std::cell::RefCell<Option<astronomical_memory_policy::ledger::MemoryGovernor>>,
 }
 
 impl std::ops::Deref for Qwen3_5ResidentModel {
@@ -49,6 +53,34 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qw
 
     fn held_model_core_payload_bytes(&self) -> u64 {
         self.base.resident_model_payload_byte_count()
+    }
+
+    fn governed_ram_budget_snapshot(&self) -> Option<crate::memory::MlxRamBudgetSnapshot> {
+        let memory_governor = self.memory_governor.borrow();
+        let accounts = memory_governor.as_ref()?.accounts();
+        // The ledger counts every weight as fixed; the breakdown shows the
+        // experts apart from the rest of the model.
+        let held_expert_payload_bytes = self.held_expert_payload_bytes();
+        let mut budget_snapshot =
+            crate::memory::MlxRamBudgetSnapshot::from_ledger_accounts(&accounts);
+        budget_snapshot.model_core_payload_bytes = budget_snapshot
+            .model_core_payload_bytes
+            .saturating_sub(held_expert_payload_bytes);
+        budget_snapshot.retained_expert_budget_bytes = held_expert_payload_bytes;
+        Some(budget_snapshot)
+    }
+}
+
+impl Qwen3_5ResidentModel {
+    /// The memory governor's view after the last measured forward, with its
+    /// accounts compared against what MLX reported; `None` before the first.
+    pub(crate) fn latest_memory_ledger_reading(
+        &self,
+    ) -> Option<astronomical_memory_policy::ledger::LedgerReading> {
+        self.memory_governor
+            .borrow()
+            .as_ref()
+            .and_then(astronomical_memory_policy::ledger::MemoryGovernor::latest_reading)
     }
 }
 

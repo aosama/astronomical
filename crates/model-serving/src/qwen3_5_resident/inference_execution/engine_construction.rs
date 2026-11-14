@@ -7,8 +7,8 @@ use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::persistent_cache::counters::PersistentPromptCacheCounters;
 use crate::{
-    AdaptiveRamGrowthGuard, InferenceEngineError, MlxInferenceEngine, PerformanceAttribution,
-    PerformanceAttributionLog, PersistentPromptCacheDiskStoreConfig,
+    InferenceEngineError, MlxInferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
+    PersistentPromptCacheDiskStoreConfig,
 };
 
 use super::super::ValidatedQwen3_5Artifact;
@@ -17,15 +17,6 @@ use super::Qwen3_5ResidentEngine;
 use super::Qwen3_5ResidentPromptProcessingChunkSizer;
 use super::engine_error_helpers::fatal_engine_error;
 use super::engine_error_helpers::qwen3_5_runtime_error;
-
-/// Wraps one adaptive-RAM-growth configuration failure as a fatal engine error.
-fn adaptive_ram_growth_configuration_error(
-    adaptive_ram_growth_guard_error: impl std::fmt::Display,
-) -> InferenceEngineError {
-    super::fatal_engine_error(format!(
-        "failed to configure adaptive RAM growth: {adaptive_ram_growth_guard_error}"
-    ))
-}
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     /// Starts the owner thread with an explicit `prefill_chunk_tokens` sizer.
@@ -52,7 +43,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             think_end_token_id,
             model_directory,
             chunking,
-            true,
             PerformanceAttribution::disabled(),
             PerformanceAttributionLog::disabled(),
         )
@@ -68,7 +58,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         think_end_token_id: u32,
         model_directory: PathBuf,
         chunking: WorkerChunkingConfiguration,
-        adaptive_ram_growth_guard_enabled: bool,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5ResidentEngine, InferenceEngineError> {
@@ -83,10 +72,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             model_directory,
             maximum_context_tokens,
             chunking,
-            adaptive_ram_growth_guard_enabled,
             model_loading_performance_attribution,
             performance_attribution_log,
-            None,
             None,
         )
     }
@@ -103,10 +90,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_directory: PathBuf,
         maximum_context_tokens: u32,
         chunking: WorkerChunkingConfiguration,
-        adaptive_ram_growth_guard_enabled: bool,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
-        diagnostic_prefill_activation_floor_bytes: Option<u64>,
         neural_engine_program_cache_directory: Option<PathBuf>,
     ) -> Result<Qwen3_5ResidentEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
@@ -134,13 +119,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             allocator_cache_memory_limit_bytes,
         )
         .map_err(qwen3_5_runtime_error)?;
-        let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(active_memory_limit_bytes)
-            .map_err(adaptive_ram_growth_configuration_error)?;
         MlxInferenceEngine::new(move || Qwen3_5InferenceExecution {
             active_request: None,
-            adaptive_ram_growth_guard,
-            adaptive_ram_growth_guard_enabled,
-            diagnostic_prefill_activation_floor_bytes,
             persistent_prompt_cache_disk_store_config,
             persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
             context_memory_reservation_bytes_per_token,

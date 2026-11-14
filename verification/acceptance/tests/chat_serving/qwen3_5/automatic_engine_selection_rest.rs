@@ -3,8 +3,8 @@
 use std::{fs, path::Path, time::Duration};
 
 use astronomical_model_serving::{
-    CompleteResidencyHeadroomBoundary, MemoryPhase, MlxRamBudget, MlxRamBudgetModelGeometry,
-    Qwen3_5ArtifactValidator, mlx_ram_budget_model_geometry_from_validated_artifact,
+    CompleteResidencyHeadroomBoundary, MlxRamBudgetModelGeometry, Qwen3_5ArtifactValidator,
+    mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -51,32 +51,12 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
         );
         let prompt_context_bytes =
             context_memory_reservation_bytes(&model_directory, SMALL_PROMPT_TOKEN_COUNT + 2);
-        // The ceiling must also purchase the request-time prefill activation
-        // workspace. Startup residency admission charges only the coexisting
-        // transient inside `complete_residency_with_headroom_bytes`, while
-        // every request's context admission additionally reserves the chunk's
-        // activation working set on top of the seated snapshot (issue #1297:
-        // 2048-token chunks transiently hold 2.0-2.27 GB a zero-workspace
-        // projection never sees, and a resident request near the ceiling is
-        // deliberately demoted to streaming instead of executing fatally).
-        // A ceiling without this term selects resident at startup and then
-        // invisible-retries into streaming on the very first request. The
-        // term is computed through the same bootstrap RAM budget the fresh
-        // worker plans with, so the journey cannot drift from the policy
-        // again (issue #1508). The equality holds because the first request
-        // meets an evidence-free budget — the resident engine runs no load
-        // warmup, so the static three-layer floor governs; a future warmup
-        // forward would make the worker's learned charge the max() and this
-        // journey would fail loud here.
-        let bootstrap_ram_budget = MlxRamBudget::new(
-            residency_geometry.complete_residency_with_headroom_bytes,
-            residency_geometry.model_geometry,
-        )
-        .expect("the resident artifact geometry should compose a bootstrap RAM budget");
-        let prefill_activation_workspace_bytes = bootstrap_ram_budget.activation_headroom_bytes(
-            MemoryPhase::Prefill,
-            u64::from(FIXED_PREFILL_CHUNK_SIZE_TOKENS),
-        );
+        // The ceiling has to hold one prompt chunk's working memory on top
+        // of the startup residency terms, or the in-memory engine is chosen
+        // at startup and then moves the first request to the streaming
+        // engine (issue #1508).
+        let prefill_activation_workspace_bytes =
+            prompt_chunk_working_memory_allowance_bytes(&residency_geometry.model_geometry);
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
             .saturating_add(prompt_context_bytes)
@@ -146,22 +126,16 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
             MULTI_CHUNK_PROMPT_TOKEN_COUNT,
         );
         // The ceiling purchases complete residency, the multi-chunk context,
-        // and the analytic three-layer prefill activation floor of one
-        // configured chunk, so the second request fits by construction.
-        let bootstrap_ram_budget = MlxRamBudget::new(
-            residency_geometry.complete_residency_with_headroom_bytes,
-            residency_geometry.model_geometry,
-        )
-        .expect("the resident artifact geometry should compose a bootstrap RAM budget");
+        // and an allowance for one prompt chunk's working memory, so the
+        // second request fits.
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
             .saturating_add(context_memory_reservation_bytes(
                 &model_directory,
                 MULTI_CHUNK_PROMPT_TOKEN_COUNT + 2,
             ))
-            .saturating_add(bootstrap_ram_budget.activation_headroom_bytes(
-                MemoryPhase::Prefill,
-                u64::from(FIXED_PREFILL_CHUNK_SIZE_TOKENS),
+            .saturating_add(prompt_chunk_working_memory_allowance_bytes(
+                &residency_geometry.model_geometry,
             ));
         assert!(
             resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
@@ -227,18 +201,6 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
         assert_eq!(
             streaming_retry_report_count, 0,
             "no request may retry on the streaming engine when the resident engine fits it"
-        );
-        // Without this, a regression back to token-ratio upscaling could stay
-        // green by reserving a phantom activation span the chunk never uses.
-        let multi_chunk_report = generation_reports
-            .last()
-            .expect("the multi-chunk request should have the latest generation report");
-        assert!(
-            attribution_counter(
-                multi_chunk_report,
-                "admission_reserve_beyond_observed_token_span_source_count"
-            ) > 0,
-            "the first 2,048-token chunk must reserve from the evidence beyond the observed token span"
         );
     })
     .await
@@ -320,9 +282,16 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
             measure_sparse_artifact_residency_geometry(&model_directory);
         let cache_seed_context_bytes =
             context_memory_reservation_bytes(&model_directory, CACHE_SEED_PROMPT_TOKEN_COUNT + 2);
+        // The seed request has to be served in memory, so the limit holds
+        // one prompt chunk's working memory too. Without it the seed request
+        // itself moves to the streaming engine and nothing is cached for
+        // the retry to restore.
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
-            .saturating_add(cache_seed_context_bytes);
+            .saturating_add(cache_seed_context_bytes)
+            .saturating_add(prompt_chunk_working_memory_allowance_bytes(
+                &residency_geometry.model_geometry,
+            ));
         assert!(
             resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
             "the retry/cache acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
@@ -617,4 +586,16 @@ fn attribution_counter(report: &Value, counter_identifier: &str) -> u64 {
         .find(|counter| counter["counter"] == counter_identifier)
         .and_then(|counter| counter["amount"].as_u64())
         .unwrap_or(0)
+}
+
+/// Room these journeys leave for one prompt chunk's working memory when
+/// they pick a limit the in-memory engine should serve under. The engine
+/// measures the real figure at load; three times the largest expert layer
+/// has been ample for the models these journeys load.
+pub(super) const fn prompt_chunk_working_memory_allowance_bytes(
+    model_geometry: &MlxRamBudgetModelGeometry,
+) -> u64 {
+    model_geometry
+        .largest_complete_expert_layer_bytes
+        .saturating_mul(3)
 }

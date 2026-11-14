@@ -63,6 +63,31 @@ impl LedgerAccounts {
             .saturating_add(self.margin_bytes)
     }
 
+    /// How far what stays in memory after a step exceeds the limit: the
+    /// fixed weights, the stored state, leases and the margin, without the
+    /// step's working memory. Above zero, no smaller step would fit either.
+    #[must_use]
+    pub const fn stable_shortfall_bytes(&self) -> u64 {
+        self.core_weight_bytes
+            .saturating_add(self.context_bytes)
+            .saturating_add(self.lease_bytes)
+            .saturating_add(self.margin_bytes)
+            .saturating_sub(self.limit_bytes)
+    }
+
+    /// Everything the accounts set aside apart from kept weights: the
+    /// fixed weights, the stored state, one step's working memory, the
+    /// slots, leases and the margin.
+    #[must_use]
+    pub const fn set_aside_bytes(&self) -> u64 {
+        self.core_weight_bytes
+            .saturating_add(self.context_bytes)
+            .saturating_add(self.working_memory_bytes)
+            .saturating_add(self.stream_slot_bytes)
+            .saturating_add(self.lease_bytes)
+            .saturating_add(self.margin_bytes)
+    }
+
     /// Whether every streamable weight fits beside the needs, so nothing has
     /// to be read from storage.
     #[must_use]
@@ -112,6 +137,9 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
     if room_without_slots_bytes >= model_shape.streamable_weight_bytes {
         accounts.kept_weight_capacity_bytes = model_shape.streamable_weight_bytes;
         accounts.unassigned_bytes = room_without_slots_bytes - model_shape.streamable_weight_bytes;
+        // A model with nothing to stream reaches here even when its needs
+        // are over the limit, and that is the one thing its engine asks.
+        accounts.shortfall_bytes = needed_without_slots_bytes.saturating_sub(accounts.limit_bytes);
         return accounts;
     }
     accounts.stream_slot_bytes = stream_slot_bytes;

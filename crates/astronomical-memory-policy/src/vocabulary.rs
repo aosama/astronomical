@@ -21,19 +21,3 @@ pub enum MemoryBoundary {
     /// A requested live ceiling cannot preserve non-evictable ownership.
     LiveCeilingMinimum,
 }
-
-/// Common request admission result consumed by execution owners.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MemoryAdmissionDecision {
-    /// The operation may proceed without changing expert ownership.
-    Admit,
-    /// Paged experts must release at least the stated number of bytes.
-    Reclaim { required_bytes: u64 },
-    /// Complete experts are indivisible; execution must demote and reassess.
-    DemoteCompleteResidency { reassess_after_demotion: bool },
-    /// No legal expert transition can satisfy the named boundary.
-    Reject {
-        boundary: MemoryBoundary,
-        shortfall_bytes: u64,
-    },
-}

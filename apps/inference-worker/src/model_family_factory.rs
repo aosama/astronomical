@@ -54,7 +54,6 @@ pub struct ModelFamilyFactory {
     performance_attribution_log_path: PathBuf,
     persistent_prompt_cache_enabled: bool,
     diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
-    diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
     /// The highest ceiling an image engine may plan its load at to reach its
     /// floor (#1902): the user's own limit, or unbounded when they set none.
     /// Startup sets it and live limit changes update it; zero until then,
@@ -115,7 +114,6 @@ impl ModelFamilyFactory {
             performance_attribution_log_path,
             persistent_prompt_cache_enabled,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
-            diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
             floor_raise_limit_bytes: 0,
         }
     }
@@ -135,19 +133,6 @@ impl ModelFamilyFactory {
         diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     ) -> Self {
         self.diagnostic_qwen3_5_engine_override = diagnostic_qwen3_5_engine_override;
-        self
-    }
-
-    /// Replaces the resident Qwen3.5 static prefill activation floor for
-    /// controlled diagnostic journeys.
-    #[doc(hidden)]
-    #[must_use]
-    pub fn with_diagnostic_qwen3_5_resident_prefill_activation_floor_bytes(
-        mut self,
-        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
-    ) -> Self {
-        self.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes =
-            diagnostic_qwen3_5_resident_prefill_activation_floor_bytes;
         self
     }
 
@@ -215,8 +200,6 @@ impl ModelFamilyFactory {
         let decode_expert_cache_policy = self.decode_expert_cache_policy;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
-        let diagnostic_resident_prefill_activation_floor_bytes =
-            self.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes;
         tokio::task::spawn_blocking(move || {
             let chunking = model_configuration.chunking.clone();
             qwen3_5_model_startup::initialize_qwen3_5_model(
@@ -234,7 +217,6 @@ impl ModelFamilyFactory {
                 performance_attribution_log_path,
                 chunking,
                 engine_selection,
-                diagnostic_resident_prefill_activation_floor_bytes,
             )
             .map_err(|startup_error| startup_error.public_model_load_failure_reason())
         })

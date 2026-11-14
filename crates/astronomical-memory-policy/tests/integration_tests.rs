@@ -4,7 +4,7 @@
 //! guarantees nothing in this crate can reach the network or the MLX
 //! bindings, so these tests run anywhere the integration lane runs).
 
-use astronomical_memory_policy::budget::adaptive_growth::AdaptiveRamGrowthGuard;
+use astronomical_memory_policy::ledger::{MemoryGovernor, ModelMemoryShape};
 use astronomical_memory_policy::phase::MemoryPhase;
 use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
 
@@ -19,5 +19,13 @@ fn should_run_the_memory_policy_integration_smoke_contract() {
         51_539_607_552
     );
     assert_eq!(MemoryPhase::Prefill, MemoryPhase::Prefill);
-    let _ = AdaptiveRamGrowthGuard::new(1_000).expect("a positive limit should create a guard");
+    let everything_streamable = ModelMemoryShape {
+        core_weight_bytes: 0,
+        streamable_weight_bytes: 4_000,
+        reading_prompt_stream_slot_bytes: 0,
+        writing_reply_stream_slot_bytes: 0,
+    };
+    let memory_governor =
+        MemoryGovernor::new(1_000, everything_streamable).expect("a positive limit opens");
+    assert!(memory_governor.kept_weight_capacity().bytes() <= 1_000);
 }

@@ -4,7 +4,7 @@
 //!
 //! 1. Choose a deterministic fixed chunk from resolved configuration.
 //! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
-//! 3. Execute exactly that chunk under adaptive memory admission.
+//! 3. Ask the memory governor whether that chunk fits, then execute exactly it.
 //! 4. Publish required prompt-cache state before advancing the in-memory cursor.
 //! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
@@ -43,7 +43,7 @@ use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
-use crate::qwen3_5_resident::model::memory_admission;
+use crate::qwen3_5_resident::model::request_errors;
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_prompt_prefill_if_pending(
         &mut self,
@@ -103,13 +103,9 @@ impl Qwen3_5EngineState {
             prefill_start,
             prefill_end,
         )?;
-        self.record_completed_forward_memory(
+        self.report_completed_prompt_chunk(
             active_request,
-            prompt_prefill_chunk_outcome.adaptive_ram_growth_context,
-            prompt_prefill_chunk_outcome.active_memory_bytes_before_growth,
-            prompt_prefill_chunk_outcome.retained_expert_payload_bytes_before_growth,
-            prompt_prefill_chunk_outcome.exact_temporary_workspace_bytes,
-            prompt_prefill_chunk_outcome.streamed_expert_page_bytes_before_growth,
+            prompt_prefill_chunk_outcome.admitted_forward,
         )?;
         Ok(Some(self.prefill_progress_token(
             active_request,
@@ -188,7 +184,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(engine_lost_loaded_model_error)?;
         match prompt_prefill_chunk_attempt_error {
             PromptPrefillChunkAttemptError::Engine(generation_error) => Err(generation_error),
-            PromptPrefillChunkAttemptError::AdaptiveForwardAdmissionRejected {
+            PromptPrefillChunkAttemptError::ForwardAdmissionRejected {
                 rejection:
                     ResidentForwardAdmissionRejection::RequireStreamingEngine {
                         cause: prefill_admission_cause,
@@ -251,7 +247,7 @@ impl Qwen3_5EngineState {
                     reason = %reason,
                     "prefill admission rejected the transient peak of the configured resident chunk"
                 );
-                Err(memory_admission::resident_capacity_error(
+                Err(request_errors::resident_capacity_error(
                     model,
                     prefill_admission_cause,
                     super::prefill_terminal_failure_descriptions::transient_peak_shortfall_failure_description(
@@ -270,7 +266,7 @@ impl Qwen3_5EngineState {
                     reason = %reason,
                     "prefill admission rejected the stable footprint of the attempted chunk"
                 );
-                Err(memory_admission::resident_capacity_error(
+                Err(request_errors::resident_capacity_error(
                     model,
                     prefill_admission_cause,
                     super::prefill_terminal_failure_descriptions::stable_footprint_shortfall_failure_description(
@@ -294,7 +290,7 @@ impl Qwen3_5EngineState {
                     reason = %reason,
                     "prefill admission rejected the request context or a runtime allocation"
                 );
-                Err(memory_admission::resident_capacity_error(
+                Err(request_errors::resident_capacity_error(
                     model,
                     prefill_admission_cause,
                     super::prefill_terminal_failure_descriptions::request_context_or_allocation_shortfall_failure_description(
@@ -328,7 +324,7 @@ impl Qwen3_5EngineState {
             allowed_active_memory_bytes,
             "prefill chunk forward exceeded the MLX active-memory limit"
         );
-        memory_admission::resident_capacity_error(
+        request_errors::resident_capacity_error(
             model,
             StreamingEngineRequirement::ForwardAllocationShortfall {
                 shortfall_bytes: super::prefill_terminal_failure_descriptions::active_memory_limit_shortfall_bytes(
@@ -363,7 +359,7 @@ impl Qwen3_5EngineState {
             reason = %reason,
             "prefill chunk forward exhausted graphics-processor memory"
         );
-        memory_admission::resident_capacity_error(
+        request_errors::resident_capacity_error(
             model,
             StreamingEngineRequirement::ForwardGraphicsProcessorMemoryExhausted,
             super::prefill_terminal_failure_descriptions::graphics_processor_memory_exhausted_failure_description(
@@ -417,10 +413,6 @@ impl Qwen3_5EngineState {
         // their previous parent, allowing restart to reproduce valid state.
         active_request.advance_position(prefill_token_count)?;
         active_request.prefill_cursor = prefill_end;
-        model.learn_context_state_payload(
-            active_request.next_position_tokens,
-            &active_request.request_decoder_state,
-        );
         Ok(())
     }
 
@@ -488,41 +480,22 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
-    /// Records one completed forward's memory evidence for adaptive RAM
-    /// growth. Every completed forward is valid model-local transient
-    /// evidence: cache boundaries and terminal tails deliberately produce
-    /// smaller chunks; discarding them would let a long request complete real
-    /// prefill work without ever teaching admission about its workspace.
-    /// Mirrors the inlined collection call.
-    #[allow(clippy::too_many_arguments)]
-    fn record_completed_forward_memory(
+    /// Tells the memory governor what the chunk needed. Every completed
+    /// chunk counts, the short ones at cache boundaries and prompt tails
+    /// included, since the governor keeps the largest figure per chunk size.
+    fn report_completed_prompt_chunk(
         &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
-        adaptive_ram_growth_context: crate::AdaptiveRamGrowthContext,
-        active_memory_bytes_before_growth: usize,
-        retained_expert_payload_bytes_before_growth: u64,
-        exact_temporary_workspace_bytes: usize,
-        streamed_expert_page_bytes_before_growth: u64,
+        active_request: &Qwen3_5EngineRequest,
+        admitted_forward: super::forward_memory::AdmittedForward,
     ) -> Result<(), InferenceEngineError> {
         let model = self
             .model
             .as_ref()
             .ok_or_else(engine_lost_loaded_model_error)?;
-        // Every completed forward is valid model-local transient evidence. Cache
-        // boundaries and terminal tails deliberately produce smaller chunks; if
-        // they are discarded, a long OpenCode request can complete real prefill
-        // work without ever teaching subsequent admission about its workspace.
-        let should_retain_adaptive_ram_growth_observation = true;
-        completed_forward_memory::collect_completed_forward_memory_snapshot(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context,
-            should_retain_adaptive_ram_growth_observation,
+        super::forward_memory::report_completed_forward(
             model,
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            exact_temporary_workspace_bytes,
-            streamed_expert_page_bytes_before_growth,
-            &mut active_request.performance_attribution,
+            admitted_forward,
+            active_request.request_decoder_state.payload_byte_count(),
         )?;
         Ok(())
     }
@@ -563,7 +536,6 @@ impl Qwen3_5EngineState {
             Some(mlx_memory_snapshot) => Some(prefill_mlx_memory_telemetry_from_snapshot(
                 model,
                 active_request,
-                prefill_token_count,
                 mlx_memory_snapshot,
             )?),
             None => None,
@@ -601,7 +573,6 @@ impl Qwen3_5EngineState {
 fn prefill_mlx_memory_telemetry_from_snapshot(
     model: &Qwen3_5ResidentModel,
     active_request: &Qwen3_5EngineRequest,
-    prefill_token_count: usize,
     mlx_memory_snapshot: MlxMemorySnapshot,
 ) -> Result<crate::memory::telemetry::MlxMemoryTelemetry, InferenceEngineError> {
     let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
@@ -617,9 +588,6 @@ fn prefill_mlx_memory_telemetry_from_snapshot(
             .map_err(mlx_allocator_cache_memory_bytes_exceed_u64_range_error)?;
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
         .map_err(mlx_peak_memory_bytes_exceed_u64_range_error)?;
-    let prompt_token_count =
-        u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
-    let chunk_token_count = u64::try_from(prefill_token_count).unwrap_or(u64::MAX);
     Ok(crate::memory::telemetry::MlxMemoryTelemetry::new(
         active_memory_bytes,
         allocator_cache_memory_bytes,
@@ -633,15 +601,10 @@ fn prefill_mlx_memory_telemetry_from_snapshot(
         model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
     )
     // Issue #510: the prefill progress sample carries the same
-    // utilization split, planned against the full prompt so the
-    // context reserve reflects the request the user submitted.
-    // The activation reserve is operation-scoped (issue #644):
-    // it plans this chunk's own workspace, not the prompt.
-    .with_memory_ceiling_utilization(model.memory_ceiling_utilization_for_breakdown(
-        crate::MemoryPhase::Prefill,
-        prompt_token_count,
-        chunk_token_count,
-        active_memory_bytes,
-        active_memory_breakdown,
-    )))
+    // utilization split, composed from the memory governor's accounts.
+    .with_memory_ceiling_utilization(
+        model
+            .memory_ceiling_utilization_for_breakdown(active_memory_bytes, active_memory_breakdown),
+    )
+    .with_memory_ledger_reading(model.latest_memory_ledger_reading()))
 }

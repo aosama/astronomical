@@ -1,12 +1,10 @@
-use crate::budget::adaptive_growth::AdaptiveRamGrowthExecutionProfile;
 use crate::phase::MemoryPhase;
-use crate::recovery::{ForwardRecoveryDecision, ForwardRecoveryRequirements};
 use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
     CurrentExpertLayerResidency, ExpertLayerState, RetainedExpertPageClass,
     decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,
-    plan_expert_residency, retained_resident_ceiling_after_budget_refresh,
-    should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
+    plan_expert_residency, should_commit_mandatory_complete_layer,
+    should_commit_mandatory_routed_page,
 };
 
 fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
@@ -163,69 +161,6 @@ fn should_evict_coldest_complete_layers_until_the_recomputed_floor_fits() {
         decode_warm_floor_eviction_indexes(&layer_residencies, 45, 10, 2, 5),
         vec![3]
     );
-}
-
-#[test]
-fn should_authorize_one_same_chunk_retry_for_paged_execution_after_reclamation() {
-    let resident_retry = ForwardRecoveryRequirements {
-        stable_active_memory_bytes: 900,
-        active_memory_bytes_at_failure: 950,
-        attempted_allocation_bytes: 100,
-        observed_transient_high_water_bytes: 25,
-        retained_expert_payload_bytes_before_reclamation: 200,
-        retained_expert_payload_bytes_after_reclamation: 100,
-        active_memory_ceiling_bytes: 1_000,
-        has_already_retried_after_reclamation: false,
-        execution_profile: AdaptiveRamGrowthExecutionProfile::Resident,
-    };
-    let paged_retry = ForwardRecoveryRequirements {
-        execution_profile: AdaptiveRamGrowthExecutionProfile::Paged,
-        ..resident_retry
-    };
-
-    assert!(matches!(
-        resident_retry.decide(),
-        ForwardRecoveryDecision::Retry { .. }
-    ));
-    assert!(matches!(
-        paged_retry.decide(),
-        ForwardRecoveryDecision::Retry { .. }
-    ));
-    // The retry is bounded exactly as it is for resident execution: a second
-    // capacity failure on the retried chunk must not loop.
-    let paged_second_retry = ForwardRecoveryRequirements {
-        has_already_retried_after_reclamation: true,
-        ..paged_retry
-    };
-    assert!(matches!(
-        paged_second_retry.decide(),
-        ForwardRecoveryDecision::Reject { .. }
-    ));
-}
-
-#[test]
-fn should_keep_all_resident_expert_pages_when_learned_budget_tightens_between_requests() {
-    let resident_complete_and_warm_table_payload_bytes = 100;
-    let tighter_leftover_expert_budget_bytes = 80;
-    let richer_leftover_expert_budget_bytes = 120;
-    assert_eq!(
-        retained_resident_ceiling_after_budget_refresh(
-            tighter_leftover_expert_budget_bytes,
-            resident_complete_and_warm_table_payload_bytes,
-        ),
-        resident_complete_and_warm_table_payload_bytes,
-        "learned context-reserve growth must not evict warm tables a previous \
-         request already paid to read (issue #955)"
-    );
-    assert_eq!(
-        retained_resident_ceiling_after_budget_refresh(
-            richer_leftover_expert_budget_bytes,
-            resident_complete_and_warm_table_payload_bytes,
-        ),
-        richer_leftover_expert_budget_bytes,
-        "a richer leftover budget must still admit additional expert pages"
-    );
-    assert_eq!(retained_resident_ceiling_after_budget_refresh(0, 0), 0);
 }
 
 #[test]

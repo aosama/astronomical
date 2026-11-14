@@ -23,6 +23,7 @@
 //! on marked lines rather than writing files, so an answer can never come from an
 //! earlier run.
 
+use super::in_memory_ledger_reconciliation::assert_the_in_memory_ledger_matches_mlx;
 use std::{path::Path, process::Stdio, time::Duration};
 
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
@@ -587,6 +588,7 @@ async fn should_record_the_resident_answer_for_the_parity_journeys() {
             )
         );
     }
+    assert_the_in_memory_ledger_matches_mlx(&qwen3_5_engine).await;
 }
 
 #[tokio::test]

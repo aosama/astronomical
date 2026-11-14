@@ -75,6 +75,30 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         })
     }
 
+    /// The memory governor's view after the last measured forward, with its
+    /// accounts compared against what MLX reported.
+    #[doc(hidden)]
+    pub async fn memory_ledger_reading_for_tests(
+        &self,
+    ) -> Result<Option<astronomical_memory_policy::ledger::LedgerReading>, InferenceEngineError>
+    {
+        let (ledger_reading_sender, ledger_reading_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let latest_ledger_reading = qwen_inference_execution
+                .model
+                .as_ref()
+                .ok_or_else(|| fatal_engine_error("no model is loaded to read the ledger of"))?
+                .latest_memory_ledger_reading();
+            ledger_reading_sender
+                .send(latest_ledger_reading)
+                .map_err(|_| fatal_engine_error("ledger reading receiver stopped unexpectedly"))
+        })
+        .await?;
+        ledger_reading_receiver
+            .recv()
+            .map_err(|_| fatal_engine_error("ledger reading owner operation returned no response"))
+    }
+
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.
     #[doc(hidden)]
     pub async fn expert_weight_memory_cache_statistics_for_tests(
@@ -136,18 +160,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         prompt_work_reuse_receiver.recv().map_err(|_| {
             fatal_engine_error("prompt work reuse owner operation returned no response")
         })
-    }
-
-    /// Disables adaptive growth guarding and its memory sampling for benchmarks.
-    #[doc(hidden)]
-    pub async fn disable_adaptive_ram_growth_memory_guard_for_tests(
-        &self,
-    ) -> Result<(), InferenceEngineError> {
-        self.run_owner_test_operation(|qwen_inference_execution| {
-            qwen_inference_execution.adaptive_ram_growth_guard_enabled = false;
-            Ok(())
-        })
-        .await
     }
 
     /// Resets the process-global MLX peak counter on the engine owner thread.

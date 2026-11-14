@@ -1,40 +1,7 @@
 use astronomical_model_serving::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, MlxAllocationAdmission,
-    retained_expert_payload_capacity_bytes, safe_minimum_mlx_memory_ceiling_bytes,
+    safe_minimum_mlx_memory_ceiling_bytes,
 };
-
-#[test]
-fn should_size_expert_retention_against_the_configured_mlx_ceiling() {
-    assert_eq!(
-        retained_expert_payload_capacity_bytes(
-            33_000_000_000,
-            40_200_896_512,
-            1_000_000_000,
-            1_000_000_000,
-            0,
-            0,
-            0,
-        ),
-        6_200_896_512,
-    );
-}
-
-#[test]
-fn should_count_an_incoming_complete_layer_once_while_reserving_a_future_page() {
-    let incoming_layer_bytes = 855_638_016;
-    let current_retained_bytes = 27_380_416_512;
-    let retained_capacity_bytes = retained_expert_payload_capacity_bytes(
-        29_982_882_054,
-        32_212_254_720,
-        26_738_688,
-        26_738_688,
-        0,
-        current_retained_bytes,
-        incoming_layer_bytes,
-    );
-
-    assert!(retained_capacity_bytes >= current_retained_bytes + incoming_layer_bytes);
-}
 
 #[test]
 fn should_recommend_cache_cleanup_when_active_allocation_fits_but_total_memory_does_not() {
@@ -42,17 +9,6 @@ fn should_recommend_cache_cleanup_when_active_allocation_fits_but_total_memory_d
         AllocationAdmissionObservation::new(9_000, 1_000, 500, 9_500).decide(),
         AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit,
     );
-}
-
-#[test]
-fn should_reduce_retention_capacity_by_observed_transient_headroom() {
-    let without_transient =
-        retained_expert_payload_capacity_bytes(4_000, 10_000, 1_500, 1_500, 0, 2_000, 0);
-    let with_transient =
-        retained_expert_payload_capacity_bytes(4_000, 10_000, 1_500, 1_500, 2_000, 2_000, 0);
-
-    assert_eq!(without_transient, 6_500);
-    assert_eq!(with_transient, 4_500);
 }
 
 #[test]

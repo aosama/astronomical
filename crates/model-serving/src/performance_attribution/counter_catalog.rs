@@ -110,16 +110,6 @@ pub enum PerformanceCounter {
     PreviousTokenPrefetchByteCount,
     /// Previous-token experts dropped because leftover slots were full (#537).
     PreviousTokenPrefetchCapacityDropCount,
-    /// Admission decisions composed from the exact-context transient evidence (#691).
-    AdmissionReserveExactContextSourceCount,
-    /// Admission decisions composed from a larger same-phase forward scaled down (#691).
-    AdmissionReservePhaseScaledSourceCount,
-    /// Admission decisions for a forward larger than every same-phase
-    /// observation, composed from the analytic floor or an unscaled smaller
-    /// observation instead of a token-ratio extrapolation.
-    AdmissionReserveBeyondObservedTokenSpanSourceCount,
-    /// Admission decisions composed from the all-phase maximum (#691).
-    AdmissionReserveGlobalMaximumSourceCount,
     /// Total bfloat16 bytes the jangtq2 codebook page decoder materialized
     /// for multi-token forwards. Divided by the page-decode operation's
     /// elapsed time it yields the decoder's effective output bandwidth, and
@@ -212,10 +202,6 @@ impl PerformanceCounter {
         Self::PreviousTokenPrefetchMissCount,
         Self::PreviousTokenPrefetchByteCount,
         Self::PreviousTokenPrefetchCapacityDropCount,
-        Self::AdmissionReserveExactContextSourceCount,
-        Self::AdmissionReservePhaseScaledSourceCount,
-        Self::AdmissionReserveBeyondObservedTokenSpanSourceCount,
-        Self::AdmissionReserveGlobalMaximumSourceCount,
         Self::Jangtq2CodebookDecodedOutputByteCount,
         Self::DecodeExpertCacheSlotEvictionCount,
         Self::PrefillCompleteLayerPrefetchPayloadBytes,
@@ -364,18 +350,6 @@ impl PerformanceCounter {
             Self::PreviousTokenPrefetchByteCount => "previous_token_prefetch_byte_count",
             Self::PreviousTokenPrefetchCapacityDropCount => {
                 "previous_token_prefetch_capacity_drop_count"
-            }
-            Self::AdmissionReserveExactContextSourceCount => {
-                "admission_reserve_exact_context_source_count"
-            }
-            Self::AdmissionReservePhaseScaledSourceCount => {
-                "admission_reserve_phase_scaled_source_count"
-            }
-            Self::AdmissionReserveBeyondObservedTokenSpanSourceCount => {
-                "admission_reserve_beyond_observed_token_span_source_count"
-            }
-            Self::AdmissionReserveGlobalMaximumSourceCount => {
-                "admission_reserve_global_maximum_source_count"
             }
             Self::Jangtq2CodebookDecodedOutputByteCount => {
                 "jangtq2_codebook_decoded_output_byte_count"

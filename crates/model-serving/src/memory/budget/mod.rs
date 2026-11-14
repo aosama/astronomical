@@ -9,13 +9,8 @@
 mod live_allocation;
 
 pub use astronomical_memory_policy::budget::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
-    AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
-    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MeasuredExpertLayerPayload, MlxRamBudget,
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-    RamBudgetGeometryError, TransientWorkspaceObservation, TransientWorkspaceReserve,
-    TransientWorkspaceReserveSource, measured_non_expert_forward_growth_bytes,
-    measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
+    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetModelGeometry,
+    MlxRamBudgetSnapshot, RamBudgetGeometryError,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
 #[cfg(feature = "direct-mlx")]

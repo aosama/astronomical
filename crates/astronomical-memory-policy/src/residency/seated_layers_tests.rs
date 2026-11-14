@@ -1,8 +1,6 @@
-//! Occupancy counts and the resident floor: whole layers are counted, partly
-//! held ones are not, and a tightened budget never drops below what is
-//! resident.
+//! Occupancy counts: whole layers are counted, partly held ones are not.
 
-use super::{retained_resident_ceiling_after_budget_refresh, seated_complete_layer_count};
+use super::seated_complete_layer_count;
 use crate::residency::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 
 fn residency(layer_index: usize, class: RetainedExpertPageClass) -> CurrentExpertLayerResidency {
@@ -28,24 +26,4 @@ fn should_count_only_layers_held_whole() {
 #[test]
 fn should_count_nothing_when_nothing_is_held() {
     assert_eq!(seated_complete_layer_count(&[]), 0);
-}
-
-#[test]
-fn should_keep_the_budget_when_it_covers_what_is_resident() {
-    assert_eq!(
-        retained_resident_ceiling_after_budget_refresh(500, 300),
-        500
-    );
-}
-
-#[test]
-fn should_not_drop_below_what_is_resident_when_the_budget_tightens() {
-    assert_eq!(
-        retained_resident_ceiling_after_budget_refresh(200, 300),
-        300
-    );
-    assert_eq!(
-        retained_resident_ceiling_after_budget_refresh(300, 300),
-        300
-    );
 }

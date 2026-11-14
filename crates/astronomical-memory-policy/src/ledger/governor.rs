@@ -193,8 +193,19 @@ impl MemoryGovernor {
     /// stands. A question only: nothing changes. A holder that pays to fill
     /// itself asks this before filling room a coming phase would take back.
     pub fn capacity_while(&self, phase: LedgerPhase) -> KeptWeightCapacity {
-        let mut ledger_in_that_phase = self.ledger.clone();
-        capacity_of(ledger_in_that_phase.enter_phase(phase))
+        capacity_of(
+            self.ledger
+                .accounts_while(phase, self.ledger.accounts().context_bytes),
+        )
+    }
+
+    /// The accounts as they would stand for one step of `phase` with
+    /// `context_bytes` of stored state. A question only: nothing changes.
+    /// An engine that keeps every weight asks this before a step, because
+    /// for it the only thing to decide is whether the step fits.
+    #[must_use]
+    pub fn accounts_while(&self, phase: LedgerPhase, context_bytes: u64) -> LedgerAccounts {
+        self.ledger.accounts_while(phase, context_bytes)
     }
 
     /// The reading of the most recent measured step.
@@ -254,6 +265,14 @@ impl MemoryGovernor {
 
     pub fn grow_context(&mut self, additional_context_bytes: u64) -> KeptWeightCapacity {
         capacity_of(self.ledger.grow_context(additional_context_bytes))
+    }
+
+    /// The stored state is now exactly `context_bytes` by the engine's own
+    /// count. An engine whose stored state can shrink inside a request, as
+    /// when a prefix kept from the last turn is not continued, reports it
+    /// this way instead of as growth.
+    pub fn settle_context(&mut self, context_bytes: u64) -> KeptWeightCapacity {
+        capacity_of(self.ledger.settle_context(context_bytes))
     }
 
     /// The request is over; whatever stored state outlives it stays on the

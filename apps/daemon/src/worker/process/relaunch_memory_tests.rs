@@ -33,7 +33,6 @@ fn boot_startup_configuration() -> WorkerStartupConfiguration {
         performance_attribution_enabled: true,
         decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Candidate,
         diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Streaming,
-        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Some(1_610_612_736),
         logging_directory: PathBuf::from("logs"),
         logging_level: WorkerLogLevel::Debug,
         retained_log_file_count: 4,

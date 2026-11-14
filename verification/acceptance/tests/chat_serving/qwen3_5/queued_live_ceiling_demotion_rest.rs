@@ -11,11 +11,12 @@
 //! ceiling and a rejected retry, and it only reproduces with a real resident
 //! model serving real traffic.
 
+use super::automatic_engine_selection_rest::prompt_chunk_working_memory_allowance_bytes;
 use std::{fs, path::Path};
 
 use astronomical_model_serving::{
-    CompleteResidencyHeadroomBoundary, MemoryPhase, MlxRamBudget, MlxRamBudgetModelGeometry,
-    Qwen3_5ArtifactValidator, mlx_ram_budget_model_geometry_from_validated_artifact,
+    CompleteResidencyHeadroomBoundary, MlxRamBudgetModelGeometry, Qwen3_5ArtifactValidator,
+    mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -62,19 +63,11 @@ async fn run_queued_demotion_journey() {
     let model_directory = configured_installed_model_directory_by_id(model_id);
     let artifact_payload_bytes = artifact_payload_bytes(&model_directory);
     let residency_geometry = measure_sparse_artifact_residency_geometry(&model_directory);
-    // The resident start must purchase the request-time prefill activation
-    // workspace on top of the startup residency terms — the same bootstrap
-    // RAM budget arithmetic as the resident engine-selection journey; see
-    // that journey for the full rationale (issue #1297 / #1508).
-    let bootstrap_ram_budget = MlxRamBudget::new(
-        residency_geometry.complete_residency_with_headroom_bytes,
-        residency_geometry.model_geometry,
-    )
-    .expect("the resident artifact geometry should compose a bootstrap RAM budget");
-    let prefill_activation_workspace_bytes = bootstrap_ram_budget.activation_headroom_bytes(
-        MemoryPhase::Prefill,
-        u64::from(FIXED_PREFILL_CHUNK_SIZE_TOKENS),
-    );
+    // The limit has to hold one prompt chunk's working memory on top of the
+    // startup residency terms; see the engine-selection journey (issue
+    // #1297 / #1508).
+    let prefill_activation_workspace_bytes =
+        prompt_chunk_working_memory_allowance_bytes(&residency_geometry.model_geometry);
     let resident_memory_ceiling_bytes = residency_geometry
         .complete_residency_with_headroom_bytes
         .saturating_add(BEHAVIOR_PROMPT_CONTEXT_BYTES)

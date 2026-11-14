@@ -64,13 +64,11 @@ pub mod expert_paging;
 pub mod forward_admission;
 pub mod geometry_floor;
 pub mod ledger;
-pub mod memory_equation;
 pub mod neural_engine_admission;
 pub mod neural_engine_program_memory_watch;
 pub mod phase;
 pub mod placement;
 pub mod reclamation;
-pub mod recovery;
 pub mod residency;
 pub mod safetensors;
 pub mod serving_ceiling;
@@ -78,10 +76,8 @@ pub mod strict_json;
 pub mod vocabulary;
 
 pub use forward_admission::{
-    PagedForwardAdmissionDecision, ResidentForwardAdmissionDecision,
-    ResidentForwardAdmissionRejection, StreamingEngineRequirement,
+    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
-pub use memory_equation::MemoryEquation;
 pub use placement::{
     EnginePlacement, ResidentPromotionBlocker, ResidentPromotionDecision,
     should_promote_demoted_streaming_engine_to_resident,
@@ -92,21 +88,9 @@ pub use residency::observed_expert_memory_mode;
 mod simulation;
 
 #[cfg(test)]
-mod adaptive_ram_growth_execution_profile_tests;
-#[cfg(test)]
-mod adaptive_ram_growth_guard_admission_tests;
-#[cfg(test)]
-mod adaptive_ram_growth_guard_reclamation_tests;
-#[cfg(test)]
-mod adaptive_ram_growth_guard_transient_reserve_tests;
-#[cfg(test)]
-mod adaptive_ram_growth_observations_tests;
-#[cfg(test)]
 mod ceiling_boundary_tests;
 #[cfg(test)]
 mod memory_policy_tests;
-#[cfg(test)]
-mod reclamation_boundary_tests;
 #[cfg(test)]
 mod serving_ceiling_tests;
 #[cfg(test)]

@@ -1,13 +1,10 @@
 use astronomical_ipc_protocol::RequestId;
 
-use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, InferenceEngineError,
-    PerformanceOperation,
-};
+use crate::{InferenceEngineError, PerformanceOperation};
 
 use super::Qwen3_5EngineState;
-use super::completed_forward_memory;
-use crate::qwen3_5_resident::model::memory_admission;
+use super::forward_memory::{ForwardShape, report_completed_forward};
+use crate::qwen3_5_resident::model::request_errors;
 
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn inject_input_tokens(
@@ -72,7 +69,7 @@ impl Qwen3_5EngineState {
                 hard_maximum_position_count: self.hard_maximum_position_count,
                 advertised_maximum_position_count: self.maximum_position_count,
             })?;
-        self.validate_injection_context_memory_admission(active_request, projected_context_tokens)?;
+        self.require_request_context_to_fit(projected_context_tokens)?;
 
         // External feedback changes the continuation frontier. Discard both the
         // one-token-ahead successor and its rollback verdict before forwarding
@@ -97,66 +94,19 @@ impl Qwen3_5EngineState {
         )
     }
 
-    fn validate_injection_context_memory_admission(
-        &self,
-        // The resident admission check is stateless against the request; the
-        // parameter stays so both engine flavors call this unit identically.
-        _active_request: &mut super::engine_request::Qwen3_5EngineRequest,
-        projected_context_tokens: usize,
-    ) -> Result<(), InferenceEngineError> {
-        // Injection extends the same live context as ordinary request admission.
-        // Re-run binary residency admission before mutating decoder state so a
-        // rejection leaves the continuation frontier unchanged.
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
-        memory_admission::validate_context_memory_admission(
-            model,
-            self.memory_limits,
-            self.context_memory_reservation_bytes_per_token,
-            projected_context_tokens,
-            0,
-            0,
-        )?;
-        Ok(())
-    }
-
     fn prefill_injected_feedback_prefix(
         &mut self,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         input_token_ids: &[u32],
         final_input_token_position: usize,
     ) -> Result<(), InferenceEngineError> {
-        let _model = self
-            .model
-            .as_ref()
-            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
-        let injected_prefill_execution_context =
-            super::super::prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
-                false,
-                AdaptiveRamGrowthExecutionProfile::Resident,
-                self.persistent_prompt_cache.is_some()
-                    && active_request.can_use_persistent_prompt_cache,
-            );
-        let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
-            feedback_prefix_token_ids.len(),
-            injected_prefill_execution_context.context_identifier_flags(),
-            false,
-            AdaptiveRamGrowthExecutionProfile::Resident,
-        );
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
+        let admitted_forward = self.admit_forward(
+            ForwardShape::prompt_chunk(feedback_prefix_token_ids.len()),
             &active_request.request_decoder_state,
             0,
             0,
         )?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
         let model = self
             .model
             .as_ref()
@@ -170,16 +120,10 @@ impl Qwen3_5EngineState {
             )
             .map_err(InferenceEngineError::from)?;
         active_request.advance_position(feedback_prefix_token_ids.len())?;
-        completed_forward_memory::record_completed_adaptive_ram_growth(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context,
-            false,
+        report_completed_forward(
             model,
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
-            &mut active_request.performance_attribution,
+            admitted_forward,
+            active_request.request_decoder_state.payload_byte_count(),
         )?;
         Ok(())
     }
@@ -191,19 +135,12 @@ impl Qwen3_5EngineState {
         final_input_token_position: usize,
     ) -> Result<(), InferenceEngineError> {
         let final_input_token_id = input_token_ids[final_input_token_position];
-        let adaptive_ram_growth_context =
-            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
+        let admitted_forward = self.admit_forward(
+            ForwardShape::reply_token(),
             &active_request.request_decoder_state,
             0,
             0,
         )?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
         let model = self
             .model
             .as_ref()
@@ -230,16 +167,10 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(InferenceEngineError::from)?;
-        completed_forward_memory::record_completed_adaptive_ram_growth(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context,
-            true,
+        report_completed_forward(
             model,
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
-            &mut active_request.performance_attribution,
+            admitted_forward,
+            active_request.request_decoder_state.payload_byte_count(),
         )?;
         active_request.pending_generated_token = Some(next_generated_token);
         Ok(())
@@ -268,7 +199,7 @@ fn project_injection_context_token_count(
         .and_then(|context_tokens| context_tokens.checked_add(projection.remaining_output_tokens))
         .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generation_context_token_count_overflow_error)?;
     if projected_context_tokens > projection.hard_maximum_position_count {
-        return Err(memory_admission::invalid_request_error(
+        return Err(request_errors::invalid_request_error(
             "generation context exceeds the model maximum position count",
         ));
     }

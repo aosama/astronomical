@@ -27,7 +27,6 @@ async fn should_round_trip_worker_startup_configuration() {
         performance_attribution_enabled: false,
         decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
         diagnostic_qwen3_5_engine_override: crate::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
-        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
         logging_directory: PathBuf::from("/tmp/fictional-logs"),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,

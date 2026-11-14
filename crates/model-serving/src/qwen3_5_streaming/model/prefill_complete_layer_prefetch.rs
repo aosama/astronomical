@@ -24,9 +24,7 @@
 use mlx_bridge::MlxArray;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
-use crate::expert_paging::{
-    ExpertManifestError, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
-};
+use crate::expert_paging::{QuantizedExpertLayerPlan, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
@@ -48,20 +46,6 @@ use crate::{
 /// bound assumes uniform routing; a skewed router leaves more experts unrouted,
 /// so the read ahead may fetch a few experts the chunk never multiplies.
 const COMPLETE_UNION_ASSIGNMENTS_PER_EXPERT: usize = 8;
-
-/// Prefill RAM reserved for streaming complete expert layers.
-///
-/// One slot holds the layer being multiplied at its forward-time peak
-/// (packed source plus any decoded output). The second holds the one layer
-/// read ahead by the prefetch, which is only issued for pages multiplied
-/// without a transient decode, so it never holds more than the packed source.
-#[must_use]
-pub(crate) const fn prefill_complete_layer_stream_slot_bytes(
-    forward_time_expert_page_peak_bytes: u64,
-    largest_complete_expert_source_payload_bytes: u64,
-) -> u64 {
-    forward_time_expert_page_peak_bytes.saturating_add(largest_complete_expert_source_payload_bytes)
-}
 
 /// Whether a `route_token_count`-token chunk is expected to route every expert.
 #[must_use]
@@ -96,33 +80,6 @@ pub(crate) fn layer_plan_allows_prefill_prefetch(
             route_token_count,
             has_fused_codebook_decode_kernel,
         )
-}
-
-/// Largest packed complete-layer source the prefill read ahead can hold.
-///
-/// Sizes the read-ahead stream slot from only the layers
-/// [`layer_plan_allows_prefill_prefetch`] can ever pick for a multi-token
-/// chunk, so a bundle whose layers are all codebook-encoded reserves nothing
-/// for a prefetch that never runs instead of keeping a whole layer's bytes
-/// out of the expert budget.
-pub(crate) fn largest_prefill_prefetchable_complete_source_payload_bytes(
-    layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<u64, ExpertManifestError> {
-    // Any multi-token count gives the same answer: the codebook rule only
-    // admits single decode tokens, and prefill chunks always route several.
-    const MULTI_TOKEN_PREFILL_CHUNK_TOKEN_COUNT: i32 = 2;
-    layer_plans
-        .iter()
-        .filter(|layer_plan| {
-            layer_plan_allows_prefill_prefetch(
-                layer_plan,
-                MULTI_TOKEN_PREFILL_CHUNK_TOKEN_COUNT,
-                true,
-            )
-        })
-        .try_fold(0_u64, |largest_source_layer_bytes, layer_plan| {
-            Ok(largest_source_layer_bytes.max(layer_plan.complete_expert_payload_byte_count()?))
-        })
 }
 
 /// The nearest later layer the prefetch should read, if any.

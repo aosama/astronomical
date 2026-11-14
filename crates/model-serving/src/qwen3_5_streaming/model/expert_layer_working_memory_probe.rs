@@ -16,12 +16,9 @@ use super::Qwen3_5Model;
 use super::layer_probe_shape::LayerProbeShape;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::model::probe_token_ids::vocabulary_walking_token_ids;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
-
-/// Step between the probe's token ids: a prime far from any power of two,
-/// so consecutive positions land all over the vocabulary.
-const PROBE_TOKEN_ID_STRIDE: u64 = 7_919;
 
 /// One measured expert-layer prompt step.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -160,18 +157,3 @@ impl Qwen3_5Model {
             .saturating_sub(streamed_expert_bytes))
     }
 }
-
-/// Token ids that walk the vocabulary in large steps, wrapping around.
-fn vocabulary_walking_token_ids(token_count: i32, vocabulary_size: u32) -> Vec<i32> {
-    let vocabulary_size = u64::from(vocabulary_size.max(1));
-    let mut token_ids = Vec::with_capacity(usize::try_from(token_count).unwrap_or(0));
-    for token_position in 0..u64::try_from(token_count).unwrap_or(0) {
-        let token_id = token_position.wrapping_mul(PROBE_TOKEN_ID_STRIDE) % vocabulary_size;
-        token_ids.push(i32::try_from(token_id).unwrap_or(0));
-    }
-    token_ids
-}
-
-#[cfg(test)]
-#[path = "expert_layer_working_memory_probe_tests.rs"]
-mod tests;

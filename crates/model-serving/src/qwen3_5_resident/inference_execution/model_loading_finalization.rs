@@ -42,13 +42,11 @@ impl Qwen3_5EngineState {
                 model_id,
                 model_revision,
                 prefill_transient_observation_completed: self
-                    .adaptive_ram_growth_guard
-                    .has_completed_growth_observation(crate::MemoryPhase::Prefill),
-                prefill_observed_transient_high_water_bytes: u64::try_from(
-                    self.adaptive_ram_growth_guard
-                        .observed_transient_high_water_bytes(crate::MemoryPhase::Prefill),
-                )
-                .unwrap_or(u64::MAX),
+                    .measured_prompt_chunk_working_memory_bytes()
+                    .is_some(),
+                prefill_observed_transient_high_water_bytes: self
+                    .measured_prompt_chunk_working_memory_bytes()
+                    .unwrap_or(0),
                 total_artifact_payload_bytes,
                 resident_model_payload_bytes,
                 model_shard_count,

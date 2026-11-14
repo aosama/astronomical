@@ -76,7 +76,6 @@ pub(crate) fn initialize_qwen3_5_model(
     chunking: WorkerChunkingConfiguration,
 
     engine_selection: Qwen3_5EngineSelection,
-    diagnostic_resident_prefill_activation_floor_bytes: Option<u64>,
 ) -> Result<
     (
         Qwen3_5GenerationProcessor,
@@ -176,7 +175,6 @@ pub(crate) fn initialize_qwen3_5_model(
         chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
-        diagnostic_resident_prefill_activation_floor_bytes,
         decode_expert_cache_policy,
         &artifact_model_id,
         &artifact_model_revision,
@@ -202,7 +200,6 @@ fn construct_selected_qwen3_5_engine(
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: PerformanceAttributionLog,
-    diagnostic_resident_prefill_activation_floor_bytes: Option<u64>,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     artifact_model_id: &str,
     artifact_model_revision: &str,
@@ -222,7 +219,6 @@ fn construct_selected_qwen3_5_engine(
             chunking,
             model_loading_performance_attribution,
             performance_attribution_log,
-            diagnostic_resident_prefill_activation_floor_bytes,
             artifact_model_id,
             artifact_model_revision,
             artifact_payload_bytes,
@@ -430,7 +426,6 @@ fn construct_resident_engine(
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     mut performance_attribution_log: PerformanceAttributionLog,
-    diagnostic_resident_prefill_activation_floor_bytes: Option<u64>,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -469,10 +464,8 @@ fn construct_resident_engine(
         model_directory_path.to_path_buf(),
         maximum_context_tokens,
         chunking,
-        true,
         model_loading_performance_attribution,
         performance_attribution_log,
-        diagnostic_resident_prefill_activation_floor_bytes,
         neural_engine_program_cache_directory,
     )
     .map(ModelFamilyInferenceEngine::Qwen3_5)

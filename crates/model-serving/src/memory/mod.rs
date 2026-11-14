@@ -74,31 +74,18 @@ mod telemetry_tests;
 
 pub use admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
-    CompleteResidencyRequirements, ContextAdmissionRequirements, RetainedPrefixRetentionDecision,
+    CompleteResidencyRequirements, RetainedPrefixRetentionDecision,
     RetainedPrefixRetentionRequirements, RotatingAdmissionError, VISIBLE_ANSWER_RESERVE_TOKENS,
-    bounded_output_reservation_token_count, combined_persistent_growth_bytes,
-    persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
-    retained_expert_payload_capacity_bytes, rotating_committed_token_count,
-    rotating_prefill_transient_token_count, safe_minimum_active_memory_ceiling_bytes,
-    seated_complete_expert_request_peak_active_memory_bytes,
-    seated_complete_expert_request_temporary_workspace_bytes,
-};
-#[cfg(feature = "direct-mlx")]
-pub(crate) use admission::{
-    log_adaptive_ram_growth_admission_decision, log_context_admission_projection,
-    log_generation_context_workspace_reservation,
+    bounded_output_reservation_token_count, persistent_context_restore_workspace_bytes,
+    rotating_committed_token_count, rotating_prefill_transient_token_count,
+    safe_minimum_active_memory_ceiling_bytes,
 };
 pub use astronomical_memory_policy::ceiling::{
     MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
 };
 pub use budget::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
-    AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
-    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MeasuredExpertLayerPayload, MlxRamBudget,
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-    RamBudgetGeometryError, TransientWorkspaceObservation, TransientWorkspaceReserve,
-    TransientWorkspaceReserveSource, measured_non_expert_forward_growth_bytes,
-    measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
+    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetModelGeometry,
+    MlxRamBudgetSnapshot, RamBudgetGeometryError,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
 #[cfg(feature = "direct-mlx")]
@@ -109,28 +96,15 @@ pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_by
 // direct-MLX admission callers and the unit artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
 pub use astronomical_memory_policy::forward_admission::{
-    PagedForwardAdmissionDecision, ResidentForwardAdmissionDecision,
-    ResidentForwardAdmissionRejection, StreamingEngineRequirement,
+    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
 pub use astronomical_memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
-pub use astronomical_memory_policy::memory_equation::MemoryEquation;
 pub use astronomical_memory_policy::phase::MemoryPhase;
 pub use astronomical_memory_policy::placement::{
     EnginePlacement, ResidentPromotionBlocker, ResidentPromotionDecision,
     should_promote_demoted_streaming_engine_to_resident,
 };
-pub use astronomical_memory_policy::reclamation::{
-    ExpertMemoryAdmissionError, ExpertReclamationPlan,
-    complete_residency_exceeds_ceiling_with_activation_headroom,
-    expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure,
-    projected_active_memory_after_complete_expert_replacement,
-    required_complete_residency_activation_headroom_bytes,
-    should_retry_fixed_forward_after_expert_reclamation, whole_table_reclamation_target_bytes,
-};
-pub use astronomical_memory_policy::recovery::{
-    ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements,
-};
+pub use astronomical_memory_policy::reclamation::ExpertMemoryAdmissionError;
 pub use astronomical_memory_policy::residency::seated_complete_layer_count;
 #[cfg(any(feature = "direct-mlx", test))]
 pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
@@ -156,8 +130,7 @@ pub use astronomical_memory_policy::residency::{
     StreamingStartupResidencyFacts, classify_expert_memory_mode,
     decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count,
     kept_layer_indexes_to_seat_before_reply, minimum_decode_warm_slot_count,
-    observed_expert_memory_mode, plan_expert_residency,
-    retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
+    observed_expert_memory_mode, plan_expert_residency, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
     should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
@@ -165,5 +138,5 @@ pub use astronomical_memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
     floor_raise_limit_bytes, floor_raised_ceiling_bytes, machine_ceiling_from_physical_ram_bytes,
 };
-pub use astronomical_memory_policy::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
+pub use astronomical_memory_policy::vocabulary::MemoryBoundary;
 pub use utilization::MemoryCeilingUtilization;

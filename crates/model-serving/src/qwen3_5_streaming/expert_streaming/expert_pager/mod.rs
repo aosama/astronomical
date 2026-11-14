@@ -289,10 +289,6 @@ impl Qwen3_5ExpertPager {
         self.memory_budget.active_memory_ceiling_bytes()
     }
 
-    pub(crate) fn maximum_expert_page_bytes(&self) -> u64 {
-        self.memory_budget.maximum_expert_page_bytes()
-    }
-
     /// Largest complete-layer packed source payload across the model's layers.
     ///
     /// Sizes the RAM owner's complete-layer streaming slot from on-disk source

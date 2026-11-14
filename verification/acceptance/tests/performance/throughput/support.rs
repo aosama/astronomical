@@ -127,10 +127,6 @@ pub(crate) struct ThroughputJourney {
     /// the memory ceiling from the engine architecture; `Automatic` is the
     /// production startup selection.
     pub(crate) diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
-    /// Replaces the resident engine's static prefill activation floor so a
-    /// diagnostic journey can test whether learned activation evidence alone
-    /// admits the shape; `None` is the production floor.
-    pub(crate) diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
 }
 
 impl ThroughputJourney {
@@ -162,7 +158,6 @@ impl ThroughputJourney {
             journey_timeout: JOURNEY_TIMEOUT,
             model_directory: None,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
-            diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
         }
     }
 }
@@ -293,14 +288,10 @@ pub(crate) async fn run_throughput_journey(
     }
     if journey.diagnostic_qwen3_5_engine_override
         != WorkerDiagnosticQwen3_5EngineOverride::Automatic
-        || journey
-            .diagnostic_qwen3_5_resident_prefill_activation_floor_bytes
-            .is_some()
     {
         eprintln!(
-            "[performance-throughput] forced-engine diagnostic run ({:?}, resident prefill activation floor {:?}): durable history append skipped because production never runs this configuration",
-            journey.diagnostic_qwen3_5_engine_override,
-            journey.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes
+            "[performance-throughput] forced-engine diagnostic run ({:?}): durable history append skipped because production never runs this configuration",
+            journey.diagnostic_qwen3_5_engine_override
         );
         return measurement;
     }

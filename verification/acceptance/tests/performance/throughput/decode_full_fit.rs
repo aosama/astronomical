@@ -46,7 +46,6 @@ async fn should_complete_decode_residency_at_37_gigabytes_after_multi_chunk_pref
         model_directory: Some(model_directory),
         diagnostic_qwen3_5_engine_override:
             astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
-        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
     };
     let outcome = timeout(
         Duration::from_secs(115),

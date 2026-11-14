@@ -33,7 +33,6 @@ macro_rules! forced_engine_cell {
             measure_summarization_throughput(
                 $ceiling_gigabytes,
                 WorkerDiagnosticQwen3_5EngineOverride::$engine_override,
-                None,
             );
         }
     };
@@ -54,15 +53,3 @@ forced_engine_cell!(
     22,
     Resident
 );
-
-/// The forced resident engine at 22 GB with the static three-layer prefill
-/// activation floor removed, so admission relies only on learned activation
-/// evidence. It answers whether the resident engine serves this shape inside
-/// the ceiling once the floor stops rejecting it.
-#[test]
-#[ignore = "loads the resident 35B sparse-MoE model with the Resident engine forced and the static prefill activation floor removed under a 22 GB memory ceiling"]
-#[serial]
-fn should_measure_forced_resident_engine_without_static_prefill_floor_under_a_22gb_memory_ceiling()
-{
-    measure_summarization_throughput(22, WorkerDiagnosticQwen3_5EngineOverride::Resident, Some(0));
-}

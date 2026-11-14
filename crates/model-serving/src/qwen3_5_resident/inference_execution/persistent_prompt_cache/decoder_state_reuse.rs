@@ -2,12 +2,13 @@
 //!
 //! Lookup is allocation-free. After a complete chain is identified, all sequence
 //! blocks and the newest required boundary are loaded, reconstructed, synchronized,
-//! and released before memory admission is repeated for only the remaining context.
+//! and released. Each prompt chunk that follows is asked of the memory governor
+//! with the restored state already in memory.
 //!
 //! The lookup diagnostics, block-key derivation, prefix enumeration, and the
 //! load-and-reconstruct pipeline are shared with the streaming engine in
 //! `crate::persistent_cache::restore_support`; this module keeps the resident
-//! engine's in-memory prefix adoption and its no-reclamation admission policy.
+//! engine's in-memory prefix adoption.
 
 use astronomical_ipc_protocol::{
     RequestId, WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheRequestDiagnostics,
@@ -162,9 +163,6 @@ impl Qwen3_5EngineState {
                 request_decoder_state,
                 performance_attribution,
             )?;
-        // The initial admission was conservative because no prefix was restored
-        // yet. Re-admit against only uncached context after temporary load memory
-        // is gone, allowing the ordinary request path to use reclaimed capacity.
         self.finalize_restored_prefix_hit(RestoreHitFinalization {
             request_id: &request_id,
             prompt_token_count: prompt_token_ids.len(),

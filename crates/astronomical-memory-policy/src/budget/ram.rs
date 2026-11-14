@@ -1,146 +1,31 @@
-//! Single-source MLX RAM budget owner for context, activations, streaming, and experts.
+//! The limit a model runs under and the sizes of its parts.
 //!
-//! This owner is the only place that composes the production split:
-//!
-//! ```text
-//! retained_expert_budget_bytes =
-//!     mlx_active_memory_ceiling_bytes
-//!     - model_core_payload_bytes
-//!     - context_window_reserve_bytes
-//!     - activation_headroom_bytes
-//!     - complete_layer_stream_slot_bytes
-//!     - other_fixed_bytes
-//! ```
-//!
-//! Callers supply measured bytes and token counts. The owner starts from a
-//! bootstrap context-window reserve and learns a conservative envelope from reports.
-//!
-//! # Categories are intentionally non-overlapping
-//!
-//! - **Model core** is the loaded non-expert model payload.
-//! - **Context reserve** protects persistent request state as context grows.
-//! - **Activation headroom** protects temporary work learned from completed
-//!   forwards. Prefill and decode retain separate high-water marks.
-//! - **Complete-layer stream slot** is scratch ownership for one nonresident
-//!   sparse layer. It is required even when most complete layers are retained.
-//! - **Other fixed bytes** lets request-specific owners, such as a draft model or
-//!   prompt-cache publication workspace, participate without duplicating policy.
-//! - **Retained experts** receive only the bytes left after every required owner.
-//!
-//! An idle status snapshot can make context and streaming space appear unused.
-//! That does not make the bytes available to expert retention: the next request
-//! needs those categories concurrently with retained experts.
-//!
-//! # Safety policy
-//!
-//! Arithmetic saturates while composing a plan. Saturation intentionally fails
-//! closed by reducing the leftover expert budget to zero instead of wrapping to a
-//! large value. Learning is high-water-only; one cheaper request cannot erase
-//! evidence required by a larger future request. The one exception is a live
-//! active-memory ceiling change, which clears activation evidence because its
-//! observations embed the previous ceiling's expert-paging regime (issue #1108).
+//! Loading measures a model's geometry once, and the limit comes from
+//! configuration or a live change. The memory governor (`crate::ledger`)
+//! decides everything about how the limit is used (issue #2221); this type
+//! only carries the two facts both engines read when they open it and when
+//! they report status before it has opened.
 
-use std::collections::BTreeMap;
+use crate::budget::ram_values::{MlxRamBudgetError, MlxRamBudgetModelGeometry};
 
-use crate::budget::prefill_stream_slot::prefill_stream_slot_bytes_after_full_fit;
-use crate::phase::MemoryPhase;
-
-/// Bootstrap context-window reserve before any live measurement exists
-/// (1 GB on the user-facing sticker scale, 2³⁰ bytes).
-pub const BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES: u64 = 1_073_741_824;
-
-/// Width of the prefill activation learning buckets, in forwarded tokens.
-pub(crate) const CONTEXT_TOKEN_BUCKET_WIDTH: u64 = 1_024;
-
-/// Extra safety margin applied on top of the projected and learned context need.
-const CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES: u64 = 64_000_000;
-
-use crate::budget::ram_values::{
-    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
-};
-
-/// Single-source owner for MLX RAM policy across streaming and expert retention.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MlxRamBudget {
-    /// User/machine-resolved hard production ceiling; never a model-specific constant.
-    pub(super) mlx_active_memory_ceiling_bytes: u64,
-    /// Startup-validated payload geometry for the currently loaded model.
-    pub(super) model_geometry: MlxRamBudgetModelGeometry,
-    /// Conservative floor used only before any real context measurement exists.
-    pub(super) bootstrap_context_window_reserve_bytes: u64,
-    /// High-water persistent bytes a forward left behind beyond the per-token
-    /// sequence state the geometry projects for its own tokens (fixed
-    /// recurrent state, allocator rounding). Independent of context length, so
-    /// it adds to the projection for any request size.
-    pub(super) measured_context_overhead_beyond_projection_high_water_bytes: u64,
-    /// Phase-specific activation evidence. Decode keeps one scalar high-water;
-    /// prefill evidence is keyed by 1,024-token context buckets so one large
-    /// request's workspace does not size every later promise (issue #623
-    /// follow-up). Values can grow but never shrink.
-    pub(super) prefill_activation_high_water_by_token_bucket: BTreeMap<u64, u64>,
-    pub(super) decode_activation_headroom_bytes: u64,
-    /// Distinguishes an unobserved prefill phase from a valid zero-byte sample.
-    pub(super) has_prefill_activation_measurement: bool,
-    /// Distinguishes an unobserved decode phase from a valid zero-byte sample.
-    pub(super) has_decode_activation_measurement: bool,
-    /// Distinguishes "no evidence" from a valid measured value of zero.
-    pub(super) has_context_window_measurement: bool,
-    /// What streaming one complete layer costs a multi-token forward when the
-    /// family decodes its page at forward time (packed source plus decoded
-    /// output); `None` keeps the packed source slot of the geometry. The
-    /// prefill residency budget subtracts this so experts are never seated
-    /// into the space the next chunk's decode needs back.
-    pub(super) prefill_complete_layer_stream_slot_bytes: Option<u64>,
-    /// Diagnostic replacement for the static three-layer prefill activation
-    /// floor; `None` keeps the production floor. Exists so a worker can be
-    /// launched to measure whether learned activation evidence alone admits a
-    /// shape the static floor rejects, without rebuilding the policy.
-    pub(super) diagnostic_prefill_activation_floor_bytes: Option<u64>,
+    mlx_active_memory_ceiling_bytes: u64,
+    model_geometry: MlxRamBudgetModelGeometry,
 }
 
 impl MlxRamBudget {
-    /// Records the bytes one complete-layer page costs a multi-token forward
-    /// (packed source plus decoded output) so prefill plans reserve the whole
-    /// decode, not only the packed read. Activation headroom and the geometry
-    /// floor keep the packed-source geometry: the decoded output is transient
-    /// per layer and never part of resident payload.
-    pub fn set_prefill_complete_layer_stream_slot_bytes(&mut self, stream_slot_bytes: u64) {
-        self.prefill_complete_layer_stream_slot_bytes = Some(stream_slot_bytes);
-    }
-
-    /// Replaces the static three-layer prefill activation floor for diagnosis.
-    pub fn set_diagnostic_prefill_activation_floor_bytes(
-        &mut self,
-        diagnostic_prefill_activation_floor_bytes: u64,
-    ) {
-        self.diagnostic_prefill_activation_floor_bytes =
-            Some(diagnostic_prefill_activation_floor_bytes);
-    }
-
-    /// The prefill streaming slot: the forward-time page peak when the family
-    /// declared one, otherwise one packed complete layer.
-    fn prefill_complete_layer_stream_slot_bytes(&self) -> u64 {
-        self.prefill_complete_layer_stream_slot_bytes
-            .unwrap_or(self.model_geometry.largest_complete_expert_layer_bytes)
-            .max(self.model_geometry.largest_complete_expert_layer_bytes)
-    }
-
-    /// Creates the owner with bootstrap context-window reserve of 1 GB SI.
-    pub fn new(
+    /// Fails for a zero limit, under which nothing can run.
+    pub const fn new(
         mlx_active_memory_ceiling_bytes: u64,
         model_geometry: MlxRamBudgetModelGeometry,
     ) -> Result<Self, MlxRamBudgetError> {
-        Self::with_bootstrap_context_window_reserve_bytes(
-            mlx_active_memory_ceiling_bytes,
-            model_geometry,
-            BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
-        )
+        Self::with_positive_limit(mlx_active_memory_ceiling_bytes, model_geometry)
     }
 
-    pub fn with_bootstrap_context_window_reserve_bytes(
+    const fn with_positive_limit(
         mlx_active_memory_ceiling_bytes: u64,
         model_geometry: MlxRamBudgetModelGeometry,
-        bootstrap_context_window_reserve_bytes: u64,
     ) -> Result<Self, MlxRamBudgetError> {
         if mlx_active_memory_ceiling_bytes == 0 {
             return Err(MlxRamBudgetError::InvalidCeiling);
@@ -148,47 +33,16 @@ impl MlxRamBudget {
         Ok(Self {
             mlx_active_memory_ceiling_bytes,
             model_geometry,
-            bootstrap_context_window_reserve_bytes,
-            measured_context_overhead_beyond_projection_high_water_bytes: 0,
-            prefill_activation_high_water_by_token_bucket: BTreeMap::new(),
-            decode_activation_headroom_bytes: 0,
-            prefill_complete_layer_stream_slot_bytes: None,
-            diagnostic_prefill_activation_floor_bytes: None,
-            has_prefill_activation_measurement: false,
-            has_decode_activation_measurement: false,
-            has_context_window_measurement: false,
         })
     }
 
-    /// Installs a new live active-memory ceiling, clearing learned activation
-    /// evidence when the value actually changes.
-    ///
-    /// Context-window evidence survives: persistent KV bytes per token do not
-    /// depend on the ceiling. Activation observations embed the previous
-    /// ceiling's expert-paging regime, so keeping them across a change would
-    /// permanently over-reserve admission even after the ceiling is restored
-    /// (issue #1108). A same-value write (a failed-raise restore path) is not a
-    /// regime change and keeps every measurement.
-    pub fn update_mlx_active_memory_ceiling_bytes(
+    /// Fails for a zero limit and leaves the current one in place.
+    pub const fn update_mlx_active_memory_ceiling_bytes(
         &mut self,
         mlx_active_memory_ceiling_bytes: u64,
     ) -> Result<(), MlxRamBudgetError> {
         if mlx_active_memory_ceiling_bytes == 0 {
             return Err(MlxRamBudgetError::InvalidCeiling);
-        }
-        // Context-window evidence survives a ceiling change: persistent KV bytes
-        // per token do not depend on the ceiling. Activation evidence does not:
-        // its observations embed the previous ceiling's expert-paging regime, so
-        // a lowered ceiling's demote/stream churn inflates the observed
-        // transients into a permanently over-sized reserve that keeps rejecting
-        // requests even after the ceiling is restored (issue #1108). The budget
-        // re-learns activation from forwards measured under the new regime and
-        // falls back to the static floor until fresh evidence exists.
-        if mlx_active_memory_ceiling_bytes != self.mlx_active_memory_ceiling_bytes {
-            self.has_prefill_activation_measurement = false;
-            self.prefill_activation_high_water_by_token_bucket.clear();
-            self.has_decode_activation_measurement = false;
-            self.decode_activation_headroom_bytes = 0;
         }
         self.mlx_active_memory_ceiling_bytes = mlx_active_memory_ceiling_bytes;
         Ok(())
@@ -203,332 +57,8 @@ impl MlxRamBudget {
     pub const fn model_geometry(&self) -> MlxRamBudgetModelGeometry {
         self.model_geometry
     }
-
-    #[must_use]
-    pub const fn has_context_window_measurement(&self) -> bool {
-        self.has_context_window_measurement
-    }
-
-    /// Context-window reserve for `context_token_count` tokens.
-    ///
-    /// Before measurements: the larger of the 1 GB bootstrap and the
-    /// geometry-projected sequence-state payload.
-    /// After measurements: the geometry projection for the whole context, plus
-    /// the learned high-water overhead beyond the projection, plus a fixed
-    /// safety buffer.
-    #[must_use]
-    pub fn context_window_reserve_bytes(&self, context_token_count: u64) -> u64 {
-        let projected_sequence_state_bytes =
-            context_token_count.saturating_mul(self.model_geometry.sequence_state_bytes_per_token);
-        if !self.has_context_window_measurement {
-            return self
-                .bootstrap_context_window_reserve_bytes
-                .max(projected_sequence_state_bytes);
-        }
-        // The projection is exact per-token state from the decoder cache
-        // layout, so it carries the length-dependent part; measurements only
-        // supply what the layout does not describe. The earlier design keyed
-        // whole-forward measurements by the forward's own token count but was
-        // queried by context length, so no measurement ever covered a context
-        // past one prefill chunk and the 1 GB bootstrap stayed forever. At a
-        // 21 GB ceiling that floor held about 0.9 GB more than a 5,242-token
-        // request needed, which was exactly what kept the last two complete
-        // expert layers out of decode residency.
-        projected_sequence_state_bytes
-            .saturating_add(self.measured_context_overhead_beyond_projection_high_water_bytes)
-            .saturating_add(CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES)
-    }
-
-    /// Learns context overhead from the request's exact decoder-state payload.
-    ///
-    /// The payload is read from live tensor shapes, so it includes what a
-    /// forward's peak-delta measurement cannot isolate: fixed recurrent and
-    /// convolution state allocated once per request, and attention slab
-    /// capacity rounded past the current position. Peak deltas subtract the
-    /// activation high-water and saturate to almost nothing, which left the
-    /// reserve short of the live context state by a few megabytes.
-    pub fn record_context_state_payload(
-        &mut self,
-        context_token_count: u64,
-        context_state_payload_bytes: u64,
-    ) {
-        self.has_context_window_measurement = true;
-        let projected_sequence_state_bytes =
-            context_token_count.saturating_mul(self.model_geometry.sequence_state_bytes_per_token);
-        self.measured_context_overhead_beyond_projection_high_water_bytes = self
-            .measured_context_overhead_beyond_projection_high_water_bytes
-            .max(context_state_payload_bytes.saturating_sub(projected_sequence_state_bytes));
-    }
-
-    /// Records one live observation and never lowers prior high-water evidence.
-    pub fn record_measurement(&mut self, measurement: MlxRamBudgetMeasurement) {
-        self.has_context_window_measurement = true;
-        // The forward sample includes both persistent context and transient
-        // activation bytes. Activation has its own separately composed owner, so
-        // subtract that evidence before learning context or the same workspace is
-        // reserved twice. Saturation fails safe when independently sampled
-        // transient evidence is larger because of allocator timing differences.
-        let measured_persistent_context_bytes = measurement
-            .measured_context_and_activation_bytes
-            .saturating_sub(measurement.observed_activation_headroom_bytes)
-            .saturating_sub(measurement.exact_temporary_workspace_bytes);
-        // Only the persistent bytes beyond this forward's own projected
-        // sequence state are learned; the projection already reserves the
-        // per-token part for every context length.
-        let projected_forward_sequence_state_bytes = measurement
-            .forward_token_count
-            .saturating_mul(self.model_geometry.sequence_state_bytes_per_token);
-        let measured_context_overhead_beyond_projection_bytes = measured_persistent_context_bytes
-            .saturating_sub(projected_forward_sequence_state_bytes);
-        self.measured_context_overhead_beyond_projection_high_water_bytes = self
-            .measured_context_overhead_beyond_projection_high_water_bytes
-            .max(measured_context_overhead_beyond_projection_bytes);
-
-        match measurement.phase {
-            MemoryPhase::Prefill => {
-                self.has_prefill_activation_measurement = true;
-                let token_bucket = context_token_bucket(measurement.forward_token_count);
-                self.prefill_activation_high_water_by_token_bucket
-                    .entry(token_bucket)
-                    .and_modify(|existing_high_water_bytes| {
-                        *existing_high_water_bytes = (*existing_high_water_bytes)
-                            .max(measurement.observed_activation_headroom_bytes);
-                    })
-                    .or_insert(measurement.observed_activation_headroom_bytes);
-            }
-            // GenerationPreparation evidence belongs to the decode window: it
-            // observes the same activation shape that generation will repeat
-            // (see the mapping contract in phase.rs).
-            MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
-                self.has_decode_activation_measurement = true;
-                self.decode_activation_headroom_bytes = self
-                    .decode_activation_headroom_bytes
-                    .max(measurement.observed_activation_headroom_bytes);
-            }
-            MemoryPhase::Idle => {}
-        }
-        // Idle has no activation operation to learn from. It can still mark that
-        // context evidence exists if a caller deliberately records an idle sample.
-    }
-
-    /// Composes the generation-context workspace reservation exactly as the
-    /// request-admission path does before it checks the active-memory ceiling.
-    ///
-    /// This is the admission-side mirror of [`Self::plan`]: the admission path
-    /// composes the same owners (context growth, restore overlap, publication
-    /// workspace, prefill activation) but historically computed the activation
-    /// component from the total context token count, reintroducing the #644
-    /// scaling defect `plan()` had already fixed. Exposing the composition here
-    /// gives the integration suite a direct contract on the numbers admission
-    /// actually charges, so the two paths cannot silently diverge again.
-    #[must_use]
-    pub fn context_admission_workspace_snapshot(
-        &self,
-        total_context_tokens: u64,
-        planned_prefill_operation_token_count: u64,
-        restore_overlap_workspace_bytes: u64,
-        direct_publication_workspace_bytes: u64,
-    ) -> MlxRamBudgetSnapshot {
-        let context_window_reserve_bytes = self.context_window_reserve_bytes(total_context_tokens);
-        let activation_headroom_bytes = self
-            .activation_headroom_bytes(MemoryPhase::Prefill, planned_prefill_operation_token_count);
-        let complete_layer_stream_slot_bytes = self.prefill_complete_layer_stream_slot_bytes();
-        let fixed_non_expert_bytes = self
-            .model_geometry
-            .model_core_payload_bytes
-            .saturating_add(context_window_reserve_bytes)
-            .saturating_add(activation_headroom_bytes)
-            .saturating_add(complete_layer_stream_slot_bytes)
-            .saturating_add(
-                restore_overlap_workspace_bytes.saturating_add(direct_publication_workspace_bytes),
-            );
-        let mlx_active_memory_ceiling_bytes = self.mlx_active_memory_ceiling_bytes();
-        MlxRamBudgetSnapshot {
-            mlx_active_memory_ceiling_bytes,
-            model_core_payload_bytes: self.model_geometry.model_core_payload_bytes,
-            context_window_reserve_bytes,
-            activation_headroom_bytes,
-            complete_layer_stream_slot_bytes,
-            other_fixed_bytes: restore_overlap_workspace_bytes
-                .saturating_add(direct_publication_workspace_bytes),
-            retained_expert_budget_bytes: mlx_active_memory_ceiling_bytes
-                .saturating_sub(fixed_non_expert_bytes),
-        }
-    }
-
-    /// `operation_token_count` sizes the activation reserve, which belongs to
-    /// the single forward being planned. A chunked prefill's activation
-    /// workspace is a function of the chunk size — measured active memory
-    /// stays flat across a 50K-token chunked prefill — so planning activation
-    /// against the prompt length multiplied a per-chunk observation into a
-    /// reserve several times the ceiling.
-    #[must_use]
-    pub fn plan(
-        &self,
-        phase: MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
-        other_fixed_bytes: u64,
-    ) -> MlxRamBudgetSnapshot {
-        self.plan_holding_live_context_state(
-            phase,
-            context_token_count,
-            operation_token_count,
-            other_fixed_bytes,
-            0,
-        )
-    }
-
-    /// [`Self::plan`] for an instant where decoder state outlives its request.
-    ///
-    /// A between-request sample plans the next request from a fresh context,
-    /// but a retained live prefix (kept for in-memory prefix adoption) still
-    /// holds its KV in active memory. Those bytes belong to the context owner,
-    /// so its reserve is at least the live payload. Without this floor the
-    /// reserve for a zero-token context undercounts the held prefix and the
-    /// published split reports a phantom owner overrun; the old permanent
-    /// 1 GB context floor hid that until the reserve became exact.
-    #[must_use]
-    pub fn plan_holding_live_context_state(
-        &self,
-        phase: MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
-        other_fixed_bytes: u64,
-        live_context_state_payload_bytes: u64,
-    ) -> MlxRamBudgetSnapshot {
-        // Idle refill happens after request arrays are released, so it needs no
-        // live context reserve. Prefill/decode plans protect the next operation's
-        // context even if the current allocator snapshot is temporarily lower.
-        let planned_context_window_reserve_bytes = match phase {
-            MemoryPhase::Idle => 0,
-            MemoryPhase::Prefill | MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
-                self.context_window_reserve_bytes(context_token_count)
-            }
-        };
-        let context_window_reserve_bytes =
-            planned_context_window_reserve_bytes.max(live_context_state_payload_bytes);
-        let activation_headroom_bytes =
-            self.activation_headroom_bytes(phase, operation_token_count);
-        let complete_layer_stream_slot_bytes = match phase {
-            MemoryPhase::Prefill => prefill_stream_slot_bytes_after_full_fit(
-                self.mlx_active_memory_ceiling_bytes(),
-                self.model_geometry
-                    .model_core_payload_bytes
-                    .saturating_add(context_window_reserve_bytes)
-                    .saturating_add(activation_headroom_bytes)
-                    .saturating_add(other_fixed_bytes),
-                self.model_geometry.complete_expert_payload_bytes,
-                self.prefill_complete_layer_stream_slot_bytes(),
-            ),
-            // GenerationPreparation budgets like decode (see phase.rs): token
-            // writing needs the routed-page slot, not a complete-layer slot.
-            MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
-                self.model_geometry.largest_routed_expert_page_bytes
-            }
-            MemoryPhase::Idle => 0,
-        };
-        let fixed_non_expert_bytes = self
-            .model_geometry
-            .model_core_payload_bytes
-            .saturating_add(context_window_reserve_bytes)
-            .saturating_add(activation_headroom_bytes)
-            .saturating_add(complete_layer_stream_slot_bytes)
-            .saturating_add(other_fixed_bytes);
-        let mlx_active_memory_ceiling_bytes = self.mlx_active_memory_ceiling_bytes();
-        let retained_expert_budget_bytes =
-            mlx_active_memory_ceiling_bytes.saturating_sub(fixed_non_expert_bytes);
-
-        MlxRamBudgetSnapshot {
-            mlx_active_memory_ceiling_bytes,
-            model_core_payload_bytes: self.model_geometry.model_core_payload_bytes,
-            context_window_reserve_bytes,
-            activation_headroom_bytes,
-            complete_layer_stream_slot_bytes,
-            other_fixed_bytes,
-            retained_expert_budget_bytes,
-        }
-    }
-
-    /// Refines retained ownership against one concrete admitted forward.
-    ///
-    /// `current_active_memory_bytes` already includes current retained experts,
-    /// while `admitted_forward_reserve_bytes` includes exact persistent growth,
-    /// one phase-correct expert page, and expected transient work. Adding the
-    /// remaining strict-ceiling capacity to current retention therefore yields
-    /// the largest expert payload that may coexist with that forward.
-    #[must_use]
-    pub const fn retained_expert_budget_for_admitted_forward(
-        &self,
-        current_active_memory_bytes: u64,
-        current_retained_expert_payload_bytes: u64,
-        admitted_forward_reserve_bytes: u64,
-    ) -> u64 {
-        let projected_active_memory_bytes =
-            current_active_memory_bytes.saturating_add(admitted_forward_reserve_bytes);
-        let mlx_active_memory_ceiling_bytes = self.mlx_active_memory_ceiling_bytes();
-        if projected_active_memory_bytes <= mlx_active_memory_ceiling_bytes {
-            return current_retained_expert_payload_bytes
-                .saturating_add(mlx_active_memory_ceiling_bytes - projected_active_memory_bytes);
-        }
-        current_retained_expert_payload_bytes
-            .saturating_sub(projected_active_memory_bytes - mlx_active_memory_ceiling_bytes)
-    }
 }
 
-/// Shared coarse bucket keeps context-growth evidence comparable across memory policies.
-pub(crate) const fn context_token_bucket(context_token_count: u64) -> u64 {
-    context_token_count / CONTEXT_TOKEN_BUCKET_WIDTH
-}
-
-/// Separates request workspace from expert ownership acquired during a forward.
-///
-/// The MLX peak includes both categories. Charging newly retained experts to
-/// context learning would reserve those bytes again and evict the topology that
-/// produced the measurement.
-#[must_use]
-pub const fn measured_non_expert_forward_growth_bytes(
-    active_memory_bytes_before_growth: u64,
-    peak_memory_bytes_during_growth: u64,
-    retained_expert_payload_bytes_before_growth: u64,
-    retained_expert_payload_bytes_after_growth: u64,
-) -> u64 {
-    let newly_retained_expert_payload_bytes = retained_expert_payload_bytes_after_growth
-        .saturating_sub(retained_expert_payload_bytes_before_growth);
-    peak_memory_bytes_during_growth
-        .saturating_sub(active_memory_bytes_before_growth)
-        .saturating_sub(newly_retained_expert_payload_bytes)
-}
-
-/// Excludes mandatory expert-page streaming from a forward's learned growth.
-///
-/// Paged prefill promotes expert pages whose payload appears in the MLX peak
-/// but is evicted before completion, so the resident-payload delta misses it
-/// ([`measured_non_expert_forward_growth_bytes`] would falsely charge the
-/// stream to context and activation). The peak's expert component beyond the
-/// pre-growth baseline is the larger of the retention delta and the promoted
-/// stream: retention delta counts what stayed resident, the stream counts
-/// everything promoted, and promotion transfers bytes between the two without
-/// creating more (issue #691). Saturating arithmetic fails safe when sampled
-/// evidence disagrees.
-#[must_use]
-pub const fn measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming(
-    active_memory_bytes_before_growth: u64,
-    peak_memory_bytes_during_growth: u64,
-    retained_expert_payload_bytes_before_growth: u64,
-    retained_expert_payload_bytes_after_growth: u64,
-    promoted_expert_page_stream_bytes: u64,
-) -> u64 {
-    let retained_expert_payload_growth_bytes = retained_expert_payload_bytes_after_growth
-        .saturating_sub(retained_expert_payload_bytes_before_growth);
-    // Ord::max is not a stable const trait yet; compare saturating values directly.
-    let expert_bytes_beyond_pre_growth_baseline =
-        if retained_expert_payload_growth_bytes > promoted_expert_page_stream_bytes {
-            retained_expert_payload_growth_bytes
-        } else {
-            promoted_expert_page_stream_bytes
-        };
-    peak_memory_bytes_during_growth
-        .saturating_sub(active_memory_bytes_before_growth)
-        .saturating_sub(expert_bytes_beyond_pre_growth_baseline)
-}
+#[cfg(test)]
+#[path = "ram_tests.rs"]
+mod tests;

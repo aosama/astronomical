@@ -9,14 +9,13 @@ use astronomical_ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
 
 use crate::{
-    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, GeneratedToken,
-    InferenceEngineError, PerformanceAttributionOutcome, PerformanceOperation,
+    GeneratedToken, InferenceEngineError, PerformanceAttributionOutcome, PerformanceOperation,
 };
 
 use super::completed_forward_memory::{
     CompletedForwardMemoryObservation, capture_completed_forward_memory_observation,
-    collect_completed_forward_memory_snapshot, record_completed_adaptive_ram_growth,
 };
+use super::forward_memory::{ForwardShape, report_completed_forward};
 use super::generated_token_emission;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 impl Qwen3_5EngineState {
@@ -163,12 +162,8 @@ impl Qwen3_5EngineState {
         } else {
             None
         };
-        let (next_generated_token, completed_forward_memory) = self
-            .decode_next_token_and_collect_memory(
-                active_request,
-                &current_generated_token,
-                adaptive_decode_ram_growth_context(),
-            )?;
+        let (next_generated_token, completed_forward_memory) =
+            self.decode_next_token_and_collect_memory(active_request, &current_generated_token)?;
 
         let generated_token_emission = match early_structured_emission.take() {
             Some(generated_token_emission) => generated_token_emission,
@@ -295,10 +290,9 @@ impl Qwen3_5EngineState {
         Ok(forced_generated_token)
     }
 
-    /// Decodes the first token from the final prompt token under the decode
-    /// admission baseline, submits the successor for asynchronous evaluation,
-    /// and files the completed-forward memory evidence. Mirrors the inlined
-    /// first-decode arm, including the first-token decode seam log.
+    /// Asks whether a reply step fits, decodes the first token from the final
+    /// prompt token, submits the successor for asynchronous evaluation, and
+    /// reports what the step needed.
     fn decode_first_token_from_final_prompt(
         &mut self,
         request_id: RequestId,
@@ -307,19 +301,12 @@ impl Qwen3_5EngineState {
         first_decode_forward_started_at: &mut Option<Instant>,
     ) -> Result<MlxArray, InferenceEngineError> {
         let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
-        let adaptive_ram_growth_context =
-            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
+        let admitted_forward = self.admit_forward(
+            ForwardShape::reply_token(),
             &active_request.request_decoder_state,
             0,
             0,
         )?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
         let model = self
             .model
             .as_ref()
@@ -360,16 +347,10 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(InferenceEngineError::from)?;
-        record_completed_adaptive_ram_growth(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context,
-            true,
+        report_completed_forward(
             model,
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
-            &mut active_request.performance_attribution,
+            admitted_forward,
+            active_request.request_decoder_state.payload_byte_count(),
         )?;
         Ok(first_generated_token)
     }
@@ -388,43 +369,31 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
-        let completed_forward_memory = if self.adaptive_ram_growth_guard_enabled {
-            Some(capture_completed_forward_memory_observation(model)?)
-        } else {
-            None
-        };
+        let completed_forward_memory = capture_completed_forward_memory_observation(model)?;
         let generated_token_emission = self.build_generated_token_emission(
             model,
             active_request,
             current_generated_token_id,
-            completed_forward_memory.as_ref(),
+            Some(&completed_forward_memory),
         )?;
         Ok(Some(ActiveRequestAdvance::Complete(
             generated_token_emission.generated_token,
         )))
     }
 
-    /// Runs the next decode forward under a fresh admission baseline, submits
-    /// the successor for asynchronous evaluation, and collects the
-    /// completed-forward memory snapshot. Mirrors the inlined admission +
-    /// forward + submission + collection sequence.
+    /// Asks whether the next reply step fits, runs it, submits the successor
+    /// for asynchronous evaluation, and reports what the step needed.
     fn decode_next_token_and_collect_memory(
         &mut self,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         current_generated_token: &MlxArray,
-        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
+        let admitted_forward = self.admit_forward(
+            ForwardShape::reply_token(),
             &active_request.request_decoder_state,
             0,
             0,
         )?;
-        let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
-        let retained_expert_payload_bytes_before_growth =
-            admitted_baseline.retained_expert_payload_bytes;
-        let streamed_expert_page_bytes_before_growth = admitted_baseline.streamed_expert_page_bytes;
         let model = self
             .model
             .as_ref()
@@ -454,16 +423,10 @@ impl Qwen3_5EngineState {
                 },
             )
             .map_err(InferenceEngineError::from)?;
-        let completed_forward_memory = collect_completed_forward_memory_snapshot(
-            &mut self.adaptive_ram_growth_guard,
-            adaptive_ram_growth_context,
-            true,
+        let completed_forward_memory = report_completed_forward(
             model,
-            active_memory_bytes_before_growth,
-            retained_expert_payload_bytes_before_growth,
-            0,
-            streamed_expert_page_bytes_before_growth,
-            &mut active_request.performance_attribution,
+            admitted_forward,
+            active_request.request_decoder_state.payload_byte_count(),
         )?;
         Ok((next_generated_token, completed_forward_memory))
     }
@@ -472,9 +435,4 @@ impl Qwen3_5EngineState {
 pub(in crate::qwen3_5_resident::inference_execution) enum ActiveRequestAdvance {
     Continue(GeneratedToken),
     Complete(GeneratedToken),
-}
-
-/// The decode admission context for one resident decode step.
-fn adaptive_decode_ram_growth_context() -> AdaptiveRamGrowthContext {
-    AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident)
 }
