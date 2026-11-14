@@ -22,6 +22,26 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
     )
   }
 
+  /// The popover draws this feedback's message as it is, so this is the
+  /// sentence someone with two installs reads under the menu-bar item.
+  @MainActor
+  func test_should_tell_the_popover_another_copy_is_running_and_clear_it_once_this_engine_starts() {
+    let telemetryStore = contractTelemetryStore(daemonClient: FixedAnswerDaemonClient())
+
+    telemetryStore.failServerStartup(DaemonLifecycleError.anotherCopyIsRunning)
+
+    XCTAssertEqual(
+      telemetryStore.controlActionFeedback,
+      .failure(
+        "Another copy of Astronomical is already running on this Mac, and only one can run at a time. Quit the other one, and this one starts by itself"
+      )
+    )
+
+    telemetryStore.completeServerStartup()
+
+    XCTAssertNil(telemetryStore.controlActionFeedback, "the message goes once this app's own engine is up")
+  }
+
   @MainActor
   func test_should_not_report_worker_restart_success_before_status_confirms_the_acknowledged_policy() async {
     let telemetryStore = contractTelemetryStore(
