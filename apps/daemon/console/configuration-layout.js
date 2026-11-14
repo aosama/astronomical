@@ -71,12 +71,18 @@ function resolveConfigurationLayoutGroups(layoutGroups, leafDescriptors) {
 
 // pageName is "settings" or "tuning". The daemon sorts object members, so the order
 // lives in the schema's arrays and never in the order of its properties.
-function configurationPageGroups(schema, pageName) {
+// unavailableSettingPaths are settings the running instance says it cannot honour
+// (a sandboxed build cannot open folders of the person's choosing): they are left
+// off the page altogether, and a group left with nothing to show goes with them.
+function configurationPageGroups(schema, pageName, unavailableSettingPaths) {
     const layout = schema[CONFIGURATION_LAYOUT_KEY] || {};
-    const leafDescriptors = pageName === "settings"
+    const pageLeafDescriptors = pageName === "settings"
         ? configurationInstanceLeafDescriptors(schema)
         : configurationModelLeafDescriptors(schema);
-    return resolveConfigurationLayoutGroups(layout[pageName] || [], leafDescriptors);
+    const unavailablePaths = new Set(unavailableSettingPaths || []);
+    const availableLeafDescriptors = new Map([...pageLeafDescriptors]
+        .filter(([settingPath]) => !unavailablePaths.has(settingPath)));
+    return resolveConfigurationLayoutGroups(layout[pageName] || [], availableLeafDescriptors);
 }
 
 // The groups the All models entry shows: only the settings every model starts from.
