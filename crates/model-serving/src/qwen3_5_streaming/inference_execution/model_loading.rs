@@ -372,6 +372,7 @@ fn load_and_materialize_streaming_model(
     // ledger knows a prompt layer's working memory before the first request.
     model.probe_expert_layer_working_memory(streaming_forward_shape.layer_probe_shape);
     model.begin_serving_session_observation();
+    model.open_memory_governor();
     Ok(model)
 }
 

@@ -146,6 +146,20 @@ pub const fn allocator_cache_exceeds_reclaim_threshold(
 }
 
 impl MlxMemorySnapshot {
+    /// The same snapshot with its peak raised to `peak_memory_bytes` when
+    /// that is higher.
+    ///
+    /// MLX's peak counter is process-global and is reset to measure one
+    /// step at a time, so a caller that measured several steps of one
+    /// forward holds their largest peak itself and restores it here.
+    #[must_use]
+    pub const fn with_peak_at_least(mut self, peak_memory_bytes: usize) -> Self {
+        if peak_memory_bytes > self.peak_memory_bytes {
+            self.peak_memory_bytes = peak_memory_bytes;
+        }
+        self
+    }
+
     /// Returns bytes held by live MLX arrays and graphs.
     #[must_use]
     pub const fn active_memory_bytes(self) -> usize {

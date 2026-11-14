@@ -17,25 +17,28 @@
 //! - `working_memory` — the measured working memory of one layer, by phase.
 //! - `lease` — short-lived needs outside the normal pattern.
 //! - `accounts` — the accounts at one instant and the rule that composes them.
-//! - `memory_ledger` — the owner: the events that change the accounts.
+//! - `memory_ledger` — the accounts' arithmetic: the events that change them.
+//! - `governor` — the one owner an engine talks to: every event answers
+//!   with the kept-weight capacity now in force.
 //! - `reconciliation` — the ledger compared with what MLX reports.
-//! - `observation` — the ledger watching an engine that still decides for
-//!   itself.
 
 pub mod accounts;
+pub mod governor;
 pub mod lease;
 pub mod memory_ledger;
 pub mod model_shape;
-pub mod observation;
 pub mod phase;
 pub mod reconciliation;
 pub mod working_memory;
 
 pub use accounts::LedgerAccounts;
+pub use governor::{
+    KeptWeightCapacity, LedgerReading, MAXIMUM_REDO_ATTEMPT_COUNT, MeasuredStep, MemoryGovernor,
+    RedoAttempt, StepVerdict,
+};
 pub use lease::{LeaseId, LeasePurpose};
 pub use memory_ledger::{MemoryLedger, MemoryLedgerError};
 pub use model_shape::ModelMemoryShape;
-pub use observation::{LedgerObserver, LedgerReading, ObservedStep};
 pub use phase::LedgerPhase;
 pub use reconciliation::{HeldMemory, LedgerReconciliation};
 pub use working_memory::{WorkingMemoryMeasurements, WorkingMemoryReserve};

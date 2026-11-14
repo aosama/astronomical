@@ -24,9 +24,6 @@ mod diagnostic_paging;
 pub(crate) mod expert_layer_working_memory_probe;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
-/// Temporary retained-page freeze while the remaining prompt still needs RAM.
-#[cfg(feature = "direct-mlx")]
-mod expert_retention_memory_pressure;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_reuse;
 #[cfg(feature = "direct-mlx")]
@@ -41,11 +38,15 @@ mod layer_major_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_major_prefill;
 #[cfg(feature = "direct-mlx")]
+mod layer_major_prefill_run;
+mod layer_major_span_redo;
+mod layer_major_span_state;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_probe_shape;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_submission;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod memory_ledger_observation;
+pub(crate) mod memory_governance;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub(crate) mod held_prompt_expert_layer;
 // Reads the next streamed layer while the graphics processor computes.
@@ -132,8 +133,6 @@ pub(crate) use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embeddin
 
 #[cfg(feature = "direct-mlx")]
 pub use cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use expert_retention_memory_pressure::reclaim_retained_payload_for_request_memory_pressure;
 pub use mixed_decode_execution::qwen3_5_moe_combine_partial_route_outputs_for_tests;
 #[cfg(feature = "direct-mlx")]
 pub use output_combination::qwen3_5_moe_combine_experts;
@@ -144,7 +143,6 @@ pub(crate) use paged_route_resolution::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
 };
 #[cfg(feature = "direct-mlx")]
-pub(crate) use phase_aware_expert_residency::record_expert_reclamation_attribution;
 #[cfg(feature = "direct-mlx")]
 pub use routing::{
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,

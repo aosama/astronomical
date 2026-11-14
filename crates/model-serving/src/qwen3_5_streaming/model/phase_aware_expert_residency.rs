@@ -9,8 +9,8 @@ use crate::{
     CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlan, MemoryPhase,
     PerformanceAttribution, PerformanceCounter, PerformanceOperation, RequestExpertResidency,
     RetainedExpertPageClass, RetainedExpertReclamation, plan_expert_residency,
-    publish_request_stable_residency_plan, retained_resident_ceiling_after_budget_refresh,
-    seated_complete_layer_count, should_enact_planned_expert_release,
+    publish_request_stable_residency_plan, seated_complete_layer_count,
+    should_enact_planned_expert_release,
 };
 
 use super::streaming_model::Qwen3_5StreamingModel;
@@ -52,12 +52,39 @@ impl Qwen3_5StreamingModel {
         operation_token_count: u64,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        self.refresh_phase_aware_expert_residency_plan(
+        self.govern_memory_as_the_engine_would_for_tests(
             phase,
             context_token_count,
             operation_token_count,
-            performance_attribution,
-        )
+        );
+        self.refresh_phase_aware_expert_residency_plan(phase, performance_attribution)
+    }
+
+    /// What the engine tells the memory governor before it plans: a model
+    /// loaded directly has no governor, no probe and so no capacity.
+    fn govern_memory_as_the_engine_would_for_tests(
+        &self,
+        phase: crate::MemoryPhase,
+        context_token_count: u64,
+        operation_token_count: u64,
+    ) {
+        if self.governed_memory.governor.borrow().is_none() {
+            self.probe_expert_layer_working_memory(super::LayerProbeShape {
+                prefill_chunk_token_count: usize::try_from(operation_token_count)
+                    .unwrap_or(usize::MAX),
+                full_attention_kv_state_growth_tokens: 256,
+            });
+            self.begin_serving_session_observation();
+            self.open_memory_governor();
+        }
+        match phase {
+            MemoryPhase::Prefill => self.govern_request_start(
+                context_token_count,
+                u32::try_from(operation_token_count).unwrap_or(u32::MAX),
+            ),
+            MemoryPhase::GenerationPreparation | MemoryPhase::Decode => self.govern_reply_start(),
+            MemoryPhase::Idle => {}
+        }
     }
 
     /// Clears an optional optimization target so execution safely streams misses.
@@ -66,33 +93,24 @@ impl Qwen3_5StreamingModel {
         *self.request_expert_residency.borrow_mut() = None;
     }
 
-    /// Refreshes the no-I/O target after memory policy has established a phase budget.
+    /// Refreshes the no-I/O target against the capacity the memory governor
+    /// has given the expert cache.
     pub(crate) fn refresh_phase_aware_expert_residency_plan(
         &self,
         phase: MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let Some(expert_pager) = self.expert_pager.as_ref() else {
             *self.active_expert_residency_plan.borrow_mut() = None;
             return Ok(());
         };
-        let retained_expert_ceiling_bytes = self.compose_phase_aware_expert_budget(
-            phase,
-            context_token_count,
-            operation_token_count,
-        );
+        let retained_expert_ceiling_bytes = self.kept_expert_capacity_bytes();
         let experts_per_token =
             usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
         let layer_geometries =
             retained_expert_layer_geometries(expert_pager.layer_plans(), experts_per_token)?;
-        let (retained_page_ceiling_bytes, budget_reclamation, current_residencies) = self
-            .refresh_retained_expert_ceiling(
-                retained_expert_ceiling_bytes,
-                expert_pager,
-                performance_attribution,
-            )?;
+        let (retained_page_ceiling_bytes, budget_reclamation, current_residencies) =
+            self.refresh_retained_expert_ceiling(retained_expert_ceiling_bytes, expert_pager)?;
         tracing::info!(
             current_residency_count = current_residencies.len(),
             current_residency_payload_bytes = summed_residency_payload_bytes(&current_residencies),
@@ -125,36 +143,6 @@ impl Qwen3_5StreamingModel {
             performance_attribution,
         );
         Ok(())
-    }
-
-    /// Composes the phase budget snapshot and reports it: the leftover expert
-    /// budget every later residency decision arbitrates against.
-    fn compose_phase_aware_expert_budget(
-        &self,
-        phase: MemoryPhase,
-        context_token_count: u64,
-        operation_token_count: u64,
-    ) -> u64 {
-        let budget_phase = planning_budget_phase(phase);
-        let budget_snapshot = self.mlx_ram_budget.borrow().plan(
-            budget_phase,
-            context_token_count,
-            operation_token_count,
-            0,
-        );
-        let retained_expert_ceiling_bytes = budget_snapshot.retained_expert_budget_bytes;
-        tracing::info!(
-            ?phase,
-            context_token_count,
-            mlx_active_memory_ceiling_bytes = budget_snapshot.mlx_active_memory_ceiling_bytes,
-            model_core_payload_bytes = budget_snapshot.model_core_payload_bytes,
-            context_window_reserve_bytes = budget_snapshot.context_window_reserve_bytes,
-            activation_headroom_bytes = budget_snapshot.activation_headroom_bytes,
-            complete_layer_stream_slot_bytes = budget_snapshot.complete_layer_stream_slot_bytes,
-            retained_expert_ceiling_bytes,
-            "composed Prefill/Decode leftover expert budget"
-        );
-        retained_expert_ceiling_bytes
     }
 
     /// Publishes the request-stable plan, enacts its releases without loading
@@ -220,16 +208,12 @@ impl Qwen3_5StreamingModel {
         *self.active_expert_residency_plan.borrow_mut() = Some(residency_plan);
     }
 
-    /// Snapshots the resident topology, floors the refreshed ceiling at the
-    /// payload already resident (a smaller number would discard a complete
-    /// layer or a warm table this request already paid to read — Prefill,
-    /// GenerationPreparation, and Decode share this rule, issue #955),
-    /// updates the retention ceiling, and records the reclamation.
+    /// Snapshots what the cache keeps for the planner. The capacity is the
+    /// governor's and is not changed here; nothing is given back.
     fn refresh_retained_expert_ceiling(
         &self,
         retained_expert_ceiling_bytes: u64,
         expert_pager: &crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager,
-        performance_attribution: &mut PerformanceAttribution,
     ) -> Result<
         (
             u64,
@@ -253,21 +237,9 @@ impl Qwen3_5StreamingModel {
             .map(|geometry| geometry.expert_capacity)
             .unwrap_or(0);
         let current_residencies = retained_experts.borrow().topology_snapshot(expert_capacity);
-        let current_residency_payload_bytes: u64 = current_residencies
-            .iter()
-            .map(|residency| residency.payload_bytes)
-            .fold(0_u64, u64::saturating_add);
-        let retained_page_ceiling_bytes = retained_resident_ceiling_after_budget_refresh(
-            retained_expert_ceiling_bytes,
-            current_residency_payload_bytes,
-        );
-        let budget_reclamation = retained_experts
-            .borrow_mut()
-            .update_maximum_resident_payload_bytes(retained_page_ceiling_bytes);
-        record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
         Ok((
-            retained_page_ceiling_bytes,
-            budget_reclamation,
+            retained_expert_ceiling_bytes,
+            RetainedExpertReclamation::default(),
             current_residencies,
         ))
     }
@@ -367,16 +339,6 @@ fn publish_phase_aware_residency_plan_info(
         low_budget_partial_mode = residency_plan.is_low_budget_partial_mode,
         "published phase-aware expert residency plan"
     );
-}
-
-/// Pure: maps the serving phase onto the budget phase the RAM planner plans
-/// against.
-fn planning_budget_phase(phase: MemoryPhase) -> MemoryPhase {
-    match phase {
-        MemoryPhase::Prefill => MemoryPhase::Prefill,
-        MemoryPhase::GenerationPreparation | MemoryPhase::Decode => MemoryPhase::Decode,
-        MemoryPhase::Idle => MemoryPhase::Idle,
-    }
 }
 
 /// Pure: counts the planned partial-layer targets for the
@@ -482,32 +444,6 @@ pub(in crate::qwen3_5_streaming) fn retained_expert_layer_geometries(
             })
         })
         .collect()
-}
-
-/// Attributes ownership released while applying one composed retained-page ceiling.
-pub(crate) fn record_expert_reclamation_attribution(
-    performance_attribution: &mut PerformanceAttribution,
-    reclamation: RetainedExpertReclamation,
-) {
-    if reclamation.released_partial_payload_bytes > 0 {
-        performance_attribution.record_counter(
-            PerformanceCounter::ExpertResidencyRetiredPartialPayloadBytes,
-            reclamation.released_partial_payload_bytes,
-        );
-    }
-    if reclamation.released_complete_payload_bytes > 0 {
-        performance_attribution.record_counter(
-            PerformanceCounter::ExpertResidencyRetiredCompletePayloadBytes,
-            reclamation.released_complete_payload_bytes,
-        );
-    }
-    let released_payload_bytes = reclamation.released_payload_bytes();
-    if released_payload_bytes > 0 {
-        performance_attribution.record_counter(
-            PerformanceCounter::ExpertTopologyRetiredPayloadBytes,
-            released_payload_bytes,
-        );
-    }
 }
 
 #[cfg(test)]

@@ -27,6 +27,42 @@ pub(crate) trait Qwen3_5MemoryOwnership {
     /// Text weight bytes, other than experts, this engine keeps in memory.
     fn held_model_core_payload_bytes(&self) -> u64;
 
+    /// The reserves the ceiling-utilization split is composed against while
+    /// a request runs. An engine whose limit a memory governor owns answers
+    /// with the governor's accounts, so the split shows what is really set
+    /// aside (issue #2221); otherwise it is the budget's plan.
+    fn request_ram_budget_snapshot(
+        &self,
+        phase: crate::MemoryPhase,
+        context_token_count: u64,
+        operation_token_count: u64,
+    ) -> crate::memory::MlxRamBudgetSnapshot {
+        self.model_base().mlx_ram_budget.borrow().plan(
+            phase,
+            context_token_count,
+            operation_token_count,
+            0,
+        )
+    }
+
+    /// The same between requests, with `live_context_state_payload_bytes`
+    /// of decoder state still held.
+    fn between_request_ram_budget_snapshot(
+        &self,
+        live_context_state_payload_bytes: u64,
+    ) -> crate::memory::MlxRamBudgetSnapshot {
+        self.model_base()
+            .mlx_ram_budget
+            .borrow()
+            .plan_holding_live_context_state(
+                crate::MemoryPhase::Decode,
+                0,
+                1,
+                0,
+                live_context_state_payload_bytes,
+            )
+    }
+
     #[must_use]
     fn active_memory_breakdown(
         &self,
@@ -74,10 +110,11 @@ pub(crate) trait Qwen3_5MemoryOwnership {
 
     /// Composes the ceiling-utilization split for one measured instant (issue #510).
     ///
-    /// The budget owner is the single source of the reserve arithmetic, so the
-    /// published split and the engine's own admission decisions can never
-    /// drift apart. Callers pass the breakdown reconciled from the same
-    /// measurement, keeping every term pinned to one instant.
+    /// The reserves come from whatever decides them for this engine
+    /// (`request_ram_budget_snapshot`), so the published split and the
+    /// engine's own decisions can never drift apart. Callers pass the
+    /// breakdown reconciled from the same measurement, keeping every term
+    /// pinned to one instant.
     fn memory_ceiling_utilization_for_breakdown(
         &self,
         phase: crate::MemoryPhase,
@@ -87,12 +124,7 @@ pub(crate) trait Qwen3_5MemoryOwnership {
         active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.model_base().mlx_ram_budget.borrow().plan(
-                phase,
-                context_token_count,
-                operation_token_count,
-                0,
-            ),
+            self.request_ram_budget_snapshot(phase, context_token_count, operation_token_count),
             mlx_active_memory_bytes,
             active_breakdown,
         )
@@ -111,16 +143,9 @@ pub(crate) trait Qwen3_5MemoryOwnership {
         finalized_active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.model_base()
-                .mlx_ram_budget
-                .borrow()
-                .plan_holding_live_context_state(
-                    crate::MemoryPhase::Decode,
-                    0,
-                    1,
-                    0,
-                    finalized_active_breakdown.context_state_payload_bytes,
-                ),
+            self.between_request_ram_budget_snapshot(
+                finalized_active_breakdown.context_state_payload_bytes,
+            ),
             mlx_active_memory_bytes,
             finalized_active_breakdown,
         )

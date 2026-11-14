@@ -216,9 +216,16 @@ pub struct WorkerMlxMemorySnapshot {
     pub memory_ledger: Option<WorkerMemoryLedgerSnapshot>,
 }
 
-/// The memory ledger's accounts, what the engine held, and how the two
-/// compared with MLX, at one instant, with the worst readings of the
-/// request so far.
+/// How far a prompt that is read one layer at a time has got.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerPromptLayerProgress {
+    /// Layers that have read the whole prompt so far.
+    pub completed_layer_count: u32,
+    /// Layers the prompt has to pass through in all.
+    pub layer_count: u32,
+}
+
+/// The memory ledger's reading of one completed step.
 ///
 /// While the ledger only watches, this is evidence, not policy: it shows
 /// what the ledger would have allowed beside what the engine did.
@@ -570,6 +577,9 @@ pub enum WorkerEvent {
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
         /// Current retained-expert ownership after this prompt-processing boundary.
         expert_residency: Option<WorkerExpertResidencySnapshot>,
+        /// Present while a prompt is read one layer at a time: no token is
+        /// finished until the last layer, so progress is counted in layers.
+        prompt_layer_progress: Option<WorkerPromptLayerProgress>,
     },
     /// Reports the explicit barrier between final prompt processing and first decode.
     ///

@@ -48,7 +48,34 @@ pub(crate) struct PromptExpertPagesInHand {
         std::cell::RefCell<Option<super::prefill_complete_layer_prefetch::PrefetchedCompleteLayer>>,
 }
 
+/// Bytes of the complete expert pages in hand.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ExpertPagesInHandBytes {
+    /// The layer being worked on.
+    pub(crate) held_bytes: u64,
+    /// The layer read ahead, which outlives this layer's step.
+    pub(crate) read_ahead_bytes: u64,
+}
+
 impl Qwen3_5Model {
+    /// What the pages in hand occupy, for the ledger's slots.
+    pub(super) fn expert_pages_in_hand_bytes(&self) -> ExpertPagesInHandBytes {
+        ExpertPagesInHandBytes {
+            held_bytes: self
+                .prompt_expert_pages_in_hand
+                .held_layer
+                .borrow()
+                .as_ref()
+                .map_or(0, |held_layer| held_layer.manifest.payload_byte_count),
+            read_ahead_bytes: self
+                .prompt_expert_pages_in_hand
+                .read_ahead_layer
+                .borrow()
+                .as_ref()
+                .map_or(0, super::prefill_complete_layer_prefetch::PrefetchedCompleteLayer::payload_byte_count),
+        }
+    }
+
     /// Before a layer's spans: takes the layer's complete page in hand when
     /// the prompt reads it whole and the cache does not keep it.
     ///
@@ -263,5 +290,57 @@ impl Qwen3_5Model {
             performance_attribution,
         )
         .map(Some)
+    }
+}
+
+impl Qwen3_5Model {
+    /// After an expert layer's last span: waits for the layer and records
+    /// its spans' routes as prompt demand.
+    ///
+    /// A route is a slice of the table the router ranks every expert in, a
+    /// kilobyte per token on a 256-expert layer, and holding the slice holds
+    /// the table. Left for the wait that ends the prompt, every layer's
+    /// tables stayed alive together: measured on a 10,240-token prompt,
+    /// memory rose 10 MB with each layer, 0.4 GB by the last. Recorded
+    /// here, they free as each layer finishes.
+    ///
+    /// The wait is the one the next layer's first span would make anyway. A
+    /// dense model has no routes and keeps building the next layer's graph
+    /// while this one computes.
+    pub(super) fn record_finished_expert_layer_routes(
+        &self,
+        previous_layer_output: &mut Option<MlxArray>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        if self.retained_experts.is_none() {
+            return Ok(());
+        }
+        self.wait_for_previous_layer(previous_layer_output, performance_attribution)?;
+        self.record_deferred_expert_demand(performance_attribution);
+        Ok(())
+    }
+
+    /// Reads the next streamed expert layer ahead once the first span this
+    /// pass over the layer runs is submitted.
+    ///
+    /// That submission waited for the previous layer, so its page is gone
+    /// and at most two are alive: this layer's and the one read here while
+    /// this layer computes. Reading any earlier would hold three.
+    pub(super) fn read_next_expert_layer_ahead_after_first_span(
+        &self,
+        submitted_span_index: usize,
+        layer_index: usize,
+        spans_token_count: i32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        if submitted_span_index != 0 {
+            return;
+        }
+        self.issue_prefill_complete_layer_prefetch(
+            layer_index,
+            spans_token_count,
+            PartlyKeptLayers::Included,
+            performance_attribution,
+        );
     }
 }

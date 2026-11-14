@@ -24,6 +24,7 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
         completed_prefill_chunk_tokens,
         mlx_memory_snapshot,
         expert_residency,
+        prompt_layer_progress,
     } = worker_prefill_progress_event
     else {
         return Err(WorkerControlError::WorkerProtocolViolation {
@@ -72,6 +73,7 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
             request_started_at: active_request.request_started_at,
             elapsed_millis,
             completed_prefill_chunk_tokens,
+            prompt_layer_progress,
         },
     );
     Ok(())

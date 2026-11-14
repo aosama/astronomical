@@ -82,8 +82,9 @@ impl Qwen3_5EngineState {
             self.persistent_prompt_cache.is_some() && !inference_request.has_visual_embeddings(),
             &mut performance_attribution,
         )?;
-        // Everything below can still fail; on failure the engine's
-        // expert-retention state must be resumed before the error escapes.
+        self.govern_request_start(&inference_request);
+        // Everything below can still fail; a request that never starts must
+        // not leave the memory governor holding its prompt's stored state.
         let admitted_generation_start = self.assemble_admitted_generation_session(
             &mut inference_request,
             &decoder_cache_layout,
@@ -94,10 +95,25 @@ impl Qwen3_5EngineState {
         if admitted_generation_start.is_err()
             && let Some(model) = self.model.as_ref()
         {
-            model.resume_expert_retention_after_request_memory_pressure();
-            model.lift_prefill_memory_recovery_freeze();
+            model.govern_request_end(request_id.value());
         }
         admitted_generation_start
+    }
+
+    /// Tells the memory governor a request starts reading its prompt, in
+    /// spans of at most the configured chunk.
+    fn govern_request_start(&self, inference_request: &Qwen3_5InferenceRequest) {
+        let Some(model) = self.model.as_ref() else {
+            return;
+        };
+        model.govern_request_start(
+            u64::try_from(inference_request.input_token_ids().len()).unwrap_or(u64::MAX),
+            u32::try_from(
+                self.prompt_processing_chunk_sizer
+                    .maximum_prompt_processing_chunk_size_tokens(),
+            )
+            .unwrap_or(u32::MAX),
+        );
     }
 
     /// Rejects a second concurrent request outright — this engine serves
@@ -574,10 +590,8 @@ impl Qwen3_5EngineState {
             engine_extension: StreamingRequestExtension {
                 has_opened_prefill_demand_window: false,
                 reserved_context_tokens,
-                completed_prefill_memory_recovery_attempt_count: 0,
-                post_recovery_expert_refill: Default::default(),
-                planned_prefill_workspace_bytes_at_recovery: 0,
                 layer_major_prefill_declined: false,
+                layer_at_a_time_prefill: None,
             },
         });
         let restored_prompt_prefix_token_count =

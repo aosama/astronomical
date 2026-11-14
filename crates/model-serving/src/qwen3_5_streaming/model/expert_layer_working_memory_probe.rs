@@ -31,6 +31,10 @@ pub(crate) struct ProbedPromptLayerWorkingMemory {
     /// The step's peak beyond what was held before it, the state it wrote
     /// and the expert weights it read.
     pub(crate) working_memory_bytes: u64,
+    /// The same for one token through one layer, which is what a reply step
+    /// is made of. Without it the ledger would know nothing about the reply
+    /// phase when the first reply begins, and would keep nothing for it.
+    pub(crate) reply_token_working_memory_bytes: u64,
 }
 
 impl Qwen3_5Model {
@@ -49,6 +53,8 @@ impl Qwen3_5Model {
                 tracing::info!(
                     span_token_count = probed_working_memory.span_token_count,
                     working_memory_bytes = probed_working_memory.working_memory_bytes,
+                    reply_token_working_memory_bytes =
+                        probed_working_memory.reply_token_working_memory_bytes,
                     "measured one expert layer's prompt working memory at load"
                 );
                 self.probed_prompt_layer_working_memory
@@ -67,10 +73,17 @@ impl Qwen3_5Model {
         &self,
         probe_shape: LayerProbeShape,
     ) -> Result<ProbedPromptLayerWorkingMemory, Qwen3_5ExecutionError> {
+        let reply_token_shape = LayerProbeShape {
+            prefill_chunk_token_count: 1,
+            ..probe_shape
+        };
         let mut working_memory_bytes = 0_u64;
+        let mut reply_token_working_memory_bytes = 0_u64;
         for probe_layer_index in self.probe_layer_indexes() {
             working_memory_bytes = working_memory_bytes
                 .max(self.measure_one_expert_layer_step(probe_layer_index, probe_shape)?);
+            reply_token_working_memory_bytes = reply_token_working_memory_bytes
+                .max(self.measure_one_expert_layer_step(probe_layer_index, reply_token_shape)?);
         }
         self.runtime
             .synchronize_gpu_stream_and_clear_allocator_cache()?;
@@ -78,6 +91,7 @@ impl Qwen3_5Model {
             span_token_count: u32::try_from(probe_shape.prefill_chunk_token_count)
                 .unwrap_or(u32::MAX),
             working_memory_bytes,
+            reply_token_working_memory_bytes,
         })
     }
 

@@ -138,13 +138,8 @@ impl Qwen3_5EngineState {
             false,
             AdaptiveRamGrowthExecutionProfile::Paged,
         );
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
-            &active_request.request_decoder_state,
-            0,
-            0,
-        )?;
+        let admitted_baseline =
+            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
         let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
         let retained_expert_payload_bytes_before_growth =
             admitted_baseline.retained_expert_payload_bytes;
@@ -187,13 +182,8 @@ impl Qwen3_5EngineState {
         let final_input_token_id = input_token_ids[final_input_token_position];
         let adaptive_ram_growth_context =
             AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged);
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
-            &active_request.request_decoder_state,
-            0,
-            0,
-        )?;
+        let admitted_baseline =
+            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
         let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
         let retained_expert_payload_bytes_before_growth =
             admitted_baseline.retained_expert_payload_bytes;

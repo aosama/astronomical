@@ -209,6 +209,11 @@ pub(super) struct InteractionLiveEvidence {
     pub(super) observed_generation_preparation: bool,
     pub(super) observed_generation_preparation_with_consistent_residency: bool,
     pub(super) observed_generation: bool,
+    /// Whether a memory sample taken inside this request has been seen.
+    /// Until the request's first forward reports, the status endpoint still
+    /// shows the sample the previous request ended with, and that one must
+    /// not count toward this request's maxima.
+    pub(super) observed_memory_sample_of_this_request: bool,
     pub(super) maximum_active_memory_bytes: u64,
     pub(super) maximum_peak_memory_bytes: u64,
     pub(super) maximum_expert_payload_bytes: u64,
@@ -234,6 +239,19 @@ impl InteractionLiveEvidence {
                 (resident_expert_count == 0) == (resident_expert_payload_bytes == 0);
         }
         self.observed_generation |= activity == "generating";
+        self.observe_memory_sample(status_document);
+    }
+
+    /// Folds the status document's memory sample into this request's maxima,
+    /// once a sample taken inside the request has been seen.
+    fn observe_memory_sample(&mut self, status_document: &Value) {
+        self.observed_memory_sample_of_this_request |= matches!(
+            status_document["mlx_memory_snapshot"]["source"].as_str(),
+            Some("prefill" | "decode_submitted")
+        );
+        if !self.observed_memory_sample_of_this_request {
+            return;
+        }
         let memory = MemorySample::from_status(status_document);
         self.maximum_active_memory_bytes = self
             .maximum_active_memory_bytes

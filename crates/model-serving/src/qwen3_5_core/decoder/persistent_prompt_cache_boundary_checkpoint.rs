@@ -146,6 +146,23 @@ impl Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector {
         Ok(())
     }
 
+    /// Drops one linear-attention layer's snapshots from every checkpoint,
+    /// so a layer whose forward failed can record them again when it is
+    /// redone. Forgetting a layer that recorded nothing changes nothing.
+    pub fn forget_linear_attention_layer(&mut self, decoder_layer_index: usize) {
+        let convolution_tensor_name = format!("layer_{decoder_layer_index}_linear.convolution");
+        let recurrent_tensor_name =
+            format!("layer_{decoder_layer_index}_linear.gated_delta_recurrent");
+        for checkpoint in &mut self.checkpoints {
+            checkpoint
+                .recurrent_snapshot_tensors
+                .remove(&convolution_tensor_name);
+            checkpoint
+                .recurrent_snapshot_tensors
+                .remove(&recurrent_tensor_name);
+        }
+    }
+
     pub fn complete(
         self,
     ) -> Result<Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, MlxRuntimeError> {
@@ -166,3 +183,7 @@ fn collector_error(description: &'static str) -> MlxRuntimeError {
         description: description.to_owned(),
     }
 }
+
+#[cfg(test)]
+#[path = "persistent_prompt_cache_boundary_checkpoint_tests.rs"]
+mod tests;

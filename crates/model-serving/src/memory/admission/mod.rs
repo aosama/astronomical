@@ -10,9 +10,7 @@ mod adaptive_ram_growth_logging;
 mod context_logging;
 
 #[cfg(feature = "direct-mlx")]
-pub(crate) use adaptive_ram_growth_logging::{
-    log_adaptive_ram_growth_admission_decision, log_adaptive_ram_growth_pressure,
-};
+pub(crate) use adaptive_ram_growth_logging::log_adaptive_ram_growth_admission_decision;
 pub use astronomical_memory_policy::admission::{
     AllocationAdmissionDecision, AllocationAdmissionObservation, CompleteResidencyDecision,
     CompleteResidencyRequirements, ContextAdmissionRequirements, RetainedPrefixRetentionDecision,

@@ -534,6 +534,7 @@ async fn dispatch_unstructured_chat(
                         memory_ledger: None,
                     }),
                     expert_residency: None,
+                    prompt_layer_progress: None,
                 })
                 .await?;
             event_writer

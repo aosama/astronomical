@@ -69,7 +69,7 @@ fn should_grow_a_warm_table_from_the_first_decode_miss_and_serve_later_hits() {
     let mut cache = WarmExpertSlotTableCache::new(1);
     // Production ceilings are set by the residency plan refresh; the tests
     // set a generous ceiling except the budget-refusal case.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights(&runtime);
 
     cache
@@ -126,7 +126,7 @@ fn should_evict_the_least_read_expert_when_a_warm_table_overflows() {
     let mut cache = WarmExpertSlotTableCache::new(1);
     // Production ceilings are set by the residency plan refresh; the tests
     // set a generous ceiling except the budget-refusal case.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights(&runtime);
 
     for routed_expert_ids in [vec![1, 2], vec![3, 4], vec![5, 6], vec![7, 8]] {
@@ -173,10 +173,10 @@ fn should_keep_the_stream_operation_local_when_the_budget_refuses_the_warm_table
     let mut cache = WarmExpertSlotTableCache::new(1);
     // Production ceilings are set by the residency plan refresh; the tests
     // set a generous ceiling except the budget-refusal case.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights(&runtime);
     // A ceiling below the padded warm-table cost refuses creation.
-    cache.update_maximum_resident_payload_bytes(1);
+    cache.set_capacity(1);
 
     cache
         .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
@@ -195,7 +195,7 @@ fn should_scale_final_prefill_chunk_demand_above_earlier_prompt_frequency() {
     let mut cache = WarmExpertSlotTableCache::new(2);
     // Production ceilings are set by the residency plan refresh; the tests
     // set a generous ceiling except the budget-refusal case.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights(&runtime);
     for (layer_index, expert_ids) in [(0, &[7, 9][..]), (1, &[3, 5][..])] {
         cache
@@ -236,7 +236,7 @@ fn should_count_warm_inserts_only_for_hot_expert_warming() {
     let mut cache = WarmExpertSlotTableCache::new(1);
     // Production ceilings are set by the residency plan refresh; the tests
     // set a generous ceiling except the budget-refusal case.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights(&runtime);
 
     // A complete adoption (warm capacity 0) is whole-layer caching and
@@ -306,7 +306,7 @@ fn warm_two_tokens(
 fn should_keep_budget_headroom_for_sibling_layers_when_the_first_warm_tables_are_barely_filled() {
     let runtime = test_runtime();
     let mut probe_cache = WarmExpertSlotTableCache::new(1);
-    probe_cache.update_maximum_resident_payload_bytes(u64::MAX >> 1);
+    probe_cache.set_capacity(u64::MAX >> 1);
     warm_two_tokens(&mut probe_cache, &runtime, 0, &[7, 9], &[11, 13]);
     let grown_table_payload_bytes = probe_cache.statistics().resident_payload_byte_count;
     drop(probe_cache);
@@ -314,7 +314,7 @@ fn should_keep_budget_headroom_for_sibling_layers_when_the_first_warm_tables_are
     let routed_size_table_payload_bytes = grown_table_payload_bytes / 2;
     let ceiling_bytes = 2 * grown_table_payload_bytes + routed_size_table_payload_bytes;
     let mut cache = WarmExpertSlotTableCache::new(SIBLING_LAYER_COUNT);
-    cache.update_maximum_resident_payload_bytes(ceiling_bytes);
+    cache.set_capacity(ceiling_bytes);
 
     warm_two_tokens(&mut cache, &runtime, 0, &[7, 9], &[11, 13]);
     warm_two_tokens(&mut cache, &runtime, 1, &[7, 9], &[11, 13]);
@@ -353,7 +353,7 @@ fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
     let weights = streamed_weights(&runtime);
     // Two routed-size inserts grow the table 2 -> 4; the ceiling then refuses
     // any further growth, so the third new routed set must evict.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     cache
         .queue_pending_routed_expert_insert(0, &[1, 2], &weights, WARM_SLOT_COUNT)
         .expect("the first warm insert should queue");
@@ -368,7 +368,7 @@ fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
         .expect("the second warm flush should succeed");
     let grown_table_payload_bytes = cache.statistics().resident_payload_byte_count;
     // Budget admits the current table but not its doubling.
-    cache.update_maximum_resident_payload_bytes(grown_table_payload_bytes);
+    cache.set_capacity(grown_table_payload_bytes);
 
     for _read in 0..3 {
         cache.record_routed_reads(0, &[1, 2]);
@@ -412,7 +412,7 @@ fn should_seat_at_most_the_composed_ceiling_and_refuse_every_further_complete_la
     let complete_layer_payload_bytes =
         u64::try_from(EXPERT_CAPACITY).unwrap_or(0) * STREAMED_PER_EXPERT_PAYLOAD_BYTES;
     let composed_ceiling_bytes = affordable_complete_layer_count * complete_layer_payload_bytes;
-    cache.update_maximum_resident_payload_bytes(composed_ceiling_bytes);
+    cache.set_capacity(composed_ceiling_bytes);
     let complete_expert_ids: Vec<usize> = (0..EXPERT_CAPACITY).collect();
 
     let mut seated_layer_indexes = Vec::new();
@@ -453,7 +453,7 @@ fn should_evict_one_whole_table_for_a_sub_table_target_and_never_reseat_it() {
     let complete_layer_payload_bytes =
         u64::try_from(EXPERT_CAPACITY).unwrap_or(0) * STREAMED_PER_EXPERT_PAYLOAD_BYTES;
     let composed_ceiling_bytes = 5 * complete_layer_payload_bytes;
-    cache.update_maximum_resident_payload_bytes(composed_ceiling_bytes);
+    cache.set_capacity(composed_ceiling_bytes);
     let complete_expert_ids: Vec<usize> = (0..EXPERT_CAPACITY).collect();
     for layer_index in 0..5_usize {
         let complete_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
@@ -473,10 +473,17 @@ fn should_evict_one_whole_table_for_a_sub_table_target_and_never_reseat_it() {
     // eviction granularity was an 855,638,016-byte table; the scaled analogue
     // is a one-expert target against a 768-byte table.
     let sub_table_target_bytes = STREAMED_PER_EXPERT_PAYLOAD_BYTES;
-    let released = cache.limit_for_request_pressure(sub_table_target_bytes);
+    let capacity_one_expert_short = cache
+        .statistics()
+        .resident_payload_byte_count
+        .saturating_sub(sub_table_target_bytes);
+    let released = cache
+        .set_capacity(capacity_one_expert_short)
+        .released_payload_bytes()
+        > 0;
     assert!(
         released,
-        "the pressure pass must release at least one table"
+        "a capacity one expert short must release at least one table"
     );
     assert_eq!(
         cache.statistics().resident_payload_byte_count,
@@ -506,7 +513,7 @@ fn should_evict_one_whole_table_for_a_sub_table_target_and_never_reseat_it() {
         2 * complete_layer_payload_bytes,
         cache.statistics().resident_payload_byte_count,
     );
-    cache.update_maximum_resident_payload_bytes(floored_ceiling_bytes);
+    cache.set_capacity(floored_ceiling_bytes);
     assert!(
         !cache
             .try_adopt_complete_layer(
@@ -536,7 +543,7 @@ fn should_evict_one_whole_table_for_a_sub_table_target_and_never_reseat_it() {
 fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(2);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights(&runtime);
 
     // Layer 0 stays partial (elastic); layer 1 receives every expert
@@ -579,7 +586,7 @@ fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() 
 fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
     let runtime = test_runtime();
     let mut seeded_cache = WarmExpertSlotTableCache::new(1);
-    seeded_cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    seeded_cache.set_capacity(1024 * 1024 * 1024);
     // Persisted history says experts 4 and 5 of this layer are
     // conversation-hot (decode record); the prefill record stays empty.
     seeded_cache.seed_expert_demand_history(PersistedExpertUsage {
@@ -609,7 +616,7 @@ fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
     // The control: an identical session without history ranks the same
     // seating strictly lower, so seeded heat genuinely raises priority.
     let mut cold_cache = WarmExpertSlotTableCache::new(1);
-    cold_cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cold_cache.set_capacity(1024 * 1024 * 1024);
     cold_cache
         .queue_pending_routed_expert_insert(0, &[4, 5], &weights, WARM_SLOT_COUNT)
         .expect("the cold warm insert should queue");
@@ -628,7 +635,7 @@ fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
 fn should_serve_a_second_chunk_route_from_a_layer_seated_by_the_first_chunk() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     // Chunk 1 routes the layer's whole expert set; the streamed page covers
     // every expert, so adoption seats the complete layer.
     let complete_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
@@ -664,7 +671,7 @@ fn should_serve_a_second_chunk_route_from_a_layer_seated_by_the_first_chunk() {
 fn should_adopt_a_streamed_complete_layer_when_the_budget_admits_it() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cache.set_capacity(1024 * 1024 * 1024);
     let complete_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
     let every_expert_id: Vec<usize> = (0..EXPERT_CAPACITY).collect();
 
@@ -683,7 +690,7 @@ fn should_adopt_a_streamed_complete_layer_when_the_budget_admits_it() {
     // Refusal path: a ceiling below the layer's payload keeps the page
     // operation-local and leaves the layer unseated.
     let mut refusing_cache = WarmExpertSlotTableCache::new(1);
-    refusing_cache.update_maximum_resident_payload_bytes(8);
+    refusing_cache.set_capacity(8);
     let refused = refusing_cache
         .try_adopt_complete_layer(&runtime, 1, &every_expert_id, &complete_weights)
         .expect("the refused adoption should not error either");

@@ -104,7 +104,7 @@ pub use protocol_message::{
     WorkerDenseLayerResidency, WorkerEvent, WorkerExpertLayerTopology,
     WorkerExpertResidencySnapshot, WorkerExpertStreamingStats,
     WorkerMemoryCeilingUtilizationSnapshot, WorkerMemoryLedgerSnapshot, WorkerMlxMemorySnapshot,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerPromptLayerProgress, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;

@@ -147,6 +147,18 @@ function overviewWorkingPresentation(statusDocument, progress, modelTitle) {
             detail: processedTokens.toLocaleString() + " tokens written · up to "
                 + totalTokens.toLocaleString() + speedAndTime, unloadText: "" };
     }
+    // A prompt read one layer at a time finishes no token until its last
+    // layer, so until then the bar follows the layers done and the text says
+    // how long the prompt is.
+    const totalLayers = progress.total_layers || 0;
+    if (totalLayers > 0 && processedTokens < totalTokens) {
+        // Multiplied before dividing so a whole percentage stays whole.
+        const layerPercent = Math.min(100, ((progress.completed_layers || 0) * 100) / totalLayers);
+        return { state: "working", stateLabel, modelTitle, fillPercent: layerPercent,
+            detail: Math.floor(layerPercent) + "% · " + totalTokens.toLocaleString() + " prompt tokens · "
+                + formatOverviewSeconds(elapsedMilliseconds),
+            unloadText: "" };
+    }
     return { state: "working", stateLabel, modelTitle,
         fillPercent: totalTokens > 0 ? Math.min(100, (processedTokens / totalTokens) * 100) : 0,
         detail: processedTokens.toLocaleString() + " of " + totalTokens.toLocaleString() + " prompt tokens read" + speedAndTime,

@@ -39,9 +39,6 @@ mod demand_phase_tests;
 mod memory_behavior_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
-mod request_pressure_tests;
-
-#[cfg(all(test, feature = "direct-mlx"))]
 mod prefill_seed_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
@@ -128,16 +125,10 @@ pub struct WarmExpertSlotTableCache {
     /// ignores it; see `demand_recording`.
     demand_assignment_weight: u64,
     resident_payload_bytes: u64,
-    normal_maximum_resident_payload_bytes: u64,
-    request_pressure_maximum_resident_payload_bytes: Option<u64>,
-    /// Set by prefill memory recovery: holds the effective ceiling at zero so
-    /// the retry streams experts instead of re-seating them. Kept apart from
-    /// the request-pressure override because per-chunk admission budgets,
-    /// staging loans and plan refreshes legitimately replace or lift that
-    /// override within a request, and each of them used to undo the freeze
-    /// (issue #1729). Lifted only at decode handoff, finalization, or a
-    /// failed request start.
-    is_frozen_for_prefill_memory_recovery: bool,
+    /// How many bytes of experts this cache may keep. Set only through
+    /// `set_capacity`, by the one owner of the memory ledger (issue #2221);
+    /// nothing else limits or empties the cache.
+    capacity_bytes: u64,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     decode_forward_active: bool,
     decode_step_epoch: u64,
@@ -176,9 +167,7 @@ impl WarmExpertSlotTableCache {
             demand_phase: demand_phase::ExpertDemandPhase::Prefill,
             demand_assignment_weight: 1,
             resident_payload_bytes: 0,
-            normal_maximum_resident_payload_bytes: 0,
-            request_pressure_maximum_resident_payload_bytes: None,
-            is_frozen_for_prefill_memory_recovery: false,
+            capacity_bytes: 0,
             decode_expert_cache_policy,
             decode_forward_active: false,
             decode_step_epoch: 0,
@@ -343,7 +332,7 @@ impl WarmExpertSlotTableCache {
             .resident_payload_bytes
             .saturating_sub(existing_payload_bytes)
             .saturating_add(incoming_payload_bytes);
-        if projected_payload_bytes > self.effective_maximum_resident_payload_bytes() {
+        if projected_payload_bytes > self.capacity_bytes {
             return Ok(false);
         }
         self.remove_layer(layer_index);
@@ -482,15 +471,10 @@ impl WarmExpertSlotTableCache {
         true
     }
 
-    pub fn update_maximum_resident_payload_bytes(
-        &mut self,
-        maximum_payload_bytes: u64,
-    ) -> RetainedExpertReclamation {
-        self.normal_maximum_resident_payload_bytes = maximum_payload_bytes;
-        // Clear any request-pressure override so eviction uses the normal
-        // ceiling. Request-pressure overrides are for generation, not
-        // residency planning.
-        self.request_pressure_maximum_resident_payload_bytes = None;
-        self.reclaim_to_effective_ceiling()
+    /// Sets how many bytes of experts the cache may keep and gives back, in
+    /// its own order, whatever no longer fits.
+    pub fn set_capacity(&mut self, capacity_bytes: u64) -> RetainedExpertReclamation {
+        self.capacity_bytes = capacity_bytes;
+        self.trim_to_capacity()
     }
 }

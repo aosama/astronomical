@@ -22,6 +22,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 GeneratedToken::PrefillProgress {
                     persistent_prompt_cache_diagnostics: None,
                     neural_engine_chunk: None,
+                    prompt_layer_progress: None,
                     processed_token_count: 2,
                     elapsed_millis: 400,
                     forward_prefill_chunk_elapsed_millis: 350,
@@ -55,6 +56,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 GeneratedToken::PrefillProgress {
                     persistent_prompt_cache_diagnostics: None,
                     neural_engine_chunk: None,
+                    prompt_layer_progress: None,
                     processed_token_count: 3,
                     elapsed_millis: 600,
                     forward_prefill_chunk_elapsed_millis: 525,
@@ -234,6 +236,7 @@ async fn should_report_where_a_chunk_ran_when_the_model_has_programs() {
             vec![GeneratedToken::PrefillProgress {
                 persistent_prompt_cache_diagnostics: None,
                 neural_engine_chunk: Some(chunk_report),
+                prompt_layer_progress: None,
                 processed_token_count: 15,
                 elapsed_millis: 400,
                 forward_prefill_chunk_elapsed_millis: 350,

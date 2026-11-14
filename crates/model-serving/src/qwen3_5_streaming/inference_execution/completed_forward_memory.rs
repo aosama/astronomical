@@ -1,32 +1,31 @@
-//! Post-forward MLX sampling and memory-budget learning.
+//! Post-forward MLX sampling: what a forward left in memory and how high it
+//! peaked.
 //!
-//! Admission and observation are deliberately separate owners. Admission predicts
-//! whether a forward may begin; this module runs only after the forward boundary
-//! and teaches future admission from what MLX actually retained and peaked at.
+//! The memory governor is told about every completed forward
+//! (`govern_completed_forward`) and is the only thing that changes how much
+//! the expert cache may keep (issue #2221). The learned growth guard and the
+//! RAM budget are still fed here because the context admission and the dense
+//! layer plan read them; they decide nothing about the expert cache.
 //!
-//! The sequence is important:
+//! The sequence:
 //!
 //! 1. Sample active and peak MLX bytes under attribution.
-//! 2. Teach the adaptive guard the residual transient window for this context.
-//! 3. Publish the phase high-water to expert paging.
-//! 4. Teach the composed RAM budget context and activation evidence.
-//! 5. Recompute the retained-layer ceiling from that single-source budget.
+//! 2. Feed the growth guard and the RAM budget.
+//! 3. Tell the governor, which answers with the cache's capacity.
+//! 4. In the reply phase, resize the hot-expert tables to that capacity.
 //!
-//! A disabled adaptive guard uses `usize::MAX` as its sentinel baseline. In that
-//! case callers may still request a telemetry sample, but no learning or residency
-//! limit changes are performed.
+//! A disabled growth guard uses `usize::MAX` as its sentinel baseline. In
+//! that case callers may still request a telemetry sample, but nothing is
+//! fed and the governor is not told.
 
 use astronomical_runtime_integration::MlxMemorySnapshot;
 
-use crate::qwen3_5_streaming::model;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
-use crate::qwen3_5_streaming::model::memory_ledger_observation::CompletedForwardMemoryReadings;
+use crate::qwen3_5_streaming::model::memory_governance::CompletedForwardMemoryReadings;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthGuard, InferenceEngineError, MemoryPhase,
     MlxRamBudgetMeasurement, PerformanceAttribution, PerformanceOperation,
-    RetainedExpertReclamation,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
-    retained_resident_ceiling_after_budget_refresh,
 };
 
 use super::qwen3_5_runtime_error;
@@ -62,8 +61,7 @@ pub(in crate::qwen3_5_streaming) fn capture_completed_forward_memory_observation
     model: &Qwen3_5Model,
 ) -> Result<CompletedForwardMemoryObservation, InferenceEngineError> {
     let mlx_memory_snapshot = model
-        .runtime()
-        .memory_snapshot()
+        .memory_snapshot_with_forward_peak()
         .map_err(qwen3_5_runtime_error)?;
     Ok(CompletedForwardMemoryObservation {
         mlx_memory_snapshot,
@@ -140,11 +138,9 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
     if should_retain_adaptive_ram_growth_observation {
         let context_observed_transient_high_water_bytes = adaptive_ram_growth_guard
             .observed_transient_high_water_bytes_for_context(adaptive_ram_growth_context);
-        let budget_reclamation = record_composed_ram_budget_measurement(
-            adaptive_ram_growth_guard,
+        record_composed_ram_budget_measurement(
             adaptive_ram_growth_context,
             model,
-            request_context_extent,
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             context_observed_transient_high_water_bytes,
@@ -152,12 +148,10 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
             &memory_snapshot_after_growth,
             promoted_expert_page_stream_bytes,
         );
-        model::record_expert_reclamation_attribution(performance_attribution, budget_reclamation);
     }
-    model.observe_completed_forward_in_memory_ledger(CompletedForwardMemoryReadings {
+    model.govern_completed_forward(CompletedForwardMemoryReadings {
         memory_phase: adaptive_ram_growth_context.memory_phase(),
         forward_token_count: adaptive_ram_growth_context.forward_token_count(),
-        context_token_count: request_context_extent.context_token_count,
         live_context_state_payload_bytes: request_context_extent.live_context_state_payload_bytes,
         active_bytes_before_forward: u64::try_from(active_memory_bytes_before_growth)
             .unwrap_or(u64::MAX),
@@ -207,17 +201,15 @@ pub(in crate::qwen3_5_streaming) fn record_completed_adaptive_ram_growth(
 
 #[allow(clippy::too_many_arguments)]
 fn record_composed_ram_budget_measurement(
-    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     model: &Qwen3_5Model,
-    request_context_extent: RequestContextExtent,
     active_memory_bytes_before_growth: usize,
     retained_expert_payload_bytes_before_growth: u64,
     observed_transient_high_water_bytes: usize,
     exact_temporary_workspace_bytes: usize,
     memory_snapshot_after_growth: &MlxMemorySnapshot,
     promoted_expert_page_stream_bytes: u64,
-) -> RetainedExpertReclamation {
+) {
     let mlx_ram_budget_phase = adaptive_ram_growth_context.memory_phase();
     let retained_expert_payload_bytes_after_growth = model
         .expert_weight_memory_cache_statistics()
@@ -243,38 +235,6 @@ fn record_composed_ram_budget_measurement(
                 .unwrap_or(u64::MAX),
         });
 
-    // Publish the composed expert budget so retained-layer ownership stays inside
-    // the single-source split. Execution policy—not this numeric owner—decides
-    // whether a mandatory page remains operation-local or transfers to retention.
-    // The forward token count is this chunk's own operation size, so the
-    // activation reserve resolves at the operation scope (issue #644). The
-    // context reserve covers the request's whole sequence and never drops
-    // below the decoder state it already holds.
-    let retained_expert_budget = model.mlx_ram_budget().plan_holding_live_context_state(
-        mlx_ram_budget_phase,
-        request_context_extent.context_token_count,
-        u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
-        0,
-        request_context_extent.live_context_state_payload_bytes,
-    );
-    // The per-forward budget refresh floors at all resident expert payload,
-    // warm tables included: learned reserve growth between forwards must not
-    // proactively discard ownership that a real capacity failure would reclaim
-    // exactly (issue #955).
-    let retained_page_ceiling_bytes = retained_resident_ceiling_after_budget_refresh(
-        retained_expert_budget.retained_expert_budget_bytes,
-        model
-            .expert_weight_memory_cache_statistics()
-            .resident_payload_byte_count,
-    );
-    let budget_reclamation = model.retained_experts.as_ref().map_or_else(
-        RetainedExpertReclamation::default,
-        |retained_experts| {
-            retained_experts
-                .borrow_mut()
-                .update_maximum_resident_payload_bytes(retained_page_ceiling_bytes)
-        },
-    );
     // Issue #512: resize the hot-expert warm tables as decode evidence
     // accumulates. The decode handoff sizes them before any decode forward
     // exists, against the conservative no-decode-evidence fallback, and the
@@ -286,7 +246,6 @@ fn record_composed_ram_budget_measurement(
     // so warming grows into the entitlement the fresh evidence supports.
     if adaptive_ram_growth_context.memory_phase() == MemoryPhase::Decode {
         let decoded_warm_slot_count = super::decode_expert_memory_handoff::decode_warm_slot_count(
-            adaptive_ram_growth_guard,
             model,
             model.expert_weight_memory_cache_statistics(),
         );
@@ -294,5 +253,4 @@ fn record_composed_ram_budget_measurement(
             model.set_hot_expert_warm_slot_count(decoded_warm_slot_count);
         }
     }
-    budget_reclamation
 }

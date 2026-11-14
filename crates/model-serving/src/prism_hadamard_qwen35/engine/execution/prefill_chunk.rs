@@ -192,6 +192,7 @@ pub(super) fn prefill_progress_token(
         prompt_work_reuse,
         persistent_prompt_cache_diagnostics: None,
         neural_engine_chunk: None,
+        prompt_layer_progress: None,
     }
 }
 

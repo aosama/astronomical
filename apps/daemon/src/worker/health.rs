@@ -137,6 +137,9 @@ pub enum ActiveRequestProgress {
         elapsed_millis: u64,
         /// Present only after the engine completes and measures a prefill chunk.
         completed_prefill_chunk_tokens: Option<u32>,
+        /// Present while the prompt is read one layer at a time: no token
+        /// is finished until the last layer, so progress is in layers.
+        prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
     },
     /// Prefill completed and the worker is preparing the first decode forward.
     GenerationPreparation {

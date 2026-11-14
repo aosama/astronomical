@@ -335,13 +335,8 @@ impl Qwen3_5EngineState {
         let final_prompt_token_id = active_request.input_token_ids[final_prompt_index];
         let adaptive_ram_growth_context =
             AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged);
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
-            &active_request.request_decoder_state,
-            0,
-            0,
-        )?;
+        let admitted_baseline =
+            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
         let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
         let retained_expert_payload_bytes_before_growth =
             admitted_baseline.retained_expert_payload_bytes;
@@ -416,7 +411,7 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
     ) {
         if self.adaptive_ram_growth_guard_enabled
-            && let Ok(memory_snapshot) = model.runtime().memory_snapshot()
+            && let Ok(memory_snapshot) = model.memory_snapshot_with_forward_peak()
         {
             // Issue #507: record why the ceiling is not fully in use at this
             // step, alongside the warming cap that decides it. Without the
@@ -440,26 +435,6 @@ impl Qwen3_5EngineState {
                 decode_active_memory_bytes,
                 &mut active_request.performance_attribution,
             );
-            let routed_expert_page_reservation_bytes = model
-                .expert_page_reservation_bytes_for_forward(1)
-                .unwrap_or(u64::MAX);
-            let warm_retention_ceiling_bytes = self
-                .adaptive_ram_growth_guard
-                .hot_expert_retention_ceiling_bytes(
-                    crate::MemoryPhase::Decode,
-                    memory_snapshot.active_memory_bytes(),
-                    model
-                        .expert_weight_memory_cache_statistics()
-                        .resident_payload_byte_count,
-                    usize::try_from(routed_expert_page_reservation_bytes).unwrap_or(usize::MAX),
-                );
-            // The plan-composed ceiling already subtracted the composer's
-            // activation workspace, context reserve, and stream slot;
-            // warming must respect whichever ceiling is tighter.
-            let plan_retained_ceiling_bytes = model.retained_expert_normal_ceiling_bytes();
-            model.limit_retained_experts_to(
-                warm_retention_ceiling_bytes.min(plan_retained_ceiling_bytes),
-            );
         }
     }
 
@@ -473,13 +448,8 @@ impl Qwen3_5EngineState {
         current_generated_token_id: u32,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     ) -> Result<(MlxArray, CompletedForwardMemoryObservation), InferenceEngineError> {
-        let admitted_baseline = self.measure_adaptive_ram_growth_memory_admission(
-            adaptive_ram_growth_context,
-            &mut active_request.performance_attribution,
-            &active_request.request_decoder_state,
-            0,
-            0,
-        )?;
+        let admitted_baseline =
+            self.begin_forward_memory_measurement(&active_request.performance_attribution)?;
         let active_memory_bytes_before_growth = admitted_baseline.active_memory_bytes;
         let retained_expert_payload_bytes_before_growth =
             admitted_baseline.retained_expert_payload_bytes;

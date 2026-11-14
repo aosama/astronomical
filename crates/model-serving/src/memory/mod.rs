@@ -86,8 +86,8 @@ pub use admission::{
 };
 #[cfg(feature = "direct-mlx")]
 pub(crate) use admission::{
-    log_adaptive_ram_growth_admission_decision, log_adaptive_ram_growth_pressure,
-    log_context_admission_projection, log_generation_context_workspace_reservation,
+    log_adaptive_ram_growth_admission_decision, log_context_admission_projection,
+    log_generation_context_workspace_reservation,
 };
 pub use astronomical_memory_policy::ceiling::{
     MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,

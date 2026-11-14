@@ -288,6 +288,21 @@ fn prompt_progress_elapsed_millis(
         .max(u64::try_from(request_elapsed.as_millis()).unwrap_or(u64::MAX))
 }
 
+/// Says how many layers have read the prompt, while it is read one layer at
+/// a time: no token is finished until the last layer, so the token counts
+/// alone would show no progress.
+fn attach_prompt_layer_progress(
+    status_json: &mut serde_json::Value,
+    prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
+) {
+    let Some(prompt_layer_progress) = prompt_layer_progress else {
+        return;
+    };
+    status_json["progress"]["completed_layers"] =
+        serde_json::json!(prompt_layer_progress.completed_layer_count);
+    status_json["progress"]["total_layers"] = serde_json::json!(prompt_layer_progress.layer_count);
+}
+
 /// Attaches the live active-request progress, keeping the worker protocol's
 /// phase state out of the daemon's JSON contract one arm at a time.
 fn attach_active_request_progress(
@@ -302,6 +317,7 @@ fn attach_active_request_progress(
             elapsed_millis,
             request_started_at,
             completed_prefill_chunk_tokens,
+            prompt_layer_progress,
         } => {
             let live_elapsed_millis = prompt_progress_elapsed_millis(
                 processed_tokens,
@@ -319,6 +335,7 @@ fn attach_active_request_progress(
                 status_json["progress"]["completed_prefill_chunk_tokens"] =
                     serde_json::json!(completed_prefill_chunk_tokens);
             }
+            attach_prompt_layer_progress(status_json, prompt_layer_progress);
         }
         ActiveRequestProgress::Generation {
             generated_token_count,

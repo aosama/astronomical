@@ -131,7 +131,7 @@ impl WarmExpertSlotTableCache {
                 warm_slot_count,
             );
         }
-        let cache_ceiling_bytes = self.effective_maximum_resident_payload_bytes();
+        let cache_ceiling_bytes = self.capacity_bytes;
         let table = self
             .tables_by_layer
             .get_mut(layer_index)

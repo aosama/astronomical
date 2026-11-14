@@ -173,6 +173,12 @@ pub(crate) struct PrefetchedCompleteLayer {
     manifest: QuantizedExpertPageManifest,
 }
 
+impl PrefetchedCompleteLayer {
+    pub(super) const fn payload_byte_count(&self) -> u64 {
+        self.manifest.payload_byte_count
+    }
+}
+
 impl Qwen3_5Model {
     /// Whether a forward that routes `route_token_count` tokens reads this
     /// layer's complete page from storage: the tokens reach every expert,

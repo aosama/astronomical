@@ -66,6 +66,7 @@ fn should_report_only_the_chunk_own_token_count_as_progress() {
             },
             persistent_prompt_cache_diagnostics: None,
             neural_engine_chunk: None,
+            prompt_layer_progress: None,
         }
     );
 }

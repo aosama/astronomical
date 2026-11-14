@@ -184,7 +184,7 @@ impl Qwen3_5Model {
                 crate::qwen3_5_streaming::PagedForwardMissingRouteCollector,
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
             request_expert_storage_read_tally: Default::default(),
-            memory_ledger_observer: RefCell::new(None),
+            governed_memory: Default::default(),
             probed_prompt_layer_working_memory: std::cell::Cell::new(None),
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,

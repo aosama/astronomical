@@ -1,118 +1,69 @@
-use super::super::prefill_expert_refill::PostRecoveryExpertRefill;
 use super::super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{
-    LayerMajorDecline, MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST,
-    layer_major_decline_for, should_attempt_prefill_memory_recovery,
+    can_redo_prefill_after_memory_failure, known_memory_shortfall_bytes, ran_out_of_memory,
 };
 
 #[test]
-fn should_attempt_recovery_for_the_first_text_prefill_memory_failure() {
-    assert!(should_attempt_prefill_memory_recovery(
-        0,
-        false,
-        PostRecoveryExpertRefill::NotAttempted.allowed_recovery_attempt_count()
-    ));
-}
-
-#[test]
-fn should_not_attempt_recovery_once_the_request_used_its_recovery() {
-    assert!(!should_attempt_prefill_memory_recovery(
-        MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST,
-        false,
-        PostRecoveryExpertRefill::NotAttempted.allowed_recovery_attempt_count()
-    ));
-}
-
-#[test]
-fn should_not_attempt_recovery_for_image_requests() {
-    assert!(!should_attempt_prefill_memory_recovery(
-        0,
-        true,
-        PostRecoveryExpertRefill::NotAttempted.allowed_recovery_attempt_count()
-    ));
-}
-
-#[test]
-fn should_not_attempt_recovery_when_the_attempt_counter_is_saturated() {
-    assert!(!should_attempt_prefill_memory_recovery(
-        u8::MAX,
-        false,
-        PostRecoveryExpertRefill::Active.allowed_recovery_attempt_count()
-    ));
-}
-
-#[test]
-fn should_attempt_one_more_recovery_when_a_chunk_fails_after_the_refill() {
-    assert!(should_attempt_prefill_memory_recovery(
-        MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST,
-        false,
-        PostRecoveryExpertRefill::Active.allowed_recovery_attempt_count()
-    ));
-}
-
-#[test]
-fn should_not_attempt_a_recovery_once_the_refill_was_used_up() {
-    // The second recovery ends the refill, so retention is frozen again and
-    // a third failure is the prompt's own workspace.
-    assert!(!should_attempt_prefill_memory_recovery(
-        MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST + 1,
-        false,
-        PostRecoveryExpertRefill::Spent.allowed_recovery_attempt_count()
-    ));
-    assert!(!should_attempt_prefill_memory_recovery(
-        MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST,
-        false,
-        PostRecoveryExpertRefill::Spent.allowed_recovery_attempt_count()
-    ));
-}
-
-#[test]
-fn should_keep_image_requests_terminal_even_with_an_active_refill() {
-    assert!(!should_attempt_prefill_memory_recovery(
-        MAXIMUM_PREFILL_MEMORY_RECOVERY_ATTEMPTS_PER_REQUEST,
-        true,
-        PostRecoveryExpertRefill::Active.allowed_recovery_attempt_count()
-    ));
-}
-
-#[test]
-fn should_continue_in_chunks_without_a_recovery_when_admission_refused_a_group() {
-    let admission_refusal = PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
-        decision: crate::PagedForwardAdmissionDecision::Reject {
-            unresolved_shortfall_bytes: 1,
-        },
-        reason: "group too large".to_owned(),
-    };
+fn should_read_the_shortfall_from_a_limit_failure() {
     assert_eq!(
-        layer_major_decline_for(&admission_refusal),
-        Some(LayerMajorDecline::NotAdmitted)
+        known_memory_shortfall_bytes(&PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+            active_memory_bytes: 9,
+            attempted_allocation_bytes: 4,
+            allowed_active_memory_bytes: 10,
+        }),
+        3
     );
 }
 
 #[test]
-fn should_rebuild_state_when_a_group_ran_out_of_memory() {
-    let active_memory_overrun = PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-        active_memory_bytes: 3,
-        attempted_allocation_bytes: 2,
-        allowed_active_memory_bytes: 4,
-    };
-    let graphics_memory_exhausted =
-        PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
-            reason: "exhausted".to_owned(),
-        };
+fn should_report_no_shortfall_when_the_figures_fit_the_limit() {
     assert_eq!(
-        layer_major_decline_for(&active_memory_overrun),
-        Some(LayerMajorDecline::RanOutOfMemory)
-    );
-    assert_eq!(
-        layer_major_decline_for(&graphics_memory_exhausted),
-        Some(LayerMajorDecline::RanOutOfMemory)
+        known_memory_shortfall_bytes(&PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+            active_memory_bytes: 5,
+            attempted_allocation_bytes: 5,
+            allowed_active_memory_bytes: 10,
+        }),
+        0
     );
 }
 
 #[test]
-fn should_end_the_request_on_an_engine_failure_during_a_group() {
-    let engine_failure =
-        PromptPrefillChunkAttemptError::Engine(crate::InferenceEngineError::EngineBusy);
-    assert_eq!(layer_major_decline_for(&engine_failure), None);
+fn should_report_no_shortfall_for_a_failure_without_figures() {
+    assert_eq!(
+        known_memory_shortfall_bytes(
+            &PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
+                reason: "out of memory".to_owned(),
+            }
+        ),
+        0
+    );
+}
+
+#[test]
+fn should_redo_a_text_request_that_ran_out_of_memory() {
+    assert!(can_redo_prefill_after_memory_failure(false));
+}
+
+#[test]
+fn should_never_redo_a_request_with_images() {
+    assert!(!can_redo_prefill_after_memory_failure(true));
+}
+
+#[test]
+fn should_tell_a_limit_failure_from_an_engine_failure() {
+    assert!(ran_out_of_memory(
+        &PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+            active_memory_bytes: 9,
+            attempted_allocation_bytes: 2,
+            allowed_active_memory_bytes: 10,
+        }
+    ));
+    assert!(ran_out_of_memory(
+        &PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
+            reason: "out of memory".to_owned(),
+        }
+    ));
+    assert!(!ran_out_of_memory(&PromptPrefillChunkAttemptError::Engine(
+        crate::qwen3_5_streaming::inference_execution::fatal_engine_error("lost the model"),
+    )));
 }

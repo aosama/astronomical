@@ -11,17 +11,17 @@
 //! (the first reply's decode seats the residency the second prefill meets)
 //! and asserts both requests are served.
 //!
-//! Serving the request is not the whole promise. The freeze used to hold
-//! until decode, so a long prompt that hit a recovery read all of its
-//! remaining chunks with nothing kept in memory: on this model at a 32 GiB
+//! Serving the request is not the whole promise. A long prompt once read
+//! most of itself with nothing kept in memory: on this model at a 32 GiB
 //! ceiling the engine sat at about 3.7 GB while every layer was re-read from
-//! storage for every chunk, and the person saw a slow first request that
-//! used a tenth of the memory they had granted. The second journey sends a
-//! short request and then a long one, as a coding agent does, and asserts
-//! that memory in use is back above half the ceiling while the long prompt
-//! is still being read. It runs with everyday settings (prompt cache on,
-//! performance attribution off), because that is where people meet this and
-//! because attribution changes what the engine learns from a streamed chunk.
+//! storage, and the person saw a slow first request that used a tenth of
+//! the memory they had granted. The second journey sends a short request
+//! and then a long one, as a coding agent does, and asserts that memory in
+//! use is above half the ceiling while the long prompt is still being read.
+//! The prompt is read one layer at a time (issue #2221), so "still being
+//! read" is counted in layers finished. It runs with everyday settings
+//! (prompt cache on, performance attribution off), because that is where
+//! people meet this.
 
 use std::{fs, path::Path};
 
@@ -45,11 +45,10 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 // production code must not assume it.
 const REFILL_MEMORY_CEILING_BYTES: u64 = 32 * (1 << 30);
 const REFILL_WARM_UP_PROMPT_TOKENS: usize = 450;
-// Four default chunks, so at least two run after the first full one.
 const REFILL_LONG_PROMPT_TOKENS: usize = 14_000;
-// Past this many tokens the first full chunk has completed and been
-// measured, whether or not it needed a recovery.
-const REFILL_MEASURED_PROMPT_TOKENS: u64 = 8_192;
+// Past this many finished layers the engine has measured a layer of this
+// prompt, whether or not one needed to be redone.
+const REFILL_MEASURED_LAYER_COUNT: u64 = 2;
 const REFILL_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[tokio::test(flavor = "multi_thread")]
@@ -269,7 +268,7 @@ fn story_request(model_id: &str, prompt: &str) -> serde_json::Value {
 /// One reading of the engine's status while it was reading the prompt.
 #[derive(Clone, Copy, Debug)]
 struct PrefillMemoryObservation {
-    processed_prompt_tokens: u64,
+    completed_layer_count: u64,
     active_memory_bytes: u64,
 }
 
@@ -292,7 +291,7 @@ async fn observe_prefill_memory(
         if activity == "prompt_processing" && memory_snapshot["source"].as_str() == Some("prefill")
         {
             let observation = PrefillMemoryObservation {
-                processed_prompt_tokens: status_document["progress"]["processed_tokens"]
+                completed_layer_count: status_document["progress"]["completed_layers"]
                     .as_u64()
                     .unwrap_or(0),
                 active_memory_bytes: memory_snapshot["active_memory_bytes"].as_u64().unwrap_or(0),
@@ -309,41 +308,41 @@ fn record_distinct_observation(
     observation: PrefillMemoryObservation,
 ) {
     let repeats_the_last_reading = prefill_memory_observations.last().is_some_and(|last| {
-        last.processed_prompt_tokens == observation.processed_prompt_tokens
+        last.completed_layer_count == observation.completed_layer_count
             && last.active_memory_bytes == observation.active_memory_bytes
     });
     if repeats_the_last_reading {
         return;
     }
     println!(
-        "[prefill-memory-refill] processed_prompt_tokens={} active_memory_gb={:.1}",
-        observation.processed_prompt_tokens,
+        "[prefill-memory-refill] completed_layer_count={} active_memory_gb={:.1}",
+        observation.completed_layer_count,
         observation.active_memory_bytes as f64 / 1e9
     );
     prefill_memory_observations.push(observation);
 }
 
-/// Once a full chunk has been read and measured, the rest of the prompt must
-/// not run with the granted memory left empty.
+/// Once a layer has been read and measured, the rest of the prompt must not
+/// run with the granted memory left empty.
 fn assert_memory_was_refilled_during_prefill(
     prefill_memory_observations: &[PrefillMemoryObservation],
     worker_home: &Path,
 ) {
     let highest_active_memory_bytes_after_measurement = prefill_memory_observations
         .iter()
-        .filter(|observation| observation.processed_prompt_tokens >= REFILL_MEASURED_PROMPT_TOKENS)
+        .filter(|observation| observation.completed_layer_count >= REFILL_MEASURED_LAYER_COUNT)
         .map(|observation| observation.active_memory_bytes)
         .max();
     let Some(highest_active_memory_bytes_after_measurement) =
         highest_active_memory_bytes_after_measurement
     else {
         panic!(
-            "no status reading was taken past {REFILL_MEASURED_PROMPT_TOKENS} prompt tokens; readings: {prefill_memory_observations:?}"
+            "no status reading was taken past {REFILL_MEASURED_LAYER_COUNT} finished layers; readings: {prefill_memory_observations:?}"
         );
     };
     assert!(
         highest_active_memory_bytes_after_measurement >= REFILL_MEMORY_CEILING_BYTES / 2,
-        "after the first full chunk the engine held at most {:.1} GB of a {:.1} GB ceiling while still reading the prompt; readings: {prefill_memory_observations:?}; evidence in {}",
+        "after its first measured layers the engine held at most {:.1} GB of a {:.1} GB ceiling while still reading the prompt; readings: {prefill_memory_observations:?}; evidence in {}",
         highest_active_memory_bytes_after_measurement as f64 / 1e9,
         REFILL_MEMORY_CEILING_BYTES as f64 / 1e9,
         worker_home.display()

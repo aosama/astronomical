@@ -4,7 +4,7 @@ use super::{dense_model_memory_shape, ledger_phase_for, sparse_model_memory_shap
 use crate::{MemoryPhase, MlxRamBudgetModelGeometry};
 
 #[test]
-fn should_watch_a_prompt_forward_as_reading_at_its_token_count() {
+fn should_govern_a_prompt_forward_as_reading_at_its_token_count() {
     assert_eq!(
         ledger_phase_for(MemoryPhase::Prefill, 4_096),
         Some(LedgerPhase::ReadingPrompt {
@@ -14,7 +14,7 @@ fn should_watch_a_prompt_forward_as_reading_at_its_token_count() {
 }
 
 #[test]
-fn should_watch_a_reply_forward_as_writing() {
+fn should_govern_a_reply_forward_as_writing() {
     assert_eq!(
         ledger_phase_for(MemoryPhase::Decode, 1),
         Some(LedgerPhase::WritingReply)
@@ -22,7 +22,7 @@ fn should_watch_a_reply_forward_as_writing() {
 }
 
 #[test]
-fn should_not_watch_phases_that_run_no_measured_forward() {
+fn should_not_govern_phases_that_run_no_measured_forward() {
     assert_eq!(
         ledger_phase_for(MemoryPhase::GenerationPreparation, 1),
         None

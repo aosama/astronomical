@@ -101,7 +101,6 @@ impl Qwen3_5Model {
             // ceiling back if reclaimed memory still exceeds the request.
             self.lower_ceiling_with_expert_reclamation(
                 requested_mlx_memory_ceiling_bytes,
-                ceiling_change_decision,
                 previous_memory_ceiling_bytes,
             )?;
         }
@@ -190,12 +189,10 @@ impl Qwen3_5Model {
     fn lower_ceiling_with_expert_reclamation(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
-        ceiling_change_decision: MemoryCeilingChangeDecision,
         previous_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
         self.prepare_expert_residency_for_lower_mlx_memory_limit(
             requested_mlx_memory_ceiling_bytes,
-            ceiling_change_decision,
         )?;
         let post_reclamation_mlx_memory_snapshot = self
             .runtime
@@ -243,19 +240,7 @@ impl Qwen3_5Model {
     fn prepare_expert_residency_for_lower_mlx_memory_limit(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
-        ceiling_change_decision: MemoryCeilingChangeDecision,
     ) -> Result<(), InferenceEngineError> {
-        let retained_paged_expert_reclamation_bytes = match ceiling_change_decision {
-            MemoryCeilingChangeDecision::Lower {
-                retained_paged_expert_reclamation_bytes,
-                ..
-            } => retained_paged_expert_reclamation_bytes,
-            _ => 0,
-        };
-        self.give_back_retained_payload_for_lower_limit(
-            retained_paged_expert_reclamation_bytes,
-            requested_mlx_memory_ceiling_bytes,
-        )?;
         self.mlx_ram_budget
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
@@ -264,6 +249,11 @@ impl Qwen3_5Model {
                     mlx_ram_budget_error.to_string(),
                 )
             })?;
+        // The governor follows the installed limit and the cache gives back
+        // what no longer fits; the amount the ceiling decision asked for is a
+        // lower bound the dense replan below still honours.
+        self.govern_limit_change();
+        self.give_back_kept_dense_layers_for_lower_limit(requested_mlx_memory_ceiling_bytes)?;
         let Some(expert_pager) = self.expert_pager.as_mut() else {
             return Ok(());
         };
@@ -271,21 +261,16 @@ impl Qwen3_5Model {
         Ok(())
     }
 
-    /// Limits retained experts, and gives back the kept dense layers the plan
-    /// for the lower limit leaves no room for. The plan keeps the always
+    /// Gives back the kept dense layers the plan for the lower limit leaves
+    /// no room for; an expert model's cache has already followed the
+    /// governor. The plan keeps the always
     /// resident bytes, kept layers, slots and working memory under the lower
     /// limit, so it frees at least what the decision needs; releasing by
     /// bytes first could overshoot and read layers straight back.
-    fn give_back_retained_payload_for_lower_limit(
+    fn give_back_kept_dense_layers_for_lower_limit(
         &self,
-        retained_paged_expert_reclamation_bytes: u64,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts
-                .borrow_mut()
-                .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);
-        }
         Ok(self.replan_kept_dense_layers(
             requested_mlx_memory_ceiling_bytes,
             KeptLayerReplan::NeverGrow,
@@ -319,6 +304,7 @@ impl Qwen3_5Model {
                     mlx_ram_budget_error.to_string(),
                 )
             })?;
+        self.govern_limit_change();
         Ok(self.replan_kept_dense_layers(
             requested_mlx_memory_ceiling_bytes,
             KeptLayerReplan::MatchPlan,
