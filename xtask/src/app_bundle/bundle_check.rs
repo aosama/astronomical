@@ -20,6 +20,7 @@ use super::channel_profile::{
     AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, DAEMON_EXECUTABLE_NAME,
     SandboxPolicy, TERMINAL_COMMAND_EXECUTABLE_NAME, WORKER_EXECUTABLE_NAME,
 };
+use super::daemon_identity_check::check_daemon_identity;
 use super::info_plist::EXPORT_DECLARATION_KEY;
 use super::tool_command::run_quiet_tool;
 
@@ -56,7 +57,7 @@ pub(crate) fn check_bundle(
         ));
     }
     check_signatures(bundle_path, channel_profile)?;
-    check_daemon_identity(bundle_path, build_identity)
+    check_daemon_identity(bundle_path, build_identity, channel_profile)
 }
 
 /// The role and identity problems of the agent inside `bundle_path`. A missing
@@ -625,19 +626,6 @@ fn signature_entitlements_text(executable_path: &Path) -> Result<String, String>
             .args(["-d", "--entitlements", "-"])
             .arg(executable_path),
     )
-}
-
-fn check_daemon_identity(bundle_path: &Path, build_identity: &BuildIdentity) -> Result<(), String> {
-    let daemon_version_text = run_quiet_tool(
-        Command::new(bundle_path.join("Contents/MacOS/astronomicald")).arg("--version"),
-    )?;
-    if !daemon_version_matches(&daemon_version_text, build_identity) {
-        return Err(format!(
-            "the bundled daemon reports {daemon_version_text:?}, not version {} at commit {}",
-            build_identity.application_version, build_identity.build_commit
-        ));
-    }
-    Ok(())
 }
 
 /// The daemon must report this build's version and commit, so an app can

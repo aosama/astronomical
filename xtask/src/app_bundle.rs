@@ -14,6 +14,7 @@ mod bundle_check;
 mod channel_profile;
 mod code_signing;
 mod command;
+mod daemon_identity_check;
 mod dev_pipeline;
 mod icon_cache;
 mod info_plist;
@@ -33,6 +34,9 @@ mod app_bundle_link_tests;
 #[cfg(test)]
 #[path = "app_bundle_tests.rs"]
 mod app_bundle_tests;
+#[cfg(test)]
+#[path = "app_daemon_identity_check_tests.rs"]
+mod app_daemon_identity_check_tests;
 #[cfg(test)]
 #[path = "app_export_declaration_tests.rs"]
 mod app_export_declaration_tests;
