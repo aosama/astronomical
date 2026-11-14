@@ -9,7 +9,11 @@ import Foundation
 /// Conversation" is remembered only while the app runs, so every launch asks
 /// again.
 public struct ToolApprovalPolicy: Sendable {
-  /// What each allowed tool does, completing "Allow Thin Talk to …?".
+  /// The name the approval sheet and the file picker use for the app: the
+  /// one the person installed and sees in the menu bar.
+  public static let applicationName = "Astronomical"
+
+  /// What each allowed tool does, completing "Allow Astronomical to …?".
   public static let actionDescriptionsByToolName: [String: String] = [
     "read_file": "read a file you choose",
     "describe_image": "look at an image you choose",
