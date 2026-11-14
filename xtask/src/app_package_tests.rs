@@ -9,7 +9,9 @@ use std::path::Path;
 use super::build_identity::BuildIdentity;
 use super::bundle_check::plist_identity_problems;
 use super::channel_profile::{Channel, ChannelProfile};
-use super::code_signing::{INHERITED_ENTITLEMENTS_PATH, SigningRequest, signing_plan};
+use super::code_signing::{
+    APPLICATION_ENTITLEMENTS_PATH, INHERITED_ENTITLEMENTS_PATH, SigningRequest, signing_plan,
+};
 use super::command::{AppCommand, parse_app_command};
 use super::package_pipeline::{PackageRequest, disposable_reentry_arguments};
 use super::release_build_steps::release_cargo_arguments;
@@ -604,4 +606,28 @@ fn should_sign_spawned_store_helpers_as_sandboxed_and_inheriting_and_nothing_els
     assert!(inherited_entitlements_text.contains("<key>com.apple.security.inherit</key>"));
     assert_eq!(inherited_entitlements_text.matches("<key>").count(), 2);
     assert_eq!(inherited_entitlements_text.matches("<true/>").count(), 2);
+}
+
+/// The chat app attaches files and saves pictures and exports through the
+/// system's Open and Save dialogs, which a sandboxed app is shown only with
+/// the user-selected file entitlement. The first store build lacked it and
+/// "Save as PDF" opened nothing (issue #2198). The engine and the worker must
+/// not carry it: they never open a person's files, and an inheriting helper
+/// with any further entitlement is refused by macOS.
+#[test]
+fn should_let_the_store_applications_use_files_the_person_selects_and_not_the_helpers() {
+    let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the xtask crate sits in the repository root");
+    let application_entitlements_text =
+        std::fs::read_to_string(repository_root.join(APPLICATION_ENTITLEMENTS_PATH))
+            .expect("the application entitlements file is checked in");
+    let inherited_entitlements_text =
+        std::fs::read_to_string(repository_root.join(INHERITED_ENTITLEMENTS_PATH))
+            .expect("the inherited entitlements file is checked in");
+    let file_entitlement_key = "<key>com.apple.security.files.user-selected.read-write</key>";
+
+    assert!(application_entitlements_text.contains(file_entitlement_key));
+    assert!(!inherited_entitlements_text.contains(file_entitlement_key));
+    assert!(!application_entitlements_text.contains("user-selected.read-only"));
 }
