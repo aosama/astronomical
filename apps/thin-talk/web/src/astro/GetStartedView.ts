@@ -28,6 +28,8 @@ export class GetStartedView {
   private readonly engineWatch: EngineWatch;
   /** Asks the host to restart the engine; null where the host cannot. */
   private readonly restartEngine: (() => void) | null;
+  /** The download step's panel while that step is on screen. */
+  private downloadPanel: ChatModelDownloadPanel | null = null;
   /** Stops listening for the engine's first answer. */
   private stopAwaitingEngine: (() => void) | null = null;
   private readonly headline: HTMLElement;
@@ -94,6 +96,7 @@ export class GetStartedView {
       openPanel.dispose();
     }
     this.openPanels = [];
+    this.downloadPanel = null;
   }
 
   private render(): void {
@@ -182,7 +185,32 @@ export class GetStartedView {
     });
     this.controls.append(downloadPanel.element);
     this.openPanels.push(downloadPanel);
+    this.downloadPanel = downloadPanel;
     void this.focusDownloadWhenOffered(downloadPanel);
+  }
+
+  /**
+   * Called when the person comes back to the window. Someone who pressed
+   * "Choose a different model" downloads on the Models page in the browser;
+   * on their return this screen would still offer the first download, with
+   * nothing to say a model is already here. If a chat model has appeared and
+   * no download was started from this screen, the journey ends in the chat.
+   */
+  public async noticeModelInstalledElsewhere(): Promise<void> {
+    if (!this.isWaitingOnDownloadChoice()) {
+      return;
+    }
+    if ((await this.library.hasChatModel()) !== true) {
+      return;
+    }
+    // The answer took a moment; the person may have pressed a button meanwhile.
+    if (this.isWaitingOnDownloadChoice()) {
+      this.advance(() => this.journey.chatModelFoundElsewhere());
+    }
+  }
+
+  private isWaitingOnDownloadChoice(): boolean {
+    return this.isOpen && this.journey.step === GetStartedStep.DOWNLOAD && this.downloadPanel?.isFollowingDownload !== true;
   }
 
   /** A headline that still says "Download a model" over a finished download

@@ -94,6 +94,30 @@ test("should_show_a_saved_name_as_text_never_as_markup", async () => {
   assert.equal(document.querySelector(".astro-home__greeting")?.textContent, "Hey, <b>Bo</b>");
 });
 
+test("should_end_the_journey_when_the_person_returns_with_a_model_downloaded_on_the_models_page", async () => {
+  const { daemon } = bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  element<HTMLButtonElement>("astro-other-model").click();
+  daemon.installChatModelFromElsewhere();
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => overlay().hidden, "the get-started journey to end");
+  assert.deepEqual(daemon.requestedLibraryDownloads, [], "the first download is not started for someone who chose another model");
+});
+
+test("should_keep_offering_the_download_when_the_person_returns_and_no_model_is_installed", async () => {
+  bootNewcomer({ models: [] });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  window.dispatchEvent(new Event("focus"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(overlay().hidden, false);
+  assert.equal(overlay().dataset.step, "download");
+  assert.equal(element("astro-download").textContent, "Download");
+});
+
 test("should_offer_the_recommended_model_by_name_and_size_with_one_download_button", async () => {
   const { daemon, host } = bootNewcomer({ models: [] });
   await getStarted();
@@ -108,6 +132,23 @@ test("should_offer_the_recommended_model_by_name_and_size_with_one_download_butt
   assert.deepEqual(daemon.requestedLibraryDownloads, [], "nothing downloads until Download is pressed");
   element<HTMLButtonElement>("astro-other-model").click();
   assert.ok(host.receivedActions.some((action) => JSON.stringify(action).includes("openExternal") && JSON.stringify(action).includes("/download-models")), "the Models page opens for a different model");
+});
+
+test("should_keep_the_ready_screen_when_the_person_returns_after_downloading_here", async () => {
+  bootNewcomer({
+    models: [],
+    libraryDownloadSequence: [{ state: "idle", huggingface_id: null, bytes_completed: 0, bytes_total: 0, error_code: null }],
+    installsWhenDownloadFinishes: { huggingfaceID: CHAT_MODEL_ID, model: { id: "starter-chat-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"] } },
+  });
+  await getStarted();
+  await waitForStep("download");
+  await waitFor(() => isPresent("astro-download"), "the Download button");
+  element<HTMLButtonElement>("astro-download").click();
+  await waitFor(() => astroSays() === "The model is ready.", "the ready line");
+  window.dispatchEvent(new Event("focus"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(overlay().hidden, false, "the screen that says the model is ready stays until the person moves on");
+  assert.equal(element("astro-download").textContent, "Start chatting");
 });
 
 test("should_download_the_chat_model_and_make_chat_ready_when_it_lands", async () => {

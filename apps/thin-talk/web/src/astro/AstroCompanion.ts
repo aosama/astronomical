@@ -85,6 +85,12 @@ export class AstroCompanion {
     init.library.onModelInstalled(() => this.welcomeNewModel(init.onModelInstalled));
   }
 
+  /** The person came back to the window: a model may have been installed
+   * somewhere else meanwhile, which the first-run screen needs to hear. */
+  public personReturned(): void {
+    void this.getStarted.noticeModelInstalledElsewhere();
+  }
+
   /** A new chat or image model changes what home offers, so home is redrawn
    * once the chat window has heard about the model. */
   private welcomeNewModel(onModelInstalled: () => void): void {

@@ -273,6 +273,7 @@ export function bootChatClient(): AppShell {
   refreshOnReturnToWindow(window, document, () => {
     void controller.refreshChatModels();
     void controller.refreshImageModels();
+    astro.personReturned();
   });
   void controller.load();
   void astro.start();

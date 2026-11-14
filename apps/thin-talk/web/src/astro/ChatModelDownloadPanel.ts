@@ -71,6 +71,13 @@ export class ChatModelDownloadPanel {
     }
   }
 
+  /** True from the moment the person pressed Download here (or a download
+   * of the offered model was found already running). The panel then tells
+   * the story to its end itself, and nothing else should end it early. */
+  public get isFollowingDownload(): boolean {
+    return this.stopListening !== null || this.hasChatModel;
+  }
+
   /** Stops listening when the panel leaves the screen. */
   public dispose(): void {
     this.stopListening?.();
