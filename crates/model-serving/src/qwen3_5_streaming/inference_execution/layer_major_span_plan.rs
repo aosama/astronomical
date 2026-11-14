@@ -1,8 +1,10 @@
-//! Which prompt spans one layer-major prefill runs (issue #1985).
+//! Which prompt spans one layer-at-a-time prefill runs (issues #1985 and
+//! #2221).
 //!
-//! The spans are exactly the chunks the chunk-by-chunk engine would run from
-//! the cursor, found with the same resolver, so the prompt cache sees the
-//! same boundaries. The group stops at the prompt's end, or, while the cache
+//! The spans are cut at the configured size and at the prompt cache's
+//! boundaries, with the resolver the cache's lookup expects. A prompt that
+//! fits one span is a plan of one span: it is read the same way as a long
+//! one, one layer at a time. The group stops at the prompt's end, or, while the cache
 //! captures, after the span that ends one token short of a prompt that does
 //! not fill its last block: that last token runs on its own so the partial
 //! tail block is captured where the next request's lookup expects it.
@@ -33,8 +35,7 @@ impl LayerMajorSpanPlan {
     }
 }
 
-/// Plans the spans from `prefill_cursor`, or `None` when fewer than two
-/// remain: a single span is exactly what the chunk path already runs.
+/// Plans the spans from `prefill_cursor`, or `None` when no token remains.
 ///
 /// `capture_block_token_count` is the prompt cache's block size when this
 /// request captures, and `None` otherwise.
@@ -69,7 +70,7 @@ pub(crate) fn layer_major_span_plan(
             break;
         }
     }
-    if span_ends.len() < 2 {
+    if span_ends.is_empty() {
         return None;
     }
     Some(spans_with_boundaries(

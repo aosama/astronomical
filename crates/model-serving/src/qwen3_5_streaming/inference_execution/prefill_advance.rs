@@ -1,30 +1,27 @@
-//! Advances one user-visible prompt-processing chunk, or, for a dense model
-//! that streams layers, one layer-major group of chunks (issue #1985).
+//! Starts the next stretch of a prompt and finishes it once its last layer
+//! has run.
 //!
-//! The order in this file is a correctness contract:
+//! Every prompt is read one layer at a time over its spans
+//! (`layer_at_a_time_prefill`). The order in this file is a correctness
+//! contract:
 //!
-//! 1. Choose a deterministic fixed chunk from resolved configuration.
-//! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
-//!    A layer-major group is the run of such chunks, each still clamped, so
-//!    it may publish several blocks, each from the state its chunk left.
-//! 3. Execute that unchanged chunk and report what it measured to the memory
-//!    governor.
-//! 4. Publish required prompt-cache state before advancing the in-memory cursor.
-//! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
-//! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
-//! 7. Emit progress only after all required state transitions succeeded.
+//! 1. Cut the spans from the cursor: the configured size, clamped at
+//!    semantic control-span and durable prompt-cache boundaries. A stretch
+//!    may publish several cache blocks, each from the state its span left.
+//! 2. Read the stretch one layer at a time, reporting every measured step
+//!    to the memory governor.
+//! 3. Publish required prompt-cache state before advancing the in-memory cursor.
+//! 4. Synchronize the tape and reclaim allocator cache only above threshold.
+//! 5. Emit progress only after all required state transitions succeeded.
 //!
-//! A capacity failure never retries a smaller chunk. The retired ladder halved
+//! A capacity failure never retries smaller spans. The retired ladder halved
 //! the executable chunk after each failure, which collapsed real requests into
 //! dozens of forwards that re-paid complete-layer storage reads while making no
 //! visible progress. Instead, a memory failure is redone with room leased
-//! from the memory governor (`prefill_memory_recovery`): a prompt read one
-//! layer at a time runs its failed span again, and a chunk of a text
-//! request is run again after re-seeding from the persistent prompt cache.
-//! Either is terminal only once the governor's attempts are spent. The one
-//! exception is a dense model's layer-major group that does not fit: its
-//! tokens run again as the chunks it was made of, which fit before, and
-//! never as smaller ones.
+//! from the memory governor (`prefill_memory_recovery`): an expert model
+//! runs its failed span again, and a prompt that cannot be put back to a
+//! span is read again from the persistent prompt cache. Either is terminal
+//! only once the governor's attempts are spent.
 
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::qwen3_5_core::prompt_cache_capture::{
@@ -44,8 +41,8 @@ use crate::{
 
 use super::completed_forward_memory;
 use super::engine_request::Qwen3_5EngineRequest;
+use super::layer_at_a_time_prefill::PromptPrefillChunkOutcome;
 use super::prefill_memory_recovery::PrefillAttemptFailure;
-use super::prompt_prefill::PromptPrefillChunkOutcome;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 impl Qwen3_5EngineState {
@@ -68,17 +65,16 @@ impl Qwen3_5EngineState {
             prefill_start,
             attempted_prefill_chunk_token_count,
             layer_major_span_plan,
-        }) = self.resolve_next_prefill_attempt(active_request, prefill_end_exclusive)
+        }) = self.next_prompt_spans_to_read(active_request, prefill_end_exclusive)
         else {
             return Ok(None);
         };
         self.refresh_prefill_residency_plan(active_request)?;
-        let forward_chunk_started_at = Instant::now();
         log_prefill_attempt(
             request_id,
             prefill_start,
             attempted_prefill_chunk_token_count,
-            layer_major_span_plan.as_ref(),
+            &layer_major_span_plan,
         );
         self.open_expert_demand_window_for_prefill(
             active_request,
@@ -91,31 +87,15 @@ impl Qwen3_5EngineState {
         let prefill_attempt_failure = PrefillAttemptFailure {
             prefill_start,
             attempted_prefill_chunk_token_count,
-            is_layer_major_attempt: layer_major_span_plan.is_some(),
         };
-        let attempt_outcome = match layer_major_span_plan {
-            Some(layer_major_span_plan) => self
-                .begin_layer_at_a_time_prefill(
-                    active_request,
-                    prefill_start,
-                    prefill_end,
-                    layer_major_span_plan,
-                )
-                .map(|()| None),
-            None => self
-                .execute_prompt_prefill_chunk(active_request, prefill_start, prefill_end)
-                .map(Some),
-        };
-        match attempt_outcome {
-            Ok(Some(prompt_prefill_chunk_outcome)) => self.complete_prefill_attempt(
-                request_id,
-                active_request,
-                prefill_start,
-                prefill_end,
-                prompt_prefill_chunk_outcome,
-                forward_chunk_started_at,
-            ),
-            Ok(None) => self.continue_layer_at_a_time_prefill(request_id, active_request),
+        let begin_outcome = self.begin_layer_at_a_time_prefill(
+            active_request,
+            prefill_start,
+            prefill_end,
+            layer_major_span_plan,
+        );
+        match begin_outcome {
+            Ok(()) => self.continue_layer_at_a_time_prefill(request_id, active_request),
             Err(prompt_prefill_chunk_attempt_error) => self.recover_failed_prefill_attempt(
                 request_id,
                 active_request,
@@ -173,48 +153,41 @@ fn log_prefill_attempt(
     request_id: RequestId,
     prefill_start: usize,
     attempted_prefill_chunk_token_count: usize,
-    layer_major_span_plan: Option<&super::layer_major_span_plan::LayerMajorSpanPlan>,
+    layer_major_span_plan: &super::layer_major_span_plan::LayerMajorSpanPlan,
 ) {
     tracing::info!(
         request_id = request_id.value(),
         prefill_start,
         attempted_prefill_chunk_token_count,
-        layer_major_span_count = layer_major_span_plan.map_or(0, |span_plan| span_plan.spans.len()),
-        "executing prompt-prefill chunk"
+        span_count = layer_major_span_plan.spans.len(),
+        "reading prompt tokens one layer at a time"
     );
 }
 
-/// What the next prefill attempt runs: one chunk, or a layer-major group of
-/// several chunks' spans.
+/// What the next prefill attempt runs: the spans from the cursor to where
+/// the plan stops, read one layer at a time.
 struct PrefillAttempt {
     prefill_start: usize,
     attempted_prefill_chunk_token_count: usize,
-    layer_major_span_plan: Option<super::layer_major_span_plan::LayerMajorSpanPlan>,
+    layer_major_span_plan: super::layer_major_span_plan::LayerMajorSpanPlan,
 }
 
 impl Qwen3_5EngineState {
-    /// The next chunk, widened to a layer-major group when a dense model
-    /// that streams layers would run several chunks' spans: one layer at a
-    /// time over all of them reads each streamed layer once.
-    fn resolve_next_prefill_attempt(
+    /// The spans the next attempt reads. Every prompt is read one layer at
+    /// a time over its spans, so a layer read from storage is read once.
+    fn next_prompt_spans_to_read(
         &self,
         active_request: &super::engine_request::Qwen3_5EngineRequest,
         prefill_end_exclusive: usize,
     ) -> Option<PrefillAttempt> {
-        let crate::persistent_cache::ResolvedPrefillChunkSpan {
-            prefill_start,
-            attempted_prefill_chunk_token_count,
-            ..
-        } = self.resolve_next_prefill_chunk_span(active_request, prefill_end_exclusive)?;
+        let crate::persistent_cache::ResolvedPrefillChunkSpan { prefill_start, .. } =
+            self.resolve_next_prefill_chunk_span(active_request, prefill_end_exclusive)?;
         let layer_major_span_plan =
-            self.layer_major_span_plan_for(active_request, prefill_start, prefill_end_exclusive);
+            self.layer_major_span_plan_for(active_request, prefill_start, prefill_end_exclusive)?;
         Some(PrefillAttempt {
             prefill_start,
-            attempted_prefill_chunk_token_count: layer_major_span_plan
-                .as_ref()
-                .map_or(attempted_prefill_chunk_token_count, |span_plan| {
-                    span_plan.group_end_token - prefill_start
-                }),
+            attempted_prefill_chunk_token_count: layer_major_span_plan.group_end_token
+                - prefill_start,
             layer_major_span_plan,
         })
     }

@@ -26,6 +26,13 @@ mod romeo_and_juliet;
 
 /// The engine's SSD-streaming chunk and a prompt-cache block that puts one
 /// boundary inside a span and one at a span's end.
+/// A short image inside the first span.
+const SHORT_IMAGE_PAD_RUN_START: usize = 100;
+const SHORT_IMAGE_PAD_RUN_TOKEN_COUNT: usize = 64;
+/// A long image whose pad run covers every position a span can end on
+/// between the first and the last prompt-cache boundary.
+const SPAN_CROSSING_IMAGE_PAD_RUN_START: usize = 1_500;
+const SPAN_CROSSING_IMAGE_PAD_RUN_TOKEN_COUNT: usize = 2_300;
 const CHUNK_TOKEN_COUNT: usize = 4096;
 const BLOCK_TOKEN_COUNT: usize = 1792;
 /// About 4,600 tokens: two spans, with boundaries at 1,792 and 3,584.
@@ -78,11 +85,81 @@ async fn assert_checkpoint_parity() {
         &prompt_token_ids,
         &streamed_boundaries,
     );
+    assert_parity_with_image_embeddings(
+        &streaming_model,
+        &qwen3_5_config,
+        &prompt_token_ids,
+        &streamed_boundaries,
+    );
     assert_parity_with_planned_layers_kept(
         &streaming_model,
         &qwen3_5_config,
         &prompt_token_ids,
         &streamed_boundaries,
+    );
+}
+
+/// A prompt with images reads one layer at a time like any other (issue
+/// #2221).
+///
+/// Two runs of image-pad tokens stand in for two images: a short one inside
+/// the first span, and a long one that crosses the end of a span, so its
+/// embedding rows are split between two spans. Read as chunks and one layer
+/// at a time, the published state must match bit for bit, both must consume
+/// every image row, and the state must differ from the same prompt without
+/// images, or the rows were never put in.
+fn assert_parity_with_image_embeddings(
+    streaming_model: &Qwen3_5StreamingModel,
+    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    prompt_token_ids: &[u32],
+    boundaries_without_images: &PublishedBoundaries,
+) {
+    let image_pad_token_id = qwen3_5_config.vocabulary_size() - 1;
+    assert!(
+        !prompt_token_ids.contains(&image_pad_token_id),
+        "the stand-in image-pad token must not occur in the prompt's own text"
+    );
+    let mut image_prompt_token_ids = prompt_token_ids.to_vec();
+    let image_pad_runs = [
+        SHORT_IMAGE_PAD_RUN_START..SHORT_IMAGE_PAD_RUN_START + SHORT_IMAGE_PAD_RUN_TOKEN_COUNT,
+        SPAN_CROSSING_IMAGE_PAD_RUN_START
+            ..SPAN_CROSSING_IMAGE_PAD_RUN_START + SPAN_CROSSING_IMAGE_PAD_RUN_TOKEN_COUNT,
+    ];
+    for image_pad_run in image_pad_runs {
+        for image_pad_position in image_pad_run {
+            image_prompt_token_ids[image_pad_position] = image_pad_token_id;
+        }
+    }
+    let image_pad_token_count =
+        SHORT_IMAGE_PAD_RUN_TOKEN_COUNT + SPAN_CROSSING_IMAGE_PAD_RUN_TOKEN_COUNT;
+    let image_prompt_boundaries = streaming_model
+        .prefill_image_prompt_both_ways(
+            &image_prompt_token_ids,
+            CHUNK_TOKEN_COUNT,
+            BLOCK_TOKEN_COUNT,
+            image_pad_token_id,
+            &mut crate::common::standard_request_decoder_state(qwen3_5_config),
+            &mut crate::common::standard_request_decoder_state(qwen3_5_config),
+        )
+        .expect("a prompt with images should prefill both ways");
+    assert_eq!(
+        image_prompt_boundaries.consumed_image_embedding_counts,
+        (image_pad_token_count, image_pad_token_count),
+        "both paths must consume one image row for every image-pad token"
+    );
+    assert!(
+        bit_patterns(&image_prompt_boundaries.layer_at_a_time)
+            == bit_patterns(&image_prompt_boundaries.chunk_path),
+        "with images the layer-at-a-time prefill must publish the chunk path's boundaries bit for bit"
+    );
+    assert!(
+        bit_patterns(&image_prompt_boundaries.layer_at_a_time)
+            != bit_patterns(boundaries_without_images),
+        "image rows must change the published state, or they were never put in"
+    );
+    eprintln!(
+        "[expert-layer-at-a-time-parity] progress=images image_pad_tokens={image_pad_token_count} boundaries={}",
+        image_prompt_boundaries.layer_at_a_time.len()
     );
 }
 

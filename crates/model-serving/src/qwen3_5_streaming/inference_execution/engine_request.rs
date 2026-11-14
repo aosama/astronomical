@@ -15,9 +15,6 @@ pub(crate) struct StreamingRequestExtension {
     /// Context tokens admitted at request start; prefill memory recovery
     /// re-seeds the persistent prompt cache against this same total.
     pub(in crate::qwen3_5_streaming) reserved_context_tokens: usize,
-    /// Set when a layer-major prefill did not fit, so this request's prompt
-    /// runs chunk by chunk from then on (issue #1985).
-    pub(in crate::qwen3_5_streaming) layer_major_prefill_declined: bool,
     /// The prompt being read one layer at a time, between its first layer
     /// and its last.
     pub(in crate::qwen3_5_streaming) layer_at_a_time_prefill:

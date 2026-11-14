@@ -35,10 +35,12 @@ mod expert_streaming_stats;
 mod forward_layer_weights;
 #[cfg(feature = "direct-mlx")]
 mod layer_major_checkpoint_parity;
+mod layer_major_image_parity;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_major_prefill;
 #[cfg(feature = "direct-mlx")]
 mod layer_major_prefill_run;
+mod layer_major_span_embedding;
 mod layer_major_span_redo;
 mod layer_major_span_state;
 #[cfg(feature = "direct-mlx")]

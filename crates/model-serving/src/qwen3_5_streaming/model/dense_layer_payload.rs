@@ -17,14 +17,6 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Bytes a forward's streamed layers occupy with the current kept count:
-    /// zero for a sparse model and while every dense layer is kept.
-    pub(crate) fn dense_streaming_slot_reservation_bytes(&self) -> u64 {
-        self.dense_layer_streamer
-            .as_ref()
-            .map_or(0, Qwen3_5DenseLayerStreamer::streaming_slot_bytes_in_use)
-    }
-
     /// Kept weights the memory governor's capacity covers: retained experts,
     /// plus a dense model's kept layers, which stream once given back.
     pub(crate) fn reclaimable_retained_payload_bytes(&self) -> u64 {

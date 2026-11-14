@@ -1,7 +1,7 @@
-//! Pre-forward decision logic for a single prompt-processing chunk.
+//! Decisions made before a stretch of a prompt is read.
 //!
-//! This module computes cache eligibility, checkpoint boundaries, workspace
-//! projection, and the token count the forward is measured under, without
+//! This module computes the spans, cache eligibility, checkpoint
+//! boundaries and the token count the forward is measured under, without
 //! side effects.
 
 use crate::persistent_prompt_cache_boundary_completed_prefill_chunk_tokens;
@@ -22,42 +22,27 @@ pub(super) struct PrefillChunkPlan {
     /// cache boundary checkpoint should be captured after the forward.
     pub(super) all_completed_prefill_chunk_tokens: Vec<usize>,
 
-    /// Like `all_completed_prefill_chunk_tokens` but with the final boundary
-    /// removed — intermediate checkpoints that need a snapshot during the
-    /// forward.
-    pub(super) intermediate_completed_prefill_chunk_tokens: Vec<usize>,
-
     /// Block token count from the persistent prompt-cache contract, if
     /// applicable.
     pub(super) persistent_prompt_cache_block_token_count: Option<usize>,
 
     /// The tokens the completed forward's memory is measured under: the
-    /// chunk's, or one span's for a group read one layer at a time, whose
-    /// peak is one span's working memory and never the whole group's.
+    /// largest span's, whose working memory the peak is; never the whole
+    /// stretch's.
     pub(super) measured_forward_token_count: usize,
 
-    /// The spans a dense model runs layer by layer, when this forward
-    /// covers several chunks at once.
-    pub(super) layer_major_span_plan: Option<LayerMajorSpanPlan>,
+    /// The spans the stretch is read in.
+    pub(super) layer_major_span_plan: LayerMajorSpanPlan,
 }
 
 impl Qwen3_5EngineState {
-    /// The spans a layer-major prefill would run from `prefill_start`, for a
-    /// text request on a model that reads layers from storage and has not
-    /// had a layer-major prefill fail.
+    /// The spans the prompt is read in from `prefill_start`.
     pub(super) fn layer_major_span_plan_for(
         &self,
         active_request: &Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end_exclusive: usize,
     ) -> Option<LayerMajorSpanPlan> {
-        let model = self.model.as_ref()?;
-        if active_request.engine_extension.layer_major_prefill_declined
-            || active_request.has_visual_inputs
-            || !model.reads_prompts_one_layer_at_a_time()
-        {
-            return None;
-        }
         let capture_block_token_count = self
             .persistent_prompt_cache
             .as_ref()
@@ -85,28 +70,17 @@ impl Qwen3_5EngineState {
         active_request: &Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
-        layer_major_span_plan: Option<LayerMajorSpanPlan>,
+        layer_major_span_plan: LayerMajorSpanPlan,
     ) -> Result<PrefillChunkPlan, PromptPrefillChunkAttemptError> {
         let prefill_token_count = prefill_end - prefill_start;
         let (all_completed_prefill_chunk_tokens, persistent_prompt_cache_block_token_count) =
             self.planned_prompt_cache_boundaries(active_request, prefill_start, prefill_end)?;
 
-        let mut intermediate_completed_prefill_chunk_tokens =
-            all_completed_prefill_chunk_tokens.clone();
-        if intermediate_completed_prefill_chunk_tokens.last().copied() == Some(prefill_token_count)
-        {
-            intermediate_completed_prefill_chunk_tokens.pop();
-        }
-
-        let measured_forward_token_count = layer_major_span_plan.as_ref().map_or(
-            prefill_token_count,
-            LayerMajorSpanPlan::largest_span_token_count,
-        );
+        let measured_forward_token_count = layer_major_span_plan.largest_span_token_count();
 
         Ok(PrefillChunkPlan {
             prefill_token_count,
             all_completed_prefill_chunk_tokens,
-            intermediate_completed_prefill_chunk_tokens,
             persistent_prompt_cache_block_token_count,
             measured_forward_token_count,
             layer_major_span_plan,

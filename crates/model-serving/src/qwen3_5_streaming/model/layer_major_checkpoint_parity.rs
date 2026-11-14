@@ -72,6 +72,7 @@ impl Qwen3_5Model {
                     block_token_count,
                 }),
                 should_materialize_logits: false,
+                visual_inputs: None,
             },
         )?;
         if let Some((layer_index, span_index)) = span_to_fail_once {
@@ -179,7 +180,7 @@ impl Qwen3_5Model {
     }
 
     /// Copies every snapshot tensor to the host as Float32, in boundary order.
-    fn host_snapshots(
+    pub(super) fn host_snapshots(
         &self,
         boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
     ) -> Result<Vec<PublishedBoundarySnapshot>, Qwen3_5ExecutionError> {
@@ -207,7 +208,7 @@ impl Qwen3_5Model {
 }
 
 /// The tokens the engine's span plan covers and its spans.
-fn planned_spans(
+pub(super) fn planned_spans(
     token_ids: &[u32],
     chunk_token_count: usize,
     block_token_count: usize,
@@ -226,7 +227,7 @@ fn planned_spans(
 
 /// Adds the boundary a forward ending at `end_token` publishes from its
 /// final state, as the engine does after each chunk, when one falls there.
-fn push_final_state_boundary(
+pub(super) fn push_final_state_boundary(
     boundary_checkpoints: &mut Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
     end_token: usize,
     block_token_count: usize,

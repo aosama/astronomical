@@ -60,29 +60,6 @@ impl Qwen3_5Model {
         self.evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)
     }
 
-    /// Evaluates terminal prefill roots: logits, decoder state, and checkpoint arrays.
-    ///
-    /// The terminal chunk needs vocabulary logits for first-token seeding while also
-    /// publishing prompt-cache boundary checkpoints. Evaluating all roots in one pass
-    /// keeps the terminal chunk as a single forward instead of a prefix+tail split.
-    pub(crate) fn evaluate_terminal_prefill_state_with_performance_attribution(
-        &self,
-        final_logits: &MlxArray,
-        request_decoder_state: &RequestDecoderStateStack,
-        boundary_checkpoint_collector: Option<
-            &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
-        >,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
-        let mut evaluation_arrays =
-            super::forward_contract::decoder_state_arrays(request_decoder_state)?;
-        evaluation_arrays.push(final_logits);
-        if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
-            evaluation_arrays.extend(boundary_checkpoint_collector.evaluation_arrays());
-        }
-        self.evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)
-    }
-
     /// Submits decode evaluation without synchronizing the graphics processor.
     pub(crate) fn async_evaluate_generation(
         &self,

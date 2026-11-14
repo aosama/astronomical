@@ -1,7 +1,9 @@
 //! A prompt read one layer at a time, advanced one layer per engine step.
 //!
-//! One layer runs over every span of the prompt before the next layer is
-//! read (issue #1985 for dense models, issue #2221 for expert models). The
+//! This is the one way the engine reads a prompt: short or long, with or
+//! without images, on a dense or an expert model. One layer runs over every
+//! span of the prompt before the next layer is read (issues #1985 and
+//! #2221). The
 //! whole prompt is one forward as far as the prompt cache and the request's
 //! cursor are concerned, so no token is finished until the last layer has
 //! run. Advancing one layer per step lets the engine report how many layers
@@ -18,10 +20,10 @@ use super::forward_memory_baseline::ForwardMemoryBaseline;
 use super::layer_major_span_plan::LayerMajorSpanPlan;
 use super::prefill_chunk_planning::PrefillChunkPlan;
 use super::prefill_memory_recovery::{PrefillAttemptFailure, ran_out_of_memory};
-use super::prompt_prefill::PromptPrefillChunkOutcome;
 use super::prompt_prefill_errors::{self, PromptPrefillChunkAttemptError};
 use crate::qwen3_5_streaming::model::layer_major_prefill::{
     LayerMajorCheckpointContract, LayerMajorPrefillRequest, LayerMajorPrefillRun,
+    LayerMajorVisualInputs,
 };
 use crate::{GeneratedToken, InferenceEngineError, PerformanceCounter};
 use astronomical_ipc_protocol::RequestId;
@@ -44,6 +46,44 @@ impl LayerAtATimePrefillInFlight {
     pub(super) const fn prefill_token_count(&self) -> usize {
         self.prefill_end - self.prefill_start
     }
+}
+
+/// The request's image embeddings, when these prompt tokens hold image-pad
+/// tokens that stand for them.
+///
+/// The artifact's image-pad vocabulary ID can occur in ordinary text, so it
+/// counts as an image row only when the request supplied an image. A text
+/// suffix of an image request, after every pad has been read, needs none.
+fn visual_inputs_for_prompt<'request>(
+    active_request: &'request Qwen3_5EngineRequest,
+    prompt_token_ids: &[u32],
+) -> Result<Option<LayerMajorVisualInputs<'request>>, PromptPrefillChunkAttemptError> {
+    if !active_request.has_visual_inputs
+        || !prompt_token_ids.contains(&active_request.image_pad_token_id)
+    {
+        return Ok(None);
+    }
+    let visual_embeddings = active_request.visual_embeddings.as_ref().ok_or_else(|| {
+        super::fatal_engine_error(
+            "the prompt contains image-pad tokens but the request's image embeddings are missing",
+        )
+    })?;
+    Ok(Some(LayerMajorVisualInputs {
+        visual_embeddings,
+        consumed_visual_embedding_count: active_request.consumed_visual_embedding_count,
+        image_pad_token_id: active_request.image_pad_token_id,
+    }))
+}
+
+/// What a finished prompt forward measured.
+pub(super) struct PromptPrefillChunkOutcome {
+    /// What MLX held when the forward began.
+    pub(super) active_memory_bytes_before_forward: usize,
+    pub(super) forward_chunk_elapsed_millis: u64,
+    /// The tokens the forward's memory is measured under: one span's,
+    /// whose working memory the peak is.
+    pub(super) measured_forward_token_count: usize,
+    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 }
 
 /// What one step of a layer-at-a-time prompt left.
@@ -73,7 +113,7 @@ impl Qwen3_5EngineState {
             active_request,
             prefill_start,
             prefill_end,
-            Some(layer_major_span_plan),
+            layer_major_span_plan,
         )?;
         active_request
             .performance_attribution
@@ -84,24 +124,24 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let spans = plan
-            .layer_major_span_plan
-            .as_ref()
-            .map_or(&[][..], |span_plan| span_plan.spans.as_slice());
+        let spans = plan.layer_major_span_plan.spans.as_slice();
         let checkpoint_contract =
             plan.persistent_prompt_cache_block_token_count
                 .map(|block_token_count| LayerMajorCheckpointContract {
                     boundary_tensor_count: model.decoder_cache_layout().boundary_tensor_count(),
                     block_token_count,
                 });
+        let prompt_token_ids = &active_request.input_token_ids[prefill_start..prefill_end];
+        let visual_inputs = visual_inputs_for_prompt(active_request, prompt_token_ids)?;
         let mut layer_major_prefill_run = model
             .begin_layer_major_prefill(
-                &active_request.input_token_ids[prefill_start..prefill_end],
+                prompt_token_ids,
                 active_request.next_position_tokens,
                 LayerMajorPrefillRequest {
                     spans,
                     checkpoint_contract,
                     should_materialize_logits: prefill_end == active_request.input_token_ids.len(),
+                    visual_inputs,
                 },
             )
             .map_err(prompt_prefill_errors::prefill_execution_error)?;
@@ -174,6 +214,8 @@ impl Qwen3_5EngineState {
                 prompt_layer_progress,
             ));
         };
+        active_request.consumed_visual_embedding_count +=
+            layer_major_prefill_outcome.consumed_visual_embedding_count;
         if let Some(final_prompt_logits) = layer_major_prefill_outcome.final_logits.as_ref() {
             let first_generated_token =
                 active_request.build_generated_token(model, final_prompt_logits)?;
@@ -222,7 +264,6 @@ impl Qwen3_5EngineState {
             .map(|prefill_in_flight| PrefillAttemptFailure {
                 prefill_start: prefill_in_flight.prefill_start(),
                 attempted_prefill_chunk_token_count: prefill_in_flight.prefill_token_count(),
-                is_layer_major_attempt: true,
             })
             .ok_or_else(|| super::fatal_engine_error("no layer-at-a-time prompt is in flight"))?;
         match self.advance_layer_at_a_time_prefill(active_request) {

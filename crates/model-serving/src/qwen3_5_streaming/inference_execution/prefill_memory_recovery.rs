@@ -148,7 +148,6 @@ impl Qwen3_5EngineState {
 pub(super) struct PrefillAttemptFailure {
     pub(super) prefill_start: usize,
     pub(super) attempted_prefill_chunk_token_count: usize,
-    pub(super) is_layer_major_attempt: bool,
 }
 
 /// The request-level error for a failed attempt, logged with where it stood.
@@ -197,11 +196,10 @@ fn prefill_memory_failure_error(
 
 impl Qwen3_5EngineState {
     /// Routes a failed attempt. An engine failure ends the request. A
-    /// layer-at-a-time prompt still in flight runs its failed span again
-    /// with more room. A dense model's layer-major group that ran out of
-    /// memory falls back to chunks. Anything else that ran out of memory is
-    /// redone from the prompt cache with more room. Every redo stops once
-    /// the memory governor's attempts are spent.
+    /// prompt still in flight runs its failed span again with more room.
+    /// A prompt that could not be put back to a span, as a dense model's
+    /// cannot, is read again from the prompt cache with more room. Every
+    /// redo stops once the memory governor's attempts are spent.
     pub(super) fn recover_failed_prefill_attempt(
         &mut self,
         request_id: RequestId,
@@ -249,18 +247,6 @@ impl Qwen3_5EngineState {
                 active_request,
                 known_shortfall_bytes,
             );
-        }
-        let serves_dense_model = self
-            .model
-            .as_ref()
-            .is_some_and(|model| model.streams_dense_layers());
-        if prefill_attempt_failure.is_layer_major_attempt && serves_dense_model {
-            self.decline_dense_layer_major_prefill_after_failure(
-                request_id,
-                active_request,
-                prefill_attempt_failure.prefill_start,
-            )?;
-            return Ok(true);
         }
         if !can_redo_prefill_after_memory_failure(active_request.has_visual_inputs) {
             return Ok(false);
@@ -334,31 +320,6 @@ pub(super) const fn ran_out_of_memory(
         PromptPrefillChunkAttemptError::Engine(_) => false,
         PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded { .. }
         | PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { .. } => true,
-    }
-}
-
-impl Qwen3_5EngineState {
-    /// Sends a dense model's prompt chunk by chunk after its layer-major
-    /// prefill ran out of memory (issue #1985).
-    ///
-    /// Holding every span's hidden states and checkpoints at once can need
-    /// more than one chunk did, so the failure means the group did not fit,
-    /// not that the prompt cannot run: the state is rebuilt from the prompt
-    /// cache and the tokens run again as chunks. The kept layers stay as
-    /// the memory governor's capacity left them.
-    pub(super) fn decline_dense_layer_major_prefill_after_failure(
-        &mut self,
-        request_id: RequestId,
-        active_request: &mut Qwen3_5EngineRequest,
-        prefill_start: usize,
-    ) -> Result<(), InferenceEngineError> {
-        tracing::warn!(
-            request_id = request_id.value(),
-            prefill_start,
-            "layer-major prefill did not fit; continuing chunk by chunk"
-        );
-        active_request.engine_extension.layer_major_prefill_declined = true;
-        self.reseed_prefill_from_prompt_cache(request_id, active_request, prefill_start)
     }
 }
 
