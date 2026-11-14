@@ -22,6 +22,9 @@ export interface Journey {
  * the same persistence a relaunch of the real app would see. Pass models
  * to control the daemon's model catalog, or seedPreferences to write durable
  * preferences before the client reads them. */
+/** The folder the test window expects its own engine to report. */
+export const OWN_STATE_DIRECTORY = "~/.astronomical-dev";
+
 export function bootJourney(
   previous?: Journey,
   options?: {
@@ -41,6 +44,9 @@ export function bootJourney(
     speechRefusal?: { status: number; code: string };
     /** Whether the fake host says it can restart the engine. */
     canRestartEngine?: boolean;
+    /** Where the engine says it keeps its files; another folder than the
+     * window expects plays a second install holding the address. */
+    engineStateDirectory?: string;
   },
 ): Journey {
   installDom();
@@ -66,7 +72,7 @@ export function bootJourney(
     : new FakeDaemon({
       daemonBaseURL: DAEMON_BASE_URL,
       channel: "development",
-      stateDirectory: "~/.astronomical-dev",
+      stateDirectory: options?.engineStateDirectory ?? OWN_STATE_DIRECTORY,
       models: options?.models,
       chatReplySequence: options?.chatReplySequence,
       libraryCatalog: options?.libraryCatalog,

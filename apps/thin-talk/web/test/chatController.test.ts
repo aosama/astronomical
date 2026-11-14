@@ -1,4 +1,5 @@
 import { ImageModelDirectory } from "../src/ImageModelDirectory";
+import { OTHER_COPY_RUNNING_NOTICE } from "../src/OtherCopyAnsweredError";
 import { ImageModelSelection } from "../src/ImageModelSelection";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -329,19 +330,55 @@ test("should_not_retry_a_start_up_that_succeeded_first_time", async () => {
   });
 }, { timeout: 30_000 });
 
-test("should_not_keep_asking_an_engine_that_belongs_to_another_channel", async () => {
+test("should_say_another_copy_is_running_and_carry_on_once_it_lets_go_of_the_address", async () => {
   await withQuickEngineRetries(async () => {
-    const { controller, daemon } = bootControllerWithEngine("stable");
+    const { controller, daemon } = bootControllerWithEngine();
+    let listedModelCount = 0;
+    let notice: string | null = null;
+    controller.subscribe((state) => {
+      listedModelCount = state.composer.models.length;
+      notice = state.transcript.notice;
+    });
+    // The direct download and the App Store version share one address but
+    // keep their files apart, so the other copy reports another folder.
+    daemon.reportedStateDirectory = "~/.astronomical";
+    await controller.load();
+    assert.equal(notice, OTHER_COPY_RUNNING_NOTICE, "the window explains it in plain words");
+    assert.equal(listedModelCount, 0, "the other copy's models are not shown as this one's");
+
+    daemon.reportedStateDirectory = "~/.astronomical-dev";
+
+    await waitFor(() => listedModelCount > 0, "the models to appear once this app's own engine answers");
+    assert.equal(notice, null);
+  });
+}, { timeout: 30_000 });
+
+test("should_treat_an_engine_of_another_channel_as_another_copy", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller } = bootControllerWithEngine("stable");
     let notice: string | null = null;
     controller.subscribe((state) => {
       notice = state.transcript.notice;
     });
     await controller.load();
+    assert.equal(notice, OTHER_COPY_RUNNING_NOTICE);
+  });
+}, { timeout: 30_000 });
+
+test("should_not_keep_asking_an_engine_whose_answer_makes_no_sense", async () => {
+  await withQuickEngineRetries(async () => {
+    const { controller, daemon } = bootControllerWithEngine();
+    let notice: string | null = null;
+    controller.subscribe((state) => {
+      notice = state.transcript.notice;
+    });
+    daemon.answersStatusWithNonsense = true;
+    await controller.load();
     const attemptCountAfterLoad = startUpAttemptCount(daemon);
 
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    assert.equal(startUpAttemptCount(daemon), attemptCountAfterLoad, "a wrong engine answers the same every time");
-    assert.match(notice ?? "", /runtime channel/, "the engine's own explanation is shown as it is");
+    assert.equal(startUpAttemptCount(daemon), attemptCountAfterLoad, "nonsense is answered the same every time");
+    assert.match(notice ?? "", /unexpected response/);
   });
 }, { timeout: 30_000 });

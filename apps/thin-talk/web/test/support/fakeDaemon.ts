@@ -52,6 +52,11 @@ export class FakeDaemon {
   /** What the status reports as loading, as the engine does while it loads a
    * model: `{ model_id }`, or null when nothing is loading. */
   public modelLoadInFlight: { model_id: string | null } | null = null;
+  /** Where the engine says it keeps its files. A test changes it to play
+   * another install holding the address and then letting go of it. */
+  public reportedStateDirectory: string;
+  /** Makes the status answer text that is not a status document. */
+  public answersStatusWithNonsense = false;
 
   public readonly requests: RecordedDaemonRequest[] = [];
   private readonly options: FakeDaemonOptions;
@@ -73,6 +78,7 @@ export class FakeDaemon {
 
   public constructor(options: FakeDaemonOptions) {
     this.options = options;
+    this.reportedStateDirectory = options.stateDirectory;
     const configuredModels: unknown[] | undefined = options.models;
     this.installedModels = configuredModels != null ? [...configuredModels] : [defaultFakeModel()];
   }
@@ -92,12 +98,15 @@ export class FakeDaemon {
       if (this.options.failHandshake) {
         return new Response("daemon is pretending to be down", { status: 503 });
       }
+      if (this.answersStatusWithNonsense) {
+        return new Response("<html>not a status document</html>", { status: 200 });
+      }
       return Response.json({
         status: "ready",
         model_load_in_flight: this.modelLoadInFlight,
         application: {
           channel: this.options.channel,
-          state_directory: this.options.stateDirectory,
+          state_directory: this.reportedStateDirectory,
         },
       });
     }

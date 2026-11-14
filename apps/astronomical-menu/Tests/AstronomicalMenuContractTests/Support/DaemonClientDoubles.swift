@@ -12,6 +12,9 @@ import Foundation
 /// because their state is the thing under test.
 struct FixedAnswerDaemonClient: DaemonClient {
   var statusDocument: DaemonStatusDocument = .unavailable
+  /// When set, asking for the status fails with this error, as when the
+  /// engine that answers is not this app's.
+  var statusFailure: (any Error & Sendable)?
   var reloadResult = ConfigurationReloadResult(message: "Config reloaded")
   /// When set, reloading fails with this error instead of returning `reloadResult`.
   var reloadFailure: (any Error & Sendable)?
@@ -23,7 +26,10 @@ struct FixedAnswerDaemonClient: DaemonClient {
   /// `nil` derives readiness from health and status, as a real client does.
   var isExpectedInstanceHealthy: Bool?
 
-  func fetchStatus() async throws -> DaemonStatusDocument { statusDocument }
+  func fetchStatus() async throws -> DaemonStatusDocument {
+    if let statusFailure { throw statusFailure }
+    return statusDocument
+  }
 
   func reloadConfiguration() async throws -> ConfigurationReloadResult {
     if let reloadFailure { throw reloadFailure }

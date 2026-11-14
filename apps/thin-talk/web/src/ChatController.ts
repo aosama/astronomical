@@ -20,6 +20,7 @@ import { ChatFailureKind } from "./ChatFailureKind";
 import { StallWatchdog } from "./StallWatchdog";
 import { ToolStep, ToolStepState } from "./ToolStep";
 import { describeLoadFailure, loadNoticeText } from "./LoadNotice";
+import { OtherCopyAnsweredError } from "./OtherCopyAnsweredError";
 import type { LoadPhase } from "./LoadNotice";
 
 /** Extra time before a stall is reported once tools finish: the next model
@@ -152,10 +153,11 @@ export class ChatController {
       this.loadPhase = "failed";
       this.loadFailureMessage = describeLoadFailure(error);
       this.publish();
-      // Only what the network or the engine reported can change by itself.
-      // An engine of another channel, or one whose answer makes no sense,
-      // will answer the same way every time, so asking again helps nobody.
-      if (error instanceof ChatFailure) {
+      // Only what can change by itself is asked again: what the network or
+      // the engine reported, and another copy holding the address, which the
+      // person can quit. An engine whose answer makes no sense will answer
+      // the same way every time, so asking again helps nobody.
+      if (error instanceof ChatFailure || error instanceof OtherCopyAnsweredError) {
         this.scheduleLoadRetry();
       }
       return;

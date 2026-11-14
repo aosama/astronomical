@@ -100,6 +100,9 @@
 }
 
 .empty-state__notice {
+  /* A notice can run to two sentences (another copy is running). Without a
+     measure it spanned the whole pane and its ends were cut off. */
+  max-width: min(520px, calc(100% - 56px));
   margin: 6px 0 0;
   color: var(--ink-2);
   font-size: 12.5px;

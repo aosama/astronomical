@@ -1,4 +1,5 @@
 import type { DaemonClient } from "../DaemonClient";
+import { OtherCopyAnsweredError } from "../OtherCopyAnsweredError";
 import { isLibraryModelReady, parseLibraryStarterPicks } from "../LibraryStarterPicks";
 import type { LibraryStarterPicks } from "../LibraryStarterPicks";
 import { ModelDownload, ModelDownloadPhase } from "./ModelDownload";
@@ -37,6 +38,7 @@ export class AstroLibrary {
   private readonly schedule: DelayScheduler;
   private readonly followersByModelID = new Map<string, DownloadFollower>();
   private readonly installListeners = new Set<() => void>();
+  private otherCopyAnswered = false;
 
   /** `schedule` is what waits between download polls. Tests pass one that
    * does not wait, so a download's whole life runs in milliseconds. */
@@ -45,15 +47,29 @@ export class AstroLibrary {
     this.schedule = schedule;
   }
 
-  /** True with any chat model installed, false with none, null when the
-   * daemon cannot be asked (then Astro skips the download screen, because a
-   * download could not start either). */
+  /** True with any chat model installed, false with none, null when this
+   * app's own daemon cannot be asked (then Astro skips the download screen,
+   * because a download could not start either).
+   *
+   * The engine's identity is checked first: with two installs on one Mac the
+   * other copy's engine answers on the same address, and reading its models
+   * as this app's would skip a newcomer's download or send it to the other
+   * copy. */
   public async hasChatModel(): Promise<boolean | null> {
     try {
+      await this.client.handshake();
+      this.otherCopyAnswered = false;
       return (await this.client.fetchModels()).length > 0;
-    } catch {
+    } catch (error) {
+      this.otherCopyAnswered = error instanceof OtherCopyAnsweredError;
       return null;
     }
+  }
+
+  /** Whether the last ask was answered by another install's engine, so a
+   * waiting screen can say that and not that the engine failed to start. */
+  public get otherCopyIsRunning(): boolean {
+    return this.otherCopyAnswered;
   }
 
   public async hasImageModel(): Promise<boolean> {
