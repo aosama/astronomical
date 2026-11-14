@@ -54,7 +54,9 @@ pub(crate) fn package_for_app_store(
         "Signed App Store installer package: {}",
         output_package.display()
     );
-    println!("Upload it to App Store Connect to submit for review.");
+    println!(
+        "Validate it with cargo xtask release app-store-upload --package PATH --api-key ID --api-issuer ID; add --upload to send it."
+    );
     Ok(())
 }
 
