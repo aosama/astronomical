@@ -10,7 +10,7 @@ The field cannot be saved until the review contact is filled in. The contact is 
 
 **To review quickly.** Open the app, press Get started, then Download. When it finishes, type a question. To try a smaller model first, press "Choose a different model", which opens the Models page.
 
-**Model files are data, not code.** Models are weight files in the safetensors format, which holds numbers only, read by the app's own bundled engine. A few optional models are Core ML model packages, which macOS itself prepares and runs through Apple's Core ML. Nothing downloaded is a script or a program of ours, and nothing downloaded can change the app's features.
+**Model files are data, not code.** Models are weight files in the safetensors format, which holds numbers only, read by the app's own bundled engine. Nothing downloaded is a script or a program of ours, and nothing downloaded can change the app's features. One experimental setting, off by default, lets the app write Core ML model packages on the Mac from weights it already has; macOS itself compiles and runs them through Apple's Core ML. They are made locally and never downloaded.
 
 **Two processes.** The window is the chat app. A small menu-bar helper inside the bundle starts the engine, so chats keep working when the window is closed. Both are sandboxed and share one app group container, where settings, logs and downloaded models are kept. The engine and its worker are inside the bundle and inherit the helper's sandbox.
 
@@ -28,7 +28,10 @@ The field cannot be saved until the review contact is filled in. The contact is 
 
 ## State on the record
 
-When this file was written, the notes saved with the first submission lacked the "User-selected files" line, because that entitlement was added after submission. Add it when the build under review is replaced.
+The notes saved with the first submission differ from the text above in two places. Bring them in line when the build under review is replaced:
+
+- They lack the "User-selected files" line, because that entitlement was added after submission.
+- Their "Model files are data" paragraph says a few optional models are Core ML model packages. That reads as if such packages were downloaded. They are not: the experimental Neural Engine setting writes them on the Mac, as the paragraph above now says.
 
 ## Questions a reviewer may raise
 

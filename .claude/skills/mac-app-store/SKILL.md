@@ -119,15 +119,30 @@ Each of these is a promise in the listing. Tests in code do not cover the sandbo
 | Local API | Connect page, then a request to the address it shows | Only chat models are listed; the request answers |
 | Settings | Open Settings | No Locations section |
 | Launch at Login | Turn it on and off | The system setting follows |
+| Two installs | Start it while another install's engine holds the address | The window and the menu-bar item say another copy is running, and carry on once it quits |
+| Model link | `open -g -a "/Applications/<test copy>.app" "astronomical://models/huggingface/OWNER/NAME"` | The Models page opens in the browser on that model |
+| Neural Engine switch | Tuning, Experimental, turn it on, Save, send a prompt of several thousand words | The reply arrives at once on the graphics chip; the status shows programs being prepared, then "active" |
 
 Wait out a screen's own timers before calling it stuck. "Starting up" gives up by itself after fifteen seconds.
 
+Notes on three of the rows:
+
+- **Model link.** With the direct app also installed, macOS hands every `astronomical://` link to the direct app, so name the test copy with `-a` as shown. Without `-a` the link starts the direct app.
+- **Neural Engine switch.** On a 9B model the 56 programs took about two and a half minutes to prepare in the sandbox. They cost about 10 GB in the app group container (`neural-engine-programs`) and the same again in Core ML's own cache inside the helper's container (`Data/Library/Caches/…/com.apple.e5rt.e5bundlecache`). Turn the switch off again and move both folders to the Trash afterwards.
+- **Two installs.** See the next paragraph.
+
+The "Two installs" row is tried without the installed direct app: a small local server that answers `/health`, `/v1/status` and `/v1/models` on the engine's port, and reports the right channel with another state folder, plays the other install. Stop it and the app must recover without a relaunch.
+
 ### Limits of on-screen control
 
+- Open test windows in the background (`open -g`, `cargo xtask app dev --background`). A window opened in front lands on top of whatever the person at the Mac is doing.
+- A window captured in the first seconds after a background launch can come back blank white. That is the capture, not the app: in front, the window paints dark at once. Capture again before filing anything.
 - Background app control cannot see or press buttons in a sandboxed app's Open and Save dialogs. Full-screen control can click Save, but not after a file name has been typed into the dialog; accept the suggested name.
 - A screenshot of one window, when the tools cannot see it: `screencapture -x -o -l <window id>`.
 - Screenshots fail while the display is asleep.
 - In zsh, `log` is a builtin; call `/usr/bin/log` to read the system log, which names a missing entitlement plainly.
+- The store engine cannot be started by hand, not even for `--version`: outside its app macOS kills it during sandbox setup (exit code 133, and the system log says the sandbox registration failed). This is expected for a helper signed to inherit its sandbox, and it is why the bundle check reads the engine's version and commit from the file. Judge the engine only through the app in the Applications folder.
+- Observatory's header reads "Stable" in the store build, because the store version runs the stable engine. That is correct.
 
 ## Validate, upload, submit
 
@@ -146,6 +161,7 @@ The API key's private half is a `.p8` file in `~/.appstoreconnect/private_keys/`
 | Error 90296 | A helper that only inherits its sandbox must also declare App Sandbox | The inherited entitlements carry both keys |
 | Warning 90889 | No provisioning profile in the bundle | Expected. It only matters for TestFlight (aosama/astronomical#2184) |
 | A refused Mac app with no category | `LSApplicationCategoryType` missing | The main app names Productivity, matching the record |
+| Held for the encryption questions | No export declaration in the build | The store build declares `ITSAppUsesNonExemptEncryption` as false |
 
 ### Replacing a build that is waiting for review
 
@@ -190,4 +206,4 @@ Screenshots are kept outside version control, in the ignored `private/store-scre
 
 ## Open work
 
-Read the umbrella issue for the current state. When this was written: the Neural Engine model path and the model link with both versions installed are untried in the sandbox, the folder picker for model locations is not built, provisioning profiles for TestFlight do not exist, and a few places still say "Thin Talk".
+Read the umbrella issue for the current state. When this was written, every promise in the table above had been tried in the sandbox, and what remained was: the folder picker for model locations (not built), provisioning profiles for TestFlight (do not exist), and building the store bundle as part of every direct release.
