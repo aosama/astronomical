@@ -1,0 +1,64 @@
+name: Announce release on Discord
+
+# Posts each published release to the project's Discord server through a
+# channel webhook, so the post carries the project's name and logo and the
+# release notes as written. A link pasted by hand shows the preview card of
+# the release page instead, which is not the project's own image.
+on:
+  release:
+    types:
+      - published
+  # A manual run announces an existing release again, for the first setup or
+  # after a failed post.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to announce, such as v0.2.105
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discord-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    name: Post the release to Discord
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # A manual run has no release event to read from, so the release is
+      # looked up by its tag. The notes go through a file-style output
+      # because they span many lines.
+      - name: Read the release for a manual run
+        id: release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json name,body,url > release.json
+          {
+            echo "name=$(jq -r .name release.json)"
+            echo "url=$(jq -r .url release.json)"
+            echo "body<<RELEASE_NOTES_END"
+            jq -r .body release.json
+            echo "RELEASE_NOTES_END"
+          } >> "$GITHUB_OUTPUT"
+      - name: Post the release
+        uses: SethCohen/github-releases-to-discord@24d166886aee4646d448c8a389ff9e1ebcab3682 # v1.20.0
+        with:
+          webhook_url: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+          # The icon's violet, as a decimal colour.
+          color: '7028676'
+          content: A new version of Astronomical is out.
+          release_name: ${{ steps.release.outputs.name }}
+          release_body: ${{ steps.release.outputs.body }}
+          release_html_url: ${{ steps.release.outputs.url }}
+          footer_title: Download for Mac at getastronomical.com
+          reduce_headings: true
+          remove_github_reference_links: true

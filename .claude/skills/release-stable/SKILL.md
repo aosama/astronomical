@@ -164,6 +164,7 @@ Require all of the following before reporting success:
 - GitHub release `$TAG` is public and is the latest Stable release.
 - Public Pages appcast is the exact prepared signed appcast.
 - Every public "Download for Mac" button passes the download button checklist below.
+- The `Announce release on Discord` workflow run for this release succeeded. Publishing the release starts it; it posts the notes to the Discord server's releases channel under the project's name and logo, so no release link is pasted there by hand. If it failed, run it again from the Actions tab with the tag as input.
 - Release issue is explicitly closed after the appcast PR merge, Pages deployment, and public-byte verification. A `Refs #N` maintenance PR does not close it automatically.
 - Local `main` equals remote `main` and the tracked worktree is clean.
 - The ignored `target/releases/${TAG}` evidence directory remains intact.
