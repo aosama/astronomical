@@ -87,6 +87,16 @@ const SWIFT_NODE_INPUT_PATH_PREFIXES: &[&str] = &[
     ".github/actions/",
 ];
 
+/// The release catalog's data file. The engine compiles it in, so it is not
+/// static content; but a change to it can only change what the catalog crate
+/// parses, which the catalog lane checks on Linux in about a minute, so on its
+/// own (with only static content beside it) it needs none of the macOS lanes.
+const CATALOG_DATA_PATH: &str = "registry/download_catalog.json";
+
+/// Everything the catalog lane builds and tests: the catalog data and the
+/// crate that parses it. A change to either opens the lane.
+const CATALOG_CHECK_INPUT_PATH_PREFIXES: &[&str] = &[CATALOG_DATA_PATH, "crates/download-catalog/"];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiEvent {
     PullRequest,
@@ -112,6 +122,7 @@ pub struct ChangeScopeVerdict {
     pub macos_verification_required: bool,
     pub swift_node_required: bool,
     pub notices_inputs_changed: bool,
+    pub catalog_check_required: bool,
     pub classification: String,
     pub changed_file_count: usize,
 }
@@ -186,6 +197,59 @@ pub fn is_notices_freshness_input_path(changed_path: &str) -> bool {
     NOTICES_FRESHNESS_INPUT_PATHS.contains(&changed_path)
 }
 
+/// True when a change to this path can change what the catalog lane checks.
+pub fn is_catalog_check_input_path(changed_path: &str) -> bool {
+    for catalog_check_input_prefix in CATALOG_CHECK_INPUT_PATH_PREFIXES {
+        if changed_path.starts_with(catalog_check_input_prefix) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The name the classification log gives a change, most specific first.
+fn classification_name(
+    code_changed: bool,
+    is_catalog_only: bool,
+    is_version_only_bump: bool,
+    native_inputs_changed: bool,
+) -> &'static str {
+    if !code_changed {
+        "static_only"
+    } else if is_catalog_only {
+        "catalog_only"
+    } else if is_version_only_bump {
+        "version_only_bump"
+    } else if native_inputs_changed {
+        "native_inputs"
+    } else {
+        "code_or_build"
+    }
+}
+
+fn any_catalog_check_input(changed_paths: &[String]) -> bool {
+    for changed_path in changed_paths {
+        if is_catalog_check_input_path(changed_path) {
+            return true;
+        }
+    }
+    false
+}
+
+/// True when a change touches only the catalog data and static content, so
+/// the catalog lane alone proves it.
+fn is_catalog_only_change(changed_paths: &[String]) -> bool {
+    let mut touches_catalog_data = false;
+    for changed_path in changed_paths {
+        if changed_path == CATALOG_DATA_PATH {
+            touches_catalog_data = true;
+        } else if !is_static_only_path(changed_path) {
+            return false;
+        }
+    }
+    touches_catalog_data
+}
+
 /// True when a change to this path can change what the Swift and Node lane checks.
 pub fn is_swift_node_input_path(changed_path: &str) -> bool {
     for swift_node_input_prefix in SWIFT_NODE_INPUT_PATH_PREFIXES {
@@ -235,6 +299,7 @@ pub fn classify_change_scope(
             macos_verification_required: true,
             swift_node_required: true,
             notices_inputs_changed: true,
+            catalog_check_required: true,
             classification: "manual_run".to_owned(),
             changed_file_count: 0,
         },
@@ -268,23 +333,21 @@ fn classify_changed_paths(
     let code_changed = changed_paths
         .iter()
         .any(|changed_path| !is_static_only_path(changed_path));
-    let classification = if !code_changed {
-        "static_only"
-    } else if is_version_only_bump {
-        "version_only_bump"
-    } else if native_inputs_changed {
-        "native_inputs"
-    } else {
-        "code_or_build"
-    };
+    let is_catalog_only = is_catalog_only_change(changed_paths);
+    let needs_macos_lanes = code_changed && !is_version_only_bump && !is_catalog_only;
+    let classification = classification_name(
+        code_changed,
+        is_catalog_only,
+        is_version_only_bump,
+        native_inputs_changed,
+    );
     ChangeScopeVerdict {
         code_changed,
         native_inputs_changed,
-        macos_verification_required: code_changed && !is_version_only_bump,
-        swift_node_required: code_changed
-            && !is_version_only_bump
-            && any_swift_node_input(changed_paths),
+        macos_verification_required: needs_macos_lanes,
+        swift_node_required: needs_macos_lanes && any_swift_node_input(changed_paths),
         notices_inputs_changed: any_notices_freshness_input(changed_paths),
+        catalog_check_required: any_catalog_check_input(changed_paths),
         classification: classification.to_owned(),
         changed_file_count: changed_paths.len(),
     }
@@ -301,6 +364,7 @@ pub(crate) fn fail_safe_verdict() -> ChangeScopeVerdict {
         macos_verification_required: true,
         swift_node_required: true,
         notices_inputs_changed: true,
+        catalog_check_required: true,
         classification: "unknown_history".to_owned(),
         changed_file_count: 0,
     }
@@ -567,14 +631,21 @@ fn publish_verdict(
         verdict.notices_inputs_changed
     )
     .unwrap();
+    writeln!(
+        github_output,
+        "catalog_check_required={}",
+        verdict.catalog_check_required
+    )
+    .unwrap();
     eprintln!(
-        "[ci-change-scope] status=complete event={event_name} classification={} changed_files={} code_changed={} native_inputs_changed={} macos_verification_required={} notices_inputs_changed={} elapsed_seconds={}",
+        "[ci-change-scope] status=complete event={event_name} classification={} changed_files={} code_changed={} native_inputs_changed={} macos_verification_required={} notices_inputs_changed={} catalog_check_required={} elapsed_seconds={}",
         verdict.classification,
         verdict.changed_file_count,
         verdict.code_changed,
         verdict.native_inputs_changed,
         verdict.macos_verification_required,
         verdict.notices_inputs_changed,
+        verdict.catalog_check_required,
         started_at.elapsed().as_secs()
     );
 }

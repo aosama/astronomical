@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 
 use super::{MAXIMUM_SUMMARY_BYTES, parse_entry_presentation};
-use crate::library::{DownloadCatalog, DownloadCatalogError};
+use crate::{DownloadCatalog, DownloadCatalogError};
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 
