@@ -186,7 +186,7 @@ pub(crate) fn load_model_kernel_verdicts(
     // The two gated-delta kernels are independent capability families. A
     // demoted kernel is None and the gated-delta dispatch falls back to
     // the ops-based public MLX route for the worker's lifetime — the
-    // checkpoint fallback preserves the prompt-cache boundary contract.
+    // checkpoint fallback preserves the astro-ssd-prompt-cache boundary contract.
     let gated_delta_kernel =
         if kernel_capability::worker_process_kernel_capabilities(runtime, performance_attribution)
             .is_custom_kernel_supported(CustomMetalKernelFamily::GATED_DELTA_SEQUENCE)

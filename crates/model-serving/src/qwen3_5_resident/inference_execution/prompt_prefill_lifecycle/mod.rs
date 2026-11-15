@@ -2,7 +2,7 @@
 //!
 //! The children own the chunk loop in its documented correctness order —
 //! plan the chunk, ask the memory governor whether it fits, dispatch the forward,
-//! publish durable prompt-cache state, then advance the cursor — with the
+//! publish durable astro-ssd-prompt-cache state, then advance the cursor — with the
 //! terminal seed and per-chunk observability alongside. This root only wires
 //! them into the engine's inference_execution module and re-binds the
 //! engine-level owners below so the children keep one-level `super::` paths.

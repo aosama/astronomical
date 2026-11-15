@@ -83,7 +83,7 @@ pub(super) struct PromptPrefillChunkOutcome {
     /// The tokens the forward's memory is measured under: one span's,
     /// whose MLX working buffers the peak is.
     pub(super) measured_forward_token_count: usize,
-    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// What one step of a layer-at-a-time prompt left.
@@ -126,7 +126,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let spans = plan.layer_major_span_plan.spans.as_slice();
         let checkpoint_contract =
-            plan.persistent_prompt_cache_block_token_count
+            plan.astro_ssd_prompt_cache_block_token_count
                 .map(|block_token_count| LayerMajorCheckpointContract {
                     boundary_tensor_count: model.decoder_cache_layout().boundary_tensor_count(),
                     block_token_count,
@@ -230,7 +230,7 @@ impl Qwen3_5EngineState {
             ..
         } = prefill_in_flight;
         let mut boundary_checkpoints = layer_major_prefill_outcome.boundary_checkpoints;
-        crate::qwen3_5_core::prompt_cache_capture::record_persistent_prompt_cache_boundary_checkpoint(
+        crate::qwen3_5_core::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint(
             active_request,
             plan.prefill_token_count,
             &plan.all_completed_prefill_chunk_tokens,
@@ -325,8 +325,8 @@ impl Qwen3_5EngineState {
             expert_residency_telemetry,
             expert_memory_mode: Some(model.observed_expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
-            persistent_prompt_cache_diagnostics: active_request
-                .persistent_prompt_cache_diagnostics
+            astro_ssd_prompt_cache_diagnostics: active_request
+                .astro_ssd_prompt_cache_diagnostics
                 .clone(),
             neural_engine_chunk: None,
             prompt_layer_progress: Some(prompt_layer_progress),

@@ -343,8 +343,7 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        self.emit_persistent_prompt_cache_stats(event_writer)
-            .await?;
+        self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
         let cached_prompt_token_count = generation_start.cached_token_count();
         let restored_prompt_prefix_token_count =
             generation_start.restored_prompt_prefix_token_count();
@@ -391,8 +390,8 @@ where
             streaming_retry_attempted,
         );
         active_engine_generation.last_reported_expert_memory_mode = initial_expert_memory_mode;
-        active_engine_generation.persistent_prompt_cache_diagnostics = generation_start
-            .persistent_prompt_cache_diagnostics()
+        active_engine_generation.astro_ssd_prompt_cache_diagnostics = generation_start
+            .astro_ssd_prompt_cache_diagnostics()
             .cloned();
         Ok(Some(active_engine_generation))
     }

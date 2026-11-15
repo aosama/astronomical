@@ -19,14 +19,14 @@ pub(super) fn chunk_requires_visual_embeddings(
     active_request.has_visual_inputs && chunk_token_ids.contains(&active_request.image_pad_token_id)
 }
 
-pub(super) fn seed_terminal_text_prefill_after_prompt_cache_boundaries(
+pub(super) fn seed_terminal_text_prefill_after_astro_ssd_prompt_cache_boundaries(
     active_request: &mut Qwen3_5EngineRequest,
     model: &Qwen3_5ResidentModel,
     prefill_start: usize,
     prefill_end: usize,
     intermediate_completed_prefill_chunk_tokens: &[usize],
-    persistent_prompt_cache_block_token_count: usize,
-) -> Result<Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+    astro_ssd_prompt_cache_block_token_count: usize,
+) -> Result<Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
     // A terminal text chunk can still contain cache-block boundaries. The terminal
     // forward builds the vocabulary head while also collecting boundary checkpoints,
     // so the chunk is a single forward pass. This avoids the prefix+tail split that
@@ -37,7 +37,7 @@ pub(super) fn seed_terminal_text_prefill_after_prompt_cache_boundaries(
             active_request.next_position_tokens,
             &mut active_request.request_decoder_state,
             intermediate_completed_prefill_chunk_tokens.to_vec(),
-            persistent_prompt_cache_block_token_count,
+            astro_ssd_prompt_cache_block_token_count,
             &mut active_request.performance_attribution,
         )?;
     seed_first_generated_token_from_terminal_forward_output(

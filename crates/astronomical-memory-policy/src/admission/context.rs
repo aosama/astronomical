@@ -43,7 +43,7 @@ pub const fn bounded_output_reservation_token_count(
 
 /// Context-cache reconstruction temporarily owns both loaded and concatenated state.
 ///
-/// `restored_context_token_count` is tokens that may already exist as prompt-cache
+/// `restored_context_token_count` is tokens that may already exist as astro-ssd-prompt-cache
 /// blocks. Future output-budget tokens have no blocks and must not be multiplied in.
 #[must_use]
 pub fn persistent_context_restore_workspace_bytes(

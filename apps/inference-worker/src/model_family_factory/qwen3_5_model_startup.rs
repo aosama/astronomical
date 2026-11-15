@@ -5,17 +5,17 @@
 use std::path::PathBuf;
 
 use astronomical_config::{
-    PromptCacheConfig, model_weights_fingerprint, neural_engine_program_cache_directory_for_model,
-    remove_other_weights_of_model,
+    AstroSsdPromptCacheConfig, model_weights_fingerprint,
+    neural_engine_program_cache_directory_for_model, remove_other_weights_of_model,
 };
 use astronomical_ipc_protocol::{
     WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy,
     WorkerDiagnosticQwen3_5EngineOverride,
 };
 use astronomical_model_serving::{
-    CompleteResidencyRequirements, EnginePlacement, ModelFamilyInferenceEngine,
-    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
-    PerformanceAttributionOutcome, PerformanceOperation, PersistentPromptCacheDiskStoreConfig,
+    AstroSsdPromptCacheDiskStoreConfig, CompleteResidencyRequirements, EnginePlacement,
+    ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
+    PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
     Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5MemoryGeometryError,
     Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5StreamingEngine,
     Qwen3_5StreamingPromptProcessingChunkSizer, ValidatedQwen3_5Artifact,
@@ -64,12 +64,12 @@ pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
-    prompt_cache_config: PromptCacheConfig,
+    astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
     neural_engine_program_directory: Option<PathBuf>,
     requested_model_id: String,
     maximum_context_tokens: u32,
     max_output_tokens: u32,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
@@ -143,17 +143,18 @@ pub(crate) fn initialize_qwen3_5_model(
     // caching. This keeps disabled operation from touching model/revision cache
     // identity, opening directories, scanning files, or reserving publication
     // workspace later in model loading.
-    let persistent_prompt_cache_disk_store_config = persistent_prompt_cache_enabled.then(|| {
-        let per_model_prompt_cache_config =
-            prompt_cache_config.for_model(&model_id, &model_revision);
-        PersistentPromptCacheDiskStoreConfig::new(
-            per_model_prompt_cache_config
-                .active_model_prompt_cache_directory()
+    let astro_ssd_prompt_cache_disk_store_config = astro_ssd_prompt_cache_enabled.then(|| {
+        let per_model_astro_ssd_prompt_cache_config =
+            astro_ssd_prompt_cache_config.for_model(&model_id, &model_revision);
+        AstroSsdPromptCacheDiskStoreConfig::new(
+            per_model_astro_ssd_prompt_cache_config
+                .active_model_astro_ssd_prompt_cache_directory()
                 .clone(),
-            per_model_prompt_cache_config
-                .global_prompt_cache_root_directory()
+            per_model_astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_root_directory()
                 .clone(),
-            per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
+            per_model_astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_maximum_size_bytes(),
         )
     });
     let neural_engine_program_cache_directory = model_program_cache_directory(
@@ -167,7 +168,7 @@ pub(crate) fn initialize_qwen3_5_model(
         validated_artifact,
         active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,
-        persistent_prompt_cache_disk_store_config,
+        astro_ssd_prompt_cache_disk_store_config,
         neural_engine_program_cache_directory,
         think_end_token_id,
         &model_directory_path,
@@ -192,7 +193,7 @@ fn construct_selected_qwen3_5_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
-    persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
@@ -211,7 +212,7 @@ fn construct_selected_qwen3_5_engine(
             validated_artifact,
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
+            astro_ssd_prompt_cache_disk_store_config,
             neural_engine_program_cache_directory,
             think_end_token_id,
             model_directory_path,
@@ -228,7 +229,7 @@ fn construct_selected_qwen3_5_engine(
             validated_artifact,
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
+            astro_ssd_prompt_cache_disk_store_config,
             think_end_token_id,
             model_directory_path,
             maximum_context_tokens,
@@ -418,7 +419,7 @@ fn construct_resident_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
-    persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
@@ -458,7 +459,7 @@ fn construct_resident_engine(
         validated_artifact,
         active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,
-        persistent_prompt_cache_disk_store_config,
+        astro_ssd_prompt_cache_disk_store_config,
         prompt_processing_chunk_sizer,
         think_end_token_id,
         model_directory_path.to_path_buf(),
@@ -482,7 +483,7 @@ fn construct_streaming_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
-    persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
     maximum_context_tokens: u32,
@@ -521,7 +522,7 @@ fn construct_streaming_engine(
         validated_artifact,
         active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,
-        persistent_prompt_cache_disk_store_config,
+        astro_ssd_prompt_cache_disk_store_config,
         prompt_processing_chunk_sizer,
         think_end_token_id,
         model_directory_path.to_path_buf(),

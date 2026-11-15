@@ -231,8 +231,8 @@ pub(crate) struct ScriptedChatEngine {
     fatal_decode_reason: Option<String>,
     pub(super) initial_expert_memory_mode: Option<ExpertMemoryMode>,
     cancelled_generation_finalization: GenerationFinalization,
-    active_generation_prompt_cache_stats: Option<WorkerEvent>,
-    prompt_cache_clear_event: Option<WorkerEvent>,
+    active_generation_astro_ssd_prompt_cache_stats: Option<WorkerEvent>,
+    astro_ssd_prompt_cache_clear_event: Option<WorkerEvent>,
     pub(super) maximum_mlx_buffer_cache_limit_bytes: u64,
     idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     scripted_replacement_required_reason: Option<String>,
@@ -285,8 +285,8 @@ impl ScriptedChatEngine {
             fatal_decode_reason: None,
             initial_expert_memory_mode: None,
             cancelled_generation_finalization: GenerationFinalization::default(),
-            active_generation_prompt_cache_stats: None,
-            prompt_cache_clear_event: None,
+            active_generation_astro_ssd_prompt_cache_stats: None,
+            astro_ssd_prompt_cache_clear_event: None,
             maximum_mlx_buffer_cache_limit_bytes: u64::MAX,
             idle_mlx_memory_telemetry: None,
             scripted_replacement_required_reason: None,
@@ -367,19 +367,20 @@ impl ScriptedChatEngine {
         Arc::clone(&self.cancellation_count)
     }
 
-    pub(super) fn with_active_generation_prompt_cache_stats(
+    pub(super) fn with_active_generation_astro_ssd_prompt_cache_stats(
         mut self,
-        active_generation_prompt_cache_stats: WorkerEvent,
+        active_generation_astro_ssd_prompt_cache_stats: WorkerEvent,
     ) -> Self {
-        self.active_generation_prompt_cache_stats = Some(active_generation_prompt_cache_stats);
+        self.active_generation_astro_ssd_prompt_cache_stats =
+            Some(active_generation_astro_ssd_prompt_cache_stats);
         self
     }
 
-    pub(super) fn with_prompt_cache_clear_event(
+    pub(super) fn with_astro_ssd_prompt_cache_clear_event(
         mut self,
-        prompt_cache_clear_event: WorkerEvent,
+        astro_ssd_prompt_cache_clear_event: WorkerEvent,
     ) -> Self {
-        self.prompt_cache_clear_event = Some(prompt_cache_clear_event);
+        self.astro_ssd_prompt_cache_clear_event = Some(astro_ssd_prompt_cache_clear_event);
         self
     }
 }
@@ -494,20 +495,20 @@ impl InferenceEngine for ScriptedChatEngine {
         }))
     }
 
-    async fn collect_persistent_prompt_cache_stats(
+    async fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         Ok(self
             .is_active
-            .then(|| self.active_generation_prompt_cache_stats.clone())
+            .then(|| self.active_generation_astro_ssd_prompt_cache_stats.clone())
             .flatten())
     }
 
-    async fn clear_persistent_prompt_cache(
+    async fn clear_astro_ssd_prompt_cache(
         &mut self,
         _model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        Ok(self.prompt_cache_clear_event.clone())
+        Ok(self.astro_ssd_prompt_cache_clear_event.clone())
     }
 
     async fn collect_mlx_memory_telemetry(

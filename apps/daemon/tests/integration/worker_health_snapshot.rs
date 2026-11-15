@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use astronomical_daemon::{
-    ChatGenerationExecutor, PendingPromptCacheClear, ServingSessionSnapshot, WorkerHealthSnapshot,
-    WorkerHealthStatus,
+    ChatGenerationExecutor, PendingAstroSsdPromptCacheClear, ServingSessionSnapshot,
+    WorkerHealthSnapshot, WorkerHealthStatus,
 };
 use astronomical_ipc_protocol::{
     ChatModelCapabilities, ImageGenerationCapabilities, WorkerModelCapabilities,
@@ -85,9 +85,10 @@ async fn should_preserve_a_pending_cache_clear_across_model_replacement() {
             "example/old-model".to_owned(),
             model_capabilities.clone(),
         );
-        previous_health_snapshot.pending_prompt_cache_clear = Some(PendingPromptCacheClear {
-            model_id: Some("example/cached-model".to_owned()),
-        });
+        previous_health_snapshot.pending_astro_ssd_prompt_cache_clear =
+            Some(PendingAstroSsdPromptCacheClear {
+                model_id: Some("example/cached-model".to_owned()),
+            });
 
         let replacement_health_snapshot = WorkerHealthSnapshot::ready_with_replacement_model(
             "example/new-model".to_owned(),
@@ -97,8 +98,8 @@ async fn should_preserve_a_pending_cache_clear_across_model_replacement() {
         );
 
         assert_eq!(
-            replacement_health_snapshot.pending_prompt_cache_clear,
-            previous_health_snapshot.pending_prompt_cache_clear
+            replacement_health_snapshot.pending_astro_ssd_prompt_cache_clear,
+            previous_health_snapshot.pending_astro_ssd_prompt_cache_clear
         );
     })
     .await

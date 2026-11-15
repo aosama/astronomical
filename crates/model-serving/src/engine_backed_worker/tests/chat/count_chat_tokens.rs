@@ -60,7 +60,7 @@ async fn should_answer_a_count_with_the_prepared_prompt_length_and_no_generation
             generated_token_count: 0,
             reasoning_token_count: 0,
             cached_token_count: 0,
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         }
     );

@@ -125,7 +125,7 @@ async fn should_replace_a_worker_after_an_unexpected_cancellation_event() {
 }
 
 #[tokio::test]
-async fn should_keep_worker_ready_when_cancellation_publishes_prompt_cache_stats() {
+async fn should_keep_worker_ready_when_cancellation_publishes_astro_ssd_prompt_cache_stats() {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
     let worker_executor = launch_test_executor(worker_executable_path)
@@ -146,14 +146,14 @@ async fn should_keep_worker_ready_when_cancellation_publishes_prompt_cache_stats
     assert_eq!(
         health_snapshot.status,
         WorkerHealthStatus::Ready,
-        "prompt-cache stats during cancellation must not disable the worker"
+        "astro-ssd-prompt-cache stats during cancellation must not disable the worker"
     );
-    let published_cache_stats =
-        astronomical_daemon::PersistentPromptCacheSummary::from_worker_event(
-            health_snapshot.persistent_prompt_cache_stats.as_ref(),
+    let published_astro_ssd_prompt_cache_stats =
+        astronomical_daemon::AstroSsdPromptCacheSummary::from_worker_event(
+            health_snapshot.astro_ssd_prompt_cache_stats.as_ref(),
         );
-    assert_eq!(published_cache_stats.hits, 1);
-    assert_eq!(published_cache_stats.tokens_saved, 2_048);
+    assert_eq!(published_astro_ssd_prompt_cache_stats.hits, 1);
+    assert_eq!(published_astro_ssd_prompt_cache_stats.tokens_saved, 2_048);
 
     let mut followup_stream = worker_executor
         .start_chat_generation(command_for_model("astronomical/test-worker"))

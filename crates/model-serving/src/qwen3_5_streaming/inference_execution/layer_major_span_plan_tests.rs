@@ -134,7 +134,7 @@ fn should_plan_the_one_span_left_from_a_block_cursor_up_to_the_tail_capture() {
 }
 
 #[test]
-fn should_treat_a_zero_block_as_no_prompt_cache() {
+fn should_treat_a_zero_block_as_no_astro_ssd_prompt_cache() {
     assert_eq!(
         layer_major_span_plan(0, 10_000, CHUNK_TOKENS, Some(0)),
         layer_major_span_plan(0, 10_000, CHUNK_TOKENS, None)

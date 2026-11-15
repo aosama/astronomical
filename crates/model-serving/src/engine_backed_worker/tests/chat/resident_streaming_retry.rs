@@ -30,7 +30,7 @@ enum RetryScenario {
 }
 
 struct RetryInferenceRequest {
-    persistent_cache_identity: String,
+    astro_ssd_prompt_cache_identity: String,
     streaming_retry_drop_count: Arc<AtomicUsize>,
     is_streaming_retry: bool,
 }
@@ -38,7 +38,7 @@ struct RetryInferenceRequest {
 impl Clone for RetryInferenceRequest {
     fn clone(&self) -> Self {
         Self {
-            persistent_cache_identity: self.persistent_cache_identity.clone(),
+            astro_ssd_prompt_cache_identity: self.astro_ssd_prompt_cache_identity.clone(),
             streaming_retry_drop_count: Arc::clone(&self.streaming_retry_drop_count),
             is_streaming_retry: true,
         }
@@ -85,7 +85,7 @@ impl ModelGenerationProcessor for RetryProcessor {
     > {
         Ok(PreparedModelGeneration::new(
             RetryInferenceRequest {
-                persistent_cache_identity: generation_command.model.clone(),
+                astro_ssd_prompt_cache_identity: generation_command.model.clone(),
                 streaming_retry_drop_count: Arc::clone(&self.streaming_retry_drop_count),
                 is_streaming_retry: false,
             },
@@ -147,7 +147,7 @@ impl InferenceEngine for RetryEngine {
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
             .push((
                 self.role,
-                inference_request.persistent_cache_identity.clone(),
+                inference_request.astro_ssd_prompt_cache_identity.clone(),
             ));
 
         if matches!(

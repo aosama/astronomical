@@ -1,3 +1,4 @@
+mod astro_ssd_prompt_cache_diagnostics;
 mod chat_generation_executor;
 mod daemon_ipc;
 mod daemon_ipc_decisions;
@@ -17,7 +18,6 @@ mod image_generation;
 mod image_memory_snapshot;
 mod local_api_website_sample;
 mod model_load_timeout;
-mod persistent_prompt_cache_diagnostics;
 mod request_queue;
 mod startup_failure_record;
 mod worker_cancellation;

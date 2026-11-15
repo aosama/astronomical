@@ -9,9 +9,9 @@
 //! not fill its last block: that last token runs on its own so the partial
 //! tail block is captured where the next request's lookup expects it.
 
-use crate::persistent_cache::{
-    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
-    persistent_prompt_cache_partial_tail_capture_end, resolve_prompt_prefill_chunk_span,
+use crate::astro_ssd_prompt_cache::{
+    astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    astro_ssd_prompt_cache_partial_tail_capture_end, resolve_prompt_prefill_chunk_span,
 };
 use crate::qwen3_5_streaming::model::layer_major_prefill::LayerMajorSpan;
 
@@ -50,7 +50,7 @@ pub(crate) fn layer_major_span_plan(
     let capture_block_token_count =
         capture_block_token_count.filter(|block_token_count| *block_token_count > 0);
     let tail_capture_end = capture_block_token_count.map(|block_token_count| {
-        persistent_prompt_cache_partial_tail_capture_end(prompt_token_count, block_token_count)
+        astro_ssd_prompt_cache_partial_tail_capture_end(prompt_token_count, block_token_count)
     });
     let mut span_ends = Vec::new();
     let mut span_start = prefill_cursor;
@@ -81,7 +81,7 @@ pub(crate) fn layer_major_span_plan(
 }
 
 /// Turns absolute span ends into spans relative to the cursor, with the
-/// prompt-cache boundaries each one captures.
+/// astro-ssd-prompt-cache boundaries each one captures.
 fn spans_with_boundaries(
     prefill_cursor: usize,
     span_ends: &[usize],
@@ -94,7 +94,7 @@ fn spans_with_boundaries(
         let span_token_count = span_end - span_start;
         let mut interior_boundary_tokens =
             capture_block_token_count.map_or_else(Vec::new, |block_token_count| {
-                persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+                astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens(
                     span_start,
                     *span_end,
                     block_token_count,

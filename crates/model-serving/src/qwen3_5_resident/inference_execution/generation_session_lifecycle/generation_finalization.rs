@@ -5,16 +5,15 @@
 //! is restored when the leftover ceiling admits it so a fitting model is not left
 //! streaming. Final telemetry then reports that restored ownership.
 
+use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::decoder_cache::DecoderCacheState;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
-use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::{
-    GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
-    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
-    PersistentPromptCacheBlockKey, RetainedPrefixRetentionDecision,
-    RetainedPrefixRetentionRequirements,
+    AstroSsdPromptCacheBlockKey, GenerationFinalization, GenerationPerformanceAttributionMetadata,
+    InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
+    PerformanceOperation, RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
 };
 
 use super::Qwen3_5EngineState;
@@ -180,8 +179,8 @@ impl Qwen3_5EngineState {
         &mut self,
         active_request: &mut Qwen3_5EngineRequest,
     ) -> Option<RetainedLiveDecoderPrefix> {
-        let model_contract = self.persistent_prompt_cache_model_contract.as_ref()?;
-        if !active_request.can_use_persistent_prompt_cache {
+        let model_contract = self.astro_ssd_prompt_cache_model_contract.as_ref()?;
+        if !active_request.can_use_astro_ssd_prompt_cache {
             return None;
         }
         let block_token_count = model_contract.block_token_count();
@@ -214,13 +213,13 @@ impl Qwen3_5EngineState {
             return None;
         }
         let mut complete_block_keys = Vec::with_capacity(adoptable_block_count);
-        let mut parent_block_key: Option<PersistentPromptCacheBlockKey> = None;
-        let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
+        let mut parent_block_key: Option<AstroSsdPromptCacheBlockKey> = None;
+        let empty_block_causal_input = AstroSsdPromptCacheBlockCausalInput::empty();
         for block_index in 0..adoptable_block_count {
             let block_start = block_index * block_token_count;
             let block_end = block_start + block_token_count;
             let block_causal_input = active_request
-                .persistent_prompt_cache_block_causal_inputs
+                .astro_ssd_prompt_cache_block_causal_inputs
                 .get(block_index)
                 .unwrap_or(&empty_block_causal_input);
             let block_key = match parent_block_key.as_ref() {
@@ -228,7 +227,7 @@ impl Qwen3_5EngineState {
                     &active_request.input_token_ids[block_start..block_end],
                     block_causal_input,
                 ),
-                None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
+                None => AstroSsdPromptCacheBlockKey::for_root_block_with_causal_input(
                     model_contract,
                     &active_request.input_token_ids[block_start..block_end],
                     block_causal_input,

@@ -1,4 +1,7 @@
 mod allocation_checkpoint;
+mod astro_ssd_prompt_cache_boundary_checkpoint;
+mod astro_ssd_prompt_cache_capture;
+mod astro_ssd_prompt_cache_restore_reconstruction_probe;
 mod attention_prefill_performance;
 mod convolution_prefill_performance;
 mod convolution_state;
@@ -11,9 +14,6 @@ mod gated_delta;
 mod gated_delta_checkpoints;
 mod gdn_decode_prework_numerics;
 mod linear_attention_norm_scale;
-mod persistent_prompt_cache_boundary_checkpoint;
-mod persistent_prompt_cache_capture;
-mod prompt_cache_restore_reconstruction_probe;
 mod quantized_matmul_partition_parity;
 mod quantized_matmul_prefill_performance;
 mod request_decoder_state;

@@ -8,9 +8,8 @@ use crate::{
     ChatGenerationOutput, DecisionsCommand, EmbeddingsCommand, EmbeddingsFailureReason,
     GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata, SpokenAudioSegment,
-    WorkerModelCapabilities, WorkerModelConfiguration,
-    WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
-    WorkerStartupConfiguration,
+    WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerModelCapabilities, WorkerModelConfiguration,
+    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -331,13 +330,13 @@ pub enum WorkerCommand {
         /// Configuration generation that owns the accepted memory policy.
         configuration_generation: String,
     },
-    /// Requests the worker delete the persistent prompt-cache footprint on SSD.
+    /// Requests the worker delete the persistent astro-ssd-prompt-cache footprint on SSD.
     ///
     /// When `model_id` is `None`, the entire global cache root is wiped. When
     /// `model_id` is `Some`, only the `<global_root>/<model_id>/` tree is
-    /// removed. The daemon sends this from `DELETE /v1/cache` and waits
-    /// for `PromptCacheCleared` before responding to the HTTP caller.
-    ClearPromptCache {
+    /// removed. The daemon sends this from `DELETE /v1/ssd-prompt-cache` and waits
+    /// for `AstroSsdPromptCacheCleared` before responding to the HTTP caller.
+    ClearAstroSsdPromptCache {
         /// Optional scoped model identity. `None` clears everything.
         model_id: Option<String>,
     },
@@ -629,7 +628,7 @@ pub enum WorkerEvent {
         generated_token_count: u16,
         reasoning_token_count: u16,
         cached_token_count: u32,
-        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+        astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
         reason: ChatGenerationCompletionReason,
     },
     /// Reports a request-scoped failure that leaves the process responsive.
@@ -654,36 +653,36 @@ pub enum WorkerEvent {
         /// Actionable model-load failure reason safe to return to the local API caller.
         model_load_failure_reason: String,
     },
-    /// Reports cumulative persistent prompt-cache observability counters and disk footprint.
+    /// Reports cumulative persistent astro-ssd-prompt-cache observability counters and disk footprint.
     ///
     /// Emitted by the worker after the model finishes loading and after each
     /// generation completes, so the daemon can expose cache health through
-    /// `GET /v1/cache/stats` without reading the cache directory itself.
-    PersistentPromptCacheStats {
-        persistent_prompt_cache_hits: u64,
-        persistent_prompt_cache_misses: u64,
-        persistent_prompt_cache_tokens_saved: u64,
-        persistent_prompt_cache_partial_tail_hits: u64,
-        persistent_prompt_cache_block_token_count: u64,
-        persistent_prompt_cache_sequence_state_block_count: u64,
-        persistent_prompt_cache_boundary_state_snapshot_count: u64,
-        persistent_prompt_cache_visual_embedding_count: u64,
-        persistent_prompt_cache_total_size_bytes: u64,
-        persistent_prompt_cache_visual_embedding_total_size_bytes: u64,
-        persistent_prompt_cache_maximum_size_bytes: u64,
-        persistent_prompt_cache_visual_embedding_hits: u64,
-        persistent_prompt_cache_visual_embedding_misses: u64,
-        persistent_prompt_cache_visual_embedding_rows_loaded: u64,
+    /// `GET /v1/ssd-prompt-cache/stats` without reading the cache directory itself.
+    AstroSsdPromptCacheStats {
+        astro_ssd_prompt_cache_hits: u64,
+        astro_ssd_prompt_cache_misses: u64,
+        astro_ssd_prompt_cache_tokens_saved: u64,
+        astro_ssd_prompt_cache_partial_tail_hits: u64,
+        astro_ssd_prompt_cache_block_token_count: u64,
+        astro_ssd_prompt_cache_sequence_state_block_count: u64,
+        astro_ssd_prompt_cache_boundary_state_snapshot_count: u64,
+        astro_ssd_prompt_cache_visual_embedding_count: u64,
+        astro_ssd_prompt_cache_total_size_bytes: u64,
+        astro_ssd_prompt_cache_visual_embedding_total_size_bytes: u64,
+        astro_ssd_prompt_cache_maximum_size_bytes: u64,
+        astro_ssd_prompt_cache_visual_embedding_hits: u64,
+        astro_ssd_prompt_cache_visual_embedding_misses: u64,
+        astro_ssd_prompt_cache_visual_embedding_rows_loaded: u64,
     },
-    /// Confirms a persistent prompt-cache deletion completed.
+    /// Confirms a persistent astro-ssd-prompt-cache deletion completed.
     ///
-    /// Emitted by the worker after processing `ClearPromptCache`. The daemon
+    /// Emitted by the worker after processing `ClearAstroSsdPromptCache`. The daemon
     /// waits for this event before responding to the HTTP caller with the
     /// deletion outcome.
-    PromptCacheCleared {
+    AstroSsdPromptCacheCleared {
         /// The model identity scoped by the request. `None` means global clear.
         model_id: Option<String>,
-        /// Number of prompt-cache block directories removed.
+        /// Number of astro-ssd-prompt-cache block directories removed.
         blocks_removed: u64,
         /// Total bytes removed across all cache file types.
         bytes_freed: u64,

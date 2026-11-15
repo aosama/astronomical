@@ -3,9 +3,9 @@
 //! The order in this file is a correctness contract:
 //!
 //! 1. Choose a deterministic fixed chunk from resolved configuration.
-//! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
+//! 2. Clamp it at semantic control-span and durable astro-ssd-prompt-cache boundaries.
 //! 3. Ask the memory governor whether that chunk fits, then execute exactly it.
-//! 4. Publish required prompt-cache state before advancing the in-memory cursor.
+//! 4. Publish required astro-ssd-prompt-cache state before advancing the in-memory cursor.
 //! 5. Synchronize the chunk tape and reclaim MLX buffer cache only above threshold.
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
 //! 7. Emit progress only after all required state transitions succeeded.
@@ -18,10 +18,10 @@
 //! every per-chunk fixed cost, so throughput collapsed exactly when memory
 //! was tight; the configured chunk size is the only prefill chunk size.
 
-use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
-use crate::qwen3_5_core::prompt_cache_capture::{
-    capture_persistent_prompt_cache_blocks, capture_persistent_prompt_cache_partial_tail_block,
+use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::{
+    capture_astro_ssd_prompt_cache_blocks, capture_astro_ssd_prompt_cache_partial_tail_block,
 };
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -58,7 +58,7 @@ impl Qwen3_5EngineState {
         else {
             return Ok(None);
         };
-        let crate::persistent_cache::ResolvedPrefillChunkSpan {
+        let crate::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan {
             prefill_start,
             requested_prefill_chunk_end: prefill_end,
             attempted_prefill_chunk_token_count,
@@ -133,23 +133,23 @@ impl Qwen3_5EngineState {
 
     /// Resolves the next prompt-prefill chunk span through the shared pure
     /// resolver: the configured chunk end from the sizer, clamped at the
-    /// durable prompt-cache boundary when one applies. The resident engine
+    /// durable astro-ssd-prompt-cache boundary when one applies. The resident engine
     /// executes exactly the requested (possibly clamped) end.
     fn resolve_next_prefill_chunk_span(
         &self,
         active_request: &Qwen3_5EngineRequest,
         prefill_end_exclusive: usize,
-    ) -> Option<crate::persistent_cache::ResolvedPrefillChunkSpan> {
-        let persistent_prompt_cache_block_token_count = self
-            .persistent_prompt_cache
+    ) -> Option<crate::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan> {
+        let astro_ssd_prompt_cache_block_token_count = self
+            .astro_ssd_prompt_cache
             .as_ref()
-            .map(|persistent_prompt_cache| {
-                persistent_prompt_cache
+            .map(|astro_ssd_prompt_cache| {
+                astro_ssd_prompt_cache
                     .model_contract_ref()
                     .block_token_count()
             })
             .unwrap_or(0);
-        crate::persistent_cache::resolve_prompt_prefill_chunk_span(
+        crate::astro_ssd_prompt_cache::resolve_prompt_prefill_chunk_span(
             active_request.prefill_cursor,
             prefill_end_exclusive,
             self.prompt_processing_chunk_sizer
@@ -157,9 +157,9 @@ impl Qwen3_5EngineState {
                     active_request.prefill_cursor,
                     prefill_end_exclusive,
                 ),
-            self.persistent_prompt_cache.is_some(),
-            active_request.can_use_persistent_prompt_cache,
-            persistent_prompt_cache_block_token_count,
+            self.astro_ssd_prompt_cache.is_some(),
+            active_request.can_use_astro_ssd_prompt_cache,
+            astro_ssd_prompt_cache_block_token_count,
         )
     }
 
@@ -348,7 +348,7 @@ impl Qwen3_5EngineState {
         )
     }
 
-    /// Publishes durable prompt-cache blocks and the partial tail, then
+    /// Publishes durable astro-ssd-prompt-cache blocks and the partial tail, then
     /// advances the request position and cursor. Publication precedes both
     /// moves so a storage failure leaves restartable state. Mirrors the
     /// inlined block.
@@ -357,7 +357,7 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
-        boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+        boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     ) -> Result<(), InferenceEngineError> {
         let model = self
             .model
@@ -367,11 +367,11 @@ impl Qwen3_5EngineState {
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
         // than continuing with an in-memory chain that restart cannot reproduce.
-        if let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() {
-            if active_request.can_use_persistent_prompt_cache && !boundary_checkpoints.is_empty() {
-                capture_persistent_prompt_cache_blocks(
+        if let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.as_ref() {
+            if active_request.can_use_astro_ssd_prompt_cache && !boundary_checkpoints.is_empty() {
+                capture_astro_ssd_prompt_cache_blocks(
                     self,
-                    persistent_prompt_cache,
+                    astro_ssd_prompt_cache,
                     model,
                     active_request,
                     prefill_start,
@@ -379,9 +379,9 @@ impl Qwen3_5EngineState {
                     boundary_checkpoints,
                 )?;
             }
-            capture_persistent_prompt_cache_partial_tail_block(
+            capture_astro_ssd_prompt_cache_partial_tail_block(
                 self,
-                persistent_prompt_cache,
+                astro_ssd_prompt_cache,
                 model,
                 active_request,
                 prefill_end,
@@ -532,8 +532,8 @@ impl Qwen3_5EngineState {
             expert_residency_telemetry: expert_residency,
             expert_memory_mode: Some(model.expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
-            persistent_prompt_cache_diagnostics: active_request
-                .persistent_prompt_cache_diagnostics
+            astro_ssd_prompt_cache_diagnostics: active_request
+                .astro_ssd_prompt_cache_diagnostics
                 .clone(),
             neural_engine_chunk,
             prompt_layer_progress: None,

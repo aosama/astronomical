@@ -1,7 +1,7 @@
 //! Idle-time pending-work draining for the daemon worker loop.
 //!
 //! Before every select iteration the loop must apply an enacted MLX memory
-//! limit change and a pending prompt-cache clear while no generation is
+//! limit change and a pending astro-ssd-prompt-cache clear while no generation is
 //! active; this module owns that pre-loop work so the loop itself stays
 //! inside the source-size budget. Dependencies stay explicit parameters,
 //! matching the process-loop style noted in `worker.rs`.
@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use tokio::sync::Semaphore;
 
-use crate::worker::cache_clear;
+use crate::worker::astro_ssd_prompt_cache_clear;
 use crate::worker::loop_types::ActiveWorkerRequest;
 use crate::worker::loop_types::WorkerLoopState;
 use crate::worker::memory::limit::{
@@ -21,7 +21,7 @@ use crate::worker::memory::limit::{
 pub(super) async fn drain_pending_idle_work(
     worker_loop_state: &mut WorkerLoopState<'_>,
     pending_mlx_memory_limit_update: &mut Option<PendingMlxMemoryLimitUpdate>,
-    pending_prompt_cache_clear: &mut Option<crate::PendingPromptCacheClear>,
+    pending_astro_ssd_prompt_cache_clear: &mut Option<crate::PendingAstroSsdPromptCacheClear>,
     active_generation_permits: &Arc<Semaphore>,
     generation_queue_permits: &Arc<Semaphore>,
 ) {
@@ -80,8 +80,8 @@ pub(super) async fn drain_pending_idle_work(
             Ok(_) => {}
         }
     }
-    cache_clear::apply_pending_prompt_cache_clear_if_idle(
-        pending_prompt_cache_clear,
+    astro_ssd_prompt_cache_clear::apply_pending_astro_ssd_prompt_cache_clear_if_idle(
+        pending_astro_ssd_prompt_cache_clear,
         worker_process,
         health_snapshot,
         active_generation,

@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::AstronomicalConfigError;
 use crate::config_document::{RuntimeConfigFile, UserConfigFile};
+use crate::config_field_renames::rename_renamed_config_fields;
 use crate::duplicate_key_json;
 use crate::legacy_config_migration;
 
@@ -37,12 +38,12 @@ pub(crate) fn read_user_config_file(
         persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config, false)?;
         return Ok(migrated_user_config);
     }
-    let removed_retired_fields = strip_retired_config_fields(&mut config_json);
+    let changed_field_names = normalize_config_field_names(&mut config_json);
     let mut user_config_file = parse_and_validate_v1(&config_file_path, config_json)?;
     persist_mandatory_chunking_fields(
         &config_file_path,
         &mut user_config_file,
-        removed_retired_fields,
+        changed_field_names,
     )?;
     Ok(user_config_file)
 }
@@ -51,7 +52,7 @@ pub(crate) fn parse_and_validate_v1(
     config_file_path: &Path,
     mut config_json: serde_json::Value,
 ) -> Result<UserConfigFile, AstronomicalConfigError> {
-    strip_retired_config_fields(&mut config_json);
+    normalize_config_field_names(&mut config_json);
     let user_config_file: UserConfigFile =
         serde_json::from_value(config_json).map_err(|source| {
             AstronomicalConfigError::ParseConfigFile {
@@ -71,6 +72,14 @@ const RETIRED_CHUNKING_FIELD_NAMES: [&str; 4] = [
     "experimental_quantized_kv_cache_enabled",
     "experimental_fused_moe_decode_enabled",
 ];
+
+/// Moves renamed settings to their new keys and drops retired ones. Returns
+/// whether either changed the document, so the caller writes it back.
+fn normalize_config_field_names(config_json: &mut serde_json::Value) -> bool {
+    let moved_renamed_fields = rename_renamed_config_fields(config_json);
+    let removed_retired_fields = strip_retired_config_fields(config_json);
+    moved_renamed_fields || removed_retired_fields
+}
 
 pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -> bool {
     let mut removed_field_names = Vec::new();

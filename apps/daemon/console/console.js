@@ -3,7 +3,7 @@
 
 const STATUS_URL = "/v1/status";
 const MODELS_URL = "/v1/models";
-const CACHE_STATS_URL = "/v1/cache/stats";
+const ASTRO_SSD_PROMPT_CACHE_STATS_URL = "/v1/ssd-prompt-cache/stats";
 const SYSTEM_TELEMETRY_URL = "/v1/system/telemetry";
 const CONFIG_REVEAL_URL = "/v1/config/reveal";
 const POLL_INTERVAL_MILLIS = 1000;
@@ -290,10 +290,10 @@ function selectAdvertisedModel(advertisedModels, preferredModelId) {
 
 async function pollCacheStats() {
     try {
-        const response = await fetch(CACHE_STATS_URL);
+        const response = await fetch(ASTRO_SSD_PROMPT_CACHE_STATS_URL);
         if (!response.ok) { return; }
         const data = await response.json();
-        renderOverviewPromptCache(data);
+        renderOverviewAstroSsdPromptCache(data);
     } catch (fetchError) {
         // Cache panel stays at last-known values on transient fetch errors.
     }

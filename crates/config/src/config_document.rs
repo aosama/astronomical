@@ -15,8 +15,14 @@ pub(crate) struct UserConfigFile {
     pub(crate) schema: String,
     pub(crate) schema_version: u32,
     pub(crate) runtime: RuntimeConfigFile,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) prompt_cache: Option<PromptCacheConfigFile>,
+    /// The `astro_ssd_prompt_cache` settings. The file is Astronomical's own,
+    /// so its keys leave out the `astro_` owner prefix the code carries.
+    #[serde(
+        default,
+        rename = "ssd_prompt_cache",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) astro_ssd_prompt_cache: Option<AstroSsdPromptCacheConfigFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) chunking: Option<ChunkingConfigFile>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -39,7 +45,7 @@ impl UserConfigFile {
                 metal_residency_refresh_enabled: None,
                 idle_model_unload_seconds: None,
             },
-            prompt_cache: None,
+            astro_ssd_prompt_cache: None,
             chunking: Some(ChunkingConfigFile {
                 fixed_prompt_processing_chunk_size_tokens: Some(
                     crate::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
@@ -58,10 +64,10 @@ impl UserConfigFile {
     }
 
     pub(crate) fn validate(&self) -> Result<(), AstronomicalConfigError> {
-        if let Some(prompt_cache) = &self.prompt_cache
-            && let Some(maximum_size_gb) = prompt_cache.maximum_size_gb
+        if let Some(astro_ssd_prompt_cache) = &self.astro_ssd_prompt_cache
+            && let Some(maximum_size_gb) = astro_ssd_prompt_cache.maximum_size_gb
         {
-            crate::prompt_cache_size_gb_to_bytes(maximum_size_gb)?;
+            crate::astro_ssd_prompt_cache_size_gb_to_bytes(maximum_size_gb)?;
         }
         if self
             .diagnostics
@@ -100,7 +106,7 @@ pub(crate) struct RuntimeConfigFile {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct PromptCacheConfigFile {
+pub(crate) struct AstroSsdPromptCacheConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -17,7 +17,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(usageBarFillFraction(.nan), 0)
   }
 
-  func test_should_present_target_prompt_cache_reuse() throws {
+  func test_should_present_target_astro_ssd_prompt_cache_reuse() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(
@@ -418,9 +418,9 @@ final class StatusPresentationContractTests: XCTestCase {
   }
 
   /// A request is already active, but the first prefill progress event has not
-  /// arrived yet. The menu extra and popover must name prompt-cache restore
+  /// arrived yet. The menu extra and popover must name astro-ssd-prompt-cache restore
   /// instead of looking idle.
-  func test_should_name_prompt_processing_without_progress_as_prompt_cache_restore() throws {
+  func test_should_name_prompt_processing_without_progress_as_astro_ssd_prompt_cache_restore() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(#"{"status":"ready","activity":"prompt_processing"}"#.utf8)

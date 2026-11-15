@@ -64,7 +64,7 @@ pub enum AnthropicStopReason {
     ToolUse,
 }
 
-/// Token usage. `input_tokens` excludes prompt-cache hits, which Anthropic
+/// Token usage. `input_tokens` excludes astro-ssd-prompt-cache hits, which Anthropic
 /// reports separately in `cache_read_input_tokens`.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 pub struct AnthropicUsage {

@@ -15,10 +15,10 @@ pub struct LeaseId(u64);
 /// Why memory outside the normal pattern is needed.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum LeasePurpose {
-    /// Snapshots held until prompt-cache blocks are written to storage.
-    PromptCachePublication,
+    /// Snapshots held until astro-ssd-prompt-cache blocks are written to storage.
+    AstroSsdPromptCachePublication,
     /// Blocks read back from the prompt cache before they join the context.
-    PromptCacheRestore,
+    AstroSsdPromptCacheRestore,
     /// The vision tower, loaded for the images of one request.
     VisionTower,
     /// A draft model serving beside the main one.

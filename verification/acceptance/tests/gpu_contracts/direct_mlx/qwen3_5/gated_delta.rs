@@ -189,7 +189,7 @@ async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() 
 }
 
 #[tokio::test]
-async fn should_apply_fused_gated_delta_tail_after_full_persistent_prompt_cache_block() {
+async fn should_apply_fused_gated_delta_tail_after_full_astro_ssd_prompt_cache_block() {
     const FULL_BLOCK_TOKEN_COUNT: i32 = 2_048;
     const TAIL_TOKEN_COUNT: i32 = 26;
     const KEY_HEAD_COUNT: i32 = 16;

@@ -23,9 +23,9 @@ pub struct WorkerChunkingConfiguration {
     /// are fully memory resident.
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     /// Exact persistent-cache block length, or `None` for model-derived sizing.
-    pub prompt_cache_block_tokens: Option<u32>,
+    pub ssd_prompt_cache_block_tokens: Option<u32>,
     /// Number of cache blocks between retained branch restart checkpoints.
-    pub prompt_cache_common_prefix_stride_blocks: u32,
+    pub ssd_prompt_cache_common_prefix_stride_blocks: u32,
     /// Diagnostic mode that runs decode forwards as stage-split evaluations
     /// for deep attribution. Roughly doubles decode time; never for serving.
     #[serde(default)]

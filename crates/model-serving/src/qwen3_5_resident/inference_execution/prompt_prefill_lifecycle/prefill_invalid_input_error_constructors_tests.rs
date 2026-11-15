@@ -12,21 +12,23 @@ fn should_carry_the_exact_engine_lost_loaded_model_invalid_input_description() {
 
 #[test]
 fn should_carry_the_exact_visual_block_contract_invalid_input_description() {
-    let execution_error = visual_prompt_cache_checkpoints_have_no_block_contract_invalid_input();
+    let execution_error =
+        visual_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input();
 
     assert!(matches!(
         execution_error,
-        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "planned visual prompt-cache checkpoints have no block contract"
+        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "planned visual astro-ssd-prompt-cache checkpoints have no block contract"
     ));
 }
 
 #[test]
 fn should_carry_the_exact_text_block_contract_invalid_input_description() {
-    let execution_error = text_prompt_cache_checkpoints_have_no_block_contract_invalid_input();
+    let execution_error =
+        text_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input();
 
     assert!(matches!(
         execution_error,
-        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "planned text prompt-cache checkpoints have no block contract"
+        crate::Qwen3_5ExecutionError::InvalidInput { description } if description == "planned text astro-ssd-prompt-cache checkpoints have no block contract"
     ));
 }
 

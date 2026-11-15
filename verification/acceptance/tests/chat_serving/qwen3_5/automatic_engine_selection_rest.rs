@@ -409,7 +409,7 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
         let prompt_token_count = attribution_counter(retry_report, "prompt_token_count");
         let restored_prefix_token_count = attribution_counter(
             retry_report,
-            "restored_persistent_prompt_cache_token_count",
+            "restored_astro_ssd_prompt_cache_token_count",
         );
         assert!(
             restored_prefix_token_count > 0 && restored_prefix_token_count < prompt_token_count,
@@ -478,7 +478,7 @@ fn write_acceptance_config(
     model_directory: &Path,
     model_id: &str,
     mlx_memory_ceiling_bytes: u64,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
 ) {
     let configuration_directory = worker_home.join(".astronomical-dev");
     fs::create_dir_all(&configuration_directory)
@@ -490,8 +490,8 @@ fn write_acceptance_config(
             "model_directories": [acceptance_model_scan_root(model_directory)],
             "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_least(mlx_memory_ceiling_bytes),
         },
-        "prompt_cache": {
-            "enabled": persistent_prompt_cache_enabled,
+        "ssd_prompt_cache": {
+            "enabled": astro_ssd_prompt_cache_enabled,
         },
         "diagnostics": {"performance_attribution_enabled": true},
         "chunking": {

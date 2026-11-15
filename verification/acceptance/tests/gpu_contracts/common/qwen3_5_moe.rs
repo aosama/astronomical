@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use astronomical_model_serving::PersistentPromptCacheModelContract;
+use astronomical_model_serving::AstroSsdPromptCacheModelContract;
 use astronomical_model_serving::{
     DecoderCacheTensorDtype, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
     ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingModelContract, Qwen3_5Config,
@@ -23,13 +23,13 @@ pub fn frozen_ornith_1_0_image_processor() -> Qwen3_5ImageProcessor {
     Qwen3_5ImageProcessor::from_vision_config(&frozen_ornith_1_0_vision_config())
 }
 
-pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelContract {
+pub fn astro_ssd_prompt_cache_model_contract() -> AstroSsdPromptCacheModelContract {
     let frozen_ornith_1_0_config = frozen_ornith_1_0_config();
     // This fixture has no bound MLX arrays. Supply its frozen BF16
     // state contract explicitly; real engine acceptance uses load-derived
     // dtypes and read the resulting block geometry back from the engine.
     let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&frozen_ornith_1_0_config);
-    PersistentPromptCacheModelContract::resolve(
+    AstroSsdPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
         astronomical_model_serving::qwen3_5_decoder_cache_layout(

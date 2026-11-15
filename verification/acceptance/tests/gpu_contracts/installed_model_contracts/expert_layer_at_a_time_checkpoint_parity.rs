@@ -1,5 +1,5 @@
 //! An expert model that reads a prompt one layer at a time must publish the
-//! prompt-cache state it publishes chunk by chunk, bit for bit, and must
+//! astro-ssd-prompt-cache state it publishes chunk by chunk, bit for bit, and must
 //! read each streamed layer once (issue #2221).
 //!
 //! One layer at a time, a streamed expert layer's complete page is read
@@ -24,13 +24,13 @@ use tokio::time::timeout;
 #[path = "../../support/romeo_and_juliet.rs"]
 mod romeo_and_juliet;
 
-/// The engine's SSD-streaming chunk and a prompt-cache block that puts one
+/// The engine's SSD-streaming chunk and a astro-ssd-prompt-cache block that puts one
 /// boundary inside a span and one at a span's end.
 /// A short image inside the first span.
 const SHORT_IMAGE_PAD_RUN_START: usize = 100;
 const SHORT_IMAGE_PAD_RUN_TOKEN_COUNT: usize = 64;
 /// A long image whose pad run covers every position a span can end on
-/// between the first and the last prompt-cache boundary.
+/// between the first and the last astro-ssd-prompt-cache boundary.
 const SPAN_CROSSING_IMAGE_PAD_RUN_START: usize = 1_500;
 const SPAN_CROSSING_IMAGE_PAD_RUN_TOKEN_COUNT: usize = 2_300;
 const CHUNK_TOKEN_COUNT: usize = 4096;
@@ -44,9 +44,10 @@ const MLX_MEMORY_LIMIT_BYTES: usize = 11 * 1024 * 1024 * 1024;
 const CHECKPOINT_PARITY_BUDGET: Duration = Duration::from_secs(120);
 
 #[tokio::test]
-#[ignore = "loads the small_sparse_moe_streaming model and compares published prompt-cache state"]
+#[ignore = "loads the small_sparse_moe_streaming model and compares published astro-ssd-prompt-cache state"]
 #[serial]
-async fn should_publish_the_chunk_path_prompt_cache_state_reading_experts_one_layer_at_a_time() {
+async fn should_publish_the_chunk_path_astro_ssd_prompt_cache_state_reading_experts_one_layer_at_a_time()
+ {
     timeout(CHECKPOINT_PARITY_BUDGET, assert_checkpoint_parity())
         .await
         .expect("the checkpoint parity journey must finish within its budget");
@@ -234,7 +235,7 @@ fn assert_parity_with_every_layer_streamed(
 ) -> PublishedBoundaries {
     let chunk_path_reads = ExpertReadCount::starting(streaming_model);
     let chunk_path_boundaries = streaming_model
-        .prefill_chunk_by_chunk_with_prompt_cache_checkpoints(
+        .prefill_chunk_by_chunk_with_astro_ssd_prompt_cache_checkpoints(
             prompt_token_ids,
             CHUNK_TOKEN_COUNT,
             BLOCK_TOKEN_COUNT,
@@ -244,7 +245,7 @@ fn assert_parity_with_every_layer_streamed(
     let chunk_path_expert_reads = chunk_path_reads.since(streaming_model);
     let layer_at_a_time_reads = ExpertReadCount::starting(streaming_model);
     let layer_at_a_time_boundaries = streaming_model
-        .prefill_layer_major_with_prompt_cache_checkpoints(
+        .prefill_layer_major_with_astro_ssd_prompt_cache_checkpoints(
             prompt_token_ids,
             CHUNK_TOKEN_COUNT,
             BLOCK_TOKEN_COUNT,
@@ -303,14 +304,14 @@ fn assert_parity_with_planned_layers_kept(
         let mut request_decoder_state =
             crate::common::standard_request_decoder_state(qwen3_5_config);
         let published_boundaries = if reads_one_layer_at_a_time {
-            streaming_model.prefill_layer_major_with_prompt_cache_checkpoints(
+            streaming_model.prefill_layer_major_with_astro_ssd_prompt_cache_checkpoints(
                 prompt_token_ids,
                 CHUNK_TOKEN_COUNT,
                 BLOCK_TOKEN_COUNT,
                 &mut request_decoder_state,
             )
         } else {
-            streaming_model.prefill_chunk_by_chunk_with_prompt_cache_checkpoints(
+            streaming_model.prefill_chunk_by_chunk_with_astro_ssd_prompt_cache_checkpoints(
                 prompt_token_ids,
                 CHUNK_TOKEN_COUNT,
                 BLOCK_TOKEN_COUNT,

@@ -24,14 +24,14 @@ pub(crate) mod expert_streaming;
 
 pub(crate) use publisher::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot,
-    publish_active_request_progress, publish_activity, publish_expert_memory_mode,
-    publish_expert_residency, publish_expert_streaming_stats, publish_health,
-    publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
+    publish_active_request_progress, publish_activity, publish_astro_ssd_prompt_cache_stats,
+    publish_expert_memory_mode, publish_expert_residency, publish_expert_streaming_stats,
+    publish_health, publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
     publish_mlx_memory_limit_rejection, publish_mlx_memory_limit_restart_required,
     publish_model_load_in_flight, publish_neural_engine_prefill,
-    publish_pending_mlx_memory_ceiling, publish_pending_prompt_cache_clear,
-    publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
-    record_neural_engine_chunk, record_prompt_work_reuse, record_serving_session,
+    publish_pending_astro_ssd_prompt_cache_clear, publish_pending_mlx_memory_ceiling,
+    publish_worker_expert_residency, record_neural_engine_chunk, record_prompt_work_reuse,
+    record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -192,7 +192,7 @@ impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PersistentPromptCacheSummary {
+pub struct AstroSsdPromptCacheSummary {
     pub hits: u64,
     pub misses: u64,
     pub tokens_saved: u64,
@@ -211,47 +211,47 @@ pub struct PersistentPromptCacheSummary {
 
 /// Scope of the newest cache clear waiting for generation to become idle.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PendingPromptCacheClear {
+pub struct PendingAstroSsdPromptCacheClear {
     pub model_id: Option<String>,
 }
 
-impl PersistentPromptCacheSummary {
-    pub fn from_worker_event(persistent_prompt_cache_stats: Option<&WorkerEvent>) -> Self {
-        let Some(WorkerEvent::PersistentPromptCacheStats {
-            persistent_prompt_cache_hits,
-            persistent_prompt_cache_misses,
-            persistent_prompt_cache_tokens_saved,
-            persistent_prompt_cache_block_token_count,
-            persistent_prompt_cache_sequence_state_block_count,
-            persistent_prompt_cache_boundary_state_snapshot_count,
-            persistent_prompt_cache_visual_embedding_count,
-            persistent_prompt_cache_total_size_bytes,
-            persistent_prompt_cache_visual_embedding_total_size_bytes,
-            persistent_prompt_cache_maximum_size_bytes,
-            persistent_prompt_cache_visual_embedding_hits,
-            persistent_prompt_cache_visual_embedding_misses,
-            persistent_prompt_cache_visual_embedding_rows_loaded,
-            persistent_prompt_cache_partial_tail_hits,
-        }) = persistent_prompt_cache_stats
+impl AstroSsdPromptCacheSummary {
+    pub fn from_worker_event(astro_ssd_prompt_cache_stats: Option<&WorkerEvent>) -> Self {
+        let Some(WorkerEvent::AstroSsdPromptCacheStats {
+            astro_ssd_prompt_cache_hits,
+            astro_ssd_prompt_cache_misses,
+            astro_ssd_prompt_cache_tokens_saved,
+            astro_ssd_prompt_cache_block_token_count,
+            astro_ssd_prompt_cache_sequence_state_block_count,
+            astro_ssd_prompt_cache_boundary_state_snapshot_count,
+            astro_ssd_prompt_cache_visual_embedding_count,
+            astro_ssd_prompt_cache_total_size_bytes,
+            astro_ssd_prompt_cache_visual_embedding_total_size_bytes,
+            astro_ssd_prompt_cache_maximum_size_bytes,
+            astro_ssd_prompt_cache_visual_embedding_hits,
+            astro_ssd_prompt_cache_visual_embedding_misses,
+            astro_ssd_prompt_cache_visual_embedding_rows_loaded,
+            astro_ssd_prompt_cache_partial_tail_hits,
+        }) = astro_ssd_prompt_cache_stats
         else {
             return Self::default();
         };
         Self {
-            hits: *persistent_prompt_cache_hits,
-            misses: *persistent_prompt_cache_misses,
-            tokens_saved: *persistent_prompt_cache_tokens_saved,
-            block_token_count: *persistent_prompt_cache_block_token_count,
-            sequence_state_block_count: *persistent_prompt_cache_sequence_state_block_count,
-            boundary_state_snapshot_count: *persistent_prompt_cache_boundary_state_snapshot_count,
-            visual_embedding_count: *persistent_prompt_cache_visual_embedding_count,
-            total_size_bytes: *persistent_prompt_cache_total_size_bytes,
+            hits: *astro_ssd_prompt_cache_hits,
+            misses: *astro_ssd_prompt_cache_misses,
+            tokens_saved: *astro_ssd_prompt_cache_tokens_saved,
+            block_token_count: *astro_ssd_prompt_cache_block_token_count,
+            sequence_state_block_count: *astro_ssd_prompt_cache_sequence_state_block_count,
+            boundary_state_snapshot_count: *astro_ssd_prompt_cache_boundary_state_snapshot_count,
+            visual_embedding_count: *astro_ssd_prompt_cache_visual_embedding_count,
+            total_size_bytes: *astro_ssd_prompt_cache_total_size_bytes,
             visual_embedding_total_size_bytes:
-                *persistent_prompt_cache_visual_embedding_total_size_bytes,
-            maximum_size_bytes: *persistent_prompt_cache_maximum_size_bytes,
-            visual_embedding_hits: *persistent_prompt_cache_visual_embedding_hits,
-            visual_embedding_misses: *persistent_prompt_cache_visual_embedding_misses,
-            visual_embedding_rows_loaded: *persistent_prompt_cache_visual_embedding_rows_loaded,
-            partial_tail_hits: *persistent_prompt_cache_partial_tail_hits,
+                *astro_ssd_prompt_cache_visual_embedding_total_size_bytes,
+            maximum_size_bytes: *astro_ssd_prompt_cache_maximum_size_bytes,
+            visual_embedding_hits: *astro_ssd_prompt_cache_visual_embedding_hits,
+            visual_embedding_misses: *astro_ssd_prompt_cache_visual_embedding_misses,
+            visual_embedding_rows_loaded: *astro_ssd_prompt_cache_visual_embedding_rows_loaded,
+            partial_tail_hits: *astro_ssd_prompt_cache_partial_tail_hits,
         }
     }
 
@@ -295,8 +295,8 @@ pub struct WorkerHealthSnapshot {
     pub expert_residency: Option<ExpertResidencySnapshot>,
     /// Feature settings explicitly acknowledged by the currently running worker.
     pub worker_runtime_feature_configuration: Option<WorkerRuntimeFeatureConfiguration>,
-    /// Latest persistent prompt-cache observability stats from the worker.
-    pub persistent_prompt_cache_stats: Option<WorkerEvent>,
+    /// Latest persistent astro-ssd-prompt-cache observability stats from the worker.
+    pub astro_ssd_prompt_cache_stats: Option<WorkerEvent>,
     /// Daemon-accumulated expert-streaming observatory state (issue #1693's
     /// user-facing surface): latest snapshot, session token totals, and the
     /// bounded mode-transition feed.
@@ -318,7 +318,7 @@ pub struct WorkerHealthSnapshot {
     /// Candidate generation waiting for its queued memory update acknowledgement.
     pub pending_configuration_generation: Option<String>,
     /// Newest cache-clear request queued behind the active generation.
-    pub pending_prompt_cache_clear: Option<PendingPromptCacheClear>,
+    pub pending_astro_ssd_prompt_cache_clear: Option<PendingAstroSsdPromptCacheClear>,
     /// Bounded last live-memory control failure. Cleared by a later success.
     pub mlx_memory_limit_error: Option<String>,
     /// Ceiling whose live application reported that only a worker restart can
@@ -347,7 +347,7 @@ impl WorkerHealthSnapshot {
             request_progress_count: 0,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
-            persistent_prompt_cache_stats: None,
+            astro_ssd_prompt_cache_stats: None,
             expert_streaming_observatory: expert_streaming::ExpertStreamingObservatory::empty(),
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes: 0,
@@ -355,7 +355,7 @@ impl WorkerHealthSnapshot {
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
-            pending_prompt_cache_clear: None,
+            pending_astro_ssd_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             restart_required_mlx_memory_ceiling_bytes: None,
             mlx_memory_ceiling_bytes: 0,
@@ -380,8 +380,9 @@ impl WorkerHealthSnapshot {
             previous_health_snapshot.wired_residency_budget_bytes;
         replacement_health_snapshot.minimum_mlx_memory_ceiling_bytes =
             minimum_mlx_memory_ceiling_bytes;
-        replacement_health_snapshot.pending_prompt_cache_clear =
-            previous_health_snapshot.pending_prompt_cache_clear.clone();
+        replacement_health_snapshot.pending_astro_ssd_prompt_cache_clear = previous_health_snapshot
+            .pending_astro_ssd_prompt_cache_clear
+            .clone();
         replacement_health_snapshot.restart_required_mlx_memory_ceiling_bytes =
             previous_health_snapshot.restart_required_mlx_memory_ceiling_bytes;
         replacement_health_snapshot.serving_session =
@@ -422,7 +423,7 @@ impl WorkerHealthSnapshot {
             request_progress_count: 0,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
-            persistent_prompt_cache_stats: None,
+            astro_ssd_prompt_cache_stats: None,
             expert_streaming_observatory: expert_streaming::ExpertStreamingObservatory::empty(),
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes,
@@ -430,7 +431,7 @@ impl WorkerHealthSnapshot {
             minimum_mlx_memory_ceiling_bytes,
             pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
-            pending_prompt_cache_clear: None,
+            pending_astro_ssd_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             restart_required_mlx_memory_ceiling_bytes: None,
             mlx_memory_ceiling_bytes,
@@ -453,7 +454,7 @@ impl WorkerHealthSnapshot {
             request_progress_count: 0,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
-            persistent_prompt_cache_stats: None,
+            astro_ssd_prompt_cache_stats: None,
             expert_streaming_observatory: expert_streaming::ExpertStreamingObservatory::empty(),
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes: 0,
@@ -461,7 +462,7 @@ impl WorkerHealthSnapshot {
             minimum_mlx_memory_ceiling_bytes: 1,
             pending_mlx_memory_ceiling_bytes: None,
             pending_configuration_generation: None,
-            pending_prompt_cache_clear: None,
+            pending_astro_ssd_prompt_cache_clear: None,
             mlx_memory_limit_error: None,
             restart_required_mlx_memory_ceiling_bytes: None,
             mlx_memory_ceiling_bytes: 0,

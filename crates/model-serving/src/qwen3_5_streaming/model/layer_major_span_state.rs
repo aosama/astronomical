@@ -1,5 +1,5 @@
 //! What a layer-major prefill keeps for each span across its layers, and the
-//! prompt-cache checkpoints it hands back (issue #1985).
+//! astro-ssd-prompt-cache checkpoints it hands back (issue #1985).
 //!
 //! A span's hidden states pass from one layer to the next; its collector
 //! gathers the boundaries strictly inside it; and a span that ends on a
@@ -13,15 +13,15 @@ use mlx_bridge::MlxArray;
 use super::layer_major_prefill::{LayerMajorCheckpointContract, LayerMajorSpan};
 use crate::DecoderCacheState;
 use crate::qwen3_5_core::decoder::{
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
 };
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 
 /// The per-span bookkeeping that lives across the layer loop.
 pub(super) struct SpanState {
     pub(super) hidden_states: Option<MlxArray>,
-    pub(super) collector: Option<Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector>,
+    pub(super) collector: Option<Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector>,
     pub(super) end_state_snapshot: Option<HashMap<String, MlxArray>>,
 }
 
@@ -53,8 +53,7 @@ pub(super) fn forget_layer_end_state(
 pub(super) fn span_collector(
     span: &LayerMajorSpan,
     checkpoint_contract: Option<LayerMajorCheckpointContract>,
-) -> Result<Option<Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector>, Qwen3_5ExecutionError>
-{
+) -> Result<Option<Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector>, Qwen3_5ExecutionError> {
     let Some(checkpoint_contract) = checkpoint_contract else {
         return Ok(None);
     };
@@ -62,7 +61,7 @@ pub(super) fn span_collector(
         return Ok(None);
     }
     Ok(Some(
-        Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+        Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
             span.interior_boundary_tokens.clone(),
             checkpoint_contract.boundary_tensor_count,
             checkpoint_contract.block_token_count,
@@ -110,7 +109,7 @@ pub(super) fn completed_checkpoints(
     spans: &[LayerMajorSpan],
     span_states: Vec<SpanState>,
     checkpoint_contract: Option<LayerMajorCheckpointContract>,
-) -> Result<Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+) -> Result<Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
     let expected_tensor_count =
         checkpoint_contract.map_or(0, |contract| contract.boundary_tensor_count);
     let mut boundary_checkpoints = Vec::new();
@@ -127,7 +126,7 @@ pub(super) fn completed_checkpoints(
                     description: "a layer-major end-state snapshot lacks part of the decoder-cache tensor layout",
                 });
             }
-            boundary_checkpoints.push(Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
+            boundary_checkpoints.push(Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint {
                 completed_prefill_chunk_tokens: span.end_token,
                 recurrent_snapshot_tensors,
             });

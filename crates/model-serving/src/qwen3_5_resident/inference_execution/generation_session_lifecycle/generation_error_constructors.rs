@@ -75,9 +75,11 @@ pub(in crate::qwen3_5_resident::inference_execution) fn completed_prefill_chunk_
     super::fatal_engine_error("completed_prefill_chunk_tokens exceeds the u32 range")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn eligible_prompt_cache_capture_has_no_persistent_cache_owner_error()
+pub(in crate::qwen3_5_resident::inference_execution) fn eligible_astro_ssd_prompt_cache_capture_has_no_persistent_cache_owner_error()
 -> InferenceEngineError {
-    super::fatal_engine_error("eligible prompt-cache capture has no persistent cache owner")
+    super::fatal_engine_error(
+        "eligible astro-ssd-prompt-cache capture has no persistent cache owner",
+    )
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn boundary_checkpoint_workspace_bytes_overflowed_error()
@@ -85,9 +87,9 @@ pub(in crate::qwen3_5_resident::inference_execution) fn boundary_checkpoint_work
     super::fatal_engine_error("boundary checkpoint workspace bytes overflowed")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn prompt_cache_publication_workspace_bytes_overflowed_error()
+pub(in crate::qwen3_5_resident::inference_execution) fn astro_ssd_prompt_cache_publication_workspace_bytes_overflowed_error()
 -> InferenceEngineError {
-    super::fatal_engine_error("prompt-cache publication workspace bytes overflowed")
+    super::fatal_engine_error("astro-ssd-prompt-cache publication workspace bytes overflowed")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn generated_token_counter_overflowed_error()

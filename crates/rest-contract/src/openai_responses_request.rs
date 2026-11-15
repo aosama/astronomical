@@ -41,7 +41,7 @@ pub struct OpenAiResponsesRequest {
     #[serde(default)]
     safety_identifier: Option<String>,
     #[serde(default)]
-    prompt_cache_key: Option<String>,
+    astro_ssd_prompt_cache_key: Option<String>,
     #[serde(default)]
     previous_response_id: Option<String>,
     #[serde(default)]
@@ -55,9 +55,9 @@ pub struct OpenAiResponsesRequest {
     #[serde(default)]
     prompt: Option<Value>,
     #[serde(default)]
-    prompt_cache_options: Option<Value>,
+    astro_ssd_prompt_cache_options: Option<Value>,
     #[serde(default)]
-    prompt_cache_retention: Option<String>,
+    astro_ssd_prompt_cache_retention: Option<String>,
     #[serde(default)]
     reasoning: Option<ReasoningRequestObject>,
     /// OpenAI `reasoning_effort` level name; resolved through the shared
@@ -345,12 +345,12 @@ fn validate_compatibility_fields(
         ("moderation", request.moderation.is_some()),
         ("prompt", request.prompt.is_some()),
         (
-            "prompt_cache_options",
-            request.prompt_cache_options.is_some(),
+            "astro_ssd_prompt_cache_options",
+            request.astro_ssd_prompt_cache_options.is_some(),
         ),
         (
-            "prompt_cache_retention",
-            request.prompt_cache_retention.is_some(),
+            "astro_ssd_prompt_cache_retention",
+            request.astro_ssd_prompt_cache_retention.is_some(),
         ),
     ] {
         if is_present {

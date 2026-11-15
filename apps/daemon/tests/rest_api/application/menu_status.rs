@@ -91,14 +91,14 @@ fn development_resolved_config() -> ResolvedRuntimeConfig {
         model_policy_catalog: Arc::new(HashMap::new()),
         unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        persistent_prompt_cache_enabled: true,
-        configured_persistent_prompt_cache_enabled: None,
+        astro_ssd_prompt_cache_enabled: true,
+        configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         idle_model_unload_seconds: 0,
-        configured_prompt_cache_maximum_size_bytes: None,
+        configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        prompt_cache_config: astronomical_config::PromptCacheConfig::new(
-            PathBuf::from("/fictional/prompt-cache"),
+        astro_ssd_prompt_cache_config: astronomical_config::AstroSsdPromptCacheConfig::new(
+            PathBuf::from("/fictional/astro-ssd-prompt-cache"),
             50_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
@@ -162,8 +162,8 @@ async fn request_status_document(application: Router) -> Value {
 fn autoregressive_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
     WorkerRuntimeFeatureConfiguration {
         configuration_generation: AUTOREGRESSIVE_CONFIGURATION_GENERATION.to_owned(),
-        persistent_prompt_cache_enabled: true,
-        prompt_cache_maximum_size_bytes: 10_000_000_000,
+        astro_ssd_prompt_cache_enabled: true,
+        astro_ssd_prompt_cache_maximum_size_bytes: 10_000_000_000,
         loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Autoregressive(
             WorkerLoadedAutoregressiveModelRuntimeConfiguration {
                 model_id: AUTOREGRESSIVE_MODEL_ID.to_owned(),
@@ -175,8 +175,8 @@ fn autoregressive_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
                     full_attention_key_value_growth_tokens: 256,
                     prefill_graph_submission_layer_interval: 0,
                     experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                    prompt_cache_block_tokens: None,
-                    prompt_cache_common_prefix_stride_blocks: 4,
+                    ssd_prompt_cache_block_tokens: None,
+                    ssd_prompt_cache_common_prefix_stride_blocks: 4,
                     experimental_decode_stage_attribution_enabled: false,
                     experimental_prefill_stage_attribution_enabled: false,
                     experimental_in_memory_prefix_adoption_enabled: false,
@@ -190,8 +190,8 @@ fn autoregressive_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
 fn flux_runtime_configuration() -> WorkerRuntimeFeatureConfiguration {
     WorkerRuntimeFeatureConfiguration {
         configuration_generation: FLUX_CONFIGURATION_GENERATION.to_owned(),
-        persistent_prompt_cache_enabled: false,
-        prompt_cache_maximum_size_bytes: 0,
+        astro_ssd_prompt_cache_enabled: false,
+        astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Flux2Klein(
             WorkerFlux2KleinModelConfiguration {
                 model_id: FLUX_MODEL_ID.to_owned(),

@@ -159,17 +159,18 @@ fn should_report_a_fallback_violation_for_an_unrouted_event() {
 
 #[test]
 fn should_report_the_violation_for_a_cache_clear_acknowledgement_outside_wait() {
-    let cache_clear_acknowledgement = WorkerEvent::PromptCacheCleared {
+    let astro_ssd_prompt_cache_clear_acknowledgement = WorkerEvent::AstroSsdPromptCacheCleared {
         model_id: None,
         blocks_removed: 0,
         bytes_freed: 0,
     };
-    let violation = outside_cache_clear_wait_violation(&cache_clear_acknowledgement);
+    let violation =
+        outside_cache_clear_wait_violation(&astro_ssd_prompt_cache_clear_acknowledgement);
     assert!(
         matches!(
             violation,
             crate::WorkerControlError::WorkerProtocolViolation { description }
-                if description == "prompt-cache clear acknowledgement outside cache-clear wait"
+                if description == "astro-ssd-prompt-cache clear acknowledgement outside cache-clear wait"
         ),
         "a cache-clear acknowledgement outside cache-clear wait carries its own message"
     );

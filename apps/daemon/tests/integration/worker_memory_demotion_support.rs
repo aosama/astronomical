@@ -151,9 +151,9 @@ pub(super) fn startup_configuration(
     WorkerStartupConfiguration {
         neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: configuration_generation.to_owned(),
-        global_prompt_cache_root_directory: temporary_directory.join("cache"),
-        global_prompt_cache_maximum_size_bytes: 1_000_000_000,
-        persistent_prompt_cache_enabled: true,
+        global_astro_ssd_prompt_cache_root_directory: temporary_directory.join("cache"),
+        global_astro_ssd_prompt_cache_maximum_size_bytes: 1_000_000_000,
+        astro_ssd_prompt_cache_enabled: true,
         configured_maximum_mlx_memory_bytes,
         performance_attribution_enabled: true,
         decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,

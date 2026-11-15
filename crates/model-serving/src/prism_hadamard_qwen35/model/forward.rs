@@ -118,7 +118,7 @@ impl StraightGenerationState {
     }
 
     /// The allocated K/V slabs of one full-attention layer's slot, for the
-    /// persistent prompt-cache capture bridge.
+    /// persistent astro-ssd-prompt-cache capture bridge.
     pub(crate) fn key_value_slabs(&self, slot: usize) -> Option<(&MlxArray, &MlxArray)> {
         let key_value_state = self.key_value_states.get(slot)?;
         Some((
@@ -127,7 +127,7 @@ impl StraightGenerationState {
         ))
     }
 
-    /// Replaces one full-attention layer's slabs from restored SSD prompt-cache
+    /// Replaces one full-attention layer's slabs from restored SSD astro-ssd-prompt-cache
     /// block tensors (already concatenated to the full restored length).
     pub(crate) fn restore_key_value_slabs(
         &mut self,

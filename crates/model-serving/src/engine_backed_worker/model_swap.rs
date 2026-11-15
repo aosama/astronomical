@@ -36,7 +36,7 @@ where
 }
 
 /// Emits paired timing boundaries for one model-swap phase only when the
-/// factory has performance attribution enabled, mirroring the prompt-cache
+/// factory has performance attribution enabled, mirroring the astro-ssd-prompt-cache
 /// clear attribution log. The two phases are the worker-level envelope around
 /// the engine's own finer-grained attribution segments: factory creation
 /// (model-family classification, artifact validation, tokenizer

@@ -6,7 +6,7 @@ use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 use super::Qwen3_5Model;
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use mlx_bridge::{MlxArray, MlxDtype};
 
 /// Target-model graph outputs retained for specialized consumers.
@@ -100,7 +100,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -127,7 +127,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -151,7 +151,7 @@ impl Qwen3_5Model {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -197,7 +197,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -224,7 +224,7 @@ impl Qwen3_5Model {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -252,7 +252,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -278,7 +278,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -305,7 +305,7 @@ impl Qwen3_5Model {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         mut boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -473,13 +473,13 @@ pub(super) fn pre_final_normalization_hidden_state_at(
 }
 
 /// The arrays one completed layer leaves to evaluate: its output, plus the
-/// convolution state and prompt-cache boundary snapshots it does not reach.
+/// convolution state and astro-ssd-prompt-cache boundary snapshots it does not reach.
 fn completed_layer_roots<'layer>(
     layer_output: &'layer MlxArray,
     layer_index: usize,
     request_decoder_state: &'layer RequestDecoderStateStack,
     boundary_checkpoint_collector: Option<
-        &'layer Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        &'layer Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
     >,
 ) -> CompletedLayerRoots<'layer> {
     CompletedLayerRoots {

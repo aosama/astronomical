@@ -49,8 +49,8 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
         .health_snapshot
         .worker_runtime_feature_configuration = Some(WorkerRuntimeFeatureConfiguration {
         configuration_generation: effective_generation.to_owned(),
-        persistent_prompt_cache_enabled: true,
-        prompt_cache_maximum_size_bytes: 50_000_000_000,
+        astro_ssd_prompt_cache_enabled: true,
+        astro_ssd_prompt_cache_maximum_size_bytes: 50_000_000_000,
         loaded_model: Some(effective_worker_model_configuration.runtime_configuration()),
     });
     let temporary_home = tempfile::tempdir().expect("status config home should exist");
@@ -112,12 +112,13 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
             .is_null()
     );
     assert_eq!(
-        status_document["configuration"]["ready_model"]["chunking"]["prompt_cache_block_tokens"]["is_configured"],
+        status_document["configuration"]["ready_model"]["chunking"]["ssd_prompt_cache_block_tokens"]
+            ["is_configured"],
         false
     );
     let status_text = String::from_utf8(status_bytes.to_vec()).expect("status should be UTF-8");
     assert!(!status_text.contains("/fictional/private"));
-    assert!(!status_text.contains("prompt-cache"));
+    assert!(!status_text.contains("astro-ssd-prompt-cache"));
 }
 
 #[tokio::test]
@@ -172,8 +173,8 @@ fn worker_model_configuration() -> WorkerModelConfiguration {
             full_attention_key_value_growth_tokens: 256,
             prefill_graph_submission_layer_interval: 0,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-            prompt_cache_block_tokens: Some(128),
-            prompt_cache_common_prefix_stride_blocks: 4,
+            ssd_prompt_cache_block_tokens: Some(128),
+            ssd_prompt_cache_common_prefix_stride_blocks: 4,
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: false,

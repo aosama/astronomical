@@ -19,7 +19,7 @@ use crate::qwen3_5_streaming::{
 };
 use crate::{DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution};
 
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 /// The streaming engine's model: shared base plus residency-forked state.
 #[derive(Debug)]
@@ -311,7 +311,7 @@ impl Qwen3_5StreamingModel {
         layer_model_state: &mut DecoderCacheState,
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,

@@ -11,7 +11,7 @@
 //! checkpointing live state before every forward would keep old K/V handles
 //! alive, defeating MLX buffer donation and copying the whole cache per
 //! forward. Every completed forward already published its durable
-//! prompt-cache blocks before the cursor advanced, so re-seeding from the
+//! astro-ssd-prompt-cache blocks before the cursor advanced, so re-seeding from the
 //! persistent prompt cache reproduces exactly the verified frontier.
 //!
 //! The retry never shrinks the forward: smaller chunks re-pay
@@ -54,14 +54,18 @@ impl Qwen3_5EngineState {
         if !model.govern_redo_after_memory_failure(MemoryPhase::Prefill, known_shortfall_bytes) {
             return Ok(false);
         }
-        self.reseed_prefill_from_prompt_cache(request_id, active_request, failed_prefill_start)?;
+        self.reseed_prefill_from_astro_ssd_prompt_cache(
+            request_id,
+            active_request,
+            failed_prefill_start,
+        )?;
         Ok(true)
     }
 
     /// Drops the possibly half-updated decoder state and rebuilds it from
     /// the persistent prompt cache, moving the cursor back to the last
     /// published boundary.
-    pub(super) fn reseed_prefill_from_prompt_cache(
+    pub(super) fn reseed_prefill_from_astro_ssd_prompt_cache(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
@@ -88,19 +92,18 @@ impl Qwen3_5EngineState {
             .map_err(qwen3_5_runtime_error)?;
         let mut restored_prefill_cursor = 0_usize;
         let mut restored_next_position_tokens = 0_u32;
-        let mut restored_last_persistent_prompt_cache_block_key = None;
-        if self.persistent_prompt_cache.is_some() && active_request.can_use_persistent_prompt_cache
-        {
+        let mut restored_last_astro_ssd_prompt_cache_block_key = None;
+        if self.astro_ssd_prompt_cache.is_some() && active_request.can_use_astro_ssd_prompt_cache {
             // Same split borrow as request start: the store must be reinstalled
             // even when restore fails, or later requests silently lose caching.
-            let persistent_prompt_cache = self.persistent_prompt_cache.take();
+            let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.take();
             let restore_result =
-                if let Some(persistent_prompt_cache) = persistent_prompt_cache.as_ref() {
-                    self.restore_persistent_prompt_cache_prefix(
+                if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
+                    self.restore_astro_ssd_prompt_cache_prefix(
                         request_id,
-                        persistent_prompt_cache,
+                        astro_ssd_prompt_cache,
                         &active_request.input_token_ids,
-                        &active_request.persistent_prompt_cache_block_causal_inputs,
+                        &active_request.astro_ssd_prompt_cache_block_causal_inputs,
                         active_request.engine_extension.reserved_context_tokens,
                         &mut active_request.request_decoder_state,
                         &mut active_request.performance_attribution,
@@ -109,25 +112,25 @@ impl Qwen3_5EngineState {
                 } else {
                     Ok(None)
                 };
-            self.persistent_prompt_cache = persistent_prompt_cache;
+            self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             if let Some(restore_outcome) = restore_result? {
                 restored_prefill_cursor = restore_outcome.restored_token_count;
-                restored_next_position_tokens = restore_outcome.persistent_prompt_cache_token_count;
-                restored_last_persistent_prompt_cache_block_key =
-                    restore_outcome.last_restored_persistent_prompt_cache_block_key;
-                // The re-restore replaced the prompt-cache frontier, so the
+                restored_next_position_tokens = restore_outcome.astro_ssd_prompt_cache_token_count;
+                restored_last_astro_ssd_prompt_cache_block_key =
+                    restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
+                // The re-restore replaced the astro-ssd-prompt-cache frontier, so the
                 // request's reported diagnostics and reuse counts must describe
                 // this restore, not the one from request start.
-                active_request.persistent_prompt_cache_diagnostics =
-                    Some(restore_outcome.persistent_prompt_cache_diagnostics);
+                active_request.astro_ssd_prompt_cache_diagnostics =
+                    Some(restore_outcome.astro_ssd_prompt_cache_diagnostics);
                 active_request.prompt_work_reuse.target_restored_token_count =
-                    u64::from(restore_outcome.persistent_prompt_cache_token_count);
+                    u64::from(restore_outcome.astro_ssd_prompt_cache_token_count);
             }
         }
         active_request.prefill_cursor = restored_prefill_cursor;
         active_request.next_position_tokens = restored_next_position_tokens;
-        active_request.last_restored_persistent_prompt_cache_block_key =
-            restored_last_persistent_prompt_cache_block_key;
+        active_request.last_restored_astro_ssd_prompt_cache_block_key =
+            restored_last_astro_ssd_prompt_cache_block_key;
         // Demand evidence recorded by the discarded forward must not steer
         // the reply's first tokens, so the retry opens a fresh window.
         active_request

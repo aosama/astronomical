@@ -5,11 +5,11 @@ use std::path::Path;
 
 use thiserror::Error;
 
-use astronomical_config::PromptCacheConfig;
+use astronomical_config::AstroSsdPromptCacheConfig;
 use astronomical_ipc_protocol::WorkerChunkingConfiguration;
 
+use crate::AstroSsdPromptCacheDiskStoreConfig;
 use crate::MlxInferenceEngine;
-use crate::PersistentPromptCacheDiskStoreConfig;
 use crate::Qwen3_5GenerationProcessor;
 use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::engine::{
@@ -26,8 +26,8 @@ pub struct PrismHadamardQwen35ServingSettings {
     pub prompt_processing_chunk_tokens: u32,
     pub enable_thinking: bool,
     pub chunking: Option<WorkerChunkingConfiguration>,
-    pub persistent_prompt_cache_enabled: bool,
-    pub prompt_cache_config: Option<PromptCacheConfig>,
+    pub astro_ssd_prompt_cache_enabled: bool,
+    pub astro_ssd_prompt_cache_config: Option<AstroSsdPromptCacheConfig>,
     pub performance_attribution_log_path: Option<std::path::PathBuf>,
 }
 
@@ -112,23 +112,25 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         }
         None => PerformanceAttributionLog::disabled(),
     };
-    let prompt_cache_disk_store_config =
-        prompt_cache_disk_store_config_for(&serving_settings, &model_id, &model_revision);
-    // The durable cache block size and checkpoint stride are prompt-cache
+    let astro_ssd_prompt_cache_disk_store_config =
+        astro_ssd_prompt_cache_disk_store_config_for(&serving_settings, &model_id, &model_revision);
+    // The durable cache block size and checkpoint stride are astro-ssd-prompt-cache
     // configuration, not the prefill chunk size: they are contract identity
     // (the storage fingerprint embeds the block count) and must satisfy the
     // layout's persistence alignment, which an arbitrary chunk size does not.
-    let (configured_prompt_cache_block_token_count, prompt_cache_common_prefix_stride_blocks) =
-        resolved_prompt_cache_layout(&serving_settings);
+    let (
+        configured_astro_ssd_prompt_cache_block_token_count,
+        ssd_prompt_cache_common_prefix_stride_blocks,
+    ) = resolved_astro_ssd_prompt_cache_layout(&serving_settings);
     let pending_startup = PrismHadamardQwen35PendingStartup {
         validated_pack: pack,
         effective_mlx_memory_ceiling_bytes,
         mlx_buffer_cache_limit_bytes,
         maximum_context_tokens: context_window,
         prompt_processing_chunk_tokens: serving_settings.prompt_processing_chunk_tokens,
-        prompt_cache_disk_store_config,
-        configured_prompt_cache_block_token_count,
-        prompt_cache_common_prefix_stride_blocks,
+        astro_ssd_prompt_cache_disk_store_config,
+        configured_astro_ssd_prompt_cache_block_token_count,
+        ssd_prompt_cache_common_prefix_stride_blocks,
         neural_engine_mlp_prefill_requested: neural_engine_mlp_prefill_requested(&serving_settings),
         performance_attribution,
         performance_attribution_log,
@@ -171,31 +173,32 @@ fn resolved_serving_window(
     Ok((context_window, max_output_tokens))
 }
 
-/// Derives the durable prompt-cache disk-store configuration when persistent
+/// Derives the durable astro-ssd-prompt-cache disk-store configuration when persistent
 /// caching is enabled and a cache configuration was supplied. The per-model
 /// scoping (model id and revision bound into the directory layout) happens
 /// here so the store a pack opens can never collide with another model's
 /// blocks.
-fn prompt_cache_disk_store_config_for(
+fn astro_ssd_prompt_cache_disk_store_config_for(
     serving_settings: &PrismHadamardQwen35ServingSettings,
     model_id: &str,
     model_revision: &str,
-) -> Option<PersistentPromptCacheDiskStoreConfig> {
+) -> Option<AstroSsdPromptCacheDiskStoreConfig> {
     serving_settings
-        .prompt_cache_config
+        .astro_ssd_prompt_cache_config
         .as_ref()
-        .filter(|_| serving_settings.persistent_prompt_cache_enabled)
-        .map(|prompt_cache_config| {
-            let per_model_prompt_cache_config =
-                prompt_cache_config.for_model(model_id, model_revision);
-            PersistentPromptCacheDiskStoreConfig::new(
-                per_model_prompt_cache_config
-                    .active_model_prompt_cache_directory()
+        .filter(|_| serving_settings.astro_ssd_prompt_cache_enabled)
+        .map(|astro_ssd_prompt_cache_config| {
+            let per_model_astro_ssd_prompt_cache_config =
+                astro_ssd_prompt_cache_config.for_model(model_id, model_revision);
+            AstroSsdPromptCacheDiskStoreConfig::new(
+                per_model_astro_ssd_prompt_cache_config
+                    .active_model_astro_ssd_prompt_cache_directory()
                     .clone(),
-                per_model_prompt_cache_config
-                    .global_prompt_cache_root_directory()
+                per_model_astro_ssd_prompt_cache_config
+                    .global_astro_ssd_prompt_cache_root_directory()
                     .clone(),
-                per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
+                per_model_astro_ssd_prompt_cache_config
+                    .global_astro_ssd_prompt_cache_maximum_size_bytes(),
             )
         })
 }
@@ -212,24 +215,24 @@ fn neural_engine_mlp_prefill_requested(
 /// Reads the durable-cache layout knobs from the chunking settings: the
 /// configured block token count (none unless the operator set it) and the
 /// common-prefix stride in blocks, floored at one so checkpointing always has
-/// a stride. These are prompt-cache contract identity, not prefill chunking.
-fn resolved_prompt_cache_layout(
+/// a stride. These are astro-ssd-prompt-cache contract identity, not prefill chunking.
+fn resolved_astro_ssd_prompt_cache_layout(
     serving_settings: &PrismHadamardQwen35ServingSettings,
 ) -> (Option<usize>, u32) {
-    let configured_prompt_cache_block_token_count =
+    let configured_astro_ssd_prompt_cache_block_token_count =
         serving_settings.chunking.as_ref().and_then(|chunking| {
             chunking
-                .prompt_cache_block_tokens
+                .ssd_prompt_cache_block_tokens
                 .map(|block_token_count| block_token_count as usize)
         });
-    let prompt_cache_common_prefix_stride_blocks = serving_settings
+    let ssd_prompt_cache_common_prefix_stride_blocks = serving_settings
         .chunking
         .as_ref()
-        .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks)
+        .map(|chunking| chunking.ssd_prompt_cache_common_prefix_stride_blocks)
         .unwrap_or(1)
         .max(1);
     (
-        configured_prompt_cache_block_token_count,
-        prompt_cache_common_prefix_stride_blocks,
+        configured_astro_ssd_prompt_cache_block_token_count,
+        ssd_prompt_cache_common_prefix_stride_blocks,
     )
 }

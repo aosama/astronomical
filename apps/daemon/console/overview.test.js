@@ -249,22 +249,22 @@ test("should_name_which_cache_each_reuse_figure_measures", () => {
     const sessionPresentation = evaluate(scriptContext, "overviewSessionPresentation(sessionForTest)", {
         sessionForTest: { completed_request_count: 12, average_generation_tok_per_second: 67.4, total_prompt_token_count: 2490, total_reused_prompt_token_count: 2284 }
     });
-    const promptCachePresentation = evaluate(scriptContext, "overviewPromptCachePresentation(settingForTest, cacheForTest)", {
+    const astroSsdPromptCachePresentation = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation(settingForTest, cacheForTest)", {
         settingForTest: { enabled: { effective: true }, capacity_bytes: { effective: 53687091200 } },
-        cacheForTest: { persistent_prompt_cache_hit_rate: 0.34, persistent_prompt_cache_hits: 34, persistent_prompt_cache_misses: 66, persistent_prompt_cache_total_size_bytes: 1288490188, persistent_prompt_cache_maximum_size_bytes: 0 }
+        cacheForTest: { astro_ssd_prompt_cache_hit_rate: 0.34, astro_ssd_prompt_cache_hits: 34, astro_ssd_prompt_cache_misses: 66, astro_ssd_prompt_cache_total_size_bytes: 1288490188, astro_ssd_prompt_cache_maximum_size_bytes: 0 }
     });
 
     assert.deepEqual(sessionPresentation, { requests: "12", speed: "67 tok/s", memoryReuse: "92%", memoryReuseHint: "2,284 of 2,490 prompt tokens" });
-    assert.deepEqual(promptCachePresentation, { usage: "1.2 GB of 50.0 GB", hint: "34% of prompts found there" });
+    assert.deepEqual(astroSsdPromptCachePresentation, { usage: "1.2 GB of 50.0 GB", hint: "34% of prompts found there" });
 });
 
 test("should_fall_back_to_the_configured_cache_setting_until_the_worker_acknowledges_it", () => {
     const scriptContext = createConsoleContext();
     const beforeAcknowledgement = evaluate(scriptContext,
-        "overviewPromptCachePresentation({ enabled: { effective: null, configured: false, default: true } }, null)");
+        "overviewAstroSsdPromptCachePresentation({ enabled: { effective: null, configured: false, default: true } }, null)");
     const capacityFromDefault = evaluate(scriptContext,
-        "overviewPromptCachePresentation({ enabled: { effective: null, default: true }, capacity_bytes: { effective: null, default: 53687091200 } }, null)");
-    const beforeStatus = evaluate(scriptContext, "overviewPromptCachePresentation(null, { persistent_prompt_cache_total_size_bytes: 1 })");
+        "overviewAstroSsdPromptCachePresentation({ enabled: { effective: null, default: true }, capacity_bytes: { effective: null, default: 53687091200 } }, null)");
+    const beforeStatus = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation(null, { astro_ssd_prompt_cache_total_size_bytes: 1 })");
 
     assert.equal(beforeAcknowledgement.usage, "Off");
     assert.equal(capacityFromDefault.usage, "0.0 GB of 50.0 GB");
@@ -315,9 +315,9 @@ test("should_clamp_reused_prompt_tokens_to_the_total", () => {
 test("should_show_dashes_before_any_request_and_off_only_when_the_setting_is_off", () => {
     const scriptContext = createConsoleContext();
     const sessionPresentation = evaluate(scriptContext, "overviewSessionPresentation(undefined)");
-    const switchedOff = evaluate(scriptContext, "overviewPromptCachePresentation({ enabled: { effective: false } }, null)");
+    const switchedOff = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation({ enabled: { effective: false } }, null)");
     const onButUnused = evaluate(scriptContext,
-        "overviewPromptCachePresentation({ enabled: { effective: true }, capacity_bytes: { effective: 53687091200 } }, { persistent_prompt_cache_maximum_size_bytes: 0 })");
+        "overviewAstroSsdPromptCachePresentation({ enabled: { effective: true }, capacity_bytes: { effective: 53687091200 } }, { astro_ssd_prompt_cache_maximum_size_bytes: 0 })");
 
     assert.deepEqual(sessionPresentation, { requests: "0", speed: "—", memoryReuse: "—", memoryReuseHint: "No prompts yet" });
     assert.equal(switchedOff.usage, "Off");

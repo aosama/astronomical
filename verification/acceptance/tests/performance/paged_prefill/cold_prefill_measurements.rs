@@ -73,10 +73,11 @@ fn should_keep_cache_scaling_fixture_at_exactly_fifty_thousand_words() {
 
 #[test]
 fn should_configure_fixed_prompt_processing_chunks_for_summary_metrics_worker() {
-    let (isolated_worker_home, _worker_executable_path) = isolated_prompt_cache_worker_launcher(
-        Path::new("/bin/true"),
-        Path::new("/tmp/model-artifact-measurement"),
-    );
+    let (isolated_worker_home, _worker_executable_path) =
+        isolated_astro_ssd_prompt_cache_worker_launcher(
+            Path::new("/bin/true"),
+            Path::new("/tmp/model-artifact-measurement"),
+        );
     let configuration_document_path = isolated_worker_home
         .path()
         .join(".astronomical-dev/config.json");
@@ -122,10 +123,11 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
     let configured_model_directory = configured_model_directory_from_user_config();
     let production_worker_executable_path =
         astronomical_test_harness::workspace_binary("astronomical-inference-worker");
-    let (isolated_worker_home, worker_executable_path) = isolated_prompt_cache_worker_launcher(
-        Path::new(&production_worker_executable_path),
-        &configured_model_directory,
-    );
+    let (isolated_worker_home, worker_executable_path) =
+        isolated_astro_ssd_prompt_cache_worker_launcher(
+            Path::new(&production_worker_executable_path),
+            &configured_model_directory,
+        );
     let machine_mlx_memory_ceiling_bytes = worker_startup::machine_mlx_memory_ceiling_bytes()
         .await
         .expect("the machine MLX memory ceiling should be available");
@@ -245,15 +247,16 @@ fn configured_model_directory_from_user_config() -> PathBuf {
     crate::support::configured_installed_model_directory_by_id(model_id())
 }
 
-fn isolated_prompt_cache_worker_launcher(
+fn isolated_astro_ssd_prompt_cache_worker_launcher(
     production_worker_executable_path: &Path,
     model_directory: &Path,
 ) -> (tempfile::TempDir, PathBuf) {
     let isolated_worker_home = tempfile::tempdir()
-        .expect("the isolated prompt-cache metrics worker home should be created");
+        .expect("the isolated astro-ssd-prompt-cache metrics worker home should be created");
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
-    fs::create_dir(&configuration_directory)
-        .expect("the isolated prompt-cache metrics configuration directory should be created");
+    fs::create_dir(&configuration_directory).expect(
+        "the isolated astro-ssd-prompt-cache metrics configuration directory should be created",
+    );
     let configuration_document = json!({
         "model_directories": [model_directory],
         "chunking": {
@@ -263,9 +266,9 @@ fn isolated_prompt_cache_worker_launcher(
     fs::write(
         configuration_directory.join("config.json"),
         serde_json::to_vec_pretty(&configuration_document)
-            .expect("the isolated prompt-cache metrics configuration should serialize"),
+            .expect("the isolated astro-ssd-prompt-cache metrics configuration should serialize"),
     )
-    .expect("the isolated prompt-cache metrics configuration should be written");
+    .expect("the isolated astro-ssd-prompt-cache metrics configuration should be written");
 
     (
         isolated_worker_home,

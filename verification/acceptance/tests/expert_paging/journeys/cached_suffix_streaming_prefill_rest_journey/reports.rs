@@ -241,7 +241,7 @@ fn assert_prefill_stream_counts_stay_seated_or_fully_streamed(
         let source_plan_count = source_summary["source_plan_count"].as_u64().unwrap_or(0);
         assert!(
             source_plan_count >= 1 && source_plan_count <= prefill_chunk_count,
-            "a streamed prefill layer prepares its expert page at most once per logical prompt chunk; a count above the chunk count means an extra forward (for example a terminal prompt-cache boundary split) or an attribution defect: layer={layer_index} source_plan_count={source_plan_count} prefill_chunks={prefill_chunk_count}"
+            "a streamed prefill layer prepares its expert page at most once per logical prompt chunk; a count above the chunk count means an extra forward (for example a terminal astro-ssd-prompt-cache boundary split) or an attribution defect: layer={layer_index} source_plan_count={source_plan_count} prefill_chunks={prefill_chunk_count}"
         );
     }
 }

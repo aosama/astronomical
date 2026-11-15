@@ -410,7 +410,7 @@ struct TwoTurnEvidence {
 #[expect(clippy::too_many_lines)]
 async fn run_two_turn_streaming_journey(
     attribution_enabled: bool,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
 ) -> TwoTurnEvidence {
     use astronomical_daemon::{ChatGenerationExecutor, GenerationPerformanceLog, WorkerHandle};
     use astronomical_ipc_protocol::RequestId;
@@ -433,7 +433,7 @@ async fn run_two_turn_streaming_journey(
     );
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         Some(throughput_support::MAXIMUM_MODEL_MEMORY_BYTES);
-    worker_startup_configuration.persistent_prompt_cache_enabled = persistent_prompt_cache_enabled;
+    worker_startup_configuration.astro_ssd_prompt_cache_enabled = astro_ssd_prompt_cache_enabled;
     let performance_log_path = logging_directory.join("performance.jsonl");
     fs::create_dir_all(&logging_directory).expect("the worker logging directory should be created");
 

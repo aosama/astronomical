@@ -23,8 +23,8 @@ fn sample_chunking_configuration() -> WorkerChunkingConfiguration {
         full_attention_key_value_growth_tokens: 256,
         prefill_graph_submission_layer_interval: 0,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-        prompt_cache_block_tokens: None,
-        prompt_cache_common_prefix_stride_blocks: 4,
+        ssd_prompt_cache_block_tokens: None,
+        ssd_prompt_cache_common_prefix_stride_blocks: 4,
         experimental_decode_stage_attribution_enabled: false,
         experimental_prefill_stage_attribution_enabled: false,
         experimental_in_memory_prefix_adoption_enabled: false,
@@ -86,8 +86,8 @@ fn runtime_policy_acknowledgement_event(
     WorkerEvent::RuntimeFeatureConfigurationApplied {
         worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
             configuration_generation: configuration_generation.to_owned(),
-            persistent_prompt_cache_enabled: true,
-            prompt_cache_maximum_size_bytes: 10_000_000_000,
+            astro_ssd_prompt_cache_enabled: true,
+            astro_ssd_prompt_cache_maximum_size_bytes: 10_000_000_000,
             loaded_model,
         },
     }

@@ -12,7 +12,7 @@ use astronomical_memory_policy::ledger::{LeasePurpose, MemoryGovernor};
 use super::Qwen3_5Model;
 
 impl Qwen3_5Model {
-    /// Publishing prompt-cache blocks needs `workspace_bytes` more than is
+    /// Publishing astro-ssd-prompt-cache blocks needs `workspace_bytes` more than is
     /// free. Leases them until the next forward completes, has the cache
     /// give back that much, and returns the allocator's freed buffers to
     /// the system so the retry finds the room.
@@ -28,8 +28,10 @@ impl Qwen3_5Model {
             if let Some(earlier_lease) = self.governed_memory.publication_workspace_lease.take() {
                 let _ = memory_governor.give_back_lease(earlier_lease);
             }
-            let (publication_lease, capacity) =
-                memory_governor.grant_lease(LeasePurpose::PromptCachePublication, workspace_bytes);
+            let (publication_lease, capacity) = memory_governor.grant_lease(
+                LeasePurpose::AstroSsdPromptCachePublication,
+                workspace_bytes,
+            );
             self.governed_memory
                 .publication_workspace_lease
                 .set(Some(publication_lease));
@@ -74,8 +76,8 @@ impl Qwen3_5Model {
                 return 0;
             };
             self.give_back_restore_workspace_lease(memory_governor);
-            let (restore_lease, capacity) =
-                memory_governor.grant_lease(LeasePurpose::PromptCacheRestore, workspace_bytes);
+            let (restore_lease, capacity) = memory_governor
+                .grant_lease(LeasePurpose::AstroSsdPromptCacheRestore, workspace_bytes);
             self.governed_memory
                 .restore_workspace_lease
                 .set(Some(restore_lease));

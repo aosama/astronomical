@@ -2,8 +2,8 @@ use std::future::Future;
 
 use crate::InferenceEngineError;
 use astronomical_ipc_protocol::{
-    ExpertLayerSeatingCounts, ExpertMemoryMode, NeuralEnginePrefillStatus, RequestId, WorkerEvent,
-    WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptProcessingPhase,
+    ExpertLayerSeatingCounts, ExpertMemoryMode, NeuralEnginePrefillStatus, RequestId,
+    WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerEvent, WorkerPromptProcessingPhase,
     WorkerPromptWorkReuse,
 };
 
@@ -55,23 +55,23 @@ pub trait InferenceEngine {
         async move { Ok(None) }
     }
 
-    /// Collects persistent prompt-cache observability stats for IPC emission.
+    /// Collects persistent astro-ssd-prompt-cache observability stats for IPC emission.
     ///
     /// Returns `Ok(None)` when the engine has no persistent prompt cache. The
-    /// worker emits `WorkerEvent::PersistentPromptCacheStats` only when `Some`.
+    /// worker emits `WorkerEvent::AstroSsdPromptCacheStats` only when `Some`.
     /// The default implementation returns `Ok(None)` so engines without persistent
     /// prompt storage incur no cost.
-    fn collect_persistent_prompt_cache_stats(
+    fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> impl Future<Output = Result<Option<WorkerEvent>, InferenceEngineError>> + Send {
         async move { Ok(None) }
     }
 
-    /// Clears persistent prompt-cache storage on the engine's owning context.
+    /// Clears persistent astro-ssd-prompt-cache storage on the engine's owning context.
     ///
     /// `Ok(None)` means this engine has no open cache store, allowing the worker
     /// to fall back to its startup-configured global cache root.
-    fn clear_persistent_prompt_cache(
+    fn clear_astro_ssd_prompt_cache(
         &mut self,
         _model_id: Option<String>,
     ) -> impl Future<Output = Result<Option<WorkerEvent>, InferenceEngineError>> + Send {
@@ -162,15 +162,15 @@ pub trait MlxInferenceExecution: 'static {
         None
     }
 
-    /// Reports optional persistent prompt-cache state.
-    fn collect_persistent_prompt_cache_stats(
+    /// Reports optional persistent astro-ssd-prompt-cache state.
+    fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         Ok(None)
     }
 
-    /// Clears persistent prompt-cache storage owned by this execution context.
-    fn clear_persistent_prompt_cache(
+    /// Clears persistent astro-ssd-prompt-cache storage owned by this execution context.
+    fn clear_astro_ssd_prompt_cache(
         &mut self,
         _model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
@@ -198,7 +198,7 @@ pub struct EngineGenerationStart {
     restored_prompt_prefix_token_count: u32,
     expert_memory_mode: Option<ExpertMemoryMode>,
     prompt_processing_phase: Option<WorkerPromptProcessingPhase>,
-    persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
 }
 
 impl EngineGenerationStart {
@@ -210,7 +210,7 @@ impl EngineGenerationStart {
             restored_prompt_prefix_token_count: cached_token_count,
             expert_memory_mode: None,
             prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
         }
     }
 
@@ -224,7 +224,7 @@ impl EngineGenerationStart {
             restored_prompt_prefix_token_count: cached_token_count,
             expert_memory_mode: Some(expert_memory_mode),
             prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
         }
     }
 
@@ -271,19 +271,19 @@ impl EngineGenerationStart {
     }
 
     #[must_use]
-    pub fn with_persistent_prompt_cache_diagnostics(
+    pub fn with_astro_ssd_prompt_cache_diagnostics(
         mut self,
-        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+        astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
     ) -> Self {
-        self.persistent_prompt_cache_diagnostics = persistent_prompt_cache_diagnostics;
+        self.astro_ssd_prompt_cache_diagnostics = astro_ssd_prompt_cache_diagnostics;
         self
     }
 
     #[must_use]
-    pub const fn persistent_prompt_cache_diagnostics(
+    pub const fn astro_ssd_prompt_cache_diagnostics(
         &self,
-    ) -> Option<&WorkerPersistentPromptCacheRequestDiagnostics> {
-        self.persistent_prompt_cache_diagnostics.as_ref()
+    ) -> Option<&WorkerAstroSsdPromptCacheRequestDiagnostics> {
+        self.astro_ssd_prompt_cache_diagnostics.as_ref()
     }
 }
 
@@ -511,7 +511,7 @@ pub enum GeneratedToken {
         expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
-        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+        astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
         /// Where this chunk ran, when the model has Neural Engine programs attached.
         neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
         /// Present while a prompt is read one layer at a time: how many

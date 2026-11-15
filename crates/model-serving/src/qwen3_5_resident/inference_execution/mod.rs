@@ -1,3 +1,4 @@
+mod astro_ssd_prompt_cache;
 /// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
 mod decode_lifecycle;
 mod engine_construction;
@@ -9,17 +10,16 @@ mod inference_execution_bridge;
 mod memory_governance;
 mod model_loading;
 mod model_loading_finalization;
-mod persistent_prompt_cache;
 mod prompt_prefill_lifecycle;
 pub(crate) mod speculative_decode_lifecycle;
 mod test_controls;
 mod visual_embeddings_runtime;
 // Downward bindings so the phase folders keep their pre-move one-level
-// `super::<module>` paths into the persistent prompt-cache machinery.
-use persistent_prompt_cache::decoder_state_reuse;
-use persistent_prompt_cache::persistent_prompt_cache_startup_logging;
-use persistent_prompt_cache::persistent_prompt_cache_visual_identity;
-use persistent_prompt_cache::retained_live_prefix;
+// `super::<module>` paths into the persistent astro-ssd-prompt-cache machinery.
+use astro_ssd_prompt_cache::astro_ssd_prompt_cache_startup_logging;
+use astro_ssd_prompt_cache::astro_ssd_prompt_cache_visual_identity;
+use astro_ssd_prompt_cache::decoder_state_reuse;
+use astro_ssd_prompt_cache::retained_live_prefix;
 // Downward binding so the phase folders keep their one-level
 // `super::completed_forward_memory` paths into the memory-governance home.
 use memory_governance::completed_forward_memory;

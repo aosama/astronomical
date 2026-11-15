@@ -1,0 +1,208 @@
+//! Process-local index of astro-ssd-prompt-cache files already validated against disk.
+//!
+//! This index accelerates lookup and exposes counters, but it is never durable
+//! authority. Publication updates it only after commit; startup rebuilds it from
+//! disk; and read paths remove entries whose files disappeared concurrently.
+
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+
+use super::disk_store_file::AstroSsdPromptCacheFileKind;
+
+#[derive(Clone, Debug)]
+pub(crate) struct TrackedAstroSsdPromptCacheFile {
+    pub(crate) file_path: PathBuf,
+    pub(crate) file_size_bytes: u64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct TrackedAstroSsdPromptCacheBlock {
+    // One entry represents the directory as a topology unit. State files remain
+    // optional because retention may remove a redundant parent boundary while
+    // preserving its required sequence state and ancestry metadata.
+    pub(crate) block_directory_path: PathBuf,
+    pub(crate) block_index: u32,
+    pub(crate) parent_block_hash: Option<[u8; 32]>,
+    pub(crate) sequence_state_file: Option<TrackedAstroSsdPromptCacheFile>,
+    pub(crate) boundary_state_file: Option<TrackedAstroSsdPromptCacheFile>,
+}
+
+#[derive(Default)]
+pub(crate) struct AstroSsdPromptCacheDiskStoreIndex {
+    blocks: HashMap<[u8; 32], TrackedAstroSsdPromptCacheBlock>,
+    visual_embeddings: HashMap<[u8; 32], TrackedAstroSsdPromptCacheFile>,
+}
+
+impl AstroSsdPromptCacheDiskStoreIndex {
+    pub(super) fn sequence_state_block_count(&self) -> usize {
+        self.blocks
+            .values()
+            .filter(|tracked_block| tracked_block.sequence_state_file.is_some())
+            .count()
+    }
+
+    pub(super) fn boundary_state_snapshot_count(&self) -> usize {
+        self.blocks
+            .values()
+            .filter(|tracked_block| tracked_block.boundary_state_file.is_some())
+            .count()
+    }
+
+    pub(super) fn visual_embedding_count(&self) -> usize {
+        self.visual_embeddings.len()
+    }
+
+    pub(crate) fn block(&self, block_hash: &[u8; 32]) -> Option<&TrackedAstroSsdPromptCacheBlock> {
+        self.blocks.get(block_hash)
+    }
+
+    pub(crate) fn insert_block(
+        &mut self,
+        block_hash: [u8; 32],
+        tracked_block: TrackedAstroSsdPromptCacheBlock,
+    ) {
+        self.blocks.insert(block_hash, tracked_block);
+    }
+
+    pub(crate) fn tracked_blocks(&self) -> Vec<([u8; 32], TrackedAstroSsdPromptCacheBlock)> {
+        self.blocks
+            .iter()
+            .map(|(block_hash, tracked_block)| (*block_hash, tracked_block.clone()))
+            .collect()
+    }
+
+    pub(crate) fn remove_block(
+        &mut self,
+        block_hash: &[u8; 32],
+    ) -> Option<TrackedAstroSsdPromptCacheBlock> {
+        self.blocks.remove(block_hash)
+    }
+
+    pub(crate) fn protected_ancestry_directory_paths(
+        &self,
+        chain_tip_block_hash: [u8; 32],
+    ) -> Vec<PathBuf> {
+        // Walk from tip to root, stopping on missing or cyclic topology. Startup
+        // validation should have removed both, but quota protection must remain
+        // bounded even if disk changes after the index was built.
+        let mut protected_block_directory_paths = Vec::new();
+        let mut visited_block_hashes = HashSet::new();
+        let mut next_block_hash = Some(chain_tip_block_hash);
+        while let Some(block_hash) = next_block_hash {
+            if !visited_block_hashes.insert(block_hash) {
+                break;
+            }
+            let Some(tracked_block) = self.blocks.get(&block_hash) else {
+                break;
+            };
+            protected_block_directory_paths.push(tracked_block.block_directory_path.clone());
+            next_block_hash = tracked_block.parent_block_hash;
+        }
+        protected_block_directory_paths
+    }
+
+    pub(crate) fn file(
+        &self,
+        astro_ssd_prompt_cache_file_kind: AstroSsdPromptCacheFileKind,
+        astro_ssd_prompt_cache_file_hash: &[u8; 32],
+    ) -> Option<&TrackedAstroSsdPromptCacheFile> {
+        match astro_ssd_prompt_cache_file_kind {
+            AstroSsdPromptCacheFileKind::SequenceStateBlock => self
+                .blocks
+                .get(astro_ssd_prompt_cache_file_hash)
+                .and_then(|tracked_block| tracked_block.sequence_state_file.as_ref()),
+            AstroSsdPromptCacheFileKind::BoundaryStateSnapshot => self
+                .blocks
+                .get(astro_ssd_prompt_cache_file_hash)
+                .and_then(|tracked_block| tracked_block.boundary_state_file.as_ref()),
+            AstroSsdPromptCacheFileKind::VisualEmbedding => {
+                self.visual_embeddings.get(astro_ssd_prompt_cache_file_hash)
+            }
+        }
+    }
+
+    pub(crate) fn insert_file(
+        &mut self,
+        astro_ssd_prompt_cache_file_kind: AstroSsdPromptCacheFileKind,
+        astro_ssd_prompt_cache_file_hash: [u8; 32],
+        tracked_astro_ssd_prompt_cache_file: TrackedAstroSsdPromptCacheFile,
+    ) {
+        match astro_ssd_prompt_cache_file_kind {
+            AstroSsdPromptCacheFileKind::SequenceStateBlock => {
+                if let Some(tracked_block) = self.blocks.get_mut(&astro_ssd_prompt_cache_file_hash)
+                {
+                    tracked_block.sequence_state_file = Some(tracked_astro_ssd_prompt_cache_file);
+                }
+            }
+            AstroSsdPromptCacheFileKind::BoundaryStateSnapshot => {
+                if let Some(tracked_block) = self.blocks.get_mut(&astro_ssd_prompt_cache_file_hash)
+                {
+                    tracked_block.boundary_state_file = Some(tracked_astro_ssd_prompt_cache_file);
+                }
+            }
+            AstroSsdPromptCacheFileKind::VisualEmbedding => {
+                self.visual_embeddings.insert(
+                    astro_ssd_prompt_cache_file_hash,
+                    tracked_astro_ssd_prompt_cache_file,
+                );
+            }
+        }
+    }
+
+    pub(crate) fn remove_file(
+        &mut self,
+        astro_ssd_prompt_cache_file_kind: AstroSsdPromptCacheFileKind,
+        astro_ssd_prompt_cache_file_hash: &[u8; 32],
+    ) -> Option<TrackedAstroSsdPromptCacheFile> {
+        match astro_ssd_prompt_cache_file_kind {
+            AstroSsdPromptCacheFileKind::SequenceStateBlock => self
+                .blocks
+                .get_mut(astro_ssd_prompt_cache_file_hash)
+                .and_then(|tracked_block| tracked_block.sequence_state_file.take()),
+            AstroSsdPromptCacheFileKind::BoundaryStateSnapshot => self
+                .blocks
+                .get_mut(astro_ssd_prompt_cache_file_hash)
+                .and_then(|tracked_block| tracked_block.boundary_state_file.take()),
+            AstroSsdPromptCacheFileKind::VisualEmbedding => self
+                .visual_embeddings
+                .remove(astro_ssd_prompt_cache_file_hash),
+        }
+    }
+
+    pub(super) fn remove_files_by_path(&mut self, removed_file_paths: &[PathBuf]) {
+        // Global quota scans all model namespaces and returns paths rather than
+        // active-model hashes. Reconcile those paths back into this local index.
+        for tracked_block in self.blocks.values_mut() {
+            if tracked_block
+                .sequence_state_file
+                .as_ref()
+                .is_some_and(|tracked_file| removed_file_paths.contains(&tracked_file.file_path))
+            {
+                tracked_block.sequence_state_file = None;
+            }
+            if tracked_block
+                .boundary_state_file
+                .as_ref()
+                .is_some_and(|tracked_file| removed_file_paths.contains(&tracked_file.file_path))
+            {
+                tracked_block.boundary_state_file = None;
+            }
+        }
+        retain_files_not_removed(&mut self.visual_embeddings, removed_file_paths);
+    }
+
+    pub(super) fn remove_blocks_by_directory_paths(&mut self, removed_directory_paths: &[PathBuf]) {
+        // Remove complete topology entries only for subtree-directory eviction;
+        // deleting one retained state file uses `remove_files_by_path` instead.
+        self.blocks.retain(|_, tracked_block| {
+            !removed_directory_paths.contains(&tracked_block.block_directory_path)
+        });
+    }
+}
+
+fn retain_files_not_removed(
+    tracked_files: &mut HashMap<[u8; 32], TrackedAstroSsdPromptCacheFile>,
+    removed_file_paths: &[PathBuf],
+) {
+    tracked_files.retain(|_, tracked_file| !removed_file_paths.contains(&tracked_file.file_path));
+}

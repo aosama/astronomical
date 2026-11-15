@@ -10,7 +10,7 @@ fn should_hold_nothing_before_any_lease_is_granted() {
 #[test]
 fn should_count_every_held_lease_until_it_is_given_back() {
     let mut lease_book = LeaseBook::default();
-    let publication_lease = lease_book.grant(LeasePurpose::PromptCachePublication, 300);
+    let publication_lease = lease_book.grant(LeasePurpose::AstroSsdPromptCachePublication, 300);
     let vision_lease = lease_book.grant(LeasePurpose::VisionTower, 900);
     assert_eq!(lease_book.held_bytes(), 1_200);
     assert_eq!(lease_book.give_back(publication_lease), Some(300));
@@ -22,11 +22,11 @@ fn should_count_every_held_lease_until_it_is_given_back() {
 #[test]
 fn should_total_one_purpose_apart_from_the_others() {
     let mut lease_book = LeaseBook::default();
-    lease_book.grant(LeasePurpose::PromptCacheRestore, 100);
-    lease_book.grant(LeasePurpose::PromptCacheRestore, 150);
+    lease_book.grant(LeasePurpose::AstroSsdPromptCacheRestore, 100);
+    lease_book.grant(LeasePurpose::AstroSsdPromptCacheRestore, 150);
     lease_book.grant(LeasePurpose::DraftModel, 4_000);
     assert_eq!(
-        lease_book.held_bytes_for(LeasePurpose::PromptCacheRestore),
+        lease_book.held_bytes_for(LeasePurpose::AstroSsdPromptCacheRestore),
         250
     );
     assert_eq!(lease_book.held_bytes_for(LeasePurpose::DraftModel), 4_000);

@@ -143,8 +143,8 @@ impl Qwen3_5ModelBase {
                     released_vision_payload_bytes = vision_model.tower_payload_bytes(),
                     "released the vision tower weights after the image request"
                 ),
-                Err(cache_clear_error) => tracing::warn!(
-                    error = %cache_clear_error,
+                Err(astro_ssd_prompt_cache_clear_error) => tracing::warn!(
+                    error = %astro_ssd_prompt_cache_clear_error,
                     "released the vision tower weights but could not clear the MLX buffer cache"
                 ),
             },

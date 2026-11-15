@@ -102,27 +102,27 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         }
     }
 
-    async fn collect_persistent_prompt_cache_stats(
+    async fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         match self {
-            Self::Qwen3_5(engine) => engine.collect_persistent_prompt_cache_stats().await,
-            Self::Qwen3_5Streaming(engine) => engine.collect_persistent_prompt_cache_stats().await,
+            Self::Qwen3_5(engine) => engine.collect_astro_ssd_prompt_cache_stats().await,
+            Self::Qwen3_5Streaming(engine) => engine.collect_astro_ssd_prompt_cache_stats().await,
             Self::PrismHadamardQwen35(engine) => {
-                engine.collect_persistent_prompt_cache_stats().await
+                engine.collect_astro_ssd_prompt_cache_stats().await
             }
         }
     }
 
-    async fn clear_persistent_prompt_cache(
+    async fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         match self {
-            Self::Qwen3_5(engine) => engine.clear_persistent_prompt_cache(model_id).await,
-            Self::Qwen3_5Streaming(engine) => engine.clear_persistent_prompt_cache(model_id).await,
+            Self::Qwen3_5(engine) => engine.clear_astro_ssd_prompt_cache(model_id).await,
+            Self::Qwen3_5Streaming(engine) => engine.clear_astro_ssd_prompt_cache(model_id).await,
             Self::PrismHadamardQwen35(engine) => {
-                engine.clear_persistent_prompt_cache(model_id).await
+                engine.clear_astro_ssd_prompt_cache(model_id).await
             }
         }
     }

@@ -262,7 +262,7 @@ fn enable_isolated_acceptance_diagnostics(isolated_home: &tempfile::TempDir) {
     )
     .expect("the copied Development config should contain JSON");
     config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(true);
-    config_document["prompt_cache"]["enabled"] = serde_json::json!(false);
+    config_document["ssd_prompt_cache"]["enabled"] = serde_json::json!(false);
     fs::write(
         config_path,
         serde_json::to_vec_pretty(&config_document)

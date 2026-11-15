@@ -10,8 +10,8 @@
 use std::path::PathBuf;
 
 use astronomical_config::{
-    ModelFamily, PromptCacheConfig, classify_model_directory, verify_flux2_klein_model_directory,
-    verify_qwen_image_21_model_directory,
+    AstroSsdPromptCacheConfig, ModelFamily, classify_model_directory,
+    verify_flux2_klein_model_directory, verify_qwen_image_21_model_directory,
 };
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
@@ -46,13 +46,13 @@ use self::qwen3_5_model_startup::Qwen3_5EngineSelection;
 pub struct ModelFamilyFactory {
     effective_mlx_memory_ceiling_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
-    prompt_cache_config: PromptCacheConfig,
+    astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
     /// `None` leaves programs uncached, which costs a slower load and nothing else.
     neural_engine_program_directory: Option<PathBuf>,
     performance_attribution_enabled: bool,
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
     diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     /// The highest ceiling an image engine may plan its load at to reach its
     /// floor (#1902): the user's own limit, or unbounded when they set none.
@@ -98,21 +98,21 @@ impl ModelFamilyFactory {
     pub fn new(
         effective_mlx_memory_ceiling_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
-        prompt_cache_config: PromptCacheConfig,
+        astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
         performance_attribution_enabled: bool,
         decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
         performance_attribution_log_path: PathBuf,
-        persistent_prompt_cache_enabled: bool,
+        astro_ssd_prompt_cache_enabled: bool,
     ) -> Self {
         Self {
             effective_mlx_memory_ceiling_bytes,
             mlx_buffer_cache_limit_bytes,
-            prompt_cache_config,
+            astro_ssd_prompt_cache_config,
             neural_engine_program_directory: None,
             performance_attribution_enabled,
             decode_astro_expert_cache_policy,
             performance_attribution_log_path,
-            persistent_prompt_cache_enabled,
+            astro_ssd_prompt_cache_enabled,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             floor_raise_limit_bytes: 0,
         }
@@ -194,24 +194,24 @@ impl ModelFamilyFactory {
     > {
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let mlx_buffer_cache_limit_bytes = self.mlx_buffer_cache_limit_bytes;
-        let prompt_cache_config = self.prompt_cache_config.clone();
+        let astro_ssd_prompt_cache_config = self.astro_ssd_prompt_cache_config.clone();
         let neural_engine_program_directory = self.neural_engine_program_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let decode_astro_expert_cache_policy = self.decode_astro_expert_cache_policy;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
+        let astro_ssd_prompt_cache_enabled = self.astro_ssd_prompt_cache_enabled;
         tokio::task::spawn_blocking(move || {
             let chunking = model_configuration.chunking.clone();
             qwen3_5_model_startup::initialize_qwen3_5_model(
                 model_directory_path,
                 effective_mlx_memory_ceiling_bytes,
                 mlx_buffer_cache_limit_bytes,
-                prompt_cache_config,
+                astro_ssd_prompt_cache_config,
                 neural_engine_program_directory,
                 model_configuration.model_id,
                 model_configuration.maximum_context_tokens,
                 model_configuration.maximum_output_tokens,
-                persistent_prompt_cache_enabled,
+                astro_ssd_prompt_cache_enabled,
                 performance_attribution_enabled,
                 decode_astro_expert_cache_policy,
                 performance_attribution_log_path,
@@ -381,10 +381,10 @@ impl
         self.floor_raise_limit_bytes = floor_raise_limit_bytes;
     }
 
-    fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
+    fn global_astro_ssd_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
         Some(
-            self.prompt_cache_config
-                .global_prompt_cache_root_directory()
+            self.astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_root_directory()
                 .as_path(),
         )
     }
@@ -525,8 +525,8 @@ impl ModelFamilyFactory {
         let mlx_buffer_cache_limit_bytes = self.mlx_buffer_cache_limit_bytes;
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
-        let prompt_cache_config = self.prompt_cache_config.clone();
+        let astro_ssd_prompt_cache_enabled = self.astro_ssd_prompt_cache_enabled;
+        let astro_ssd_prompt_cache_config = self.astro_ssd_prompt_cache_config.clone();
         let initialization_task_result = tokio::task::spawn_blocking(move || {
             let (generation_processor, prism_engine) =
                 initialize_prism_hadamard_qwen35_model_with_serving_settings(
@@ -545,9 +545,9 @@ impl ModelFamilyFactory {
                         // per-request thinking budgets.
                         enable_thinking: true,
                         chunking: Some(model_configuration.chunking.clone()),
-                        persistent_prompt_cache_enabled,
-                        prompt_cache_config: persistent_prompt_cache_enabled
-                            .then_some(prompt_cache_config),
+                        astro_ssd_prompt_cache_enabled,
+                        astro_ssd_prompt_cache_config: astro_ssd_prompt_cache_enabled
+                            .then_some(astro_ssd_prompt_cache_config),
                         performance_attribution_log_path: Some(performance_attribution_log_path),
                     },
                 )

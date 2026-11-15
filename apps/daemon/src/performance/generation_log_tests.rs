@@ -2,10 +2,10 @@ use std::fs;
 
 use crate::{GenerationPerformanceLog, GenerationPerformanceRecord};
 use astronomical_ipc_protocol::{
-    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
-    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPersistentPromptCacheStartupCleanupCategory,
-    WorkerPersistentPromptCacheStartupCleanupEvidence,
+    WorkerAstroSsdPromptCacheExpectedBlockHashPrefix, WorkerAstroSsdPromptCacheLookupOutcome,
+    WorkerAstroSsdPromptCacheMissReason, WorkerAstroSsdPromptCacheRequestDiagnostics,
+    WorkerAstroSsdPromptCacheStartupCleanupCategory,
+    WorkerAstroSsdPromptCacheStartupCleanupEvidence,
 };
 
 #[test]
@@ -104,8 +104,8 @@ fn sample_generation_performance_record() -> GenerationPerformanceRecord {
         generation_tok_per_second: Some(100.0),
         mlx_peak_memory_bytes: Some(40_000_000_000),
         mlx_active_memory_bytes: Some(31_000_000_000),
-        persistent_prompt_cache_diagnostics: Some(WorkerPersistentPromptCacheRequestDiagnostics {
-            lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Hit,
+        astro_ssd_prompt_cache_diagnostics: Some(WorkerAstroSsdPromptCacheRequestDiagnostics {
+            lookup_outcome: WorkerAstroSsdPromptCacheLookupOutcome::Hit,
             block_token_count: 2_048,
             complete_prompt_block_count: 5,
             maximum_restorable_block_count: 4,
@@ -115,24 +115,23 @@ fn sample_generation_performance_record() -> GenerationPerformanceRecord {
             first_missing_sequence_state_block_index: None,
             miss_reason: None,
             expected_block_hash_prefix: None,
-            startup_cleanup_evidence: Some(WorkerPersistentPromptCacheStartupCleanupEvidence {
-                interrupted_transaction_recovery:
-                    WorkerPersistentPromptCacheStartupCleanupCategory {
-                        artifact_count: 1,
-                        block_count: 0,
-                        byte_count: 128,
-                    },
-                obsolete_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+            startup_cleanup_evidence: Some(WorkerAstroSsdPromptCacheStartupCleanupEvidence {
+                interrupted_transaction_recovery: WorkerAstroSsdPromptCacheStartupCleanupCategory {
+                    artifact_count: 1,
+                    block_count: 0,
+                    byte_count: 128,
+                },
+                obsolete_format: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                     artifact_count: 2,
                     block_count: 0,
                     byte_count: 256,
                 },
-                corrupt_current_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+                corrupt_current_format: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                     artifact_count: 0,
                     block_count: 1,
                     byte_count: 512,
                 },
-                quota_eviction: WorkerPersistentPromptCacheStartupCleanupCategory {
+                quota_eviction: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                     artifact_count: 0,
                     block_count: 2,
                     byte_count: 1_024,
@@ -185,19 +184,19 @@ fn should_open_and_append_to_performance_log() {
     assert_eq!(parsed["mlx_peak_memory_bytes"], 40_000_000_000_i64);
     assert_eq!(parsed["mlx_active_memory_bytes"], 31_000_000_000_i64);
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["matched_sequence_state_block_count"],
+        parsed["astro_ssd_prompt_cache_diagnostics"]["matched_sequence_state_block_count"],
         4
     );
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["published_block_count"],
+        parsed["astro_ssd_prompt_cache_diagnostics"]["published_block_count"],
         1
     );
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["expert_bytes_reclaimed_for_restore"],
+        parsed["astro_ssd_prompt_cache_diagnostics"]["expert_bytes_reclaimed_for_restore"],
         16_384
     );
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["startup_cleanup_evidence"]["obsolete_format"]
+        parsed["astro_ssd_prompt_cache_diagnostics"]["startup_cleanup_evidence"]["obsolete_format"]
             ["artifact_count"],
         2
     );
@@ -233,7 +232,7 @@ fn should_append_multiple_records_to_performance_log() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
         mlx_active_memory_bytes: None,
-        persistent_prompt_cache_diagnostics: None,
+        astro_ssd_prompt_cache_diagnostics: None,
     };
 
     let second_record = GenerationPerformanceRecord {
@@ -257,7 +256,7 @@ fn should_append_multiple_records_to_performance_log() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: Some(35_000_000_000),
         mlx_active_memory_bytes: Some(28_000_000_000),
-        persistent_prompt_cache_diagnostics: None,
+        astro_ssd_prompt_cache_diagnostics: None,
     };
 
     performance_log.record(&first_record);
@@ -303,8 +302,8 @@ fn should_serialize_null_for_optional_fields() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
         mlx_active_memory_bytes: None,
-        persistent_prompt_cache_diagnostics: Some(WorkerPersistentPromptCacheRequestDiagnostics {
-            lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Miss,
+        astro_ssd_prompt_cache_diagnostics: Some(WorkerAstroSsdPromptCacheRequestDiagnostics {
+            lookup_outcome: WorkerAstroSsdPromptCacheLookupOutcome::Miss,
             block_token_count: 2_048,
             complete_prompt_block_count: 1,
             maximum_restorable_block_count: 1,
@@ -312,9 +311,9 @@ fn should_serialize_null_for_optional_fields() {
             restored_block_count: 0,
             partial_tail_block_token_count: None,
             first_missing_sequence_state_block_index: Some(0),
-            miss_reason: Some(WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing),
+            miss_reason: Some(WorkerAstroSsdPromptCacheMissReason::RootSequenceStateBlockMissing),
             expected_block_hash_prefix: Some(
-                WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash([1_u8; 32]),
+                WorkerAstroSsdPromptCacheExpectedBlockHashPrefix::from_block_hash([1_u8; 32]),
             ),
             startup_cleanup_evidence: None,
             published_block_count: 1,

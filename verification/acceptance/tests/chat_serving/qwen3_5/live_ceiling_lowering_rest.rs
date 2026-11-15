@@ -421,7 +421,7 @@ fn write_acceptance_config(
             "model_directories": [acceptance_model_scan_root(model_directory)],
             "maximum_mlx_memory_gb": mlx_memory_ceiling_bytes.div_ceil(BYTES_PER_MARKETED_GIGABYTE),
         },
-        "prompt_cache": {"enabled": false},
+        "ssd_prompt_cache": {"enabled": false},
         "diagnostics": {"performance_attribution_enabled": true},
         "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": FIXED_PREFILL_CHUNK_SIZE_TOKENS

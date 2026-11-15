@@ -20,8 +20,8 @@ fn should_resolve_every_user_configured_chunking_boundary() {
             "full_attention_key_value_growth_tokens": 192,
             "prefill_graph_submission_layer_interval": 2,
             "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
-            "prompt_cache_block_tokens": 1024,
-            "prompt_cache_common_prefix_stride_blocks": 6
+            "ssd_prompt_cache_block_tokens": 1024,
+            "ssd_prompt_cache_common_prefix_stride_blocks": 6
           }
         }"#,
     );
@@ -40,8 +40,8 @@ fn should_resolve_every_user_configured_chunking_boundary() {
         0
     );
     assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 1_024);
-    assert_eq!(chunking.prompt_cache_block_tokens(), Some(1_024));
-    assert_eq!(chunking.prompt_cache_common_prefix_stride_blocks(), 6);
+    assert_eq!(chunking.ssd_prompt_cache_block_tokens(), Some(1_024));
+    assert_eq!(chunking.ssd_prompt_cache_common_prefix_stride_blocks(), 6);
 
     let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
     assert_eq!(
@@ -187,8 +187,8 @@ fn should_load_a_saved_file_that_still_names_the_retired_ssd_prefill_interval() 
 fn should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled() {
     for field_name in [
         "full_attention_key_value_growth_tokens",
-        "prompt_cache_block_tokens",
-        "prompt_cache_common_prefix_stride_blocks",
+        "ssd_prompt_cache_block_tokens",
+        "ssd_prompt_cache_common_prefix_stride_blocks",
     ] {
         let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
         write_config(
@@ -446,7 +446,7 @@ fn should_accept_and_ignore_the_speculative_decoding_block_length() {
         .chunking()
         .expect("chunking configuration should resolve");
 
-    assert_eq!(chunking.prompt_cache_common_prefix_stride_blocks(), 4);
+    assert_eq!(chunking.ssd_prompt_cache_common_prefix_stride_blocks(), 4);
 }
 
 #[test]

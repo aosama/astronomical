@@ -186,10 +186,10 @@ fn report_prefix_adoption_evidence(isolated_home: &std::path::Path) {
 /// restore that adoption must eliminate.
 fn restore_span_evidence(generation_report: &Value) -> (u64, u64, f64) {
     const RESTORE_OPERATIONS: [&str; 4] = [
-        "persistent_prompt_cache_prefix_lookup",
-        "persistent_prompt_cache_kv_block_read",
-        "persistent_prompt_cache_state_reconstruction",
-        "persistent_prompt_cache_recurrent_snapshot_read",
+        "astro_ssd_prompt_cache_prefix_lookup",
+        "astro_ssd_prompt_cache_kv_block_read",
+        "astro_ssd_prompt_cache_state_reconstruction",
+        "astro_ssd_prompt_cache_recurrent_snapshot_read",
     ];
     generation_report
         .get("operations")
@@ -208,7 +208,7 @@ fn restore_span_evidence(generation_report: &Value) -> (u64, u64, f64) {
                     .and_then(Value::as_u64)
                     .unwrap_or(0);
                 restore_span_occurrences += occurrence_count;
-                if operation_name == Some("persistent_prompt_cache_kv_block_read") {
+                if operation_name == Some("astro_ssd_prompt_cache_kv_block_read") {
                     kv_block_read_occurrences += occurrence_count;
                 }
                 restore_spans_ms += operation

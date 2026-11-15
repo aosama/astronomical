@@ -8,13 +8,13 @@ use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerPromptWorkReuse};
 
 use mlx_bridge::MlxArray;
 
+use crate::AstroSsdPromptCacheDiskStore;
 use crate::GeneratedToken;
 use crate::InferenceEngineError;
 use crate::MlxMemoryTelemetry;
 use crate::PerformanceAttribution;
 use crate::PerformanceOperation;
-use crate::PersistentPromptCacheDiskStore;
-use crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end;
+use crate::astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::PrismStateSlotLayout;
 
@@ -25,7 +25,7 @@ use super::successor_stays_pending;
 
 /// Anchors a prefill chunk at the processed-prompt cursor and returns how
 /// many prompt tokens it consumes, stopping the chunk at the first
-/// persistent prompt-cache block boundary it would cross.
+/// persistent astro-ssd-prompt-cache block boundary it would cross.
 ///
 /// A durable boundary snapshot is only valid at a forward edge, so at most
 /// one durable publication per forward keeps the boundary snapshot honest.
@@ -33,13 +33,13 @@ pub(super) fn prefill_chunk_length(
     processed_prompt_token_count: u32,
     remaining_prompt_token_count: usize,
     prompt_processing_chunk_tokens: u32,
-    persistent_prompt_cache_block_token_count: Option<usize>,
+    astro_ssd_prompt_cache_block_token_count: Option<usize>,
 ) -> usize {
     let chunk_start = processed_prompt_token_count as usize;
     let requested_chunk_end =
         chunk_start + remaining_prompt_token_count.min(prompt_processing_chunk_tokens as usize);
-    let clamped_chunk_end = match persistent_prompt_cache_block_token_count {
-        Some(block_token_count) => persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
+    let clamped_chunk_end = match astro_ssd_prompt_cache_block_token_count {
+        Some(block_token_count) => astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end(
             chunk_start,
             requested_chunk_end,
             block_token_count,
@@ -141,16 +141,16 @@ pub(super) fn queue_prefill_first_token(
     Ok(())
 }
 
-/// Publishes the prompt-cache block the chunk just completed, if any.
+/// Publishes the astro-ssd-prompt-cache block the chunk just completed, if any.
 ///
 /// The capture's own attribution is swapped in for the call and swapped back
 /// afterwards so the chunk's runtime attribution never records capture work.
 pub(super) fn capture_completed_prefill_cache_block(
     model: &PrismHadamardTextModel,
-    persistent_prompt_cache: Option<&PersistentPromptCacheDiskStore>,
+    astro_ssd_prompt_cache: Option<&AstroSsdPromptCacheDiskStore>,
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,
 ) -> Result<(), InferenceEngineError> {
-    let Some(persistent_prompt_cache) = persistent_prompt_cache else {
+    let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache else {
         return Ok(());
     };
     let slot_layout = PrismStateSlotLayout::for_model(model);
@@ -158,9 +158,9 @@ pub(super) fn capture_completed_prefill_cache_block(
         &mut active_generation.performance_attribution,
         PerformanceAttribution::disabled(),
     );
-    let capture_result = super::super::prompt_cache::capture_completed_cache_block(
+    let capture_result = super::super::astro_ssd_prompt_cache::capture_completed_cache_block(
         &model.runtime,
-        persistent_prompt_cache,
+        astro_ssd_prompt_cache,
         active_generation,
         &slot_layout,
         &mut capture_attribution,
@@ -190,7 +190,7 @@ pub(super) fn prefill_progress_token(
         expert_residency_telemetry: None,
         expert_memory_mode: Some(ExpertMemoryMode::Resident),
         prompt_work_reuse,
-        persistent_prompt_cache_diagnostics: None,
+        astro_ssd_prompt_cache_diagnostics: None,
         neural_engine_chunk: None,
         prompt_layer_progress: None,
     }

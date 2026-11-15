@@ -35,8 +35,8 @@ fn should_keep_stable_and_development_state_and_endpoints_separate() {
         development_paths.config_file_path()
     );
     assert_ne!(
-        stable_paths.prompt_cache_directory(),
-        development_paths.prompt_cache_directory()
+        stable_paths.astro_ssd_prompt_cache_directory(),
+        development_paths.astro_ssd_prompt_cache_directory()
     );
     assert_eq!(
         stable_paths.models_directory(),
@@ -79,7 +79,7 @@ fn should_keep_every_writable_path_beneath_an_explicit_test_state_directory() {
 
     for writable_path in [
         instance_paths.config_file_path(),
-        instance_paths.prompt_cache_directory(),
+        instance_paths.astro_ssd_prompt_cache_directory(),
         instance_paths.models_directory(),
         instance_paths.logging_directory(),
         instance_paths.daemon_ownership_file_path(),
@@ -257,7 +257,7 @@ fn should_resolve_app_store_state_beneath_the_application_support_directory() {
         fictional_application_support_directory.join("Astronomical/models")
     );
     assert_eq!(
-        stable_paths.prompt_cache_directory(),
+        stable_paths.astro_ssd_prompt_cache_directory(),
         fictional_application_support_directory.join("Astronomical/cache")
     );
     assert_eq!(
@@ -392,7 +392,7 @@ fn should_resolve_every_state_path_beneath_the_application_group_container() {
         fictional_group_container.join("Astronomical/models")
     );
     assert_eq!(
-        stable_paths.prompt_cache_directory(),
+        stable_paths.astro_ssd_prompt_cache_directory(),
         fictional_group_container.join("Astronomical/cache")
     );
 }

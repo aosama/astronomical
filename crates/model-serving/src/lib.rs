@@ -59,7 +59,7 @@ pub(crate) mod speech_models;
 
 pub(crate) mod performance_attribution;
 
-pub(crate) mod persistent_cache;
+pub(crate) mod astro_ssd_prompt_cache;
 
 // The folded ternary family ships its loader and straight text model as
 // crate API ahead of the serving-path integration; the acceptance crate
@@ -291,25 +291,25 @@ pub use performance_attribution::{
     PerformanceOperationMeasurement, process_io_delta_between_samples,
 };
 
-pub use persistent_cache::{
-    PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError,
-    PersistentPromptCacheLookupDiagnostics, PersistentPromptCacheMissReason,
-    PersistentPromptCacheModelContract, PersistentPromptCacheModelContractError,
-    PersistentPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
+pub use astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheBlockKeyError,
+    AstroSsdPromptCacheLookupDiagnostics, AstroSsdPromptCacheMissReason,
+    AstroSsdPromptCacheModelContract, AstroSsdPromptCacheModelContractError,
+    AstroSsdPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
     PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
-    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
-    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
-    persistent_prompt_cache_clamped_prefill_chunk_end,
-    persistent_prompt_cache_partial_tail_capture_end,
+    astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end,
+    astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    astro_ssd_prompt_cache_clamped_prefill_chunk_end,
+    astro_ssd_prompt_cache_partial_tail_capture_end,
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use persistent_cache::{
-    PersistentPromptCacheClearOutcome, PersistentPromptCacheDiskStore,
-    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheDiskStoreError,
-    PersistentPromptCachePublicationOutcome, PersistentPromptCacheStartupCleanupCategory,
-    PersistentPromptCacheStartupCleanupEvidence, build_persistent_prompt_cache_stats_event,
-    clear_persistent_prompt_cache_directory,
+pub use astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheClearOutcome, AstroSsdPromptCacheDiskStore,
+    AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheDiskStoreError,
+    AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheStartupCleanupCategory,
+    AstroSsdPromptCacheStartupCleanupEvidence, build_astro_ssd_prompt_cache_stats_event,
+    clear_astro_ssd_prompt_cache_directory,
 };
 
 pub use qwen3_5_core::artifacts::{
@@ -374,17 +374,17 @@ pub use crate::model_generation_processor::{
 
 pub use crate::performance_attribution::macos_process_io::MacosProcessIoError;
 
-pub use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+pub use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
-pub use crate::persistent_cache::block_format::PersistentPromptCacheBlockHeader;
+pub use crate::astro_ssd_prompt_cache::block_format::AstroSsdPromptCacheBlockHeader;
 
-pub use crate::persistent_cache::block_format_error::PersistentPromptCacheBlockError;
+pub use crate::astro_ssd_prompt_cache::block_format_error::AstroSsdPromptCacheBlockError;
 
-pub use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;
+pub use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
 
-pub use crate::persistent_cache::visual_embedding_format::PersistentVisualEmbeddingFileHeader;
+pub use crate::astro_ssd_prompt_cache::visual_embedding_format::PersistentVisualEmbeddingFileHeader;
 
-pub use crate::persistent_cache::visual_embedding_key::PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION;
+pub use crate::astro_ssd_prompt_cache::visual_embedding_key::PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION;
 
 pub use crate::qwen_image_21::artifact::QwenImage21ArtifactValidator;
 
@@ -433,10 +433,10 @@ pub use qwen3_5_core::text::{
 
 pub use qwen3_5_core::vision::{
     Qwen3_5ImageProcessor, Qwen3_5ProcessedImage, Qwen3_5VisionConfig,
-    Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
-    Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
-    plan_qwen3_5_visual_embedding_suffix, plan_qwen3_5_visual_prompt_cache_block_inputs,
-    qwen3_5_vision_tensor_profiles,
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlan,
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError, Qwen3_5VisualEmbeddingSuffixPlan,
+    Qwen3_5VisualEmbeddingSuffixPlanError, plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
+    plan_qwen3_5_visual_embedding_suffix, qwen3_5_vision_tensor_profiles,
 };
 
 #[cfg(any(test, feature = "direct-mlx"))]
@@ -485,8 +485,8 @@ pub use qwen3_5_core::artifacts::{
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::decoder::{
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
 };
 
@@ -598,7 +598,7 @@ pub use qwen3_5_streaming::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
+pub use qwen3_5_core::astro_ssd_prompt_cache_capture::astro_ssd_prompt_cache_publication_advances_parent_chain;
 
 pub use qwen3_5_streaming::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,

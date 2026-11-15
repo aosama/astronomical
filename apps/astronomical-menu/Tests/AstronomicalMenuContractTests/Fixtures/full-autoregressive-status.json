@@ -19,7 +19,7 @@
       "error": null,
       "pending_maximum_bytes": null
     },
-    "prompt_cache": {
+    "astro_ssd_prompt_cache": {
       "capacity_bytes": {
         "configured": null,
         "default": 53687091200,
@@ -58,13 +58,13 @@
           "default": 0,
           "effective": 0
         },
-        "prompt_cache_block_tokens": {
+        "ssd_prompt_cache_block_tokens": {
           "configured": null,
           "default": null,
           "effective": null,
           "is_configured": false
         },
-        "prompt_cache_common_prefix_stride_blocks": {
+        "ssd_prompt_cache_common_prefix_stride_blocks": {
           "configured": null,
           "default": 4,
           "effective": 4
@@ -121,7 +121,7 @@
   "mlx_memory_limit_error": null,
   "mlx_memory_snapshot": null,
   "pending_mlx_memory_ceiling_bytes": null,
-  "persistent_prompt_cache": {
+  "astro_ssd_prompt_cache": {
     "hit_rate": 0.0,
     "hits": 0,
     "misses": 0,
@@ -155,8 +155,8 @@
           "fixed_prompt_processing_chunk_size_tokens": 2048,
           "full_attention_key_value_growth_tokens": 256,
           "prefill_graph_submission_layer_interval": 0,
-          "prompt_cache_block_tokens": null,
-          "prompt_cache_common_prefix_stride_blocks": 4,
+          "ssd_prompt_cache_block_tokens": null,
+          "ssd_prompt_cache_common_prefix_stride_blocks": 4,
           "experimental_decode_stage_attribution_enabled": false,
           "experimental_prefill_stage_attribution_enabled": false,
           "experimental_in_memory_prefix_adoption_enabled": false,
@@ -169,8 +169,8 @@
       },
       "kind": "autoregressive"
     },
-    "persistent_prompt_cache_enabled": true,
-    "prompt_cache_maximum_size_bytes": 10000000000
+    "astro_ssd_prompt_cache_enabled": true,
+    "astro_ssd_prompt_cache_maximum_size_bytes": 10000000000
   },
   "worker_runtime_feature_configuration_applied": true
 }

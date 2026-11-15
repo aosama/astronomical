@@ -383,7 +383,7 @@ impl AstronomicalInstancePaths {
     }
 
     #[must_use]
-    pub fn prompt_cache_directory(&self) -> PathBuf {
+    pub fn astro_ssd_prompt_cache_directory(&self) -> PathBuf {
         self.state_directory.join("cache")
     }
 

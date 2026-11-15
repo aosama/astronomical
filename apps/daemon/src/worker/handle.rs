@@ -15,8 +15,8 @@ use std::{
 };
 
 use crate::{
-    CompletionAttributionLog, GenerationPerformanceLog, ImageGenerationTimeouts,
-    PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
+    AstroSsdPromptCacheClearOutcome, CompletionAttributionLog, GenerationPerformanceLog,
+    ImageGenerationTimeouts, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
     WorkerHealthStatus, WorkerProcess, WorkerTerminationOutcome,
 };
 use astronomical_ipc_protocol::{WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration};
@@ -533,17 +533,17 @@ impl WorkerHandle {
     }
 
     /// Applies a cache clear immediately or queues the newest scope until idle.
-    pub async fn clear_prompt_cache(
+    pub async fn clear_astro_ssd_prompt_cache(
         &self,
         model_id: Option<String>,
-    ) -> Result<PromptCacheClearOutcome, WorkerControlError> {
+    ) -> Result<AstroSsdPromptCacheClearOutcome, WorkerControlError> {
         let command_sender = self
             .command_sender
             .as_ref()
             .ok_or(WorkerControlError::MissingActiveWorker)?;
         let (clear_sender, clear_receiver) = oneshot::channel();
         command_sender
-            .send(WorkerLoopCommand::ClearPromptCache {
+            .send(WorkerLoopCommand::ClearAstroSsdPromptCache {
                 model_id,
                 clear_sender,
             })

@@ -20,7 +20,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             3,
             vec![
                 GeneratedToken::PrefillProgress {
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     neural_engine_chunk: None,
                     prompt_layer_progress: None,
                     processed_token_count: 2,
@@ -54,7 +54,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     },
                 },
                 GeneratedToken::PrefillProgress {
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     neural_engine_chunk: None,
                     prompt_layer_progress: None,
                     processed_token_count: 3,
@@ -234,7 +234,7 @@ async fn should_report_where_a_chunk_ran_when_the_model_has_programs() {
         ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
             0,
             vec![GeneratedToken::PrefillProgress {
-                persistent_prompt_cache_diagnostics: None,
+                astro_ssd_prompt_cache_diagnostics: None,
                 neural_engine_chunk: Some(chunk_report),
                 prompt_layer_progress: None,
                 processed_token_count: 15,

@@ -103,11 +103,13 @@ pub enum WorkerControlError {
         /// by containment, which logs it in full.
         failure_description: String,
     },
-    /// The worker did not acknowledge a prompt-cache clear in time.
+    /// The worker did not acknowledge a astro-ssd-prompt-cache clear in time.
     #[error(
-        "worker prompt-cache clear acknowledgement did not arrive within the {cache_clear_timeout_millis}-millisecond timeout"
+        "worker astro-ssd-prompt-cache clear acknowledgement did not arrive within the {astro_ssd_prompt_cache_clear_timeout_millis}-millisecond timeout"
     )]
-    PromptCacheClearTimeout { cache_clear_timeout_millis: u128 },
+    AstroSsdPromptCacheClearTimeout {
+        astro_ssd_prompt_cache_clear_timeout_millis: u128,
+    },
 
     /// The daemon no longer owns a worker process to operate on.
     #[error("daemon does not currently own an active worker process")]

@@ -59,7 +59,7 @@ async fn should_expose_ready_model_id_and_serving_session_in_status_when_ready_a
         "idle status should not carry a progress object"
     );
     assert!(status_document["serving_session"].is_object());
-    assert!(status_document["persistent_prompt_cache"].is_object());
+    assert!(status_document["astro_ssd_prompt_cache"].is_object());
     assert!(
         status_document.get("predictor").is_none(),
         "the retired predictor surface must never publish a status object (#594)"
@@ -324,7 +324,7 @@ async fn should_zero_fill_cache_stats_when_no_worker_data_so_the_ui_never_sees_m
     let response = application
         .oneshot(
             Request::builder()
-                .uri("/v1/cache/stats")
+                .uri("/v1/ssd-prompt-cache/stats")
                 .body(Body::empty())
                 .expect("the cache-stats request should be valid"),
         )
@@ -337,21 +337,18 @@ async fn should_zero_fill_cache_stats_when_no_worker_data_so_the_ui_never_sees_m
     let cache_document: serde_json::Value =
         serde_json::from_slice(&response_body).expect("the cache-stats body should contain JSON");
 
-    assert_eq!(cache_document["persistent_prompt_cache_hits"], 0);
-    assert_eq!(cache_document["persistent_prompt_cache_misses"], 0);
-    assert_eq!(cache_document["persistent_prompt_cache_tokens_saved"], 0);
-    assert_eq!(cache_document["persistent_prompt_cache_hit_rate"], 0.0);
+    assert_eq!(cache_document["astro_ssd_prompt_cache_hits"], 0);
+    assert_eq!(cache_document["astro_ssd_prompt_cache_misses"], 0);
+    assert_eq!(cache_document["astro_ssd_prompt_cache_tokens_saved"], 0);
+    assert_eq!(cache_document["astro_ssd_prompt_cache_hit_rate"], 0.0);
+    assert_eq!(cache_document["astro_ssd_prompt_cache_total_size_bytes"], 0);
     assert_eq!(
-        cache_document["persistent_prompt_cache_total_size_bytes"],
-        0
-    );
-    assert_eq!(
-        cache_document["persistent_prompt_cache_maximum_size_bytes"],
+        cache_document["astro_ssd_prompt_cache_maximum_size_bytes"],
         0
     );
     // Every field the Observatory cache panel reads must be present.
-    assert!(cache_document["persistent_prompt_cache_sequence_state_block_count"].is_u64());
-    assert!(cache_document["persistent_prompt_cache_boundary_state_snapshot_count"].is_u64());
+    assert!(cache_document["astro_ssd_prompt_cache_sequence_state_block_count"].is_u64());
+    assert!(cache_document["astro_ssd_prompt_cache_boundary_state_snapshot_count"].is_u64());
 }
 
 #[tokio::test]

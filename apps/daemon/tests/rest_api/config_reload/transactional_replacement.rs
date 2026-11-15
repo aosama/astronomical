@@ -15,7 +15,7 @@ async fn should_reject_mismatched_candidate_without_changing_effective_serving_s
         .keep();
     write_config_file(
         &config_home_directory,
-        r#"{"prompt_cache":{"maximum_size_gb":49}}"#,
+        r#"{"ssd_prompt_cache":{"maximum_size_gb":49}}"#,
     );
     let performance_log_directory = config_home_directory.join("performance");
     std::fs::create_dir_all(&performance_log_directory)

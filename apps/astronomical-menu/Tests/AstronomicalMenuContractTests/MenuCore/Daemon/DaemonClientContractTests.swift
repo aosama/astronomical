@@ -28,7 +28,7 @@ final class DaemonClientContractTests: XCTestCase {
     StubDaemonURLProtocol.responseConfiguration = .init(
       statusCode: 202,
       responseBody: Data(
-        #"{"status":"reloaded","message":"Config reloaded and applied by the worker","worker_restart_completed":true,"candidate_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","effective_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","worker_runtime_feature_configuration":{"configuration_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","persistent_prompt_cache_enabled":true,"prompt_cache_maximum_size_bytes":50000000000,"loaded_model":null}}"#.utf8)
+        #"{"status":"reloaded","message":"Config reloaded and applied by the worker","worker_restart_completed":true,"candidate_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","effective_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","worker_runtime_feature_configuration":{"configuration_generation":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","astro_ssd_prompt_cache_enabled":true,"astro_ssd_prompt_cache_maximum_size_bytes":50000000000,"loaded_model":null}}"#.utf8)
     )
     defer { StubDaemonURLProtocol.responseConfiguration = nil }
 
@@ -56,8 +56,8 @@ final class DaemonClientContractTests: XCTestCase {
         "effective_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "worker_runtime_feature_configuration": {
           "configuration_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "persistent_prompt_cache_enabled": true,
-          "prompt_cache_maximum_size_bytes": 50000000000,
+          "astro_ssd_prompt_cache_enabled": true,
+          "astro_ssd_prompt_cache_maximum_size_bytes": 50000000000,
           "loaded_model": {
             "kind": "autoregressive",
             "configuration": {
@@ -70,8 +70,8 @@ final class DaemonClientContractTests: XCTestCase {
                 "full_attention_key_value_growth_tokens": 256,
                 "prefill_graph_submission_layer_interval": 0,
                 "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
-                "prompt_cache_block_tokens": 128,
-                "prompt_cache_common_prefix_stride_blocks": 4,
+                "ssd_prompt_cache_block_tokens": 128,
+                "ssd_prompt_cache_common_prefix_stride_blocks": 4,
                 "experimental_decode_stage_attribution_enabled": false,
                 "experimental_prefill_stage_attribution_enabled": false,
                 "experimental_in_memory_prefix_adoption_enabled": false,
@@ -100,9 +100,9 @@ final class DaemonClientContractTests: XCTestCase {
         "full_attention_key_value_growth_tokens": 256,
         "prefill_graph_submission_layer_interval": 0,
         "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
-        "prompt_cache_block_tokens": 128,
+        "ssd_prompt_cache_block_tokens": 128,
         "speculative_decoding_block_length": 4,
-        "prompt_cache_common_prefix_stride_blocks": 4,
+        "ssd_prompt_cache_common_prefix_stride_blocks": 4,
         "experimental_decode_stage_attribution_enabled": false,
         "experimental_prefill_stage_attribution_enabled": false,
         "experimental_in_memory_prefix_adoption_enabled": false,
@@ -116,8 +116,8 @@ final class DaemonClientContractTests: XCTestCase {
         "full_attention_key_value_growth_tokens": 256,
         "prefill_graph_submission_layer_interval": 0,
         "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
-        "prompt_cache_block_tokens": 128,
-        "prompt_cache_common_prefix_stride_blocks": 4,
+        "ssd_prompt_cache_block_tokens": 128,
+        "ssd_prompt_cache_common_prefix_stride_blocks": 4,
         "experimental_decode_stage_attribution_enabled": false,
         "experimental_prefill_stage_attribution_enabled": false,
         "experimental_in_memory_prefix_adoption_enabled": false,
@@ -144,8 +144,8 @@ final class DaemonClientContractTests: XCTestCase {
         "full_attention_key_value_growth_tokens": 256,
         "prefill_graph_submission_layer_interval": 0,
         "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
-        "prompt_cache_block_tokens": 128,
-        "prompt_cache_common_prefix_stride_blocks": 4,
+        "ssd_prompt_cache_block_tokens": 128,
+        "ssd_prompt_cache_common_prefix_stride_blocks": 4,
         "experimental_decode_stage_attribution_enabled": false,
         "experimental_prefill_stage_attribution_enabled": false,
         "experimental_in_memory_prefix_adoption_enabled": false,

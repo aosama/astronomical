@@ -7,7 +7,7 @@
 
 use mlx_bridge::MlxArray;
 
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeights;
 use crate::qwen3_5_core::model_math::error::{
     Qwen3_5ExecutionError, invalid_request_decoder_state,
@@ -37,7 +37,7 @@ impl Qwen3_5ModelBase {
         layer_model_state: &mut DecoderCacheState,
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5DecoderLayerAttentionOutput, Qwen3_5ExecutionError> {

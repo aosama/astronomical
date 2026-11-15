@@ -147,7 +147,7 @@ impl Qwen3_5ArtifactValidator {
 
 /// The validated core configuration triple every artifact carries: the parsed
 /// text configuration, the optional vision configuration, and the
-/// revision hash derived from the exact config bytes (so prompt-cache blocks
+/// revision hash derived from the exact config bytes (so astro-ssd-prompt-cache blocks
 /// invalidate when the config changes).
 struct ParsedArtifactConfig {
     config: Qwen3_5Config,

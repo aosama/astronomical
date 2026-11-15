@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
-    InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
-    PerformanceOperation, PersistentPromptCacheDiskStore, PersistentPromptCacheDiskStoreConfig,
-    PersistentPromptCacheModelContract, PersistentVisualEmbeddingModelContract,
+    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
+    AstroSsdPromptCacheModelContract, InferenceEngineError, PerformanceAttribution,
+    PerformanceAttributionOutcome, PerformanceOperation, PersistentVisualEmbeddingModelContract,
 };
 
-use super::persistent_prompt_cache_startup_logging;
+use super::astro_ssd_prompt_cache_startup_logging;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
@@ -124,9 +124,9 @@ impl Qwen3_5EngineState {
                     &resolved_model_id,
                     &resolved_model_revision,
                 );
-            let (persistent_prompt_cache_model_contract, persistent_prompt_cache) =
-                open_resident_persistent_prompt_cache(
-                    self.persistent_prompt_cache_disk_store_config.clone(),
+            let (astro_ssd_prompt_cache_model_contract, astro_ssd_prompt_cache) =
+                open_resident_astro_ssd_prompt_cache(
+                    self.astro_ssd_prompt_cache_disk_store_config.clone(),
                     &model,
                     &self.chunking,
                     &resolved_model_id,
@@ -158,23 +158,23 @@ impl Qwen3_5EngineState {
             tracing::debug!("resident engine decode path: classic (DFlash disabled by design)");
             Ok((
                 model,
-                persistent_prompt_cache_model_contract,
+                astro_ssd_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
-                persistent_prompt_cache,
+                astro_ssd_prompt_cache,
             ))
         })();
 
         match model_loading_result {
             Ok((
                 model,
-                persistent_prompt_cache_model_contract,
+                astro_ssd_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
-                persistent_prompt_cache,
+                astro_ssd_prompt_cache,
             )) => self.install_loaded_resident_model(
                 model,
-                persistent_prompt_cache_model_contract,
+                astro_ssd_prompt_cache_model_contract,
                 persistent_visual_embedding_model_contract,
-                persistent_prompt_cache,
+                astro_ssd_prompt_cache,
                 model_loading_performance_attribution,
                 model_id,
                 model_revision,
@@ -204,9 +204,9 @@ impl Qwen3_5EngineState {
     fn install_loaded_resident_model(
         &mut self,
         model: Qwen3_5ResidentModel,
-        persistent_prompt_cache_model_contract: Option<PersistentPromptCacheModelContract>,
+        astro_ssd_prompt_cache_model_contract: Option<AstroSsdPromptCacheModelContract>,
         persistent_visual_embedding_model_contract: Option<PersistentVisualEmbeddingModelContract>,
-        persistent_prompt_cache: Option<Arc<PersistentPromptCacheDiskStore>>,
+        astro_ssd_prompt_cache: Option<Arc<AstroSsdPromptCacheDiskStore>>,
         model_loading_performance_attribution: PerformanceAttribution,
         model_id: Option<String>,
         model_revision: Option<String>,
@@ -215,10 +215,10 @@ impl Qwen3_5EngineState {
     ) -> Result<EngineLoadResult, InferenceEngineError> {
         self.model_id = model_id.clone();
         self.model_revision = model_revision.clone();
-        self.persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract;
+        self.astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract;
         self.persistent_visual_embedding_model_contract =
             persistent_visual_embedding_model_contract;
-        self.persistent_prompt_cache = persistent_prompt_cache;
+        self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
         let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
         let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
         let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;
@@ -368,29 +368,29 @@ fn resolve_visual_embedding_model_contract(
     })
 }
 
-/// Resolves the persistent prompt-cache model-state storage contract from
+/// Resolves the persistent astro-ssd-prompt-cache model-state storage contract from
 /// the model's decoder cache layout, position budget, active memory limit,
 /// and the request's chunking overrides.
-fn resolve_persistent_prompt_cache_model_contract(
-    persistent_prompt_cache_disk_store_config: &PersistentPromptCacheDiskStoreConfig,
+fn resolve_astro_ssd_prompt_cache_model_contract(
+    astro_ssd_prompt_cache_disk_store_config: &AstroSsdPromptCacheDiskStoreConfig,
     model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
     resolved_model_id: &str,
     resolved_model_revision: &str,
-) -> Result<PersistentPromptCacheModelContract, InferenceEngineError> {
-    let global_prompt_cache_maximum_size_bytes =
-        persistent_prompt_cache_disk_store_config.global_prompt_cache_maximum_size_bytes();
-    PersistentPromptCacheModelContract::resolve(
+) -> Result<AstroSsdPromptCacheModelContract, InferenceEngineError> {
+    let global_astro_ssd_prompt_cache_maximum_size_bytes =
+        astro_ssd_prompt_cache_disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes();
+    AstroSsdPromptCacheModelContract::resolve(
         resolved_model_id.to_owned(),
         resolved_model_revision.to_owned(),
         model.decoder_cache_layout().clone(),
         model.config().maximum_position_count() as usize,
         model.runtime().memory_limits().active_memory_limit_bytes() as u64,
-        global_prompt_cache_maximum_size_bytes,
+        global_astro_ssd_prompt_cache_maximum_size_bytes,
         chunking
-            .prompt_cache_block_tokens
+            .ssd_prompt_cache_block_tokens
             .map(|block_token_count| block_token_count as usize),
-        chunking.prompt_cache_common_prefix_stride_blocks,
+        chunking.ssd_prompt_cache_common_prefix_stride_blocks,
     )
     .map_err(|model_contract_error| {
         fatal_engine_error(format!(
@@ -404,8 +404,8 @@ fn resolve_persistent_prompt_cache_model_contract(
 /// loading because of storage alignment, quota, stale files, or filesystem
 /// availability (contract derivation is intentionally inside the same branch
 /// as store ownership).
-fn open_resident_persistent_prompt_cache(
-    persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+fn open_resident_astro_ssd_prompt_cache(
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
     resolved_model_id: &str,
@@ -414,80 +414,80 @@ fn open_resident_persistent_prompt_cache(
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<
     (
-        Option<PersistentPromptCacheModelContract>,
-        Option<Arc<PersistentPromptCacheDiskStore>>,
+        Option<AstroSsdPromptCacheModelContract>,
+        Option<Arc<AstroSsdPromptCacheDiskStore>>,
     ),
     InferenceEngineError,
 > {
-    let Some(persistent_prompt_cache_disk_store_config) = persistent_prompt_cache_disk_store_config
+    let Some(astro_ssd_prompt_cache_disk_store_config) = astro_ssd_prompt_cache_disk_store_config
     else {
         return Ok((None, None));
     };
-    let persistent_prompt_cache_model_contract = resolve_persistent_prompt_cache_model_contract(
-        &persistent_prompt_cache_disk_store_config,
+    let astro_ssd_prompt_cache_model_contract = resolve_astro_ssd_prompt_cache_model_contract(
+        &astro_ssd_prompt_cache_disk_store_config,
         model,
         chunking,
         resolved_model_id,
         resolved_model_revision,
     )?;
-    let persistent_prompt_cache = open_and_scan_persistent_prompt_cache_store(
-        persistent_prompt_cache_disk_store_config,
-        persistent_prompt_cache_model_contract.clone(),
+    let astro_ssd_prompt_cache = open_and_scan_astro_ssd_prompt_cache_store(
+        astro_ssd_prompt_cache_disk_store_config,
+        astro_ssd_prompt_cache_model_contract.clone(),
         persistent_visual_embedding_model_contract,
         model_loading_performance_attribution,
     )
     .map_err(fatal_engine_error_for_string_failure)?;
     Ok((
-        Some(persistent_prompt_cache_model_contract),
-        Some(persistent_prompt_cache),
+        Some(astro_ssd_prompt_cache_model_contract),
+        Some(astro_ssd_prompt_cache),
     ))
 }
 
-/// Opens the persistent prompt-cache disk store under attribution, scans the
+/// Opens the persistent astro-ssd-prompt-cache disk store under attribution, scans the
 /// required visual prompt-state entries, logs the startup cleanup and cache
 /// inventory, and hands back the shared store.
-fn open_and_scan_persistent_prompt_cache_store(
-    persistent_prompt_cache_disk_store_config: PersistentPromptCacheDiskStoreConfig,
-    model_contract: PersistentPromptCacheModelContract,
+fn open_and_scan_astro_ssd_prompt_cache_store(
+    astro_ssd_prompt_cache_disk_store_config: AstroSsdPromptCacheDiskStoreConfig,
+    model_contract: AstroSsdPromptCacheModelContract,
     persistent_visual_embedding_model_contract: Option<&PersistentVisualEmbeddingModelContract>,
     model_loading_performance_attribution: &mut PerformanceAttribution,
-) -> Result<Arc<PersistentPromptCacheDiskStore>, String> {
-    let global_prompt_cache_maximum_size_bytes =
-        persistent_prompt_cache_disk_store_config.global_prompt_cache_maximum_size_bytes();
-    let persistent_prompt_cache = model_loading_performance_attribution
+) -> Result<Arc<AstroSsdPromptCacheDiskStore>, String> {
+    let global_astro_ssd_prompt_cache_maximum_size_bytes =
+        astro_ssd_prompt_cache_disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes();
+    let astro_ssd_prompt_cache = model_loading_performance_attribution
         .measure_operation(
-            PerformanceOperation::PersistentPromptCacheOpenAndScan,
+            PerformanceOperation::AstroSsdPromptCacheOpenAndScan,
             |_performance_attribution| {
-                PersistentPromptCacheDiskStore::open(
-                    persistent_prompt_cache_disk_store_config,
+                AstroSsdPromptCacheDiskStore::open(
+                    astro_ssd_prompt_cache_disk_store_config,
                     model_contract.clone(),
                 )
             },
         )
-        .map_err(|persistent_prompt_cache_error| {
-            format!("required target prompt-state storage initialization failed: {persistent_prompt_cache_error}")
+        .map_err(|astro_ssd_prompt_cache_error| {
+            format!("required target prompt-state storage initialization failed: {astro_ssd_prompt_cache_error}")
         })?;
     if let Some(persistent_visual_embedding_model_contract) =
         persistent_visual_embedding_model_contract
-        && let Err(visual_embedding_scan_error) = persistent_prompt_cache
+        && let Err(visual_embedding_scan_error) = astro_ssd_prompt_cache
             .scan_visual_embeddings(persistent_visual_embedding_model_contract)
     {
         return Err(format!(
             "required visual prompt-state storage scan failed: {visual_embedding_scan_error}"
         ));
     }
-    persistent_prompt_cache_startup_logging::log_persistent_prompt_cache_startup_cleanup(
+    astro_ssd_prompt_cache_startup_logging::log_astro_ssd_prompt_cache_startup_cleanup(
         "target",
-        &persistent_prompt_cache,
+        &astro_ssd_prompt_cache,
     );
     tracing::info!(
-        sequence_state_block_count = persistent_prompt_cache.sequence_state_block_count(),
-        boundary_state_snapshot_count = persistent_prompt_cache.boundary_state_snapshot_count(),
-        total_size_bytes = persistent_prompt_cache.total_size_bytes(),
-        maximum_size_bytes = global_prompt_cache_maximum_size_bytes,
+        sequence_state_block_count = astro_ssd_prompt_cache.sequence_state_block_count(),
+        boundary_state_snapshot_count = astro_ssd_prompt_cache.boundary_state_snapshot_count(),
+        total_size_bytes = astro_ssd_prompt_cache.total_size_bytes(),
+        maximum_size_bytes = global_astro_ssd_prompt_cache_maximum_size_bytes,
         "opened Qwen3.5 persistent prompt cache"
     );
-    Ok(Arc::new(persistent_prompt_cache))
+    Ok(Arc::new(astro_ssd_prompt_cache))
 }
 
 /// Loads the resident expert weights when the model plans expert layers;

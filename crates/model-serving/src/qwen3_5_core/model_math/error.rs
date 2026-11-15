@@ -62,11 +62,11 @@ pub enum Qwen3_5ExecutionError {
     ExpertSourceFailure { description: String },
     #[error("validated expert layer plan construction failed: {description}")]
     ExpertLayerPlan { description: String },
-    #[error("persistent prompt-cache disk-store error: {0}")]
-    PersistentPromptCache(#[from] crate::PersistentPromptCacheDiskStoreError),
-    #[error("persistent prompt-cache state bridge error: {0}")]
-    PersistentPromptCacheStateBridge(
-        #[from] crate::qwen3_5_core::decoder::PersistentPromptCacheStateBridgeError,
+    #[error("persistent astro-ssd-prompt-cache disk-store error: {0}")]
+    AstroSsdPromptCache(#[from] crate::AstroSsdPromptCacheDiskStoreError),
+    #[error("persistent astro-ssd-prompt-cache state bridge error: {0}")]
+    AstroSsdPromptCacheStateBridge(
+        #[from] crate::qwen3_5_core::decoder::AstroSsdPromptCacheStateBridgeError,
     ),
     #[error("Qwen3.5 sampled decoding error: {0}")]
     SampledDecoding(#[from] crate::InferenceEngineError),

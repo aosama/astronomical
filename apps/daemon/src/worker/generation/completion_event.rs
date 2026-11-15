@@ -9,7 +9,7 @@
 use std::sync::{Arc, RwLock};
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, RequestId, WorkerPersistentPromptCacheRequestDiagnostics,
+    ChatGenerationCompletionReason, RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics,
 };
 
 use crate::{
@@ -63,7 +63,7 @@ pub(in crate::worker) fn handle_worker_completion_event(
     generated_token_count: u16,
     reasoning_token_count: u16,
     cached_token_count: u32,
-    persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
     reason: ChatGenerationCompletionReason,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     active_worker_request: &mut Option<ActiveWorkerRequest>,
@@ -103,7 +103,7 @@ pub(in crate::worker) fn handle_worker_completion_event(
     };
     record_completion(
         &completion_observation,
-        persistent_prompt_cache_diagnostics,
+        astro_ssd_prompt_cache_diagnostics,
         performance_log,
         completion_log,
     );
@@ -221,7 +221,7 @@ pub(super) fn should_record_completion_performance(chat_work: ChatWork) -> bool 
 /// own trace line.
 fn record_completion(
     completion_observation: &CompletionObservation<'_>,
-    persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
     performance_log: &mut GenerationPerformanceLog,
     completion_log: &mut CompletionAttributionLog,
 ) {
@@ -241,7 +241,7 @@ fn record_completion(
     log_completed_generation(completion_observation);
     record_completion_performance_and_attribution(
         completion_observation,
-        persistent_prompt_cache_diagnostics,
+        astro_ssd_prompt_cache_diagnostics,
         performance_log,
         completion_log,
     );
@@ -276,7 +276,7 @@ fn log_completed_generation(completion_observation: &CompletionObservation<'_>) 
 /// operator enabled the toggle, to the completion attribution log.
 fn record_completion_performance_and_attribution(
     completion_observation: &CompletionObservation<'_>,
-    persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
     performance_log: &mut GenerationPerformanceLog,
     completion_log: &mut CompletionAttributionLog,
 ) {
@@ -336,7 +336,7 @@ fn record_completion_performance_and_attribution(
         mlx_active_memory_bytes: completion_observation
             .completed_request
             .last_mlx_active_memory_bytes,
-        persistent_prompt_cache_diagnostics,
+        astro_ssd_prompt_cache_diagnostics,
     });
     // Attribute what the model emitted — function names and the arguments JSON —
     // so argument pollution and foreign-dialect regressions are diagnosable

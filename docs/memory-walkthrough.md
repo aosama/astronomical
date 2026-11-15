@@ -32,7 +32,7 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
    - The governor is told. It records the MLX working buffers, compares its accounts with what MLX reports, and answers with the capacity. The page that was read is kept by the cache if there is capacity for it, and dropped otherwise.
    - The engine reports "N of M layers done" to the status page.
 9. **If a span cannot fit**, MLX reports it at the next wait. The layer is put back to its oldest unconfirmed span. The governor leases as much room again as the step was given, or the shortfall MLX reported if that is more, and the cache gives back only what the lease displaces. The span runs again. After four attempts the request ends with MLX's error.
-10. After the last layer the prompt's tokens count as read, the prompt-cache blocks are published under a lease for their workspace, and the request moves on.
+10. After the last layer the prompt's tokens count as read, the astro-ssd-prompt-cache blocks are published under a lease for their workspace, and the request moves on.
 
 ## Writing the reply
 

@@ -13,7 +13,7 @@ use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_resident::Qwen3_5ResidentExpertWeights;
 use crate::{DecoderCacheState, ExpertWeightMemoryCacheStatistics, PerformanceAttribution};
 
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 /// The resident engine's model: shared base plus complete expert arrays.
 #[derive(Debug)]
@@ -368,7 +368,7 @@ impl Qwen3_5ResidentModel {
         layer_model_state: &mut DecoderCacheState,
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {

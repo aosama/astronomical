@@ -108,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     generated_token_count: 0,
                     reasoning_token_count: 0,
                     cached_token_count: 0,
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     reason: ChatGenerationCompletionReason::EndOfSequence,
                 })
                 .await?;
@@ -117,10 +117,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 .send_event(&WorkerEvent::RuntimeFeatureConfigurationApplied {
                     worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
                         configuration_generation: MATCHING_FLUX_GENERATION.to_owned(),
-                        persistent_prompt_cache_enabled: startup_configuration
-                            .persistent_prompt_cache_enabled,
-                        prompt_cache_maximum_size_bytes: startup_configuration
-                            .global_prompt_cache_maximum_size_bytes,
+                        astro_ssd_prompt_cache_enabled: startup_configuration
+                            .astro_ssd_prompt_cache_enabled,
+                        astro_ssd_prompt_cache_maximum_size_bytes: startup_configuration
+                            .global_astro_ssd_prompt_cache_maximum_size_bytes,
                         loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Flux2Klein(
                             WorkerFlux2KleinModelConfiguration {
                                 model_id: FLUX_MODEL_ID.to_owned(),
@@ -168,10 +168,10 @@ where
                 // This fixture proves replacement acknowledgement is identity-bound rather
                 // than inferred from process readiness or otherwise matching policy fields.
                 configuration_generation: acknowledged_generation.to_owned(),
-                persistent_prompt_cache_enabled: startup_configuration
-                    .persistent_prompt_cache_enabled,
-                prompt_cache_maximum_size_bytes: startup_configuration
-                    .global_prompt_cache_maximum_size_bytes,
+                astro_ssd_prompt_cache_enabled: startup_configuration
+                    .astro_ssd_prompt_cache_enabled,
+                astro_ssd_prompt_cache_maximum_size_bytes: startup_configuration
+                    .global_astro_ssd_prompt_cache_maximum_size_bytes,
                 loaded_model: None,
             },
         })

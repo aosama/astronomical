@@ -4,9 +4,8 @@
 //! within the repository's source-size limit.
 
 use astronomical_ipc_protocol::{
-    MlxMemorySnapshotSource, ProtocolWriter, WorkerEvent,
-    WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptProcessingPhase,
-    WorkerPromptWorkReuse,
+    MlxMemorySnapshotSource, ProtocolWriter, WorkerAstroSsdPromptCacheRequestDiagnostics,
+    WorkerEvent, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 use tokio::io::AsyncWrite;
 
@@ -66,7 +65,7 @@ where
         >,
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
-        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+        astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
         neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
         prompt_layer_progress: Option<astronomical_ipc_protocol::WorkerPromptLayerProgress>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -85,9 +84,9 @@ where
                 u32::try_from(required_target_prompt_processing_token_count).unwrap_or(u32::MAX);
         }
         active_generation.prompt_work_reuse = prompt_work_reuse;
-        if persistent_prompt_cache_diagnostics.is_some() {
-            active_generation.persistent_prompt_cache_diagnostics =
-                persistent_prompt_cache_diagnostics;
+        if astro_ssd_prompt_cache_diagnostics.is_some() {
+            active_generation.astro_ssd_prompt_cache_diagnostics =
+                astro_ssd_prompt_cache_diagnostics;
         }
         emit_expert_memory_mode_if_changed(
             &mut active_generation,

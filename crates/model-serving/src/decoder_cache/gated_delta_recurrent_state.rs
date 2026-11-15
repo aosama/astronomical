@@ -96,7 +96,7 @@ impl GatedDeltaRecurrentState {
     }
 
     /// Read-only access to the current recurrent state. Used by the SSD
-    /// prompt-cache bridge to snapshot recurrent state for persistence.
+    /// astro-ssd-prompt-cache bridge to snapshot recurrent state for persistence.
     #[must_use]
     pub fn state(&self) -> Option<&MlxArray> {
         self.state.as_ref()
@@ -122,7 +122,7 @@ impl GatedDeltaRecurrentState {
         self.state = checkpoint.state;
     }
 
-    /// Replaces the recurrent state from a restored SSD prompt-cache snapshot.
+    /// Replaces the recurrent state from a restored SSD astro-ssd-prompt-cache snapshot.
     /// Called by the SSD bridge after it has loaded the snapshot tensor.
     pub fn restore_from_snapshot(&mut self, restored_state: MlxArray) {
         self.state = Some(restored_state);

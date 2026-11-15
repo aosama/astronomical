@@ -74,7 +74,7 @@ pub enum AstronomicalConfigError {
         expected_bind_address: SocketAddr,
     },
     #[error("invalid prompt cache max_size_gb: {description}")]
-    InvalidPromptCacheMaxSizeGb { description: &'static str },
+    InvalidAstroSsdPromptCacheMaxSizeGb { description: &'static str },
     #[error("invalid maximum_mlx_memory_gb: {description}")]
     InvalidMaximumMlxMemoryGb { description: &'static str },
     #[error("invalid default_model: {description}")]

@@ -100,8 +100,8 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
     )
     .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
         configuration_generation: "generation-before-memory-update".to_owned(),
-        persistent_prompt_cache_enabled: false,
-        prompt_cache_maximum_size_bytes: 0,
+        astro_ssd_prompt_cache_enabled: false,
+        astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
     let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
@@ -199,8 +199,8 @@ async fn should_apply_live_memory_updates_to_the_idle_worker_up_to_the_machine_b
     )
     .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
         configuration_generation: "generation-before-live-clamp".to_owned(),
-        persistent_prompt_cache_enabled: false,
-        prompt_cache_maximum_size_bytes: 0,
+        astro_ssd_prompt_cache_enabled: false,
+        astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
     let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
@@ -368,8 +368,8 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
     )
     .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
         configuration_generation: "startup-generation".to_owned(),
-        persistent_prompt_cache_enabled: false,
-        prompt_cache_maximum_size_bytes: 0,
+        astro_ssd_prompt_cache_enabled: false,
+        astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
     let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
@@ -471,8 +471,8 @@ async fn should_report_restart_required_without_building_a_replacement_runtime()
     )
     .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
         configuration_generation: "generation-before-demotion".to_owned(),
-        persistent_prompt_cache_enabled: false,
-        prompt_cache_maximum_size_bytes: 0,
+        astro_ssd_prompt_cache_enabled: false,
+        astro_ssd_prompt_cache_maximum_size_bytes: 0,
         loaded_model: None,
     });
     let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);

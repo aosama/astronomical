@@ -174,7 +174,7 @@ fn write_speculative_acceptance_config(
         // The cache stays enabled to match the control journey's working
         // attribution path; admitted speculative sessions bypass it in both
         // directions regardless (decided at session admission).
-        "prompt_cache": {"enabled": true},
+        "ssd_prompt_cache": {"enabled": true},
         "diagnostics": {"performance_attribution_enabled": true},
         "chunking": {
             "speculative_decoding_block_length_tokens": SPECULATIVE_BLOCK_LENGTH_TOKENS,

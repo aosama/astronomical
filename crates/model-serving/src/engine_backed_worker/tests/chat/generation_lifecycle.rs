@@ -68,7 +68,7 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
     assert_eq!(
         next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
             request_id: RequestId::new(711),
             prompt_token_count: 1,
             generated_token_count: 2,
@@ -91,7 +91,7 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
     assert_eq!(
         next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
             request_id: RequestId::new(712),
             prompt_token_count: 1,
             generated_token_count: 0,
@@ -225,7 +225,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
     assert_eq!(
         next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
             request_id: RequestId::new(713),
             prompt_token_count: 1,
             generated_token_count: 3,
@@ -399,7 +399,7 @@ async fn should_report_engine_cached_token_count_in_completion() {
     assert_eq!(
         next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
             request_id: RequestId::new(741),
             prompt_token_count: 1,
             generated_token_count: 2,

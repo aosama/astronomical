@@ -40,7 +40,7 @@ async fn should_complete_a_copilot_stream_with_visible_reasoning_and_supported_t
             ],
             "parallel_tool_calls":true,
             "reasoning":{{"effort":"medium"}},
-            "prompt_cache_key":"copilot-session",
+            "astro_ssd_prompt_cache_key":"copilot-session",
             "max_output_tokens":20480,
             "store":false,
             "stream":true,

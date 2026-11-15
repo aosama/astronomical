@@ -127,7 +127,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     fs::remove_dir_all(&isolated_worker_home_path).ok();
     fs::create_dir_all(&isolated_worker_home_path)
         .expect("the persistent worker home should be created");
-    // Canonicalize so the prompt-cache validator sees no ../.. components.
+    // Canonicalize so the astro-ssd-prompt-cache validator sees no ../.. components.
     let isolated_worker_home_path = isolated_worker_home_path
         .canonicalize()
         .unwrap_or(isolated_worker_home_path);
@@ -185,7 +185,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     };
     let timeout_duration = SSD_JOURNEY_TIMEOUT;
     eprintln!(
-        "{LOG_MARKER} request=journey status=start timeout_seconds={} artifact_payload_bytes={artifact_payload_bytes} artifact_payload_gb={:.3} allocated_mlx_memory_bytes={allocated_mlx_memory_bytes} allocated_mlx_memory_gb={:.3} initial_prompt_tokens={initial_prompt_token_count} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} persistent_prompt_cache_enabled=true",
+        "{LOG_MARKER} request=journey status=start timeout_seconds={} artifact_payload_bytes={artifact_payload_bytes} artifact_payload_gb={:.3} allocated_mlx_memory_bytes={allocated_mlx_memory_bytes} allocated_mlx_memory_gb={:.3} initial_prompt_tokens={initial_prompt_token_count} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} astro_ssd_prompt_cache_enabled=true",
         timeout_duration.as_secs(),
         artifact_payload_bytes as f64 / 1_073_741_824.0,
         allocated_mlx_memory_bytes as f64 / 1_073_741_824.0,

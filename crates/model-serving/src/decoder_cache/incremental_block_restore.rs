@@ -1,4 +1,4 @@
-//! SSD prompt-cache block restoration for append-only KV states, one
+//! SSD astro-ssd-prompt-cache block restoration for append-only KV states, one
 //! concatenation per tensor.
 //!
 //! Every restored block slice is concatenated along the token axis exactly
@@ -16,7 +16,7 @@ use super::append_only_attention_state::{FullAttentionKeyValueState, STATE_DIMEN
 use mlx_bridge::MlxArray;
 
 const RESTORE_OPERATION: &str =
-    "restore the in-memory KV state from persistent prompt-cache blocks";
+    "restore the in-memory KV state from persistent astro-ssd-prompt-cache blocks";
 
 impl FullAttentionKeyValueState {
     /// Seats the restored K/V by concatenating every block slice along the

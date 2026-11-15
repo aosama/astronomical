@@ -1,6 +1,6 @@
 //! Integration contracts for selecting a runtime without loading model artifacts.
 
-use astronomical_config::PromptCacheConfig;
+use astronomical_config::AstroSsdPromptCacheConfig;
 use astronomical_inference_worker::model_family_factory::ModelFamilyFactory;
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
@@ -151,7 +151,10 @@ fn model_family_factory(fixture_directory: &std::path::Path) -> ModelFamilyFacto
     ModelFamilyFactory::new(
         2_000_000_000,
         200_000_000,
-        PromptCacheConfig::new(fixture_directory.join("prompt-cache"), 1_000_000_000),
+        AstroSsdPromptCacheConfig::new(
+            fixture_directory.join("astro-ssd-prompt-cache"),
+            1_000_000_000,
+        ),
         true,
         astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
         fixture_directory.join("performance-attribution.jsonl"),
@@ -185,8 +188,8 @@ fn autoregressive_configuration() -> WorkerModelConfiguration {
             full_attention_key_value_growth_tokens: 256,
             prefill_graph_submission_layer_interval: 0,
             experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-            prompt_cache_block_tokens: None,
-            prompt_cache_common_prefix_stride_blocks: 4,
+            ssd_prompt_cache_block_tokens: None,
+            ssd_prompt_cache_common_prefix_stride_blocks: 4,
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: false,

@@ -1,4 +1,4 @@
-//! Pure planning for image-aware prompt-cache restore and visual row suffixes.
+//! Pure planning for image-aware astro-ssd-prompt-cache restore and visual row suffixes.
 
 use thiserror::Error;
 
@@ -56,7 +56,7 @@ impl Qwen3_5VisualEmbeddingRequiredImage {
     }
 }
 
-/// Visual rows required after an optional prompt-cache restore.
+/// Visual rows required after an optional astro-ssd-prompt-cache restore.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Qwen3_5VisualEmbeddingSuffixPlan {
     restored_visual_embedding_row_count: usize,

@@ -460,22 +460,22 @@ async fn should_round_trip_first_decode_completion_event() {
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn should_round_trip_one_persistent_prompt_cache_stats_event() {
-    let worker_event = WorkerEvent::PersistentPromptCacheStats {
-        persistent_prompt_cache_hits: 12,
-        persistent_prompt_cache_misses: 3,
-        persistent_prompt_cache_tokens_saved: 95_000,
-        persistent_prompt_cache_partial_tail_hits: 7,
-        persistent_prompt_cache_block_token_count: 2_048,
-        persistent_prompt_cache_sequence_state_block_count: 87,
-        persistent_prompt_cache_boundary_state_snapshot_count: 1,
-        persistent_prompt_cache_visual_embedding_count: 5,
-        persistent_prompt_cache_total_size_bytes: 1_073_741_824,
-        persistent_prompt_cache_visual_embedding_total_size_bytes: 222_222,
-        persistent_prompt_cache_maximum_size_bytes: 123_456_789,
-        persistent_prompt_cache_visual_embedding_hits: 4,
-        persistent_prompt_cache_visual_embedding_misses: 2,
-        persistent_prompt_cache_visual_embedding_rows_loaded: 256,
+async fn should_round_trip_one_astro_ssd_prompt_cache_stats_event() {
+    let worker_event = WorkerEvent::AstroSsdPromptCacheStats {
+        astro_ssd_prompt_cache_hits: 12,
+        astro_ssd_prompt_cache_misses: 3,
+        astro_ssd_prompt_cache_tokens_saved: 95_000,
+        astro_ssd_prompt_cache_partial_tail_hits: 7,
+        astro_ssd_prompt_cache_block_token_count: 2_048,
+        astro_ssd_prompt_cache_sequence_state_block_count: 87,
+        astro_ssd_prompt_cache_boundary_state_snapshot_count: 1,
+        astro_ssd_prompt_cache_visual_embedding_count: 5,
+        astro_ssd_prompt_cache_total_size_bytes: 1_073_741_824,
+        astro_ssd_prompt_cache_visual_embedding_total_size_bytes: 222_222,
+        astro_ssd_prompt_cache_maximum_size_bytes: 123_456_789,
+        astro_ssd_prompt_cache_visual_embedding_hits: 4,
+        astro_ssd_prompt_cache_visual_embedding_misses: 2,
+        astro_ssd_prompt_cache_visual_embedding_rows_loaded: 256,
     };
 
     let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
@@ -485,18 +485,18 @@ async fn should_round_trip_one_persistent_prompt_cache_stats_event() {
     worker_writer
         .send_event(&worker_event)
         .await
-        .expect("a persistent prompt-cache stats event should be written");
+        .expect("a persistent astro-ssd-prompt-cache stats event should be written");
 
     assert_eq!(
         daemon_reader
             .next_event()
             .await
-            .expect("the persistent prompt-cache stats event frame should decode"),
+            .expect("the persistent astro-ssd-prompt-cache stats event frame should decode"),
         Some(worker_event)
     );
 }
 
-mod prompt_cache_clear_protocol {
+mod astro_ssd_prompt_cache_clear_protocol {
     use std::time::Duration;
 
     use crate::{ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent};
@@ -506,18 +506,18 @@ mod prompt_cache_clear_protocol {
     const TEST_TRANSPORT_CAPACITY_BYTES: usize = 16 * 1024;
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn should_round_trip_global_clear_prompt_cache_command() {
+    async fn should_round_trip_global_clear_astro_ssd_prompt_cache_command() {
         run_bounded_test(async {
-            let worker_command = WorkerCommand::ClearPromptCache { model_id: None };
+            let worker_command = WorkerCommand::ClearAstroSsdPromptCache { model_id: None };
             assert_command_round_trip(worker_command).await;
         })
         .await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn should_round_trip_scoped_clear_prompt_cache_command() {
+    async fn should_round_trip_scoped_clear_astro_ssd_prompt_cache_command() {
         run_bounded_test(async {
-            let worker_command = WorkerCommand::ClearPromptCache {
+            let worker_command = WorkerCommand::ClearAstroSsdPromptCache {
                 model_id: Some("astronomical/requested-model".to_owned()),
             };
             assert_command_round_trip(worker_command).await;
@@ -526,9 +526,9 @@ mod prompt_cache_clear_protocol {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn should_round_trip_prompt_cache_cleared_event() {
+    async fn should_round_trip_astro_ssd_prompt_cache_cleared_event() {
         run_bounded_test(async {
-            let worker_event = WorkerEvent::PromptCacheCleared {
+            let worker_event = WorkerEvent::AstroSsdPromptCacheCleared {
                 model_id: Some("astronomical/requested-model".to_owned()),
                 blocks_removed: 1_247,
                 bytes_freed: 8_589_934_592,
@@ -540,12 +540,12 @@ mod prompt_cache_clear_protocol {
             worker_writer
                 .send_event(&worker_event)
                 .await
-                .expect("prompt-cache cleared event should be written");
+                .expect("astro-ssd-prompt-cache cleared event should be written");
             assert_eq!(
                 daemon_reader
                     .next_event()
                     .await
-                    .expect("prompt-cache cleared event should decode"),
+                    .expect("astro-ssd-prompt-cache cleared event should decode"),
                 Some(worker_event)
             );
         })
@@ -560,12 +560,12 @@ mod prompt_cache_clear_protocol {
         daemon_writer
             .send_command(&worker_command)
             .await
-            .expect("prompt-cache clear command should be written");
+            .expect("astro-ssd-prompt-cache clear command should be written");
         assert_eq!(
             worker_reader
                 .next_command()
                 .await
-                .expect("prompt-cache clear command should decode"),
+                .expect("astro-ssd-prompt-cache clear command should decode"),
             Some(worker_command)
         );
     }
@@ -573,7 +573,7 @@ mod prompt_cache_clear_protocol {
     async fn run_bounded_test(test_journey: impl std::future::Future<Output = ()>) {
         tokio::time::timeout(TEST_TIMEOUT, test_journey)
             .await
-            .expect("prompt-cache protocol test should finish within five seconds");
+            .expect("astro-ssd-prompt-cache protocol test should finish within five seconds");
     }
 }
 

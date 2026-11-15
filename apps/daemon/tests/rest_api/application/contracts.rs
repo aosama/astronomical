@@ -364,13 +364,10 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         status_document["serving_session"]["average_generation_tok_per_second"],
         0.0
     );
-    assert_eq!(status_document["persistent_prompt_cache"]["hits"], 0);
-    assert_eq!(status_document["persistent_prompt_cache"]["misses"], 0);
-    assert_eq!(
-        status_document["persistent_prompt_cache"]["tokens_saved"],
-        0
-    );
-    assert_eq!(status_document["persistent_prompt_cache"]["hit_rate"], 0.0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["hits"], 0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["misses"], 0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["tokens_saved"], 0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["hit_rate"], 0.0);
 }
 
 #[tokio::test]

@@ -3,7 +3,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::time::SystemTime;
 
-use astronomical_ipc_protocol::WorkerPersistentPromptCacheRequestDiagnostics;
+use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 use serde::Serialize;
 
 /// One row in the generation performance log.
@@ -69,7 +69,7 @@ pub struct GenerationPerformanceRecord {
     /// The worker computes this evidence while it owns MLX and disk-cache state;
     /// the daemon transports it unchanged into the completion record so log
     /// readers can distinguish a true cache miss from publication memory pressure.
-    pub persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    pub astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
 }
 
 /// One finalized image request's end-to-end performance attribution.

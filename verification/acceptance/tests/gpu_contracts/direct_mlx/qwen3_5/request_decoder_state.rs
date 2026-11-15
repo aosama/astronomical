@@ -6,9 +6,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::sync::MutexGuard;
 
-use crate::common::qwen3_5_moe::{
-    frozen_ornith_1_0_config, persistent_prompt_cache_model_contract,
-};
+use crate::common::qwen3_5_moe::{astro_ssd_prompt_cache_model_contract, frozen_ornith_1_0_config};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
 };
@@ -90,16 +88,16 @@ async fn should_grow_full_attention_kv_capacity_in_256_token_steps() {
 
 #[test]
 fn should_create_qwen_request_state_from_the_shared_decoder_cache_layout() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+    let astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract();
 
     let request_decoder_state = RequestDecoderStateStack::empty_from_decoder_cache_layout(
-        persistent_prompt_cache_model_contract.decoder_cache_layout(),
+        astro_ssd_prompt_cache_model_contract.decoder_cache_layout(),
     )
     .expect("the frozen Qwen decoder-cache layout should create request state");
 
     assert_eq!(
         request_decoder_state.layer_count(),
-        persistent_prompt_cache_model_contract
+        astro_ssd_prompt_cache_model_contract
             .decoder_cache_layout()
             .layer_count()
     );

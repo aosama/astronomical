@@ -149,14 +149,14 @@ impl FullAttentionKeyValueState {
     }
 
     /// Read-only access to the current K storage tensor. Used by the SSD
-    /// prompt-cache bridge to extract full-attention KV blocks for persistence.
+    /// astro-ssd-prompt-cache bridge to extract full-attention KV blocks for persistence.
     #[must_use]
     pub fn keys_state(&self) -> Option<&MlxArray> {
         self.keys.as_ref()
     }
 
     /// Read-only access to the current V storage tensor. Used by the SSD
-    /// prompt-cache bridge to extract full-attention KV blocks for persistence.
+    /// astro-ssd-prompt-cache bridge to extract full-attention KV blocks for persistence.
     #[must_use]
     pub fn values_state(&self) -> Option<&MlxArray> {
         self.values.as_ref()
@@ -257,7 +257,7 @@ impl FullAttentionKeyValueState {
         Ok(())
     }
 
-    /// Replaces the K and V storage from a restored SSD prompt-cache prefix.
+    /// Replaces the K and V storage from a restored SSD astro-ssd-prompt-cache prefix.
     /// Called by the SSD bridge after it has written block tensors into a
     /// final-length slab; the owner takes ownership and updates its offset.
     pub fn restore_from_blocks(

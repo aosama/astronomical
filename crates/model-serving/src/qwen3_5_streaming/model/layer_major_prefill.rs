@@ -22,7 +22,7 @@ use super::layer_major_span_state::{
     SpanState, completed_checkpoints, layer_snapshot_arrays, record_end_state_snapshot,
 };
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{DecoderCacheState, PerformanceAttribution, RequestDecoderStateStack};
@@ -37,7 +37,7 @@ pub(crate) struct LayerMajorSpan {
     /// Prompt-cache boundaries strictly inside the span, relative to its
     /// start, captured the way a chunk captures them.
     pub(crate) interior_boundary_tokens: Vec<usize>,
-    /// Whether the span ends on a prompt-cache boundary short of the last
+    /// Whether the span ends on a astro-ssd-prompt-cache boundary short of the last
     /// span; a chunk publishes that boundary from its final state.
     pub(crate) ends_at_inner_boundary: bool,
 }
@@ -48,7 +48,7 @@ impl LayerMajorSpan {
     }
 }
 
-/// The shape of a layer-major prefill's prompt-cache checkpoints: how many
+/// The shape of a layer-major prefill's astro-ssd-prompt-cache checkpoints: how many
 /// tensors each holds, and the block size boundaries fall on.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LayerMajorCheckpointContract {
@@ -60,7 +60,7 @@ pub(crate) struct LayerMajorCheckpointContract {
 #[derive(Clone, Copy)]
 pub(crate) struct LayerMajorPrefillRequest<'spans> {
     pub(crate) spans: &'spans [LayerMajorSpan],
-    /// The prompt-cache contract when this request captures checkpoints.
+    /// The astro-ssd-prompt-cache contract when this request captures checkpoints.
     pub(crate) checkpoint_contract: Option<LayerMajorCheckpointContract>,
     /// Whether the last span ends the prompt, so its logits seed the first
     /// generated token.
@@ -86,7 +86,7 @@ pub(crate) struct LayerMajorPrefillOutcome {
     pub(crate) final_logits: Option<MlxArray>,
     /// Checkpoints at boundaries before the last span's end, in order, with
     /// positions relative to the first span.
-    pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(crate) boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// Bytes per element of the widest floating activation MLX produces, used
@@ -290,7 +290,7 @@ impl Qwen3_5Model {
     }
 
     /// Runs a whole prompt layer by layer over spans of `span_token_count`
-    /// tokens, without prompt-cache checkpoints, and returns the last token's
+    /// tokens, without astro-ssd-prompt-cache checkpoints, and returns the last token's
     /// Float32 logits: the prefill the engine runs, for parity and speed
     /// measurements.
     #[doc(hidden)]
@@ -434,7 +434,7 @@ impl Qwen3_5Model {
     }
 
     /// Runs one span through one layer and submits it with the state and
-    /// prompt-cache snapshots it leaves.
+    /// astro-ssd-prompt-cache snapshots it leaves.
     #[allow(clippy::too_many_arguments)]
     fn run_and_submit_span(
         &self,

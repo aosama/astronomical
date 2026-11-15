@@ -224,7 +224,7 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         generated_token_count: 1,
                         reasoning_token_count: 0,
                         cached_token_count: 0,
-                        persistent_prompt_cache_diagnostics: None,
+                        astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
                     .await?;
@@ -289,9 +289,9 @@ fn runtime_configuration(
 ) -> WorkerRuntimeFeatureConfiguration {
     WorkerRuntimeFeatureConfiguration {
         configuration_generation: acknowledged_generation.to_owned(),
-        persistent_prompt_cache_enabled: startup_configuration.persistent_prompt_cache_enabled,
-        prompt_cache_maximum_size_bytes: startup_configuration
-            .global_prompt_cache_maximum_size_bytes,
+        astro_ssd_prompt_cache_enabled: startup_configuration.astro_ssd_prompt_cache_enabled,
+        astro_ssd_prompt_cache_maximum_size_bytes: startup_configuration
+            .global_astro_ssd_prompt_cache_maximum_size_bytes,
         loaded_model,
     }
 }

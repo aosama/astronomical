@@ -225,7 +225,7 @@ where
                 expert_residency_telemetry,
                 expert_memory_mode,
                 prompt_work_reuse,
-                persistent_prompt_cache_diagnostics,
+                astro_ssd_prompt_cache_diagnostics,
                 neural_engine_chunk,
                 prompt_layer_progress,
             } => {
@@ -239,7 +239,7 @@ where
                     expert_residency_telemetry,
                     expert_memory_mode,
                     prompt_work_reuse,
-                    persistent_prompt_cache_diagnostics,
+                    astro_ssd_prompt_cache_diagnostics,
                     neural_engine_chunk,
                     prompt_layer_progress,
                     event_writer,
@@ -594,8 +594,7 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        self.emit_persistent_prompt_cache_stats(event_writer)
-            .await?;
+        self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
         active_generation.cached_token_count = generation_start.cached_token_count();
         active_generation.required_prompt_processing_token_count = active_generation
             .prompt_token_count
@@ -606,8 +605,8 @@ where
         active_generation.prefill_elapsed_millis = 0;
         active_generation.generation_started_at = None;
         active_generation.last_reported_expert_memory_mode = generation_start.expert_memory_mode();
-        active_generation.persistent_prompt_cache_diagnostics = generation_start
-            .persistent_prompt_cache_diagnostics()
+        active_generation.astro_ssd_prompt_cache_diagnostics = generation_start
+            .astro_ssd_prompt_cache_diagnostics()
             .cloned();
 
         if let Some(expert_memory_mode) = generation_start.expert_memory_mode() {

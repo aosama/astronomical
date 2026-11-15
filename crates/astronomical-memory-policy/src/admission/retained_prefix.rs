@@ -11,7 +11,7 @@ pub struct RetainedPrefixRetentionRequirements {
     /// Whether the serving configuration enables in-memory prefix adoption.
     pub adoption_enabled: bool,
     /// Token count the retained state can adopt: the boundary of the last
-    /// complete prompt-cache block the generation published. Zero means the
+    /// complete astro-ssd-prompt-cache block the generation published. Zero means the
     /// generation published nothing adoptable.
     pub adoptable_token_count: usize,
     /// The retained decoder state's payload bytes, measured from the live state.

@@ -39,7 +39,7 @@ pub(crate) struct GovernedMemory {
     /// the retried forward is measured or the request ends.
     pub(super) pending_redo_attempt:
         std::cell::RefCell<Option<astronomical_memory_policy::ledger::RedoAttempt>>,
-    /// Room leased for publishing prompt-cache blocks, until the next
+    /// Room leased for publishing astro-ssd-prompt-cache blocks, until the next
     /// forward completes.
     pub(super) publication_workspace_lease:
         std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,

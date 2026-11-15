@@ -336,7 +336,7 @@ pub(super) fn print_request_records(reports: &InteractionReports) {
             "{LOG_MARKER} request=attribution index={request_index} outcome={} rejection_reason={} restored_tokens={} prefill_chunks={} streamed_payload_bytes={} positional_read_calls={} positional_read_bytes={} positional_read_elapsed_ns={} complete_layers_planned={} counters={}",
             attribution_report["outcome"],
             attribution_report["rejection_reason"],
-            counters["RestoredPersistentPromptCacheTokenCount"],
+            counters["RestoredAstroSsdPromptCacheTokenCount"],
             counters["PrefillChunkCount"],
             counters["RustExpertStreamingPayloadByteCount"],
             counters["PositionalFileReadCallCount"],

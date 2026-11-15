@@ -227,7 +227,7 @@ fn should_agree_with_a_reading_that_matches_what_is_held() {
 #[test]
 fn should_report_memory_in_use_that_no_account_names() {
     let mut ledger = ledger_at_16_gibibytes();
-    ledger.grant_lease(LeasePurpose::PromptCachePublication, 100 * MEBIBYTE);
+    ledger.grant_lease(LeasePurpose::AstroSsdPromptCachePublication, 100 * MEBIBYTE);
     let held_memory = HeldMemory {
         context_bytes: GIBIBYTE / 2,
         kept_weight_bytes: 8 * GIBIBYTE,
@@ -312,8 +312,10 @@ fn should_keep_the_accounts_adding_up_through_any_sequence_of_events() {
             4 => drop(ledger.enter_phase(LedgerPhase::WritingReply)),
             5 => drop(ledger.record_mlx_working_buffers(READING, event_dice.roll(6 * GIBIBYTE))),
             6 => {
-                let (lease_id, _) =
-                    ledger.grant_lease(LeasePurpose::PromptCacheRestore, event_dice.roll(GIBIBYTE));
+                let (lease_id, _) = ledger.grant_lease(
+                    LeasePurpose::AstroSsdPromptCacheRestore,
+                    event_dice.roll(GIBIBYTE),
+                );
                 held_leases.push(lease_id);
             }
             _ => {

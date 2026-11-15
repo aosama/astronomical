@@ -91,8 +91,8 @@ pub(crate) fn standard_worker_chunking_configuration()
         full_attention_key_value_growth_tokens: 256,
         prefill_graph_submission_layer_interval: 0,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-        prompt_cache_block_tokens: None,
-        prompt_cache_common_prefix_stride_blocks: 4,
+        ssd_prompt_cache_block_tokens: None,
+        ssd_prompt_cache_common_prefix_stride_blocks: 4,
         experimental_decode_stage_attribution_enabled: false,
         experimental_prefill_stage_attribution_enabled: false,
         experimental_in_memory_prefix_adoption_enabled: false,
@@ -410,10 +410,10 @@ pub(crate) fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) fn configured_model_artifact_prompt_cache_maximum_size_bytes() -> u64 {
+pub(crate) fn configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes() -> u64 {
     AstronomicalConfig::load_from_development_location()
         .expect("~/.astronomical-dev/config.json should load for model-artifact acceptance")
-        .prompt_cache()
-        .expect("~/.astronomical-dev/config.json should define prompt_cache.max_size_gb")
-        .global_prompt_cache_maximum_size_bytes()
+        .astro_ssd_prompt_cache()
+        .expect("~/.astronomical-dev/config.json should define astro_ssd_prompt_cache.max_size_gb")
+        .global_astro_ssd_prompt_cache_maximum_size_bytes()
 }

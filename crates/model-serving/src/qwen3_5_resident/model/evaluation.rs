@@ -3,7 +3,7 @@ use mlx_bridge::MlxArray;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 impl Qwen3_5ResidentModel {
     /// Returns the highest-logit token ID for one final-position output.
@@ -51,7 +51,7 @@ impl Qwen3_5ResidentModel {
         &self,
         request_decoder_state: &RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
@@ -70,14 +70,14 @@ impl Qwen3_5ResidentModel {
     /// Evaluates terminal prefill roots: logits, decoder state, and checkpoint arrays.
     ///
     /// The terminal chunk needs vocabulary logits for first-token seeding while also
-    /// publishing prompt-cache boundary checkpoints. Evaluating all roots in one pass
+    /// publishing astro-ssd-prompt-cache boundary checkpoints. Evaluating all roots in one pass
     /// keeps the terminal chunk as a single forward instead of a prefix+tail split.
     pub(crate) fn evaluate_terminal_prefill_state_with_performance_attribution(
         &self,
         final_logits: &MlxArray,
         request_decoder_state: &RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {

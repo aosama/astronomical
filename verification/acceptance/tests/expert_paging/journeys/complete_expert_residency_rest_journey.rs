@@ -342,7 +342,7 @@ fn print_worker_diagnostic_logs(logging_directory: &Path) {
                 || log_line.contains("Generate")
                 || log_line.contains("generation")
                 || log_line.contains("admission")
-                || log_line.contains("prompt-cache")
+                || log_line.contains("astro-ssd-prompt-cache")
                 || log_line.contains("demot")
                 || log_line.contains("resident")
             {

@@ -14,8 +14,8 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
     let worker_event = WorkerEvent::RuntimeFeatureConfigurationApplied {
         worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration {
             configuration_generation: configuration_generation.clone(),
-            persistent_prompt_cache_enabled: true,
-            prompt_cache_maximum_size_bytes: 12_000_000_000,
+            astro_ssd_prompt_cache_enabled: true,
+            astro_ssd_prompt_cache_maximum_size_bytes: 12_000_000_000,
             loaded_model: Some(WorkerLoadedModelRuntimeConfiguration::Autoregressive(
                 WorkerLoadedAutoregressiveModelRuntimeConfiguration {
                     model_id: "fictional/target".to_owned(),
@@ -27,8 +27,8 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
                         full_attention_key_value_growth_tokens: 256,
                         prefill_graph_submission_layer_interval: 0,
                         experimental_ssd_paging_generation_graph_submission_layer_interval: 0,
-                        prompt_cache_block_tokens: Some(128),
-                        prompt_cache_common_prefix_stride_blocks: 4,
+                        ssd_prompt_cache_block_tokens: Some(128),
+                        ssd_prompt_cache_common_prefix_stride_blocks: 4,
                         experimental_decode_stage_attribution_enabled: false,
                         experimental_prefill_stage_attribution_enabled: false,
                         experimental_in_memory_prefix_adoption_enabled: false,

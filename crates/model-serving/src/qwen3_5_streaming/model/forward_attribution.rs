@@ -10,13 +10,13 @@ use super::forward_contract;
 use super::visual_embedding_injection;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::{
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
 };
 
 pub(crate) struct Qwen3_5BoundaryCheckpointPrefillOutcome {
     pub(crate) consumed_visual_embedding_count: usize,
-    pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(crate) boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 impl Qwen3_5Model {
@@ -60,7 +60,7 @@ impl Qwen3_5Model {
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<usize, Qwen3_5ExecutionError> {
@@ -120,7 +120,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
                 self.decoder_cache_layout.boundary_tensor_count(),
                 checkpoint_interval_token_count,
@@ -203,7 +203,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
                 self.decoder_cache_layout.boundary_tensor_count(),
                 checkpoint_interval_token_count,

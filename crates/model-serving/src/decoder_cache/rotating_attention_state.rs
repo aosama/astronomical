@@ -266,7 +266,7 @@ impl RotatingKeyValueState {
         Ok(())
     }
 
-    /// Replaces state from a validated persistent prompt-cache boundary.
+    /// Replaces state from a validated persistent astro-ssd-prompt-cache boundary.
     pub fn restore_from_blocks(
         &mut self,
         restored_keys: MlxArray,
