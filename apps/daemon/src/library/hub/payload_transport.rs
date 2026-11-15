@@ -17,11 +17,14 @@ pub trait HubPayloadTransport: Send + Sync {
     fn execute_payload(&self, request: HubPayloadRequest) -> HubPayloadFuture<'_>;
 }
 
-/// Immutable file request with an optional first unread byte.
+/// Immutable file request for the bytes from an optional first unread byte up
+/// to an optional end.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HubPayloadRequest {
     url: String,
     resume_offset_bytes: u64,
+    /// One past the last byte wanted, or `None` for the rest of the file.
+    end_offset_bytes: Option<u64>,
     request_timeout: Duration,
 }
 
@@ -39,7 +42,43 @@ impl HubPayloadRequest {
         Self {
             url,
             resume_offset_bytes,
+            end_offset_bytes: None,
             request_timeout: Duration::from_secs(120),
+        }
+    }
+
+    /// Asks for exactly the bytes from `resume_offset_bytes` up to, but not
+    /// including, `end_offset_bytes`. A response that ends where the request
+    /// does leaves its connection open for the next request; hanging up on an
+    /// open-ended response part-way does not, and every piece would then pay
+    /// for a new connection that starts slow.
+    #[must_use]
+    pub fn get_range(url: String, resume_offset_bytes: u64, end_offset_bytes: u64) -> Self {
+        Self {
+            end_offset_bytes: Some(end_offset_bytes),
+            ..Self::get(url, resume_offset_bytes)
+        }
+    }
+
+    /// One past the last byte wanted, or `None` for the rest of the file.
+    #[must_use]
+    pub const fn end_offset_bytes(&self) -> Option<u64> {
+        self.end_offset_bytes
+    }
+
+    /// The `Range` header value, or `None` when the whole file is wanted.
+    #[must_use]
+    pub fn range_header_value(&self) -> Option<String> {
+        match self.end_offset_bytes {
+            Some(end_offset_bytes) => Some(format!(
+                "bytes={}-{}",
+                self.resume_offset_bytes,
+                end_offset_bytes.saturating_sub(1)
+            )),
+            None if self.resume_offset_bytes > 0 => {
+                Some(format!("bytes={}-", self.resume_offset_bytes))
+            }
+            None => None,
         }
     }
 
@@ -92,5 +131,43 @@ impl HubPayloadResponse {
 
     pub(crate) fn into_byte_stream(self) -> HubPayloadByteStream {
         self.byte_stream
+    }
+}
+
+#[cfg(test)]
+mod payload_request_tests {
+    use super::HubPayloadRequest;
+
+    const PAYLOAD_URL: &str = "https://huggingface.co/owner/name/resolve/revision/file";
+
+    #[test]
+    fn should_ask_for_an_exact_range_with_an_inclusive_last_byte() {
+        let request = HubPayloadRequest::get_range(PAYLOAD_URL.to_owned(), 100, 300);
+
+        assert_eq!(
+            request.range_header_value().as_deref(),
+            Some("bytes=100-299")
+        );
+        assert_eq!(request.end_offset_bytes(), Some(300));
+    }
+
+    #[test]
+    fn should_ask_for_an_exact_range_even_from_byte_zero() {
+        let request = HubPayloadRequest::get_range(PAYLOAD_URL.to_owned(), 0, 32);
+
+        assert_eq!(request.range_header_value().as_deref(), Some("bytes=0-31"));
+    }
+
+    #[test]
+    fn should_ask_for_the_rest_of_the_file_or_send_no_range_without_an_end() {
+        let resumed_request = HubPayloadRequest::get(PAYLOAD_URL.to_owned(), 100);
+        let whole_file_request = HubPayloadRequest::get(PAYLOAD_URL.to_owned(), 0);
+
+        assert_eq!(
+            resumed_request.range_header_value().as_deref(),
+            Some("bytes=100-")
+        );
+        assert_eq!(whole_file_request.range_header_value(), None);
+        assert_eq!(whole_file_request.end_offset_bytes(), None);
     }
 }
