@@ -43,4 +43,6 @@ pub(crate) use model::Qwen3_5ExecutionError;
 pub use model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::RecordedDecoderLayerInput;
-pub use model::{Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode};
+pub use model::{
+    Qwen3_5DraftedRowsVerification, Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,
+};

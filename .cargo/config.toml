@@ -453,6 +453,10 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # back-to-back residency churn on the large sparse model; issues #1716 and
 # #1717). Each case loads the real model, so run them only when comparing
 # strategies; append --filter NAME to pick cases.
+# A drafted block rewound to its kept rows leaves the target exactly where
+# forwarding only those rows would (small dense Qwen3.5 from the Development
+# library, every kept count 1 to 7, plus a control without the rewind). Seconds.
+test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter drafted_rewind"
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
 # real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
 # beside a plain one-row step. Each stage is timed alone. Asserts nothing;

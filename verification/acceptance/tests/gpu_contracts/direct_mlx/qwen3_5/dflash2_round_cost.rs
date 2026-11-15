@@ -218,8 +218,8 @@ fn time_drafting(
     (drafter_pass, draft_head, started.elapsed(), drafted_ids)
 }
 
-/// The 8-row verify, its readback, and today's rewind: restore the
-/// checkpoint and run four kept rows again.
+/// The 8-row verify (capturing DeltaNet state after each row), its readback,
+/// and the rewind to four kept rows from those captures.
 fn time_verify_and_rewind(
     pair: &JourneyPair,
     decoder_state: &mut RequestDecoderStateStack,
@@ -227,40 +227,40 @@ fn time_verify_and_rewind(
     drafted_ids: &[u32],
 ) -> [Duration; 3] {
     let runtime = pair.target.runtime();
-    let tap_layer_ids = &pair.drafter_configuration.target_tap_layer_ids;
-    let checkpoint = decoder_state.checkpoint().expect("checkpoint");
     let mut verified_ids = vec![ANCHOR_TOKEN_ID];
     verified_ids.extend_from_slice(drafted_ids);
     let started = Instant::now();
-    let verification = forward(
-        pair,
-        &verified_ids,
-        fed,
-        decoder_state,
-        tap_layer_ids,
-        VerificationLogitsMode::AllPositions,
-    );
-    let logits = verification.per_position_logits.expect("logits");
-    evaluate(runtime, &[&logits]);
+    let mut verification = pair
+        .target
+        .verify_drafted_rows(
+            &verified_ids,
+            fed,
+            decoder_state,
+            &pair.drafter_configuration.target_tap_layer_ids,
+            &mut PerformanceAttribution::disabled(),
+        )
+        .expect("the block verifies");
+    let mut evaluated_arrays = vec![&verification.per_position_logits];
+    for row_boundary in &verification.row_boundaries {
+        evaluated_arrays.extend(row_boundary.recurrent_snapshot_tensors.values());
+    }
+    evaluate(runtime, &evaluated_arrays);
     let verify_eight_rows = started.elapsed();
     let started = Instant::now();
-    let _argmax = host_values(runtime, &runtime.argmax_axis(&logits, -1).expect("argmax"));
+    let _argmax = host_values(
+        runtime,
+        &runtime
+            .argmax_axis(&verification.per_position_logits, -1)
+            .expect("argmax"),
+    );
     let verify_logits_readback = started.elapsed();
     let started = Instant::now();
     decoder_state
-        .restore_checkpoint(checkpoint)
-        .expect("restore");
-    let rerun = forward(
-        pair,
-        &verified_ids[..4],
-        fed,
-        decoder_state,
-        tap_layer_ids,
-        VerificationLogitsMode::NoLogits,
-    );
-    // The deepest tap (layer 61 of 64) forces nearly the whole rerun; the
-    // first tap alone would evaluate only six layers.
-    evaluate(runtime, &[rerun.hidden_state_taps.last().expect("taps")]);
+        .rewind_to_kept_row_boundary(
+            &mut verification.row_boundaries[3].recurrent_snapshot_tensors,
+            fed as i32 + 4,
+        )
+        .expect("the state rewinds");
     [verify_eight_rows, verify_logits_readback, started.elapsed()]
 }
 
@@ -276,9 +276,9 @@ fn report(times: &mut StageTimes) {
         "drafter pass (bf16, 8 rows)",
         "target head on 7 draft rows",
         "selector walk + path readback",
-        "target verify, 8 rows",
+        "target verify, 8 rows + row states",
         "verify logits readback (argmax)",
-        "rewind: restore + rerun 4 kept rows",
+        "rewind to 4 kept rows (no rerun)",
     ];
     let mut round_total = Duration::ZERO;
     for (label, stage_times) in labels.iter().zip(times.all_mut()) {

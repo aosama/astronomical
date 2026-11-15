@@ -8,8 +8,8 @@
 //! 1.0 on this pair (single path, 256 tokens, thinking off), so the floors
 //! below sit about 10% under those. Greedy runs only as a labelled diagnostic.
 //!
-//! This measures acceptance, not speed: a refused draft restores the target's
-//! decoder state and runs the kept rows again, the slow rewind Gate 2 replaces.
+//! This measures acceptance, not speed: every stage syncs with the GPU and
+//! reads full probability rows back; `dflash2_round_cost` times the stages.
 
 use std::time::Instant;
 
@@ -22,8 +22,9 @@ use astronomical_model_serving::speculative_decoding::verification_decision::{
     DraftedSlot, VerificationDecision, decide_by_rejection_sampling, decide_by_token_equality,
 };
 use astronomical_model_serving::{
-    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration,
-    Qwen3_5ResidentModel, Qwen3_5Tokenizer, RequestDecoderStateStack, VerificationLogitsMode,
+    PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5DraftedRowsVerification,
+    Qwen3_5ModelChunkingConfiguration, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
+    RequestDecoderStateStack, VerificationLogitsMode,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxDtype};
@@ -339,25 +340,22 @@ fn run_round(
         .iter()
         .map(|value| *value as u32)
         .collect();
-    let checkpoint = decoder_state
-        .checkpoint()
-        .expect("the decoder state checkpoints");
     let mut verified_ids = vec![round.last_token_id];
     verified_ids.extend_from_slice(&drafted_ids);
     let verification = pair
         .target
-        .build_speculative_verification_forward(
+        .verify_drafted_rows(
             &verified_ids,
             round.fed_token_count,
             decoder_state,
             &configuration.target_tap_layer_ids,
-            VerificationLogitsMode::AllPositions,
             &mut PerformanceAttribution::disabled(),
         )
         .expect("the target verifies the block");
     let logits = verification
         .per_position_logits
-        .expect("every row has logits");
+        .retain()
+        .expect("the logits handle");
     let drafter_distribution = match &path.candidate_probabilities {
         Some(probabilities) => Some(DrafterDistribution {
             candidate_ids: host_values(runtime, &path.candidate_ids)
@@ -376,50 +374,36 @@ fn run_round(
         drafter_distribution.as_ref(),
         uniforms,
     );
-    settle_round(
-        pair,
-        round,
-        decoder_state,
-        checkpoint,
-        &verified_ids,
-        &verification.hidden_state_taps,
-        decision,
-    );
+    settle_round(pair, round, decoder_state, verification, decision);
     decision.kept_draft_count + 1
 }
 
-/// Keeps the accepted rows in the target and the drafter's pending context.
+/// Keeps the accepted rows in the target and the drafter's pending context:
+/// a round that keeps fewer rows than it verified rewinds the target to the
+/// kept row's captured state, with no second pass.
 fn settle_round(
     pair: &JourneyPair,
     round: &mut RoundState,
     decoder_state: &mut RequestDecoderStateStack,
-    checkpoint: astronomical_model_serving::RequestDecoderStateStackCheckpoint,
-    verified_ids: &[u32],
-    verification_taps: &[MlxArray],
+    mut verification: Qwen3_5DraftedRowsVerification,
     decision: VerificationDecision,
 ) {
     let kept_row_count = decision.kept_draft_count + 1;
-    if kept_row_count < verified_ids.len() {
+    let kept_token_offset = round.fed_token_count + kept_row_count as u32;
+    if kept_row_count <= verification.row_boundaries.len() {
         decoder_state
-            .restore_checkpoint(checkpoint)
-            .expect("the decoder state restores");
-        pair.target
-            .build_speculative_verification_forward(
-                &verified_ids[..kept_row_count],
-                round.fed_token_count,
-                decoder_state,
-                &pair.drafter_configuration.target_tap_layer_ids,
-                VerificationLogitsMode::NoLogits,
-                &mut PerformanceAttribution::disabled(),
+            .rewind_to_kept_row_boundary(
+                &mut verification.row_boundaries[kept_row_count - 1].recurrent_snapshot_tensors,
+                kept_token_offset as i32,
             )
-            .expect("the kept rows run again");
+            .expect("the decoder state rewinds to the kept rows");
     }
     round.pending_tap_rows = tap_rows(
         pair.target.runtime(),
-        verification_taps,
+        &verification.hidden_state_taps,
         kept_row_count as i32,
     );
-    round.fed_token_count += kept_row_count as u32;
+    round.fed_token_count = kept_token_offset;
     round.last_token_id = decision.next_token_id;
 }
 

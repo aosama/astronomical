@@ -10,6 +10,7 @@ mod dflash2_kept_per_round;
 mod dflash2_round_cost;
 mod dflash_proof_scenario;
 mod dflash_speculative_proof;
+mod drafted_rewind;
 mod elementwise_fusion_probe;
 mod error_logging;
 mod full_attention;
