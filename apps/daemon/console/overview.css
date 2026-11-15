@@ -57,6 +57,7 @@
 .overview-memory-seg[data-limit-part="working"], .overview-memory-swatch[data-limit-part="working"] { background: var(--accent); }
 .overview-memory-seg[data-limit-part="reading"], .overview-memory-swatch[data-limit-part="reading"] { background: var(--accent-soft); }
 .overview-memory-seg[data-limit-part="margin"], .overview-memory-swatch[data-limit-part="margin"] { background: var(--ink-faint); }
+.overview-memory-seg[data-limit-part="system"], .overview-memory-swatch[data-limit-part="system"] { background: var(--border-strong); }
 .overview-memory-seg[data-limit-part="rest"], .overview-memory-swatch[data-limit-part="rest"] { background: var(--resident); }
 .overview-memory-swatch[data-limit-part="spare"] { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--border-strong); }
 .overview-memory-limit-list { display: grid; gap: 4px; margin: 0; font-size: var(--text-md); }

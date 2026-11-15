@@ -65,6 +65,10 @@ mod dense_resident;
 // Only the direct-MLX decision and speech engines report through it.
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod forward_pass_telemetry;
+// Only the direct-MLX streaming engine reads it; the unit tests read it
+// without the graphics-processor runtime.
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) mod macos_wired_memory;
 // Only the direct-MLX streaming engine records replies through it; the unit
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]

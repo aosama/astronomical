@@ -98,6 +98,7 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_forward(
         peak_bytes_during_forward: u64::try_from(memory_snapshot_after_forward.peak_memory_bytes())
             .unwrap_or(u64::MAX),
     });
+    model.govern_system_wired_memory();
     if measured_forward.memory_phase == MemoryPhase::Decode {
         resize_hot_expert_tables_to_the_capacity(model);
     }

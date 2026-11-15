@@ -25,6 +25,7 @@ fn inputs_at(limit_bytes: u64) -> AccountInputs {
         phase: READING,
         mlx_working_buffer_reserve: MlxWorkingBufferReserve::Measured(GIBIBYTE),
         lease_bytes: 0,
+        system_wired_reserve_bytes: 0,
     }
 }
 
@@ -232,5 +233,54 @@ fn should_never_add_the_mlx_buffer_cache_room_to_a_shortfall() {
         needs_that_serving_requires_bytes - accounts.limit_bytes,
         "a limit too small to serve at is exactly as short as its required needs make it"
     );
+    assert_accounts_add_up(accounts);
+}
+
+#[test]
+fn should_take_the_system_wired_reserve_from_what_would_be_kept() {
+    let accounts_without_reserve = compose_accounts(writing_reply_inputs_at(20 * GIBIBYTE));
+    let accounts = compose_accounts(AccountInputs {
+        system_wired_reserve_bytes: GIBIBYTE / 2,
+        ..writing_reply_inputs_at(20 * GIBIBYTE)
+    });
+
+    assert_eq!(accounts.system_wired_reserve_bytes, GIBIBYTE / 2);
+    assert_eq!(
+        accounts.kept_weight_capacity_bytes,
+        accounts_without_reserve.kept_weight_capacity_bytes - GIBIBYTE / 2
+    );
+    assert_eq!(accounts.mlx_buffer_cache_bytes, GIBIBYTE / 4);
+    assert_accounts_add_up(accounts);
+}
+
+#[test]
+fn should_shrink_the_system_wired_reserve_to_what_fits_and_leave_no_shortfall() {
+    let accounts_without_reserve = compose_accounts(writing_reply_inputs_at(20 * GIBIBYTE));
+    let accounts = compose_accounts(AccountInputs {
+        system_wired_reserve_bytes: 40 * GIBIBYTE,
+        ..writing_reply_inputs_at(20 * GIBIBYTE)
+    });
+
+    assert_eq!(
+        accounts.system_wired_reserve_bytes,
+        accounts_without_reserve.kept_weight_capacity_bytes
+            + accounts_without_reserve.mlx_buffer_cache_bytes,
+        "the reserve takes all the optional room and no more"
+    );
+    assert_eq!(accounts.kept_weight_capacity_bytes, 0);
+    assert_eq!(accounts.mlx_buffer_cache_bytes, 0);
+    assert_eq!(accounts.shortfall_bytes, 0);
+    assert_accounts_add_up(accounts);
+}
+
+#[test]
+fn should_reserve_nothing_for_the_system_on_a_limit_too_small_to_serve_at() {
+    let accounts = compose_accounts(AccountInputs {
+        system_wired_reserve_bytes: GIBIBYTE,
+        ..writing_reply_inputs_at(2 * GIBIBYTE)
+    });
+
+    assert_eq!(accounts.system_wired_reserve_bytes, 0);
+    assert!(accounts.shortfall_bytes > 0);
     assert_accounts_add_up(accounts);
 }

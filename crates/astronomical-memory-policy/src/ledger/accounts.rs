@@ -22,6 +22,9 @@ pub(super) struct AccountInputs {
     pub(super) phase: LedgerPhase,
     pub(super) mlx_working_buffer_reserve: MlxWorkingBufferReserve,
     pub(super) lease_bytes: u64,
+    /// What the system's wired ceiling asks to be left unused; see
+    /// `system_wired_ceiling`.
+    pub(super) system_wired_reserve_bytes: u64,
 }
 
 /// Every account under the limit at one instant.
@@ -39,6 +42,10 @@ pub struct LedgerAccounts {
     /// Room kept free for the `mlx_buffer_cache`, so MLX can hold one
     /// step's buffers for the next step to reuse. See `mlx_buffer_cache_bytes_for`.
     pub mlx_buffer_cache_bytes: u64,
+    /// Part of the limit left unused so the memory macOS has wired across
+    /// the whole system stays under the line where it stops keeping MLX's
+    /// memory wired. See `system_wired_ceiling`.
+    pub system_wired_reserve_bytes: u64,
     pub stream_slot_bytes: u64,
     pub lease_bytes: u64,
     pub margin_bytes: u64,
@@ -62,6 +69,7 @@ impl LedgerAccounts {
             .saturating_add(self.context_bytes)
             .saturating_add(self.mlx_working_buffer_bytes)
             .saturating_add(self.mlx_buffer_cache_bytes)
+            .saturating_add(self.system_wired_reserve_bytes)
             .saturating_add(self.stream_slot_bytes)
             .saturating_add(self.lease_bytes)
             .saturating_add(self.margin_bytes)
@@ -88,6 +96,7 @@ impl LedgerAccounts {
             .saturating_add(self.context_bytes)
             .saturating_add(self.mlx_working_buffer_bytes)
             .saturating_add(self.mlx_buffer_cache_bytes)
+            .saturating_add(self.system_wired_reserve_bytes)
             .saturating_add(self.stream_slot_bytes)
             .saturating_add(self.lease_bytes)
             .saturating_add(self.margin_bytes)
@@ -122,6 +131,7 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
         context_bytes: account_inputs.context_bytes,
         mlx_working_buffer_bytes: 0,
         mlx_buffer_cache_bytes: 0,
+        system_wired_reserve_bytes: 0,
         stream_slot_bytes: 0,
         lease_bytes: account_inputs.lease_bytes,
         margin_bytes,
@@ -137,7 +147,16 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
     };
     accounts.mlx_working_buffer_bytes = mlx_working_buffer_bytes;
     let needed_before_mlx_buffer_cache_bytes = fixed_bytes.saturating_add(mlx_working_buffer_bytes);
-    accounts.mlx_buffer_cache_bytes = fitting_mlx_buffer_cache_bytes(
+    // The reserve comes first: room that is not kept wired is no use to the
+    // buffer cache either.
+    accounts.system_wired_reserve_bytes = fitting_optional_room_bytes(
+        account_inputs.system_wired_reserve_bytes,
+        accounts.limit_bytes,
+        needed_before_mlx_buffer_cache_bytes.saturating_add(stream_slot_bytes),
+    );
+    let needed_before_mlx_buffer_cache_bytes =
+        needed_before_mlx_buffer_cache_bytes.saturating_add(accounts.system_wired_reserve_bytes);
+    accounts.mlx_buffer_cache_bytes = fitting_optional_room_bytes(
         mlx_buffer_cache_bytes_for(account_inputs.phase, mlx_working_buffer_bytes),
         accounts.limit_bytes,
         needed_before_mlx_buffer_cache_bytes.saturating_add(stream_slot_bytes),
@@ -184,20 +203,21 @@ const fn mlx_buffer_cache_bytes_for(phase: LedgerPhase, mlx_working_buffer_bytes
     }
 }
 
-/// The room for the `mlx_buffer_cache` that still fits beside every need.
+/// The part of an optional room that still fits beside every need.
 ///
-/// The room only makes replies faster; a model runs without it. It is
+/// The room for the `mlx_buffer_cache` and the system wired reserve only
+/// make replies faster; a model runs without them. Each is
 /// therefore taken from what would otherwise be kept, never added to a
 /// shortfall: on a limit with nothing to spare it shrinks to zero, and
 /// whether a model can be served is decided exactly as before it existed.
-const fn fitting_mlx_buffer_cache_bytes(
-    wanted_mlx_buffer_cache_bytes: u64,
+const fn fitting_optional_room_bytes(
+    wanted_room_bytes: u64,
     limit_bytes: u64,
     needed_with_slots_bytes: u64,
 ) -> u64 {
     let room_bytes = limit_bytes.saturating_sub(needed_with_slots_bytes);
-    if wanted_mlx_buffer_cache_bytes < room_bytes {
-        wanted_mlx_buffer_cache_bytes
+    if wanted_room_bytes < room_bytes {
+        wanted_room_bytes
     } else {
         room_bytes
     }

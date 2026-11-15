@@ -90,6 +90,7 @@ pub(crate) mod route_observation;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
 pub(crate) mod streaming_model;
+mod system_wired_governance;
 
 pub(crate) use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 pub(crate) use crate::qwen3_5_core::model_math::{error, forward_contract, weights};
