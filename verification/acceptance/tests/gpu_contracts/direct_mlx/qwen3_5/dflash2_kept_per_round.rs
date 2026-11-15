@@ -52,7 +52,7 @@ const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
 /// One measured cell: the prompt, the temperature (0 = greedy diagnostic), and
 /// the least kept-per-round that passes.
-struct Cell {
+pub(crate) struct Cell {
     label: &'static str,
     prompt: &'static str,
     temperature_thousandths: u16,
@@ -116,19 +116,21 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
         } else {
             SAMPLED_SEED_COUNT
         };
-        let (mut rounds, mut emitted) = (0, 0);
+        let (mut rounds, mut emitted, mut decode_seconds) = (0, 0, 0.0);
         for seed_offset in 0..seed_count {
-            let (seed_rounds, seed_emitted) = run_cell(&pair, cell, SAMPLING_SEED + seed_offset);
-            rounds += seed_rounds;
-            emitted += seed_emitted;
+            let seed_outcome = run_cell(&pair, cell, SAMPLING_SEED + seed_offset);
+            rounds += seed_outcome.rounds;
+            emitted += seed_outcome.emitted_tokens;
+            decode_seconds += seed_outcome.decode_seconds;
         }
         let kept_per_round = emitted as f64 / rounds as f64;
+        let decode_tokens_per_second = emitted as f64 / decode_seconds;
         let elapsed_seconds = journey_started_at.elapsed().as_secs_f64();
         let remaining_seconds =
             elapsed_seconds / (cell_index + 1) as f64 * (CELLS.len() - cell_index - 1) as f64;
         eprintln!(
-            "[dflash2-gate1 {}/{} ETA {remaining_seconds:.0} s] {} T={:.1}: {kept_per_round:.2} kept per round \
-             ({emitted} tokens in {rounds} rounds, {:.0} s)",
+            "[dflash2-gate1 {}/{} ETA {remaining_seconds:.0} s] {} T={:.1}: {kept_per_round:.2} kept per round, \
+             {decode_tokens_per_second:.1} tok/s decode ({emitted} tokens in {rounds} rounds, {:.0} s)",
             cell_index + 1,
             CELLS.len(),
             cell.label,
@@ -246,7 +248,15 @@ pub(crate) fn prompt_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
 
 /// One cell's request: prefill, then draft-and-verify rounds until the
 /// output budget is spent. Returns (verify rounds, tokens emitted by them).
-fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> (usize, usize) {
+/// One request's drafted decode: rounds run, tokens they emitted, and the
+/// wall time from the first drafted round to the last, prefill excluded.
+pub(crate) struct CellOutcome {
+    pub(crate) rounds: usize,
+    pub(crate) emitted_tokens: usize,
+    pub(crate) decode_seconds: f64,
+}
+
+pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> CellOutcome {
     let tap_layer_ids = &pair.drafter_configuration.target_tap_layer_ids;
     let prompt = prompt_token_ids(pair, cell.prompt);
     let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
@@ -284,6 +294,7 @@ fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> (usize, usiz
         ),
         context_states: DrafterContextStates::new(&pair.drafter_configuration, 0),
     };
+    let decode_started_at = Instant::now();
     let (mut rounds, mut emitted) = (0, 0);
     while emitted < OUTPUT_TOKENS {
         emitted += run_round(
@@ -296,7 +307,11 @@ fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> (usize, usiz
         );
         rounds += 1;
     }
-    (rounds, emitted)
+    CellOutcome {
+        rounds,
+        emitted_tokens: emitted,
+        decode_seconds: decode_started_at.elapsed().as_secs_f64(),
+    }
 }
 
 struct RoundState {
