@@ -4,39 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.107</title>
-            <pubDate>Sun, 15 Nov 2026 12:40:02 -0500</pubDate>
-            <sparkle:version>2340</sparkle:version>
-            <sparkle:shortVersionString>0.2.107</sparkle:shortVersionString>
+            <title>0.2.108</title>
+            <pubDate>Sun, 15 Nov 2026 14:11:46 -0500</pubDate>
+            <sparkle:version>2347</sparkle:version>
+            <sparkle:shortVersionString>0.2.108</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Download several models one after another
+            <description sparkle:format="markdown"><![CDATA[## More dependable model downloads
 
-- Get always works. When a model is already downloading, the next one joins a download list, and models download one at a time in the order you asked for them.
-- The next model on the list starts on its own when the current one finishes. If one cannot finish, it stays on the list with Try again, and the rest carry on.
-- Each waiting model shows its place in line on the Models page, with the list's total size and how long it will take once the download speed is known. Remove from list takes a model off.
-- Pausing pauses the whole list, and the list is kept when Astronomical restarts.
-- If everything on the list would not fit on your disk, Astronomical says so when you press Get, with the sizes in GB, instead of failing later.
-- The chat window and `astronomical models download` also wait their place in line instead of refusing.
+- A download that loses its connection now picks the interrupted piece up again by itself, up to three times, instead of stopping and asking you to press Try again.
+- A download connection that has slowed to a crawl while the others run fast is replaced. On a slow network nothing is replaced, because every connection is equally slow.
+- A paused download now stops within about ten seconds even when a connection has gone quiet.
+- Download speed itself is unchanged: about 360 Mbit/s on a 500 Mbit/s line. The gain is recovery, not speed.
 
-## Fixes
+## Models
 
-- You can now select and copy text on the Models page while a download runs. Before, the page redrew itself every second and cleared your selection.
-- The command line no longer mistakes a download that has just started for a paused one.
+- The text-only Ornith 1.5 35B A3B builds (6-bit and 8-bit) are no longer offered in the catalog. The vision builds of the same model stay, and copies you already installed keep working.
 
 ## Compatibility
 
-- REST: `GET /v1/library/download` now includes the download list, asking for a model while another downloads answers `queued` with its place instead of `library_busy`, and `POST /v1/library/download/queue/remove` takes a model off the list.
+- No configuration, REST or command-line changes.
 - Your models, conversations and settings are kept. Requires macOS 14 or later on Apple silicon.
 
 ## Distribution
 
-Astronomical 0.2.107 is signed with a Developer ID certificate, notarized by Apple, and delivered through a signed Sparkle update feed.
+Astronomical 0.2.108 is signed with a Developer ID certificate, notarized by Apple, and delivered through a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.107/Astronomical-0.2.107-macOS-arm64.dmg" length="23746800" type="application/octet-stream" sparkle:edSignature="urmtC/btEG68D7pHH4XnJlpotdIbDdMlqZppjP56TJHGrF7QCnBdFjCgCqfbFI87aBT3qYnAKIrFRMGYfjRuCA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.108/Astronomical-0.2.108-macOS-arm64.dmg" length="23788376" type="application/octet-stream" sparkle:edSignature="6L7gDG6LVI6yCX192pwelrjKY5VI0Mpek/C/2e1ZXqqjbmliBD7F5MFMepo4ry0Kmmy/WZqRZ04kFzrYK5TAAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: MlHEo+n9e6I4gaB4cz8FRiwCMB+wHkRGWj1WSzk0RxT60Jh8Kb+ofoZHFWIXJIwYXQw6oA/ayV1eFh74OPoVAQ==
-length: 2878
+edSignature: FnhYuFbdSIPgAZGz+Azc3Dy7wzGcWhDqOrDrj1Hwk44DTtXuZK2P7p21UGiiLEXnsCwSbAg3Id6TyWB0abs/AA==
+length: 2327
 -->
