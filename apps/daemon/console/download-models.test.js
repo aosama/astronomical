@@ -243,7 +243,32 @@ test("should_word_transfer_progress_with_time_left_only_once_the_rate_is_measure
     );
 
     assert.equal(unmeasuredText, "2.0 of 10.0 GB");
-    assert.equal(measuredText, "2.0 of 10.0 GB · about 10 minutes left");
+    assert.equal(measuredText, "2.0 of 10.0 GB · 14 MB/s · about 10 minutes left");
+});
+
+test("should_word_the_transfer_rate_in_megabytes_per_second_with_a_decimal_only_when_slow", () => {
+    const scriptContext = createDownloadModelsContext();
+    const rateTexts = vm.runInContext(
+        "[41 * 1048576, 10 * 1048576, 9.96 * 1048576, 2.5 * 1048576, 50 * 1024].map(formatDownloadModelsTransferRate)",
+        scriptContext
+    );
+
+    assert.deepEqual(Array.from(rateTexts), ["41 MB/s", "10 MB/s", "10.0 MB/s", "2.5 MB/s", "0.0 MB/s"]);
+});
+
+test("should_leave_out_speed_and_time_while_the_download_is_paused", () => {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.activeDownload = {
+        state: "paused", bytes_completed: 2 * 1073741824, bytes_total: 10 * 1073741824
+    };
+
+    const pausedText = vm.runInContext(
+        `downloadModelsMeasuredBytesPerSecond = 40 * 1048576;
+         downloadModelsTransferProgressText(activeDownload)`,
+        scriptContext
+    );
+
+    assert.equal(pausedText, "2.0 of 10.0 GB");
 });
 
 test("should_read_the_model_id_and_summary_and_ignore_a_blank_summary", () => {

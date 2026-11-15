@@ -330,7 +330,7 @@ impl DownloadPayloadTransfer {
             .observed_transfer_progress
             .record_received_bytes(
                 segment_target.download_file.relative_path(),
-                segment_target.assembler.contiguous_end_bytes().await,
+                segment_target.assembler.received_bytes().await,
                 segment_target.updated_at_unix_millis,
             )
             .map_err(DownloadJobStoreError::from)?;

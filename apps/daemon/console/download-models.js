@@ -383,15 +383,25 @@ function downloadModelsRowDownloadState(catalogRow) {
     return currentModelId ? null : catalogRow.downloadState;
 }
 
-// "9.2 of 21.9 GB · about 12 minutes left" for a running download; the time
-// is left out until the transfer rate has been measured, rather than guessed.
+// "9.2 of 21.9 GB · 41 MB/s · about 12 minutes left" for a running download;
+// the speed and time are left out until the transfer rate has been measured,
+// rather than guessed.
 function downloadModelsTransferProgressText(activeDownload) {
     const transferredText = formatDownloadModelsGigabyteCount(activeDownload.bytes_completed)
         + " of " + formatDownloadModelsCardSize(activeDownload.bytes_total);
     const bytesPerSecond = downloadModelsMeasuredBytesPerSecond;
     if (activeDownload.state !== "downloading" || !(bytesPerSecond > 0)) return transferredText;
     const remainingBytes = activeDownload.bytes_total - activeDownload.bytes_completed;
-    return transferredText + " · " + formatDownloadModelsRemainingTime(remainingBytes / bytesPerSecond);
+    return transferredText + " · " + formatDownloadModelsTransferRate(bytesPerSecond)
+        + " · " + formatDownloadModelsRemainingTime(remainingBytes / bytesPerSecond);
+}
+
+// The speed in megabytes of 1,048,576 bytes per second, matching the 2^30
+// gigabyte the page uses for sizes. A whole number reads steadily at the usual
+// tens of MB/s; one decimal keeps a slow link from showing as 0.
+function formatDownloadModelsTransferRate(bytesPerSecond) {
+    const megabytesPerSecond = bytesPerSecond / 1_048_576;
+    return (megabytesPerSecond < 10 ? megabytesPerSecond.toFixed(1) : String(Math.round(megabytesPerSecond))) + " MB/s";
 }
 
 function smoothDownloadModelsTransferRate(previousBytesPerSecond, measuredBytesPerSecond) {
