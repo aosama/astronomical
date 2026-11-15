@@ -1,9 +1,9 @@
 ---
-name: release-stable
-description: Prepare, sign, notarize, publish and activate one Astronomical Stable release. Use when asked to make, cut or ship a release or a new version of Astronomical, and read it before tagging or running any `cargo xtask release` step. Not for ordinary builds, commits or pull requests.
+name: sparkle-release
+description: Prepare, sign, notarize, publish and activate one Astronomical Stable release on the direct download and the Sparkle update feed. Use when asked to make, cut or ship a release, a Sparkle release, or a new version of Astronomical, and read it before tagging or running any `cargo xtask release` step. Never uploads to or submits to the Mac App Store, which is the macos-appstore-release skill. Not for ordinary builds, commits or pull requests.
 ---
 
-# Release Astronomical Stable
+# Release Astronomical Stable through Sparkle
 
 Release the version the user named. If they named none, ask for a numeric `MAJOR.MINOR.PATCH`; never infer it. Then use the confirmed value as `VERSION` and `TAG="v${VERSION}"`, and require it to be newer than the latest semantic release tag. Asking for a release authorizes the release work, but you must stop once after local artifact review and obtain the user's explicit approval before pushing the tag or publishing. Approval the user gave in advance for this release counts; the review itself still happens, and its results still go in your report.
 
@@ -111,7 +111,7 @@ cargo xtask app dev
 cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"; echo EXIT=$?
 ```
 
-`DISTRIBUTION_IDENTITY` is the Keychain identity whose quoted name starts with `Apple Distribution:` (section 8 lists the store credentials). The build uploads nothing and changes nothing in the worktree. It ends with the store bundle check: both applications sandboxed, the engine and worker inheriting, no Sparkle, no terminal command, the privacy manifest, the export declaration, and an engine that belongs to this commit. A nonzero exit stops the release here, before any tag exists; fix the cause through its own pull request and start this section again. If this Mac has no distribution identity, stop and tell the user: do not skip the step. Section 8 builds the bundle again from the tag for the upload itself; this run only proves the channel still builds.
+`DISTRIBUTION_IDENTITY` is the Keychain identity whose quoted name starts with `Apple Distribution:` (the `macos-appstore-release` skill lists the store credentials). The build uploads nothing and changes nothing in the worktree. It ends with the store bundle check: both applications sandboxed, the engine and worker inheriting, no Sparkle, no terminal command, the privacy manifest, the export declaration, and an engine that belongs to this commit. A nonzero exit stops the release here, before any tag exists; fix the cause through its own pull request and start this section again. If this Mac has no distribution identity, stop and tell the user: do not skip the step. A store release, when the user asks for one, builds the bundle again from the tag through the `macos-appstore-release` skill; this run only proves the channel still builds and is not a store release.
 
 6. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
 7. Prepare the release:
@@ -200,39 +200,9 @@ Section 6 step 3 is where the README link is set. Repair a failing link through 
 
 Tell the user that Astronomical `$VERSION` is available through the normal public release and Sparkle channels. Do not acquire it for them; they will receive it through the ordinary user journey.
 
-## 8. Ship the same version to the Mac App Store
+## 8. The Mac App Store is a separate release
 
-The store version is the same product built as a sandboxed channel. Do this stage after section 7 succeeds, from the release tag, so both channels carry one version number. It never changes the direct release.
-
-Read the `mac-app-store` skill (`.claude/skills/mac-app-store/SKILL.md`) before the first step. It holds the detail behind each step here: the decisions already made for the app record, how to run and try the sandboxed build on screen, what Apple's validation has said before, and how to work on the App Store Connect pages.
-
-Three steps need the user's word each time, and nothing else in this stage does: uploading a build, submitting for review, and releasing to the public. Ask in the chat; approval for a direct release does not cover them.
-
-Store credentials, besides the map above:
-
-- **Distribution identity:** the Keychain identity whose quoted name starts with `Apple Distribution:`.
-- **Installer identity:** the one whose quoted name starts with `3rd Party Mac Developer Installer:`.
-- **App Store Connect API key:** the key's private half lives in `~/.appstoreconnect/private_keys/AuthKey_<KEY ID>.p8`. The Key ID is in that file name; the Issuer ID is on the Users and Access, Integrations page of App Store Connect. Never copy the private key anywhere else or print it.
-
-Steps:
-
-1. Build the store bundle from the clean release tag: `cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"`. The bundle check refuses a bundle with an unsandboxed executable, a terminal command, a missing privacy manifest, missing entitlements, or a missing export declaration.
-2. Prove it runs sandboxed. Stop the installed Stable app first (check it is idle; the two share a port), copy the bundle into the Applications folder under another name, and run `cargo xtask app smoke-test --app-bundle "/Applications/<that name>.app"`. From a build folder a sandboxed agent cannot reach its engine, so the smoke test must run on the Applications copy. Then try each promise of the listing on screen, following the table in the `mac-app-store` skill; the smoke test does not open a file dialog. Move the copy to the Trash and reopen Stable afterwards.
-3. Package it: `cargo xtask release app-store-pkg --app-bundle PATH --installer-identity "$INSTALLER_IDENTITY"`.
-4. Ask Apple to validate it: `cargo xtask release app-store-upload --package PATH --api-key KEY_ID --api-issuer ISSUER_ID`. Validation sends nothing permanent. Fix every error it reports before going on. One warning is expected until provisioning profiles exist: 90889, which only concerns TestFlight.
-5. **Ask the user, then upload:** the same command with `--upload`. An uploaded build cannot be withdrawn, and a build number can be used once per version. Processing takes roughly ten to thirty minutes before the build can be selected.
-6. On the app record in App Store Connect, create the new version with the release's version number, write "What's New" from the release notes in plain words, and select the uploaded build. Screenshots carry over from the previous version; replace them only when the app looks different.
-7. **Ask the user, then submit for review.** Keep release set to manual.
-8. When Apple answers: on approval, install the approved build from the store on a Mac account that has never run the store version and reach a first reply before asking the user whether to release; on rejection, record Apple's reasons on the release issue and open one issue per reason.
-
-Rules for the app record that must not change by accident:
-
-- **Availability excludes the European Union.** The account holder has declared to Apple that they do not distribute there. When availability is edited, all 27 member states stay unticked, automatic availability in future countries stays off, and "distribution in France" is answered "No".
-- **Listing text and screenshots** promise only what works in the sandboxed build. Before adding a promise, do it on screen in the store build.
-- **The privacy answer is "Data Not Collected".** It must change in the same release as any feature that sends data anywhere.
-- **Entitlements are part of the review.** A new entitlement needs a sentence in the review notes saying why.
-
-To replace a build that is already waiting for review, remove the version from review on the app record first, then repeat steps 1 to 7 with the new build.
+This procedure ends at section 7. Shipping the same version to the Mac App Store is its own release, done only when the user asks for it in their own words, and never as part of a Sparkle release: follow the `macos-appstore-release` skill (`.claude/skills/macos-appstore-release/SKILL.md`). Section 3's store bundle build is a check that the store channel still builds; it uploads nothing and is not a store release.
 
 ## Failure rules
 
