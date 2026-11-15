@@ -1,10 +1,10 @@
 //! Which prompt spans one layer-at-a-time prefill runs (issues #1985 and
 //! #2221).
 //!
-//! The spans are cut at the configured size and at the astro SSD astro SSD prompt cache's
-//! boundaries, with the resolver the astro SSD astro SSD prompt cache's lookup expects. A prompt that
+//! The spans are cut at the configured size and at the astro SSD prompt cache's
+//! boundaries, with the resolver the astro SSD prompt cache's lookup expects. A prompt that
 //! fits one span is a plan of one span: it is read the same way as a long
-//! one, one layer at a time. The group stops at the prompt's end, or, while the astro SSD astro SSD prompt cache
+//! one, one layer at a time. The group stops at the prompt's end, or, while the astro SSD prompt cache
 //! captures, after the span that ends one token short of a prompt that does
 //! not fill its last block: that last token runs on its own so the partial
 //! tail block is captured where the next request's lookup expects it.
@@ -37,7 +37,7 @@ impl LayerMajorSpanPlan {
 
 /// Plans the spans from `prefill_cursor`, or `None` when no token remains.
 ///
-/// `capture_block_token_count` is the astro SSD astro SSD prompt cache's block size when this
+/// `capture_block_token_count` is the astro SSD prompt cache's block size when this
 /// request captures, and `None` otherwise.
 pub(crate) fn layer_major_span_plan(
     prefill_cursor: usize,
@@ -45,7 +45,7 @@ pub(crate) fn layer_major_span_plan(
     chunk_token_count: usize,
     capture_block_token_count: Option<usize>,
 ) -> Option<LayerMajorSpanPlan> {
-    // A zero block holds no boundary; the astro SSD astro SSD prompt cache contract never makes one,
+    // A zero block holds no boundary; the astro SSD prompt cache contract never makes one,
     // and the boundary arithmetic divides by it.
     let capture_block_token_count =
         capture_block_token_count.filter(|block_token_count| *block_token_count > 0);

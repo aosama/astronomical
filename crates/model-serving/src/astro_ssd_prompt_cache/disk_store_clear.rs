@@ -1,7 +1,7 @@
 //! Safe deletion of global or model-scoped persistent astro-ssd-prompt-cache trees.
 //!
 //! The worker is the sole owner of this operation. The daemon sends an IPC
-//! command and never reads or mutates astro SSD astro SSD prompt cache files directly.
+//! command and never reads or mutates astro SSD prompt cache files directly.
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -25,10 +25,10 @@ pub struct AstroSsdPromptCacheClearOutcome {
     pub bytes_freed: u64,
 }
 
-/// Deletes either every astro SSD astro SSD prompt cache namespace or all revisions of one model.
+/// Deletes either every astro SSD prompt cache namespace or all revisions of one model.
 ///
 /// Model identities may contain multiple normal path components, such as
-/// `organization/model`, because that is the astro SSD astro SSD prompt cache layout used by model IDs.
+/// `organization/model`, because that is the astro SSD prompt cache layout used by model IDs.
 /// Absolute paths, `.` and `..` are rejected before any filesystem access.
 pub fn clear_astro_ssd_prompt_cache_directory(
     global_astro_ssd_prompt_cache_root_directory: &Path,

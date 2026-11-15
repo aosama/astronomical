@@ -47,21 +47,21 @@ impl StorageTransition {
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves the LiveReuse astro SSD astro SSD prompt cache interaction matrix cell"]
+#[ignore = "loads Ornith and proves the LiveReuse astro SSD prompt cache interaction matrix cell"]
 #[serial]
 async fn should_run_pinned_ornith_astro_ssd_prompt_cache_interaction_live_reuse() {
     run_selected_acceptance_cell(StorageTransition::LiveReuse).await;
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves the WorkerRestart astro SSD astro SSD prompt cache interaction matrix cell"]
+#[ignore = "loads Ornith and proves the WorkerRestart astro SSD prompt cache interaction matrix cell"]
 #[serial]
 async fn should_run_pinned_ornith_astro_ssd_prompt_cache_interaction_worker_restart() {
     run_selected_acceptance_cell(StorageTransition::WorkerRestart).await;
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves the DeletedWhileLive astro SSD astro SSD prompt cache interaction matrix cell"]
+#[ignore = "loads Ornith and proves the DeletedWhileLive astro SSD prompt cache interaction matrix cell"]
 #[serial]
 async fn should_run_pinned_ornith_astro_ssd_prompt_cache_interaction_deleted_while_live() {
     run_selected_acceptance_cell(StorageTransition::DeletedWhileLive).await;
@@ -191,7 +191,7 @@ async fn run_greedy_request(
         .start_generation(
             // `new` samples at temperature 1.0 with no seed, so two runs would compare two
             // random draws. Greedy makes the token a function of the logits alone, so a
-            // changed token means the restored astro SSD astro SSD prompt cache changed them.
+            // changed token means the restored astro SSD prompt cache changed them.
             Qwen3_5InferenceRequest::new_sampling(
                 request_id,
                 prompt_token_ids.to_vec(),

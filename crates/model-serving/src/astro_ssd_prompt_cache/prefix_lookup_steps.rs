@@ -60,7 +60,7 @@ pub(super) fn complete_and_maximum_restorable_block_counts(
 
 /// Produces the lookup outcome for a prompt too short for one restorable
 /// block: a root partial tail when the probe finds one, otherwise a plain
-/// astro SSD astro SSD prompt cache miss.
+/// astro SSD prompt cache miss.
 pub(super) fn prompt_too_short_lookup_result<KvBlockExists, RecurrentSnapshotExists>(
     lookup_inputs: &AstroSsdPromptCachePrefixLookupInputs<
         '_,

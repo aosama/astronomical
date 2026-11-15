@@ -171,7 +171,7 @@ fn write_speculative_acceptance_config(
             "model_directories": [acceptance_model_scan_root(model_directory)],
             "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_least(speculative_memory_ceiling_bytes),
         },
-        // The astro SSD astro SSD prompt cache stays enabled to match the control journey's working
+        // The astro SSD prompt cache stays enabled to match the control journey's working
         // attribution path; admitted speculative sessions bypass it in both
         // directions regardless (decided at session admission).
         "ssd_prompt_cache": {"enabled": true},

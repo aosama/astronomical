@@ -209,7 +209,7 @@ pub struct AstroSsdPromptCacheSummary {
     pub partial_tail_hits: u64,
 }
 
-/// Scope of the newest astro SSD astro SSD prompt cache clear waiting for generation to become idle.
+/// Scope of the newest astro SSD prompt cache clear waiting for generation to become idle.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PendingAstroSsdPromptCacheClear {
     pub model_id: Option<String>,

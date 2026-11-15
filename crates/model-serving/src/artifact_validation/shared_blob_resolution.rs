@@ -9,7 +9,7 @@ use super::ArtifactValidationError;
 /// Directory, directly under a Hugging Face hub root, that holds shared blobs.
 const SHARED_BLOB_STORE_DIRECTORY_NAME: &str = "blobs";
 
-/// Directory, inside one astro SSD astro SSD prompt cache entry, that holds the per-revision tree metadata.
+/// Directory, inside one astro SSD prompt cache entry, that holds the per-revision tree metadata.
 const TREES_DIRECTORY_NAME: &str = "trees";
 
 /// Snapshot tree key holding the per-file record map.
@@ -115,7 +115,7 @@ pub(crate) fn resolve_verified_shared_hub_blob_path(
 /// One file record from a Hugging Face cache entry's snapshot tree metadata.
 struct SnapshotTreeRecord {
     /// Digest the shared store names this object after, preferring the Xet hash
-    /// because Xet-backed astro SSD prompt astro SSD prompt caches store the object under that name.
+    /// because Xet-backed astro SSD prompt caches store the object under that name.
     primary_recorded_digest: String,
     /// Every digest the tree records for this file, in preference order.
     recorded_content_digests: Vec<String>,

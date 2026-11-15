@@ -144,7 +144,7 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
         );
         let worker_home = tempfile::tempdir()
             .expect("the multi-chunk resident worker home should be created");
-        // The astro SSD astro SSD prompt cache stops a terminal chunk one token short,
+        // The astro SSD prompt cache stops a terminal chunk one token short,
         // so the short request leaves a one-token prefill observation. That
         // observation once extrapolated to a 2,048-token chunk as a ~23 GB
         // phantom transient and demoted a fitting request to SSD streaming.

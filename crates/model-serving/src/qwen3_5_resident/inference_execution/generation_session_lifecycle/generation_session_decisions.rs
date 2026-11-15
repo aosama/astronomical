@@ -3,7 +3,7 @@
 use astronomical_ipc_protocol::WorkerPromptProcessingPhase;
 
 /// Persistent snapshots contain target decoder state only, so target-only
-/// execution is preferred whenever the astro SSD astro SSD prompt cache is available; precomputed visual
+/// execution is preferred whenever the astro SSD prompt cache is available; precomputed visual
 /// embeddings would restore an incompatible shifted history and disable reuse.
 pub(super) fn can_use_astro_ssd_prompt_cache(
     astro_ssd_prompt_cache_is_available: bool,

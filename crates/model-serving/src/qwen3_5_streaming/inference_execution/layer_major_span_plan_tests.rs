@@ -1,4 +1,4 @@
-//! Layer-major span plans: the chunk path's spans with the astro SSD astro SSD prompt cache on
+//! Layer-major span plans: the chunk path's spans with the astro SSD prompt cache on
 //! and off, a prompt one span long, a block-aligned prompt, and a cursor
 //! that does not start at zero.
 

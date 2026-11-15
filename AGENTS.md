@@ -56,9 +56,9 @@
 
 ## The Memory Areas Have Formal Names
 
-- You MUST read `<repo-root>/docs/glossary.md` before you read, write, review or discuss anything about memory, MLX, caching or streaming. It defines the four memory areas: `astro_expert_cache`, `mlx_working_buffers`, `mlx_buffer_cache` and `metal_kernel_cache`.
-- Use those names, and no others, for those areas in code, comments, tests, logs, documentation, GitHub content and replies. Screens keep their plain words; the glossary lists which is which.
-- When you find an area under another name, such as "allocator cache", "working memory" or "kernel cache" for memory MLX holds, rename it to the formal name as part of your work.
+- You MUST read `<repo-root>/docs/glossary.md` before you read, write, review or discuss anything about memory, MLX, caching or streaming. It defines every memory area and every cache by one formal name, such as `astro_expert_cache`, `astro_ssd_prompt_cache`, `astro_decoder_state_cache`, `mlx_buffer_cache`, `mlx_working_buffers` and `macos_file_cache`.
+- Never write the bare word "cache": every mention says which cache it means, by its formal name. Use those names in code, comments, tests, logs, documentation, GitHub content and replies. Screens keep their plain words; the glossary lists which is which.
+- When you find a cache or memory area under another name, or a bare "cache", rename it to the formal name as part of your work.
 
 ## Hints About This Repo
 

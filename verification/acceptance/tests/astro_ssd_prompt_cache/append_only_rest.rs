@@ -15,7 +15,7 @@ use crate::support::serving_rest;
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and restores completed cold astro SSD astro SSD prompt cache blocks on an appended Romeo chat"]
+#[ignore = "launches the production REST server and restores completed cold astro SSD prompt cache blocks on an appended Romeo chat"]
 async fn should_restore_every_completed_cold_block_for_an_appended_chat_through_rest() {
     timeout(E2E_TIMEOUT, run_append_only_rest_journey())
         .await

@@ -60,7 +60,7 @@ async fn run_startup_cleanup_attribution_journey() {
             astro_ssd_prompt_cache_directory.path(),
             // The test-chunk rule fixes the prefill chunk at 2,048 tokens so
             // results stay comparable across every journey in this lane; this
-            // journey measures astro SSD astro SSD prompt cache rebuild attribution, not chunk width.
+            // journey measures astro SSD prompt cache rebuild attribution, not chunk width.
             2_048,
         )
         .await;

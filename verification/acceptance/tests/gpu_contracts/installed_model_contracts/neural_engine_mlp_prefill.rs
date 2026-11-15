@@ -483,7 +483,7 @@ fn report_paired_prefill_speedup(
     );
 }
 
-/// The production loader with an astro Neural Engine astro Neural Engine program cache, prefill only: what a user gets
+/// The production loader with an astro Neural Engine program cache, prefill only: what a user gets
 /// from the second load of a model onwards.
 async fn compare_prefill_with_kept_programs() {
     let _gpu_exclusive = crate::common::direct_mlx_test_guard().await;
@@ -511,7 +511,7 @@ async fn compare_prefill_with_kept_programs() {
 }
 
 #[tokio::test]
-#[ignore = "loads a real dense artifact and its Neural Engine programs through an astro Neural Engine astro Neural Engine program cache"]
+#[ignore = "loads a real dense artifact and its Neural Engine programs through an astro Neural Engine program cache"]
 #[serial]
 async fn should_serve_real_dense_prefill_from_kept_programs() {
     timeout(JOURNEY_TIMEOUT, compare_prefill_with_kept_programs())

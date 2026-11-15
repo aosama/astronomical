@@ -54,7 +54,7 @@ pub fn optimize_astro_decoder_state_cache(
     Ok(configs)
 }
 
-/// Astro decoder state astro decoder state cache bytes for a context length under a per-layer config, for the
+/// astro decoder state cache bytes for a context length under a per-layer config, for the
 /// memory report: each layer's float16 elements per token at its width,
 /// plus a float16 scale and bias per group when it is quantized.
 #[must_use]

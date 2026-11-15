@@ -33,7 +33,7 @@ pub struct GenerationPerformanceRecord {
     pub model_id: String,
     /// Total prompt tokens (including cached tokens).
     pub prompt_token_count: u32,
-    /// Prompt tokens restored from the persistent Astro SSD astro SSD prompt cache.
+    /// Prompt tokens restored from the persistent astro SSD prompt cache.
     pub astro_ssd_prompt_cache_token_count: u32,
     /// Output tokens the model produced.
     pub generated_token_count: u16,
@@ -64,9 +64,9 @@ pub struct GenerationPerformanceRecord {
     pub mlx_peak_memory_bytes: Option<u64>,
     /// Active MLX GPU memory at last prefill progress event, in bytes.
     pub mlx_active_memory_bytes: Option<u64>,
-    /// Bounded astro SSD astro SSD prompt cache lookup, publication, and reclamation attribution for this request.
+    /// Bounded astro SSD prompt cache lookup, publication, and reclamation attribution for this request.
     ///
-    /// The worker computes this evidence while it owns MLX and astro SSD astro SSD prompt cache state;
+    /// The worker computes this evidence while it owns MLX and astro SSD prompt cache state;
     /// the daemon transports it unchanged into the completion record so log
     /// readers can distinguish a true cache miss from publication memory pressure.
     pub astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,

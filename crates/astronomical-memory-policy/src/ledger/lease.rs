@@ -2,7 +2,7 @@
 //!
 //! Most memory follows the same shape every request: weights, context, one
 //! layer's MLX working buffers. A few jobs do not: saving or restoring prompt
-//! astro SSD astro SSD prompt cache blocks, the vision tower for one image, a draft model. Each asks
+//! astro SSD prompt cache blocks, the vision tower for one image, a draft model. Each asks
 //! the ledger for a lease naming its purpose and size, and gives it back
 //! when done. That is how the code that allocates declares its cost.
 
@@ -17,7 +17,7 @@ pub struct LeaseId(u64);
 pub enum LeasePurpose {
     /// Snapshots held until astro-ssd-prompt-cache blocks are written to storage.
     AstroSsdPromptCachePublication,
-    /// Blocks read back from the astro SSD astro SSD prompt cache before they join the context.
+    /// Blocks read back from the astro SSD prompt cache before they join the context.
     AstroSsdPromptCacheRestore,
     /// The vision tower, loaded for the images of one request.
     VisionTower,

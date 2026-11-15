@@ -392,7 +392,7 @@ impl ChunkingConfig {
     /// Default on: the A/B on the resident measurement journey showed the
     /// byte-moving KV-block reads eliminated (six restore spans to three,
     /// the remainder being the lookup and the small boundary snapshot), with
-    /// unchanged rates at the journey's astro SSD astro SSD prompt cache depth and the production win
+    /// unchanged rates at the journey's astro SSD prompt cache depth and the production win
     /// growing with cache depth and cold stores.
     #[must_use]
     pub const fn experimental_in_memory_prefix_adoption_enabled(&self) -> bool {

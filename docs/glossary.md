@@ -1,6 +1,8 @@
-# Glossary: the memory areas
+# Glossary: memory areas and caches
 
-Four areas of memory matter when Astronomical runs a model on MLX. Each has one formal name, and the prefix says who owns it: `astro_` is Astronomical's, `mlx_` is MLX's, `metal_` is macOS's. Code, logs, tests, documentation and conversation use these names and no others for these areas.
+Every cache and memory area in Astronomical has one formal name, and the prefix says who owns it: `astro_` is Astronomical's, `mlx_` is MLX's, `metal_`, `macos_` and `coreml_` are Apple's, and the rest name the outside project that owns it. Code, logs, tests, documentation and conversation use these names. The bare word "cache" is never used on its own: every mention says which cache it means.
+
+## The four memory areas under the limit
 
 | Name | What it holds | Owner | Where it lives | Counts against the memory limit |
 |---|---|---|---|---|
@@ -58,9 +60,30 @@ limit = core weights that always stay in memory
 
 The `astro_expert_cache` is always the remainder. Whatever the other accounts need is taken first, and it gets what is left.
 
+## Every other cache
+
+| Name | What it holds | Owner | Where it lives |
+|---|---|---|---|
+| `astro_ssd_prompt_cache` | Blocks of processed prompts saved on the SSD, so a later request that starts the same way skips that work | Astronomical | Storage (`~/.astronomical/cache`) |
+| `astro_decoder_state_cache` | One request's attention keys and values and recurrent state, carried from token to token | Astronomical | Memory |
+| `astro_neural_engine_program_cache` | Compiled Neural Engine programs kept between loads | Astronomical | Storage |
+| `astro_image_prefix_key_value_cache` | Qwen-Image's prefix keys and values reused across denoising steps | Astronomical | Memory |
+| `astro_native_build_cache` | Downloaded and built native sources such as MLX | Astronomical | Storage (`~/Library/Caches/Astronomical`) |
+| `coreml_model_cache` | Core ML's own compiled copy of a model | Core ML | Storage |
+| `huggingface_hub_cache` | Downloaded model files in Hugging Face's folder layout | Hugging Face | Storage |
+| `macos_file_cache` | File pages macOS keeps in memory after a read | macOS | Memory outside the limit |
+| `github_actions_cache` | Saved CI state restored by later CI runs | GitHub | GitHub's servers |
+| `sccache` | The compiler cache tool of that name, and what it stores | Mozilla's sccache | Storage and CI |
+
+- **Small in-process memos** need no table entry, but their name says what they hold, such as `vision_padding_zero_cache` or `safetensors_header_cache`. A memo may also be called a memo.
+- **Names other projects define** keep their spelling: MLX's `set_cache_limit`, `clear_cache` and `get_cache_memory`; OpenAI's `cached_tokens`; Anthropic's `cache_read_input_tokens`, `cache_creation_input_tokens` and `cache_control`; HTTP's `Cache-Control`; OptiQ's and diffusers' `kv_cache`. Where Astronomical's code calls them, it wraps or imports them under the formal name.
+- **config.json** leaves out the `astro_` prefix, because the whole file is Astronomical's: the `astro_ssd_prompt_cache` settings are the `ssd_prompt_cache` section. Everything else, including IPC, REST and logs, carries the full name.
+- **Folders on disk** keep the names they were created with, so an update never orphans what a person already has.
+- **"Cached"** as an adjective is replaced by what it means: "held in the `astro_expert_cache`", "restored from the `astro_ssd_prompt_cache`", or "memoized".
+
 ## On screen
 
-Screens do not show these names; they use plain words. On Observatory's Overview, where the limit is divided:
+Screens do not show these names; they use plain words, such as "Prompt cache" in Settings or "Restoring prompt cache" in the menu bar. On Observatory's Overview, where the limit is divided:
 
 | On screen | Formal name |
 |---|---|

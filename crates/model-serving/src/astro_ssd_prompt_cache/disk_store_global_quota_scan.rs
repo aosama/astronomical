@@ -3,7 +3,7 @@
 //! This module has no deletion authority. It takes one filesystem snapshot,
 //! counts every owned byte, reconstructs committed block ancestry, and returns
 //! deterministic eviction units. Keeping discovery separate from deletion
-//! avoids rescanning and resorting the whole astro SSD astro SSD prompt cache after every removed block.
+//! avoids rescanning and resorting the whole astro SSD prompt cache after every removed block.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -201,7 +201,7 @@ fn scan_standalone_file(
             .is_some_and(|directory_name| directory_name == "visual_embeddings")
     });
     // `kv_blocks` and `recurrent_snapshots` are retired pre-format-11 storage
-    // trees. Their files are recoverable astro SSD astro SSD prompt cache artifacts, not valid committed
+    // trees. Their files are recoverable astro SSD prompt cache artifacts, not valid committed
     // blocks, so startup may reclaim them before current-format content.
     let is_obsolete_format_artifact = file_path.ancestors().any(|ancestor_path| {
         ancestor_path.file_name().is_some_and(|directory_name| {

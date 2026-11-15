@@ -81,7 +81,7 @@ impl Qwen3_5EngineState {
                 );
             }
         }
-        // Astro astro expert cache bookkeeping after seating and materialization. Decode admission
+        // astro expert cache bookkeeping after seating and materialization. Decode admission
         // takes its own MLX snapshot next.
         let expert_statistics = model.astro_expert_cache_statistics();
         let total_layer_count = model

@@ -1,4 +1,4 @@
-//! Bounded reason-separated evidence for cleanup performed while opening the astro SSD astro SSD prompt cache.
+//! Bounded reason-separated evidence for cleanup performed while opening the astro SSD prompt cache.
 
 /// Count and byte total for one startup-cleanup reason.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

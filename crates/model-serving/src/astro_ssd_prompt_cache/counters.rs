@@ -1,6 +1,6 @@
 //! Cumulative persistent astro-ssd-prompt-cache observability counters and stats snapshot.
 //!
-//! These counters track how often the astro SSD astro SSD prompt cache restored a prompt
+//! These counters track how often the astro SSD prompt cache restored a prompt
 //! prefix (hit) versus fell back to cold prefill (miss), how many prompt tokens
 //! were saved across all hits, and how often persisted visual embeddings were
 //! loaded instead of recomputed. They are pure Rust so they can be tested without
@@ -35,7 +35,7 @@ impl AstroSsdPromptCacheCounters {
     #[cfg(any(test, feature = "direct-mlx"))]
     /// Records one successful persistent astro-ssd-prompt-cache prefix restore.
     ///
-    /// `restored_token_count` is the number of prompt tokens the astro SSD astro SSD prompt cache supplied,
+    /// `restored_token_count` is the number of prompt tokens the astro SSD prompt cache supplied,
     /// which is accumulated into `astro_ssd_prompt_cache_tokens_saved`.
     pub fn record_astro_ssd_prompt_cache_hit(&mut self, restored_token_count: usize) {
         self.astro_ssd_prompt_cache_hits = self.astro_ssd_prompt_cache_hits.saturating_add(1);
@@ -78,7 +78,7 @@ impl AstroSsdPromptCacheCounters {
             .saturating_add(u64::try_from(visual_embedding_row_count).unwrap_or(u64::MAX));
     }
 
-    /// Records one persistent visual-embedding astro SSD astro SSD prompt cache miss.
+    /// Records one persistent visual-embedding astro SSD prompt cache miss.
     pub fn record_astro_ssd_prompt_cache_visual_embedding_miss(&mut self) {
         self.astro_ssd_prompt_cache_visual_embedding_misses = self
             .astro_ssd_prompt_cache_visual_embedding_misses
@@ -97,7 +97,7 @@ impl AstroSsdPromptCacheCounters {
         self.astro_ssd_prompt_cache_misses
     }
 
-    /// Returns the cumulative number of prompt tokens restored from the astro SSD astro SSD prompt cache.
+    /// Returns the cumulative number of prompt tokens restored from the astro SSD prompt cache.
     #[must_use]
     pub const fn astro_ssd_prompt_cache_tokens_saved(&self) -> u64 {
         self.astro_ssd_prompt_cache_tokens_saved
@@ -109,7 +109,7 @@ impl AstroSsdPromptCacheCounters {
         self.astro_ssd_prompt_cache_partial_tail_hits
     }
 
-    /// Returns how many visual embedding files were loaded from the astro SSD astro SSD prompt cache.
+    /// Returns how many visual embedding files were loaded from the astro SSD prompt cache.
     #[must_use]
     pub const fn astro_ssd_prompt_cache_visual_embedding_hits(&self) -> u64 {
         self.astro_ssd_prompt_cache_visual_embedding_hits

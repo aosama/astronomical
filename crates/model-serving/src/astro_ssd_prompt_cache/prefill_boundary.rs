@@ -1,4 +1,4 @@
-//! Arithmetic for aligning prompt processing with durable astro SSD astro SSD prompt cache boundaries.
+//! Arithmetic for aligning prompt processing with durable astro SSD prompt cache boundaries.
 //!
 //! Cache-enabled prefill is clamped to one boundary per forward. That keeps the
 //! captured decoder state and token slice at the same exact point, and ensures a

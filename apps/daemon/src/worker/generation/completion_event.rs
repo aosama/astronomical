@@ -2,7 +2,7 @@
 //!
 //! Worker completion has four audiences with different contracts: protocol
 //! validation protects daemon state, the local performance log receives
-//! astro SSD astro SSD prompt cache diagnostics, the completion attribution log receives emitted tool
+//! astro SSD prompt cache diagnostics, the completion attribution log receives emitted tool
 //! calls when enabled, and the public stream receives only OpenAI-compatible
 //! completion fields. Keeping the fan-out here makes that separation explicit.
 
@@ -78,7 +78,7 @@ pub(in crate::worker) fn handle_worker_completion_event(
         astro_ssd_prompt_cache_token_count,
         reason,
     };
-    // Astro SSD astro SSD prompt cache diagnostics are request-scoped completion evidence. They go only to
+    // astro SSD prompt cache diagnostics are request-scoped completion evidence. They go only to
     // the local performance row; the public generation stream keeps its stable
     // OpenAI-compatible completion shape unchanged.
     let Some(active_request) = active_worker_request

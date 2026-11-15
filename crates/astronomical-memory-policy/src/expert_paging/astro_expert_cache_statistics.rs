@@ -1,4 +1,4 @@
-//! Astro astro expert cache accounting DTOs and exact retained-weight payload sizing.
+//! astro expert cache accounting DTOs and exact retained-weight payload sizing.
 
 /// Cumulative astro expert cache counters for transparent low-level performance tests.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

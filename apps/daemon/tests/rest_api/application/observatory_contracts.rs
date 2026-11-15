@@ -362,7 +362,7 @@ async fn should_zero_fill_astro_ssd_prompt_cache_stats_when_no_worker_data_so_th
         astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_maximum_size_bytes"],
         0
     );
-    // Every field the Observatory astro SSD astro SSD prompt cache panel reads must be present.
+    // Every field the Observatory astro SSD prompt cache panel reads must be present.
     assert!(
         astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_sequence_state_block_count"]
             .is_u64()

@@ -532,7 +532,7 @@ impl WorkerHandle {
         })
     }
 
-    /// Applies an astro SSD astro SSD prompt cache clear immediately or queues the newest scope until idle.
+    /// Applies an astro SSD prompt cache clear immediately or queues the newest scope until idle.
     pub async fn clear_astro_ssd_prompt_cache(
         &self,
         model_id: Option<String>,

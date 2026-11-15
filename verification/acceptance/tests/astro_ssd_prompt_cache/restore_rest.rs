@@ -19,7 +19,7 @@ use crate::support::serving_rest;
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and publishes then restores a Romeo and Juliet astro SSD astro SSD prompt cache"]
+#[ignore = "launches the production REST server and publishes then restores a Romeo and Juliet astro SSD prompt cache"]
 async fn should_publish_and_restore_the_romeo_and_juliet_astro_ssd_prompt_cache_through_rest() {
     timeout(
         E2E_TIMEOUT,
@@ -60,7 +60,7 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     );
     // Build a textual request instead of injecting token IDs: only the public REST tokenizer
     // may define the actual user journey. The local tokenizer is used solely to size a stable
-    // Romeo-and-Juliet fixture near the astro SSD astro SSD prompt cache boundary before it is sent as ordinary text.
+    // Romeo-and-Juliet fixture near the astro SSD prompt cache boundary before it is sent as ordinary text.
     let prepared_romeo_and_juliet_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, cacheable_prompt_token_count);
     let model_artifact_rest_server =
@@ -124,7 +124,7 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     );
 
     // Warm request: the same messages and model identity must recover the cold request prefix.
-    // Astro SSD astro SSD prompt cache counters, rather than timing, are the durable proof because machines differ widely.
+    // astro SSD prompt cache counters, rather than timing, are the durable proof because machines differ widely.
     eprintln!("{acceptance_log_prefix} status=progress phase=warm_request");
     let warm_response = if let Some(expected_warm_request_expert_memory_mode) =
         expected_warm_request_expert_memory_mode

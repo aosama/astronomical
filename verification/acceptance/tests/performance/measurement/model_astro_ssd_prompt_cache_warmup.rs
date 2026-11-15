@@ -210,7 +210,7 @@ fn assert_astro_ssd_prompt_cache_warmup(
     );
     // Only the tail remainder of the prompt may stay uncached; anything
     // larger means lookup stopped early and silently discarded blocks that
-    // the configured astro SSD astro SSD prompt cache size still admits.
+    // the configured astro SSD prompt cache size still admits.
     assert!(
         warm_unastro_ssd_prompt_cache_token_count <= astro_ssd_prompt_cache_block_token_count,
         "the warm request must leave at most one block of prompt work uncached: \

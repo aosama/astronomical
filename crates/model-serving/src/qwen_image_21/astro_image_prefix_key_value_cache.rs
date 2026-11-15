@@ -10,11 +10,11 @@
 //! (`kv_cache = None`), matching the pipeline default here. This module is the verified bookkeeping
 //! for the cached path — it is what `prefix_length` already supplies, and what a cache-carrying
 //! forward would need — so it is unit-tested and kept, not dead residue. Do not read its
-//! presence as evidence that the runtime astro image prefix key-value astro image prefix key-value caches prefix keys and values yet.
+//! presence as evidence that the runtime astro image prefix key-value caches prefix keys and values yet.
 //!
 //! The whole scheme rests on one layout fact: the target-image tokens must be the **contiguous
 //! suffix** of the joint sequence. The forward slices `joint_hidden_states[:, prefix_len:]` and
-//! astro image prefix key-value astro image prefix key-value caches `[0, prefix_len)` as single ranges, which is only correct under that invariant, so
+//! astro image prefix key-value caches `[0, prefix_len)` as single ranges, which is only correct under that invariant, so
 //! [`astro_image_prefix_key_value_cache_is_valid`] checks it (and the `causal_condition` gate the reference requires) before the
 //! runtime relies on it. This module is pure integer/tuple bookkeeping — no runtime dependency — so
 //! it is unit-tested against the diffusers oracle.

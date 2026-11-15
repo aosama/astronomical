@@ -1,4 +1,4 @@
-//! SSD-backed, architecture-neutral persistent decoder-state astro SSD astro SSD prompt cache.
+//! SSD-backed, architecture-neutral persistent decoder-state astro SSD prompt cache.
 //!
 //! Current-format state is published as complete atomic block directories with
 //! manifest-bound ancestry and contract-derived sequence and boundary files.
@@ -51,7 +51,7 @@ impl AstroSsdPromptCacheDiskStoreConfig {
         }
     }
 
-    /// Derives an isolated astro SSD astro SSD prompt cache namespace while retaining the shared global quota.
+    /// Derives an isolated astro SSD prompt cache namespace while retaining the shared global quota.
     #[must_use]
     pub fn for_model(&self, model_id: &str, model_revision: &str) -> Self {
         Self::new(
@@ -69,7 +69,7 @@ impl AstroSsdPromptCacheDiskStoreConfig {
     }
 }
 
-/// Persistent, descriptor-backed Astro SSD astro SSD prompt cache for Qwen3.5-MoE astro-ssd-prompt-cache files.
+/// Persistent, descriptor-backed astro SSD prompt cache for Qwen3.5-MoE astro-ssd-prompt-cache files.
 pub struct AstroSsdPromptCacheDiskStore {
     pub(super) active_model_astro_ssd_prompt_cache_directory: PathBuf,
     pub(super) blocks_directory: PathBuf,
@@ -264,7 +264,7 @@ impl AstroSsdPromptCacheDiskStore {
         };
         // `NotFound` is authoritative and updates telemetry immediately. Other
         // metadata errors are left for the actual load path to report with full
-        // typed context rather than turning a permission fault into an astro SSD astro SSD prompt cache miss.
+        // typed context rather than turning a permission fault into an astro SSD prompt cache miss.
         match std::fs::symlink_metadata(&tracked_file_path) {
             Ok(_) => true,
             Err(metadata_error) if metadata_error.kind() == std::io::ErrorKind::NotFound => {

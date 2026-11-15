@@ -14,7 +14,7 @@
 //!   exactly on "prefill starts" and excludes prefill execution entirely.
 //!
 //! Method: one real worker process in an isolated temporary home (no SSD
-//! astro SSD astro SSD prompt cache, fixed 2,048-token prefill chunks per the repo standard), one
+//! astro SSD prompt cache, fixed 2,048-token prefill chunks per the repo standard), one
 //! ~500-token Romeo and Juliet warmup-fixture request, and a one-field JSON
 //! report on stderr. The request runs to completion only so the journey can
 //! verify it succeeded; no other metric is collected. Laptop-only: it loads

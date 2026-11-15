@@ -101,7 +101,7 @@ pub fn qwen3_5_astro_decoder_state_cache_layout(
     AstroDecoderStateCacheLayout::new(decoder_layer_layouts)
 }
 
-/// The append-only Astro decoder state astro decoder state cache layout for one full-attention layer: keys and
+/// The append-only astro decoder state cache layout for one full-attention layer: keys and
 /// values as sequence-growing tensors that share the layer's head geometry.
 fn full_attention_layer_layout(
     keys: AstroDecoderStateCacheTensorDtype,

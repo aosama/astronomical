@@ -87,7 +87,7 @@ impl Qwen3_5ResidentModel {
                     )
                 }
             };
-        // Astro decoder state astro decoder state cache geometry cannot be finalized before weights and sparse plans are
+        // astro decoder state cache geometry cannot be finalized before weights and sparse plans are
         // bound: their source dtypes determine MLX result-type promotion. Derive
         // the persistence contract at that boundary without evaluating tensors.
         let astro_decoder_state_cache_layout = performance_attribution.measure_operation(
@@ -322,7 +322,7 @@ fn build_resident_model_memory_facts(
 
 /// Derives the astro decoder state cache layout at the tensor-binding boundary.
 ///
-/// Astro decoder state astro decoder state cache geometry cannot be finalized before weights and sparse plans are
+/// astro decoder state cache geometry cannot be finalized before weights and sparse plans are
 /// bound: their source dtypes determine MLX result-type promotion, so the
 /// persistence contract is derived here without evaluating tensors. The
 /// resident path derives dtypes from the quantized expert layer plans.

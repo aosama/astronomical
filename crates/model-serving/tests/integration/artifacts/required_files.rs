@@ -9,7 +9,7 @@ use astronomical_model_serving::{
 /// Builds a Hugging Face cache entry whose snapshot symlinks `config.json`
 /// into its own blob directory, then an install directory that reaches the
 /// snapshot through a symlink — the symlink-farm install shape a conversion
-/// pipeline produces when it links an installed model at the astro SSD astro SSD prompt cache's
+/// pipeline produces when it links an installed model at the astro SSD prompt cache's
 /// snapshot instead of copying it.
 fn symlink_farm_over_hugging_face_snapshot() -> (tempfile::TempDir, PathBuf) {
     let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
