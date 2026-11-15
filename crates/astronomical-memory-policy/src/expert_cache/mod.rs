@@ -9,16 +9,18 @@
 //! one eviction order, and a record of every decision so a slow reply can be
 //! explained from data instead of guessed at.
 //!
-//! Nothing here touches a model or a GPU. The engine mirrors the decisions
-//! onto its weight tables, and a recorded reply can be replayed through the
-//! same code on every commit (`recorded_reply_replay_tests`).
+//! Nothing here touches a model or a GPU, so a recorded reply can be
+//! replayed through this code on every commit
+//! (`recorded_reply_replay_tests`). The streaming engine does not follow
+//! these decisions yet: its tables are still laid out by its own rules, and
+//! this module is the measured design it is to be moved onto.
 //!
 //! - `routed_reply` — which experts each layer chose for each token of a
 //!   real reply, and the compact file such a recording is kept in.
 //! - `cache` — the cache with memory perfectly divisible, as a bound to
 //!   compare against.
 //! - `expert_tables` — the cache as an engine can hold it, one table per
-//!   layer, whose decisions the engine carries out.
+//!   layer, with every decision stated as a change to a table.
 //! - `cache_record` — what the cache did, per layer, per expert and per
 //!   eviction.
 

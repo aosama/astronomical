@@ -4,7 +4,7 @@
 //! experts live in one stacked tensor, so an empty slot frees nothing and
 //! memory moves between layers only by reallocating a table. This module is
 //! the same cache under that constraint, and every decision it takes is a
-//! `TableChange` the engine carries out on its tensors.
+//! `TableChange` an engine can carry out on its tensors.
 //!
 //! A table behaves like a growable vector. A miss takes a free slot if the
 //! table has one; otherwise the table grows by a step. When the step does
@@ -93,6 +93,8 @@ enum FreedSlot {
     None,
 }
 
+/// Every layer's table, the bytes they may take together, and the record of
+/// what serving each token did to them.
 #[derive(Debug)]
 pub struct ExpertTables {
     layer_geometries: Vec<ExpertCacheLayerGeometry>,

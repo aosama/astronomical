@@ -227,7 +227,9 @@ impl Qwen3_5Model {
                     history
                         .rerun_token_count
                         .set(history.rerun_token_count.get() + 1);
-                    tracing::info!(
+                    // A warming cache can miss on many tokens of one reply,
+                    // so this stays out of the default log.
+                    tracing::debug!(
                         optimistic_token_count = history.optimistic_token_count.get(),
                         rerun_token_count = history.rerun_token_count.get(),
                         "an optimistic reply token routed to an expert not in memory; running it again"

@@ -104,15 +104,15 @@ const METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND: u64 = 25;
 /// ceiling at 97.5%, above the collection line. A model that filled it ran
 /// with MLX's buffer cache permanently drained. Measured 2026-11-14 on a
 /// 48 GB machine with a 40,200,896,512-byte budget, whose collection line is
-/// 35.57 GiB: a 122B model replied at 28 to 30 tokens per second under a
-/// 35 GiB ceiling and at 10 to 11 under a 36 GiB one, with the same reads
+/// 35.57 GB: a 122B model replied at 28 to 30 tokens per second under a
+/// 35 GB ceiling and at 10 to 11 under a 36 GB one, with the same reads
 /// from storage and the same free system memory.
 ///
 /// The margin's own history: a planner that packs MLX arrays to the raw
 /// claim fails the command buffer with
 /// `kIOGPUCommandBufferCallbackErrorOutOfMemory`. Measured 2026-10-24 on the
 /// same machine, a 122B decode peaked at 40,051,177,002 MLX bytes (99.6% of
-/// the claim) and the worker died, while the same model at 37.4 GB peaks
+/// the claim) and the worker died, while the same model at 34.8 GB peaks
 /// (93%) never failed.
 #[must_use]
 pub const fn plannable_wired_residency_bytes(claimed_wired_residency_budget_bytes: u64) -> u64 {
