@@ -29,6 +29,7 @@ pub(crate) fn create_bypassing_macos_file_cache(path: &Path) -> std::io::Result<
     Ok(file)
 }
 
+#[cfg(target_os = "macos")]
 fn set_no_macos_file_cache(file: &File) -> std::io::Result<()> {
     // SAFETY: fcntl on a live descriptor with an integer argument.
     let status = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_NOCACHE, 1) };
@@ -37,6 +38,18 @@ fn set_no_macos_file_cache(file: &File) -> std::io::Result<()> {
     } else {
         Ok(())
     }
+}
+
+/// Astronomical runs only on macOS. Elsewhere this crate is built only as a
+/// dependency of the release catalog's Linux check, which never writes an
+/// atlas, so there is no file cache to bypass.
+#[cfg(not(target_os = "macos"))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "keeps the macOS signature so callers stay platform-blind"
+)]
+fn set_no_macos_file_cache(_file: &File) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// A zeroed buffer whose start and length are 16 KiB aligned.
