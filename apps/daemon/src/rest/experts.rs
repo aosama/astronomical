@@ -122,6 +122,7 @@ pub(crate) fn expert_stats_document(
             expert_streaming_observatory),
         "layer_topology": layer_topology_entries(latest_stats),
         "mode_transitions": mode_transition_entries(expert_streaming_observatory),
+        "last_reply": latest_stats.last_reply_memory_record,
         "updated_at_unix_millis": expert_streaming_observatory.updated_at_unix_millis,
     })
 }

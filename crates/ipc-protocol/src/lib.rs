@@ -41,11 +41,13 @@ mod protocol_message;
 mod protocol_message_tests;
 mod protocol_reader;
 mod protocol_writer;
+mod reply_memory_record;
 mod speech;
 mod worker_chunking_configuration;
 #[cfg(test)]
 mod worker_chunking_configuration_tests;
 mod worker_event_diagnostics;
+mod worker_memory_ledger_snapshot;
 mod worker_model_capabilities;
 mod worker_model_configuration;
 #[cfg(test)]
@@ -102,17 +104,19 @@ pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, RequestId, WorkerCommand,
     WorkerDenseLayerResidency, WorkerEvent, WorkerExpertLayerTopology,
     WorkerExpertResidencySnapshot, WorkerExpertStreamingStats,
-    WorkerMemoryCeilingUtilizationSnapshot, WorkerMemoryLedgerSnapshot, WorkerMlxMemorySnapshot,
-    WorkerPromptLayerProgress, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerMemoryCeilingUtilizationSnapshot, WorkerMlxMemorySnapshot, WorkerPromptLayerProgress,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
+pub use reply_memory_record::ReplyMemoryRecord;
 pub use speech::{
     SpeechCommand, SpeechResultMetadata, SpokenAudioSegment, WorkerSpeechCapabilities,
 };
 pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
 };
+pub use worker_memory_ledger_snapshot::WorkerMemoryLedgerSnapshot;
 pub use worker_model_capabilities::{
     WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
 };

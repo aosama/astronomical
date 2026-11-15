@@ -49,6 +49,7 @@ fn stats_snapshot(
         mandatory_decode_source_bytes: 4_000_000,
         prompt_token_count: prompt_tokens,
         generated_token_count: 100,
+        last_reply_memory_record: None,
     }
 }
 

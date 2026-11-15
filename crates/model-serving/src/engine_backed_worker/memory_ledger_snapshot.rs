@@ -10,6 +10,10 @@ pub(crate) const fn worker_memory_ledger_snapshot(
     let accounts = ledger_reading.accounts;
     let held_memory = ledger_reading.held_memory;
     let reconciliation = ledger_reading.reconciliation;
+    let (system_wired_bytes, system_wire_limit_bytes) = match ledger_reading.system_wired_reading {
+        Some(system_wired_reading) => system_wired_reading,
+        None => (0, 0),
+    };
     WorkerMemoryLedgerSnapshot {
         limit_bytes: accounts.limit_bytes,
         core_weight_bytes: accounts.core_weight_bytes,
@@ -17,6 +21,8 @@ pub(crate) const fn worker_memory_ledger_snapshot(
         mlx_working_buffer_bytes: accounts.mlx_working_buffer_bytes,
         mlx_buffer_cache_bytes: accounts.mlx_buffer_cache_bytes,
         system_wired_reserve_bytes: accounts.system_wired_reserve_bytes,
+        system_wired_bytes,
+        system_wire_limit_bytes,
         stream_slot_bytes: accounts.stream_slot_bytes,
         lease_bytes: accounts.lease_bytes,
         margin_bytes: accounts.margin_bytes,

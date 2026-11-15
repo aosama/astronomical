@@ -41,6 +41,7 @@ async function pollExpertStats() {
         const statsResponse = await fetch(EXPERTS_STATS_URL);
         if (statsResponse.ok) {
             latestExpertStatsDocument = await statsResponse.json();
+            rememberMemoryPageExpertStats(latestExpertStatsDocument);
         }
     } catch (statsFetchError) {
         return;

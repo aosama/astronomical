@@ -395,3 +395,17 @@ fn should_never_carry_a_system_wired_reserve_larger_than_the_limit() {
     assert_eq!(accounts.system_wired_reserve_bytes, 0);
     assert_eq!(accounts.shortfall_bytes, 0);
 }
+
+#[test]
+fn should_remember_the_latest_system_wired_reading_and_none_before_the_first() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    assert_eq!(memory_ledger.latest_system_wired_reading(), None);
+
+    let _ = memory_ledger.observe_system_wired(20 * GIBIBYTE, 38 * GIBIBYTE);
+    let _ = memory_ledger.observe_system_wired(21 * GIBIBYTE, 38 * GIBIBYTE);
+
+    assert_eq!(
+        memory_ledger.latest_system_wired_reading(),
+        Some((21 * GIBIBYTE, 38 * GIBIBYTE))
+    );
+}

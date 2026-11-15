@@ -138,11 +138,12 @@ impl Qwen3_5EngineState {
             &mut active_request.performance_attribution,
             PerformanceAttribution::disabled(),
         );
-        log_mlx_buffer_cache_over_the_reply(
-            request_id.value(),
-            active_request
-                .engine_extension
-                .mlx_buffer_cache_reply_record,
+        let mlx_buffer_cache_reply_record = active_request
+            .engine_extension
+            .mlx_buffer_cache_reply_record;
+        log_mlx_buffer_cache_over_the_reply(request_id.value(), mlx_buffer_cache_reply_record);
+        let reply_memory_record = mlx_buffer_cache_reply_record.reply_memory_record(
+            std::mem::take(&mut active_request.engine_extension.reply_expert_route_record),
         );
         // Drop pending tokens, decoder state, and all
         // request-local snapshot references before lifting the pressure ceiling.
@@ -181,6 +182,8 @@ impl Qwen3_5EngineState {
                 .as_ref()
                 .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
         );
+        let generation_finalization =
+            generation_finalization.with_reply_memory_record(reply_memory_record);
         self.record_generation_performance_attribution(
             performance_attribution,
             outcome,

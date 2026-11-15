@@ -47,6 +47,7 @@ pub(super) fn expert_streaming_session_stats_snapshot(
         mandatory_decode_source_bytes: 2_000_000_000 * session_request_index,
         prompt_token_count: 100,
         generated_token_count: 10 * session_request_index,
+        last_reply_memory_record: None,
     }
 }
 

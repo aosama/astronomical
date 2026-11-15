@@ -36,6 +36,9 @@ const CONFIGURATION_CSS: &str = include_str!("../../console/configuration.css");
 const CONSOLE_CSS: &str = include_str!("../../console/console.css");
 const DOWNLOAD_MODELS_CSS: &str = include_str!("../../console/download-models.css");
 const EXPERTS_CSS: &str = include_str!("../../console/experts.css");
+const MEMORY_PAGE_JS: &str = include_str!("../../console/memory-page.js");
+const MEMORY_PAGE_IMAGE_JS: &str = include_str!("../../console/memory-page-image.js");
+const MEMORY_PAGE_CSS: &str = include_str!("../../console/memory-page.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
@@ -55,6 +58,7 @@ where
         // the shell, and console.js opens Overview from it.
         .route("/model", get(console_index))
         .route("/experts", get(console_index))
+        .route("/memory", get(console_index))
         .route("/download-models", get(console_index))
         // The page was renamed Download Models; its old address still serves
         // the shell, and console.js opens the renamed page from it.
@@ -108,6 +112,9 @@ where
         .route("/console.css", get(console_stylesheet))
         .route("/download-models.css", get(download_models_stylesheet))
         .route("/experts.css", get(experts_stylesheet))
+        .route("/memory-page.js", get(memory_page_script))
+        .route("/memory-page-image.js", get(memory_page_image_script))
+        .route("/memory-page.css", get(memory_page_stylesheet))
 }
 
 /// `GET /` — the Observatory single-page shell. References the per-view scripts and
@@ -217,6 +224,22 @@ pub(crate) async fn configuration_stylesheet() -> Response {
 /// session totals, and the measurement disclosure).
 pub(crate) async fn experts_stylesheet() -> Response {
     embedded_text_response(EXPERTS_CSS, CSS_CONTENT_TYPE)
+}
+
+/// `GET /memory-page.js` — the Memory view: the Mac's memory bar with the
+/// kernel wire limit, the reply facts and the per-token strip.
+pub(crate) async fn memory_page_script() -> Response {
+    embedded_text_response(MEMORY_PAGE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /memory-page-image.js` — draws the Memory view as one picture for
+/// Copy as image.
+pub(crate) async fn memory_page_image_script() -> Response {
+    embedded_text_response(MEMORY_PAGE_IMAGE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn memory_page_stylesheet() -> Response {
+    embedded_text_response(MEMORY_PAGE_CSS, CSS_CONTENT_TYPE)
 }
 
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.

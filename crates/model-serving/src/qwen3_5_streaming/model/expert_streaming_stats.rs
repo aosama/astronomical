@@ -55,6 +55,20 @@ impl Qwen3_5Model {
         }
     }
 
+    /// Routed experts served from memory and read from storage since the
+    /// model loaded, in that order; zeros for a model that streams no
+    /// experts. A reply token's own routes are the difference across its
+    /// forward.
+    pub(crate) fn session_route_assignment_counts(&self) -> (u64, u64) {
+        self.expert_pager.as_ref().map_or((0, 0), |expert_pager| {
+            let session_counters = expert_pager.session_counter_snapshot();
+            (
+                session_counters.retained_route_assignment_count,
+                session_counters.storage_route_assignment_count,
+            )
+        })
+    }
+
     /// Composes the session snapshot; `None` when this model has no pager.
     fn expert_streaming_session_stats(
         &self,
@@ -123,6 +137,7 @@ impl Qwen3_5Model {
             // emission boundary; the model itself does not track them.
             prompt_token_count: 0,
             generated_token_count: 0,
+            last_reply_memory_record: None,
         })
     }
 }

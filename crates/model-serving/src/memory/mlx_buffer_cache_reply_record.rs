@@ -63,6 +63,26 @@ impl MlxBufferCacheReplyRecord {
             None => 0,
         }
     }
+
+    /// The reply's memory record as Observatory reads it: these
+    /// `mlx_buffer_cache` readings beside where each token found its experts.
+    #[must_use]
+    pub(crate) fn reply_memory_record(
+        &self,
+        reply_expert_route_record: crate::memory::reply_expert_route_record::ReplyExpertRouteRecord,
+    ) -> astronomical_ipc_protocol::ReplyMemoryRecord {
+        astronomical_ipc_protocol::ReplyMemoryRecord {
+            routed_expert_count_per_token: reply_expert_route_record
+                .routed_expert_count_per_token(),
+            storage_read_expert_counts_by_token: reply_expert_route_record
+                .into_storage_read_expert_counts_by_token(),
+            mlx_buffer_cache_sampled_token_count: self.sampled_token_count,
+            mlx_buffer_cache_empty_token_count: self.empty_token_count,
+            smallest_mlx_buffer_cache_bytes: self.smallest_bytes,
+            mean_mlx_buffer_cache_bytes: self.mean_bytes(),
+            largest_mlx_buffer_cache_bytes: self.largest_bytes,
+        }
+    }
 }
 
 #[cfg(test)]
