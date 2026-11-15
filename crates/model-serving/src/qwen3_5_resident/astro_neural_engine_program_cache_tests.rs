@@ -16,7 +16,7 @@ fn should_name_each_layers_program_inside_the_set() {
     let astro_neural_engine_program_cache_directory =
         tempfile::tempdir().expect("a scratch directory");
 
-    let program_set_cache = AstroNeuralEngineProgramSetCache::open(
+    let astro_neural_engine_program_set = AstroNeuralEngineProgramSetCache::open(
         astro_neural_engine_program_cache_directory.path(),
         "mlp",
         "v1-960-of-2048",
@@ -24,7 +24,7 @@ fn should_name_each_layers_program_inside_the_set() {
     .expect("the set opens");
 
     assert_eq!(
-        program_set_cache.program_path(7),
+        astro_neural_engine_program_set.program_path(7),
         astro_neural_engine_program_cache_directory
             .path()
             .join("mlp-v1-960-of-2048")
@@ -66,17 +66,19 @@ fn should_remove_outdated_sets_of_the_same_family_only() {
 fn should_record_a_finished_set_with_its_identity_and_size() {
     let root = tempfile::tempdir().expect("a scratch directory");
     let revision_directory = root.path().join("fictional-model/revision-1");
-    let program_set_cache =
+    let astro_neural_engine_program_set =
         AstroNeuralEngineProgramSetCache::open(&revision_directory, "mlp", "v1-960-of-2048")
             .expect("the set opens");
-    fs::create_dir_all(program_set_cache.program_path(0)).expect("a program folder");
+    fs::create_dir_all(astro_neural_engine_program_set.program_path(0)).expect("a program folder");
     fs::write(
-        program_set_cache.program_path(0).join("weight.bin"),
+        astro_neural_engine_program_set
+            .program_path(0)
+            .join("weight.bin"),
         [0_u8; 10],
     )
     .expect("a weight file");
 
-    program_set_cache.record_finished_set(1);
+    astro_neural_engine_program_set.record_finished_set(1);
 
     let manifest_bytes = fs::read(revision_directory.join("mlp-v1-960-of-2048/programs.json"))
         .expect("the manifest exists");
@@ -99,7 +101,7 @@ fn should_record_a_finished_set_with_its_identity_and_size() {
 fn should_rewrite_the_record_only_when_the_set_changed() {
     let astro_neural_engine_program_cache_directory =
         tempfile::tempdir().expect("a scratch directory");
-    let program_set_cache = AstroNeuralEngineProgramSetCache::open(
+    let astro_neural_engine_program_set = AstroNeuralEngineProgramSetCache::open(
         astro_neural_engine_program_cache_directory.path(),
         "mlp",
         "v1-960-of-2048",
@@ -111,10 +113,10 @@ fn should_rewrite_the_record_only_when_the_set_changed() {
     let recorded = r#"{"model_id":"kept","model_revision":"r","set_name":"s","program_count":2,"byte_count":1,"macos_version":null,"built_with":"b"}"#;
     fs::write(&manifest_path, recorded).expect("a manifest exists");
 
-    program_set_cache.record_finished_set(2);
+    astro_neural_engine_program_set.record_finished_set(2);
     assert_eq!(fs::read_to_string(&manifest_path).unwrap(), recorded);
 
-    program_set_cache.record_finished_set(3);
+    astro_neural_engine_program_set.record_finished_set(3);
     assert!(
         fs::read_to_string(&manifest_path)
             .unwrap()
@@ -126,7 +128,7 @@ fn should_rewrite_the_record_only_when_the_set_changed() {
 fn should_replace_a_damaged_record() {
     let astro_neural_engine_program_cache_directory =
         tempfile::tempdir().expect("a scratch directory");
-    let program_set_cache = AstroNeuralEngineProgramSetCache::open(
+    let astro_neural_engine_program_set = AstroNeuralEngineProgramSetCache::open(
         astro_neural_engine_program_cache_directory.path(),
         "mlp",
         "v1-960-of-2048",
@@ -137,7 +139,7 @@ fn should_replace_a_damaged_record() {
         .join("mlp-v1-960-of-2048/programs.json");
     fs::write(&manifest_path, "not json").expect("a damaged manifest exists");
 
-    program_set_cache.record_finished_set(1);
+    astro_neural_engine_program_set.record_finished_set(1);
 
     assert!(
         fs::read_to_string(&manifest_path)

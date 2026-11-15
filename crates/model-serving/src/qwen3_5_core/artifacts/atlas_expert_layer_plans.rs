@@ -1,7 +1,7 @@
 //! Expert layer plans for an Expert Atlas model.
 //!
 //! The ordinary plan builder finds each routed-expert tensor through the
-//! shard index and a cache of parsed safetensors headers, then validates its
+//! shard index and a safetensors_header_cache of parsed headers, then validates its
 //! geometry. An Atlas keeps those tensors in layer record files instead, so
 //! this module hands the same builder an index that points the expert
 //! tensors at their layer files and a safetensors header cache already holding one

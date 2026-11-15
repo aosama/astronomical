@@ -1,4 +1,4 @@
-//! Verified resolution of Hugging Face shared cache blobs.
+//! Verified resolution of Hugging Face hub cache shared blobs.
 
 use std::fs;
 use std::io;
@@ -107,7 +107,7 @@ pub(crate) fn resolve_verified_shared_hub_blob_path(
         shared_blob_path = %canonical_resolved_target_path.display(),
         recorded_digest_text = %snapshot_tree_record.primary_recorded_digest,
         recorded_size_bytes = snapshot_tree_record.recorded_size_bytes,
-        "verified Hugging Face shared cache blob for required file"
+        "verified Hugging Face hub cache shared blob for required file"
     );
     Ok(Some(canonical_resolved_target_path.to_path_buf()))
 }

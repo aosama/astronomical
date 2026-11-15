@@ -1,6 +1,6 @@
 [package]
 name = "astronomical-lowercase-hex"
-description = "The lowercase hexadecimal encoder, validator and decoder shared by the product crates for digests, revisions and cache identities."
+description = "The lowercase hexadecimal encoder, validator and decoder shared by the product crates for digests, revisions and astro SSD prompt cache and astro Neural Engine program cache identities."
 edition.workspace = true
 license.workspace = true
 publish.workspace = true

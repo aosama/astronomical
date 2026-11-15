@@ -156,7 +156,7 @@ fn whole_output_probe_value(
     };
     require_non_empty_probe(probe_name, &probe_output)?;
     eprintln!(
-        "[native-build-cache-fingerprint] probe={probe_name} elapsed_seconds={}",
+        "[astro-native-build-cache-fingerprint] probe={probe_name} elapsed_seconds={}",
         probe_started_at.elapsed().as_secs()
     );
     Ok(ProbeValue {
@@ -188,7 +188,7 @@ fn composite_sdk_probe_value(
     };
     require_non_empty_probe("sdk", &probe_output)?;
     eprintln!(
-        "[native-build-cache-fingerprint] probe=sdk elapsed_seconds={}",
+        "[astro-native-build-cache-fingerprint] probe=sdk elapsed_seconds={}",
         probe_started_at.elapsed().as_secs()
     );
     Ok(ProbeValue {
@@ -214,7 +214,7 @@ fn composite_clang_probe_value(
     };
     require_non_empty_probe("clang", &probe_output)?;
     eprintln!(
-        "[native-build-cache-fingerprint] probe=clang elapsed_seconds={}",
+        "[astro-native-build-cache-fingerprint] probe=clang elapsed_seconds={}",
         probe_started_at.elapsed().as_secs()
     );
     Ok(ProbeValue {
@@ -243,7 +243,7 @@ fn composite_cmake_probe_value(
     };
     require_non_empty_probe("cmake", &probe_output)?;
     eprintln!(
-        "[native-build-cache-fingerprint] probe=cmake elapsed_seconds={}",
+        "[astro-native-build-cache-fingerprint] probe=cmake elapsed_seconds={}",
         probe_started_at.elapsed().as_secs()
     );
     Ok(ProbeValue {

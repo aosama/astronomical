@@ -450,7 +450,7 @@ pub enum WorkerEvent {
     /// generation finalizes.
     ///
     /// Emitted by the worker whenever a streaming engine completes a
-    /// generation, so the daemon can expose expert-cache benefits through
+    /// generation, so the daemon can expose astro expert cache benefits through
     /// `GET /v1/experts/stats` without touching worker-owned state itself.
     ExpertStreamingStats { stats: WorkerExpertStreamingStats },
     /// Reports image-generation phase and denoising-step progress.

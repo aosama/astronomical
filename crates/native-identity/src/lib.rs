@@ -170,7 +170,7 @@ pub fn native_build_identity_with_probe_values(
 ) -> Result<(String, Vec<probes::ProbeValue>), NativeIdentityError> {
     let started_at = std::time::Instant::now();
     eprintln!(
-        "[native-build-cache-fingerprint] status=start source_only={} profile={}",
+        "[astro-native-build-cache-fingerprint] status=start source_only={} profile={}",
         request.scope == IdentityScope::SourceOnly,
         request.profile.as_profile_text()
     );
@@ -204,7 +204,7 @@ pub fn native_build_identity_with_probe_values(
     let identity_digest = digest_bytes(manifest.as_bytes());
     validate_identity_digest(&identity_digest)?;
     eprintln!(
-        "[native-build-cache-fingerprint] status=success elapsed_seconds={}",
+        "[astro-native-build-cache-fingerprint] status=success elapsed_seconds={}",
         started_at.elapsed().as_secs()
     );
     Ok((identity_digest, probe_values))

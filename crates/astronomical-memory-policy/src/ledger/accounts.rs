@@ -9,7 +9,7 @@ use super::phase::LedgerPhase;
 /// The margin is the room for what no account names: allocator rounding,
 /// buffers MLX has freed but not yet returned. MLX itself tolerates one
 /// percent above the limit; planning to within that percent is what turned
-/// a 0.3 GB misjudgment into a discarded cache (issue #2221). Two percent is
+/// a 0.3 GB misjudgment into a discarded astro expert cache (issue #2221). Two percent is
 /// the starting value and is to be settled by measurement.
 const SAFETY_MARGIN_DIVISOR: u64 = 50;
 

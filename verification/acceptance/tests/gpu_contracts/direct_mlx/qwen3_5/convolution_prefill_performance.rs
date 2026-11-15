@@ -331,7 +331,7 @@ async fn measure_convolution_chain_costs() {
 
     // Production rolling-state shape: the state operand is a strided slice of
     // the previous chunk's wider buffer, not a contiguous array. A reference
-    // cache API materializes its window instead; if concat on the strided view
+    // implementation's decoder state cache API materializes its window instead; if concat on the strided view
     // is slower, that difference is the convolution-section excess.
     let production_state = runtime
         .slice(

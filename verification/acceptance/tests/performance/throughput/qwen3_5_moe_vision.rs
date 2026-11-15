@@ -19,7 +19,7 @@
 //! Tests": the ~500-token warmup completion (small image, ~50 output
 //! tokens) is discarded so first-use JIT kernel compilation — including the
 //! vision tower's — never inflates the measured prefill, the astro SSD
-//! prompt cache is disabled, and the measured completion's server-attributed
+//! astro SSD prompt cache is disabled, and the measured completion's server-attributed
 //! rates persist to the durable historical record under the "vision" journey
 //! kind, which delineates them from the text journey's lines in the same
 //! shared history log. The journey verifies measured token counts and zero

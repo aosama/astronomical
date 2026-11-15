@@ -1,5 +1,6 @@
-//! Lowercase hexadecimal text for the digests, revisions and cache
-//! identities the product crates write and read.
+//! Lowercase hexadecimal text for the digests, revisions, astro SSD prompt
+//! cache block keys and astro Neural Engine program cache fingerprints the
+//! product crates write and read.
 //!
 //! Those identities are written as lowercase hex, so the decoder and
 //! validator reject uppercase digits: accepting both cases would let two
