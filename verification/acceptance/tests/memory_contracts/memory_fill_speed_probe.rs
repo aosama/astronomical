@@ -28,6 +28,17 @@ const TABLE_BYTES: usize = 512 * 1024 * 1024;
 /// multiply in each of this many layers, evaluated once.
 const LAYERS_PER_STEP: usize = 48;
 const ROWS_GATHERED_PER_LAYER: i32 = 8;
+/// Each step also writes freshly created pages into small tables, as the
+/// engine writes experts it has just read from storage into a layer's
+/// `astro_expert_cache` table: twelve pages of 160 rows, about 2.5 MB each,
+/// into three tables of 32 such pages.
+const PAGES_WRITTEN_PER_STEP: usize = 12;
+const PAGE_ROW_COUNT: i32 = 160;
+const WRITTEN_TABLE_COUNT: usize = 3;
+const WRITTEN_TABLE_PAGE_SLOTS: i32 = 32;
+/// Buffers left in the `mlx_buffer_cache` before the measurement, about what
+/// a large sparse model's reply keeps there.
+const SEEDED_MLX_BUFFER_CACHE_BYTES: usize = 512 * 1024 * 1024;
 const WARMUP_STEP_COUNT: usize = 20;
 const MEASURED_STEP_COUNT: usize = 150;
 
@@ -81,6 +92,89 @@ fn should_time_fixed_work_at_a_36_5_gb_limit_holding_34_7_gb() {
     });
 }
 
+/// One process, one limit, a rising fill: after each measurement another
+/// tenth of a gigabyte is held, so the fill where the work slows shows as a
+/// step in one printed column.
+#[test]
+#[ignore = "fills most of the GPU's memory with MLX arrays and times fixed work"]
+fn should_time_fixed_work_as_the_fill_rises_from_34_5_to_36_gb_under_a_36_5_gb_limit() {
+    const SWEEP_STEP_COUNT: usize = 60;
+    const SWEEP_FILL_INCREMENT_ROWS: i32 = 6_554;
+    let memory_fill = MemoryFill {
+        label: "sweep_limit_36.5",
+        memory_limit_gigabytes: 36.5,
+        held_gigabytes: 34.5,
+    };
+    let runtime = initialize_runtime_as_the_worker_does(memory_fill);
+    let tables = fill_with_tables(&runtime, memory_fill);
+    let layer_weight = create_layer_weight(&runtime);
+    let mut written_tables = create_written_tables(&runtime);
+    let host_page = vec![0.5_f32; (PAGE_ROW_COUNT * HIDDEN_SIZE) as usize];
+    seed_mlx_buffer_cache(&runtime);
+    let mut step_index = 0;
+    for sweep_index in 0..16 {
+        let measurement_started_at = Instant::now();
+        for _sweep_step in 0..SWEEP_STEP_COUNT {
+            run_one_step(&runtime, &tables, &layer_weight, step_index);
+            write_pages_into_tables(&runtime, &mut written_tables, &host_page, step_index);
+            step_index += 1;
+        }
+        let elapsed_seconds = measurement_started_at.elapsed().as_secs_f64();
+        let memory_snapshot = runtime
+            .memory_snapshot()
+            .expect("the memory snapshot should be readable");
+        eprintln!(
+            "[memory-fill-speed] status=progress sweep={}/16 system_wired_gb={:.2} held_gb={:.2} mlx_buffer_cache_gb={:.2} steps_per_second={:.1}",
+            sweep_index + 1,
+            system_wired_gigabytes(),
+            memory_snapshot.active_memory_bytes() as f64 / BYTES_PER_GIGABYTE,
+            memory_snapshot.mlx_buffer_cache_bytes() as f64 / BYTES_PER_GIGABYTE,
+            SWEEP_STEP_COUNT as f64 / elapsed_seconds,
+        );
+        let added_fill = runtime
+            .full(
+                &[SWEEP_FILL_INCREMENT_ROWS, HIDDEN_SIZE],
+                0.5,
+                MlxDtype::Float32,
+            )
+            .expect("the added fill should be created");
+        runtime
+            .evaluate_arrays(&[&added_fill])
+            .expect("the added fill should be evaluated");
+        std::mem::forget(added_fill);
+    }
+}
+
+fn initialize_runtime_as_the_worker_does(memory_fill: MemoryFill) -> MlxRuntime {
+    let memory_limit_bytes = (memory_fill.memory_limit_gigabytes * BYTES_PER_GIGABYTE) as usize;
+    let runtime = MlxRuntime::initialize(
+        MlxMemoryLimits::new(memory_limit_bytes, memory_limit_bytes)
+            .expect("the probe's memory limits should be valid"),
+    )
+    .expect("the pinned MLX runtime should initialize");
+    // The serving worker claims the whole recommended working set as wired
+    // memory at startup; the probe does the same so the fills compare.
+    let recommended_working_set_bytes = maximum_recommended_gpu_working_set_size_bytes()
+        .expect("Metal should report its recommended working set");
+    mlx_bridge::set_wired_limit(recommended_working_set_bytes)
+        .expect("MLX should accept the recommended working set as its wired limit");
+    runtime
+}
+
+fn create_layer_weight(runtime: &MlxRuntime) -> MlxArray {
+    let layer_weight = runtime
+        .full(
+            &[HIDDEN_SIZE, HIDDEN_SIZE],
+            1.0 / HIDDEN_SIZE as f32,
+            MlxDtype::Float32,
+        )
+        .expect("the layer weight should be created");
+    runtime
+        .evaluate_arrays(&[&layer_weight])
+        .expect("the layer weight should be evaluated");
+    layer_weight
+}
+
 fn measure_fixed_work_speed(memory_fill: MemoryFill) {
     let memory_limit_bytes = (memory_fill.memory_limit_gigabytes * BYTES_PER_GIGABYTE) as usize;
     let runtime = MlxRuntime::initialize(
@@ -96,6 +190,9 @@ fn measure_fixed_work_speed(memory_fill: MemoryFill) {
         .expect("MLX should accept the recommended working set as its wired limit");
 
     let tables = fill_with_tables(&runtime, memory_fill);
+    let mut written_tables = create_written_tables(&runtime);
+    let host_page = vec![0.5_f32; (PAGE_ROW_COUNT * HIDDEN_SIZE) as usize];
+    seed_mlx_buffer_cache(&runtime);
     let layer_weight = runtime
         .full(
             &[HIDDEN_SIZE, HIDDEN_SIZE],
@@ -109,6 +206,7 @@ fn measure_fixed_work_speed(memory_fill: MemoryFill) {
 
     for warmup_step_index in 0..WARMUP_STEP_COUNT {
         run_one_step(&runtime, &tables, &layer_weight, warmup_step_index);
+        write_pages_into_tables(&runtime, &mut written_tables, &host_page, warmup_step_index);
     }
     let measurement_started_at = Instant::now();
     let mut last_progress_report_at = Instant::now();
@@ -117,6 +215,12 @@ fn measure_fixed_work_speed(memory_fill: MemoryFill) {
             &runtime,
             &tables,
             &layer_weight,
+            WARMUP_STEP_COUNT + measured_step_index,
+        );
+        write_pages_into_tables(
+            &runtime,
+            &mut written_tables,
+            &host_page,
             WARMUP_STEP_COUNT + measured_step_index,
         );
         if last_progress_report_at.elapsed().as_secs() >= 5 {
@@ -156,7 +260,11 @@ fn report_progress(fill_label: &str, completed_step_count: usize, started_at: In
 /// Creates and evaluates half-gigabyte tables until MLX holds the target.
 fn fill_with_tables(runtime: &MlxRuntime, memory_fill: MemoryFill) -> Vec<MlxArray> {
     let held_target_bytes = (memory_fill.held_gigabytes * BYTES_PER_GIGABYTE) as usize;
-    let table_count = held_target_bytes / TABLE_BYTES;
+    // The written tables are part of what is held.
+    let written_tables_bytes = WRITTEN_TABLE_COUNT
+        * (WRITTEN_TABLE_PAGE_SLOTS * PAGE_ROW_COUNT * HIDDEN_SIZE) as usize
+        * std::mem::size_of::<f32>();
+    let table_count = held_target_bytes.saturating_sub(written_tables_bytes) / TABLE_BYTES;
     let fill_started_at = Instant::now();
     let mut tables = Vec::with_capacity(table_count);
     for table_index in 0..table_count {
@@ -181,7 +289,88 @@ fn fill_with_tables(runtime: &MlxRuntime, memory_fill: MemoryFill) -> Vec<MlxArr
             );
         }
     }
+    // A last, smaller table brings the fill to the target exactly.
+    let row_bytes = HIDDEN_SIZE as usize * std::mem::size_of::<f32>();
+    let remaining_row_count = held_target_bytes
+        .saturating_sub(written_tables_bytes)
+        .saturating_sub(table_count * TABLE_BYTES)
+        / row_bytes;
+    if remaining_row_count > 64 {
+        let last_table = runtime
+            .full(
+                &[remaining_row_count as i32, HIDDEN_SIZE],
+                0.25,
+                MlxDtype::Float32,
+            )
+            .expect("the last table should be created");
+        runtime
+            .evaluate_arrays(&[&last_table])
+            .expect("the last table should be evaluated");
+        // Gathers only ever read the first tables' row range, so the last
+        // table is held but placed where no step indexes past its rows.
+        std::mem::forget(last_table);
+    }
     tables
+}
+
+fn create_written_tables(runtime: &MlxRuntime) -> Vec<MlxArray> {
+    let mut written_tables = Vec::with_capacity(WRITTEN_TABLE_COUNT);
+    for _written_table_index in 0..WRITTEN_TABLE_COUNT {
+        let written_table = runtime
+            .zeros(
+                &[WRITTEN_TABLE_PAGE_SLOTS * PAGE_ROW_COUNT, HIDDEN_SIZE],
+                MlxDtype::Float32,
+            )
+            .expect("a written table should be created");
+        runtime
+            .evaluate_arrays(&[&written_table])
+            .expect("a written table should be evaluated");
+        written_tables.push(written_table);
+    }
+    written_tables
+}
+
+/// Allocates and frees one buffer so the `mlx_buffer_cache` holds it.
+fn seed_mlx_buffer_cache(runtime: &MlxRuntime) {
+    let seed_row_count =
+        SEEDED_MLX_BUFFER_CACHE_BYTES / (HIDDEN_SIZE as usize * std::mem::size_of::<f32>());
+    let seed = runtime
+        .zeros(&[seed_row_count as i32, HIDDEN_SIZE], MlxDtype::Float32)
+        .expect("the seed buffer should be created");
+    runtime
+        .evaluate_arrays(&[&seed])
+        .expect("the seed buffer should be evaluated");
+}
+
+/// Creates pages from host memory and writes each into a slot of a table,
+/// replacing the table with the updated one, then evaluates the tables.
+fn write_pages_into_tables(
+    runtime: &MlxRuntime,
+    written_tables: &mut [MlxArray],
+    host_page: &[f32],
+    step_index: usize,
+) {
+    for page_index in 0..PAGES_WRITTEN_PER_STEP {
+        let page = runtime
+            .array_from_f32(host_page, &[PAGE_ROW_COUNT, HIDDEN_SIZE])
+            .expect("a page should be created from host memory");
+        let written_table_index = page_index % written_tables.len();
+        let page_slot = ((step_index * 5 + page_index * 3) as i32) % WRITTEN_TABLE_PAGE_SLOTS;
+        let updated_table = runtime
+            .slice_update(
+                &written_tables[written_table_index],
+                &page,
+                &[page_slot * PAGE_ROW_COUNT, 0],
+                &[(page_slot + 1) * PAGE_ROW_COUNT, HIDDEN_SIZE],
+                &[1, 1],
+            )
+            .expect("the page should be written into its slot");
+        written_tables[written_table_index] = updated_table;
+    }
+    let written_table_references: Vec<&MlxArray> = written_tables.iter().collect();
+    runtime
+        .evaluate_arrays(&written_table_references)
+        .expect("the written tables should be evaluated");
 }
 
 /// One step: in every layer, gather a few rows from one table, add them to
@@ -223,4 +412,26 @@ fn run_one_step(
     runtime
         .evaluate_arrays(&[&state])
         .expect("the step should be evaluated");
+}
+
+/// Memory macOS has wired across the whole system, from `vm_stat`: MLX's
+/// buffers plus everything the kernel and other processes keep wired.
+fn system_wired_gigabytes() -> f64 {
+    let vm_stat_output = std::process::Command::new("vm_stat")
+        .output()
+        .expect("vm_stat should run");
+    let vm_stat_text = String::from_utf8_lossy(&vm_stat_output.stdout);
+    let page_bytes = vm_stat_text
+        .split("page size of ")
+        .nth(1)
+        .and_then(|after_page_size| after_page_size.split(' ').next())
+        .and_then(|page_size_text| page_size_text.parse::<f64>().ok())
+        .expect("vm_stat should state its page size");
+    let wired_page_count = vm_stat_text
+        .lines()
+        .find(|line| line.starts_with("Pages wired down:"))
+        .and_then(|line| line.split(':').nth(1))
+        .and_then(|count_text| count_text.trim().trim_end_matches('.').parse::<f64>().ok())
+        .expect("vm_stat should report wired pages");
+    wired_page_count * page_bytes / BYTES_PER_GIGABYTE
 }
