@@ -453,6 +453,13 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # back-to-back residency churn on the large sparse model; issues #1716 and
 # #1717). Each case loads the real model, so run them only when comparing
 # strategies; append --filter NAME to pick cases.
+# Gate 1 of speculative decoding on the dense Qwen3.8 27B: tokens kept per
+# verify round by the DFlash2 drafter on the real pair (TensorFold/Qwen3.8-27B-
+# MLX-4bit and z-lab/Qwen3.8-27B-DFlash2, read from the Hugging Face hub folder;
+# `hf download` both first). Code at 0.7, chat at 1.0, greedy as a diagnostic;
+# floors sit about 10% under z-lab's reference (6.07 and 3.00). Needs about
+# 22 GB of free memory; about one minute.
+measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
 # The DFlash2 drafter against z-lab's own MLX reference: a tiny random
 # drafter run through dflash/model_mlx.py for two rounds (fixture and its
 # generator in verification/acceptance/tests/fixtures/dflash2_reference); hidden

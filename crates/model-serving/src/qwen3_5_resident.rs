@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod dflash2_draft_target;
 pub mod dflash_draft;
 // Crate-visible so the sensitivity probe can swap one routed-expert
 // projection for a re-encoded copy and put the original back.

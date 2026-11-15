@@ -130,6 +130,33 @@ fn sampled_tokens_for_logits(
     )
 }
 
+/// The probabilities the sampler draws from, per row: the same top-k and
+/// top-p mask on the untempered logits, then the temperature, then softmax.
+/// Speculative verification compares drafts against exactly this law, so a
+/// drafted reply is distributed as the undrafted one; keep the two in step.
+pub(crate) fn sampling_probability_rows(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    temperature_thousandths: u16,
+    top_p_thousandths: u16,
+    top_k: u16,
+) -> Result<MlxArray, InferenceEngineError> {
+    let vocabulary_size =
+        validate_sampled_logits(logits, temperature_thousandths, top_p_thousandths)?;
+    let constrained_logits = masked_logits_after_top_k_and_top_p(
+        runtime,
+        logits,
+        vocabulary_size,
+        top_k,
+        top_p_thousandths,
+    )?;
+    let temperature = f32::from(temperature_thousandths) / 1_000.0;
+    let tempered_logits = runtime
+        .multiply_scalar(&constrained_logits, temperature.recip())
+        .map_err(sampling_runtime_error)?;
+    softmax_last_axis(runtime, &tempered_logits)
+}
+
 fn validate_sampled_logits(
     logits: &MlxArray,
     temperature_thousandths: u16,

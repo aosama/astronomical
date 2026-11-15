@@ -7,3 +7,7 @@
 //! family that is.
 
 pub mod dflash2_drafter;
+pub mod verification_decision;
+
+#[cfg(test)]
+mod verification_decision_tests;
