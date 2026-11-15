@@ -91,8 +91,8 @@ function renderMemoryControlFor(statusDocument, editedInputValue) {
     return elementsById;
 }
 
-// A 48 GB Mac whose 40,200,896,512-byte wired claim the engine plans 7.5%
-// below: 37,185,829,312 bytes (34.63 GB).
+// A 48 GB Mac whose 40,200,896,512-byte wired claim the engine plans 2.5%
+// below: 39,195,874,112 bytes (36.50 GB).
 const WIRED_MAC_STATUS = {
     machine_mlx_memory_ceiling_bytes: 42949672960,
     wired_residency_budget_bytes: 40200896512
@@ -101,13 +101,13 @@ const WIRED_MAC_STATUS = {
 test("shows only the reachable limit while an explicit request is served", () => {
     const elementsById = renderMemoryControlFor({
         ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 34359738368,
-        configured_maximum_mlx_memory_gb: 32
+        mlx_memory_ceiling_bytes: 36507222016,
+        configured_maximum_mlx_memory_gb: 34
     });
 
-    assert.equal(elementsById["maximum-mlx-memory-gb"].max, "34");
-    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "32");
-    assert.equal(elementsById["maximum-mlx-memory-status"].textContent, "Up to 34 GB on this Mac");
+    assert.equal(elementsById["maximum-mlx-memory-gb"].max, "36");
+    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "34");
+    assert.equal(elementsById["maximum-mlx-memory-status"].textContent, "Up to 36 GB on this Mac");
     assert.equal(elementsById["maximum-mlx-memory-apply"].hidden, true);
     assert.equal(elementsById["maximum-mlx-memory-reset"].hidden, false);
     assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, true);
@@ -116,8 +116,8 @@ test("shows only the reachable limit while an explicit request is served", () =>
 test("offers apply only once the input differs from the applied value", () => {
     const elementsById = renderMemoryControlFor({
         ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 34359738368,
-        configured_maximum_mlx_memory_gb: 32
+        mlx_memory_ceiling_bytes: 36507222016,
+        configured_maximum_mlx_memory_gb: 34
     }, "30");
 
     assert.equal(elementsById["maximum-mlx-memory-apply"].hidden, false);
@@ -126,11 +126,11 @@ test("offers apply only once the input differs from the applied value", () => {
 test("treats the Mac maximum landing below the machine ceiling as honoured, not capped", () => {
     const elementsById = renderMemoryControlFor({
         ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 37185829312,
+        mlx_memory_ceiling_bytes: 39195874112,
         configured_maximum_mlx_memory_gb: null
     });
 
-    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "34");
+    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "36");
     assert.equal(elementsById["maximum-mlx-memory-reset"].hidden, true);
     assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, true);
 });
@@ -138,13 +138,13 @@ test("treats the Mac maximum landing below the machine ceiling as honoured, not 
 test("reports a cap when an explicit request exceeds the live ceiling", () => {
     const elementsById = renderMemoryControlFor({
         ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 37185829312,
+        mlx_memory_ceiling_bytes: 39195874112,
         configured_maximum_mlx_memory_gb: 40
     });
 
-    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "34");
+    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "36");
     assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, false);
-    assert.equal(elementsById["maximum-mlx-memory-notice"].textContent, "Capped at 34.63 GB on this Mac");
+    assert.equal(elementsById["maximum-mlx-memory-notice"].textContent, "Capped at 36.50 GB on this Mac");
     assert.equal(elementsById["maximum-mlx-memory-apply"].hidden, false);
 });
 
@@ -152,18 +152,18 @@ test("prefers a pending change and then an error over the cap notice", () => {
     const pendingElements = renderMemoryControlFor({
         ...WIRED_MAC_STATUS,
         mlx_memory_ceiling_bytes: 32212254720,
-        configured_maximum_mlx_memory_gb: 32,
-        pending_mlx_memory_ceiling_bytes: 34359738368
+        configured_maximum_mlx_memory_gb: 34,
+        pending_mlx_memory_ceiling_bytes: 36507222016
     });
     const failedElements = renderMemoryControlFor({
         ...WIRED_MAC_STATUS,
         mlx_memory_ceiling_bytes: 32212254720,
-        configured_maximum_mlx_memory_gb: 32,
-        pending_mlx_memory_ceiling_bytes: 34359738368,
+        configured_maximum_mlx_memory_gb: 34,
+        pending_mlx_memory_ceiling_bytes: 36507222016,
         mlx_memory_limit_error: "The worker could not apply the requested MLX memory ceiling"
     });
 
-    assert.equal(pendingElements["maximum-mlx-memory-notice"].textContent, "Pending 32.00 GB");
+    assert.equal(pendingElements["maximum-mlx-memory-notice"].textContent, "Pending 34.00 GB");
     assert.equal(
         failedElements["maximum-mlx-memory-notice"].textContent,
         "The worker could not apply the requested MLX memory ceiling"
@@ -174,7 +174,7 @@ test("reaches the machine ceiling when serving is pageable and stays quiet befor
     const elementsById = renderMemoryControlFor({
         machine_mlx_memory_ceiling_bytes: 42949672960,
         mlx_memory_ceiling_bytes: 0,
-        configured_maximum_mlx_memory_gb: 32
+        configured_maximum_mlx_memory_gb: 34
     });
 
     assert.equal(elementsById["maximum-mlx-memory-gb"].max, "40");

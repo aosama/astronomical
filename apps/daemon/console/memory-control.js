@@ -6,11 +6,10 @@
 const MAXIMUM_MLX_MEMORY_URL = "/v1/config/maximum-mlx-memory";
 const CONFIG_FILE_WRITTEN_EVENT = "observatory:config-file-written";
 const MARKETED_GIGABYTE_BYTES = 1073741824;
-// Mirrors the serving ceiling (serving_ceiling.rs): the engine plans 7.5%
-// below any wired claim, which is the 5% above MLX's buffer-cache collection
-// line and a 2.5% margin below it. The control must do the same or it offers
-// a top value the engine quietly cuts.
-const UNPLANNABLE_WIRED_CLAIM_PARTS_PER_THOUSAND = 75;
+// Mirrors METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND in the serving ceiling:
+// the engine plans 2.5% below any wired claim, so the control must too or it
+// offers a top value the engine quietly cuts.
+const METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND = 25;
 let maximumMlxMemoryEditIsActive = false;
 
 function mlxMemoryCeilingTheEngineWillInstall(requestedCeilingBytes, wiredResidencyBudgetBytes) {
@@ -18,7 +17,7 @@ function mlxMemoryCeilingTheEngineWillInstall(requestedCeilingBytes, wiredReside
         return requestedCeilingBytes;
     }
     const metalWorkingSetMarginBytes =
-        Math.floor(wiredResidencyBudgetBytes / 1000) * UNPLANNABLE_WIRED_CLAIM_PARTS_PER_THOUSAND;
+        Math.floor(wiredResidencyBudgetBytes / 1000) * METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND;
     const plannableWiredResidencyBytes = Math.max(0, wiredResidencyBudgetBytes - metalWorkingSetMarginBytes);
     return Math.min(requestedCeilingBytes, plannableWiredResidencyBytes);
 }
