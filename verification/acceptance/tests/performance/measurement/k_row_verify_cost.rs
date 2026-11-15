@@ -15,7 +15,7 @@
 use std::time::{Duration, Instant};
 
 use astronomical_model_serving::row_batched_matmul::{
-    RowBatchedMatmulKernels, RowBatchedProjection,
+    RowBatchedMatmulKernels, row_batched_quantized_matmul, row_batched_quantized_matmul_accepts,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
@@ -28,11 +28,10 @@ const MIXER_OUTPUT_WIDTH: i32 = 6144;
 const VOCABULARY_SIZE: i32 = 248_320;
 const QUANTIZATION_GROUP_SIZE: i32 = 64;
 const QUANTIZATION_BITS: i32 = 4;
-/// The 27B repeats three DeltaNet layers and one attention layer; 12 distinct
-/// layers (2.39 GB) is far past the GPU's system-level memory, so every pass
-/// reads DRAM. Each layer is held twice (MLX's layout and the row-batched
-/// tiles), which still leaves room beside a model another app holds.
-const MEASURED_LAYER_COUNT: usize = 12;
+/// The 27B repeats three DeltaNet layers and one attention layer; 16 distinct
+/// layers (3.19 GB) is far past the GPU's system-level memory, so every pass
+/// reads DRAM. Both kernels read the same arrays, so each layer is held once.
+const MEASURED_LAYER_COUNT: usize = 16;
 const MODEL_LAYER_COUNT: f64 = 64.0;
 const ROW_COUNTS: [i32; 9] = [1, 2, 4, 6, 8, 12, 13, 16, 32];
 const WARM_UP_PASS_COUNT: usize = 2;
@@ -58,14 +57,12 @@ impl MatmulPath<'_> {
     }
 }
 
-/// One packed 4-bit projection, `[output, input]` before packing, ready for
-/// both paths over the same weight bytes.
+/// One packed 4-bit projection, `[output, input]` before packing, in MLX's
+/// layout, which both paths read as stored.
 struct PackedProjection {
     weight: MlxArray,
     scales: MlxArray,
     biases: MlxArray,
-    /// None for a shape the row-batched kernel cannot tile, which stays on MLX.
-    row_batched: Option<RowBatchedProjection>,
     stored_bytes: usize,
 }
 
@@ -187,7 +184,7 @@ fn should_measure_k_row_cost_against_one_row_for_each_projection_shape() {
                 ));
             }
             eprintln!(
-                "{row_cost_line} (one row {:.2} ms for 12 copies)",
+                "{row_cost_line} (one row {:.2} ms for 16 copies)",
                 one_row_time.expect("one row was timed").as_secs_f64() * 1000.0
             );
         }
@@ -226,20 +223,12 @@ fn pack_projection(
 ) -> PackedProjection {
     let (weight, scales, biases) =
         quantize_random_weight_in_row_slices(runtime, random_key, output_width, input_width);
-    let row_batched = match RowBatchedProjection::prepare(runtime, &weight, &scales, &biases) {
-        Ok(row_batched) => Some(row_batched),
-        Err(refusal) => {
-            eprintln!("[k-row] {output_width}x{input_width} stays on MLX: {refusal}");
-            None
-        }
-    };
     let element_count = output_width as usize * input_width as usize;
     let group_count = element_count / QUANTIZATION_GROUP_SIZE as usize;
     PackedProjection {
         weight,
         scales,
         biases,
-        row_batched,
         // Four bits a value, plus a bf16 scale and bias for every group.
         stored_bytes: element_count / 2 + group_count * 4,
     }
@@ -318,13 +307,25 @@ fn project(
     rows: &MlxArray,
     projection: &PackedProjection,
 ) -> MlxArray {
+    // A shape the row-batched kernel cannot tile (the 48-wide DeltaNet gates)
+    // stays on MLX, as serving does.
     if let MatmulPath::RowBatched(kernels) = matmul_path
-        && let Some(row_batched) = &projection.row_batched
-        && row_batched.plan(rows.shape()[0]).is_ok()
+        && row_batched_quantized_matmul_accepts(
+            rows,
+            &projection.weight,
+            &projection.scales,
+            &projection.biases,
+        )
     {
-        return row_batched
-            .forward(runtime, kernels, rows)
-            .expect("the row-batched matmul builds");
+        return row_batched_quantized_matmul(
+            runtime,
+            kernels,
+            rows,
+            &projection.weight,
+            &projection.scales,
+            &projection.biases,
+        )
+        .expect("the row-batched matmul builds");
     }
     runtime
         .quantized_matmul_affine(

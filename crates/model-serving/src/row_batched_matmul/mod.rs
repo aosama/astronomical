@@ -10,13 +10,14 @@ pub(crate) mod dispatch_plan;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod kernel_source;
 #[cfg(feature = "direct-mlx")]
-pub mod row_batched_projection;
+pub mod row_batched_quantized_matmul;
 
 #[cfg(test)]
 mod dispatch_plan_tests;
 
 pub use dispatch_plan::{ROW_BATCHED_MATMUL_MAXIMUM_ROWS, RowBatchedDispatchRefusal};
 #[cfg(feature = "direct-mlx")]
-pub use row_batched_projection::{
-    RowBatchedMatmulKernels, RowBatchedProjection, RowBatchedProjectionError,
+pub use row_batched_quantized_matmul::{
+    RowBatchedMatmulKernels, RowBatchedProjectionError, row_batched_quantized_matmul,
+    row_batched_quantized_matmul_accepts,
 };

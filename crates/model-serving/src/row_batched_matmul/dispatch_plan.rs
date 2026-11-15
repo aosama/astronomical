@@ -32,7 +32,9 @@ const MINIMUM_GROUPS_PER_SLICE: i32 = 8;
 pub enum RowBatchedDispatchRefusal {
     #[error("{row_count} rows is outside 1 to {ROW_BATCHED_MATMUL_MAXIMUM_ROWS}")]
     RowCount { row_count: i32 },
-    #[error("input width {input_width} is not a positive multiple of {QUANTIZATION_GROUP_SIZE}")]
+    #[error(
+        "input width {input_width} is not a positive multiple of four {QUANTIZATION_GROUP_SIZE}-value groups"
+    )]
     InputWidth { input_width: i32 },
     #[error(
         "output width {output_width} is not a positive multiple of {OUTPUT_COLUMNS_PER_SIMDGROUP}"

@@ -8,7 +8,7 @@
 //! decoding would.
 
 use astronomical_model_serving::row_batched_matmul::{
-    RowBatchedMatmulKernels, RowBatchedProjection, RowBatchedProjectionError,
+    RowBatchedMatmulKernels, RowBatchedProjectionError, row_batched_quantized_matmul,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
@@ -37,9 +37,8 @@ fn initialize_runtime() -> MlxRuntime {
     .expect("the MLX runtime initializes")
 }
 
+/// One quantized weight in MLX's layout, which both kernels read as stored.
 struct ShapeFixture {
-    projection: RowBatchedProjection,
-    /// MLX's own layout, which the projection regroups into its tiled copy.
     packed_weight: MlxArray,
     scales: MlxArray,
     biases: MlxArray,
@@ -66,13 +65,28 @@ fn shape_fixture(
     runtime
         .evaluate_arrays(&[&packed_weight, &scales, &biases])
         .expect("weights materialize");
-    let projection = RowBatchedProjection::prepare(runtime, &packed_weight, &scales, &biases)
-        .expect("the projection prepares");
     ShapeFixture {
-        projection,
         packed_weight,
         scales,
         biases,
+    }
+}
+
+impl ShapeFixture {
+    fn row_batched(
+        &self,
+        runtime: &MlxRuntime,
+        kernels: &RowBatchedMatmulKernels,
+        rows: &MlxArray,
+    ) -> Result<MlxArray, RowBatchedProjectionError> {
+        row_batched_quantized_matmul(
+            runtime,
+            kernels,
+            rows,
+            &self.packed_weight,
+            &self.scales,
+            &self.biases,
+        )
     }
 }
 
@@ -144,8 +158,7 @@ fn should_match_mlx_quantized_matmul_for_every_27b_shape_and_row_count() {
                 )
                 .expect("rows build");
             let kernel_output = fixture
-                .projection
-                .forward(&runtime, &kernels, &rows)
+                .row_batched(&runtime, &kernels, &rows)
                 .expect("the kernel runs");
             let mlx_output = runtime
                 .quantized_matmul_affine(
@@ -203,8 +216,7 @@ fn should_give_each_row_the_same_bits_alone_and_inside_a_sixteen_row_block() {
         let block_values = values(
             &runtime,
             &fixture
-                .projection
-                .forward(&runtime, &kernels, &rows)
+                .row_batched(&runtime, &kernels, &rows)
                 .expect("the block runs"),
         );
         for row_index in [0, 7, 15] {
@@ -219,8 +231,7 @@ fn should_give_each_row_the_same_bits_alone_and_inside_a_sixteen_row_block() {
             let alone_values = values(
                 &runtime,
                 &fixture
-                    .projection
-                    .forward(&runtime, &kernels, &single_row)
+                    .row_batched(&runtime, &kernels, &single_row)
                     .expect("one row runs"),
             );
             let width = output_width as usize;
@@ -247,7 +258,7 @@ fn should_refuse_more_rows_than_the_kernel_takes() {
         .random_normal(&[33, 5120], MlxDtype::BFloat16, 0.0, 1.0, &random_key)
         .expect("rows build");
     assert!(matches!(
-        fixture.projection.forward(&runtime, &kernels, &rows),
+        fixture.row_batched(&runtime, &kernels, &rows),
         Err(RowBatchedProjectionError::Refused(_))
     ));
 }
@@ -257,7 +268,11 @@ fn should_refuse_more_rows_than_the_kernel_takes() {
 #[serial]
 fn should_refuse_group_32_and_float32_scale_packings_instead_of_misreading_them() {
     let runtime = initialize_runtime();
+    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
     let random_key = runtime.random_key(17).expect("a key builds");
+    let rows = runtime
+        .random_normal(&[4, 5120], MlxDtype::BFloat16, 0.0, 1.0, &random_key)
+        .expect("rows build");
     let weight = runtime
         .random_normal(&[1024, 5120], MlxDtype::BFloat16, 0.0, 0.02, &random_key)
         .expect("weights build");
@@ -265,8 +280,10 @@ fn should_refuse_group_32_and_float32_scale_packings_instead_of_misreading_them(
         .quantize_affine(&weight, 32, 4)
         .expect("group 32 quantizes");
     assert!(matches!(
-        RowBatchedProjection::prepare(
+        row_batched_quantized_matmul(
             &runtime,
+            &kernels,
+            &rows,
             &group_32_weight,
             &group_32_scales,
             &group_32_biases
@@ -280,7 +297,14 @@ fn should_refuse_group_32_and_float32_scale_packings_instead_of_misreading_them(
         .astype(&scales, MlxDtype::Float32)
         .expect("scales widen");
     assert!(matches!(
-        RowBatchedProjection::prepare(&runtime, &packed_weight, &float32_scales, &biases),
+        row_batched_quantized_matmul(
+            &runtime,
+            &kernels,
+            &rows,
+            &packed_weight,
+            &float32_scales,
+            &biases
+        ),
         Err(RowBatchedProjectionError::UnsupportedQuantization { .. })
     ));
 }

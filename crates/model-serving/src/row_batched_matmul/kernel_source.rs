@@ -7,7 +7,8 @@
 //! split along the input, which measured 3.85x one row for 16 rows over the
 //! Qwen3.8 27B's projections and 5 to 6x on its narrow 5,120-wide outputs
 //! (`cargo measure-k-row-verify-cost`). This kernel reads each weight group
-//! once for all rows and splits long inputs across simdgroups.
+//! once for all rows and splits long inputs across simdgroups. It reads MLX's
+//! packed weight, scales and biases exactly as stored.
 //!
 //! The matrix units multiply the raw 4-bit codes (`uint4b_format`, which is
 //! MLX's packed nibble order) by the bf16 rows; the affine dequantization is
@@ -39,9 +40,9 @@ pub(crate) const GROUP_SUM_SOURCE: &str = r#"
   XS[group * MP + row] = group_sum;
 "#;
 
-/// Inputs: `X` [M, K] bf16, `XS` [K / GS, MP] float32, `Wq` [N, K / 8]
-/// uint32 codes regrouped by `tile_packed_weight`, `SBt` [K / GS, N, 2] bf16 scale
-/// and bias pairs, `row_dimensions` [M, MP] int32.
+/// Inputs: `X` [M, K] bf16, `XS` [K / GS, MP] float32, and MLX's own packed
+/// weight `Wq` [N, K / 8] uint32 with its bf16 `S` scales and `B` biases
+/// [N, K / GS], read in place; `row_dimensions` [M, MP] int32.
 /// Output: `Y` [M, N] bf16.
 ///
 /// Template integers: `TMR` 16-row blocks per threadgroup, `N`, `K`, `NT`
@@ -75,7 +76,8 @@ pub(crate) const ROW_BATCHED_MATMUL_SOURCE: &str = r#"
   float accumulated[TMR][FRAGMENT_COUNT * 8];
   for (int block = 0; block < TMR; block++)
     for (int index = 0; index < FRAGMENT_COUNT * 8; index++) accumulated[block][index] = 0.0f;
-  const device uint4* scale_bias_words = (const device uint4*)SBt;
+  tensor<device uint4b_format, dextents<int32_t, 2>, tensor_inline> codes_tensor(
+      (device uchar*)Wq, dextents<int32_t, 2>(K, N));
   bool column_in_range[FRAGMENT_COUNT];
   for (int column_fragment = 0; column_fragment < FRAGMENT_COUNT; column_fragment++)
     column_in_range[column_fragment] = first_column + column_fragment * 16 + fragment_column < N;
@@ -83,24 +85,19 @@ pub(crate) const ROW_BATCHED_MATMUL_SOURCE: &str = r#"
   for (int group = first_group; group < end_group; group++) {
     float scales[FRAGMENT_COUNT][4];
     float biases[FRAGMENT_COUNT][4];
-    for (int column_fragment = 0; column_fragment < FRAGMENT_COUNT; column_fragment++) {
-      const uint4 packed_pairs = column_in_range[column_fragment]
-          ? scale_bias_words[(group * N + first_column + column_fragment * 16 + fragment_column) / 4]
-          : uint4(0);
-      const vec<bfloat, 8> pairs = as_type<vec<bfloat, 8>>(packed_pairs);
+    // MLX stores one scale and bias per column and group, [N, K / GS]. Scalar
+    // reads measured faster here than loading four groups per column at once
+    // (96 against 106 ms for an 8-row pass over the 27B's 64 layers): the
+    // held chunks cost more registers than the reads they save.
+    for (int column_fragment = 0; column_fragment < FRAGMENT_COUNT; column_fragment++)
       for (int pair = 0; pair < 4; pair++) {
-        scales[column_fragment][pair] = float(pairs[2 * pair]);
-        biases[column_fragment][pair] = float(pairs[2 * pair + 1]);
+        const int column = first_column + column_fragment * 16 + fragment_column + pair;
+        const bool in_range = column_in_range[column_fragment];
+        scales[column_fragment][pair] = in_range ? float(S[column * GROUP_COUNT + group]) : 0.0f;
+        biases[column_fragment][pair] = in_range ? float(B[column * GROUP_COUNT + group]) : 0.0f;
       }
-    }
     auto rows_slice = rows_tensor.slice(group * GS, 0);
-    // Tiled weights hold each column tile's group as one contiguous NT x GS
-    // block of codes (`tile_packed_weight`), so this read is one 1 KB run
-    // instead of NT 32-byte pieces a whole row apart.
-    tensor<device uint4b_format, dextents<int32_t, 2>, tensor_inline> codes_slice(
-        (device uchar*)Wq
-            + (int64_t)(threadgroup_position_in_grid.x * GROUP_COUNT + group) * (NT * GS / 2),
-        dextents<int32_t, 2>(GS, NT));
+    auto codes_slice = codes_tensor.slice(group * GS, first_column);
     auto products = operation.template get_destination_cooperative_tensor<
         decltype(rows_slice), decltype(codes_slice), float>();
     operation.run(rows_slice, codes_slice, products);
