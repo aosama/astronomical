@@ -15,16 +15,22 @@
 //!
 //! - `routed_reply` — which experts each layer chose for each token of a
 //!   real reply, and the compact file such a recording is kept in.
-//! - `cache` — the cache itself.
+//! - `cache` — the cache with memory perfectly divisible, as a bound to
+//!   compare against.
+//! - `expert_tables` — the cache as an engine can hold it, one table per
+//!   layer, whose decisions the engine carries out.
 //! - `cache_record` — what the cache did, per layer, per expert and per
 //!   eviction.
 
 mod cache;
 mod cache_record;
+mod expert_tables;
 mod routed_reply;
 
 #[cfg(test)]
 mod cache_tests;
+#[cfg(test)]
+mod expert_tables_tests;
 #[cfg(test)]
 mod recorded_reply_replay_tests;
 #[cfg(test)]
@@ -34,4 +40,5 @@ pub use cache::{
     EvictionOrder, ExpertCache, ExpertCacheLayerGeometry, ExpertKey, LayerSlotLimit, ServedRoute,
 };
 pub use cache_record::{EvictionEvent, ExpertCacheRecord, ExpertUse, LayerCacheSummary};
+pub use expert_tables::{ExpertTableRules, ExpertTables, TableChange};
 pub use routed_reply::{RoutedReply, RoutedReplyDecodeError};

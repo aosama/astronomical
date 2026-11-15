@@ -7,7 +7,8 @@
 //! only thing that varies is how the cache spends that memory.
 
 use super::{
-    EvictionOrder, ExpertCache, ExpertCacheLayerGeometry, ExpertKey, LayerSlotLimit, RoutedReply,
+    EvictionOrder, ExpertCache, ExpertCacheLayerGeometry, ExpertKey, ExpertTableRules,
+    ExpertTables, LayerSlotLimit, RoutedReply,
 };
 
 /// Tokens left out of the per-token averages, so the tables a reply starts
@@ -220,5 +221,142 @@ fn should_read_the_same_under_either_eviction_order_on_these_replies() {
             least_recent.cache.record().read_count(),
             least_frequent.cache.record().read_count()
         );
+    }
+}
+
+impl RecordedModel {
+    /// The engine's tables as the reply begins: every layer whole except the
+    /// three partial ones, which start at their small size and empty.
+    fn tables_as_the_reply_begins(&self) -> ExpertTables {
+        let routed_reply = self.routed_reply();
+        let experts_per_layer = routed_reply.experts_per_layer();
+        let layer_geometry = ExpertCacheLayerGeometry {
+            expert_count: experts_per_layer,
+            expert_payload_bytes: EXPERT_BYTES,
+        };
+        let mut tables = ExpertTables::new(
+            vec![layer_geometry; routed_reply.layer_count()],
+            self.held_expert_count * EXPERT_BYTES,
+            ExpertTableRules::default(),
+        );
+        let every_expert_id = (0..experts_per_layer).collect::<Vec<_>>();
+        for layer_index in 0..routed_reply.layer_count() {
+            if self.partial_layer_indexes.contains(&layer_index) {
+                tables.adopt_table(layer_index, self.partial_layer_slot_count, &[]);
+            } else {
+                tables.adopt_table(
+                    layer_index,
+                    usize::from(experts_per_layer),
+                    &every_expert_id,
+                );
+            }
+        }
+        tables
+    }
+}
+
+/// Serves the reply through the tables and returns the reads per token,
+/// leaving out the warm-up when `skips_warm_up` is set.
+fn serve_reply_from_tables(
+    tables: &mut ExpertTables,
+    routed_reply: &RoutedReply,
+    skips_warm_up: bool,
+) -> f64 {
+    let first_measured_token = if skips_warm_up {
+        WARM_UP_TOKEN_COUNT
+    } else {
+        0
+    };
+    let read_count_before = tables.record().read_count();
+    let mut read_count_during_warm_up = 0;
+    for token_index in 0..routed_reply.token_count() {
+        if token_index == first_measured_token {
+            read_count_during_warm_up = tables.record().read_count() - read_count_before;
+        }
+        tables.begin_token();
+        for layer_index in 0..routed_reply.layer_count() {
+            tables.serve(
+                layer_index,
+                routed_reply.layer_route(token_index, layer_index),
+            );
+        }
+    }
+    let measured_read_count =
+        tables.record().read_count() - read_count_before - read_count_during_warm_up;
+    let measured_token_count = routed_reply.token_count() - first_measured_token;
+    measured_read_count as f64 / measured_token_count as f64
+}
+
+#[test]
+fn should_read_under_two_experts_a_token_from_tables_that_grow_and_compact() {
+    for recorded_model in [&FORTY_EIGHT_LAYER_MODEL, &FORTY_LAYER_MODEL] {
+        let routed_reply = recorded_model.routed_reply();
+        let mut tables = recorded_model.tables_as_the_reply_begins();
+
+        let reads_per_token = serve_reply_from_tables(&mut tables, &routed_reply, true);
+
+        assert!(reads_per_token < 2.0, "reads per token: {reads_per_token}");
+    }
+}
+
+#[test]
+fn should_read_almost_nothing_from_tables_when_the_same_reply_is_served_again() {
+    for recorded_model in [&FORTY_EIGHT_LAYER_MODEL, &FORTY_LAYER_MODEL] {
+        let routed_reply = recorded_model.routed_reply();
+        let mut tables = recorded_model.tables_as_the_reply_begins();
+        serve_reply_from_tables(&mut tables, &routed_reply, false);
+
+        let reads_per_token = serve_reply_from_tables(&mut tables, &routed_reply, false);
+
+        assert!(reads_per_token < 0.3, "reads per token: {reads_per_token}");
+    }
+}
+
+/// Reallocating a table copies what it holds, so the design only works if
+/// reallocations stay rare and most layers stay whole.
+#[test]
+fn should_reallocate_rarely_and_leave_most_layers_whole() {
+    for recorded_model in [&FORTY_EIGHT_LAYER_MODEL, &FORTY_LAYER_MODEL] {
+        let routed_reply = recorded_model.routed_reply();
+        let mut tables = recorded_model.tables_as_the_reply_begins();
+
+        serve_reply_from_tables(&mut tables, &routed_reply, false);
+
+        let mut partial_layer_count = 0;
+        for layer_index in 0..routed_reply.layer_count() {
+            if tables.held_expert_count(layer_index) < usize::from(routed_reply.experts_per_layer())
+            {
+                partial_layer_count += 1;
+            }
+        }
+        assert!(
+            tables.reallocation_count() < 120,
+            "reallocations: {}",
+            tables.reallocation_count()
+        );
+        assert!(
+            partial_layer_count <= 12,
+            "partial layers: {partial_layer_count}"
+        );
+    }
+}
+
+#[test]
+fn should_never_take_more_memory_than_the_capacity() {
+    for recorded_model in [&FORTY_EIGHT_LAYER_MODEL, &FORTY_LAYER_MODEL] {
+        let routed_reply = recorded_model.routed_reply();
+        let mut tables = recorded_model.tables_as_the_reply_begins();
+        let capacity_bytes = recorded_model.held_expert_count * EXPERT_BYTES;
+
+        for token_index in 0..routed_reply.token_count() {
+            tables.begin_token();
+            for layer_index in 0..routed_reply.layer_count() {
+                tables.serve(
+                    layer_index,
+                    routed_reply.layer_route(token_index, layer_index),
+                );
+                assert!(tables.allocated_bytes() <= capacity_bytes);
+            }
+        }
     }
 }
