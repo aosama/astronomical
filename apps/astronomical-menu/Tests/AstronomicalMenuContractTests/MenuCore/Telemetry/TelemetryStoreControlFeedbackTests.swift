@@ -200,7 +200,7 @@ final class TelemetryStoreControlFeedbackTests: XCTestCase {
     let telemetryStore = contractTelemetryStore(
       daemonClient: FixedAnswerDaemonClient(
         statusDocument: maximumMlxMemoryStatusDocument(
-          effectiveMlxMemoryCeilingBytes: 39_195_874_112,
+          effectiveMlxMemoryCeilingBytes: 37_185_829_312,
           wiredResidencyBudgetBytes: 40_200_896_512,
           machineMlxMemoryCeilingBytes: 42_949_672_960,
           configuredMaximumMlxMemoryGigabytes: 37)),

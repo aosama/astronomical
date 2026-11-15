@@ -79,29 +79,49 @@ pub const fn effective_mlx_memory_ceiling_after_wired_claim(
     }
 }
 
-/// Share of the wired-residency budget kept free of MLX planning, in parts
-/// per thousand (25 = 2.5%).
+/// Share of Metal's recommended working set at which MLX starts emptying its
+/// buffer cache, in parts per thousand.
+///
+/// MLX's Metal allocator sets `gc_limit_` to 95% of the recommended working
+/// set, and once active memory plus cached buffers plus the request reaches
+/// it, every allocation that misses the cache releases cached buffers first
+/// (`mlx/backend/metal/allocator.cpp`, `MetalAllocator::malloc`). Above that
+/// line no buffer is reused: each token allocates and wires its temporaries
+/// afresh.
+const MLX_CACHE_COLLECTION_PARTS_PER_THOUSAND: u64 = 950;
+
+/// Share of the wired-residency budget kept free below MLX's cache
+/// collection line, in parts per thousand (25 = 2.5%), for what MLX's
+/// `active_memory` does not count: allocator-cache buffers, driver
+/// command-buffer scratch, and other GPU clients of the system-wide wired
+/// pool.
 const METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND: u64 = 25;
 
-/// Wired residency the MLX residency planner may fill: the claimed budget
-/// minus a 2.5% Metal working-set margin.
+/// Wired residency the MLX residency planner may fill: MLX's cache
+/// collection line (95% of the claimed budget) less a 2.5% margin, so 92.5%.
 ///
-/// MLX `active_memory` does not count everything Metal charges against the
-/// wired budget: allocator-cache buffers, driver command-buffer scratch, and
-/// other GPU clients sharing the system-wide wired pool. A planner that packs
-/// MLX arrays to the raw claim therefore fails the command buffer with
-/// `kIOGPUCommandBufferCallbackErrorOutOfMemory`. Measured 2026-10-24 on a
-/// 48 GB machine with a 40,200,896,512-byte claim: a 122B decode peaked at
-/// 40,051,177,002 MLX bytes (99.6% of the claim) and the worker died, while
-/// the same model at 37.4 GB peaks (93%) never failed. Upstream MLX makes the
-/// same judgement, starting cache garbage collection at 95% of Metal's
-/// recommended working set. The margin used to exist only by accident inside
-/// an oversized 1 GB context-reserve floor; it lives here, named, so the
-/// context reserve can stay exact.
+/// The margin alone used to be taken from the whole budget, which put the
+/// ceiling at 97.5%, above the collection line. A model that filled it ran
+/// with MLX's buffer cache permanently drained. Measured 2026-11-14 on a
+/// 48 GB machine with a 40,200,896,512-byte budget, whose collection line is
+/// 35.57 GB: a 122B model replied at 28 to 30 tokens per second under a
+/// 35 GB ceiling and at 10 to 11 under a 36 GB one, with the same reads
+/// from storage and the same free system memory.
+///
+/// The margin's own history: a planner that packs MLX arrays to the raw
+/// claim fails the command buffer with
+/// `kIOGPUCommandBufferCallbackErrorOutOfMemory`. Measured 2026-10-24 on the
+/// same machine, a 122B decode peaked at 40,051,177,002 MLX bytes (99.6% of
+/// the claim) and the worker died, while the same model at 34.8 GB peaks
+/// (93%) never failed.
 #[must_use]
 pub const fn plannable_wired_residency_bytes(claimed_wired_residency_budget_bytes: u64) -> u64 {
+    // Subtracting the unplannable share, rather than multiplying by the
+    // plannable one, leaves a claim under a thousand bytes whole.
+    let unplannable_parts_per_thousand = 1_000 - MLX_CACHE_COLLECTION_PARTS_PER_THOUSAND
+        + METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND;
     claimed_wired_residency_budget_bytes.saturating_sub(
-        claimed_wired_residency_budget_bytes / 1_000 * METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND,
+        claimed_wired_residency_budget_bytes / 1_000 * unplannable_parts_per_thousand,
     )
 }
 

@@ -9,7 +9,7 @@ let mlxMemoryBytesPerGigabyte: UInt64 = 1_073_741_824
 /// in the serving ceiling. The menu has to repeat it: the worker publishes
 /// the clamped ceiling, and the success sentence must clear when that clamped
 /// ceiling arrives rather than waiting for the raw request.
-private let metalWorkingSetMarginPartsPerThousand: UInt64 = 25
+private let unplannableWiredClaimPartsPerThousand: UInt64 = 75
 
 /// Reports whether the live engine ceiling is the ceiling this request installs.
 ///
@@ -48,7 +48,7 @@ func mlxMemoryCeilingTheEngineWillInstall(
 /// Wired residency the engine may fill: the claim minus the Metal working-set margin.
 private func plannableWiredResidencyBytes(claimedWiredResidencyBudgetBytes: UInt64) -> UInt64 {
   let metalWorkingSetMarginBytes =
-    claimedWiredResidencyBudgetBytes / 1_000 * metalWorkingSetMarginPartsPerThousand
+    claimedWiredResidencyBudgetBytes / 1_000 * unplannableWiredClaimPartsPerThousand
   if metalWorkingSetMarginBytes > claimedWiredResidencyBudgetBytes {
     return 0
   }

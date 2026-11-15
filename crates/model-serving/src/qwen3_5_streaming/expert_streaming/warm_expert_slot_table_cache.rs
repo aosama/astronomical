@@ -57,6 +57,17 @@ pub struct RoutedExpertCoverage {
     pub missing_expert_ids: Vec<usize>,
 }
 
+/// A layer's table prepared for a lookup that assumes every routed expert is
+/// held, with the mask that tells whether the assumption was right.
+#[derive(Debug)]
+pub struct OptimisticTablePage {
+    pub weights: Qwen3_5PagedExpertWeights,
+    pub manifest: QuantizedExpertPageManifest,
+    /// One for every expert the table does not hold; `None` when it holds
+    /// the whole layer and so cannot miss.
+    pub missing_expert_mask: Option<Vec<u32>>,
+}
+
 /// One layer's slot table: a preallocated weight tensor and its slot map.
 #[derive(Debug)]
 struct ExpertSlotTable {
@@ -308,6 +319,51 @@ impl WarmExpertSlotTableCache {
             payload_byte_count: table.payload_bytes,
         };
         Some((table.weights.retained_reference_ok(), manifest))
+    }
+
+    /// The layer's table for an optimistic lookup on the graphics processor,
+    /// whatever part of the layer it holds, or `None` when the layer has no
+    /// table or the table is empty.
+    ///
+    /// Experts the table does not hold are pointed at slot zero so the
+    /// gather stays in bounds; what it computes for them is discarded,
+    /// because the returned mask counts them and a nonzero count means the
+    /// token is run again.
+    #[must_use]
+    pub fn optimistic_table_page(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+    ) -> Option<OptimisticTablePage> {
+        let table = self.tables_by_layer.get(layer_index)?.as_ref()?;
+        if table.occupied_slot_count == 0 {
+            return None;
+        }
+        let mut page_slot_by_global_expert_id = vec![0_u32; expert_capacity];
+        let mut missing_expert_mask = vec![1_u32; expert_capacity];
+        let mut held_expert_ids = Vec::with_capacity(table.occupied_slot_count);
+        for (slot, expert_id) in table.expert_id_by_slot.iter().enumerate() {
+            let Some(expert_id) = *expert_id else {
+                continue;
+            };
+            if expert_id < expert_capacity {
+                page_slot_by_global_expert_id[expert_id] = u32::try_from(slot).unwrap_or(0);
+                missing_expert_mask[expert_id] = 0;
+                held_expert_ids.push(expert_id);
+            }
+        }
+        held_expert_ids.sort_unstable();
+        Some(OptimisticTablePage {
+            weights: table.weights.retained_reference_ok(),
+            manifest: QuantizedExpertPageManifest {
+                expert_ids: held_expert_ids,
+                page_slot_by_global_expert_id,
+                source_manifests: Vec::new(),
+                payload_byte_count: table.payload_bytes,
+            },
+            missing_expert_mask: (table.occupied_slot_count < expert_capacity)
+                .then_some(missing_expert_mask),
+        })
     }
 
     /// Seats a complete expert layer if it fits leftover budget. Returns false

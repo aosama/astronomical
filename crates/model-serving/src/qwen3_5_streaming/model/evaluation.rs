@@ -43,7 +43,9 @@ impl Qwen3_5Model {
         self.evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)
     }
 
-    /// Evaluates decoder-state roots and returns paged-route replay outcome.
+    /// Evaluates the decoder-state roots of a prompt forward. A prompt is
+    /// always read the exact way, so every route it took was resolved before
+    /// its layer was built and nothing can be found missing here.
     pub(crate) fn evaluate_decoder_state_for_paged_route_resolution(
         &self,
         request_decoder_state: &RequestDecoderStateStack,
@@ -51,13 +53,14 @@ impl Qwen3_5Model {
             &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
+    ) -> Result<(), Qwen3_5ExecutionError> {
         let mut evaluation_arrays =
             super::forward_contract::decoder_state_arrays(request_decoder_state)?;
         if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
             evaluation_arrays.extend(boundary_checkpoint_collector.evaluation_arrays());
         }
         self.evaluate_arrays_resolving_paged_routes(&evaluation_arrays, performance_attribution)
+            .and_then(require_every_route_resolved)
     }
 
     /// Submits decode evaluation without synchronizing the graphics processor.
@@ -70,5 +73,17 @@ impl Qwen3_5Model {
             super::forward_contract::forward_state_arrays(generated_token, request_decoder_state)?;
         self.runtime.async_eval_arrays(&evaluation_arrays)?;
         Ok(())
+    }
+}
+
+/// A prompt forward cannot be run again from here, so a miss is an error.
+fn require_every_route_resolved(
+    validation_outcome: PagedRouteValidationOutcome,
+) -> Result<(), Qwen3_5ExecutionError> {
+    match validation_outcome {
+        PagedRouteValidationOutcome::CompleteHit => Ok(()),
+        PagedRouteValidationOutcome::MissedExperts => Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "a prompt forward reported experts missing from memory",
+        }),
     }
 }

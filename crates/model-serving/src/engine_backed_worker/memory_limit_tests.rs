@@ -56,11 +56,12 @@ fn should_keep_the_requested_ceiling_when_no_wired_budget_is_claimed() {
 
 #[test]
 fn should_lower_the_requested_ceiling_to_the_plannable_wired_residency() {
-    // A 100,000-byte wired claim plans against 97,500 bytes (2.5% Metal
-    // working-set margin), which sits below the 99,000-byte request.
+    // A 100,000-byte wired claim plans against 92,500 bytes (MLX's cache
+    // collection line at 95%, less a 2.5% margin), which sits below the
+    // 99,000-byte request.
     assert_eq!(
         effective_requested_ceiling_after_wired_claim(99_000, 200_000, Some(100_000)),
-        97_500
+        92_500
     );
 }
 
