@@ -241,6 +241,47 @@ fn should_refuse_an_output_folder_inside_the_model_folder() {
 }
 
 #[test]
+fn should_write_into_folders_that_do_not_exist_yet() {
+    let work_directory = tempfile::tempdir().unwrap();
+    let source_directory = source_model_folder(work_directory.path());
+    let output_directory = work_directory
+        .path()
+        .join("calibrated")
+        .join("verona")
+        .join("kev");
+    write_calibrated_model_folder(
+        &whole_folder(&source_directory),
+        &output_directory,
+        calibration_only(&noul_calibration()),
+        &mut RecordedProgress::default(),
+    )
+    .unwrap();
+    assert!(
+        output_directory
+            .join(DECISION_CALIBRATION_FILE_NAME)
+            .is_file()
+    );
+}
+
+#[test]
+fn should_refuse_a_not_yet_existing_folder_nested_inside_the_model_folder() {
+    let work_directory = tempfile::tempdir().unwrap();
+    let source_directory = source_model_folder(work_directory.path());
+    let output_directory = source_directory.join("later").join("calibrated");
+    let write_outcome = write_calibrated_model_folder(
+        &whole_folder(&source_directory),
+        &output_directory,
+        calibration_only(&noul_calibration()),
+        &mut RecordedProgress::default(),
+    );
+    assert!(matches!(
+        write_outcome,
+        Err(CalibratedFolderError::OutputOverlapsSource)
+    ));
+    assert!(!source_directory.join("later").exists());
+}
+
+#[test]
 fn should_leave_no_partial_folder_when_the_source_is_missing() {
     let work_directory = tempfile::tempdir().unwrap();
     let missing_source = work_directory.path().join("no-such-model");

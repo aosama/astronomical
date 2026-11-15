@@ -147,18 +147,34 @@ pub fn check_output_location(
         });
     }
     let canonical_source = canonical_path(source_directory)?;
-    let output_parent = output_directory.parent().unwrap_or(Path::new("."));
-    let canonical_output_parent = canonical_path(output_parent)?;
-    let canonical_output = match output_directory.file_name() {
-        Some(output_name) => canonical_output_parent.join(output_name),
-        None => canonical_output_parent,
-    };
+    let canonical_output = canonical_output_path(output_directory)?;
     if canonical_output.starts_with(&canonical_source)
         || canonical_source.starts_with(&canonical_output)
     {
         return Err(CalibratedFolderError::OutputOverlapsSource);
     }
     Ok(())
+}
+
+/// `output_directory` as an absolute path with links resolved, even when it
+/// and some of its parents do not exist yet: the nearest folder that exists
+/// is resolved and the missing names are added back. The folder is written
+/// with its parents created, so a new `calibrated/` folder is a fine target.
+fn canonical_output_path(output_directory: &Path) -> Result<PathBuf, CalibratedFolderError> {
+    let mut missing_names = Vec::new();
+    let mut existing_ancestor = output_directory;
+    while !existing_ancestor.as_os_str().is_empty() && !existing_ancestor.exists() {
+        let Some(missing_name) = existing_ancestor.file_name() else {
+            break;
+        };
+        missing_names.push(missing_name.to_owned());
+        existing_ancestor = existing_ancestor.parent().unwrap_or(Path::new(""));
+    }
+    let mut resolved_output = canonical_path(existing_ancestor)?;
+    for missing_name in missing_names.iter().rev() {
+        resolved_output.push(missing_name);
+    }
+    Ok(resolved_output)
 }
 
 fn canonical_path(path: &Path) -> Result<PathBuf, CalibratedFolderError> {
