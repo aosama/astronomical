@@ -17,8 +17,9 @@ use support::{
     staged_file_path_for_relative_path,
 };
 
-/// Segments one large payload: every request restarts at its own offset and serves the whole
-/// remaining tail, mirroring how the real delivery endpoint ignores an upper range bound.
+/// Segments one large payload against a server that ignores the upper bound of a range: every
+/// request restarts at its own offset and is answered with the whole remaining tail, which the
+/// transfer must still accept, consuming only its own segment's share.
 fn tail_serving_factories(complete_payload: &[u8]) -> Vec<(String, ScriptedResponseFactory)> {
     let owned_payload_bytes = complete_payload.to_vec();
     let total_bytes = owned_payload_bytes.len() as u64;
@@ -137,7 +138,7 @@ async fn should_segment_a_large_file_into_parallel_ranged_requests_within_the_bo
                 PAYLOAD_TRANSFER_SEGMENT_BYTES,
                 PAYLOAD_TRANSFER_SEGMENT_BYTES * 2
             ],
-            "each segment must request its own open-ended range: {requested_resume_offsets:?}"
+            "each segment must start its request at its own offset: {requested_resume_offsets:?}"
         );
         assert_eq!(
             transport.maximum_active_request_count(),

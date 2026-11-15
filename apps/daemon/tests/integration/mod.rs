@@ -11,6 +11,7 @@ mod daemon_ipc_speech;
 mod download_payload;
 mod download_payload_concurrency;
 mod download_payload_empty_files;
+mod download_payload_recovery;
 mod download_payload_segments;
 mod download_payload_support;
 mod expert_streaming_stats;

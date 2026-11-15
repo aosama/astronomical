@@ -15,7 +15,9 @@ use futures_util::stream::{FuturesUnordered, StreamExt};
 
 use super::{
     DownloadPayloadTransfer, DownloadPayloadTransferError,
+    payload_segment_transfer::SegmentTransferTarget,
     payload_transfer_segment::{PayloadSegment, SegmentedFileAssembler, plan_payload_segments},
+    slow_stream_watch::StreamRateReference,
 };
 use crate::library::{DownloadJob, DownloadJobError, DownloadJobFile, DownloadProgressSnapshot};
 use crate::{
@@ -50,6 +52,9 @@ pub(super) struct SegmentOutcome {
 pub(super) struct ObservedTransferProgress {
     live_job: Mutex<DownloadJob>,
     snapshot: DownloadProgressSnapshot,
+    /// What this window's streams have recently achieved, so one that falls
+    /// far behind the others can be told from a slow network.
+    stream_rate_reference: StreamRateReference,
 }
 
 impl ObservedTransferProgress {
@@ -57,7 +62,12 @@ impl ObservedTransferProgress {
         Self {
             live_job: Mutex::new(download_job),
             snapshot,
+            stream_rate_reference: StreamRateReference::default(),
         }
+    }
+
+    pub(super) const fn stream_rate_reference(&self) -> &StreamRateReference {
+        &self.stream_rate_reference
     }
 
     pub(super) fn select_file(
@@ -339,14 +349,16 @@ async fn transfer_segment_with_attribution(
         .measure_async_operation(
             DaemonPerformanceOperation::FileTransfer,
             || {
-                segment_transfer.transfer.transfer_payload_segment(
-                    &segment_transfer.transfer_job,
-                    &pending_file,
-                    &payload_segment,
-                    assembler,
-                    segment_transfer.updated_at_unix_millis,
-                    segment_transfer.observed_transfer_progress,
-                )
+                segment_transfer
+                    .transfer
+                    .transfer_payload_segment(SegmentTransferTarget {
+                        download_job: &segment_transfer.transfer_job,
+                        download_file: &pending_file,
+                        payload_segment: &payload_segment,
+                        assembler,
+                        updated_at_unix_millis: segment_transfer.updated_at_unix_millis,
+                        observed_transfer_progress: segment_transfer.observed_transfer_progress,
+                    })
             },
             |transfer_outcome| {
                 let measurement = if transfer_outcome.is_ok() {
