@@ -61,6 +61,7 @@ Run `astronomical --help` for the full list.
 ## Learn more
 
 - [How Astronomical works](docs/how-it-works.md): memory, speed, precision and current scope.
+- [One request, start to finish](docs/memory-walkthrough.md): how memory is managed during a request, for contributors.
 - [Configuration](docs/configuration.md): every setting, for people who want to edit the file by hand.
 - [Neural Engine prefill](docs/neural-engine-prefill.md): an experimental speed-up for some models.
 - [Building and developing](docs/development.md): build from source and run the tests.

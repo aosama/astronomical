@@ -110,9 +110,9 @@ fn journey_kind_label(kind: StreamingPrefillJourneyKind) -> &'static str {
 enum StreamingPrefillJourneyKind {
     HalfModelReread,
     HighRamResponsiveSuffix,
-    /// Tight ceiling that forces the OOM-retry-reread stall on the first
-    /// prefill chunk. Promoting two missing layers exceeds the budget and
-    /// the retry re-reads them from SSD before OOMing again.
+    /// A limit so tight that the prompt once stalled: a span hit the limit,
+    /// was retried, re-read its layers from the SSD and hit the limit
+    /// again. The request must be served without that stall.
     TightCeiling,
 }
 
@@ -187,8 +187,8 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     eprintln!(
         "{LOG_MARKER} request=journey status=start timeout_seconds={} artifact_payload_bytes={artifact_payload_bytes} artifact_payload_gb={:.3} allocated_mlx_memory_bytes={allocated_mlx_memory_bytes} allocated_mlx_memory_gb={:.3} initial_prompt_tokens={initial_prompt_token_count} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} persistent_prompt_cache_enabled=true",
         timeout_duration.as_secs(),
-        artifact_payload_bytes as f64 / 1_000_000_000.0,
-        allocated_mlx_memory_bytes as f64 / 1_000_000_000.0,
+        artifact_payload_bytes as f64 / 1_073_741_824.0,
+        allocated_mlx_memory_bytes as f64 / 1_073_741_824.0,
     );
 
     let real_model_rest_server = launch_real_model_rest_server(

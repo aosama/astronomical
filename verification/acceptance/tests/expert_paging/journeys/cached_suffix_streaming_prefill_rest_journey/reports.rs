@@ -399,7 +399,7 @@ pub(super) fn print_comparison_summary(
             performance_record["mlx_peak_memory_bytes"]
                 .as_u64()
                 .unwrap_or(0) as f64
-                / 1_000_000_000.0,
+                / 1_073_741_824.0,
         );
     }
     eprintln!(
@@ -436,8 +436,8 @@ pub(super) fn assert_admitted_complete_layers_are_reused_across_prefill_chunks(
     let same_request_reread_bytes = prefill_same_request_reread_bytes(append_attribution);
     eprintln!(
         "{LOG_MARKER} request=reuse-across-chunks avoided_complete_layer_gb={:.3} same_request_reread_gb={:.3} prefill_chunks={prefill_chunk_count}",
-        avoided_complete_layer_bytes as f64 / 1_000_000_000.0,
-        same_request_reread_bytes as f64 / 1_000_000_000.0,
+        avoided_complete_layer_bytes as f64 / 1_073_741_824.0,
+        same_request_reread_bytes as f64 / 1_073_741_824.0,
     );
     assert!(
         avoided_complete_layer_bytes > 0,

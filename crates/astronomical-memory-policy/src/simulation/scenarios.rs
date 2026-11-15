@@ -3,6 +3,21 @@
 //! Each test is one real memory incident, or one promise of the redesign,
 //! run on a model sized like the 35B: about 2.5 GiB of core weights and
 //! forty half-gibibyte layers under a 12 GiB limit.
+//!
+//! | Incident | Scenario |
+//! |---|---|
+//! | A first large prompt after a small one overflowed and discarded every kept expert (issue #2217) | `should_serve_a_first_large_prompt_after_a_small_one_without_overflow` |
+//! | A first large prompt planned around working memory nobody had measured overflowed (the 122B, 2026-11-14) | `should_stream_everything_until_a_step_is_measured_when_the_probe_did_not_run` |
+//! | A follow-up prompt arrived while a reply's experts filled the cache | `should_give_weights_back_once_between_two_identical_requests` |
+//! | Working memory misjudged by half | `should_redo_one_layer_step_once_when_working_memory_was_misjudged_by_half`, `should_not_overflow_again_once_the_true_working_memory_is_known` |
+//! | The limit lowered in the middle of a request (issue #1108) | `should_only_trim_when_the_limit_is_lowered_in_the_middle_of_a_request` |
+//! | A cancelled request left the cache full | `should_start_the_next_request_cleanly_after_a_cancelled_one` |
+//! | The same request twice gave back and re-read the same layers (October) | `should_give_weights_back_once_between_two_identical_requests` |
+//! | A model that fits completely still read from the drive | `should_keep_every_weight_and_read_nothing_once_the_model_fits` |
+//! | A limit below the streaming floor on a small Mac refused the model (issue #1902) | `should_report_a_shortfall_and_refuse_nothing_below_the_streaming_floor` |
+//! | A request with an image | `should_make_room_for_an_image_and_take_the_room_back` |
+//! | A long reply grew the context until kept experts no longer fitted | `should_give_back_a_layer_at_a_time_as_a_long_reply_grows_the_context` |
+//! | Memory nobody declared went unseen | `should_expose_an_allocation_that_nobody_declared` |
 
 use super::simulated_engine::{EngineJournal, KeptLayerOrder, SimulatedEngine};
 use super::simulated_model::SimulatedModel;
@@ -75,6 +90,33 @@ fn should_use_the_capacity_while_reading_the_very_first_prompt() {
         engine.kept_weight_bytes() * 10 >= capacity_bytes * 9,
         "the first prompt must leave at least 90% of the capacity kept: kept {} of {capacity_bytes}",
         engine.kept_weight_bytes()
+    );
+    engine.write_reply(REPLY_TOKEN_COUNT);
+    engine.finish_request();
+    assert_healthy(engine.journal(), LIMIT_BYTES);
+}
+
+/// The 122B on 2026-11-14: nothing had measured a prompt step, the first
+/// large prompt was planned around a guess, hit the limit and discarded
+/// everything. A step nobody has measured now keeps nothing and streams, so
+/// it cannot overflow, and the capacity opens once one step is measured.
+#[test]
+fn should_stream_everything_until_a_step_is_measured_when_the_probe_did_not_run() {
+    let mut engine = SimulatedEngine::load(model_like_the_35b(), LIMIT_BYTES);
+    engine.start_request(LARGE_PROMPT_TOKEN_COUNT);
+    engine.read_prompt(LARGE_PROMPT_TOKEN_COUNT, SPAN_TOKEN_COUNT);
+    assert!(
+        engine.journal().storage_read_bytes >= LAYER_WEIGHT_BYTES,
+        "the first layer, which nobody had measured, is read from storage"
+    );
+    assert!(engine.accounts().working_memory_is_measured);
+    assert!(
+        engine.accounts().kept_weight_capacity_bytes > 0,
+        "one measured step opens the capacity"
+    );
+    assert!(
+        engine.kept_weight_bytes() > 0,
+        "layers read after the first measured step are kept"
     );
     engine.write_reply(REPLY_TOKEN_COUNT);
     engine.finish_request();

@@ -11,11 +11,12 @@ use tokio::time::{Duration, Instant, sleep};
 
 use super::serving_rest;
 
-const NAMED_HEADROOM_FIELDS: [&str; 4] = [
+const NAMED_HEADROOM_FIELDS: [&str; 5] = [
     "reserved_model_core_slack_bytes",
     "reserved_context_growth_bytes",
     "reserved_activation_and_workspace_bytes",
     "unseated_expert_entitlement_bytes",
+    "unneeded_headroom_bytes",
 ];
 
 /// Fails when the status snapshot is missing the split or the identity does

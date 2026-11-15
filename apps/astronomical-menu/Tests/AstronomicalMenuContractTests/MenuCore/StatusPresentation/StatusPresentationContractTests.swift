@@ -79,7 +79,7 @@ final class StatusPresentationContractTests: XCTestCase {
     )
     XCTAssertEqual(
       MlxMemoryLegendItem.unusedBudget.explanationText,
-      "Unused budget the ceiling already granted for expert weights that are not in RAM. Distinct from Experts, which are weights already resident."
+      "Room under your limit that is not in use: space granted for expert weights that are not in RAM yet, or space left over because the whole model fits. Distinct from Experts, which are weights already resident."
     )
     XCTAssertEqual(
       MlxMemoryLegendItem.reservedContextGrowth.explanationText,

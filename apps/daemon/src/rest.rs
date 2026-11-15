@@ -27,6 +27,7 @@ pub(crate) mod request_body_budget;
 pub(crate) mod request_rejections;
 pub(crate) mod status;
 pub(crate) mod system_one_endpoint;
+pub(crate) mod worker_replacement_wait;
 
 #[cfg(test)]
 mod chat_diagnostics_tests;

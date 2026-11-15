@@ -74,7 +74,6 @@ impl Qwen3_5EngineState {
             return Ok(());
         }
         Err(request_errors::resident_capacity_error(
-            model,
             StreamingEngineRequirement::RequestContextShortfall {
                 shortfall_bytes: usize::try_from(prompt_chunk_accounts.shortfall_bytes)
                     .unwrap_or(usize::MAX),

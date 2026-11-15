@@ -20,8 +20,6 @@ mod complete_residency_headroom_boundary_tests;
 #[cfg(test)]
 mod expert_residency_policy_tests;
 #[cfg(test)]
-mod foundation_overlay_accounting_tests;
-#[cfg(test)]
 mod generation_full_fit_tests;
 #[cfg(test)]
 mod observed_mode_tests;

@@ -55,10 +55,14 @@ pub struct MemoryCeilingUtilization {
     pub reserved_model_core_slack_bytes: u64,
     /// Context-window reserve that persistent request state does not occupy.
     pub reserved_context_growth_bytes: u64,
-    /// Activation workspace, stream slot, and other fixed reserves.
+    /// Working memory, the margin, leases and the slots for weights being
+    /// read.
     pub reserved_activation_and_workspace_bytes: u64,
     /// Expert entitlement the budget owner granted but warming never filled.
     pub unseated_expert_entitlement_bytes: u64,
+    /// Room under the limit that nothing needs, such as what is left when
+    /// the whole model fits with space to spare.
+    pub unneeded_headroom_bytes: u64,
     /// Headroom not accounted for by any owner named above.
     pub unexplained_headroom_bytes: u64,
     /// Headroom an owner consumed beyond its reserve. Nonzero means a named
@@ -105,15 +109,16 @@ impl MemoryCeilingUtilization {
         let reserved_activation_and_workspace_bytes = budget_snapshot
             .activation_headroom_bytes
             .saturating_add(budget_snapshot.complete_layer_stream_slot_bytes)
-            .saturating_add(budget_snapshot.other_fixed_bytes)
             .saturating_sub(unattributed_active_bytes);
+        let unneeded_headroom_bytes = budget_snapshot.unneeded_bytes;
         let unseated_expert_entitlement_bytes = budget_snapshot
             .retained_expert_budget_bytes
             .saturating_sub(active_breakdown.expert_payload_bytes);
         let named_headroom_bytes = reserved_model_core_slack_bytes
             .saturating_add(reserved_context_growth_bytes)
             .saturating_add(reserved_activation_and_workspace_bytes)
-            .saturating_add(unseated_expert_entitlement_bytes);
+            .saturating_add(unseated_expert_entitlement_bytes)
+            .saturating_add(unneeded_headroom_bytes);
         let unexplained_headroom_bytes = unused_headroom_bytes.saturating_sub(named_headroom_bytes);
         // Clamping a negative term to zero inflates the named total above what
         // the headroom can explain. That excess is the overrun, and reporting
@@ -127,6 +132,7 @@ impl MemoryCeilingUtilization {
             reserved_context_growth_bytes,
             reserved_activation_and_workspace_bytes,
             unseated_expert_entitlement_bytes,
+            unneeded_headroom_bytes,
             unexplained_headroom_bytes,
             owner_overrun_bytes,
         }
@@ -172,7 +178,7 @@ mod tests {
                 - 2_000_000_000
                 - 200_000_000,
             complete_layer_stream_slot_bytes: 200_000_000,
-            other_fixed_bytes: 0,
+            unneeded_bytes: 0,
             retained_expert_budget_bytes,
         }
     }
@@ -288,7 +294,7 @@ mod tests {
             context_window_reserve_bytes: GIGABYTE,
             activation_headroom_bytes: decode_activation_reserve_bytes,
             complete_layer_stream_slot_bytes: routed_page_slot_bytes,
-            other_fixed_bytes: 0,
+            unneeded_bytes: 0,
             retained_expert_budget_bytes: 25 * GIGABYTE
                 - model_core_payload_bytes
                 - GIGABYTE
@@ -341,6 +347,59 @@ mod tests {
         assert!(
             corrected.is_fully_explained(),
             "attributing live context must close the identity: {corrected:?}"
+        );
+    }
+
+    #[test]
+    fn should_report_room_nothing_needs_apart_from_any_reserve() {
+        // A model that fits under a far larger limit: 5 GB in use of 36 GB,
+        // 1 GB of working room set aside, 30 GB that nothing needs.
+        let budget = MemoryReserveSnapshot {
+            mlx_active_memory_ceiling_bytes: 36 * GIGABYTE,
+            model_core_payload_bytes: 5 * GIGABYTE,
+            context_window_reserve_bytes: 0,
+            activation_headroom_bytes: GIGABYTE,
+            complete_layer_stream_slot_bytes: 0,
+            unneeded_bytes: 30 * GIGABYTE,
+            retained_expert_budget_bytes: 0,
+        };
+        let breakdown = MlxActiveMemoryBreakdown {
+            expert_payload_bytes: 0,
+            model_core_payload_bytes: 5 * GIGABYTE,
+            context_state_payload_bytes: 0,
+        };
+        let utilization = MemoryCeilingUtilization::compose(budget, 5 * GIGABYTE, breakdown);
+
+        assert_eq!(utilization.unneeded_headroom_bytes, 30 * GIGABYTE);
+        assert_eq!(
+            utilization.reserved_activation_and_workspace_bytes,
+            GIGABYTE
+        );
+        assert!(utilization.is_fully_explained(), "{utilization:?}");
+    }
+
+    #[test]
+    fn should_report_no_unneeded_room_when_the_limit_is_fully_assigned() {
+        let budget = MemoryReserveSnapshot {
+            mlx_active_memory_ceiling_bytes: 10 * GIGABYTE,
+            model_core_payload_bytes: 5 * GIGABYTE,
+            context_window_reserve_bytes: 0,
+            activation_headroom_bytes: 5 * GIGABYTE,
+            complete_layer_stream_slot_bytes: 0,
+            unneeded_bytes: 0,
+            retained_expert_budget_bytes: 0,
+        };
+        let breakdown = MlxActiveMemoryBreakdown {
+            expert_payload_bytes: 0,
+            model_core_payload_bytes: 5 * GIGABYTE,
+            context_state_payload_bytes: 0,
+        };
+        let utilization = MemoryCeilingUtilization::compose(budget, 5 * GIGABYTE, breakdown);
+
+        assert_eq!(utilization.unneeded_headroom_bytes, 0);
+        assert_eq!(
+            utilization.reserved_activation_and_workspace_bytes,
+            5 * GIGABYTE
         );
     }
 }

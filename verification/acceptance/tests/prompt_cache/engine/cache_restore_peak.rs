@@ -266,8 +266,8 @@ async fn generate_token_ids_with_event_timing(
                 .map(|memory_snapshot| {
                     format!(
                         "active_gb={:.3} peak_gb={:.3}",
-                        memory_snapshot.active_memory_bytes() as f64 / 1_000_000_000.0,
-                        memory_snapshot.peak_memory_bytes() as f64 / 1_000_000_000.0,
+                        memory_snapshot.active_memory_bytes() as f64 / 1_073_741_824.0,
+                        memory_snapshot.peak_memory_bytes() as f64 / 1_073_741_824.0,
                     )
                 })
                 .unwrap_or_else(|snapshot_error| {

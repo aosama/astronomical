@@ -1,8 +1,7 @@
-//! The two ways this engine turns a request away.
+//! The two ways this engine turns a request away: as invalid, or as one the
+//! streaming engine has to serve.
 
 use crate::{InferenceEngineError, StreamingEngineRequirement};
-
-use super::Qwen3_5ResidentModel;
 
 pub(crate) fn invalid_request_error(reason: impl Into<String>) -> InferenceEngineError {
     InferenceEngineError::InvalidRequest {
@@ -10,18 +9,24 @@ pub(crate) fn invalid_request_error(reason: impl Into<String>) -> InferenceEngin
     }
 }
 
-/// The request does not fit beside every weight. A model whose experts are
-/// all in memory can be served by the streaming engine instead, so the
-/// error says so; any other model has no such engine to move to.
+/// The request does not fit beside every weight, so it moves to the
+/// streaming engine, which keeps what fits and reads the rest from the SSD.
+///
+/// That holds for a dense model as much as for one with experts: the
+/// streaming engine keeps a dense model's leading layers and streams the
+/// others (issue #1985). A dense model used to get an invalid-request error
+/// here, which a person saw as a failed chat at a limit just above the
+/// model's size.
 pub(in crate::qwen3_5_resident) fn resident_capacity_error(
-    model: &Qwen3_5ResidentModel,
     cause: StreamingEngineRequirement,
     reason: impl Into<String>,
 ) -> InferenceEngineError {
-    let reason = reason.into();
-    if model.resident_expert_weights.is_some() {
-        InferenceEngineError::ResidentForkRequired { cause, reason }
-    } else {
-        InferenceEngineError::InvalidRequest { reason }
+    InferenceEngineError::ResidentForkRequired {
+        cause,
+        reason: reason.into(),
     }
 }
+
+#[cfg(test)]
+#[path = "request_errors_tests.rs"]
+mod tests;

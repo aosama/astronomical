@@ -1,3 +1,4 @@
+use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -37,9 +38,10 @@ pub(crate) async fn create_response(
             return responses_validation_rejection_response(validation_error);
         }
     };
-    // Policy resolution and queue admission must observe one side of a worker replacement.
+    // Policy resolution and queue admission must observe one side of a worker
+    // replacement, so a request that arrives during one waits for it to end.
     let configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
+        lock_configuration_transition_for_generation(&application_state).await;
     let resolved_model_id =
         match resolve_responses_target_model(&application_state, &request_parts.model) {
             Ok(resolved_model_id) => resolved_model_id,

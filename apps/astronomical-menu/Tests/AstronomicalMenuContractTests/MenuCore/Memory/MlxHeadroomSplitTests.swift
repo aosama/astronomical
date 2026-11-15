@@ -42,6 +42,49 @@ final class MlxHeadroomSplitTests: XCTestCase {
     XCTAssertEqual(headroomSplit.ownerOverrunByteCount, 0)
   }
 
+  func test_should_show_room_nothing_needs_as_unused_and_not_as_held_for_activations() {
+    var utilization = MlxMemoryCeilingUtilization(
+      unusedHeadroomBytes: 31_000_000_000,
+      reservedModelCoreSlackBytes: 0,
+      reservedContextGrowthBytes: 0,
+      reservedActivationAndWorkspaceBytes: 1_000_000_000,
+      unseatedExpertEntitlementBytes: 0,
+      unexplainedHeadroomBytes: 0,
+      ownerOverrunBytes: 0
+    )
+    utilization.unneededHeadroomBytes = 30_000_000_000
+    let headroomSplit = MlxHeadroomSplit.from(
+      utilization: utilization, availableByteCount: 31_000_000_000)
+
+    XCTAssertEqual(headroomSplit.unusedBudgetByteCount, 30_000_000_000)
+    XCTAssertEqual(headroomSplit.reservedActivationByteCount, 1_000_000_000)
+    XCTAssertEqual(headroomSplit.paintedByteCount, 31_000_000_000)
+  }
+
+  func test_should_treat_a_snapshot_without_unneeded_room_as_having_none() throws {
+    let utilization = try JSONDecoder().decode(
+      MlxMemoryCeilingUtilization.self,
+      from: Data(
+        """
+        {"unused_headroom_bytes":10,"reserved_model_core_slack_bytes":0,"reserved_context_growth_bytes":4,"reserved_activation_and_workspace_bytes":6,"unseated_expert_entitlement_bytes":0,"unexplained_headroom_bytes":0,"owner_overrun_bytes":0}
+        """.utf8))
+    XCTAssertNil(utilization.unneededHeadroomBytes)
+    let headroomSplit = MlxHeadroomSplit.from(utilization: utilization, availableByteCount: 10)
+
+    XCTAssertEqual(headroomSplit.unusedBudgetByteCount, 0)
+    XCTAssertEqual(headroomSplit.reservedActivationByteCount, 6)
+  }
+
+  func test_should_decode_unneeded_room_when_the_engine_reports_it() throws {
+    let utilization = try JSONDecoder().decode(
+      MlxMemoryCeilingUtilization.self,
+      from: Data(
+        """
+        {"unused_headroom_bytes":10,"reserved_model_core_slack_bytes":0,"reserved_context_growth_bytes":0,"reserved_activation_and_workspace_bytes":1,"unseated_expert_entitlement_bytes":0,"unneeded_headroom_bytes":9,"unexplained_headroom_bytes":0,"owner_overrun_bytes":0}
+        """.utf8))
+    XCTAssertEqual(utilization.unneededHeadroomBytes, 9)
+  }
+
   func test_should_decode_engine_utilization_from_the_status_snapshot() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,

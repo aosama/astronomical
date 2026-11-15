@@ -6,6 +6,7 @@
 //! headers, so a caller can reproduce it (the seed) and play bare samples
 //! (the sample rate) without a second request.
 
+use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use astronomical_config::SpeechModelCapabilities;
 use astronomical_rest_contract::{OpenAiSpeechRequest, OpenAiSpeechRequestParts};
 use astronomical_speech_contract::{AudioFormat, SpeechFailure, wav_bytes_from_pcm16};
@@ -44,7 +45,7 @@ pub(crate) async fn create_speech(
     };
     let response_format = speech_request_parts.response_format;
     let configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
+        lock_configuration_transition_for_generation(&application_state).await;
     let (speech_command, request_identifier) =
         match prepared_speech_command(&application_state, speech_request_parts) {
             Ok(prepared_command) => prepared_command,

@@ -44,7 +44,7 @@ impl PageLoadMeasurement {
     fn report(&self, label: &str) {
         let elapsed_seconds = self.elapsed.as_secs_f64();
         let effective_gigabytes_per_second =
-            (self.payload_bytes as f64 / 1e9) / elapsed_seconds.max(f64::EPSILON);
+            (self.payload_bytes as f64 / 1_073_741_824.0) / elapsed_seconds.max(f64::EPSILON);
         let average_read_milliseconds = if self.read_call_count == 0 {
             0.0
         } else {
@@ -58,10 +58,10 @@ impl PageLoadMeasurement {
         eprintln!(
             "[ssd-streaming-probe {label}] elapsed_ms={} payload_gb={:.3} rate_gb_per_s={:.3} read_calls={} read_gb={:.3} avg_read_ms={:.3} max_read_ms={:.3} max_concurrent_reads={} read_to_wall_overlap={:.2}",
             self.elapsed.as_millis(),
-            self.payload_bytes as f64 / 1e9,
+            self.payload_bytes as f64 / 1_073_741_824.0,
             effective_gigabytes_per_second,
             self.read_call_count,
-            self.read_byte_count as f64 / 1e9,
+            self.read_byte_count as f64 / 1_073_741_824.0,
             average_read_milliseconds,
             self.maximum_read_elapsed.as_secs_f64() * 1_000.0,
             self.maximum_concurrent_read_count,
@@ -211,7 +211,7 @@ fn should_attribute_complete_layer_streaming_rate() {
     }
     eprintln!(
         "[ssd-streaming-probe complete-layer] holding_gb={:.1} held_layers={held_layer_count}",
-        held_layer_count as f64 * unpressured.payload_bytes as f64 / 1e9
+        held_layer_count as f64 * unpressured.payload_bytes as f64 / 1_073_741_824.0
     );
     let pressured = measure_page_load(&runtime, &fixture, 0, &every_expert_id);
     pressured.report("complete-layer-pressured");

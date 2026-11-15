@@ -4,6 +4,7 @@
 //! `ChatWork::CountPromptTokens`. It shares the worker generation path with
 //! the OpenAI surfaces and differs only in the wire protocol at both ends.
 
+use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use astronomical_config::ModelCapabilities;
 use astronomical_ipc_protocol::{ChatGenerationCommand, RequestId};
 use astronomical_rest_contract::{
@@ -117,7 +118,7 @@ pub(super) async fn admit_message_generation(
     messages_work: ChatWork,
 ) -> Result<AdmittedMessageGeneration, Response> {
     let configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
+        lock_configuration_transition_for_generation(application_state).await;
     let resolved_model_id = resolve_messages_target_model(application_state, &request_parts.model)?;
     let request_id = allocate_messages_request_identifier(application_state)?;
     let should_stream_response = request_parts.stream;

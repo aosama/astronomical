@@ -24,7 +24,6 @@
 //! the limit now leases room and is run again, and the kept experts' one
 //! capacity is always the remainder.
 
-use crate::phase::MemoryPhase;
 use crate::residency::ExpertLayerGeometry;
 use crate::residency::{ExpertLayerState, plan_expert_residency};
 
@@ -59,13 +58,8 @@ fn should_pin_exactly_the_affordable_complete_layers_for_the_incident_geometry()
     // 38 layers plus 33 incremental complete payloads fits the composed budget,
     // and a 34th does not. This is the plan the incident session published
     // (`complete_layer_target_count=33 pinned_complete_layer_count=33`).
-    let plan = plan_expert_residency(
-        MemoryPhase::Prefill,
-        COMPOSED_LEFTOVER_BUDGET_BYTES,
-        &incident_geometry(),
-        &[],
-    )
-    .expect("the incident geometry should plan against the incident budget");
+    let plan = plan_expert_residency(COMPOSED_LEFTOVER_BUDGET_BYTES, &incident_geometry(), &[])
+        .expect("the incident geometry should plan against the incident budget");
 
     assert_eq!(plan.complete_layer_targets.len(), 33);
     assert_eq!(

@@ -7,7 +7,6 @@
 //! highest-coverage partials, and a zero budget streams everything instead of
 //! erroring.
 
-use crate::phase::MemoryPhase;
 use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
     CurrentExpertLayerResidency, ExpertLayerState, ExpertResidencyPlanError,
@@ -37,7 +36,7 @@ fn should_cap_the_routed_floor_at_the_complete_payload_for_adversarial_routing_w
     // stays at zero instead of underflowing.
     let geometries = vec![geometry(0, 10, 4, 9), geometry(1, 10, 4, 4)];
 
-    let plan = plan_expert_residency(MemoryPhase::Prefill, 80, &geometries, &[])
+    let plan = plan_expert_residency(80, &geometries, &[])
         .expect("adversarial routing width must plan, not underflow");
 
     assert_eq!(
@@ -45,7 +44,6 @@ fn should_cap_the_routed_floor_at_the_complete_payload_for_adversarial_routing_w
         vec![0, 1],
         "a layer whose routed floor already equals its complete payload promotes at zero incremental cost"
     );
-    assert!(!plan.is_low_budget_partial_mode);
 }
 
 #[test]
@@ -53,19 +51,19 @@ fn should_admit_a_complete_layer_at_the_exact_leftover_boundary_only() {
     // Two uniform layers: floor 20 + complete 40 each. Floor sum 40.
     let geometries = vec![geometry(0, 10, 4, 2), geometry(1, 10, 4, 2)];
 
-    let exact_fit = plan_expert_residency(MemoryPhase::Prefill, 60, &geometries, &[])
-        .expect("a plan that exactly fits must succeed");
+    let exact_fit =
+        plan_expert_residency(60, &geometries, &[]).expect("a plan that exactly fits must succeed");
     assert_eq!(
         exact_fit.complete_layer_targets,
         vec![0],
         "20 leftover bytes admit layer 0 exactly; layer 1 must find nothing left"
     );
 
-    let one_byte_short = plan_expert_residency(MemoryPhase::Prefill, 79, &geometries, &[])
+    let one_byte_short = plan_expert_residency(79, &geometries, &[])
         .expect("79 leaves 39 after the floor: layer 0 fits, layer 1 does not");
     assert_eq!(one_byte_short.complete_layer_targets, vec![0]);
 
-    let both_fit = plan_expert_residency(MemoryPhase::Prefill, 80, &geometries, &[])
+    let both_fit = plan_expert_residency(80, &geometries, &[])
         .expect("the full ceiling must hold both complete layers");
     assert_eq!(both_fit.complete_layer_targets, vec![0, 1]);
 }
@@ -107,13 +105,12 @@ fn should_preserve_every_seated_generation_page_when_the_seating_ceiling_covers_
     // layers first, then highest coverage-per-byte partials) but can never
     // release: the family must reclaim down to the seating ceiling before
     // planning, or validation fails the plan instead.
-    let plan = plan_expert_residency(MemoryPhase::Decode, 70, &geometries, &current_residencies)
+    let plan = plan_expert_residency(70, &geometries, &current_residencies)
         .expect("a seating ceiling at the retained total must plan");
 
     assert_eq!(plan.layer_states[0], ExpertLayerState::Kept);
     assert_eq!(plan.layer_states[1], ExpertLayerState::Hot);
     assert_eq!(plan.layer_states[2], ExpertLayerState::Hot);
-    assert_eq!(plan.expected_preserved_bytes, 70);
 }
 
 #[test]
@@ -131,8 +128,7 @@ fn should_reject_generation_seating_when_the_leftover_ceiling_shrinks_below_curr
     // smaller than current retention is an input defect, and the family's
     // request-pressure reclamation must run before this plan is composed.
     assert_eq!(
-        plan_expert_residency(MemoryPhase::Decode, 39, &geometries, &[current_residency],)
-            .unwrap_err(),
+        plan_expert_residency(39, &geometries, &[current_residency],).unwrap_err(),
         ExpertResidencyPlanError::CurrentResidencyExceedsCeiling
     );
 }
@@ -141,15 +137,13 @@ fn should_reject_generation_seating_when_the_leftover_ceiling_shrinks_below_curr
 fn should_stream_every_layer_when_the_budget_cannot_hold_even_one_routed_floor() {
     let geometries = vec![geometry(0, 10, 4, 2), geometry(1, 10, 4, 2)];
 
-    let plan = plan_expert_residency(MemoryPhase::Decode, 5, &geometries, &[])
+    let plan = plan_expert_residency(5, &geometries, &[])
         .expect("a zero-capacity budget must plan into streaming mode, not error");
 
-    assert!(plan.is_low_budget_partial_mode);
     assert_eq!(
         plan.layer_states,
         vec![ExpertLayerState::Absent, ExpertLayerState::Absent,]
     );
-    assert_eq!(plan.maximum_new_retained_bytes, 0);
 }
 
 #[test]
@@ -164,17 +158,10 @@ fn should_reject_current_residency_one_byte_above_the_planning_ceiling() {
     };
 
     assert!(
-        plan_expert_residency(
-            MemoryPhase::Prefill,
-            10,
-            &geometries,
-            std::slice::from_ref(&current_residency),
-        )
-        .is_ok()
+        plan_expert_residency(10, &geometries, std::slice::from_ref(&current_residency),).is_ok()
     );
     assert_eq!(
-        plan_expert_residency(MemoryPhase::Prefill, 9, &geometries, &[current_residency])
-            .unwrap_err(),
+        plan_expert_residency(9, &geometries, &[current_residency]).unwrap_err(),
         ExpertResidencyPlanError::CurrentResidencyExceedsCeiling
     );
 }

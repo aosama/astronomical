@@ -1,13 +1,19 @@
-//! Public journey for one conversation across SSD streaming, complete residency, and renewed streaming.
+//! One conversation while the limit is raised and lowered again.
 //!
-//! The ceiling transitions occur while one production worker remains loaded and
-//! idle. Each follow-up resends the exact ordered user/assistant history, matching
-//! the stateless OpenAI conversation contract rather than relying on test-local
-//! engine state.
+//! A person starts under a limit that makes the model stream, raises the
+//! limit until every expert fits, then lowers it again. Each turn must be
+//! served, the status page must never contradict itself, nearly every expert
+//! must stay in memory after the raise, and the model must stream again
+//! after the limit comes back down.
+//!
+//! The limit changes while one production worker is loaded and idle. Each
+//! follow-up resends the exact ordered user and assistant history, matching
+//! the stateless OpenAI conversation contract rather than relying on
+//! test-local engine state.
 
 mod support;
 
-use std::{fs, net::SocketAddr, time::Instant};
+use std::{net::SocketAddr, time::Instant};
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -20,22 +26,14 @@ use crate::support::serving_rest::{
     stop_real_model_rest_server,
 };
 use support::{
-    BYTES_PER_MARKETED_GIGABYTE, artifact_directory_regular_file_bytes,
-    assert_expert_reporting_consistency, assert_machine_supports_round_trip,
-    assert_nonresident_status_before_request, assert_resident_status, assert_streaming_status,
-    read_generation_evidence, wait_for_idle_status, wait_for_settled_resident_status,
-    write_mid_streaming_raise_config, write_round_trip_config,
+    BYTES_PER_MARKETED_GIGABYTE, assert_machine_supports_round_trip,
+    assert_most_experts_stay_in_memory, assert_nonresident_status_before_request,
+    assert_streaming_status, kept_expert_payload_bytes, read_generation_evidence,
+    wait_for_idle_status, wait_for_settled_resident_status, write_round_trip_config,
 };
 
 pub(super) const LOG_MARKER: &str = "[live-memory-ceiling-residency-round-trip]";
 
-/// Raise margin above the artifact payload: enough that idle complete residency
-/// fits, but deliberately smaller than the context reserve of a ~40,000-token
-/// conversation, so request-time residency stays tight (the issue #337 squeeze).
-const RESIDENCY_RAISE_MARGIN_BYTES: u64 = 1_500_000_000;
-const MID_STREAMING_PROMPT_TOKEN_COUNT: usize = 26_000;
-const POST_RAISE_FRESH_SOURCE_REPEATS: usize = 2;
-const STATUS_CONSISTENCY_SAMPLE_INTERVAL: Duration = Duration::from_millis(200);
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(45);
 
 fn model_id() -> &'static str {
@@ -63,209 +61,6 @@ async fn should_serve_one_conversation_across_streaming_resident_and_streaming_m
         .expect("the live-ceiling expert-residency SSD journey must finish within 120 seconds");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "raises the worker ceiling during a long cached streaming conversation and asserts residency reporting consistency (issue #337); its idle settle-fully-resident step pins a behavior the product does not build: a demoted worker returns to the resident engine before its next request (#1535), not while idle (issue #1316)"]
-#[serial]
-async fn should_settle_fully_resident_after_raising_the_memory_ceiling_mid_streaming_conversation()
-{
-    timeout(SSD_JOURNEY_TIMEOUT, run_mid_streaming_raise_settlement())
-        .await
-        .expect("the mid-streaming SSD ceiling raise settlement must finish within 120 seconds");
-}
-
-#[expect(clippy::too_many_lines)]
-async fn run_mid_streaming_raise_settlement() {
-    let journey_started_at = Instant::now();
-    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
-    let artifact_payload_bytes = artifact_directory_regular_file_bytes(&model_directory);
-    assert!(artifact_payload_bytes > 0);
-    let initial_ceiling_bytes = artifact_payload_bytes / 2;
-    let initial_ceiling_gb = initial_ceiling_bytes / BYTES_PER_MARKETED_GIGABYTE;
-    // The raise margin is expressed in raw bytes above the artifact, then
-    // quantized to whole marketed GB; the daemon re-expands that GB input at
-    // 2^30 bytes per GB, so the expected effective ceiling must use the same
-    // unit as the raise request itself.
-    let raised_ceiling_gb =
-        (artifact_payload_bytes + RESIDENCY_RAISE_MARGIN_BYTES) / BYTES_PER_MARKETED_GIGABYTE;
-    let raised_ceiling_bytes = raised_ceiling_gb * BYTES_PER_MARKETED_GIGABYTE;
-    // Persistent (not tempfile) so the worker's residency transition and
-    // reclamation logs survive the journey for issue #337 diagnosis.
-    let isolated_worker_home =
-        support::acceptance_evidence_root().join("worker-home-mid-streaming-raise");
-    fs::remove_dir_all(&isolated_worker_home).ok();
-    fs::create_dir_all(&isolated_worker_home)
-        .expect("the mid-streaming raise worker home should be created");
-    // Canonicalize so the prompt-cache validator sees no ../.. components.
-    let isolated_worker_home = isolated_worker_home
-        .canonicalize()
-        .unwrap_or(isolated_worker_home);
-    write_mid_streaming_raise_config(
-        &isolated_worker_home,
-        &model_directory,
-        initial_ceiling_bytes,
-    );
-    let initial_user_message = crate::support::exact_model_prompt::build_exact_model_prompt_content(
-        &model_directory,
-        ROMEO_AND_JULIET_SOURCE,
-        "Explain how haste shapes the tragedy in one concise paragraph.",
-        MID_STREAMING_PROMPT_TOKEN_COUNT,
-    );
-    eprintln!(
-        "{LOG_MARKER} phase=mid_streaming_raise status=start initial_ceiling_gb={initial_ceiling_gb} raised_ceiling_gb={raised_ceiling_gb} artifact_payload_gb={:.3} prompt_tokens={MID_STREAMING_PROMPT_TOKEN_COUNT}",
-        artifact_payload_bytes as f64 / 1_000_000_000.0,
-    );
-    let real_model_rest_server = launch_real_model_rest_server(
-        model_id(),
-        model_directory,
-        &isolated_worker_home,
-        initial_ceiling_bytes,
-    )
-    .await;
-    let server_address = real_model_rest_server.server_address;
-    let initial_status = wait_for_idle_status(server_address, "initial_idle").await;
-    assert_machine_supports_round_trip(&initial_status, raised_ceiling_bytes);
-    let openai_client = LocalOpenAiClient::new(server_address, "local-mid-streaming-raise-client");
-
-    let first_assistant_response = execute_conversation_request(
-        &openai_client,
-        json!([{"role": "user", "content": initial_user_message}]),
-        "turn_1_streaming_growth",
-    )
-    .await;
-    let first_status = wait_for_idle_status(server_address, "turn_1_finalization").await;
-    assert_nonresident_status_before_request(&first_status, initial_ceiling_bytes);
-    assert_expert_reporting_consistency(&first_status, "turn_1_finalization");
-
-    let second_user_message =
-        "Which decision best demonstrates that haste, and why? Answer briefly.";
-    let second_assistant_response = execute_conversation_request(
-        &openai_client,
-        json!([
-            {"role": "user", "content": initial_user_message},
-            {"role": "assistant", "content": first_assistant_response},
-            {"role": "user", "content": second_user_message}
-        ]),
-        "turn_2_cached_streaming",
-    )
-    .await;
-    let second_status = wait_for_idle_status(server_address, "turn_2_finalization").await;
-    assert_nonresident_status_before_request(&second_status, initial_ceiling_bytes);
-    assert_expert_reporting_consistency(&second_status, "turn_2_finalization");
-
-    let applied_raised_ceiling_bytes =
-        apply_memory_ceiling(server_address, raised_ceiling_gb, raised_ceiling_bytes).await;
-
-    // The fresh source keeps the post-raise turn in streamed prefill long enough
-    // to sample the exact window where issue #337 reported a complete-residency
-    // claim beside a zero measured expert payload.
-    let post_raise_source = ROMEO_AND_JULIET_SOURCE.repeat(POST_RAISE_FRESH_SOURCE_REPEATS);
-    let third_user_message =
-        format!("Use this additional context without quoting it: {post_raise_source}");
-    let (status_sampler, first_reporting_violation) =
-        support::spawn_status_consistency_sampler(server_address);
-    let third_assistant_response = execute_conversation_request(
-        &openai_client,
-        json!([
-            {"role": "user", "content": initial_user_message},
-            {"role": "assistant", "content": first_assistant_response},
-            {"role": "user", "content": second_user_message},
-            {"role": "assistant", "content": second_assistant_response},
-            {"role": "user", "content": third_user_message}
-        ]),
-        "turn_3_post_raise_streaming",
-    )
-    .await;
-    assert!(!third_assistant_response.is_empty());
-
-    wait_for_settled_resident_status(
-        server_address,
-        "post_raise_settlement",
-        applied_raised_ceiling_bytes,
-        SETTLE_TIMEOUT,
-    )
-    .await;
-
-    // The production contradiction appeared during a request that followed a
-    // completed promotion, so turn 4 stays inside the sampler's window too.
-    let fourth_user_message = "Close with one sentence on the Prince's judgment.";
-    execute_conversation_request(
-        &openai_client,
-        json!([
-            {"role": "user", "content": initial_user_message},
-            {"role": "assistant", "content": first_assistant_response},
-            {"role": "user", "content": second_user_message},
-            {"role": "assistant", "content": second_assistant_response},
-            {"role": "user", "content": third_user_message},
-            {"role": "assistant", "content": third_assistant_response},
-            {"role": "user", "content": fourth_user_message}
-        ]),
-        "turn_4_resident",
-    )
-    .await;
-    let fourth_status = wait_for_idle_status(server_address, "turn_4_finalization").await;
-    assert_resident_status(&fourth_status, applied_raised_ceiling_bytes);
-    status_sampler.abort();
-    let reporting_violation = first_reporting_violation
-        .lock()
-        .expect("the status consistency violation slot should lock")
-        .clone();
-    assert!(
-        reporting_violation.is_none(),
-        "status reported contradictory expert residency during the post-raise turns (issue #337): {reporting_violation:?}"
-    );
-    stop_real_model_rest_server(real_model_rest_server).await;
-
-    let generation_evidence = read_generation_evidence(
-        &isolated_worker_home,
-        &[
-            // The pre-raise turns ran under the launch-applied raw-byte
-            // ceiling, not a GB-quantized one, so the evidence bound is the
-            // exact applied value rather than a GB round-trip. The post-raise
-            // turns ran under the resident engine's applied ceiling.
-            initial_ceiling_bytes,
-            initial_ceiling_bytes,
-            applied_raised_ceiling_bytes,
-            applied_raised_ceiling_bytes,
-        ],
-    );
-    assert!(
-        generation_evidence[0].expert_source_read_bytes > 0,
-        "the first long turn must stream experts under the initial streaming ceiling"
-    );
-    // Issue #339: decode seating re-owns the complete layers prefill already
-    // streamed, so it must never read that payload from storage a second time
-    // in the same request. Read-through seating during prefill keeps every turn
-    // here at zero; a regression that drops the prefill handoff reads the
-    // complete expert payload again immediately before the first generated
-    // token.
-    for (turn_index, turn_evidence) in generation_evidence.iter().enumerate() {
-        assert_eq!(
-            turn_evidence.decode_seating_streamed_complete_payload_bytes,
-            0,
-            "turn {} streamed {} bytes of complete expert layers during decode seating; prefill already read those bytes for this request",
-            turn_index + 1,
-            turn_evidence.decode_seating_streamed_complete_payload_bytes,
-        );
-    }
-    eprintln!(
-        "{LOG_MARKER} phase=mid_streaming_raise status=success elapsed_seconds={:.3} raised_ceiling_gb={raised_ceiling_gb} turn_1_expert_read_gb={:.3} turn_2_expert_read_gb={:.3} turn_3_expert_read_gb={:.3} turn_4_expert_read_gb={:.3} turn_1_decode_seating_gb={:.3} turn_2_decode_seating_gb={:.3} turn_3_decode_seating_gb={:.3} turn_4_decode_seating_gb={:.3}",
-        journey_started_at.elapsed().as_secs_f64(),
-        generation_evidence[0].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[1].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[2].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[3].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[0].decode_seating_streamed_complete_payload_bytes as f64
-            / 1_000_000_000.0,
-        generation_evidence[1].decode_seating_streamed_complete_payload_bytes as f64
-            / 1_000_000_000.0,
-        generation_evidence[2].decode_seating_streamed_complete_payload_bytes as f64
-            / 1_000_000_000.0,
-        generation_evidence[3].decode_seating_streamed_complete_payload_bytes as f64
-            / 1_000_000_000.0,
-    );
-}
-
-#[expect(clippy::too_many_lines)]
 async fn run_residency_round_trip() {
     let journey_started_at = Instant::now();
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
@@ -318,66 +113,17 @@ async fn run_residency_round_trip() {
     );
     assert!(first_evidence[0].expert_source_read_bytes > 0);
 
-    let resident_ceiling_bytes =
-        apply_memory_ceiling(server_address, 38, RESIDENT_MLX_MEMORY_CEILING_BYTES).await;
-    // Promotion replaces the worker so the resident engine loads under the
-    // raised ceiling. The settle wait tolerates the replacement's loading
-    // window and asserts the resident contract against the applied ceiling.
-    wait_for_settled_resident_status(
+    let conversation = RoundTripConversation {
         server_address,
-        "resident_before_turn_2",
-        resident_ceiling_bytes,
-        SETTLE_TIMEOUT,
-    )
-    .await;
-
-    let second_user_message =
-        "Which decision best demonstrates that haste, and why? Answer briefly.";
-    let second_assistant_response = execute_conversation_request(
-        &openai_client,
-        json!([
-            {"role": "user", "content": initial_user_message},
-            {"role": "assistant", "content": first_assistant_response},
-            {"role": "user", "content": second_user_message}
-        ]),
-        "turn_2_resident",
-    )
-    .await;
-    let second_status = wait_for_idle_status(server_address, "turn_2_finalization").await;
-    assert_resident_status(&second_status, resident_ceiling_bytes);
-    let second_evidence = read_generation_evidence(
-        isolated_worker_home.path(),
-        &[INITIAL_MLX_MEMORY_CEILING_BYTES, resident_ceiling_bytes],
-    );
-    assert_eq!(second_evidence[1].expert_source_read_bytes, 0);
-    assert_generation_continuity(&second_evidence[0], &second_evidence[1]);
-
-    let return_to_streaming_ceiling_bytes = apply_memory_ceiling(
-        server_address,
-        26,
-        RETURN_TO_STREAMING_MLX_MEMORY_CEILING_BYTES,
-    )
-    .await;
-    let paged_status = wait_for_idle_status(server_address, "streaming_before_turn_3").await;
-    assert_nonresident_status_before_request(&paged_status, return_to_streaming_ceiling_bytes);
-
-    let third_user_message =
-        "Relate that decision to the final reconciliation. Keep the answer concise.";
-    let third_assistant_response = execute_conversation_request(
-        &openai_client,
-        json!([
-            {"role": "user", "content": initial_user_message},
-            {"role": "assistant", "content": first_assistant_response},
-            {"role": "user", "content": second_user_message},
-            {"role": "assistant", "content": second_assistant_response},
-            {"role": "user", "content": third_user_message}
-        ]),
-        "turn_3_streaming",
-    )
-    .await;
-    assert!(!third_assistant_response.is_empty());
-    let third_status = wait_for_idle_status(server_address, "turn_3_finalization").await;
-    assert_streaming_status(&third_status, return_to_streaming_ceiling_bytes);
+        openai_client: &openai_client,
+        worker_home: isolated_worker_home.path(),
+        initial_user_message: &initial_user_message,
+        first_assistant_response: &first_assistant_response,
+    };
+    let (resident_ceiling_bytes, second_assistant_response) =
+        raise_the_limit_and_serve_the_second_turn(&conversation).await;
+    let return_to_streaming_ceiling_bytes =
+        lower_the_limit_and_serve_the_third_turn(&conversation, &second_assistant_response).await;
     stop_real_model_rest_server(real_model_rest_server).await;
 
     let generation_evidence = read_generation_evidence(
@@ -393,10 +139,104 @@ async fn run_residency_round_trip() {
     eprintln!(
         "{LOG_MARKER} phase=journey status=success elapsed_seconds={:.3} turn_1_expert_read_gb={:.3} turn_2_expert_read_gb={:.3} turn_3_expert_read_gb={:.3}",
         journey_started_at.elapsed().as_secs_f64(),
-        generation_evidence[0].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[1].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[2].expert_source_read_bytes as f64 / 1_000_000_000.0,
+        generation_evidence[0].expert_source_read_bytes as f64 / 1_073_741_824.0,
+        generation_evidence[1].expert_source_read_bytes as f64 / 1_073_741_824.0,
+        generation_evidence[2].expert_source_read_bytes as f64 / 1_073_741_824.0,
     );
+}
+
+/// What the later turns of the conversation need from the first.
+struct RoundTripConversation<'journey> {
+    server_address: SocketAddr,
+    openai_client: &'journey LocalOpenAiClient,
+    worker_home: &'journey std::path::Path,
+    initial_user_message: &'journey str,
+    first_assistant_response: &'journey str,
+}
+
+const SECOND_USER_MESSAGE: &str =
+    "Which decision best demonstrates that haste, and why? Answer briefly.";
+
+/// Raises the limit until every expert fits while idle, then serves the
+/// second turn. Returns the limit that was applied and the reply.
+async fn raise_the_limit_and_serve_the_second_turn(
+    conversation: &RoundTripConversation<'_>,
+) -> (u64, String) {
+    let server_address = conversation.server_address;
+    let resident_ceiling_bytes =
+        apply_memory_ceiling(server_address, 38, RESIDENT_MLX_MEMORY_CEILING_BYTES).await;
+    // Promotion replaces the worker so the in-memory engine loads under the
+    // raised limit. The settle wait tolerates the replacement's loading
+    // window and asserts the resident contract against the applied limit.
+    let resident_status = wait_for_settled_resident_status(
+        server_address,
+        "resident_before_turn_2",
+        resident_ceiling_bytes,
+        SETTLE_TIMEOUT,
+    )
+    .await;
+    let complete_expert_payload_bytes = kept_expert_payload_bytes(&resident_status);
+    let second_assistant_response = execute_conversation_request(
+        conversation.openai_client,
+        json!([
+            {"role": "user", "content": conversation.initial_user_message},
+            {"role": "assistant", "content": conversation.first_assistant_response},
+            {"role": "user", "content": SECOND_USER_MESSAGE}
+        ]),
+        "turn_2_resident",
+    )
+    .await;
+    assert!(!second_assistant_response.is_empty());
+    let second_status = wait_for_idle_status(server_address, "turn_2_finalization").await;
+    // The raised limit holds every expert while idle. Whether it also holds
+    // a turn's stored state and working memory depends on the limit the
+    // machine grants, so the engine may give a few experts back to serve
+    // the turn. What a person is owed is that the turn is served and that
+    // nearly everything stays in memory.
+    assert_most_experts_stay_in_memory(
+        &second_status,
+        resident_ceiling_bytes,
+        complete_expert_payload_bytes,
+    );
+    let second_evidence = read_generation_evidence(
+        conversation.worker_home,
+        &[INITIAL_MLX_MEMORY_CEILING_BYTES, resident_ceiling_bytes],
+    );
+    assert_generation_continuity(&second_evidence[0], &second_evidence[1]);
+    (resident_ceiling_bytes, second_assistant_response)
+}
+
+/// Lowers the limit below what every expert needs and serves the third
+/// turn, which must stream again. Returns the limit that was applied.
+async fn lower_the_limit_and_serve_the_third_turn(
+    conversation: &RoundTripConversation<'_>,
+    second_assistant_response: &str,
+) -> u64 {
+    let server_address = conversation.server_address;
+    let return_to_streaming_ceiling_bytes = apply_memory_ceiling(
+        server_address,
+        26,
+        RETURN_TO_STREAMING_MLX_MEMORY_CEILING_BYTES,
+    )
+    .await;
+    let paged_status = wait_for_idle_status(server_address, "streaming_before_turn_3").await;
+    assert_nonresident_status_before_request(&paged_status, return_to_streaming_ceiling_bytes);
+    let third_assistant_response = execute_conversation_request(
+        conversation.openai_client,
+        json!([
+            {"role": "user", "content": conversation.initial_user_message},
+            {"role": "assistant", "content": conversation.first_assistant_response},
+            {"role": "user", "content": SECOND_USER_MESSAGE},
+            {"role": "assistant", "content": second_assistant_response},
+            {"role": "user", "content": "Relate that decision to the final reconciliation. Keep the answer concise."}
+        ]),
+        "turn_3_streaming",
+    )
+    .await;
+    assert!(!third_assistant_response.is_empty());
+    let third_status = wait_for_idle_status(server_address, "turn_3_finalization").await;
+    assert_streaming_status(&third_status, return_to_streaming_ceiling_bytes);
+    return_to_streaming_ceiling_bytes
 }
 
 async fn execute_conversation_request(

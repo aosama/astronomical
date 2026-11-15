@@ -206,13 +206,13 @@ fn report_and_check(worker_home: &Path, ceiling_gibibytes: u64, chunk_tokens: u3
     let peak_bytes = report["mlx_peak_memory_bytes"].as_u64().unwrap_or(u64::MAX);
     println!(
         "[prefill-chunk-restreaming] ceiling_gib={ceiling_gibibytes} chunk_tokens={chunk_tokens} prompt_tokens={prompt_tokens} chunks={chunk_count} prefill_requested_gb={:.2} physical_gb={:.2} elapsed_s={:.1} peak_gb={:.2}",
-        prefill_streamed_bytes(&report) as f64 / 1e9,
+        prefill_streamed_bytes(&report) as f64 / 1_073_741_824.0,
         report["process_physical_disk_read_bytes"]
             .as_u64()
             .unwrap_or(0) as f64
-            / 1e9,
+            / 1_073_741_824.0,
         report["report_elapsed_nanoseconds"].as_u64().unwrap_or(0) as f64 / 1e9,
-        peak_bytes as f64 / 1e9,
+        peak_bytes as f64 / 1_073_741_824.0,
     );
     // Memory admission may split a chunk the budget cannot hold, so the
     // engine can use more chunks than configured, never fewer.

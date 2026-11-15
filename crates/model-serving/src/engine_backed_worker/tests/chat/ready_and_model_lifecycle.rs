@@ -336,6 +336,7 @@ async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjus
         reserved_context_growth_bytes: 2_000_000_000,
         reserved_activation_and_workspace_bytes: 1_000_000_000,
         unseated_expert_entitlement_bytes: 4_000_000_000,
+        unneeded_headroom_bytes: 0,
         unexplained_headroom_bytes: 0,
         owner_overrun_bytes: 0,
     };

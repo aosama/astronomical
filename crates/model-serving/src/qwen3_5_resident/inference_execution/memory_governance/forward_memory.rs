@@ -33,16 +33,30 @@ use super::resident_memory_governor::nothing_to_give_back;
 pub(in crate::qwen3_5_resident) struct ForwardShape {
     phase: LedgerPhase,
     token_count: usize,
+    is_prompt_chunk: bool,
 }
 
 impl ForwardShape {
     /// A chunk of prompt tokens run through every layer at once.
+    ///
+    /// A chunk of one token, such as the last token of a prompt, is the
+    /// same work as a reply step and is measured as one. The ledger answers
+    /// for a chunk with the figure of the smallest measured chunk at least
+    /// as large, so a one-token chunk would otherwise be charged what a
+    /// whole chunk needs: a 9B model at a 5 GiB limit was refused its last
+    /// prompt token for 280 MB it did not need.
     pub(in crate::qwen3_5_resident) fn prompt_chunk(token_count: usize) -> Self {
-        Self {
-            phase: LedgerPhase::ReadingPrompt {
+        let phase = if token_count == 1 {
+            LedgerPhase::WritingReply
+        } else {
+            LedgerPhase::ReadingPrompt {
                 span_token_count: u32::try_from(token_count).unwrap_or(u32::MAX),
-            },
+            }
+        };
+        Self {
+            phase,
             token_count,
+            is_prompt_chunk: true,
         }
     }
 
@@ -51,6 +65,7 @@ impl ForwardShape {
         Self {
             phase: LedgerPhase::WritingReply,
             token_count: 1,
+            is_prompt_chunk: false,
         }
     }
 
@@ -59,9 +74,10 @@ impl ForwardShape {
     }
 
     const fn prompt_chunk_token_count(self) -> Option<usize> {
-        match self.phase {
-            LedgerPhase::ReadingPrompt { .. } => Some(self.token_count),
-            LedgerPhase::Idle | LedgerPhase::WritingReply => None,
+        if self.is_prompt_chunk {
+            Some(self.token_count)
+        } else {
+            None
         }
     }
 }

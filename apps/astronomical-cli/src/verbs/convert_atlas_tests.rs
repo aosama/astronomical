@@ -211,8 +211,8 @@ fn should_convert_under_a_chosen_output_model_id_and_refuse_to_overwrite_it() {
 fn should_describe_resident_and_layer_progress_with_a_percentage() {
     let mut conversion_progress = ConversionProgress {
         stage: ConversionStage::ResidentBundle,
-        written_byte_count: 1_000_000_000,
-        total_byte_count: 4_000_000_000,
+        written_byte_count: 1_073_741_824,
+        total_byte_count: 4 * 1_073_741_824,
         completed_layer_count: 0,
         total_layer_count: 40,
         started_at: Instant::now(),

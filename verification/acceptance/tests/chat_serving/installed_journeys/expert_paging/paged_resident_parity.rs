@@ -537,8 +537,8 @@ async fn prove_paging_keeps_the_answer(paging_depth: PagingDepth, depth_name: &s
     eprintln!(
         "[paged-resident-parity] status=success depth={depth_name} redone_spans={} kept_expert_gb_before={:.2} kept_expert_gb_after={:.2}",
         redo_cost.redo_attempt_count,
-        redo_cost.kept_expert_bytes_before as f64 / 1e9,
-        redo_cost.kept_expert_bytes_after as f64 / 1e9,
+        redo_cost.kept_expert_bytes_before as f64 / 1_073_741_824.0,
+        redo_cost.kept_expert_bytes_after as f64 / 1_073_741_824.0,
     );
 }
 

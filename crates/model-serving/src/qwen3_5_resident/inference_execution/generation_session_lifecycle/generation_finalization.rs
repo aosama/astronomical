@@ -85,14 +85,14 @@ impl Qwen3_5EngineState {
                 model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
             )
             // Issue #510: the idle sample answers "is the remaining headroom
-            // free or promised" by planning the next request's decode budget
-            // against a fresh zero-token context, plus the live prefix it holds.
+            // free or promised" from the memory governor's accounts.
             .with_memory_ceiling_utilization(
                 model.between_request_memory_ceiling_utilization_for_breakdown(
                     active_memory_bytes,
                     active_memory_breakdown,
                 ),
-            ),
+            )
+            .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
         ))
     }
 
@@ -315,7 +315,8 @@ impl Qwen3_5EngineState {
                                     active_memory_bytes,
                                     active_memory_breakdown,
                                 ),
-                            ),
+                            )
+                            .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
                         ),
                         expert_residency_telemetry,
                     )

@@ -13,6 +13,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use crate::formatting::BYTES_PER_GIGABYTE;
 use astronomical_expert_atlas::{
     AtlasConversionError, ConversionProgress, ConversionProgressObserver, ConversionRequest,
     ConversionStage, atlas_model_id_for, convert_to_atlas, organization_and_name,
@@ -125,7 +126,7 @@ pub fn run_convert_atlas(
         dependencies.stdout,
         "Converted {}\n     into {output_model_id}\n     {:.1} GB, {} expert layers, every expert byte read back and verified\n     at {}",
         resolved_source.source_model_id,
-        conversion_summary.atlas_byte_count as f64 / 1e9,
+        conversion_summary.atlas_byte_count as f64 / BYTES_PER_GIGABYTE,
         conversion_summary.expert_layer_count,
         conversion_summary.output_directory.display()
     )
@@ -220,8 +221,8 @@ fn progress_line(conversion_progress: &ConversionProgress) -> String {
     format!(
         "[convert-atlas] {stage_description} ({:.0}%) {:.1} of {:.1} GB, ETA {eta_seconds:.0}s",
         completed_fraction * 100.0,
-        conversion_progress.written_byte_count as f64 / 1e9,
-        conversion_progress.total_byte_count as f64 / 1e9
+        conversion_progress.written_byte_count as f64 / BYTES_PER_GIGABYTE,
+        conversion_progress.total_byte_count as f64 / BYTES_PER_GIGABYTE
     )
 }
 

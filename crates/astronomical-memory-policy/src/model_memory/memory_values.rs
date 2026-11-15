@@ -33,20 +33,21 @@ pub struct MemoryReserveSnapshot {
     pub activation_headroom_bytes: u64,
     /// Reserved bytes for one complete-layer stream workspace.
     pub complete_layer_stream_slot_bytes: u64,
-    /// Any additional fixed non-expert owners (draft model, publication workspace, …).
-    pub other_fixed_bytes: u64,
+    /// Room under the limit that nothing needs: what is left once every
+    /// weight is kept and every reserve is met.
+    pub unneeded_bytes: u64,
     /// Leftover budget that may pin retained expert layers in MLX.
     pub retained_expert_budget_bytes: u64,
 }
 
-/// Live measurement that refines context-window reserve and activation headroom.
 impl MemoryReserveSnapshot {
     /// The memory ledger's accounts in this shape.
     ///
     /// Working memory, the margin and any lease are one reserve to a
     /// reader: room held for work in progress. Room left once every
-    /// streamable weight is kept has no owner and is reported as a fixed
-    /// reserve instead of as unexplained.
+    /// streamable weight is kept is reported as not needed, never as part
+    /// of a reserve: a 9B model under a 36 GiB limit once showed 31 GB
+    /// "held for activations" that nothing was holding.
     #[must_use]
     pub const fn from_ledger_accounts(accounts: &crate::ledger::LedgerAccounts) -> Self {
         Self {
@@ -58,7 +59,7 @@ impl MemoryReserveSnapshot {
                 .saturating_add(accounts.margin_bytes)
                 .saturating_add(accounts.lease_bytes),
             complete_layer_stream_slot_bytes: accounts.stream_slot_bytes,
-            other_fixed_bytes: accounts.unassigned_bytes,
+            unneeded_bytes: accounts.unassigned_bytes,
             retained_expert_budget_bytes: accounts.kept_weight_capacity_bytes,
         }
     }
@@ -76,7 +77,7 @@ impl MemoryReserveSnapshot {
             context_window_reserve_bytes: 0,
             activation_headroom_bytes: 0,
             complete_layer_stream_slot_bytes: 0,
-            other_fixed_bytes: mlx_active_memory_ceiling_bytes
+            unneeded_bytes: mlx_active_memory_ceiling_bytes
                 .saturating_sub(model_core_payload_bytes),
             retained_expert_budget_bytes: 0,
         }

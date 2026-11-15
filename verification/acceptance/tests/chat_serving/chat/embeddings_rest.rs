@@ -187,11 +187,11 @@ async fn run_embeddings_gpu_journey() {
     );
     eprintln!(
         "[embeddings-rest] status=progress phase=utilization unused_gb={:.2} reserved_transient_gb={:.2}",
-        unused_headroom_bytes as f64 / 1_000_000_000.0,
+        unused_headroom_bytes as f64 / 1_073_741_824.0,
         utilization["reserved_activation_and_workspace_bytes"]
             .as_u64()
             .unwrap_or(0) as f64
-            / 1_000_000_000.0,
+            / 1_073_741_824.0,
     );
 
     openai_rest::stop_serving_rest_server(rest_server).await;

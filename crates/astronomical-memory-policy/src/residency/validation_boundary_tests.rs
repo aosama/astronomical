@@ -2,7 +2,6 @@
 //! defect the fail-closed validator names, driven through the planner entry
 //! point exactly as production callers reach them.
 
-use crate::phase::MemoryPhase;
 use crate::residency::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertResidencyPlanError,
     RetainedExpertPageClass, plan_expert_residency,
@@ -34,7 +33,7 @@ fn plan_with(
     geometries: &[ExpertLayerGeometry],
     current_residencies: &[CurrentExpertLayerResidency],
 ) -> Result<crate::residency::ExpertResidencyPlan, ExpertResidencyPlanError> {
-    plan_expert_residency(MemoryPhase::Prefill, 200, geometries, current_residencies)
+    plan_expert_residency(200, geometries, current_residencies)
 }
 
 #[test]
@@ -173,13 +172,8 @@ fn should_reject_a_current_payload_or_class_that_disagrees_with_retention() {
 
 #[test]
 fn should_reject_current_ownership_one_byte_over_the_planning_ceiling() {
-    let plan_error = plan_expert_residency(
-        MemoryPhase::Prefill,
-        39,
-        &valid_geometry(1),
-        &[complete_residency(0)],
-    )
-    .expect_err("ownership above the ceiling must fail closed");
+    let plan_error = plan_expert_residency(39, &valid_geometry(1), &[complete_residency(0)])
+        .expect_err("ownership above the ceiling must fail closed");
 
     assert_eq!(
         plan_error,

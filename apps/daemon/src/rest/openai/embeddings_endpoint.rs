@@ -1,5 +1,6 @@
 //! OpenAI-compatible native embeddings with complete validation before shared queue admission.
 
+use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use astronomical_config::ModelCapabilities;
 use astronomical_ipc_protocol::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, RequestId,
@@ -39,7 +40,7 @@ pub(crate) async fn create_embeddings(
     };
 
     let configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
+        lock_configuration_transition_for_generation(&application_state).await;
     let resolved_model_id =
         match resolve_embeddings_target_model(&application_state, &request_parts.model) {
             Ok(resolved_model_id) => resolved_model_id,

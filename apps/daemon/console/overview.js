@@ -206,6 +206,83 @@ function renderOverviewMemory(statusDocument) {
         document.getElementById("overview-memory-" + memoryPart.key).textContent = formatOverviewGigabytes(partBytes);
     }
     document.getElementById("overview-memory-free").textContent = formatOverviewGigabytes(segmentBytes.availableBytes);
+    const isWorking = Boolean(statusDocument.activity) && statusDocument.activity !== "idle";
+    renderOverviewMemoryLimit(statusDocument.mlx_memory_snapshot, isWorking);
+}
+
+// How the memory limit is divided, from the accounts of the engine's memory
+// ledger. Every byte of the limit belongs to exactly one part, so the parts
+// add up to the limit unless the limit is too small for the step in hand.
+const OVERVIEW_LIMIT_PARTS = [
+    { key: "fixed", accountBytes: (memoryLedger) => memoryLedger.core_weight_bytes },
+    { key: "conversation", accountBytes: (memoryLedger) => memoryLedger.context_bytes },
+    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.working_memory_bytes || 0) + (memoryLedger.lease_bytes || 0) },
+    { key: "reading", accountBytes: (memoryLedger) => memoryLedger.stream_slot_bytes },
+    { key: "margin", accountBytes: (memoryLedger) => memoryLedger.margin_bytes },
+    { key: "rest", accountBytes: (memoryLedger) => memoryLedger.kept_weight_capacity_bytes },
+    { key: "spare", accountBytes: (memoryLedger) => memoryLedger.unassigned_bytes }
+];
+const OVERVIEW_BYTES_PER_MEGABYTE = 1048576;
+
+function formatOverviewMemoryDifference(byteCount) {
+    if (byteCount < OVERVIEW_BYTES_PER_MEGABYTE) return "less than 1 MB";
+    if (byteCount < 1024 * OVERVIEW_BYTES_PER_MEGABYTE) return Math.round(byteCount / OVERVIEW_BYTES_PER_MEGABYTE) + " MB";
+    return formatOverviewGigabytes(byteCount);
+}
+
+function overviewMemoryLimitNote(memoryLedger) {
+    if ((memoryLedger.shortfall_bytes || 0) > 0) {
+        return "Your limit is " + formatOverviewMemoryDifference(memoryLedger.shortfall_bytes)
+            + " too small to keep any of the rest of the model, so all of it is read from the SSD.";
+    }
+    if (!(memoryLedger.observed_step_count > 0)) return "Nothing has run yet, so nothing has been checked.";
+    return "Checked against the graphics system after every step. Largest difference seen: "
+        + formatOverviewMemoryDifference(memoryLedger.largest_unaccounted_bytes || 0) + ".";
+}
+
+// The engine reports its accounts after each step of work, so between
+// requests the figures are those of the last step, and the title says so.
+function overviewMemoryLimitTitle(isWorking) {
+    return isWorking ? "How your limit is divided" : "How your limit was divided at the last step";
+}
+
+function overviewMemoryLimitPresentation(mlxMemorySnapshot, isWorking) {
+    const memoryLedger = mlxMemorySnapshot?.memory_ledger;
+    if (!memoryLedger || !(memoryLedger.limit_bytes > 0)) {
+        return { isAvailable: false, title: "", parts: [], note: "" };
+    }
+    const parts = OVERVIEW_LIMIT_PARTS.map((limitPart) => {
+        const partBytes = limitPart.accountBytes(memoryLedger) || 0;
+        return {
+            key: limitPart.key,
+            text: formatOverviewGigabytes(partBytes),
+            widthPercent: Math.min(100, (partBytes / memoryLedger.limit_bytes) * 100)
+        };
+    });
+    // Until one step has been measured the engine holds everything that is
+    // left for the unknown, and says so instead of showing a guess as a fact.
+    if (memoryLedger.working_memory_is_measured === false) {
+        parts.find((part) => part.key === "working").text += " · held until a step is measured";
+    }
+    parts.find((part) => part.key === "rest").text += " · "
+        + formatOverviewGigabytes(memoryLedger.held_kept_weight_bytes || 0) + " in use";
+    return {
+        isAvailable: true,
+        title: overviewMemoryLimitTitle(isWorking),
+        parts,
+        note: overviewMemoryLimitNote(memoryLedger)
+    };
+}
+
+function renderOverviewMemoryLimit(mlxMemorySnapshot, isWorking) {
+    const limitPresentation = overviewMemoryLimitPresentation(mlxMemorySnapshot, isWorking);
+    document.getElementById("overview-memory-limit").hidden = !limitPresentation.isAvailable;
+    document.getElementById("overview-memory-limit-title").textContent = limitPresentation.title;
+    for (const limitPart of limitPresentation.parts) {
+        document.getElementById("overview-memory-limit-seg-" + limitPart.key).style.width = limitPart.widthPercent.toFixed(1) + "%";
+        document.getElementById("overview-memory-limit-" + limitPart.key).textContent = limitPart.text;
+    }
+    document.getElementById("overview-memory-limit-note").textContent = limitPresentation.note;
 }
 
 function renderOverviewMemoryPressure(memoryPressureState) {

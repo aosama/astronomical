@@ -93,7 +93,8 @@ impl Qwen3_5EngineState {
                     active_memory_bytes,
                     active_memory_breakdown,
                 ),
-            ),
+            )
+            .with_memory_ledger_reading(model.latest_memory_ledger_reading()),
         );
         let expert_memory_mode = model.expert_memory_mode();
         let expert_residency_transition_occurred =

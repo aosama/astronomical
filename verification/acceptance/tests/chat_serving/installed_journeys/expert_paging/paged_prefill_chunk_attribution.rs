@@ -109,7 +109,7 @@ async fn attribute_paged_prefill_chunks() {
     let opening_cache_statistics = qwen3_5_model.expert_weight_memory_cache_statistics();
     eprintln!(
         "[paged-prefill-attribution] request_open cache_ceiling_gb={:.3}",
-        opening_cache_statistics.maximum_resident_payload_byte_count as f64 / 1e9
+        opening_cache_statistics.maximum_resident_payload_byte_count as f64 / 1_073_741_824.0
     );
 
     let mut total_positional_read_bytes = 0_u64;
@@ -195,9 +195,9 @@ async fn attribute_paged_prefill_chunks() {
             "[paged-prefill-attribution] chunk={chunk_index} tokens={} wall_ms={} streamed_gb={:.3} seated_gb={:.3} full_hit_assignments={full_hit_assignments} read_calls={read_calls} read_gb={:.3} read_ms={:.0} | ms: stream_prep={stream_prep} materialize_wait={materialization_wait} residency_plan={residency_planning} admission={admission} moe_graph={moe_graph} mixture_gpu_wait={mixture_wait}",
             chunk_end - chunk_start,
             chunk_elapsed.as_millis() as f64,
-            streamed_payload_bytes as f64 / 1e9,
-            seated_payload_bytes as f64 / 1e9,
-            read_bytes as f64 / 1e9,
+            streamed_payload_bytes as f64 / 1_073_741_824.0,
+            seated_payload_bytes as f64 / 1_073_741_824.0,
+            read_bytes as f64 / 1_073_741_824.0,
             read_elapsed_ns as f64 / 1e6,
         );
         assert!(
@@ -212,10 +212,10 @@ async fn attribute_paged_prefill_chunks() {
         eprintln!(
             "[paged-prefill-attribution] chunk={chunk_index} cache_after: entries={} resident_gb={:.3} complete_layers={} evictions={} max_gb={:.3}",
             cache_statistics.entry_count,
-            cache_statistics.resident_payload_byte_count as f64 / 1e9,
+            cache_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
             cache_statistics.complete_layer_count,
             cache_statistics.eviction_count,
-            cache_statistics.maximum_resident_payload_byte_count as f64 / 1e9,
+            cache_statistics.maximum_resident_payload_byte_count as f64 / 1_073_741_824.0,
         );
     }
 
@@ -224,9 +224,9 @@ async fn attribute_paged_prefill_chunks() {
         total_streamed_payload_bytes as f64 / complete_expert_payload_bytes.max(1) as f64;
     eprintln!(
         "[paged-prefill-attribution] summary chunks={chunk_index} total_streamed_gb={:.3} total_read_gb={:.3} complete_expert_payload_gb={:.3} logical_restream_multiplier={restream_multiplier:.2}",
-        total_streamed_payload_bytes as f64 / 1e9,
-        total_positional_read_bytes as f64 / 1e9,
-        complete_expert_payload_bytes as f64 / 1e9,
+        total_streamed_payload_bytes as f64 / 1_073_741_824.0,
+        total_positional_read_bytes as f64 / 1_073_741_824.0,
+        complete_expert_payload_bytes as f64 / 1_073_741_824.0,
     );
     // Chunk-to-chunk retention: chunk one seats what the composed leftover
     // ceiling admits; later chunks must stream only the unseated remainder,

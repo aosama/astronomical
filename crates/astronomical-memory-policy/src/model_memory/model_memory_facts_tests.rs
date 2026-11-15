@@ -79,7 +79,7 @@ fn should_show_the_ledger_accounts_as_one_snapshot_that_adds_up_to_the_limit() {
     assert_eq!(budget_snapshot.activation_headroom_bytes, 1_200);
     assert_eq!(budget_snapshot.complete_layer_stream_slot_bytes, 500);
     assert_eq!(budget_snapshot.retained_expert_budget_bytes, 3_300);
-    assert_eq!(budget_snapshot.other_fixed_bytes, 0);
+    assert_eq!(budget_snapshot.unneeded_bytes, 0);
     assert_eq!(accounts.set_aside_bytes(), 6_700);
 }
 
@@ -87,12 +87,12 @@ fn should_show_the_ledger_accounts_as_one_snapshot_that_adds_up_to_the_limit() {
 fn should_set_only_the_weights_aside_before_anything_is_measured() {
     let budget_snapshot = MemoryReserveSnapshot::with_only_weights_set_aside(10_000, 3_000);
     assert_eq!(budget_snapshot.model_core_payload_bytes, 3_000);
-    assert_eq!(budget_snapshot.other_fixed_bytes, 7_000);
+    assert_eq!(budget_snapshot.unneeded_bytes, 7_000);
     assert_eq!(budget_snapshot.retained_expert_budget_bytes, 0);
 }
 
 #[test]
 fn should_leave_nothing_unowned_when_the_weights_exceed_the_limit() {
     let budget_snapshot = MemoryReserveSnapshot::with_only_weights_set_aside(1_000, 3_000);
-    assert_eq!(budget_snapshot.other_fixed_bytes, 0);
+    assert_eq!(budget_snapshot.unneeded_bytes, 0);
 }

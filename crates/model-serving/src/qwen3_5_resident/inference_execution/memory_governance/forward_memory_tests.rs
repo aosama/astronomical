@@ -179,3 +179,37 @@ fn should_say_in_the_reason_how_far_over_the_limit_the_chunk_is() {
     assert!(reason.contains("7 bytes more"), "{reason}");
     assert!(reason.contains("10000 byte limit"), "{reason}");
 }
+
+#[test]
+fn should_charge_a_one_token_prompt_chunk_what_a_reply_step_needs() {
+    // Beside this much stored state a whole chunk's working memory does not
+    // fit, but one token's does.
+    let stored_state_bytes = LARGEST_STORED_STATE_BESIDE_A_CHUNK_BYTES + 1;
+    assert_eq!(
+        decision_for(ForwardShape::prompt_chunk(1), stored_state_bytes, 0),
+        ResidentForwardAdmissionDecision::Admit
+    );
+    assert_ne!(
+        decision_for(ForwardShape::prompt_chunk(2), stored_state_bytes, 0),
+        ResidentForwardAdmissionDecision::Admit
+    );
+}
+
+#[test]
+fn should_still_name_the_prompt_chunk_when_its_one_token_does_not_fit() {
+    let largest_stored_state_beside_a_reply_step_bytes =
+        LIMIT_BYTES - EVERY_WEIGHT_BYTES - REPLY_TOKEN_WORKING_MEMORY_BYTES - MARGIN_BYTES;
+    assert_eq!(
+        decision_for(
+            ForwardShape::prompt_chunk(1),
+            largest_stored_state_beside_a_reply_step_bytes + 1,
+            0,
+        ),
+        ResidentForwardAdmissionDecision::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::TransientPeakShortfallAtPrefillChunk {
+                shortfall_bytes: 1,
+                prefill_chunk_token_count: 1,
+            },
+        }
+    );
+}
