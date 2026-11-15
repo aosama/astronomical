@@ -16,6 +16,7 @@ mod astro_ssd_prompt_cache_startup_cleanup_evidence;
 mod astro_ssd_prompt_cache_state_bridge;
 mod astro_ssd_prompt_cache_visual_embeddings;
 mod attention;
+mod dflash2_drafter_reference;
 mod flux2_klein;
 mod gpu_wired_ceiling_probe;
 mod kernel_capability;

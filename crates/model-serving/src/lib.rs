@@ -99,6 +99,8 @@ pub(crate) use astronomical_memory_policy::{safetensors, strict_json};
 
 pub mod row_batched_matmul;
 
+pub mod speculative_decoding;
+
 mod sampling_seed;
 
 mod sparse_experts;

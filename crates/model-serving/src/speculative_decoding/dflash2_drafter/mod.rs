@@ -1,0 +1,42 @@
+//! The DFlash2 block drafter (z-lab, MIT), translated from z-lab's MLX
+//! reference `dflash/model_mlx.py`; see `third-party/THIRD_PARTY_NOTICES`.
+//!
+//! One pass drafts a whole block: the last committed token followed by mask
+//! slots goes through a few layers that attend to fused target hidden rows,
+//! the target's own head scores every slot, and the candidate selector walks
+//! one coherent path through each slot's best candidates.
+
+#[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
+pub mod block_attention_mask;
+#[cfg(feature = "direct-mlx")]
+pub mod candidate_selector;
+#[cfg(feature = "direct-mlx")]
+mod drafter_attention;
+pub mod drafter_configuration;
+#[cfg(feature = "direct-mlx")]
+pub mod drafter_context_state;
+#[cfg(feature = "direct-mlx")]
+pub mod drafter_forward;
+#[cfg(feature = "direct-mlx")]
+pub mod drafter_weights;
+#[cfg(feature = "direct-mlx")]
+mod grouped_dynamic_convolution;
+
+#[cfg(test)]
+mod block_attention_mask_tests;
+#[cfg(test)]
+mod drafter_configuration_tests;
+
+#[cfg(feature = "direct-mlx")]
+pub use candidate_selector::{PathChoice, ProposedPath, select_path};
+pub use drafter_configuration::{
+    DFlash2DrafterConfiguration, DFlash2DrafterConfigurationError, DrafterLayerAttention,
+};
+#[cfg(feature = "direct-mlx")]
+pub use drafter_context_state::DrafterContextStates;
+#[cfg(feature = "direct-mlx")]
+pub use drafter_forward::{DFlash2DraftTarget, drafted_hidden_rows};
+#[cfg(feature = "direct-mlx")]
+pub use drafter_weights::{
+    DFlash2DrafterWeights, DFlash2DrafterWeightsError, bind_drafter_weights,
+};

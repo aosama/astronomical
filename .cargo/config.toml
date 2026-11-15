@@ -453,6 +453,11 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # back-to-back residency churn on the large sparse model; issues #1716 and
 # #1717). Each case loads the real model, so run them only when comparing
 # strategies; append --filter NAME to pick cases.
+# The DFlash2 drafter against z-lab's own MLX reference: a tiny random
+# drafter run through dflash/model_mlx.py for two rounds (fixture and its
+# generator in verification/acceptance/tests/fixtures/dflash2_reference); hidden
+# rows, logits, greedy path and kept candidates must match. Seconds.
+test-dflash2-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_drafter_reference"
 # The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
 # every 27B shape at 1 to 32 rows, gives each row the same bits alone and
 # inside a 16-row block, and refuses packings it cannot read. Seconds.
