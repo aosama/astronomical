@@ -18,7 +18,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use astronomical_decision_contract::{
-    DecisionQuestion, OrderedJsonValue, parse_system_one_questions,
+    DecisionQuestion, HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
 };
 use astronomical_model_serving::{DecisionEngine, LayaDecisionEngine};
 use astronomical_test_harness::test_run::TestRunContext;
@@ -65,7 +65,7 @@ fn measure_checkpoint(checkpoint_name: &str, checkpoint_directory: &Path) {
     let load_result = decision_engine.load().expect("the checkpoint should load");
     let state = OrderedJsonValue::Text(romeo_and_juliet::excerpt(STATE_WORD_COUNT));
     decision_engine
-        .decide(&state, &questions_of_count(1))
+        .decide(&state, &questions_of_count(1), HeadInputRequest::Omit)
         .expect("the warmup request should be answered");
     eprintln!(
         "[laya-latency] checkpoint={checkpoint_name} tokens_per_question={} load_and_warmup_milliseconds={}",
@@ -79,7 +79,7 @@ fn measure_checkpoint(checkpoint_name: &str, checkpoint_directory: &Path) {
         for _timed_request in 0..TIMED_REQUESTS_PER_QUESTION_COUNT {
             let request_started_at = Instant::now();
             let decision_output = decision_engine
-                .decide(&state, &questions)
+                .decide(&state, &questions, HeadInputRequest::Omit)
                 .expect("the timed request should be answered");
             request_milliseconds.push(request_started_at.elapsed().as_secs_f64() * 1_000.0);
             assert_eq!(decision_output.question_outcomes.len(), question_count);

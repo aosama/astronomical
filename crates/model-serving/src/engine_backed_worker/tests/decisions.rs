@@ -6,8 +6,8 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use astronomical_decision_contract::{
-    DecisionAnswer, DecisionFailure, DecisionQuestion, NoulAnswer, OrderedJsonValue,
-    QuestionInputCoverage, QuestionOutcome,
+    DecisionAnswer, DecisionFailure, DecisionQuestion, FloatVector, HeadInputRequest, HeadInputs,
+    NoulAnswer, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
 };
 use astronomical_ipc_protocol::{
     DecisionsCommand, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
@@ -18,13 +18,15 @@ use tokio::io::{duplex, split};
 use tokio::task::JoinHandle;
 
 use super::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
+use crate::decision_engine::HeadTrainingStep;
 use crate::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, EmbeddingUnavailableEngine,
     EngineBackedWorker, ImageGenerationUnavailableEngine, MlxActiveMemoryBreakdown,
     MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
 };
+use astronomical_decision_contract::head_training_job::HeadTrainingJob;
 
-const DECISION_MODEL_ID: &str = "scripted-decision-model";
+pub(super) const DECISION_MODEL_ID: &str = "scripted-decision-model";
 const MAXIMUM_TOKENS_PER_QUESTION: u32 = 512;
 const HAMLET_LINE: &str = "To be, or not to be, that is the question.";
 
@@ -50,11 +52,16 @@ type DaemonWriter = ProtocolWriter<tokio::io::WriteHalf<tokio::io::DuplexStream>
 
 /// Answers each request with the next scripted outcome and records the
 /// question names it was asked, so a test can see what crossed the boundary.
-struct ScriptedDecisionEngine {
+pub(super) struct ScriptedDecisionEngine {
     loaded_model_id: String,
     scripted_outcomes: VecDeque<Result<(), DecisionFailure>>,
     asked_question_names: Arc<Mutex<Vec<String>>>,
     has_unreported_cleanup: bool,
+    /// One step per `advance_head_training`; a model with none scripted
+    /// refuses to train, as an untrainable model does.
+    scripted_training_steps: VecDeque<Result<HeadTrainingStep, DecisionFailure>>,
+    /// Whether the worker dropped the training state after a failure.
+    was_training_cancelled: Arc<Mutex<bool>>,
 }
 
 impl DecisionEngine for ScriptedDecisionEngine {
@@ -69,6 +76,7 @@ impl DecisionEngine for ScriptedDecisionEngine {
         &mut self,
         _state: &OrderedJsonValue,
         questions: &[DecisionQuestion],
+        head_input_request: HeadInputRequest,
     ) -> Result<DecisionEngineOutput, DecisionFailure> {
         self.has_unreported_cleanup = true;
         let scripted_outcome = self
@@ -82,13 +90,45 @@ impl DecisionEngine for ScriptedDecisionEngine {
                 .lock()
                 .expect("the asked-question log should not be poisoned")
                 .push(question.name.clone());
-            question_outcomes.push(even_noul_outcome(&question.name));
+            let mut question_outcome = even_noul_outcome(&question.name);
+            if head_input_request == HeadInputRequest::Include {
+                question_outcome.head_inputs = Some(scripted_head_inputs());
+            }
+            question_outcomes.push(question_outcome);
         }
         Ok(DecisionEngineOutput {
             question_outcomes,
             input_token_count: 24,
             elapsed_millis: 3,
         })
+    }
+
+    fn start_head_training(&mut self, job: HeadTrainingJob) -> Result<(), DecisionFailure> {
+        let _ = job;
+        if self.scripted_training_steps.is_empty() {
+            return Err(DecisionFailure::invalid_request(
+                "this model's final layers cannot be trained",
+            ));
+        }
+        Ok(())
+    }
+
+    fn advance_head_training(&mut self) -> Result<HeadTrainingStep, DecisionFailure> {
+        self.has_unreported_cleanup = true;
+        match self.scripted_training_steps.pop_front() {
+            Some(scripted_step) => scripted_step,
+            None => Err(DecisionFailure::fatal_execution(
+                "no head training is in progress",
+            )),
+        }
+    }
+
+    fn cancel_head_training(&mut self) {
+        self.scripted_training_steps.clear();
+        *self
+            .was_training_cancelled
+            .lock()
+            .expect("the cancellation flag should not be poisoned") = true;
     }
 
     fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
@@ -102,6 +142,13 @@ impl DecisionEngine for ScriptedDecisionEngine {
             512,
             MlxActiveMemoryBreakdown::default(),
         ))
+    }
+}
+
+/// Two marker states, standing in for what a real head reads.
+fn scripted_head_inputs() -> HeadInputs {
+    HeadInputs::Laya {
+        marker_states: vec![FloatVector(vec![0.25, -1.5]), FloatVector(vec![2.0, 0.5])],
     }
 }
 
@@ -120,6 +167,7 @@ fn even_noul_outcome(question_name: &str) -> QuestionOutcome {
             option_token_cap: None,
             distinguishable_option_count: 2,
         },
+        head_inputs: None,
     }
 }
 
@@ -151,11 +199,12 @@ impl
     }
 }
 
-struct DecisionsWorkerHarness {
-    events: DaemonReader,
-    commands: DaemonWriter,
+pub(super) struct DecisionsWorkerHarness {
+    pub(super) events: DaemonReader,
+    pub(super) commands: DaemonWriter,
     worker_task: JoinHandle<Result<(), WorkerRuntimeError>>,
     asked_question_names: Arc<Mutex<Vec<String>>>,
+    pub(super) was_training_cancelled: Arc<Mutex<bool>>,
 }
 
 /// Starts an idle worker whose factory builds one decision engine that loads
@@ -164,12 +213,31 @@ async fn start_worker_and_swap_in_a_decision_model(
     loaded_model_id: &str,
     scripted_outcomes: Vec<Result<(), DecisionFailure>>,
 ) -> DecisionsWorkerHarness {
+    start_worker_with_scripts(loaded_model_id, scripted_outcomes, Vec::new()).await
+}
+
+/// Like [`start_worker_and_swap_in_a_decision_model`], for a model whose
+/// training takes `scripted_training_steps`, one per advance.
+pub(super) async fn start_worker_and_swap_in_a_trainable_model(
+    scripted_training_steps: Vec<Result<HeadTrainingStep, DecisionFailure>>,
+) -> DecisionsWorkerHarness {
+    start_worker_with_scripts(DECISION_MODEL_ID, Vec::new(), scripted_training_steps).await
+}
+
+async fn start_worker_with_scripts(
+    loaded_model_id: &str,
+    scripted_outcomes: Vec<Result<(), DecisionFailure>>,
+    scripted_training_steps: Vec<Result<HeadTrainingStep, DecisionFailure>>,
+) -> DecisionsWorkerHarness {
     let asked_question_names = Arc::new(Mutex::new(Vec::new()));
+    let was_training_cancelled = Arc::new(Mutex::new(false));
     let decision_engine = ScriptedDecisionEngine {
         loaded_model_id: loaded_model_id.to_owned(),
         scripted_outcomes: scripted_outcomes.into(),
         asked_question_names: Arc::clone(&asked_question_names),
         has_unreported_cleanup: false,
+        scripted_training_steps: scripted_training_steps.into(),
+        was_training_cancelled: Arc::clone(&was_training_cancelled),
     };
     let worker: DecisionsWorker = EngineBackedWorker::idle_with_model_factory(
         ScriptedDecisionFactory {
@@ -186,6 +254,7 @@ async fn start_worker_and_swap_in_a_decision_model(
         commands: ProtocolWriter::new(daemon_write),
         worker_task,
         asked_question_names,
+        was_training_cancelled,
     };
     assert!(matches!(
         next_event(&mut harness.events).await,
@@ -210,7 +279,7 @@ async fn start_worker_and_swap_in_a_decision_model(
 }
 
 /// The next event that is not a periodic memory sample.
-async fn next_event(events: &mut DaemonReader) -> WorkerEvent {
+pub(super) async fn next_event(events: &mut DaemonReader) -> WorkerEvent {
     loop {
         let worker_event = super::next_event_skipping_load_progress(events).await;
         if !matches!(worker_event, WorkerEvent::MlxMemorySample { .. }) {
@@ -228,7 +297,7 @@ fn decisions_command(request_number: u64, questions_json: &str) -> WorkerCommand
     })
 }
 
-async fn close(harness: DecisionsWorkerHarness) {
+pub(super) async fn close(harness: DecisionsWorkerHarness) {
     harness
         .commands
         .close()
@@ -327,6 +396,39 @@ async fn should_answer_questions_in_request_order_then_finalize_with_memory() {
             .expect("the asked-question log should not be poisoned"),
         ["tragic", "asking"]
     );
+    close(harness).await;
+}
+
+#[tokio::test]
+async fn should_never_send_head_inputs_back_with_an_answer() {
+    let mut harness =
+        start_worker_and_swap_in_a_decision_model(DECISION_MODEL_ID, vec![Ok(())]).await;
+    assert!(matches!(
+        next_event(&mut harness.events).await,
+        WorkerEvent::ModelSwapped { .. }
+    ));
+    let questions_json =
+        r#"{"tragic": {"type": "noul", "instructions": "Is the speaker in despair?"}}"#;
+    harness
+        .commands
+        .send_command(&decisions_command(51, questions_json))
+        .await
+        .expect("the decisions command should reach the worker");
+    let completed_event = next_event(&mut harness.events).await;
+    let WorkerEvent::DecisionsCompleted {
+        question_outcomes, ..
+    } = completed_event
+    else {
+        panic!("the worker should complete the request: {completed_event:?}");
+    };
+    // The scripted engine returns head inputs whenever it is asked for
+    // them; only training reads them, inside the worker, so an answer
+    // request never asks and its outcomes stay small.
+    assert_eq!(question_outcomes[0].head_inputs, None);
+    assert!(matches!(
+        next_event(&mut harness.events).await,
+        WorkerEvent::DecisionsFinalized { .. }
+    ));
     close(harness).await;
 }
 

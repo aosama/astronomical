@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::answer::DecisionAnswer;
+use crate::head_inputs::HeadInputs;
 
 /// One question's answer and what the model actually read to produce it.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -18,6 +19,10 @@ pub struct QuestionOutcome {
     /// The temperature the logits were divided by before the softmax.
     pub applied_temperature: f64,
     pub input_coverage: QuestionInputCoverage,
+    /// What the trainable final layers read, present only when the request
+    /// asked for it; ordinary answers leave it out of the wire form entirely.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head_inputs: Option<HeadInputs>,
 }
 
 /// How much of a question's input fit the model's token limits.

@@ -10,7 +10,10 @@
 use std::path::Path;
 
 use astronomical_decision_contract::DecisionFailure;
+use astronomical_decision_contract::head_tuning_file::HeadTuning;
 use safetensors::{Dtype, SafeTensors};
+
+use crate::decision_models::head_tuning::check_tuned_shape;
 
 pub(crate) const KEV_HEAD_FILE_NAME: &str = "kev_head.safetensors";
 /// The head is two 256-wide projections; anything near this size is not one.
@@ -75,6 +78,23 @@ impl KevPointerHead {
         self.hidden_size
     }
 
+    /// Replaces each projection tensor the folder's training changed. A
+    /// trained tensor must have exactly the shipped tensor's shape.
+    pub(crate) fn apply_tuning(&mut self, head_tuning: &HeadTuning) -> Result<(), DecisionFailure> {
+        let weight_shape = [self.pointer_dimension, self.hidden_size];
+        let bias_shape = [self.pointer_dimension];
+        replace_tuned(
+            head_tuning,
+            "q.weight",
+            &weight_shape,
+            &mut self.query.weight,
+        )?;
+        replace_tuned(head_tuning, "q.bias", &bias_shape, &mut self.query.bias)?;
+        replace_tuned(head_tuning, "k.weight", &weight_shape, &mut self.key.weight)?;
+        replace_tuned(head_tuning, "k.bias", &bias_shape, &mut self.key.bias)?;
+        Ok(())
+    }
+
     /// One logit per option, before the temperature, for one question.
     pub(crate) fn option_logits(
         &self,
@@ -94,6 +114,22 @@ impl KevPointerHead {
         }
         option_logits
     }
+}
+
+/// Puts the trained values of `tensor_name` in place of `shipped_values`
+/// when the folder's training changed that tensor.
+fn replace_tuned(
+    head_tuning: &HeadTuning,
+    tensor_name: &str,
+    shipped_shape: &[usize],
+    shipped_values: &mut Vec<f32>,
+) -> Result<(), DecisionFailure> {
+    let Some(tuned_tensor) = head_tuning.tensor(tensor_name) else {
+        return Ok(());
+    };
+    check_tuned_shape(tuned_tensor, shipped_shape)?;
+    shipped_values.clone_from(&tuned_tensor.values);
+    Ok(())
 }
 
 /// `weight · hidden + bias`, row by row.

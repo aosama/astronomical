@@ -5,7 +5,10 @@
 //! owns only what is particular to its family: how the artifact is laid out,
 //! and the forward pass from tokens to one logit per option.
 
+pub(crate) mod calibration_override;
 pub(crate) mod clef;
+pub(crate) mod head_training;
+pub(crate) mod head_tuning;
 pub(crate) mod kev;
 pub(crate) mod laya;
 pub(crate) mod qwen_backbone;

@@ -244,6 +244,8 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             | WorkerEvent::EmbeddingsFailed { .. }
             | WorkerEvent::EmbeddingsFinalized { .. }
             | WorkerEvent::DecisionsCompleted { .. }
+            | WorkerEvent::DecisionHeadTrainingProgress { .. }
+            | WorkerEvent::DecisionHeadTrained { .. }
             | WorkerEvent::DecisionsFailed { .. }
             | WorkerEvent::DecisionsFinalized { .. }
             | WorkerEvent::SpeechSegmentSpoken { .. }

@@ -14,7 +14,7 @@
 //! matrix built on the host, rather than one slice per span: a request may
 //! ask about hundreds of options, and one product keeps the graph small.
 
-use astronomical_decision_contract::DecisionFailure;
+use astronomical_decision_contract::{DecisionFailure, HeadInputRequest};
 use mlx_bridge::MlxArray;
 
 use super::head_layers::{ClefHeadLayers, head_math};
@@ -45,16 +45,36 @@ struct OptionTerms {
     lexical_prior: Vec<f32>,
     cosine: Vec<f32>,
     residual: Vec<f32>,
+    /// `[options, width]` field and normalized option rows, read out only
+    /// when the request asked for head inputs.
+    field_and_option_rows: Option<FieldAndOptionRows>,
+}
+
+/// One question's per-option head inputs, in the order Clef scored them.
+pub(crate) struct ClefQuestionReadout {
+    pub(crate) field_vectors: Vec<Vec<f32>>,
+    pub(crate) option_vectors: Vec<Vec<f32>>,
+    pub(crate) lexical_priors: Vec<f32>,
+    pub(crate) cosines: Vec<f32>,
+}
+
+/// Every question's logits and, when asked, its head inputs, in scoring order.
+pub(crate) struct JointHeadScores {
+    pub(crate) question_logits: Vec<Vec<f64>>,
+    pub(crate) question_readouts: Option<Vec<ClefQuestionReadout>>,
 }
 
 impl ClefHeadLayers<'_> {
-    /// One logit per option, per question, in scoring order.
+    /// One logit per option, per question, in scoring order; with
+    /// [`HeadInputRequest::Include`] also what the residual scorer and the
+    /// final mix read for each option.
     pub(crate) fn joint_option_logits(
         &self,
         head_inputs: &ClefHeadInputs<'_>,
         routing_layer_count: usize,
         decoder_layer_count: usize,
-    ) -> Result<Vec<Vec<f64>>, DecisionFailure> {
+        head_input_request: HeadInputRequest,
+    ) -> Result<JointHeadScores, DecisionFailure> {
         let pooled = self.pooled_inputs(head_inputs)?;
         let mut routed_options = self.option_queries(&pooled)?;
         for routing_layer_index in 0..routing_layer_count {
@@ -74,8 +94,22 @@ impl ClefHeadLayers<'_> {
             )?;
         }
         let fields = self.layer_norm("field_norm", &self.rows_of(&fields)?)?;
-        let option_terms = self.option_terms(&pooled, &routed_options, &fields)?;
-        self.combined_logits(&option_terms, &pooled.option_counts)
+        let option_terms =
+            self.option_terms(&pooled, &routed_options, &fields, head_input_request)?;
+        let question_logits = self.combined_logits(&option_terms, &pooled.option_counts)?;
+        let question_readouts = match &option_terms.field_and_option_rows {
+            Some(feature_rows) => Some(question_readouts(
+                &option_terms,
+                &feature_rows.field_rows,
+                &feature_rows.option_rows,
+                &pooled.option_counts,
+            )),
+            None => None,
+        };
+        Ok(JointHeadScores {
+            question_logits,
+            question_readouts,
+        })
     }
 
     fn pooled_inputs(
@@ -252,6 +286,7 @@ impl ClefHeadLayers<'_> {
         pooled: &PooledInputs,
         routed_options: &MlxArray,
         fields: &MlxArray,
+        head_input_request: HeadInputRequest,
     ) -> Result<OptionTerms, DecisionFailure> {
         let runtime = self.runtime;
         let anchors = self.unit_rows(
@@ -273,10 +308,13 @@ impl ClefHeadLayers<'_> {
         runtime
             .evaluate_arrays(&[&lexical_prior, &cosine, &residual])
             .map_err(head_math)?;
+        let field_and_option_rows =
+            field_and_option_rows(&field_per_option, &options, head_input_request)?;
         Ok(OptionTerms {
             lexical_prior: lexical_prior.to_vec_f32().map_err(head_math)?,
             cosine: cosine.to_vec_f32().map_err(head_math)?,
             residual: residual.to_vec_f32().map_err(head_math)?,
+            field_and_option_rows,
         })
     }
 
@@ -410,6 +448,64 @@ impl ClefHeadLayers<'_> {
             .reshape(batched, &[batched_shape[1], batched_shape[2]])
             .map_err(head_math)
     }
+}
+
+/// The field and normalized option rows, read to the host only when the
+/// request asked for head inputs.
+fn field_and_option_rows(
+    field_per_option: &MlxArray,
+    options: &MlxArray,
+    head_input_request: HeadInputRequest,
+) -> Result<Option<FieldAndOptionRows>, DecisionFailure> {
+    match head_input_request {
+        HeadInputRequest::Omit => Ok(None),
+        HeadInputRequest::Include => Ok(Some(FieldAndOptionRows {
+            field_rows: field_per_option.to_vec_f32().map_err(head_math)?,
+            option_rows: options.to_vec_f32().map_err(head_math)?,
+        })),
+    }
+}
+
+/// Every option's field vector and normalized option vector, row after row,
+/// as the host reads them back.
+struct FieldAndOptionRows {
+    field_rows: Vec<f32>,
+    option_rows: Vec<f32>,
+}
+
+/// Cuts the flat per-option readout into one readout per question.
+fn question_readouts(
+    option_terms: &OptionTerms,
+    field_rows: &[f32],
+    option_rows: &[f32],
+    option_counts: &[usize],
+) -> Vec<ClefQuestionReadout> {
+    let total_option_count = option_terms.lexical_prior.len().max(1);
+    let width = option_rows.len() / total_option_count;
+    let mut question_readouts = Vec::with_capacity(option_counts.len());
+    let mut option_index = 0;
+    for option_count in option_counts {
+        let mut readout = ClefQuestionReadout {
+            field_vectors: Vec::with_capacity(*option_count),
+            option_vectors: Vec::with_capacity(*option_count),
+            lexical_priors: Vec::with_capacity(*option_count),
+            cosines: Vec::with_capacity(*option_count),
+        };
+        for _ in 0..*option_count {
+            let row_range = option_index * width..(option_index + 1) * width;
+            readout
+                .field_vectors
+                .push(field_rows[row_range.clone()].to_vec());
+            readout.option_vectors.push(option_rows[row_range].to_vec());
+            readout
+                .lexical_priors
+                .push(option_terms.lexical_prior[option_index]);
+            readout.cosines.push(option_terms.cosine[option_index]);
+            option_index += 1;
+        }
+        question_readouts.push(readout);
+    }
+    question_readouts
 }
 
 /// The pooled vectors and index arrays one request's head pass reads.

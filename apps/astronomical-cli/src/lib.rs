@@ -22,6 +22,10 @@ pub use verbs::convert_atlas::{
 pub use verbs::decide::{
     DecideArguments, DecideDependencies, DecideError, DecideQuestionsSource, run_decide,
 };
+pub use verbs::decision::{
+    DecisionCommand, DecisionToolArguments, DecisionToolDependencies, DecisionToolError,
+    run_calibrate, run_train,
+};
 pub use verbs::doctor::{DoctorDependencies, DoctorError, run_doctor};
 pub use verbs::embed::{EmbedArguments, EmbedDependencies, EmbedError, run_embed};
 pub use verbs::image::{ImageArguments, ImageDependencies, ImageError, run_image};

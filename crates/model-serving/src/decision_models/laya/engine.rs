@@ -5,9 +5,14 @@
 //! and the decision head as one lazy graph and reads back one logit per
 //! option. The contract crate then calibrates the logits into typed answers.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use std::collections::BTreeMap;
+
+use astronomical_decision_contract::calibration_file::CalibrationOverride;
+use astronomical_decision_contract::head_training_job::HeadTrainingJob;
+use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
 use astronomical_decision_contract::laya_rendering::{
     laya_question_type_index, laya_truncates_state_from_the_left,
 };
@@ -15,16 +20,25 @@ use astronomical_decision_contract::laya_sequence::{
     LayaQuestionSequence, LayaSequenceError, build_laya_question_sequence, encode_laya_state,
 };
 use astronomical_decision_contract::{
-    DecisionFailure, DecisionQuestion, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
+    DecisionFailure, DecisionQuestion, DecisionQuestionKind, FloatVector, HeadInputRequest,
+    HeadInputs, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
     answer_from_probabilities, calibrated_probabilities,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
+use mlx_bridge::MlxArray;
 
+use crate::decision_engine::HeadTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
+use crate::decision_models::calibration_override::read_calibration_override;
+use crate::decision_models::head_training::training_session::{
+    HeadTrainingHost, HeadTrainingSession, keep_session_if_running, read_through_decide,
+    start_session,
+};
+use crate::decision_models::head_tuning::{check_tuned_shape, read_head_tuning, unusable_tuning};
 use crate::decision_models::laya::artifact::LayaArtifact;
 use crate::decision_models::laya::batching::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
 use crate::decision_models::laya::configuration::LayaConfiguration;
-use crate::decision_models::laya::head::{HeadPassRows, LayaDecisionHead};
+use crate::decision_models::laya::head::{HeadPassRows, LayaDecisionHead, ScoredHeadRow};
 use crate::decision_models::laya::tokenizer::LayaTokenizer;
 use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
@@ -40,17 +54,28 @@ const QUANTIZED_EMBEDDING_SCALES_TENSOR: &str = "encoder.embeddings.tok_embeddin
 /// A Laya runtime bound to one artifact directory.
 pub struct LayaDecisionEngine {
     model_id: String,
+    /// The model folder, which head training reads the shipped scorer from.
+    model_directory: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     resident_weight_bytes: u64,
     preloaded_artifact: Option<LayaArtifact>,
+    /// Temperatures fitted on the person's own examples, read at
+    /// construction so an unusable file fails before any weights load.
+    calibration_override: CalibrationOverride,
+    /// The folder's trained scorer, read at construction for the same reason.
+    head_tuning: HeadTuning,
     loaded_state: Option<LoadedLayaState>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
+    /// A training of the final layers in progress, if any.
+    head_training: Option<HeadTrainingSession>,
 }
 
 struct LoadedLayaState {
     runtime: MlxRuntime,
     tensors: MlxSafetensors,
+    /// Trained scorer tensors in 32-bit, used in place of the shipped ones.
+    tuned_tensors: BTreeMap<String, MlxArray>,
     configuration: LayaConfiguration,
     weight_layout: ModernBertWeightLayout,
     tokenizer: LayaTokenizer,
@@ -72,14 +97,20 @@ impl LayaDecisionEngine {
                 )));
             }
         };
+        let calibration_override = read_calibration_override(model_directory)?;
+        let head_tuning = read_head_tuning(model_directory, TunableHeadFamily::Laya)?;
         Ok(Self {
             model_id: model_id.into(),
+            model_directory: model_directory.to_path_buf(),
+            calibration_override,
+            head_tuning,
             effective_mlx_memory_ceiling_bytes,
             allocator_cache_memory_limit_bytes,
             resident_weight_bytes: artifact.weights_file_bytes,
             preloaded_artifact: Some(artifact),
             loaded_state: None,
             post_cleanup_memory_telemetry: None,
+            head_training: None,
         })
     }
 
@@ -132,27 +163,42 @@ impl LoadedLayaState {
 
     /// Runs every forward pass the request needs and returns each question's
     /// option logits, in request order.
-    fn option_logits_by_question(
+    fn scored_rows_by_question(
         &self,
         questions: &[DecisionQuestion],
         question_sequences: &[LayaQuestionSequence],
-    ) -> Result<Vec<Vec<f32>>, DecisionFailure> {
+        head_input_request: HeadInputRequest,
+    ) -> Result<Vec<ScoredHeadRow>, DecisionFailure> {
         let mut sequence_lengths = Vec::with_capacity(question_sequences.len());
         for question_sequence in question_sequences {
             sequence_lengths.push(question_sequence.token_ids.len());
         }
-        let mut option_logits_by_question: Vec<Vec<f32>> = vec![Vec::new(); questions.len()];
+        let mut scored_rows_by_question = Vec::with_capacity(questions.len());
+        for _ in questions {
+            scored_rows_by_question.push(None);
+        }
         for pass_question_indices in plan_forward_passes(&sequence_lengths, PADDED_TOKENS_PER_PASS)
         {
-            let pass_logits =
-                self.run_forward_pass(questions, question_sequences, &pass_question_indices)?;
-            for (question_index, question_logits) in
-                pass_question_indices.into_iter().zip(pass_logits)
-            {
-                option_logits_by_question[question_index] = question_logits;
+            let pass_rows = self.run_forward_pass(
+                questions,
+                question_sequences,
+                &pass_question_indices,
+                head_input_request,
+            )?;
+            for (question_index, scored_row) in pass_question_indices.into_iter().zip(pass_rows) {
+                scored_rows_by_question[question_index] = Some(scored_row);
             }
         }
-        Ok(option_logits_by_question)
+        let mut scored_rows = Vec::with_capacity(questions.len());
+        for scored_row in scored_rows_by_question {
+            let Some(scored_row) = scored_row else {
+                return Err(DecisionFailure::fatal_execution(
+                    "a question was left out of every forward pass",
+                ));
+            };
+            scored_rows.push(scored_row);
+        }
+        Ok(scored_rows)
     }
 
     /// Runs one forward pass over the chosen questions and returns their option logits.
@@ -161,7 +207,8 @@ impl LoadedLayaState {
         questions: &[DecisionQuestion],
         question_sequences: &[LayaQuestionSequence],
         pass_question_indices: &[usize],
-    ) -> Result<Vec<Vec<f32>>, DecisionFailure> {
+        head_input_request: HeadInputRequest,
+    ) -> Result<Vec<ScoredHeadRow>, DecisionFailure> {
         let mut token_sequences = Vec::with_capacity(pass_question_indices.len());
         let mut question_type_indices = Vec::with_capacity(pass_question_indices.len());
         let mut option_marker_positions = Vec::with_capacity(pass_question_indices.len());
@@ -189,18 +236,20 @@ impl LoadedLayaState {
         let head = LayaDecisionHead {
             runtime: &self.runtime,
             tensors: &self.tensors,
+            tuned_tensors: &self.tuned_tensors,
             configuration: &self.configuration,
         };
         let trunk_hidden_states = trunk
             .encode_hidden_states(&token_batch)
             .map_err(forward_failure)?;
-        head.option_logits(
+        head.scored_rows(
             &trunk_hidden_states,
             &HeadPassRows {
                 token_batch: &token_batch,
                 question_type_indices: &question_type_indices,
                 option_marker_positions: &option_marker_positions,
             },
+            head_input_request,
         )
         .map_err(forward_failure)
     }
@@ -249,10 +298,12 @@ impl DecisionEngine for LayaDecisionEngine {
             .configuration
             .sequence_limits
             .maximum_sequence_tokens as u32;
+        let tuned_tensors = tuned_head_tensors(&tensors, &self.head_tuning)?;
         self.loaded_state = Some(LoadedLayaState {
             weight_layout: detect_weight_layout(&tensors),
             runtime,
             tensors,
+            tuned_tensors,
             configuration: artifact.configuration,
             tokenizer,
         });
@@ -266,6 +317,7 @@ impl DecisionEngine for LayaDecisionEngine {
         &mut self,
         state: &OrderedJsonValue,
         questions: &[DecisionQuestion],
+        head_input_request: HeadInputRequest,
     ) -> Result<DecisionEngineOutput, DecisionFailure> {
         let started_at = Instant::now();
         let Some(loaded_state) = self.loaded_state.as_ref() else {
@@ -279,7 +331,11 @@ impl DecisionEngine for LayaDecisionEngine {
             ));
         }
         let question_sequences = loaded_state.build_question_sequences(state, questions)?;
-        let forward_result = loaded_state.option_logits_by_question(questions, &question_sequences);
+        let forward_result = loaded_state.scored_rows_by_question(
+            questions,
+            &question_sequences,
+            head_input_request,
+        );
         // The pass arrays are dropped by now, whether or not a pass failed;
         // synchronizing and clearing the allocator cache returns their memory
         // before the next request.
@@ -297,11 +353,14 @@ impl DecisionEngine for LayaDecisionEngine {
             Err(_) => None,
         };
         let decision_outcome = match forward_result {
-            Ok(option_logits_by_question) => answered_questions(
-                &loaded_state.configuration,
+            Ok(scored_rows) => answered_questions(
+                &QuestionTemperatures {
+                    configuration: &loaded_state.configuration,
+                    calibration_override: &self.calibration_override,
+                },
                 questions,
                 &question_sequences,
-                option_logits_by_question,
+                scored_rows,
             ),
             Err(forward_failure) => Err(forward_failure),
         };
@@ -312,6 +371,30 @@ impl DecisionEngine for LayaDecisionEngine {
             input_token_count,
             elapsed_millis: u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
         })
+    }
+
+    fn start_head_training(&mut self, job: HeadTrainingJob) -> Result<(), DecisionFailure> {
+        if self.loaded_state.is_none() {
+            return Err(DecisionFailure::fatal_execution(
+                "the decision engine was asked to train before load",
+            ));
+        }
+        start_session(&mut self.head_training, job)
+    }
+
+    fn advance_head_training(&mut self) -> Result<HeadTrainingStep, DecisionFailure> {
+        let Some(mut session) = self.head_training.take() else {
+            return Err(DecisionFailure::fatal_execution(
+                "no head training is in progress",
+            ));
+        };
+        let step = session.advance(self);
+        keep_session_if_running(&mut self.head_training, session, &step);
+        step
+    }
+
+    fn cancel_head_training(&mut self) {
+        self.head_training = None;
     }
 
     fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
@@ -329,27 +412,47 @@ impl DecisionEngine for LayaDecisionEngine {
     }
 }
 
+/// Where a question's temperature comes from: the folder's calibration for
+/// a kind it names, otherwise the checkpoint's own table.
+struct QuestionTemperatures<'loaded> {
+    configuration: &'loaded LayaConfiguration,
+    calibration_override: &'loaded CalibrationOverride,
+}
+
+impl QuestionTemperatures<'_> {
+    fn temperature_for(&self, kind: DecisionQuestionKind, option_count: usize) -> f64 {
+        match self
+            .calibration_override
+            .temperature_for(kind, option_count)
+        {
+            Some(calibrated_temperature) => calibrated_temperature,
+            None => self
+                .configuration
+                .temperature_table
+                .temperature_for(kind, option_count),
+        }
+    }
+}
+
 /// Turns every question's logits into its answer, and counts the tokens read.
 fn answered_questions(
-    configuration: &LayaConfiguration,
+    question_temperatures: &QuestionTemperatures<'_>,
     questions: &[DecisionQuestion],
     question_sequences: &[LayaQuestionSequence],
-    option_logits_by_question: Vec<Vec<f32>>,
+    scored_rows: Vec<ScoredHeadRow>,
 ) -> Result<(Vec<QuestionOutcome>, u32), DecisionFailure> {
     let mut question_outcomes = Vec::with_capacity(questions.len());
     let mut input_token_count = 0_u32;
-    for ((question, question_sequence), option_logits) in questions
-        .iter()
-        .zip(question_sequences)
-        .zip(option_logits_by_question)
+    for ((question, question_sequence), scored_row) in
+        questions.iter().zip(question_sequences).zip(scored_rows)
     {
         input_token_count =
             input_token_count.saturating_add(question_sequence.token_ids.len() as u32);
         question_outcomes.push(question_outcome(
-            configuration,
+            question_temperatures,
             question,
             question_sequence,
-            option_logits,
+            scored_row,
         )?);
     }
     Ok((question_outcomes, input_token_count))
@@ -360,11 +463,15 @@ fn answered_questions(
 /// Laya lays its options out in canonical order, so the logits need no
 /// reordering before the contract crate reads them.
 fn question_outcome(
-    configuration: &LayaConfiguration,
+    question_temperatures: &QuestionTemperatures<'_>,
     question: &DecisionQuestion,
     question_sequence: &LayaQuestionSequence,
-    option_logits: Vec<f32>,
+    scored_row: ScoredHeadRow,
 ) -> Result<QuestionOutcome, DecisionFailure> {
+    let ScoredHeadRow {
+        option_logits,
+        marker_states,
+    } = scored_row;
     for option_logit in &option_logits {
         if !option_logit.is_finite() {
             return Err(DecisionFailure::fatal_execution(&format!(
@@ -373,9 +480,8 @@ fn question_outcome(
             )));
         }
     }
-    let applied_temperature = configuration
-        .temperature_table
-        .temperature_for(question.kind(), option_logits.len());
+    let applied_temperature =
+        question_temperatures.temperature_for(question.kind(), option_logits.len());
     let option_probabilities = calibrated_probabilities(&option_logits, applied_temperature);
     let answer = match answer_from_probabilities(question, &option_probabilities) {
         Ok(answer) => answer,
@@ -396,7 +502,51 @@ fn question_outcome(
                 .map(|token_cap| token_cap as u32),
             distinguishable_option_count: question_sequence.distinct_option_count as u32,
         },
+        head_inputs: laya_head_inputs(marker_states),
     })
+}
+
+/// The marker states the scorer read, as head inputs, when they were asked for.
+fn laya_head_inputs(marker_states: Option<Vec<Vec<f32>>>) -> Option<HeadInputs> {
+    let marker_states = marker_states?;
+    let mut marker_vectors = Vec::with_capacity(marker_states.len());
+    for marker_state in marker_states {
+        marker_vectors.push(FloatVector(marker_state));
+    }
+    Some(HeadInputs::Laya {
+        marker_states: marker_vectors,
+    })
+}
+
+/// The trained scorer tensors as 32-bit arrays, each checked against the
+/// shape of the shipped tensor it replaces.
+fn tuned_head_tensors(
+    tensors: &MlxSafetensors,
+    head_tuning: &HeadTuning,
+) -> Result<BTreeMap<String, MlxArray>, DecisionFailure> {
+    let mut tuned_tensors = BTreeMap::new();
+    for tuned_tensor in &head_tuning.tensors {
+        let Ok(shipped_tensor) = tensors.tensor(&tuned_tensor.name) else {
+            return Err(unusable_tuning(&format!(
+                "the model has no tensor {}",
+                tuned_tensor.name
+            )));
+        };
+        let mut shipped_shape = Vec::new();
+        let mut array_shape = Vec::new();
+        for dimension in shipped_tensor.shape() {
+            shipped_shape.push(dimension as usize);
+            array_shape.push(dimension);
+        }
+        check_tuned_shape(tuned_tensor, &shipped_shape)?;
+        match MlxArray::from_f32(&tuned_tensor.values, &array_shape) {
+            Ok(tuned_array) => {
+                tuned_tensors.insert(tuned_tensor.name.clone(), tuned_array);
+            }
+            Err(array_error) => return Err(unusable_tuning(&array_error.to_string())),
+        }
+    }
+    Ok(tuned_tensors)
 }
 
 /// Reads how the artifact stores its token embeddings from which tensors it has.
@@ -427,6 +577,34 @@ fn sequence_failure(sequence_error: LayaSequenceError) -> DecisionFailure {
 
 fn forward_failure(forward_error: ModernBertTrunkError) -> DecisionFailure {
     DecisionFailure::fatal_execution(&format!("decision forward pass failed: {forward_error}"))
+}
+
+/// What a head training needs from this engine.
+impl HeadTrainingHost for LayaDecisionEngine {
+    fn read_with_head_inputs(
+        &mut self,
+        state: &OrderedJsonValue,
+        questions: &OrderedJsonValue,
+    ) -> Result<Vec<QuestionOutcome>, DecisionFailure> {
+        read_through_decide(self, state, questions)
+    }
+
+    fn mlx_runtime(&self) -> Result<&MlxRuntime, DecisionFailure> {
+        match self.loaded_state.as_ref() {
+            Some(loaded_state) => Ok(&loaded_state.runtime),
+            None => Err(DecisionFailure::fatal_execution(
+                "the decision engine was asked to train before load",
+            )),
+        }
+    }
+
+    fn model_directory(&self) -> &Path {
+        &self.model_directory
+    }
+
+    fn tunable_family(&self) -> TunableHeadFamily {
+        TunableHeadFamily::Laya
+    }
 }
 
 #[cfg(test)]

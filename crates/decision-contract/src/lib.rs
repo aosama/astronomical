@@ -30,10 +30,14 @@
 
 pub mod answer;
 pub mod calibration;
+pub mod calibration_file;
 pub mod clef_answers;
 pub mod clef_rendering;
 pub mod criterion_text;
 pub mod failure;
+pub mod head_inputs;
+pub mod head_training_job;
+pub mod head_tuning_file;
 pub mod kev_answers;
 pub mod kev_rendering;
 pub mod laya_rendering;
@@ -55,6 +59,7 @@ pub use calibration::{
     clamp_temperature, temperature_bucket_key,
 };
 pub use failure::DecisionFailure;
+pub use head_inputs::{FloatVector, HeadInputRequest, HeadInputs};
 pub use ordered_json::{OrderedJsonMember, OrderedJsonValue};
 pub use outcome::{QuestionInputCoverage, QuestionOutcome};
 pub use python_json_text::{JsonKeyOrder, JsonTextStyle, python_float_repr, python_json_text};

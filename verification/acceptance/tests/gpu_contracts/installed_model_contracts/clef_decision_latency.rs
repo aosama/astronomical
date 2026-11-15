@@ -20,7 +20,7 @@
 use std::time::Instant;
 
 use astronomical_decision_contract::{
-    DecisionQuestion, OrderedJsonValue, parse_system_one_questions,
+    DecisionQuestion, HeadInputRequest, OrderedJsonValue, parse_system_one_questions,
 };
 use astronomical_model_serving::{ClefDecisionEngine, DecisionEngine};
 use astronomical_test_harness::test_run::TestRunContext;
@@ -69,7 +69,7 @@ fn timed_request_milliseconds(
     let questions = questions_of_count(question_count);
     let request_started_at = Instant::now();
     let decision_output = decision_engine
-        .decide(state, &questions)
+        .decide(state, &questions, HeadInputRequest::Omit)
         .expect("the timed request should be answered");
     assert_eq!(decision_output.question_outcomes.len(), question_count);
     (

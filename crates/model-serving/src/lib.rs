@@ -141,6 +141,7 @@ pub use decoder_cache::{
 
 pub use decision_engine::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionUnavailableEngine,
+    HeadTrainingStep,
 };
 
 #[cfg(feature = "direct-mlx")]

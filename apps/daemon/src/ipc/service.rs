@@ -235,14 +235,25 @@ async fn run_helper_request(
         } => {
             crate::ipc::decisions::run_decisions_generation(
                 generation_context,
-                model,
-                state,
-                questions,
+                crate::ipc::decisions::DecisionsRequest {
+                    model,
+                    state,
+                    questions,
+                },
                 streaming_response_writer,
             )
             .await
         }
-        // The dispatch routes only those two requests here.
+        DaemonRequest::TrainDecisionHead { model, job } => {
+            crate::ipc::decision_training::run_decision_training(
+                generation_context,
+                model,
+                job,
+                streaming_response_writer,
+            )
+            .await
+        }
+        // The dispatch routes only those requests here.
         _ => streaming_response_writer.close().await,
     }
 }
@@ -285,6 +296,7 @@ async fn handle_streaming_daemon_request(
             .await
         }
         helper_request @ (DaemonRequest::DecideGenerate { .. }
+        | DaemonRequest::TrainDecisionHead { .. }
         | DaemonRequest::SpeakGenerate(_)) => {
             run_helper_request(
                 &generation_context,

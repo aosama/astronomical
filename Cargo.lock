@@ -82,6 +82,7 @@ version = "0.2.105"
 dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
+ "astronomical-decision-training",
  "astronomical-expert-atlas",
  "astronomical-ipc-protocol",
  "astronomical-model-serving",
@@ -152,8 +153,21 @@ dependencies = [
 name = "astronomical-decision-contract"
 version = "0.2.105"
 dependencies = [
+ "base64 0.23.1",
+ "safetensors",
  "serde",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "astronomical-decision-training"
+version = "0.2.105"
+dependencies = [
+ "astronomical-decision-contract",
+ "safetensors",
+ "serde_json",
+ "tempfile",
  "thiserror",
 ]
 
@@ -280,6 +294,7 @@ version = "0.2.105"
 dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
+ "astronomical-decision-training",
  "astronomical-english-phonemes",
  "astronomical-expert-atlas",
  "astronomical-ipc-protocol",

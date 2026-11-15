@@ -86,9 +86,10 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::MlxMemoryLimitRestartRequired { .. }) => {
             apply_memory_limit_event(memory_limit_event, health_snapshot);
         }
-        swap_wait_event @ (WorkerEvent::ModelSwapped { .. }
-        | WorkerEvent::ModelSwapFailed { .. }) => {
-            return Err(outside_model_swap_wait_violation(&swap_wait_event));
+        waited_for_event @ (WorkerEvent::ModelSwapped { .. }
+        | WorkerEvent::ModelSwapFailed { .. }
+        | WorkerEvent::PromptCacheCleared { .. }) => {
+            return Err(outside_its_wait_violation(&waited_for_event));
         }
         generation_finalized_event @ WorkerEvent::GenerationFinalized { .. } => {
             apply_generation_finalized(
@@ -121,9 +122,6 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::ExpertStreamingStats { .. }) => {
             dispatch_observability_worker_event(observability_event, health_snapshot);
         }
-        cache_cleared_event @ WorkerEvent::PromptCacheCleared { .. } => {
-            return Err(outside_cache_clear_wait_violation(&cache_cleared_event));
-        }
         stepped_event @ (WorkerEvent::ImageGenerationProgress { .. }
         | WorkerEvent::ImageGenerationCompleted { .. }
         | WorkerEvent::ImageGenerationFailed { .. }
@@ -140,6 +138,8 @@ pub(super) fn handle_worker_event(
             )?;
         }
         single_shot_event @ (WorkerEvent::DecisionsCompleted { .. }
+        | WorkerEvent::DecisionHeadTrainingProgress { .. }
+        | WorkerEvent::DecisionHeadTrained { .. }
         | WorkerEvent::DecisionsFailed { .. }
         | WorkerEvent::DecisionsFinalized { .. }
         | WorkerEvent::EmbeddingsCompleted { .. }
@@ -623,6 +623,17 @@ fn dispatch_chat_progress_event(
             )
         }
         _ => Ok(()),
+    }
+}
+
+/// The protocol violation for an event only its own wait loop may receive
+/// (a model swap's or a prompt-cache clear's), arriving outside that wait.
+fn outside_its_wait_violation(waited_for_event: &WorkerEvent) -> WorkerControlError {
+    match waited_for_event {
+        WorkerEvent::PromptCacheCleared { .. } => {
+            outside_cache_clear_wait_violation(waited_for_event)
+        }
+        _ => outside_model_swap_wait_violation(waited_for_event),
     }
 }
 

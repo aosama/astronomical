@@ -1,3 +1,4 @@
+use astronomical_decision_contract::head_training_job::{HeadTrainingOutcome, HeadTrainingStage};
 use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
 use astronomical_speech_contract::SpeechFailure;
 use serde::{Deserialize, Serialize};
@@ -5,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::expert_layer_seating::ExpertLayerSeatingCounts;
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, DecisionsCommand, EmbeddingsCommand, EmbeddingsFailureReason,
-    GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
-    ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata, SpokenAudioSegment,
-    WorkerModelCapabilities, WorkerModelConfiguration,
+    ChatGenerationOutput, DecisionHeadTrainingCommand, DecisionsCommand, EmbeddingsCommand,
+    EmbeddingsFailureReason, GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason,
+    ImageGenerationPhase, ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata,
+    SpokenAudioSegment, WorkerModelCapabilities, WorkerModelConfiguration,
     WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
 };
@@ -309,6 +310,8 @@ pub enum WorkerCommand {
     GenerateEmbeddings(EmbeddingsCommand),
     /// Starts one decision request: typed questions about a state.
     GenerateDecisions(DecisionsCommand),
+    /// Starts training the loaded decision model's final layers, a step at a time.
+    TrainDecisionHead(DecisionHeadTrainingCommand),
     /// Starts one speech request, spoken a segment at a time.
     GenerateSpeech(SpeechCommand),
     /// Stops the active generation with this request identifier.
@@ -508,6 +511,19 @@ pub enum WorkerEvent {
         question_outcomes: Vec<QuestionOutcome>,
         /// The tokens the model read across all questions.
         input_token_count: u32,
+        elapsed_millis: u64,
+    },
+    /// Reports how far a head training has got while it continues.
+    DecisionHeadTrainingProgress {
+        request_id: RequestId,
+        stage: HeadTrainingStage,
+        completed: u64,
+        total: u64,
+    },
+    /// Delivers a finished head training: answers, trained scores and tensors.
+    DecisionHeadTrained {
+        request_id: RequestId,
+        outcome: Box<HeadTrainingOutcome>,
         elapsed_millis: u64,
     },
     /// Reports a request-scoped decisions failure that leaves the worker responsive.

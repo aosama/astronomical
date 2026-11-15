@@ -1,6 +1,7 @@
-//! Bounded loopback GET for launch. This layer reports transport outcomes;
-//! launch maps them to one-line user errors so a running instance is never
-//! described as missing.
+//! Bounded loopback HTTP requests: GET for launch, and the POST that asks the
+//! daemon to reload its configuration after a verb writes a new model folder.
+//! This layer reports transport outcomes; each verb maps them to one-line
+//! user errors so a running instance is never described as missing.
 
 use std::{
     io::{Read, Write},
@@ -28,25 +29,46 @@ pub(crate) fn get_loopback_json(
     request_path: &str,
     timeout: Duration,
 ) -> Result<Value, LoopbackRequestError> {
+    request_loopback_json("GET", bind_address, request_path, timeout)
+}
+
+/// POST with an empty body to one Astronomical loopback path and read the
+/// JSON reply; only a 200 counts as done.
+pub(crate) fn post_loopback_json(
+    bind_address: SocketAddr,
+    request_path: &str,
+    timeout: Duration,
+) -> Result<Value, LoopbackRequestError> {
+    request_loopback_json("POST", bind_address, request_path, timeout)
+}
+
+fn request_loopback_json(
+    request_method: &'static str,
+    bind_address: SocketAddr,
+    request_path: &str,
+    timeout: Duration,
+) -> Result<Value, LoopbackRequestError> {
     let request_started_at = Instant::now();
-    let response_body = match fetch_http_body(bind_address, request_path, timeout) {
+    let response_body = match fetch_http_body(request_method, bind_address, request_path, timeout) {
         Ok(response_body) => response_body,
         Err(request_error) => {
             tracing::debug!(
                 bind_address = %bind_address,
+                request_method,
                 request_path,
                 elapsed_milliseconds = request_started_at.elapsed().as_millis() as u64,
-                "loopback GET failed"
+                "loopback request failed"
             );
             return Err(request_error);
         }
     };
     tracing::debug!(
         bind_address = %bind_address,
+        request_method,
         request_path,
         elapsed_milliseconds = request_started_at.elapsed().as_millis() as u64,
         body_bytes = response_body.len(),
-        "loopback GET completed"
+        "loopback request completed"
     );
     serde_json::from_slice(&response_body).map_err(|parse_error| {
         tracing::debug!(error = %parse_error, "loopback JSON was not usable");
@@ -55,13 +77,14 @@ pub(crate) fn get_loopback_json(
 }
 
 fn fetch_http_body(
+    request_method: &'static str,
     bind_address: SocketAddr,
     request_path: &str,
     timeout: Duration,
 ) -> Result<Vec<u8>, LoopbackRequestError> {
     let mut tcp_stream = open_loopback_stream(bind_address, timeout)?;
     let http_request = format!(
-        "GET {request_path} HTTP/1.1\r\nHost: {bind_address}\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
+        "{request_method} {request_path} HTTP/1.1\r\nHost: {bind_address}\r\nAccept: application/json\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
     );
     tcp_stream
         .write_all(http_request.as_bytes())

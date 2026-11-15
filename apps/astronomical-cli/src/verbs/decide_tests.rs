@@ -4,22 +4,27 @@
 use astronomical_decision_contract::DecisionFailure;
 use astronomical_ipc_protocol::DaemonResponse;
 
-use super::{DecideError, write_decisions_outcome};
+use astronomical_decision_contract::system_one_response;
+
+use super::{DecideError, decisions_answered, write_json_document};
 
 #[test]
 fn should_print_a_completed_frame_as_one_json_line() {
     let mut stdout = Vec::new();
 
-    write_decisions_outcome(
-        DaemonResponse::DecisionsCompleted {
-            model: "test/local-decider".to_owned(),
-            question_outcomes: Vec::new(),
-            input_token_count: 12,
-            elapsed_millis: 3,
-        },
-        &mut stdout,
-    )
-    .expect("a completed frame should print");
+    let answered = decisions_answered(DaemonResponse::DecisionsCompleted {
+        model: "test/local-decider".to_owned(),
+        question_outcomes: Vec::new(),
+        input_token_count: 12,
+        elapsed_millis: 3,
+    })
+    .expect("a completed frame carries answers");
+    let answers_document = system_one_response(
+        &answered.model,
+        &answered.question_outcomes,
+        answered.input_token_count,
+    );
+    write_json_document(&mut stdout, &answers_document).expect("the document should print");
 
     let printed_text = String::from_utf8(stdout).expect("the document should be UTF-8");
     assert!(printed_text.ends_with('\n'));
@@ -32,35 +37,28 @@ fn should_print_a_completed_frame_as_one_json_line() {
 
 #[test]
 fn should_surface_a_failed_frame_with_the_models_reason() {
-    let mut stdout = Vec::new();
-
-    let write_outcome = write_decisions_outcome(
-        DaemonResponse::DecisionsFailed {
-            reason: DecisionFailure::InvalidRequest {
-                reason: "a choice question needs at least two options".to_owned(),
-            },
+    let answer_outcome = decisions_answered(DaemonResponse::DecisionsFailed {
+        reason: DecisionFailure::InvalidRequest {
+            reason: "a choice question needs at least two options".to_owned(),
         },
-        &mut stdout,
-    );
+    });
 
-    let decide_error = write_outcome.expect_err("a failed frame must be an error");
+    let Err(decide_error) = answer_outcome else {
+        panic!("a failed frame must be an error");
+    };
     assert!(
         decide_error
             .to_string()
             .contains("a choice question needs at least two options")
     );
-    assert!(stdout.is_empty(), "a failure must print nothing on stdout");
 }
 
 #[test]
 fn should_treat_an_unrelated_frame_as_a_daemon_that_stopped_responding() {
-    let mut stdout = Vec::new();
-
-    let write_outcome =
-        write_decisions_outcome(DaemonResponse::DownloadStatus { job: None }, &mut stdout);
+    let answer_outcome = decisions_answered(DaemonResponse::DownloadStatus { job: None });
 
     assert!(matches!(
-        write_outcome,
+        answer_outcome,
         Err(DecideError::DaemonStoppedResponding)
     ));
 }

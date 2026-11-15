@@ -16,6 +16,7 @@ fn outcome(question_name: &str, answer: DecisionAnswer) -> QuestionOutcome {
             option_token_cap: None,
             distinguishable_option_count: 2,
         },
+        head_inputs: None,
     }
 }
 

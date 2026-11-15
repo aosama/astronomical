@@ -18,6 +18,8 @@ use std::os::unix::process::CommandExt;
 
 #[path = "main/file_output_verbs.rs"]
 mod file_output_verbs;
+#[path = "main/model_building_verbs.rs"]
+mod model_building_verbs;
 
 fn main() -> ExitCode {
     let process_arguments = env::args_os().collect::<Vec<_>>();
@@ -52,7 +54,9 @@ fn main() -> ExitCode {
         Ok(CliCommand::Status) => run_status_verb(),
         Ok(CliCommand::Doctor) => run_doctor_verb(),
         Ok(CliCommand::Quantize(quantize_command)) => run_quantize_verb(quantize_command),
-        Ok(CliCommand::Vision(vision_command)) => run_vision_verb(&vision_command),
+        Ok(model_building_command @ (CliCommand::Vision(_) | CliCommand::Decision(_))) => {
+            model_building_verbs::run_model_building_verb(&model_building_command)
+        }
         Ok(
             disk_models_command @ (CliCommand::ModelPrograms | CliCommand::ModelConvertAtlas(_)),
         ) => run_disk_models_command(&disk_models_command),
