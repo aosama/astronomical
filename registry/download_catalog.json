@@ -307,24 +307,6 @@
             "upstream_license": "MIT"
         },
         {
-            "huggingface_id": "ornith-ai/Ornith-1.5-35B-A3B-MLX-6bit",
-            "revision": "585b7867b0517980293ece857b26d64e84491352",
-            "summary": "The heavy thinker for coding, long writing and complex reasoning.",
-            "family": "qwen3_5",
-            "approximate_size_bytes": 28190535198,
-            "approximate_memory_bytes": 29313151686,
-            "role": "coding",
-            "public": true,
-            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents, and runs comfortably on more Macs thanks to its lighter compression.",
-            "capabilities": {
-                "supports_reasoning": true,
-                "supports_tool_calls": true,
-                "context_window": 262144
-            },
-            "quantization_label": "6-bit affine (group 64)",
-            "upstream_license": "MIT"
-        },
-        {
             "huggingface_id": "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e",
             "revision": "e96662f04124748aed20b2a2e768f75997f136ca",
             "summary": "Built for code. Strong at finding and fixing bugs in real projects.",
@@ -382,26 +364,6 @@
             },
             "quantization_label": "MTPLX dynamic 4-bit (affine, group 32)",
             "upstream_license": "Apache-2.0"
-        },
-        {
-            "huggingface_id": "ornith-ai/Ornith-1.5-35B-A3B-MLX-8bit",
-            "revision": "02440c39bdf7365c494a7f55f2a8b104ba87562f",
-            "summary": "The heavy thinker for coding, long writing and complex reasoning.",
-            "family": "qwen3_5",
-            "approximate_size_bytes": 36850140696,
-            "approximate_memory_bytes": 38010460428,
-            "minimum_memory_bytes": 4484842240,
-            "role": "coding",
-            "public": true,
-            "retiring": true,
-            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents. This is the highest-precision MLX build of the 35B model, favoring quality over fitting smaller Macs.",
-            "capabilities": {
-                "supports_reasoning": true,
-                "supports_tool_calls": true,
-                "context_window": 262144
-            },
-            "quantization_label": "8-bit affine (group 64)",
-            "upstream_license": "MIT"
         },
         {
             "huggingface_id": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
