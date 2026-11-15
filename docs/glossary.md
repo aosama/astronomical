@@ -78,8 +78,8 @@ The `astro_expert_cache` is always the remainder. Whatever the other accounts ne
 | `sccache` | The compiler cache tool of that name, and what it stores | Mozilla's sccache | Storage and CI |
 
 - **Small in-process memos** need no table entry, but their name says what they hold, such as `vision_padding_zero_cache` or `safetensors_header_cache`. A memo may also be called a memo.
-- **Names other projects define** keep their spelling: MLX's `set_cache_limit`, `clear_cache` and `get_cache_memory`; OpenAI's `cached_tokens`; Anthropic's `cache_read_input_tokens`, `cache_creation_input_tokens` and `cache_control`; HTTP's `Cache-Control`; OptiQ's and diffusers' `kv_cache`. Where Astronomical's code calls them, it wraps or imports them under the formal name.
-- **config.json** leaves out the `astro_` prefix, because the whole file is Astronomical's: the `astro_ssd_prompt_cache` settings are the `ssd_prompt_cache` section. Everything else, including IPC, REST and logs, carries the full name.
+- **Names other projects define** keep their spelling: MLX's `set_cache_limit`, `clear_cache` and `get_cache_memory`; OpenAI's `cached_tokens` and its request fields `prompt_cache_key`, `prompt_cache_options` and `prompt_cache_retention`; Anthropic's `cache_read_input_tokens`, `cache_creation_input_tokens` and `cache_control`; HTTP's `Cache-Control`; OptiQ's and diffusers' `kv_cache`. Where Astronomical's code calls them, it wraps or imports them under the formal name.
+- **config.json** leaves out the `astro_` prefix, because the whole file is Astronomical's: the `astro_ssd_prompt_cache` settings are the `ssd_prompt_cache` section. Everything else, including IPC, Astronomical's own REST fields and logs, carries the full name; a field of the OpenAI or Anthropic request formats is never renamed, because clients that send it would be refused.
 - **Folders on disk** keep the names they were created with, so an update never orphans what a person already has.
 - **"Cached"** as an adjective is replaced by what it means: "held in the `astro_expert_cache`", "restored from the `astro_ssd_prompt_cache`", or "memoized".
 

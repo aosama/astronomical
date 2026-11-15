@@ -40,8 +40,13 @@ pub struct OpenAiResponsesRequest {
     user: Option<String>,
     #[serde(default)]
     safety_identifier: Option<String>,
+    /// OpenAI's own request field names, kept exactly as OpenAI spells them:
+    /// clients such as GitHub Copilot send `prompt_cache_key` on every
+    /// request, and any other spelling makes them fail as an unknown field.
+    /// The key is accepted and not used; `astro_ssd_prompt_cache` matches
+    /// prompts by their content instead.
     #[serde(default)]
-    astro_ssd_prompt_cache_key: Option<String>,
+    prompt_cache_key: Option<String>,
     #[serde(default)]
     previous_response_id: Option<String>,
     #[serde(default)]
@@ -55,9 +60,9 @@ pub struct OpenAiResponsesRequest {
     #[serde(default)]
     prompt: Option<Value>,
     #[serde(default)]
-    astro_ssd_prompt_cache_options: Option<Value>,
+    prompt_cache_options: Option<Value>,
     #[serde(default)]
-    astro_ssd_prompt_cache_retention: Option<String>,
+    prompt_cache_retention: Option<String>,
     #[serde(default)]
     reasoning: Option<ReasoningRequestObject>,
     /// OpenAI `reasoning_effort` level name; resolved through the shared
@@ -345,12 +350,12 @@ fn validate_compatibility_fields(
         ("moderation", request.moderation.is_some()),
         ("prompt", request.prompt.is_some()),
         (
-            "astro_ssd_prompt_cache_options",
-            request.astro_ssd_prompt_cache_options.is_some(),
+            "prompt_cache_options",
+            request.prompt_cache_options.is_some(),
         ),
         (
-            "astro_ssd_prompt_cache_retention",
-            request.astro_ssd_prompt_cache_retention.is_some(),
+            "prompt_cache_retention",
+            request.prompt_cache_retention.is_some(),
         ),
     ] {
         if is_present {
@@ -438,3 +443,6 @@ fn validate_sampling_parameter(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod prompt_cache_fields;
