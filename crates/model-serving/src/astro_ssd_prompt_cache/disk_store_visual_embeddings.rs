@@ -8,7 +8,7 @@ use super::disk_store::AstroSsdPromptCacheDiskStore;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
     AstroSsdPromptCacheFileKind, map_safetensors_writer_error, open_without_following_symlinks,
-    read_file_size_bytes, remove_cache_owned_file_or_confirm_absent,
+    read_file_size_bytes, remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent,
 };
 use super::disk_store_index::TrackedAstroSsdPromptCacheFile;
 use super::disk_store_scan;
@@ -117,7 +117,9 @@ impl AstroSsdPromptCacheDiskStore {
         ) {
             // Corrupt visual embedding: delete first (NotFound counts as
             // already absent), then untrack only after successful deletion.
-            remove_cache_owned_file_or_confirm_absent(&visual_embedding_file_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
+                &visual_embedding_file_path,
+            )?;
             self.untrack_file_and_subtract_global_accounting(
                 AstroSsdPromptCacheFileKind::VisualEmbedding,
                 visual_embedding_hash,
@@ -190,7 +192,7 @@ fn save_visual_embedding_safetensors_file(
     );
     let file_path = visual_embeddings_directory.join(&file_name);
     let temp_file_path = visual_embeddings_directory.join(format!("{file_name}.tmp"));
-    remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temp_file_path)?;
     let named_array = ("visual_embeddings", visual_embeddings);
     let encoded_image_sha256_text =
         astronomical_lowercase_hex::encode_lowercase_hex(&encoded_image_sha256);
@@ -217,12 +219,12 @@ fn save_visual_embedding_safetensors_file(
     if let Err(save_error) =
         runtime.save_safetensors(temporary_file, &[named_array], &metadata_entries)
     {
-        remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
+        remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temp_file_path)?;
         return Err(map_safetensors_writer_error(save_error));
     }
     fs::rename(&temp_file_path, &file_path).map_err(|rename_error| {
         let temporary_file_cleanup_result =
-            remove_cache_owned_file_or_confirm_absent(&temp_file_path);
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temp_file_path);
         if let Err(temporary_file_cleanup_error) = temporary_file_cleanup_result {
             return temporary_file_cleanup_error;
         }

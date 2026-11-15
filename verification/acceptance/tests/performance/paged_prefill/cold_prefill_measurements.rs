@@ -40,7 +40,7 @@ struct StreamingMeasurement {
     first_output_at: Instant,
     response_completed_at: Instant,
     completion_token_count: u64,
-    cached_token_count: u64,
+    astro_ssd_prompt_cache_token_count: u64,
     generated_text: String,
     maximum_prefill_mlx_active_memory_bytes: Option<u64>,
     maximum_prefill_mlx_buffer_cache_bytes: Option<u64>,
@@ -192,7 +192,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
     assert!(streaming_measurement.prompt_token_count > 0);
     assert!(streaming_measurement.completion_token_count > 0);
     assert_eq!(
-        streaming_measurement.cached_token_count, 0,
+        streaming_measurement.astro_ssd_prompt_cache_token_count, 0,
         "the performance test must measure model prefill rather than SSD cache restoration"
     );
 
@@ -220,7 +220,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
 
     let metrics_report = json!({
         "completion_tokens": streaming_measurement.completion_token_count,
-        "cached_tokens": streaming_measurement.cached_token_count,
+        "cached_tokens": streaming_measurement.astro_ssd_prompt_cache_token_count,
         "generation_seconds": generation_duration.as_secs_f64(),
         "generation_tokens_per_second": generation_tokens_per_second,
         "machine_mlx_memory_ceiling_bytes": machine_mlx_memory_ceiling_bytes,
@@ -337,7 +337,7 @@ async fn measure_worker_summarization(
     let mut generated_text = String::new();
     let mut prompt_token_count: Option<u64> = None;
     let mut completion_token_count: Option<u64> = None;
-    let mut cached_token_count: Option<u64> = None;
+    let mut astro_ssd_prompt_cache_token_count: Option<u64> = None;
     let mut maximum_prefill_mlx_active_memory_bytes: Option<u64> = None;
     let mut maximum_prefill_mlx_buffer_cache_bytes: Option<u64> = None;
     let mut maximum_prefill_mlx_peak_memory_bytes: Option<u64> = None;
@@ -406,12 +406,13 @@ async fn measure_worker_summarization(
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count: completed_prompt_token_count,
                 generated_token_count,
-                cached_token_count: completed_cached_token_count,
+                astro_ssd_prompt_cache_token_count: completed_astro_ssd_prompt_cache_token_count,
                 ..
             } => {
                 prompt_token_count = Some(u64::from(completed_prompt_token_count));
                 completion_token_count = Some(u64::from(generated_token_count));
-                cached_token_count = Some(u64::from(completed_cached_token_count));
+                astro_ssd_prompt_cache_token_count =
+                    Some(u64::from(completed_astro_ssd_prompt_cache_token_count));
                 break;
             }
             ChatGenerationStreamEvent::Failed { reason } => {
@@ -429,7 +430,7 @@ async fn measure_worker_summarization(
         response_completed_at,
         completion_token_count: completion_token_count
             .expect("the terminal worker event should report completion tokens"),
-        cached_token_count: cached_token_count
+        astro_ssd_prompt_cache_token_count: astro_ssd_prompt_cache_token_count
             .expect("the terminal worker event should report cached prompt tokens"),
         generated_text,
         maximum_prefill_mlx_active_memory_bytes,

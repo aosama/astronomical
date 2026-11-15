@@ -145,7 +145,7 @@ pub(super) fn queue_prefill_first_token(
 ///
 /// The capture's own attribution is swapped in for the call and swapped back
 /// afterwards so the chunk's runtime attribution never records capture work.
-pub(super) fn capture_completed_prefill_cache_block(
+pub(super) fn capture_completed_prefill_astro_ssd_prompt_cache_block(
     model: &PrismHadamardTextModel,
     astro_ssd_prompt_cache: Option<&AstroSsdPromptCacheDiskStore>,
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,
@@ -158,13 +158,14 @@ pub(super) fn capture_completed_prefill_cache_block(
         &mut active_generation.performance_attribution,
         PerformanceAttribution::disabled(),
     );
-    let capture_result = super::super::astro_ssd_prompt_cache::capture_completed_cache_block(
-        &model.runtime,
-        astro_ssd_prompt_cache,
-        active_generation,
-        &slot_layout,
-        &mut capture_attribution,
-    );
+    let capture_result =
+        super::super::astro_ssd_prompt_cache::capture_completed_astro_ssd_prompt_cache_block(
+            &model.runtime,
+            astro_ssd_prompt_cache,
+            active_generation,
+            &slot_layout,
+            &mut capture_attribution,
+        );
     active_generation.performance_attribution = capture_attribution;
     capture_result
 }

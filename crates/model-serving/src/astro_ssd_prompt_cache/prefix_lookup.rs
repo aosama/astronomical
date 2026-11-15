@@ -17,7 +17,7 @@ use super::prefix_lookup_steps::{
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::{AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheModelContract};
 
-/// The exact reason a prompt prefix could not be restored from the persistent prompt cache.
+/// The exact reason a prompt prefix could not be restored from the astro SSD astro SSD prompt cache.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AstroSsdPromptCacheMissReason {
     /// The prompt cannot produce even one safely restorable block.
@@ -178,7 +178,7 @@ pub struct AstroSsdPromptCachePrefixLookupResult {
 }
 
 impl AstroSsdPromptCachePrefixLookupResult {
-    /// Returns the number of prompt tokens that can be restored from the persistent prompt cache.
+    /// Returns the number of prompt tokens that can be restored from the astro SSD astro SSD prompt cache.
     #[must_use]
     pub fn restored_token_count(&self) -> usize {
         self.restored_token_count
@@ -219,14 +219,14 @@ impl AstroSsdPromptCachePrefixLookupResult {
     }
 }
 
-/// Walks a prompt and queries the persistent prompt cache to find the longest prefix.
+/// Walks a prompt and queries the astro SSD astro SSD prompt cache to find the longest prefix.
 pub struct AstroSsdPromptCachePrefixLookup;
 
 impl AstroSsdPromptCachePrefixLookup {
     /// Computes the longest restorable prefix of one prompt.
     ///
     /// The caller supplies separate KV-block and recurrent-snapshot predicates
-    /// to query the persistent prompt cache without coupling this pure-Rust
+    /// to query the astro SSD astro SSD prompt cache without coupling this pure-Rust
     /// layer to MLX or the filesystem.
     /// The result never consumes the final prompt token, so the engine
     /// always has at least one token to feed forward.
@@ -419,7 +419,7 @@ impl AstroSsdPromptCachePrefixLookup {
                 lookup_diagnostics.first_missing_sequence_state_block_index(),
             );
             lookup_diagnostics.record_miss_reason(miss_reason);
-            return cache_miss_lookup_result(prompt_tokens, lookup_diagnostics);
+            return astro_ssd_prompt_cache_miss_lookup_result(prompt_tokens, lookup_diagnostics);
         };
         lookup_diagnostics
             .record_newest_boundary_state_snapshot_block_index(recurrent_snapshot_block_index);
@@ -433,7 +433,7 @@ impl AstroSsdPromptCachePrefixLookup {
     }
 }
 
-pub(super) fn cache_miss_lookup_result(
+pub(super) fn astro_ssd_prompt_cache_miss_lookup_result(
     prompt_tokens: &[u32],
     lookup_diagnostics: AstroSsdPromptCacheLookupDiagnostics,
 ) -> AstroSsdPromptCachePrefixLookupResult {

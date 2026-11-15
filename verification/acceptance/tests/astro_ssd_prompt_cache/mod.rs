@@ -1,4 +1,4 @@
-//! Prompt-cache acceptance: REST restore, append-only follow-up, and cache stats.
+//! Prompt-cache acceptance: REST restore, append-only follow-up, and astro SSD astro SSD prompt cache stats.
 
 #[cfg(feature = "serving-acceptance")]
 mod append_only_rest;

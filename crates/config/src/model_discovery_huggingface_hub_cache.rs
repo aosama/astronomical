@@ -1,13 +1,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// A Hugging Face cache entry resolved to its active snapshot directory.
+/// A Hugging Face hub Hugging Face hub cache entry resolved to its active snapshot directory.
 pub(super) struct HuggingfaceHubCacheEntry {
     pub(super) model_id: String,
     pub(super) snapshot_directory: PathBuf,
 }
 
-/// Resolves one Hugging Face cache entry to its active snapshot directory.
+/// Resolves one Hugging Face hub Hugging Face hub cache entry to its active snapshot directory.
 ///
 /// Prefer the `main` or `master` reference. If neither reference identifies an
 /// existing snapshot, use the most recently modified snapshot as a local-only

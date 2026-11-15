@@ -317,7 +317,8 @@ async fn should_report_an_unavailable_experts_document_before_any_streaming_even
 }
 
 #[tokio::test]
-async fn should_zero_fill_cache_stats_when_no_worker_data_so_the_ui_never_sees_missing_fields() {
+async fn should_zero_fill_astro_ssd_prompt_cache_stats_when_no_worker_data_so_the_ui_never_sees_missing_fields()
+ {
     let application = build_application(ContractScriptedExecutor::ready(
         ready_health_snapshot_with_model(),
     ));
@@ -334,21 +335,42 @@ async fn should_zero_fill_cache_stats_when_no_worker_data_so_the_ui_never_sees_m
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
         .expect("the cache-stats body should be readable");
-    let cache_document: serde_json::Value =
+    let astro_ssd_prompt_cache_document: serde_json::Value =
         serde_json::from_slice(&response_body).expect("the cache-stats body should contain JSON");
 
-    assert_eq!(cache_document["astro_ssd_prompt_cache_hits"], 0);
-    assert_eq!(cache_document["astro_ssd_prompt_cache_misses"], 0);
-    assert_eq!(cache_document["astro_ssd_prompt_cache_tokens_saved"], 0);
-    assert_eq!(cache_document["astro_ssd_prompt_cache_hit_rate"], 0.0);
-    assert_eq!(cache_document["astro_ssd_prompt_cache_total_size_bytes"], 0);
     assert_eq!(
-        cache_document["astro_ssd_prompt_cache_maximum_size_bytes"],
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_hits"],
         0
     );
-    // Every field the Observatory cache panel reads must be present.
-    assert!(cache_document["astro_ssd_prompt_cache_sequence_state_block_count"].is_u64());
-    assert!(cache_document["astro_ssd_prompt_cache_boundary_state_snapshot_count"].is_u64());
+    assert_eq!(
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_misses"],
+        0
+    );
+    assert_eq!(
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_tokens_saved"],
+        0
+    );
+    assert_eq!(
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_hit_rate"],
+        0.0
+    );
+    assert_eq!(
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_total_size_bytes"],
+        0
+    );
+    assert_eq!(
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_maximum_size_bytes"],
+        0
+    );
+    // Every field the Observatory astro SSD astro SSD prompt cache panel reads must be present.
+    assert!(
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_sequence_state_block_count"]
+            .is_u64()
+    );
+    assert!(
+        astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_boundary_state_snapshot_count"]
+            .is_u64()
+    );
 }
 
 #[tokio::test]

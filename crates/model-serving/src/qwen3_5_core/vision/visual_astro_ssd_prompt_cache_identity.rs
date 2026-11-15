@@ -163,7 +163,7 @@ fn canonical_block_causal_input(
     AstroSsdPromptCacheBlockCausalInput::from_canonical_bytes(&canonical_bytes)
 }
 
-/// Visual prompt geometry cannot produce safe per-block cache identity.
+/// Visual prompt geometry cannot produce safe per-block astro SSD astro SSD prompt cache identity.
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError {
     #[error("astro-ssd-prompt-cache block token count must be positive")]

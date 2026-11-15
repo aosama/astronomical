@@ -3,7 +3,7 @@
 //! A configuration activation label is insufficient for persistent state: MLX
 //! promotes each operation from live activation, normalization, affine-scale,
 //! and affine-bias dtypes. This module replays only that type flow, without
-//! evaluating arrays, so cache serialization and memory admission describe the
+//! evaluating arrays, so astro decoder state cache serialization and memory admission describe the
 //! tensors the production graph actually creates.
 //!
 //! The promotion replay itself lives in
@@ -61,7 +61,7 @@ pub(crate) fn derive_astro_decoder_state_cache_layer_dtypes(
 
         // Residual promotion becomes the input dtype for the following MLP and
         // ultimately for the next decoder layer. A single FP32 affine companion
-        // can therefore influence cache state beyond the operation that owns it.
+        // can therefore influence astro decoder state cache state beyond the operation that owns it.
         let attention_residual_dtype =
             promote_floating_dtypes(hidden_state_dtype, attention_output_dtype)?;
         let normalized_attention_dtype = promote_floating_dtypes(
@@ -82,7 +82,7 @@ pub(crate) fn derive_astro_decoder_state_cache_layer_dtypes(
     Ok(astro_decoder_state_cache_layer_dtypes)
 }
 
-/// The cache dtypes one attention layer stores and the dtype it outputs.
+/// The astro decoder state cache dtypes one attention layer stores and the dtype it outputs.
 fn attention_dtypes(
     normalized_input_dtype: mlx_bridge::MlxDtype,
     attention_weights: &Qwen3_5AttentionWeights,

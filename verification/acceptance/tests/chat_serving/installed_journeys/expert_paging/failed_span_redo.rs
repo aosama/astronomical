@@ -23,7 +23,7 @@ pub(super) struct RedoCost {
 
 async fn kept_expert_bytes(qwen3_5_engine: &Qwen3_5StreamingEngine) -> u64 {
     qwen3_5_engine
-        .expert_weight_memory_cache_statistics_for_tests()
+        .astro_expert_cache_statistics_for_tests()
         .await
         .expect("the loaded model should report its astro expert cache")
         .resident_payload_byte_count
@@ -66,7 +66,7 @@ pub(super) async fn redo_cost_since(
     }
 }
 
-/// One failed span is one step over the limit, redone once, and the cache gives back
+/// One failed span is one step over the limit, redone once, and the astro expert cache gives back
 /// only the room the redo leased: at least four fifths of what it kept stays.
 pub(super) fn assert_one_span_was_redone_cheaply(redo_cost: &RedoCost, depth_name: &str) {
     assert_eq!(

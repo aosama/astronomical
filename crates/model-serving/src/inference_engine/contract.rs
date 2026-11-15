@@ -57,7 +57,7 @@ pub trait InferenceEngine {
 
     /// Collects persistent astro-ssd-prompt-cache observability stats for IPC emission.
     ///
-    /// Returns `Ok(None)` when the engine has no persistent prompt cache. The
+    /// Returns `Ok(None)` when the engine has no astro SSD astro SSD prompt cache. The
     /// worker emits `WorkerEvent::AstroSsdPromptCacheStats` only when `Some`.
     /// The default implementation returns `Ok(None)` so engines without persistent
     /// prompt storage incur no cost.
@@ -69,8 +69,8 @@ pub trait InferenceEngine {
 
     /// Clears persistent astro-ssd-prompt-cache storage on the engine's owning context.
     ///
-    /// `Ok(None)` means this engine has no open cache store, allowing the worker
-    /// to fall back to its startup-configured global cache root.
+    /// `Ok(None)` means this engine has no open astro SSD astro SSD prompt cache store, allowing the worker
+    /// to fall back to its startup-configured global astro SSD astro SSD prompt cache root.
     fn clear_astro_ssd_prompt_cache(
         &mut self,
         _model_id: Option<String>,
@@ -194,7 +194,7 @@ pub trait MlxInferenceExecution: 'static {
 /// Engine-side metadata reported when one generation request starts.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EngineGenerationStart {
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_token_count: u32,
     restored_prompt_prefix_token_count: u32,
     expert_memory_mode: Option<ExpertMemoryMode>,
     prompt_processing_phase: Option<WorkerPromptProcessingPhase>,
@@ -202,12 +202,12 @@ pub struct EngineGenerationStart {
 }
 
 impl EngineGenerationStart {
-    /// Builds start metadata with the prompt tokens restored from persistent cache.
+    /// Builds start metadata with the prompt tokens restored from astro SSD astro SSD prompt cache.
     #[must_use]
-    pub const fn new(cached_token_count: u32) -> Self {
+    pub const fn new(astro_ssd_prompt_cache_token_count: u32) -> Self {
         Self {
-            cached_token_count,
-            restored_prompt_prefix_token_count: cached_token_count,
+            astro_ssd_prompt_cache_token_count,
+            restored_prompt_prefix_token_count: astro_ssd_prompt_cache_token_count,
             expert_memory_mode: None,
             prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
             astro_ssd_prompt_cache_diagnostics: None,
@@ -216,12 +216,12 @@ impl EngineGenerationStart {
 
     #[must_use]
     pub const fn with_expert_memory_mode(
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_token_count: u32,
         expert_memory_mode: ExpertMemoryMode,
     ) -> Self {
         Self {
-            cached_token_count,
-            restored_prompt_prefix_token_count: cached_token_count,
+            astro_ssd_prompt_cache_token_count,
+            restored_prompt_prefix_token_count: astro_ssd_prompt_cache_token_count,
             expert_memory_mode: Some(expert_memory_mode),
             prompt_processing_phase: Some(WorkerPromptProcessingPhase::Target),
             astro_ssd_prompt_cache_diagnostics: None,
@@ -238,10 +238,10 @@ impl EngineGenerationStart {
         self
     }
 
-    /// Returns the number of prompt tokens restored from persistent cache.
+    /// Returns the number of prompt tokens restored from astro SSD astro SSD prompt cache.
     #[must_use]
-    pub const fn cached_token_count(&self) -> u32 {
-        self.cached_token_count
+    pub const fn astro_ssd_prompt_cache_token_count(&self) -> u32 {
+        self.astro_ssd_prompt_cache_token_count
     }
 
     /// Returns the logical prompt prefix already represented by restored engine state.

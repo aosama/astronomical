@@ -11,9 +11,9 @@ use astronomical_ipc_protocol::{
 #[test]
 fn should_create_generation_performance_record_with_computed_throughput() {
     let (prefill_tps, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 100_000, /* cached_token_count */ 50_000,
-        /* generated_token_count */ 500, /* prefill_elapsed_millis */ 1_000,
-        /* generation_elapsed_millis */ 5_000,
+        /* prompt_token_count */ 100_000,
+        /* astro_ssd_prompt_cache_token_count */ 50_000, /* generated_token_count */ 500,
+        /* prefill_elapsed_millis */ 1_000, /* generation_elapsed_millis */ 5_000,
     );
     // 50,000 uncached tokens / 1.0 seconds = 50,000 tok/s
     assert_eq!(prefill_tps, Some(50_000.0));
@@ -25,7 +25,7 @@ fn should_create_generation_performance_record_with_computed_throughput() {
 fn should_return_none_for_prefill_tok_per_second_when_fully_cached() {
     // When all tokens are cached (0 ms prefill elapsed), prefill TPS is None.
     let (prefill_tps, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 10_000, /* cached_token_count */ 10_000,
+        /* prompt_token_count */ 10_000, /* astro_ssd_prompt_cache_token_count */ 10_000,
         /* generated_token_count */ 200, /* prefill_elapsed_millis */ 0,
         /* generation_elapsed_millis */ 2_000,
     );
@@ -39,7 +39,7 @@ fn should_return_none_for_prefill_tok_per_second_when_fully_cached() {
 #[test]
 fn should_return_none_for_generation_tok_per_second_when_zero_elapsed() {
     let (prefill_tps, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 5_000, /* cached_token_count */ 0,
+        /* prompt_token_count */ 5_000, /* astro_ssd_prompt_cache_token_count */ 0,
         /* generated_token_count */ 1, /* prefill_elapsed_millis */ 500,
         /* generation_elapsed_millis */ 0,
     );
@@ -52,11 +52,11 @@ fn should_return_none_for_generation_tok_per_second_when_zero_elapsed() {
 
 #[test]
 fn should_return_none_for_prefill_tps_when_uncached_tokens_is_zero() {
-    // If prompt_token_count == cached_token_count, uncached = 0, so TPS is None
+    // If prompt_token_count == astro_ssd_prompt_cache_token_count, uncached = 0, so TPS is None
     // even if prefill_elapsed_millis > 0 (which shouldn't happen in practice, but
     // the math should be robust).
     let (prefill_tps, _) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 1_000, /* cached_token_count */ 1_000,
+        /* prompt_token_count */ 1_000, /* astro_ssd_prompt_cache_token_count */ 1_000,
         /* generated_token_count */ 100, /* prefill_elapsed_millis */ 500,
         /* generation_elapsed_millis */ 1_000,
     );
@@ -69,7 +69,7 @@ fn should_return_none_for_prefill_tps_when_uncached_tokens_is_zero() {
 #[test]
 fn should_return_none_for_generation_tps_when_token_count_is_zero() {
     let (_, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 1_000, /* cached_token_count */ 0,
+        /* prompt_token_count */ 1_000, /* astro_ssd_prompt_cache_token_count */ 0,
         /* generated_token_count */ 0, /* prefill_elapsed_millis */ 100,
         /* generation_elapsed_millis */ 1_000,
     );
@@ -88,7 +88,7 @@ fn sample_generation_performance_record() -> GenerationPerformanceRecord {
         request_id: 42,
         model_id: "test-model".to_owned(),
         prompt_token_count: 10_000,
-        cached_token_count: 5_000,
+        astro_ssd_prompt_cache_token_count: 5_000,
         generated_token_count: 200,
         completion_reason: "end_of_sequence".to_owned(),
         prefill_elapsed_millis: 1_000,
@@ -167,7 +167,7 @@ fn should_open_and_append_to_performance_log() {
     assert_eq!(parsed["request_id"], 42);
     assert_eq!(parsed["model_id"], "test-model");
     assert_eq!(parsed["prompt_token_count"], 10_000);
-    assert_eq!(parsed["cached_token_count"], 5_000);
+    assert_eq!(parsed["astro_ssd_prompt_cache_token_count"], 5_000);
     assert_eq!(parsed["generated_token_count"], 200);
     assert_eq!(parsed["completion_reason"], "end_of_sequence");
     assert_eq!(parsed["prefill_elapsed_millis"], 1_000);
@@ -216,7 +216,7 @@ fn should_append_multiple_records_to_performance_log() {
         request_id: 1,
         model_id: "model-a".to_owned(),
         prompt_token_count: 1_000,
-        cached_token_count: 0,
+        astro_ssd_prompt_cache_token_count: 0,
         generated_token_count: 50,
         completion_reason: "end_of_sequence".to_owned(),
         prefill_elapsed_millis: 200,
@@ -240,7 +240,7 @@ fn should_append_multiple_records_to_performance_log() {
         request_id: 2,
         model_id: "model-a".to_owned(),
         prompt_token_count: 50_000,
-        cached_token_count: 49_000,
+        astro_ssd_prompt_cache_token_count: 49_000,
         generated_token_count: 500,
         completion_reason: "tool_calls".to_owned(),
         prefill_elapsed_millis: 100,
@@ -286,7 +286,7 @@ fn should_serialize_null_for_optional_fields() {
         request_id: 1,
         model_id: "model-a".to_owned(),
         prompt_token_count: 1_000,
-        cached_token_count: 1_000,
+        astro_ssd_prompt_cache_token_count: 1_000,
         generated_token_count: 50,
         completion_reason: "end_of_sequence".to_owned(),
         prefill_elapsed_millis: 0,

@@ -298,7 +298,7 @@ pub(crate) fn publish_mlx_memory_limit_rejection(
 pub(crate) fn record_serving_session(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     prompt_token_count: u32,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_token_count: u32,
     prefill_tok_per_second: Option<f64>,
     generation_tok_per_second: Option<f64>,
 ) {
@@ -307,7 +307,7 @@ pub(crate) fn record_serving_session(
             .serving_session
             .record_completed_request(
                 prompt_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 prefill_tok_per_second,
                 generation_tok_per_second,
             );

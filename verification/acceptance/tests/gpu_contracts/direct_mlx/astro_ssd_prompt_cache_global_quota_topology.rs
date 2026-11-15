@@ -12,7 +12,7 @@ use astronomical_model_serving::{
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[tokio::test]
 async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_match() {
@@ -22,16 +22,18 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
     let runtime = runtime_with_shared_limits();
     let measurement_directory =
         tempfile::tempdir().expect("the test should create a measurement directory");
-    let measurement_cache =
-        open_astro_ssd_prompt_cache_disk_store(&measurement_directory, LARGE_CACHE_LIMIT_BYTES)
-            .expect("the measurement cache should open");
+    let measurement_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
+        &measurement_directory,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
+    )
+    .expect("the measurement cache should open");
     let parent_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = parent_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
         .expect("the child identity should resolve");
     let sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
-    measurement_cache
+    measurement_astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &parent_block_key,
@@ -40,8 +42,8 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
             &boundary_state_tensors,
         )
         .expect("the measurement block should publish");
-    let measured_block_size_bytes = measurement_cache.total_size_bytes();
-    drop(measurement_cache);
+    let measured_block_size_bytes = measurement_astro_ssd_prompt_cache.total_size_bytes();
+    drop(measurement_astro_ssd_prompt_cache);
 
     let two_block_quota_bytes = measured_block_size_bytes
         .checked_mul(2)
@@ -49,12 +51,12 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
         .expect("the two-block quota should fit");
     let global_astro_ssd_prompt_cache_root =
         tempfile::tempdir().expect("the test should create a global cache root");
-    let active_cache = open_astro_ssd_prompt_cache_disk_store(
+    let active_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &global_astro_ssd_prompt_cache_root,
         two_block_quota_bytes,
     )
     .expect("the active cache should open");
-    active_cache
+    active_astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &parent_block_key,
@@ -90,7 +92,7 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
         .set_times(std::fs::FileTimes::new().set_modified(UNIX_EPOCH))
         .expect("the foreign block should become the oldest candidate");
 
-    active_cache
+    active_astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &child_block_key,

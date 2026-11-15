@@ -105,14 +105,17 @@ mod retained_expert_count_tests {
     use super::super::AstroExpertCache;
 
     #[test]
-    fn should_report_zero_retained_experts_when_the_cache_has_no_layers() {
-        let warm_cache = AstroExpertCache::new(0);
-        assert!(warm_cache.retained_expert_counts().is_empty());
+    fn should_report_zero_retained_experts_when_the_astro_expert_cache_has_no_layers() {
+        let warm_astro_expert_cache = AstroExpertCache::new(0);
+        assert!(warm_astro_expert_cache.retained_expert_counts().is_empty());
     }
 
     #[test]
     fn should_report_a_zero_for_every_layer_that_has_no_warm_table() {
-        let warm_cache = AstroExpertCache::new(3);
-        assert_eq!(warm_cache.retained_expert_counts(), vec![0, 0, 0]);
+        let warm_astro_expert_cache = AstroExpertCache::new(3);
+        assert_eq!(
+            warm_astro_expert_cache.retained_expert_counts(),
+            vec![0, 0, 0]
+        );
     }
 }

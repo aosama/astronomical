@@ -26,7 +26,7 @@ const ROMEO_AND_JULIET: &str = include_str!(
 );
 
 #[tokio::test]
-async fn should_clear_the_entire_ssd_cache_while_the_worker_is_idle() {
+async fn should_clear_the_entire_astro_ssd_prompt_cache_while_the_worker_is_idle() {
     run_bounded_test(async {
         let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
         eprintln!("[cache-clear-rest] deleting the global cache while idle");
@@ -39,7 +39,7 @@ async fn should_clear_the_entire_ssd_cache_while_the_worker_is_idle() {
         assert_eq!(clear_document["model_id"], serde_json::Value::Null);
         assert_eq!(clear_document["blocks_removed"], 3);
         assert_eq!(clear_document["bytes_freed"], 4_096);
-        wait_for_zeroed_cache_stats(&test_context.application).await;
+        wait_for_zeroed_astro_ssd_prompt_cache_stats(&test_context.application).await;
 
         test_context.shutdown().await;
     })
@@ -66,7 +66,7 @@ async fn should_clear_one_model_astro_ssd_prompt_cache_by_its_model_id() {
 }
 
 #[tokio::test]
-async fn should_queue_only_the_newest_cache_clear_until_generation_finishes() {
+async fn should_queue_only_the_newest_astro_ssd_prompt_cache_clear_until_generation_finishes() {
     run_bounded_test(async {
         let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
         eprintln!("[cache-clear-rest] starting the Romeo and Juliet generation journey");
@@ -104,7 +104,7 @@ async fn should_queue_only_the_newest_cache_clear_until_generation_finishes() {
 }
 
 #[tokio::test]
-async fn should_wait_for_a_queued_generation_before_applying_the_cache_clear() {
+async fn should_wait_for_a_queued_generation_before_applying_the_astro_ssd_prompt_cache_clear() {
     run_bounded_test(async {
         let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
         let mut first_generation_events = test_context
@@ -142,7 +142,7 @@ async fn should_wait_for_a_queued_generation_before_applying_the_cache_clear() {
 }
 
 #[tokio::test]
-async fn should_reject_a_model_id_that_can_escape_the_cache_root() {
+async fn should_reject_a_model_id_that_can_escape_the_astro_ssd_prompt_cache_root() {
     run_bounded_test(async {
         let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
 
@@ -163,7 +163,7 @@ async fn should_reject_a_model_id_that_can_escape_the_cache_root() {
 }
 
 #[tokio::test]
-async fn should_not_offer_cache_clear_without_live_worker_control() {
+async fn should_not_offer_astro_ssd_prompt_cache_clear_without_live_worker_control() {
     run_bounded_test(async {
         let application = build_application(WorkerHandle::unavailable());
 
@@ -427,7 +427,7 @@ async fn wait_for_pending_clear_to_finish(application: &axum::Router) {
     }
 }
 
-async fn wait_for_zeroed_cache_stats(application: &axum::Router) {
+async fn wait_for_zeroed_astro_ssd_prompt_cache_stats(application: &axum::Router) {
     let stats_deadline = Instant::now() + Duration::from_secs(2);
     loop {
         let astro_ssd_prompt_cache_stats = get_astro_ssd_prompt_cache_stats(application).await;

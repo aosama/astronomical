@@ -73,7 +73,7 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
             prompt_token_count: 1,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::ToolCalls,
         }
     );
@@ -96,7 +96,7 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::Cancelled,
         }
     );
@@ -140,7 +140,7 @@ fn parallel_tool_call_script_tokens() -> Vec<GeneratedToken> {
 async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_parallel_tool_calls(),
-        ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count_and_generated_tokens(
             0,
             parallel_tool_call_script_tokens(),
         ),
@@ -230,7 +230,7 @@ async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
             prompt_token_count: 1,
             generated_token_count: 3,
             reasoning_token_count: 1,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::ToolCalls,
         }
     );
@@ -372,10 +372,10 @@ async fn should_ignore_a_stale_cancellation_after_request_completion() {
 }
 
 #[tokio::test]
-async fn should_report_engine_cached_token_count_in_completion() {
+async fn should_report_engine_astro_ssd_prompt_cache_token_count_in_completion() {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::new(),
-        ScriptedChatEngine::with_cached_token_count(2_048),
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count(2_048),
     );
     let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
     let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
@@ -404,7 +404,7 @@ async fn should_report_engine_cached_token_count_in_completion() {
             prompt_token_count: 1,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            cached_token_count: 2_048,
+            astro_ssd_prompt_cache_token_count: 2_048,
             reason: ChatGenerationCompletionReason::ToolCalls,
         }
     );

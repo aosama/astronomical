@@ -1,12 +1,12 @@
-//! Slot-insert planning for the warm-table cache: the free functions the
-//! routed-expert insert sequences. They take the table (or the cache, for
+//! Slot-insert planning for the warm-table astro expert cache: the free functions the
+//! routed-expert insert sequences. They take the table (or the astro expert cache, for
 //! the immutable pre-borrow snapshot) and return plans, counts, and grown
 //! payloads; every cache-wide counter write stays with the caller that owns
 //! the mutable table borrow.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::decode_cache_policy::{
+use super::decode_astro_expert_cache_policy::{
     DecodeExpertSlotState, MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP,
     available_probationary_slot_count,
 };
@@ -22,11 +22,11 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpert
 /// borrow: the layer's prefetched-but-unconsumed experts and the incoming
 /// set's historically hot members.
 pub(super) fn snapshot_insert_planning_inputs(
-    cache: &AstroExpertCache,
+    astro_expert_cache: &AstroExpertCache,
     layer_index: usize,
     expert_ids: &[usize],
 ) -> (Vec<usize>, Vec<usize>) {
-    let layer_prefetched_unconsumed_expert_ids: Vec<usize> = cache
+    let layer_prefetched_unconsumed_expert_ids: Vec<usize> = astro_expert_cache
         .prefetched_unconsumed_experts
         .iter()
         .filter(|(prefetched_layer_index, _)| *prefetched_layer_index == layer_index)
@@ -36,7 +36,8 @@ pub(super) fn snapshot_insert_planning_inputs(
         .iter()
         .copied()
         .filter(|expert_id| {
-            cache.historical_demand_count(layer_index, *expert_id) >= HISTORICAL_HOT_DEMAND_COUNT
+            astro_expert_cache.historical_demand_count(layer_index, *expert_id)
+                >= HISTORICAL_HOT_DEMAND_COUNT
         })
         .collect();
     (
@@ -67,7 +68,7 @@ pub(super) fn plan_new_expert_rows(
     new_expert_rows
 }
 
-/// Grows the table within the cache budget to cover the free-slot deficit.
+/// Grows the table within the astro expert cache budget to cover the free-slot deficit.
 /// The returned free-slot list is the caller's own list when growth was
 /// refused, and a recomputed list when the table tensor grew; the grown
 /// payload carries back to the caller so the cache-wide accounting moves
@@ -77,7 +78,7 @@ pub(super) fn grow_free_slots_within_budget(
     runtime: &MlxRuntime,
     table: &mut ExpertSlotTable,
     resident_payload_bytes: u64,
-    cache_ceiling_bytes: u64,
+    astro_expert_cache_ceiling_bytes: u64,
     warm_slot_count: usize,
     free_slot_deficit: usize,
     free_slots: Vec<usize>,
@@ -86,7 +87,7 @@ pub(super) fn grow_free_slots_within_budget(
         runtime,
         table,
         resident_payload_bytes,
-        cache_ceiling_bytes,
+        astro_expert_cache_ceiling_bytes,
         warm_slot_count,
         free_slot_deficit,
     )?;
@@ -255,7 +256,7 @@ pub(super) fn grow_table_within_budget(
     runtime: &MlxRuntime,
     table: &mut ExpertSlotTable,
     resident_payload_bytes: u64,
-    cache_ceiling_bytes: u64,
+    astro_expert_cache_ceiling_bytes: u64,
     warm_slot_count: usize,
     free_slot_deficit: usize,
 ) -> Result<Option<u64>, MlxRuntimeError> {
@@ -274,7 +275,7 @@ pub(super) fn grow_table_within_budget(
         .saturating_mul(u64::try_from(growth_target_slot_count - table.slot_count()).unwrap_or(0));
     if estimated_growth_payload_bytes > 0
         && resident_payload_bytes.saturating_add(estimated_growth_payload_bytes)
-            > cache_ceiling_bytes
+            > astro_expert_cache_ceiling_bytes
     {
         return Ok(None);
     }
@@ -305,7 +306,7 @@ pub(super) fn grow_table_within_budget(
     let projected_resident_payload_bytes =
         resident_payload_bytes.saturating_add(measured_growth_payload_bytes);
     if measured_growth_payload_bytes > estimated_growth_payload_bytes
-        && projected_resident_payload_bytes > cache_ceiling_bytes
+        && projected_resident_payload_bytes > astro_expert_cache_ceiling_bytes
     {
         // The measured growth exceeded the pre-allocation estimate and no
         // longer fits. The table itself already grew, so keep the honest
@@ -314,7 +315,7 @@ pub(super) fn grow_table_within_budget(
             measured_growth_payload_bytes,
             estimated_growth_payload_bytes,
             projected_resident_payload_bytes,
-            cache_ceiling_bytes,
+            astro_expert_cache_ceiling_bytes,
             "warm-table growth measured above the budget estimate"
         );
     }

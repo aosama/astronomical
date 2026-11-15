@@ -10,7 +10,7 @@
 //!
 //! The streamed_dense model loads under the machine's own limit with the
 //! kept count pinned, prefills layer by layer, and decodes greedily. A cold
-//! file cache keeps the weight files out of the macOS file cache throughout,
+//! macOS file cache keeps the weight files out of the macOS file cache throughout,
 //! so reads cost what they cost on a Mac whose RAM is no larger than the
 //! model; no prompt cache is involved. Run it on an optimized build.
 
@@ -40,7 +40,7 @@ const PROMPT_WORD_COUNT: usize = 9000;
 /// Layers whose cold reads make the raw read rate.
 const RAW_READ_LAYER_COUNT: usize = 8;
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
-/// Long enough for the cold file cache to sweep the layer just read.
+/// Long enough for the cold macOS file cache to sweep the layer just read.
 const COLD_MACOS_FILE_CACHE_SETTLE: Duration = Duration::from_millis(500);
 
 #[tokio::test]

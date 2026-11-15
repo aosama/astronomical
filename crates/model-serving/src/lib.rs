@@ -163,8 +163,8 @@ pub use engine_backed_worker::{
 pub use expert_paging::load_quantized_expert_page;
 
 pub use expert_paging::{
-    ExpertManifestError, ExpertPageRoutePartition, ExpertWeightMemoryCacheStatistics,
-    ExpertWeightPage, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
+    AstroExpertCacheStatistics, ExpertManifestError, ExpertPageRoutePartition, ExpertWeightPage,
+    QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
     QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,
     QuantizedTensorSource, RetainedExpertReclamation, SafetensorsDtype, SafetensorsHeader,
     SafetensorsHeaderError, TensorHeaderEntry, build_quantized_expert_page_manifest_from_plan,
@@ -582,7 +582,7 @@ pub use qwen3_5_resident::{
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
-    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoECachedPlusStreamedPageRoute,
+    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,
     Qwen3_5MoEPagedExecutionMode, build_source_manifests, contiguous_selected_runs,
     qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,

@@ -164,7 +164,7 @@ impl StraightGenerationState {
     }
 
     /// Retargets the covered position after a restored prefix so RoPE offsets
-    /// and KV-cache views continue from the restored length.
+    /// and Astro decoder state astro SSD prompt cache views continue from the restored length.
     pub(crate) fn set_sequence_position_offset(&mut self, covered_token_count: i32) {
         self.sequence_position_offset = covered_token_count;
     }

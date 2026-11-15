@@ -35,7 +35,7 @@ fn completion_measurements(
         prompt_token_count: 100,
         generated_token_count,
         reasoning_token_count: 0,
-        cached_token_count: 0,
+        astro_ssd_prompt_cache_token_count: 0,
         reason,
     }
 }
@@ -288,7 +288,7 @@ fn should_produce_distinct_non_empty_labels_for_every_completion_reason() {
 
 fn timed_out_chat_request(
     prompt_token_count: u32,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_token_count: u32,
     generated_token_count: u16,
     prefill_elapsed_millis: u64,
     request_started_ago: Duration,
@@ -303,7 +303,7 @@ fn timed_out_chat_request(
         prompt_token_count,
         generated_token_count,
         reasoning_token_count: 0,
-        cached_token_count,
+        astro_ssd_prompt_cache_token_count,
         reason: ChatGenerationCompletionReason::EndOfSequence,
     };
     let completed_request = ActiveGeneration {

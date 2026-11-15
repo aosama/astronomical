@@ -13,7 +13,7 @@ use crate::{
     PendingAstroSsdPromptCacheClear, WorkerControlError, WorkerHealthSnapshot, WorkerProcess,
 };
 
-/// Result returned to the HTTP request that submitted one cache clear.
+/// Result returned to the HTTP request that submitted one astro SSD astro SSD prompt cache clear.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AstroSsdPromptCacheClearOutcome {
     Applied {

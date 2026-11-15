@@ -2,7 +2,7 @@ use super::http_transport;
 use super::live_progress;
 use super::*;
 
-/// Parameterizes the E2E cache stats test so the same runner covers both the
+/// Parameterizes the E2E astro SSD astro SSD prompt cache stats test so the same runner covers both the
 /// representative Romeo and Juliet scenarios without duplicating logic.
 pub(super) struct AstroSsdPromptCacheStatsE2eCase {
     /// Short label used in all `eprintln!` log lines, e.g. `"2k"` or `"50k"`.
@@ -12,7 +12,7 @@ pub(super) struct AstroSsdPromptCacheStatsE2eCase {
     /// Word count of the prompt, for log labels only.
     prompt_word_count: usize,
     /// Maximum output tokens requested. Kept small so generation finishes fast;
-    /// the test cares about prefill and cache behavior, not generation quality.
+    /// the test cares about prefill and astro SSD astro SSD prompt cache behavior, not generation quality.
     maximum_output_tokens: u16,
     /// Wall-clock timeout for the entire test (model load + two requests).
     timeout: Duration,
@@ -28,7 +28,7 @@ pub(super) fn five_thousand_word_case() -> AstroSsdPromptCacheStatsE2eCase {
     }
 }
 
-pub(super) async fn run_cache_stats_e2e_with_timeout(
+pub(super) async fn run_astro_ssd_prompt_cache_stats_e2e_with_timeout(
     astro_ssd_prompt_cache_stats_e2e_case: AstroSsdPromptCacheStatsE2eCase,
 ) {
     let test_name = astro_ssd_prompt_cache_stats_e2e_case.test_name;
@@ -39,7 +39,8 @@ pub(super) async fn run_cache_stats_e2e_with_timeout(
     progress_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     tokio::pin!(timeout_deadline);
-    let test_future = run_cache_stats_e2e(&astro_ssd_prompt_cache_stats_e2e_case, &log_prefix);
+    let test_future =
+        run_astro_ssd_prompt_cache_stats_e2e(&astro_ssd_prompt_cache_stats_e2e_case, &log_prefix);
 
     eprintln!(
         "{log_prefix} status=start timeout_seconds={} prompt_word_count={}",
@@ -78,7 +79,7 @@ pub(super) async fn run_cache_stats_e2e_with_timeout(
 }
 
 #[expect(clippy::too_many_lines)]
-async fn run_cache_stats_e2e(
+async fn run_astro_ssd_prompt_cache_stats_e2e(
     astro_ssd_prompt_cache_stats_e2e_case: &AstroSsdPromptCacheStatsE2eCase,
     log_prefix: &str,
 ) {
@@ -89,7 +90,7 @@ async fn run_cache_stats_e2e(
         configured_model_directory,
         model_policy_catalog,
         worker_startup_configuration,
-    ) = create_cache_stats_worker_configuration();
+    ) = create_astro_ssd_prompt_cache_stats_worker_configuration();
 
     eprintln!(
         "{log_prefix} launching the model-artifact worker from isolated config.json; astro_ssd_prompt_cache_dir={}",
@@ -132,7 +133,7 @@ async fn run_cache_stats_e2e(
 
     live_progress::wait_until_ready(server_address, log_prefix).await;
 
-    // ── Phase 1: first request — should be a cache miss ──
+    // ── Phase 1: first request — should be an astro SSD astro SSD prompt cache miss ──
     let phase_one_started_at = Instant::now();
     eprintln!(
         "{log_prefix} phase 1: sending first {}K-word request (expecting cache miss)",
@@ -201,14 +202,14 @@ async fn run_cache_stats_e2e(
     );
 
     // Check what was saved to disk after phase 1.
-    http_transport::log_cache_directory_contents(
+    http_transport::log_astro_ssd_prompt_cache_directory_contents(
         &astro_ssd_prompt_cache_directory_path,
         &format!(
             "{log_prefix} after phase 1 (expecting sequence state and boundary snapshot files)"
         ),
     );
 
-    // ── Phase 2: same prompt — should be a cache hit ──
+    // ── Phase 2: same prompt — should be an astro SSD astro SSD prompt cache hit ──
     let phase_two_started_at = Instant::now();
     eprintln!(
         "{log_prefix} phase 2: sending the same {}K-word request (expecting cache hit)",
@@ -280,7 +281,7 @@ async fn run_cache_stats_e2e(
         );
         let status_response = http_transport::get_endpoint(server_address, "/v1/status").await;
         eprintln!("{log_prefix} DIAGNOSTIC: /v1/status = {status_response}");
-        http_transport::log_cache_directory_contents(
+        http_transport::log_astro_ssd_prompt_cache_directory_contents(
             &astro_ssd_prompt_cache_directory_path,
             &format!("{log_prefix} DIAGNOSTIC: after phase 2 miss"),
         );

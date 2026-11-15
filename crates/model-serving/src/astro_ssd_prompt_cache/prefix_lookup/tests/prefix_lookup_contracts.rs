@@ -7,7 +7,7 @@ use crate::{
 use super::lookup_fixtures::astro_ssd_prompt_cache_model_contract;
 
 #[test]
-fn should_report_no_cache_hit_when_no_complete_blocks_exist() {
+fn should_report_no_astro_ssd_prompt_cache_hit_when_no_complete_blocks_exist() {
     let prompt_tokens: Vec<u32> = (0..1_500).map(|token_index| token_index as u32).collect();
     let lookup_result = AstroSsdPromptCachePrefixLookup::for_prompt(
         astro_ssd_prompt_cache_model_contract_ref(),

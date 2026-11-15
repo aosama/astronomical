@@ -224,10 +224,10 @@ fn should_derive_linear_attention_dtypes_across_all_bfloat16_layers() {
         output_projection: native_affine_contract(),
     };
 
-    let (cache_dtypes, output_dtype) = linear_attention_dtypes(&flow).unwrap();
+    let (astro_decoder_state_cache_dtypes, output_dtype) = linear_attention_dtypes(&flow).unwrap();
 
     assert_eq!(
-        cache_dtypes,
+        astro_decoder_state_cache_dtypes,
         Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
             convolution: AstroDecoderStateCacheTensorDtype::BFloat16,
         }
@@ -252,10 +252,10 @@ fn should_widen_linear_attention_through_the_convolution_and_gate_promotions() {
         output_projection: native_affine_contract(),
     };
 
-    let (cache_dtypes, output_dtype) = linear_attention_dtypes(&flow).unwrap();
+    let (astro_decoder_state_cache_dtypes, output_dtype) = linear_attention_dtypes(&flow).unwrap();
 
     assert_eq!(
-        cache_dtypes,
+        astro_decoder_state_cache_dtypes,
         Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
             convolution: AstroDecoderStateCacheTensorDtype::Float16,
         }
@@ -264,7 +264,7 @@ fn should_widen_linear_attention_through_the_convolution_and_gate_promotions() {
 }
 
 #[test]
-fn should_derive_full_attention_cache_dtypes_from_key_and_value_projections() {
+fn should_derive_full_attention_astro_decoder_state_cache_dtypes_from_key_and_value_projections() {
     // Keys carry the promoted normalized key dtype; values carry the raw
     // value-projection dtype before any output gating.
     let flow = FullAttentionDtypeFlow {
@@ -277,10 +277,10 @@ fn should_derive_full_attention_cache_dtypes_from_key_and_value_projections() {
         output_projection: native_affine_contract(),
     };
 
-    let (cache_dtypes, output_dtype) = full_attention_dtypes(&flow).unwrap();
+    let (astro_decoder_state_cache_dtypes, output_dtype) = full_attention_dtypes(&flow).unwrap();
 
     assert_eq!(
-        cache_dtypes,
+        astro_decoder_state_cache_dtypes,
         Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
             keys: AstroDecoderStateCacheTensorDtype::Float32,
             values: AstroDecoderStateCacheTensorDtype::BFloat16,
@@ -387,7 +387,7 @@ fn should_promote_expert_projection_output_over_affine_companions() {
 }
 
 #[test]
-fn should_narrow_only_floating_cache_dtypes() {
+fn should_narrow_only_floating_astro_decoder_state_cache_dtypes() {
     assert_eq!(
         astro_decoder_state_cache_tensor_dtype(MlxDtype::Float16).unwrap(),
         AstroDecoderStateCacheTensorDtype::Float16
@@ -402,6 +402,6 @@ fn should_narrow_only_floating_cache_dtypes() {
     };
     assert_eq!(
         description,
-        "decoder cache state has an unsupported MLX dtype"
+        "astro decoder state cache state has an unsupported MLX dtype"
     );
 }

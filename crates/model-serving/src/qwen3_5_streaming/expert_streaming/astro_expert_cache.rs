@@ -17,7 +17,7 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpert
 
 use slot_writes::RetainedReferenceOk;
 
-mod decode_cache_policy;
+mod decode_astro_expert_cache_policy;
 mod demand_history;
 mod demand_phase;
 mod demand_recording;
@@ -75,7 +75,7 @@ struct ExpertSlotTable {
     expert_id_by_slot: Vec<Option<usize>>,
     slot_by_expert_id: HashMap<usize, usize>,
     read_count_by_slot: Vec<u64>,
-    decode_policy_by_slot: Vec<decode_cache_policy::DecodeExpertSlotState>,
+    decode_policy_by_slot: Vec<decode_astro_expert_cache_policy::DecodeExpertSlotState>,
     occupied_slot_count: usize,
     /// Per-expert payload bytes. Used when decode inserts or evicts a slot.
     per_expert_payload_bytes: u64,
@@ -136,9 +136,9 @@ pub struct AstroExpertCache {
     /// ignores it; see `demand_recording`.
     demand_assignment_weight: u64,
     resident_payload_bytes: u64,
-    /// How many bytes of experts this cache may keep. Set only through
+    /// How many bytes of experts this astro expert cache may keep. Set only through
     /// `set_capacity`, by the one owner of the memory ledger (issue #2221);
-    /// nothing else limits or empties the cache.
+    /// nothing else limits or empties the astro expert cache.
     capacity_bytes: u64,
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     decode_forward_active: bool,
@@ -161,13 +161,13 @@ impl AstroExpertCache {
     #[cfg(test)]
     #[must_use]
     pub fn new(layer_count: usize) -> Self {
-        Self::new_with_decode_cache_policy(
+        Self::new_with_decode_astro_expert_cache_policy(
             layer_count,
             WorkerDecodeAstroExpertCachePolicy::Baseline,
         )
     }
 
-    pub(crate) fn new_with_decode_cache_policy(
+    pub(crate) fn new_with_decode_astro_expert_cache_policy(
         layer_count: usize,
         decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     ) -> Self {
@@ -531,7 +531,7 @@ impl AstroExpertCache {
         true
     }
 
-    /// Sets how many bytes of experts the cache may keep and gives back, in
+    /// Sets how many bytes of experts the astro expert cache may keep and gives back, in
     /// its own order, whatever no longer fits.
     pub fn set_capacity(&mut self, capacity_bytes: u64) -> RetainedExpertReclamation {
         self.capacity_bytes = capacity_bytes;

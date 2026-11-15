@@ -96,7 +96,9 @@ impl AstroSsdPromptCacheBlockManifest {
         // state files and this manifest are durable.
         let manifest_file_path = staging_block_directory.join(BLOCK_MANIFEST_FILE_NAME);
         let temporary_manifest_file_path = staging_block_directory.join("manifest.json.tmp");
-        disk_store_file::remove_cache_owned_file_or_confirm_absent(&temporary_manifest_file_path)?;
+        disk_store_file::remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
+            &temporary_manifest_file_path,
+        )?;
         let manifest_bytes = serde_json::to_vec(self).map_err(|source| {
             AstroSsdPromptCacheDiskStoreError::SerializeBlockManifest { source }
         })?;
@@ -110,7 +112,7 @@ impl AstroSsdPromptCacheBlockManifest {
                 source,
             })?;
         if let Err(source) = temporary_manifest_file.write_all(&manifest_bytes) {
-            disk_store_file::remove_cache_owned_file_or_confirm_absent(
+            disk_store_file::remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
                 &temporary_manifest_file_path,
             )?;
             return Err(AstroSsdPromptCacheDiskStoreError::WriteTempFile {
@@ -119,7 +121,7 @@ impl AstroSsdPromptCacheBlockManifest {
             });
         }
         if let Err(source) = temporary_manifest_file.sync_all() {
-            disk_store_file::remove_cache_owned_file_or_confirm_absent(
+            disk_store_file::remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
                 &temporary_manifest_file_path,
             )?;
             return Err(AstroSsdPromptCacheDiskStoreError::SynchronizeTempFile {
@@ -134,7 +136,7 @@ impl AstroSsdPromptCacheBlockManifest {
                 block_file_path: manifest_file_path.clone(),
                 source,
             };
-            disk_store_file::remove_cache_owned_file_or_confirm_absent(
+            disk_store_file::remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
                 &temporary_manifest_file_path,
             )?;
             return Err(rename_error);

@@ -52,7 +52,7 @@ async fn main() {
                         prompt_token_count: 1,
                         generated_token_count: 0,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
+                        astro_ssd_prompt_cache_token_count: 0,
                         astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
@@ -65,7 +65,7 @@ async fn main() {
                         prompt_token_count: 1,
                         generated_token_count: 0,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
+                        astro_ssd_prompt_cache_token_count: 0,
                         astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::Cancelled,
                     })

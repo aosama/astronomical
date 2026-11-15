@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use crate::openai_rest;
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 
-pub(crate) fn cache_pressure_model_id() -> &'static str {
+pub(crate) fn astro_ssd_prompt_cache_pressure_model_id() -> &'static str {
     crate::support::large_sparse_moe_streaming_model_id()
 }
 pub(crate) const MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 2_048;
@@ -121,7 +121,7 @@ pub(crate) async fn send_streaming_chat_request(
     thinking_budget_token_count: u16,
 ) -> StreamedAssistantResponse {
     let request_document = json!({
-        "model": cache_pressure_model_id(),
+        "model": astro_ssd_prompt_cache_pressure_model_id(),
         "messages": messages,
         "stream": true,
         "stream_options": { "include_usage": true },
@@ -222,7 +222,7 @@ pub(crate) fn read_performance_records(performance_log_directory: &Path) -> Vec<
         .collect()
 }
 
-pub(crate) fn write_cache_pressure_worker_config(
+pub(crate) fn write_astro_ssd_prompt_cache_pressure_worker_config(
     isolated_worker_home: &Path,
     model_directory: &Path,
     maximum_mlx_memory_bytes: Option<u64>,

@@ -10,7 +10,7 @@
 //! The layering contract (`cargo xtask check-architecture`) fails if an MLX
 //! dependency is
 //! reintroduced here, so the boundary is enforced by the dependency graph
-//! instead of by convention. The MLX-facing owners (retained cache slot
+//! instead of by convention. The MLX-facing owners (retained astro expert cache slot
 //! tables, streaming readers, the runtime-backed allocation admission, the
 //! direct-MLX admission logging) stay in `astronomical-model-serving` and
 //! depend on this crate; the dependency direction is one way.

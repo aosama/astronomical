@@ -147,7 +147,7 @@ impl ExpertStreamingSessionCounters {
 /// expert of the layer equals exactly one layer payload and no route can
 /// exceed it (issue #1715).
 #[must_use]
-pub(crate) fn no_cache_route_source_bytes(
+pub(crate) fn no_astro_expert_cache_route_source_bytes(
     complete_layer_payload_bytes: u64,
     expert_capacity: usize,
     distinct_routed_expert_count: usize,
@@ -174,7 +174,7 @@ pub(crate) enum RouteCoverageClass {
     Missed,
 }
 
-/// Pure mapping of one warm-cache layer residency onto the observatory DTO.
+/// Pure mapping of one astro expert cache layer residency onto the observatory DTO.
 #[must_use]
 pub(crate) fn expert_layer_topology_from_residency(
     layer_residency: &astronomical_memory_policy::residency::CurrentExpertLayerResidency,

@@ -28,7 +28,7 @@ async fn should_dispatch_a_count_and_return_the_worker_measured_prompt_length() 
             prompt_token_count: 3 * SCRIPTED_TOKENS_PER_MESSAGE,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         }
     );

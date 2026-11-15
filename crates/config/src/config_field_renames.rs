@@ -8,8 +8,8 @@ use serde_json::{Map, Value};
 
 /// A root section whose key changed.
 const RENAMED_ROOT_FIELDS: [(&str, &str); 1] = [
-    // The cache of prompt blocks on the SSD is the `astro_ssd_prompt_cache`;
-    // "prompt cache" alone did not say which cache.
+    // The astro SSD astro SSD prompt cache of prompt blocks on the SSD is the `astro_ssd_prompt_cache`;
+    // "astro SSD astro SSD prompt cache" alone did not say which astro SSD astro SSD prompt cache.
     ("prompt_cache", "ssd_prompt_cache"),
 ];
 

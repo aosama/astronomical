@@ -22,7 +22,8 @@ const ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
 #[ignore = "loads Ornith for a Romeo and Juliet startup-cleanup attribution journey"]
-async fn should_attribute_startup_invalidation_once_then_restore_the_rebuilt_cache() {
+async fn should_attribute_startup_invalidation_once_then_restore_the_rebuilt_astro_ssd_prompt_cache()
+ {
     eprintln!(
         "[astro-ssd-prompt-cache-startup-attribution] status=start timeout_seconds={}",
         ACCEPTANCE_TIMEOUT.as_secs()
@@ -59,7 +60,7 @@ async fn run_startup_cleanup_attribution_journey() {
             astro_ssd_prompt_cache_directory.path(),
             // The test-chunk rule fixes the prefill chunk at 2,048 tokens so
             // results stay comparable across every journey in this lane; this
-            // journey measures cache rebuild attribution, not chunk width.
+            // journey measures astro SSD astro SSD prompt cache rebuild attribution, not chunk width.
             2_048,
         )
         .await;
@@ -89,7 +90,10 @@ async fn run_startup_cleanup_attribution_journey() {
         )
         .await
         .expect("the cold Romeo and Juliet request should start");
-    assert_eq!(cold_generation_start.cached_token_count(), 0);
+    assert_eq!(
+        cold_generation_start.astro_ssd_prompt_cache_token_count(),
+        0
+    );
     let cold_diagnostics = cold_generation_start
         .astro_ssd_prompt_cache_diagnostics()
         .expect("the cold request should report astro-ssd-prompt-cache diagnostics");
@@ -121,7 +125,7 @@ async fn run_startup_cleanup_attribution_journey() {
         .await
         .expect("the warm Romeo and Juliet request should start");
     assert!(
-        warm_generation_start.cached_token_count()
+        warm_generation_start.astro_ssd_prompt_cache_token_count()
             >= astro_ssd_prompt_cache_block_token_count as u32
     );
     let warm_diagnostics = warm_generation_start

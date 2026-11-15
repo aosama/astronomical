@@ -19,7 +19,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::{MlxArray, MlxDtype};
 
@@ -44,12 +44,12 @@ async fn compare_cached_padding_with_per_call_zeros() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the padding cache test memory limits should be valid"),
     )
     .expect("the direct MLX runtime should initialize");
-    let padding_zero_cache = Qwen3_5VisionPaddingZeroCache::new();
+    let vision_padding_zero_cache = Qwen3_5VisionPaddingZeroCache::new();
 
     for patch_count in [64, 129] {
         for component_index in 0..3 {
@@ -59,7 +59,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
                 0.004,
                 -0.37 + component_index as f32 * 0.11,
             );
-            let cached_padded = padding_zero_cache
+            let cached_padded = vision_padding_zero_cache
                 .pad_attention_head_dimension(
                     &runtime,
                     &attention_states,
@@ -86,7 +86,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
 
     // A different fused width must replace the retained zeros, not reuse them.
     let attention_states = patterned_head_array(&runtime, 64, 0.004, -0.37);
-    let cached_wider_padded = padding_zero_cache
+    let cached_wider_padded = vision_padding_zero_cache
         .pad_attention_head_dimension(
             &runtime,
             &attention_states,
@@ -112,7 +112,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
     // An already-fused head dimension takes the identity path without padding.
     let fused_states =
         patterned_head_array_with_dimension(&runtime, 64, WIDER_FUSED_HEAD_DIMENSION, 0.004, -0.37);
-    let identity_padded = padding_zero_cache
+    let identity_padded = vision_padding_zero_cache
         .pad_attention_head_dimension(
             &runtime,
             &fused_states,

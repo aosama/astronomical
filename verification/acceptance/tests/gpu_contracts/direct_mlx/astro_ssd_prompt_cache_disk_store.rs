@@ -237,7 +237,7 @@ async fn should_classify_a_vanished_kv_block_load_as_a_treatable_cache_miss() {
             .expect_err("a vanished KV block file must fail the raw load");
 
         assert!(
-            vanished_kv_block_error.is_treatable_as_cache_miss(),
+            vanished_kv_block_error.is_treatable_as_astro_ssd_prompt_cache_miss(),
             "a vanished KV block file must classify as a treatable cache miss"
         );
         assert!(

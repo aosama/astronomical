@@ -1,4 +1,4 @@
-//! Two real replies replayed through the cache.
+//! Two real replies replayed through the astro expert cache.
 //!
 //! Each fixture records which experts every layer chose for each of 499
 //! reply tokens: a summary of a 10,000-token Shakespeare prompt, written by
@@ -40,7 +40,7 @@ const FORTY_LAYER_MODEL: RecordedModel = RecordedModel {
 };
 
 struct ReplayOutcome {
-    cache: DivisibleAstroExpertCache,
+    astro_expert_cache: DivisibleAstroExpertCache,
     reads_per_token_after_warm_up: f64,
 }
 
@@ -67,27 +67,31 @@ impl RecordedModel {
             expert_count: experts_per_layer,
             expert_payload_bytes: EXPERT_BYTES,
         };
-        let mut cache = DivisibleAstroExpertCache::new(
+        let mut astro_expert_cache = DivisibleAstroExpertCache::new(
             vec![layer_geometry; routed_reply.layer_count()],
             self.held_expert_count * EXPERT_BYTES,
             eviction_order,
             layer_slot_limit,
         );
-        self.seat_whole_layers(&mut cache, &routed_reply);
-        let reads_per_token_after_warm_up = serve_reply(&mut cache, &routed_reply);
+        self.seat_whole_layers(&mut astro_expert_cache, &routed_reply);
+        let reads_per_token_after_warm_up = serve_reply(&mut astro_expert_cache, &routed_reply);
         ReplayOutcome {
-            cache,
+            astro_expert_cache,
             reads_per_token_after_warm_up,
         }
     }
 
-    fn seat_whole_layers(&self, cache: &mut DivisibleAstroExpertCache, routed_reply: &RoutedReply) {
+    fn seat_whole_layers(
+        &self,
+        astro_expert_cache: &mut DivisibleAstroExpertCache,
+        routed_reply: &RoutedReply,
+    ) {
         for layer_index in 0..routed_reply.layer_count() {
             if self.partial_layer_indexes.contains(&layer_index) {
                 continue;
             }
             for expert_id in 0..routed_reply.experts_per_layer() {
-                let was_seated = cache.seat(ExpertKey {
+                let was_seated = astro_expert_cache.seat(ExpertKey {
                     layer_index,
                     expert_id,
                 });
@@ -97,12 +101,15 @@ impl RecordedModel {
     }
 }
 
-fn serve_reply(cache: &mut DivisibleAstroExpertCache, routed_reply: &RoutedReply) -> f64 {
+fn serve_reply(
+    astro_expert_cache: &mut DivisibleAstroExpertCache,
+    routed_reply: &RoutedReply,
+) -> f64 {
     let mut read_count_after_warm_up = 0_usize;
     for token_index in 0..routed_reply.token_count() {
-        cache.begin_token();
+        astro_expert_cache.begin_token();
         for layer_index in 0..routed_reply.layer_count() {
-            let served_route = cache.serve(
+            let served_route = astro_expert_cache.serve(
                 layer_index,
                 routed_reply.layer_route(token_index, layer_index),
             );
@@ -116,9 +123,9 @@ fn serve_reply(cache: &mut DivisibleAstroExpertCache, routed_reply: &RoutedReply
     read_count_after_warm_up as f64 / measured_token_count as f64
 }
 
-fn held_never_used_expert_count(cache: &DivisibleAstroExpertCache) -> usize {
+fn held_never_used_expert_count(astro_expert_cache: &DivisibleAstroExpertCache) -> usize {
     let mut held_never_used_expert_count = 0;
-    for layer_summary in cache.record().layer_summaries() {
+    for layer_summary in astro_expert_cache.record().layer_summaries() {
         held_never_used_expert_count += layer_summary.held_never_used_expert_count;
     }
     held_never_used_expert_count
@@ -139,7 +146,7 @@ fn should_reproduce_the_reads_a_division_by_layer_costs() {
         "40-layer reads per token: {}",
         small_model.reads_per_token_after_warm_up
     );
-    assert!(large_model.cache.record().repeat_read_count() > 4_000);
+    assert!(large_model.astro_expert_cache.record().repeat_read_count() > 4_000);
 }
 
 #[test]
@@ -147,8 +154,14 @@ fn should_hold_experts_no_token_used_when_memory_is_divided_by_layer() {
     let large_model = FORTY_EIGHT_LAYER_MODEL.replay(EvictionOrder::LeastFrequentlyUsed, true);
     let small_model = FORTY_LAYER_MODEL.replay(EvictionOrder::LeastFrequentlyUsed, true);
 
-    assert_eq!(held_never_used_expert_count(&large_model.cache), 2_008);
-    assert_eq!(held_never_used_expert_count(&small_model.cache), 2_978);
+    assert_eq!(
+        held_never_used_expert_count(&large_model.astro_expert_cache),
+        2_008
+    );
+    assert_eq!(
+        held_never_used_expert_count(&small_model.astro_expert_cache),
+        2_978
+    );
 }
 
 #[test]
@@ -164,19 +177,19 @@ fn should_read_under_three_experts_a_token_when_memory_is_shared_across_layers()
     }
 }
 
-/// The reply needs fewer experts than memory holds, so once the cache has
+/// The reply needs fewer experts than memory holds, so once the astro expert cache has
 /// seen what the text uses, the same text must not touch storage at all.
 #[test]
 fn should_read_nothing_when_the_same_reply_is_served_again() {
     for recorded_model in [&FORTY_EIGHT_LAYER_MODEL, &FORTY_LAYER_MODEL] {
         let routed_reply = recorded_model.routed_reply();
         let mut shared = recorded_model.replay(EvictionOrder::LeastRecentlyUsed, false);
-        let read_count_after_first_serving = shared.cache.record().read_count();
+        let read_count_after_first_serving = shared.astro_expert_cache.record().read_count();
 
-        serve_reply(&mut shared.cache, &routed_reply);
+        serve_reply(&mut shared.astro_expert_cache, &routed_reply);
 
         assert_eq!(
-            shared.cache.record().read_count(),
+            shared.astro_expert_cache.record().read_count(),
             read_count_after_first_serving
         );
     }
@@ -184,11 +197,12 @@ fn should_read_nothing_when_the_same_reply_is_served_again() {
 
 /// Divided by layer, the same reply keeps reading for as long as it runs.
 #[test]
-fn should_keep_reading_when_a_divided_cache_serves_the_same_reply_again() {
+fn should_keep_reading_when_a_divided_astro_expert_cache_serves_the_same_reply_again() {
     let routed_reply = FORTY_EIGHT_LAYER_MODEL.routed_reply();
     let mut divided = FORTY_EIGHT_LAYER_MODEL.replay(EvictionOrder::LeastFrequentlyUsed, true);
 
-    let reads_per_token_on_second_serving = serve_reply(&mut divided.cache, &routed_reply);
+    let reads_per_token_on_second_serving =
+        serve_reply(&mut divided.astro_expert_cache, &routed_reply);
 
     assert!(
         reads_per_token_on_second_serving > 10.0,
@@ -218,8 +232,8 @@ fn should_read_the_same_under_either_eviction_order_on_these_replies() {
         let least_frequent = recorded_model.replay(EvictionOrder::LeastFrequentlyUsed, false);
 
         assert_eq!(
-            least_recent.cache.record().read_count(),
-            least_frequent.cache.record().read_count()
+            least_recent.astro_expert_cache.record().read_count(),
+            least_frequent.astro_expert_cache.record().read_count()
         );
     }
 }

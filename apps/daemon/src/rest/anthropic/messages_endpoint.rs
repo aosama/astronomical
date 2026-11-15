@@ -321,13 +321,13 @@ async fn create_non_streaming_response(
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 reason,
                 ..
             } => {
                 let worker_token_counts = WorkerTokenCounts {
                     prompt_token_count,
-                    cached_token_count,
+                    astro_ssd_prompt_cache_token_count,
                     generated_token_count,
                 };
                 return match message_collector.into_message(worker_token_counts, reason) {

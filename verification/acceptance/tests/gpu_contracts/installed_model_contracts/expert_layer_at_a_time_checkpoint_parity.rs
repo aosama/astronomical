@@ -322,7 +322,7 @@ fn assert_parity_with_planned_layers_kept(
         planned_boundaries.push(published_boundaries);
     }
     let kept_expert_payload_bytes = streaming_model
-        .expert_weight_memory_cache_statistics()
+        .astro_expert_cache_statistics()
         .resident_payload_byte_count;
     assert!(
         kept_expert_payload_bytes > 0,
@@ -353,14 +353,14 @@ impl ExpertReadCount {
     fn starting(streaming_model: &Qwen3_5StreamingModel) -> Self {
         Self {
             experts_read_before: streaming_model
-                .expert_weight_memory_cache_statistics()
+                .astro_expert_cache_statistics()
                 .disk_page_load_count,
         }
     }
 
     fn since(&self, streaming_model: &Qwen3_5StreamingModel) -> u64 {
         streaming_model
-            .expert_weight_memory_cache_statistics()
+            .astro_expert_cache_statistics()
             .disk_page_load_count
             .saturating_sub(self.experts_read_before)
     }

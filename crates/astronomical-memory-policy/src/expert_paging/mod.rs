@@ -10,7 +10,7 @@ pub mod safetensors_header;
 #[cfg(test)]
 mod safetensors_header_tests;
 
-pub use astro_expert_cache_statistics::ExpertWeightMemoryCacheStatistics;
+pub use astro_expert_cache_statistics::AstroExpertCacheStatistics;
 pub use safetensors_header::{
     SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError, TensorHeaderEntry,
     parse_safetensors_header,

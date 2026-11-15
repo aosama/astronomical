@@ -383,7 +383,7 @@ fn load_streaming_expert_runtime(
             None
         };
     let astro_expert_cache = RefCell::new(
-        qwen3_5_streaming::AstroExpertCache::new_with_decode_cache_policy(
+        qwen3_5_streaming::AstroExpertCache::new_with_decode_astro_expert_cache_policy(
             expert_pager.layer_count(),
             decode_astro_expert_cache_policy,
         ),

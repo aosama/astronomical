@@ -44,7 +44,7 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: usize = 10;
 struct AstroSsdPromptCacheParityAcceptanceOutcome {
     cold_generated_token_ids: Vec<u32>,
     cold_completed_prefill_chunk_token_counts: Vec<u32>,
-    restored_cached_token_count: u32,
+    restored_astro_ssd_prompt_cache_token_count: u32,
     restored_generated_token_ids: Vec<u32>,
 }
 
@@ -165,10 +165,10 @@ async fn should_restore_exact_cache_parity_for_one_selected_large_prefill_size()
             "the selected prefill size must complete as one model forward"
         );
         assert!(
-            acceptance_outcome.restored_cached_token_count
+            acceptance_outcome.restored_astro_ssd_prompt_cache_token_count
                 >= configured_prefill_chunk_tokens,
             "the restored request recovered {} tokens but must recover every 2048-token block produced by one selected {configured_prefill_chunk_tokens}-token forward",
-            acceptance_outcome.restored_cached_token_count,
+            acceptance_outcome.restored_astro_ssd_prompt_cache_token_count,
         );
         assert!(
             acceptance_outcome.cold_generated_token_ids.len() >= 32,
@@ -223,7 +223,10 @@ async fn run_astro_ssd_prompt_cache_parity_acceptance(
         ))
         .await
         .expect("the first engine should accept the request");
-    assert_eq!(first_generation_start.cached_token_count(), 0);
+    assert_eq!(
+        first_generation_start.astro_ssd_prompt_cache_token_count(),
+        0
+    );
     let (cold_generated_token_ids, cold_completed_prefill_chunk_token_counts) =
         generate_token_ids(&mut qwen3_5_engine, first_request_id, generated_token_count).await;
     let minimum_expected_sequence_state_block_count = (usize::try_from(fixed_prefill_chunk_tokens)
@@ -248,11 +251,12 @@ async fn run_astro_ssd_prompt_cache_parity_acceptance(
         .await
         .expect("the second engine should accept the request");
     assert!(
-        second_generation_start.cached_token_count()
+        second_generation_start.astro_ssd_prompt_cache_token_count()
             >= astro_ssd_prompt_cache_block_token_count as u32,
         "the second run should report at least one restored astro-ssd-prompt-cache block"
     );
-    let restored_cached_token_count = second_generation_start.cached_token_count();
+    let restored_astro_ssd_prompt_cache_token_count =
+        second_generation_start.astro_ssd_prompt_cache_token_count();
     let (restored_generated_token_ids, _restored_completed_prefill_chunk_token_counts) =
         generate_token_ids(
             &mut qwen3_5_engine,
@@ -263,7 +267,7 @@ async fn run_astro_ssd_prompt_cache_parity_acceptance(
     AstroSsdPromptCacheParityAcceptanceOutcome {
         cold_generated_token_ids,
         cold_completed_prefill_chunk_token_counts,
-        restored_cached_token_count,
+        restored_astro_ssd_prompt_cache_token_count,
         restored_generated_token_ids,
     }
 }

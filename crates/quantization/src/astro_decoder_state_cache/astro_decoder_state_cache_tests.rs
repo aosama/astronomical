@@ -1,4 +1,4 @@
-//! Unit tests for the key-value cache allocator.
+//! Unit tests for the astro decoder state cache allocator.
 
 use super::*;
 use crate::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
@@ -15,7 +15,7 @@ fn result(layer_index: usize, kl_at_four: f64) -> AstroDecoderStateCacheSensitiv
         kl_divergence_by_bit_width: BTreeMap::from([(bits(4), kl_at_four), (bits(8), 0.0)]),
         key_value_head_count: 8,
         head_dimension: 128,
-        cache_bytes_per_token: 2.0 * 8.0 * 128.0 * 2.0,
+        astro_decoder_state_cache_bytes_per_token: 2.0 * 8.0 * 128.0 * 2.0,
     }
 }
 
@@ -49,7 +49,7 @@ fn should_protect_the_most_sensitive_layer_first() {
 }
 
 #[test]
-fn should_scale_cache_bytes_with_bit_width() {
+fn should_scale_astro_decoder_state_cache_bytes_with_bit_width() {
     let results = vec![result(0, 0.1)];
     let four_bit = vec![AstroDecoderStateCacheLayerConfig {
         layer_index: 0,
@@ -87,7 +87,7 @@ fn should_keep_every_layer_at_the_lowest_width_when_no_upgrade_reduces_kl() {
 }
 
 #[test]
-fn should_return_no_configs_for_no_cached_layers() {
+fn should_return_no_configs_for_no_astro_decoder_state_cache_layers() {
     let candidate_bit_widths = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
 
     let configs = optimize_astro_decoder_state_cache(
@@ -118,29 +118,29 @@ fn should_skip_configs_without_a_measured_layer_when_estimating_bytes() {
 
 /// A probe whose KL is scripted per layer: quantizing layer `n` moves the
 /// output by `kl_by_layer[n] / bits`, so the sweep's bookkeeping is visible.
-struct ScriptedCacheProbe {
-    cached_layer_indices: Vec<usize>,
+struct ScriptedAstroDecoderStateCacheProbe {
+    astro_decoder_state_cache_layer_indices: Vec<usize>,
     kl_by_layer: BTreeMap<usize, f64>,
     forward_count: usize,
 }
 
-impl AstroDecoderStateCacheProbeModel for ScriptedCacheProbe {
+impl AstroDecoderStateCacheProbeModel for ScriptedAstroDecoderStateCacheProbe {
     type Logits = f64;
 
-    fn cached_layers(&self) -> Vec<CachedLayerDescriptor> {
-        let mut cached_layers = Vec::new();
-        for layer_index in &self.cached_layer_indices {
-            cached_layers.push(CachedLayerDescriptor {
+    fn astro_decoder_state_cache_layers(&self) -> Vec<AstroDecoderStateCacheLayerDescriptor> {
+        let mut astro_decoder_state_cache_layers = Vec::new();
+        for layer_index in &self.astro_decoder_state_cache_layer_indices {
+            astro_decoder_state_cache_layers.push(AstroDecoderStateCacheLayerDescriptor {
                 layer_index: *layer_index,
                 layer_name: format!("model.layers.{layer_index}"),
                 key_value_head_count: 4,
                 head_dimension: 64,
             });
         }
-        cached_layers
+        astro_decoder_state_cache_layers
     }
 
-    fn forward_with_cache_bit_widths(
+    fn forward_with_astro_decoder_state_cache_bit_widths(
         &mut self,
         _sample: &crate::sensitivity::CalibrationForwardSample,
         bit_width_by_layer: &BTreeMap<usize, BitWidth>,
@@ -175,9 +175,9 @@ fn two_samples() -> Vec<crate::sensitivity::CalibrationForwardSample> {
 }
 
 #[test]
-fn should_measure_each_cached_layer_at_each_width_against_full_precision() {
-    let mut probe = ScriptedCacheProbe {
-        cached_layer_indices: vec![3, 7],
+fn should_measure_each_astro_decoder_state_cache_layer_at_each_width_against_full_precision() {
+    let mut probe = ScriptedAstroDecoderStateCacheProbe {
+        astro_decoder_state_cache_layer_indices: vec![3, 7],
         kl_by_layer: BTreeMap::from([(3, 0.8), (7, 0.08)]),
         forward_count: 0,
     };
@@ -197,13 +197,16 @@ fn should_measure_each_cached_layer_at_each_width_against_full_precision() {
     assert_eq!(results[0].layer_index, 3);
     assert_eq!(results[0].kl_divergence_by_bit_width[&bits(4)], 0.2);
     assert_eq!(results[1].kl_divergence_by_bit_width[&bits(8)], 0.01);
-    assert_eq!(results[0].cache_bytes_per_token, 2.0 * 4.0 * 64.0 * 2.0);
+    assert_eq!(
+        results[0].astro_decoder_state_cache_bytes_per_token,
+        2.0 * 4.0 * 64.0 * 2.0
+    );
 }
 
 #[test]
-fn should_refuse_a_model_without_any_cached_layer() {
-    let mut probe = ScriptedCacheProbe {
-        cached_layer_indices: Vec::new(),
+fn should_refuse_a_model_without_any_astro_decoder_state_cache_layer() {
+    let mut probe = ScriptedAstroDecoderStateCacheProbe {
+        astro_decoder_state_cache_layer_indices: Vec::new(),
         kl_by_layer: BTreeMap::new(),
         forward_count: 0,
     };
@@ -225,8 +228,8 @@ fn should_refuse_a_model_without_any_cached_layer() {
 
 #[test]
 fn should_refuse_a_measurement_where_quantization_never_engaged() {
-    let mut probe = ScriptedCacheProbe {
-        cached_layer_indices: vec![0],
+    let mut probe = ScriptedAstroDecoderStateCacheProbe {
+        astro_decoder_state_cache_layer_indices: vec![0],
         kl_by_layer: BTreeMap::from([(0, 1e-9)]),
         forward_count: 0,
     };

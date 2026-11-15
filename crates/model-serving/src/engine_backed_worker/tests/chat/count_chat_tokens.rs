@@ -59,7 +59,7 @@ async fn should_answer_a_count_with_the_prepared_prompt_length_and_no_generation
             prompt_token_count: 4_321,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         }

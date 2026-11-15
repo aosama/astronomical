@@ -10,7 +10,7 @@
 //! tokens.
 //!
 //! The probe measures the replaced pattern against the production concat on
-//! identical data and scales total tokens at the real 2048-token cache block
+//! identical data and scales total tokens at the real 2048-token astro SSD astro SSD prompt cache block
 //! size so the super-linear cost stays visible next to the single-pass concat:
 //!   A "current-per-block" = per-block `slice_update` + per-block evaluate
 //!   B "batched-eval"      = per-block `slice_update` + one final evaluate

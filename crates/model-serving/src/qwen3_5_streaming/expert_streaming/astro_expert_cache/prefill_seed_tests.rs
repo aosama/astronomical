@@ -8,12 +8,12 @@ use serial_test::serial;
 #[serial]
 fn should_complete_a_cold_prefill_union_seed_using_only_missing_experts() {
     let runtime = test_runtime();
-    let mut cache = AstroExpertCache::new(1);
-    cache.set_capacity(1024 * 1024 * 1024);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.set_capacity(1024 * 1024 * 1024);
 
     let seeded_expert_ids: Vec<usize> = (0..3).collect();
     let seeded_weights = streamed_weights_for_expert_count(&runtime, seeded_expert_ids.len());
-    let seeded_expert_count = cache
+    let seeded_expert_count = astro_expert_cache
         .insert_streamed_experts(
             &runtime,
             0,
@@ -24,9 +24,9 @@ fn should_complete_a_cold_prefill_union_seed_using_only_missing_experts() {
         )
         .expect("the initial prefill union should seed a table");
     assert_eq!(seeded_expert_count, seeded_expert_ids.len());
-    assert!(!cache.has_complete_layer(0, EXPERT_CAPACITY));
+    assert!(!astro_expert_cache.has_complete_layer(0, EXPERT_CAPACITY));
 
-    let missing_expert_ids = cache
+    let missing_expert_ids = astro_expert_cache
         .non_resident_expert_ids(0, EXPERT_CAPACITY)
         .expect("the seeded table should identify its missing experts");
     assert_eq!(
@@ -34,7 +34,7 @@ fn should_complete_a_cold_prefill_union_seed_using_only_missing_experts() {
         (seeded_expert_ids.len()..EXPERT_CAPACITY).collect::<Vec<_>>()
     );
     let completion_weights = streamed_weights_for_expert_count(&runtime, missing_expert_ids.len());
-    let inserted_expert_count = cache
+    let inserted_expert_count = astro_expert_cache
         .insert_streamed_experts(
             &runtime,
             0,
@@ -49,8 +49,8 @@ fn should_complete_a_cold_prefill_union_seed_using_only_missing_experts() {
         inserted_expert_count,
         EXPERT_CAPACITY - seeded_expert_ids.len()
     );
-    assert!(cache.has_complete_layer(0, EXPERT_CAPACITY));
-    let complete_page = cache
+    assert!(astro_expert_cache.has_complete_layer(0, EXPERT_CAPACITY));
+    let complete_page = astro_expert_cache
         .full_coverage_page(
             0,
             &(0..EXPERT_CAPACITY).collect::<Vec<_>>(),

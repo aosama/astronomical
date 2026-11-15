@@ -3,13 +3,13 @@
 //!
 //! The surface measures serving throughput over the worker IPC boundary, records
 //! the numbers against this machine's specifications, and appends them to a
-//! durable historical log. It asserts the measured token counts and cache state.
+//! durable historical log. It asserts the measured token counts and astro expert cache state.
 
 #[cfg(feature = "performance_throughput")]
 mod completion;
 
 #[cfg(feature = "performance_throughput")]
-mod decode_cache_experiment;
+mod decode_astro_expert_cache_experiment;
 
 #[cfg(feature = "performance_throughput")]
 mod decode_full_fit;

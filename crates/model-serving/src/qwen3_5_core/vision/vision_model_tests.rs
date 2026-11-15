@@ -28,7 +28,7 @@ fn vision_model_over(
         weights: vision_weights_over(runtime, sidecar_source(shard_path))
             .expect("the vision tensor should bind"),
         weights_have_been_used: Cell::new(weights_have_been_used),
-        padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
+        vision_padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
     }
 }
 

@@ -148,7 +148,7 @@ async fn attribute_decode_token_time(macos_file_cache_condition: MacosFileCacheC
         // The residency each request leaves is what the next one starts
         // from; printing it shows whether decode's warm experts survive.
         let expert_statistics = engine
-            .expert_weight_memory_cache_statistics_for_tests()
+            .astro_expert_cache_statistics_for_tests()
             .await
             .expect("the engine reports its expert residency");
         eprintln!(

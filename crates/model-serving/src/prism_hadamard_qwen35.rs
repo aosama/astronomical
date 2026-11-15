@@ -10,7 +10,7 @@ pub mod hadamard;
 
 pub mod artifacts;
 
-pub mod cache_layout;
+pub mod astro_decoder_state_cache_layout;
 
 #[cfg(feature = "direct-mlx")]
 pub mod engine;

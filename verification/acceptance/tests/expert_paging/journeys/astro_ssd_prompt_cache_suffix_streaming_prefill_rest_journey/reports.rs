@@ -70,7 +70,7 @@ fn assert_throughput_measurements_exist(reports: &InteractionReports) {
 fn assert_append_request_reused_the_cached_suffix(reports: &InteractionReports) {
     let append_performance = &reports.performance_records[1];
     assert!(
-        append_performance["cached_token_count"]
+        append_performance["astro_ssd_prompt_cache_token_count"]
             .as_u64()
             .unwrap_or(0)
             > 0
@@ -351,7 +351,7 @@ pub(super) fn print_comparison_summary(
             performance_record["prompt_token_count"]
                 .as_u64()
                 .unwrap_or(0),
-            performance_record["cached_token_count"]
+            performance_record["astro_ssd_prompt_cache_token_count"]
                 .as_u64()
                 .unwrap_or(0),
             performance_record["generated_token_count"]

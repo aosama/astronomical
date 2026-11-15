@@ -1,6 +1,6 @@
 //! Decisions made before a stretch of a prompt is read.
 //!
-//! This module computes the spans, cache eligibility, checkpoint
+//! This module computes the spans, astro SSD astro SSD prompt cache eligibility, checkpoint
 //! boundaries and the token count the forward is measured under, without
 //! side effects.
 
@@ -19,7 +19,7 @@ pub(super) struct PrefillChunkPlan {
     pub(super) prefill_token_count: usize,
 
     /// Completed chunk-end offsets (relative to chunk start) where a prompt
-    /// cache boundary checkpoint should be captured after the forward.
+    /// astro SSD astro SSD prompt cache boundary checkpoint should be captured after the forward.
     pub(super) all_completed_prefill_chunk_tokens: Vec<usize>,
 
     /// Block token count from the persistent astro-ssd-prompt-cache contract, if

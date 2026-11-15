@@ -1,4 +1,4 @@
-//! SSD-backed, architecture-neutral persistent decoder-state cache.
+//! SSD-backed, architecture-neutral persistent decoder-state astro SSD astro SSD prompt cache.
 //!
 //! Current-format state is published as complete atomic block directories with
 //! manifest-bound ancestry and contract-derived sequence and boundary files.
@@ -12,11 +12,11 @@ use super::block_key::AstroSsdPromptCacheBlockKey;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
     AstroSsdPromptCacheFileKind, expected_tensor_names, open_without_following_symlinks,
-    remove_cache_owned_file_or_confirm_absent, validate_current_file_header,
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent, validate_current_file_header,
 };
 use super::disk_store_global_quota::{
     prepare_astro_ssd_prompt_cache_directory_tree,
-    remove_retired_speculative_prefill_cache_directories,
+    remove_retired_speculative_prefill_astro_ssd_prompt_cache_directories,
 };
 use super::disk_store_index::AstroSsdPromptCacheDiskStoreIndex;
 use super::disk_store_scan;
@@ -51,7 +51,7 @@ impl AstroSsdPromptCacheDiskStoreConfig {
         }
     }
 
-    /// Derives an isolated cache namespace while retaining the shared global quota.
+    /// Derives an isolated astro SSD astro SSD prompt cache namespace while retaining the shared global quota.
     #[must_use]
     pub fn for_model(&self, model_id: &str, model_revision: &str) -> Self {
         Self::new(
@@ -69,7 +69,7 @@ impl AstroSsdPromptCacheDiskStoreConfig {
     }
 }
 
-/// Persistent, descriptor-backed SSD cache for Qwen3.5-MoE astro-ssd-prompt-cache files.
+/// Persistent, descriptor-backed Astro SSD astro SSD prompt cache for Qwen3.5-MoE astro-ssd-prompt-cache files.
 pub struct AstroSsdPromptCacheDiskStore {
     pub(super) active_model_astro_ssd_prompt_cache_directory: PathBuf,
     pub(super) blocks_directory: PathBuf,
@@ -108,7 +108,7 @@ impl AstroSsdPromptCacheDiskStore {
             &astro_ssd_prompt_cache_directory,
             &[&blocks_directory, &visual_embeddings_directory],
         )?;
-        remove_retired_speculative_prefill_cache_directories(
+        remove_retired_speculative_prefill_astro_ssd_prompt_cache_directories(
             &astro_ssd_prompt_cache_directory,
             &mut startup_cleanup_evidence,
         )?;
@@ -264,7 +264,7 @@ impl AstroSsdPromptCacheDiskStore {
         };
         // `NotFound` is authoritative and updates telemetry immediately. Other
         // metadata errors are left for the actual load path to report with full
-        // typed context rather than turning a permission fault into a cache miss.
+        // typed context rather than turning a permission fault into an astro SSD astro SSD prompt cache miss.
         match std::fs::symlink_metadata(&tracked_file_path) {
             Ok(_) => true,
             Err(metadata_error) if metadata_error.kind() == std::io::ErrorKind::NotFound => {
@@ -375,7 +375,7 @@ impl AstroSsdPromptCacheDiskStore {
             // Corrupt block: delete first (NotFound counts as already absent),
             // then untrack only after successful deletion. On any other
             // deletion failure, keep tracking and surface RemoveAstroSsdPromptCacheFile.
-            remove_cache_owned_file_or_confirm_absent(&block_file_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&block_file_path)?;
             self.untrack_file_and_subtract_global_accounting(
                 file_kind,
                 astro_ssd_prompt_cache_block_key.block_hash(),

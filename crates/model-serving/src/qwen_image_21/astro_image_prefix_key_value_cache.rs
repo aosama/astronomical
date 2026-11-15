@@ -1,4 +1,4 @@
-//! Per-layer KV-cache control logic for Qwen-Image-2.1.
+//! Per-layer Astro decoder state astro image prefix key-value cache control logic for Qwen-Image-2.1.
 //!
 //! The denoise loop runs the transformer once per step, but everything that is *not* the target
 //! image is identical every step: the text/condition prefix does not change, and `causal_condition`
@@ -10,11 +10,11 @@
 //! (`kv_cache = None`), matching the pipeline default here. This module is the verified bookkeeping
 //! for the cached path — it is what `prefix_length` already supplies, and what a cache-carrying
 //! forward would need — so it is unit-tested and kept, not dead residue. Do not read its
-//! presence as evidence that the runtime caches prefix keys and values yet.
+//! presence as evidence that the runtime astro image prefix key-value astro image prefix key-value caches prefix keys and values yet.
 //!
 //! The whole scheme rests on one layout fact: the target-image tokens must be the **contiguous
 //! suffix** of the joint sequence. The forward slices `joint_hidden_states[:, prefix_len:]` and
-//! caches `[0, prefix_len)` as single ranges, which is only correct under that invariant, so
+//! astro image prefix key-value astro image prefix key-value caches `[0, prefix_len)` as single ranges, which is only correct under that invariant, so
 //! [`astro_image_prefix_key_value_cache_is_valid`] checks it (and the `causal_condition` gate the reference requires) before the
 //! runtime relies on it. This module is pure integer/tuple bookkeeping — no runtime dependency — so
 //! it is unit-tested against the diffusers oracle.
@@ -27,9 +27,9 @@ mod tests;
 pub enum AstroImagePrefixKeyValueCacheMode {
     /// Warm-up without caching: process the whole joint sequence, keep nothing.
     Prefill,
-    /// Populate the cache: process the whole joint sequence once and store the prefix keys/values.
+    /// Populate the astro image prefix astro decoder state cache: process the whole joint sequence once and store the prefix keys/values.
     Extract,
-    /// Consume the cache: process only the target-image queries against the cached prefix.
+    /// Consume the astro image prefix astro decoder state cache: process only the target-image queries against the cached prefix.
     Reuse,
 }
 
@@ -92,7 +92,7 @@ pub fn astro_image_prefix_key_value_cache_query_slice(
     }
 }
 
-/// The half-open range to write into the cache, or `None` when the step does not populate it.
+/// The half-open range to write into the astro image prefix astro decoder state cache, or `None` when the step does not populate it.
 ///
 /// Only `Extract` writes, and it writes the prefix `[0, prefix_len)`; `Prefill` keeps nothing and
 /// `Reuse` reads the values written by an earlier `Extract`.

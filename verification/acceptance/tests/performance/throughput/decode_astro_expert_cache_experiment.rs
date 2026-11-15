@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use crate::performance_throughput::completion::ThroughputMeasurement;
 use crate::performance_throughput::completion::{
-    DecodeCacheDiagnosticEvidence, PerformanceOperationEvidence,
+    DecodeAstroExpertCacheDiagnosticEvidence, PerformanceOperationEvidence,
 };
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
 
@@ -46,7 +46,7 @@ impl MeasuredShapeWindow {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct PairedDecodeCacheTrial {
+pub(crate) struct PairedDecodeAstroExpertCacheTrial {
     pub(crate) baseline: ThroughputMeasurement,
     pub(crate) candidate: ThroughputMeasurement,
 }
@@ -59,12 +59,12 @@ pub(crate) struct PairedConfidenceInterval95 {
 }
 
 #[expect(clippy::too_many_lines)]
-pub(crate) fn run_paired_decode_cache_trials(
+pub(crate) fn run_paired_decode_astro_expert_cache_trials(
     model_id: &'static str,
     journey_template: &ThroughputJourney,
     paired_trial_count: usize,
     measured_shape_window: &MeasuredShapeWindow,
-) -> Vec<PairedDecodeCacheTrial> {
+) -> Vec<PairedDecodeAstroExpertCacheTrial> {
     assert!(
         paired_trial_count >= 2,
         "paired confidence intervals need at least two baseline-candidate trials"
@@ -116,7 +116,7 @@ pub(crate) fn run_paired_decode_cache_trials(
             assert_peak_memory_within_limit(&journey, &measured_throughput);
             if journey.attribution_enabled {
                 let diagnostic_evidence = measured_throughput
-                    .decode_cache_diagnostic_evidence
+                    .decode_astro_expert_cache_diagnostic_evidence
                     .as_ref()
                     .expect("the attributed run must produce measured decode-cache evidence");
                 assert!(
@@ -157,19 +157,19 @@ pub(crate) fn run_paired_decode_cache_trials(
         if journey_template.attribution_enabled {
             assert_eq!(
                 baseline
-                    .decode_cache_diagnostic_evidence
+                    .decode_astro_expert_cache_diagnostic_evidence
                     .as_ref()
                     .expect("the baseline attribution must be present")
                     .prefill_expert_source_payload_bytes,
                 candidate
-                    .decode_cache_diagnostic_evidence
+                    .decode_astro_expert_cache_diagnostic_evidence
                     .as_ref()
                     .expect("the candidate attribution must be present")
                     .prefill_expert_source_payload_bytes,
                 "prefill source bytes must remain identical across cache policies"
             );
         }
-        paired_trials.push(PairedDecodeCacheTrial {
+        paired_trials.push(PairedDecodeAstroExpertCacheTrial {
             baseline,
             candidate,
         });
@@ -272,7 +272,7 @@ fn assert_peak_memory_within_limit(
     measured_throughput: &ThroughputMeasurement,
 ) {
     let diagnostic_peak_memory_bytes = measured_throughput
-        .decode_cache_diagnostic_evidence
+        .decode_astro_expert_cache_diagnostic_evidence
         .as_ref()
         .and_then(|diagnostic_evidence| diagnostic_evidence.mlx_peak_memory_bytes);
     let observed_peak_memory_bytes = [
@@ -293,17 +293,19 @@ fn assert_peak_memory_within_limit(
 }
 
 #[cfg(test)]
-#[path = "decode_cache_experiment_tests.rs"]
-mod decode_cache_experiment_tests;
+#[path = "decode_astro_expert_cache_experiment_tests.rs"]
+mod decode_astro_expert_cache_experiment_tests;
 
 #[expect(clippy::too_many_lines)]
-pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeCacheTrial]) {
+pub(super) fn report_attributed_policy_comparison(
+    paired_trials: &[PairedDecodeAstroExpertCacheTrial],
+) {
     let baseline_decode_p95_nanoseconds = paired_trials
         .iter()
         .map(|paired_trial| {
             paired_trial
                 .baseline
-                .decode_cache_diagnostic_evidence
+                .decode_astro_expert_cache_diagnostic_evidence
                 .as_ref()
                 .and_then(|diagnostic_evidence| {
                     diagnostic_evidence.decode_token_forward_latency_p95_nanoseconds
@@ -316,7 +318,7 @@ pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeC
         .map(|paired_trial| {
             paired_trial
                 .candidate
-                .decode_cache_diagnostic_evidence
+                .decode_astro_expert_cache_diagnostic_evidence
                 .as_ref()
                 .and_then(|diagnostic_evidence| {
                     diagnostic_evidence.decode_token_forward_latency_p95_nanoseconds
@@ -329,7 +331,7 @@ pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeC
         .map(|paired_trial| {
             let diagnostic_evidence = paired_trial
                 .baseline
-                .decode_cache_diagnostic_evidence
+                .decode_astro_expert_cache_diagnostic_evidence
                 .as_ref()
                 .expect("baseline decode attribution should be present");
             diagnostic_evidence.decode_expert_source_payload_bytes as f64
@@ -341,7 +343,7 @@ pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeC
         .map(|paired_trial| {
             let diagnostic_evidence = paired_trial
                 .candidate
-                .decode_cache_diagnostic_evidence
+                .decode_astro_expert_cache_diagnostic_evidence
                 .as_ref()
                 .expect("candidate decode attribution should be present");
             diagnostic_evidence.decode_expert_source_payload_bytes as f64
@@ -407,8 +409,14 @@ pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeC
         format_confidence_interval(source_bytes_confidence_interval),
         format_confidence_interval(decode_throughput_confidence_interval),
         format_confidence_interval(prefill_throughput_confidence_interval),
-        aggregate_cache_evidence(paired_trials, WorkerDecodeAstroExpertCachePolicy::Baseline),
-        aggregate_cache_evidence(paired_trials, WorkerDecodeAstroExpertCachePolicy::Candidate),
+        aggregate_astro_expert_cache_evidence(
+            paired_trials,
+            WorkerDecodeAstroExpertCachePolicy::Baseline
+        ),
+        aggregate_astro_expert_cache_evidence(
+            paired_trials,
+            WorkerDecodeAstroExpertCachePolicy::Candidate
+        ),
         if has_primary_improvement && has_no_material_regression {
             "candidate_win"
         } else {
@@ -419,7 +427,7 @@ pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeC
 
 pub(super) fn report_streaming_decode_stage_evidence(
     measured_throughput: &ThroughputMeasurement,
-    diagnostic_evidence: &DecodeCacheDiagnosticEvidence,
+    diagnostic_evidence: &DecodeAstroExpertCacheDiagnosticEvidence,
 ) {
     eprintln!(
         "[decode-streaming-stage-evidence] model_id={} input_tokens={} output_tokens={} decode_tokens_per_second={:.2} decode_forward_p95_milliseconds={:?} decode_forward_sample_count={:?} decode_advance_span={} route_host_materialization={} route_array_construction={} route_array_evaluation={} route_host_copy={} streaming_page_setup={} router_graph={} paged_moe_graph={} request_forward_completion_wait={} generated_token_synchronization_wait={} positional_read_call_count={} positional_read_bytes={} positional_read_callback_elapsed_milliseconds={:.3} positional_read_maximum_elapsed_milliseconds={:.3} positional_read_maximum_concurrent_count={} process_physical_disk_read_bytes={:?}",
@@ -502,8 +510,8 @@ pub(super) fn nanoseconds_to_milliseconds(elapsed_nanoseconds: u64) -> f64 {
     elapsed_nanoseconds as f64 / 1_000_000.0
 }
 
-pub(super) fn aggregate_cache_evidence(
-    paired_trials: &[PairedDecodeCacheTrial],
+pub(super) fn aggregate_astro_expert_cache_evidence(
+    paired_trials: &[PairedDecodeAstroExpertCacheTrial],
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
 ) -> String {
     let mut retained_route_assignment_hit_count = 0_u64;
@@ -521,7 +529,7 @@ pub(super) fn aggregate_cache_evidence(
             WorkerDecodeAstroExpertCachePolicy::Candidate => &paired_trial.candidate,
         };
         let diagnostic_evidence = measured_throughput
-            .decode_cache_diagnostic_evidence
+            .decode_astro_expert_cache_diagnostic_evidence
             .as_ref()
             .expect("each attribution trial must retain its diagnostics");
         retained_route_assignment_hit_count = retained_route_assignment_hit_count
@@ -564,7 +572,7 @@ pub(super) fn aggregate_cache_evidence(
     )
 }
 
-pub(super) fn report_clean_policy_comparison(paired_trials: &[PairedDecodeCacheTrial]) {
+pub(super) fn report_clean_policy_comparison(paired_trials: &[PairedDecodeAstroExpertCacheTrial]) {
     let baseline_decode_tokens_per_second = paired_trials
         .iter()
         .map(|paired_trial| paired_trial.baseline.decode_tokens_per_second)

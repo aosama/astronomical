@@ -2,7 +2,7 @@
 
 Sensitivity-driven mixed-precision affine quantization for MLX artifacts: a Rust port of the quantization core of [OptiQ](https://mlx-optiq.com) (the `mlx-optiq` Python package, MIT License, Copyright (c) 2026 Thin Signal). The full attribution, including the oMLX lineage of the range-search encoder, is in `third-party/THIRD_PARTY_NOTICES`; the vendored calibration mix carries its license beside it in `calibration/LICENSE-OPTIQ`.
 
-This document is the design record for the port. The crate holds the typed design and the complete test plan. The taxonomy, bit widths, progress reporting, the allocator, the module inventory with its output layout, the structural scorer, the KL formula, the pure reference encoder, the artifact writers, the Metal range-search encoder, the requantizer (plan, bit policy, shard writer, and the MLX driver with its source reader for fused, stacked, FP8, and packed layouts), calibration loading with chat-template rendering, the sweep driver with its checkpoint and report, the pipeline orchestration, the roofline latency model, and the key-value cache sweep and allocator are ported and tested. No algorithm body in the crate is a stub, and the Qwen3.5 probe in model-serving covers every module the allocator decides: dense layers, the mixture-of-experts router, the shared expert, and the routed experts.
+This document is the design record for the port. The crate holds the typed design and the complete test plan. The taxonomy, bit widths, progress reporting, the allocator, the module inventory with its output layout, the structural scorer, the KL formula, the pure reference encoder, the artifact writers, the Metal range-search encoder, the requantizer (plan, bit policy, shard writer, and the MLX driver with its source reader for fused, stacked, FP8, and packed layouts), calibration loading with chat-template rendering, the sweep driver with its checkpoint and report, the pipeline orchestration, the roofline latency model, and the astro decoder state cache sweep and allocator are ported and tested. No algorithm body in the crate is a stub, and the Qwen3.5 probe in model-serving covers every module the allocator decides: dense layers, the mixture-of-experts router, the shared expert, and the routed experts.
 
 ## Parity with OptiQ
 
@@ -57,7 +57,7 @@ Every `mod.rs` holds only module declarations and re-exports; each concern lives
 | Write the multi-token-prediction head | `requantize::{mtp_sidecar, mtp_sidecar_writer}`, `artifact::mtp_config` | `runtime/mtp_convert.py` `preserve_mtp` | `direct-mlx` for the writer | ported |
 | Evaluate a finished artifact against a reference | `evaluation::{prompts, kl_statistics, kl_evaluation}` through `evaluation::KlDivergenceEngine` | `eval/kl.py` `evaluate_kl` | engine-side only | ported; the Qwen3.5 engine in model-serving forwards both models; the reference is named explicitly rather than resolved from the Hub |
 | Roofline throughput model | `latency::{hardware_profile, roofline, calibrated_model}` | `core/latency.py` | no | ported |
-| Key-value cache allocation | `astro_decoder_state_cache::{astro_decoder_state_cache_sensitivity, astro_decoder_state_cache_allocator, astro_decoder_state_cache_config_document}` | `core/kv_cache.py` | engine-side only | sweep driver and allocator ported; an engine probe is not yet written |
+| Key-value astro decoder state cache allocation | `astro_decoder_state_cache::{astro_decoder_state_cache_sensitivity, astro_decoder_state_cache_allocator, astro_decoder_state_cache_config_document}` | `core/kv_cache.py` | engine-side only | sweep driver and allocator ported; an engine probe is not yet written |
 | Orchestrate | `pipeline` with `artifact_files`, `conversion` and `probe_source_view` | `models/llm.py` `run_llm_pipeline` | `direct-mlx` for the full path | ported |
 | Progress and ETA | `progress` | the per-layer ETA prints | no | ported |
 
@@ -70,7 +70,7 @@ These parts of OptiQ 0.8.2's quantization path have no module here yet:
 - Model-class bit overrides and the streaming convert's per-unit splitting (`optiq_quant_overrides`, `convert_llm_to_mlx_streaming`), which serve families OptiQ vendors its own model classes for.
 - Requantizing sources already packed in a non-affine format (MXFP4, FP8 with E8M0 scales): `_requantize_prequantized`, `_relabel_e8m0_headers`.
 - Expert pruning for MoE models (the `prune-experts` command): `mep/profiler.py`, `mep/prune.py`.
-- An engine probe for the key-value cache sweep.
+- An engine probe for the astro decoder state cache sweep.
 - The output layout and traversal order of families other than Qwen3.5. Their tensors keep the source's names and their allocation table is in a deterministic but not mlx-lm's order.
 
 ## Dependency direction
@@ -104,7 +104,7 @@ Every long stage reports percentage completion and an estimated time to completi
 
 Test names start with `should_`; unit tests live beside their source as `*_tests.rs` modules; integration journeys live under `tests/integration/`; GPU contracts under `tests/direct_mlx/`; real-model journeys in the root acceptance package.
 
-Unit tests (`cargo test -p astronomical-quantization --lib`) cover the taxonomy on names that bit real conversions, every allocator rule in isolation (efficiency ordering, the target as a floor, protected boosting, NaN handling, the uniform-reference sign detection, the attention slot reservation, the two-linear block cap, the run guard stride), the sweep driver's probe sequencing and the measured-majority guard against a scripted probe, checkpoint monotonicity and the Python checkpoint shape, calibration rendering and deterministic chunking, encoder packing and the never-worse-than-stock property, shard naming and the index, the artifact documents, the roofline arithmetic, the key-value cache allocator, and the progress tracker's cadence and ETA.
+Unit tests (`cargo test -p astronomical-quantization --lib`) cover the taxonomy on names that bit real conversions, every allocator rule in isolation (efficiency ordering, the target as a floor, protected boosting, NaN handling, the uniform-reference sign detection, the attention slot reservation, the two-linear block cap, the run guard stride), the sweep driver's probe sequencing and the measured-majority guard against a scripted probe, checkpoint monotonicity and the Python checkpoint shape, calibration rendering and deterministic chunking, encoder packing and the never-worse-than-stock property, shard naming and the index, the artifact documents, the roofline arithmetic, the astro decoder state cache allocator, and the progress tracker's cadence and ETA.
 
 Integration journeys (`cargo test -p astronomical-quantization --test integration_tests`) pin the port to the Python reference through fixtures generated by `tests/fixtures/generate_optiq_parity_fixtures.py` with mlx-optiq 0.8.2: the allocator must reproduce five Python allocations bit for bit on a synthetic table that exercises every rule; the taxonomy must agree with OptiQ's four predicates on every fixture name; structural priorities must match to float rounding; the pure reference encoder must reproduce the Python range search's packed codes exactly at 2 and 3 bits and stock min/max at 4 and 8; the KL formula must match on a logits pair. The journeys also load the bundled mix end to end, inventory real safetensors files (2-D linears, fused gate-up splits, unfused expert stacking), build requantization plans with byte estimates, and round-trip the artifact documents through disk.
 
@@ -141,7 +141,7 @@ This crate is a translation, and its algorithms belong to the people who designe
   - the range-search encoder
   - the shard-wise requantizer
   - the calibration mix and loader
-  - the latency and key-value cache models
+  - the latency and astro decoder state cache models
   - the artifact layout
 - **oMLX** ([github.com/jundot/omlx](https://github.com/jundot/omlx), Apache-2.0) is where OptiQ's range-search encoder comes from: OptiQ adapted it from oMLX's oQ quantizer.
 - **NumPy's legacy random stream** is reproduced by the calibration shuffle. It builds on:

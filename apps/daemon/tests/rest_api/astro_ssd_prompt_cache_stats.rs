@@ -29,7 +29,8 @@ const POPULATED_ASTRO_SSD_PROMPT_CACHE_STATS_EVENT: WorkerEvent =
     };
 
 #[tokio::test]
-async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
+async fn should_return_populated_astro_ssd_prompt_cache_stats_for_a_ready_worker_with_astro_ssd_prompt_cache()
+ {
     let mut health_snapshot = WorkerHealthSnapshot::ready_with_model(
         MODEL_ID.to_owned(),
         ChatModelCapabilities {
@@ -114,7 +115,7 @@ async fn should_return_populated_cache_stats_for_a_ready_worker_with_cache() {
 }
 
 #[tokio::test]
-async fn should_return_zeroed_cache_stats_when_worker_is_unavailable() {
+async fn should_return_zeroed_astro_ssd_prompt_cache_stats_when_worker_is_unavailable() {
     let health_snapshot = WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable);
     let application =
         astronomical_daemon::build_application(StatsScriptedExecutor::ready(health_snapshot));

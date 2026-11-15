@@ -1,7 +1,7 @@
 //! Safe deletion of global or model-scoped persistent astro-ssd-prompt-cache trees.
 //!
 //! The worker is the sole owner of this operation. The daemon sends an IPC
-//! command and never reads or mutates cache files directly.
+//! command and never reads or mutates astro SSD astro SSD prompt cache files directly.
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -9,7 +9,8 @@ use std::path::{Component, Path, PathBuf};
 use super::disk_store::AstroSsdPromptCacheDiskStore;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
-    remove_cache_owned_directory_or_confirm_absent, remove_cache_owned_file_or_confirm_absent,
+    remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent,
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent,
 };
 use super::disk_store_global_quota;
 use super::disk_store_index::AstroSsdPromptCacheDiskStoreIndex;
@@ -24,10 +25,10 @@ pub struct AstroSsdPromptCacheClearOutcome {
     pub bytes_freed: u64,
 }
 
-/// Deletes either every cache namespace or all revisions of one model.
+/// Deletes either every astro SSD astro SSD prompt cache namespace or all revisions of one model.
 ///
 /// Model identities may contain multiple normal path components, such as
-/// `organization/model`, because that is the cache layout used by model IDs.
+/// `organization/model`, because that is the astro SSD astro SSD prompt cache layout used by model IDs.
 /// Absolute paths, `.` and `..` are rejected before any filesystem access.
 pub fn clear_astro_ssd_prompt_cache_directory(
     global_astro_ssd_prompt_cache_root_directory: &Path,
@@ -44,7 +45,7 @@ pub fn clear_astro_ssd_prompt_cache_directory(
     };
     let (blocks_removed, bytes_freed) = measure_clear_target(&clear_target_directory)?;
     if model_id.is_some() {
-        remove_cache_owned_directory_or_confirm_absent(&clear_target_directory)?;
+        remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(&clear_target_directory)?;
     } else {
         remove_global_root_contents(&clear_target_directory)?;
     }
@@ -236,9 +237,9 @@ fn remove_global_root_contents(
             }
         })?;
         if entry_metadata.is_dir() && !entry_metadata.file_type().is_symlink() {
-            remove_cache_owned_directory_or_confirm_absent(&entry_path)?;
+            remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(&entry_path)?;
         } else {
-            remove_cache_owned_file_or_confirm_absent(&entry_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&entry_path)?;
         }
     }
     Ok(())

@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 
 #[tokio::test]
@@ -10,7 +10,7 @@ async fn should_replace_chunk_image_pad_runs_with_the_matching_visual_embedding_
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the visual injection test memory limits should be valid"),
     )
@@ -59,7 +59,7 @@ async fn should_continue_the_visual_embedding_cursor_across_two_prefill_chunks()
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the visual injection test memory limits should be valid"),
     )

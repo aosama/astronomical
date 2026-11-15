@@ -71,7 +71,7 @@ async fn should_publish_the_ready_model_identity_from_the_worker_readiness_event
 }
 
 #[tokio::test]
-async fn should_preserve_a_pending_cache_clear_across_model_replacement() {
+async fn should_preserve_a_pending_astro_ssd_prompt_cache_clear_across_model_replacement() {
     timeout(Duration::from_secs(1), async {
         let model_capabilities = ChatModelCapabilities {
             supports_reasoning: true,

@@ -8,7 +8,7 @@
 //! journey serves the same requests with attribution off, through the
 //! in-process engine, so the storage reads behind a production prefill can be
 //! examined directly. The model's weight files are kept out of the file
-//! cache (`cold_macos_file_cache`), as on a Mac whose RAM is the limit.
+//! macOS file cache (`cold_macos_file_cache`), as on a Mac whose RAM is the limit.
 //!
 //! Run it with `cargo measure-unattributed-cold-prefill --configuration PATH`.
 
@@ -38,7 +38,7 @@ const MEASURED_OUTPUT_TOKEN_COUNT: u16 = 2;
 const PREFILL_JOURNEY_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[tokio::test]
-#[ignore = "serves a 10,240-token Shakespeare prefill without attribution on an installed sparse model with a cold file cache"]
+#[ignore = "serves a 10,240-token Shakespeare prefill without attribution on an installed sparse model with a cold macOS file cache"]
 #[serial]
 async fn should_measure_cold_prefill_without_attribution() {
     timeout(PREFILL_JOURNEY_TIMEOUT, measure_cold_prefill())

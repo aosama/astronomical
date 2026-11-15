@@ -14,7 +14,7 @@
 //!   exactly on "prefill starts" and excludes prefill execution entirely.
 //!
 //! Method: one real worker process in an isolated temporary home (no SSD
-//! prompt cache, fixed 2,048-token prefill chunks per the repo standard), one
+//! astro SSD astro SSD prompt cache, fixed 2,048-token prefill chunks per the repo standard), one
 //! ~500-token Romeo and Juliet warmup-fixture request, and a one-field JSON
 //! report on stderr. The request runs to completion only so the journey can
 //! verify it succeeded; no other metric is collected. Laptop-only: it loads
@@ -120,7 +120,7 @@ async fn should_measure_model_load_to_prefill_start_latency() {
 struct LoadToPrefillMeasurement {
     load_to_prefill_elapsed_millis: u128,
     prompt_token_count: u32,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_token_count: u32,
 }
 
 async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
@@ -172,7 +172,7 @@ async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
         "the measured request must have carried prompt tokens",
     );
     assert_eq!(
-        measurement.cached_token_count, 0,
+        measurement.astro_ssd_prompt_cache_token_count, 0,
         "the isolated cold worker must not restore SSD-cached tokens",
     );
 
@@ -269,10 +269,11 @@ async fn run_single_measured_request(
             | ChatGenerationStreamEvent::ToolCall { .. } => {}
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 ..
             } => {
-                completed_token_counts = Some((prompt_token_count, cached_token_count));
+                completed_token_counts =
+                    Some((prompt_token_count, astro_ssd_prompt_cache_token_count));
                 break;
             }
             ChatGenerationStreamEvent::Failed { reason } => {
@@ -286,14 +287,14 @@ async fn run_single_measured_request(
 
     let prefill_start_arrival_at = prefill_start_arrival_at
         .expect("the journey must observe the prefill-start boundary event");
-    let (prompt_token_count, cached_token_count) =
+    let (prompt_token_count, astro_ssd_prompt_cache_token_count) =
         completed_token_counts.expect("the terminal worker event should report the token counts");
     LoadToPrefillMeasurement {
         load_to_prefill_elapsed_millis: prefill_start_arrival_at
             .duration_since(request_accepted_at)
             .as_millis(),
         prompt_token_count,
-        cached_token_count,
+        astro_ssd_prompt_cache_token_count,
     }
 }
 

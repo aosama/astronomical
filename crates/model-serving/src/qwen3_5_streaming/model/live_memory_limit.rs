@@ -42,7 +42,7 @@ impl Qwen3_5Model {
             minimum_mlx_memory_ceiling_bytes,
             current_active_memory_bytes,
         } = live_memory_observation;
-        let expert_statistics = self.expert_weight_memory_cache_statistics();
+        let expert_statistics = self.astro_expert_cache_statistics();
         let ceiling_change_decision = MemoryCeilingChangeRequirements {
             current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
             requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,

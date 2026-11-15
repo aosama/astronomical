@@ -5,7 +5,7 @@
 //! direct (uncached) read only when the file offset, the length and the
 //! destination are all 16 KiB aligned (the virtual-memory page size), and a
 //! repeated aligned read stays cold; an unaligned read is silently served
-//! through the cache and leaves the range cached. Stock safetensors tensors
+//! through the macOS file cache and leaves the range cached. Stock safetensors tensors
 //! start at unaligned offsets, so a stock-layout read always warms the cache.
 
 use std::fs::{File, OpenOptions};
@@ -19,7 +19,7 @@ pub(super) const DIRECT_READ_ALIGNMENT_BYTES: u64 = 16_384;
 pub(super) fn open_bypassing_macos_file_cache(path: &Path) -> File {
     let file =
         File::open(path).unwrap_or_else(|error| panic!("{} should open: {error}", path.display()));
-    set_no_cache(&file);
+    set_no_macos_file_cache(&file);
     file
 }
 
@@ -31,11 +31,11 @@ pub(super) fn create_bypassing_macos_file_cache(path: &Path) -> File {
         .write(true)
         .open(path)
         .unwrap_or_else(|error| panic!("{} should be creatable: {error}", path.display()));
-    set_no_cache(&file);
+    set_no_macos_file_cache(&file);
     file
 }
 
-fn set_no_cache(file: &File) {
+fn set_no_macos_file_cache(file: &File) {
     // SAFETY: fcntl on a live descriptor with an integer argument.
     let status = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_NOCACHE, 1) };
     assert_ne!(
@@ -122,7 +122,7 @@ impl PageAlignedSpan {
     }
 }
 
-/// Whether any virtual-memory page under the range is in the file cache.
+/// Whether any virtual-memory page under the range is in the macOS file cache.
 pub(super) fn any_vm_page_resident(file: &File, offset: u64, length: u64) -> bool {
     assert!(length > 0, "a residency check needs at least one byte");
     let mapping_start = offset / DIRECT_READ_ALIGNMENT_BYTES * DIRECT_READ_ALIGNMENT_BYTES;

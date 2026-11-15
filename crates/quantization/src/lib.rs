@@ -40,7 +40,7 @@
 //!    the output is a complete, loadable artifact.
 //!
 //! [`latency`] (the roofline throughput model) and [`astro_decoder_state_cache`] (mixed-precision
-//! key-value cache allocation) are ported alongside because they consume the
+//! astro decoder state cache allocation) are ported alongside because they consume the
 //! same sensitivity signal, but neither sits on the critical path of a
 //! conversion.
 //!

@@ -433,7 +433,7 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
                 prompt_token_count: 5,
                 generated_token_count: 2,
                 reasoning_token_count: 0,
-                cached_token_count: 0,
+                astro_ssd_prompt_cache_token_count: 0,
                 reason: ChatGenerationCompletionReason::EndOfSequence,
             },
         ],

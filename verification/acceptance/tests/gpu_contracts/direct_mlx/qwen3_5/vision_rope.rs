@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::{MlxCompiledElementwiseGraphs, MlxDtype};
 
@@ -16,7 +16,7 @@ async fn should_match_composed_vision_rope_bit_for_bit_through_the_compiled_grap
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the vision rope test memory limits should be valid"),
     )

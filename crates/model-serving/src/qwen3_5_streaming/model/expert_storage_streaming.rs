@@ -65,12 +65,12 @@ impl Qwen3_5StreamingModel {
 
     /// The engine's serving phase at this storage read.
     ///
-    /// The warm cache's demand phase is the real phase state: each request
+    /// The astro expert cache's demand phase is the real phase state: each request
     /// opens in prefill and the first decode forward switches it. Phase is
     /// never inferred from the route's token count — speculative and
     /// multi-token decode routes would otherwise be filed as prefill in both
     /// the observatory counters and the attribution reports (issue #1715).
-    /// A model without a warm cache cannot track phase state; its streaming
+    /// A model without an astro expert cache cannot track phase state; its streaming
     /// reads fall back to the route-length approximation, documented here so
     /// the fallback is visible rather than implicit.
     pub(super) fn current_serving_phase(&self, route_token_count: i32) -> SessionStreamingPhase {
@@ -103,7 +103,7 @@ impl Qwen3_5StreamingModel {
     }
 }
 
-/// Route-length approximation used only when no warm cache tracks phase.
+/// Route-length approximation used only when no astro expert cache tracks phase.
 fn fallback_serving_phase_from_route_token_count(route_token_count: i32) -> SessionStreamingPhase {
     if route_token_count > 1 {
         SessionStreamingPhase::Prefill

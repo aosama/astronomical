@@ -4,7 +4,7 @@
 //! decoder layer comes off the SSD through the bounded-range reader, then
 //! what one streamed layer costs read and run, before a whole prompt. These
 //! entry points do exactly that work and nothing else; the measurement
-//! harness owns the clock and the cold file cache.
+//! harness owns the clock and the cold macOS file cache.
 
 use mlx_bridge::MlxArray;
 

@@ -6,7 +6,7 @@ use astronomical_ipc_protocol::{RequestId, WorkerPromptWorkReuse};
 
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_core::decoder::cache_layout::{
+use crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::{
     Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
 };
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;

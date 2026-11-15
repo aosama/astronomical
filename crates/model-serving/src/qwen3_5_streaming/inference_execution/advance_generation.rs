@@ -382,7 +382,7 @@ impl Qwen3_5EngineState {
 
     /// Records the decode-phase memory ceiling utilization. Hot-expert
     /// warming (issue #372) stays inside the capacity the memory governor
-    /// gives the cache, which already leaves a reply step its working
+    /// gives the astro expert cache, which already leaves a reply step its working
     /// memory.
     fn warm_hot_experts_and_record_utilization(
         &self,

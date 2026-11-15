@@ -85,13 +85,13 @@ impl OpenAiResponsesStreamEncoder {
                 prompt_token_count,
                 generated_token_count,
                 reasoning_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 reason,
             } => self.complete(
                 prompt_token_count,
                 generated_token_count,
                 reasoning_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 reason,
             ),
             ChatGenerationStreamEvent::Failed { reason } => Ok(self.worker_failure(reason)),
@@ -261,7 +261,7 @@ impl OpenAiResponsesStreamEncoder {
         prompt_token_count: u32,
         generated_token_count: u16,
         reasoning_token_count: u16,
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_token_count: u32,
         reason: ChatGenerationCompletionReason,
     ) -> Result<VecDeque<OpenAiResponseStreamEvent>, OpenAiResponsesStreamEncodingError> {
         let mut events = self.close_reasoning();
@@ -273,7 +273,7 @@ impl OpenAiResponsesStreamEncoder {
         let response = collector.into_response(
             prompt_token_count,
             generated_token_count,
-            cached_token_count,
+            astro_ssd_prompt_cache_token_count,
             reasoning_token_count,
             reason,
         )?;

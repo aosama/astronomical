@@ -5,7 +5,7 @@
 use crate::AstroSsdPromptCacheModelContract;
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::decoder::cache_layout::{
+use crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::{
     Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
 };
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config;

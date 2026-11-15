@@ -17,7 +17,7 @@ use super::disk_store::AstroSsdPromptCacheDiskStore;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
     AstroSsdPromptCacheFileKind, open_without_following_symlinks,
-    remove_cache_owned_directory_or_confirm_absent, validate_current_file_header,
+    remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent, validate_current_file_header,
 };
 use super::disk_store_index::TrackedAstroSsdPromptCacheBlock;
 use mlx_bridge::MlxArray;
@@ -205,7 +205,9 @@ impl AstroSsdPromptCacheDiskStore {
             |_performance_attribution| {
                 superseded_sibling_directory_paths.iter().try_for_each(
                     |superseded_directory_path| {
-                        remove_cache_owned_directory_or_confirm_absent(superseded_directory_path)
+                        remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
+                            superseded_directory_path,
+                        )
                     },
                 )
             },

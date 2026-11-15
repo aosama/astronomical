@@ -106,7 +106,7 @@ impl Qwen3_5ExpertPager {
         )
     }
 
-    /// Maps warm-cache layer residencies onto observatory topology rows.
+    /// Maps astro expert cache layer residencies onto observatory topology rows.
     pub(crate) fn session_layer_topology(
         &self,
         layer_residencies: &[astronomical_memory_policy::residency::CurrentExpertLayerResidency],

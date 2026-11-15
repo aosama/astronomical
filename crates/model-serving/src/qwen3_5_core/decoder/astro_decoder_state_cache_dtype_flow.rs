@@ -4,7 +4,7 @@
 //! A configuration activation label is insufficient for persistent state: MLX
 //! promotes each operation from live activation, normalization, affine-scale,
 //! and affine-bias dtypes. This module replays only that type flow, without
-//! evaluating arrays, so cache serialization and memory admission describe the
+//! evaluating arrays, so astro decoder state cache serialization and memory admission describe the
 //! tensors the production graph actually creates.
 //!
 //! The replay lives here, in `qwen3_5_core`, because the streaming and resident
@@ -34,7 +34,7 @@ pub(crate) enum AffineDtypeContract {
 }
 
 /// The normalized input activation plus the linear-attention projections and
-/// normalizations one layer needs for its cache and output dtype derivation.
+/// normalizations one layer needs for its astro decoder state cache and output dtype derivation.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LinearAttentionDtypeFlow {
     pub(crate) normalized_input_dtype: MlxDtype,
@@ -46,7 +46,7 @@ pub(crate) struct LinearAttentionDtypeFlow {
 }
 
 /// The normalized input activation plus the full-attention projections and
-/// normalizations one layer needs for its cache and output dtype derivation.
+/// normalizations one layer needs for its astro decoder state cache and output dtype derivation.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct FullAttentionDtypeFlow {
     pub(crate) normalized_input_dtype: MlxDtype,
@@ -81,7 +81,7 @@ pub(crate) struct MixtureOfExpertsDtypeFlow {
     pub(crate) shared_expert_output_gate_projection: AffineDtypeContract,
 }
 
-/// Derives the linear-attention cache dtype (convolution state) and the
+/// Derives the linear-attention astro decoder state cache dtype (convolution state) and the
 /// attention output dtype for one layer.
 pub(crate) fn linear_attention_dtypes(
     flow: &LinearAttentionDtypeFlow,
@@ -111,7 +111,7 @@ pub(crate) fn linear_attention_dtypes(
     ))
 }
 
-/// Derives the full-attention cache dtypes (keys and values) and the attention
+/// Derives the full-attention astro decoder state cache dtypes (keys and values) and the attention
 /// output dtype for one layer.
 pub(crate) fn full_attention_dtypes(
     flow: &FullAttentionDtypeFlow,
@@ -306,7 +306,7 @@ pub(crate) fn astro_decoder_state_cache_tensor_dtype(
         MlxDtype::BFloat16 => Ok(AstroDecoderStateCacheTensorDtype::BFloat16),
         MlxDtype::Float32 => Ok(AstroDecoderStateCacheTensorDtype::Float32),
         _ => Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "decoder cache state has an unsupported MLX dtype",
+            description: "astro decoder state cache state has an unsupported MLX dtype",
         }),
     }
 }

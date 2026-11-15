@@ -15070,7 +15070,7 @@
     },
     {
       "file": "apps/daemon/src/worker/event_handler.rs",
-      "function": "outside_cache_clear_wait_violation",
+      "function": "outside_astro_ssd_prompt_cache_clear_wait_violation",
       "line": 640,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -39118,7 +39118,7 @@
     },
     {
       "file": "crates/model-serving/src/engine_backed_worker/tests/chat/generation_lifecycle.rs",
-      "function": "should_report_engine_cached_token_count_in_completion",
+      "function": "should_report_engine_astro_ssd_prompt_cache_token_count_in_completion",
       "line": 375,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -40306,7 +40306,7 @@
     },
     {
       "file": "crates/model-serving/src/engine_backed_worker/tests/chat/scripted_chat_test_doubles.rs",
-      "function": "ScriptedChatEngine::with_cached_token_count",
+      "function": "ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count",
       "line": 250,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -40315,7 +40315,7 @@
     },
     {
       "file": "crates/model-serving/src/engine_backed_worker/tests/chat/scripted_chat_test_doubles.rs",
-      "function": "ScriptedChatEngine::with_cached_token_count_and_generated_tokens",
+      "function": "ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count_and_generated_tokens",
       "line": 274,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -46111,7 +46111,7 @@
     },
     {
       "file": "crates/model-serving/src/inference_engine/contract.rs",
-      "function": "EngineGenerationStart::cached_token_count",
+      "function": "EngineGenerationStart::astro_ssd_prompt_cache_token_count",
       "line": 243,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -47434,7 +47434,7 @@
     },
     {
       "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
-      "function": "no_cache_route_source_bytes",
+      "function": "no_astro_expert_cache_route_source_bytes",
       "line": 150,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -49513,7 +49513,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/counters.rs",
-      "function": "AstroSsdPromptCacheCounters::record_cache_hit",
+      "function": "AstroSsdPromptCacheCounters::record_astro_ssd_prompt_cache_hit",
       "line": 40,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -49522,7 +49522,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/counters.rs",
-      "function": "AstroSsdPromptCacheCounters::record_cache_miss",
+      "function": "AstroSsdPromptCacheCounters::record_astro_ssd_prompt_cache_miss",
       "line": 56,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -50008,7 +50008,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/disk_store_error.rs",
-      "function": "AstroSsdPromptCacheDiskStoreError::is_treatable_as_cache_miss",
+      "function": "AstroSsdPromptCacheDiskStoreError::is_treatable_as_astro_ssd_prompt_cache_miss",
       "line": 214,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -50089,7 +50089,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/disk_store_file.rs",
-      "function": "remove_cache_owned_directory_or_confirm_absent",
+      "function": "remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent",
       "line": 257,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -50098,7 +50098,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/disk_store_file.rs",
-      "function": "remove_cache_owned_file_or_confirm_absent",
+      "function": "remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent",
       "line": 372,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -52698,7 +52698,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/prism_hadamard_qwen35/cache_layout.rs",
+      "file": "crates/model-serving/src/prism_hadamard_qwen35/astro_decoder_state_cache_layout.rs",
       "function": "prism_hadamard_qwen35_astro_decoder_state_cache_layout",
       "line": 34,
       "cyclomatic": 2.0,
@@ -53104,7 +53104,7 @@
     },
     {
       "file": "crates/model-serving/src/prism_hadamard_qwen35/engine/execution/prefill_chunk.rs",
-      "function": "capture_completed_prefill_cache_block",
+      "function": "capture_completed_prefill_astro_ssd_prompt_cache_block",
       "line": 148,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -53239,7 +53239,7 @@
     },
     {
       "file": "crates/model-serving/src/prism_hadamard_qwen35/engine/astro_ssd_prompt_cache.rs",
-      "function": "capture_completed_cache_block",
+      "function": "capture_completed_astro_ssd_prompt_cache_block",
       "line": 305,
       "cyclomatic": 8.0,
       "coverage": null,
@@ -56613,7 +56613,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/cache_layout.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_layout.rs",
       "function": "full_attention_layer_layout",
       "line": 99,
       "cyclomatic": 1.0,
@@ -56622,7 +56622,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/cache_layout.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_layout.rs",
       "function": "linear_attention_layer_layout",
       "line": 125,
       "cyclomatic": 1.0,
@@ -56631,7 +56631,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/cache_layout.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_layout.rs",
       "function": "qwen3_5_astro_decoder_state_cache_layout",
       "line": 30,
       "cyclomatic": 4.0,
@@ -66028,7 +66028,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/test_controls.rs",
-      "function": "MlxInferenceEngine::expert_weight_memory_cache_statistics_for_tests",
+      "function": "MlxInferenceEngine::astro_expert_cache_statistics_for_tests",
       "line": 80,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -66073,7 +66073,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/test_controls.rs",
-      "function": "Qwen3_5EngineState::expert_weight_memory_cache_statistics_for_tests",
+      "function": "Qwen3_5EngineState::astro_expert_cache_statistics_for_tests",
       "line": 20,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -66694,7 +66694,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::expert_weight_memory_cache_statistics",
+      "function": "Qwen3_5ResidentModel::astro_expert_cache_statistics",
       "line": 247,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -69457,7 +69457,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
-      "function": "AstroExpertCache::new_with_decode_cache_policy",
+      "function": "AstroExpertCache::new_with_decode_astro_expert_cache_policy",
       "line": 165,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -71905,7 +71905,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/test_controls.rs",
-      "function": "MlxInferenceEngine::expert_weight_memory_cache_statistics_for_tests",
+      "function": "MlxInferenceEngine::astro_expert_cache_statistics_for_tests",
       "line": 97,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -71959,7 +71959,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/test_controls.rs",
-      "function": "Qwen3_5EngineState::expert_weight_memory_cache_statistics_for_tests",
+      "function": "Qwen3_5EngineState::astro_expert_cache_statistics_for_tests",
       "line": 20,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -72111,8 +72111,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/cached_plus_streamed_page_route.rs",
-      "function": "Qwen3_5MoECachedPlusStreamedPageRoute::build",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/astro_expert_cache_plus_streamed_page_route.rs",
+      "function": "Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build",
       "line": 22,
       "cyclomatic": 12.0,
       "coverage": null,
@@ -72120,7 +72120,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/cached_plus_streamed_page_route.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "assignment_position_array",
       "line": 161,
       "cyclomatic": 4.0,
@@ -72129,8 +72129,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/cached_plus_streamed_page_route.rs",
-      "function": "cached_plus_streamed_page_route_error",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/astro_expert_cache_plus_streamed_page_route.rs",
+      "function": "astro_expert_cache_plus_streamed_page_route_error",
       "line": 182,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -72138,7 +72138,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/cached_plus_streamed_page_route.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "qwen3_5_moe_remap_expert_page_slots",
       "line": 79,
       "cyclomatic": 5.0,
@@ -72147,8 +72147,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/cached_plus_streamed_page_route.rs",
-      "function": "validate_cached_plus_streamed_page_route",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/astro_expert_cache_plus_streamed_page_route.rs",
+      "function": "validate_astro_expert_cache_plus_streamed_page_route",
       "line": 108,
       "cyclomatic": 9.0,
       "coverage": null,
@@ -73993,7 +73993,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/mixed_decode_execution.rs",
-      "function": "Qwen3_5Model::build_cached_plus_streamed_sparse_output",
+      "function": "Qwen3_5Model::build_astro_expert_cache_plus_streamed_sparse_output",
       "line": 107,
       "cyclomatic": 7.0,
       "coverage": null,
@@ -74002,7 +74002,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/mixed_decode_execution.rs",
-      "function": "Qwen3_5Model::forward_moe_cached_plus_streamed_route_with_performance_attribution",
+      "function": "Qwen3_5Model::forward_moe_astro_expert_cache_plus_streamed_route_with_performance_attribution",
       "line": 67,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -74983,7 +74983,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
-      "function": "Qwen3_5StreamingModel::expert_weight_memory_cache_statistics",
+      "function": "Qwen3_5StreamingModel::astro_expert_cache_statistics",
       "line": 119,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -94440,7 +94440,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey.rs",
       "function": "journey_kind_label",
       "line": 102,
       "cyclomatic": 4.0,
@@ -94449,7 +94449,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey.rs",
       "function": "run_interaction_journey",
       "line": 121,
       "cyclomatic": 12.0,
@@ -94458,7 +94458,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey.rs",
       "function": "should_complete_cold_and_cached_append_requests_with_consistent_prefill_decode_residency",
       "line": 69,
       "cyclomatic": 1.0,
@@ -94467,7 +94467,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey.rs",
       "function": "should_keep_high_ram_tool_prefixed_cached_suffix_prefill_responsive",
       "line": 82,
       "cyclomatic": 1.0,
@@ -94476,7 +94476,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey.rs",
       "function": "should_recover_from_prefill_oom_without_stalling",
       "line": 93,
       "cyclomatic": 1.0,
@@ -94485,7 +94485,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "assert_completed_request",
       "line": 351,
       "cyclomatic": 3.0,
@@ -94494,7 +94494,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "completion_request",
       "line": 29,
       "cyclomatic": 1.0,
@@ -94503,7 +94503,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "consume_stream",
       "line": 100,
       "cyclomatic": 11.0,
@@ -94512,7 +94512,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "execute_observed_request",
       "line": 43,
       "cyclomatic": 1.0,
@@ -94521,7 +94521,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "observe_request",
       "line": 153,
       "cyclomatic": 11.0,
@@ -94530,7 +94530,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "print_request_records",
       "line": 323,
       "cyclomatic": 3.0,
@@ -94539,7 +94539,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "print_status_sample",
       "line": 212,
       "cyclomatic": 15.0,
@@ -94548,7 +94548,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/observe.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/observe.rs",
       "function": "remaining_tokens_for_activity",
       "line": 308,
       "cyclomatic": 4.0,
@@ -94557,7 +94557,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_admitted_complete_layers_are_reused_across_prefill_chunks",
       "line": 423,
       "cyclomatic": 1.0,
@@ -94566,7 +94566,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_append_request_reused_the_cached_suffix",
       "line": 70,
       "cyclomatic": 1.0,
@@ -94575,7 +94575,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_decode_retained_routed_experts",
       "line": 185,
       "cyclomatic": 1.0,
@@ -94584,7 +94584,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_performance_records_retain_request_peak_memory",
       "line": 152,
       "cyclomatic": 1.0,
@@ -94593,7 +94593,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_prefill_stream_counts_stay_seated_or_fully_streamed",
       "line": 230,
       "cyclomatic": 2.0,
@@ -94602,7 +94602,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_reported_interaction",
       "line": 207,
       "cyclomatic": 1.0,
@@ -94611,7 +94611,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_requests_published_visible_output",
       "line": 128,
       "cyclomatic": 1.0,
@@ -94620,7 +94620,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "assert_throughput_measurements_exist",
       "line": 49,
       "cyclomatic": 3.0,
@@ -94629,7 +94629,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "attribution_counter",
       "line": 267,
       "cyclomatic": 1.0,
@@ -94638,7 +94638,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "persist_prefill_throughput_summary",
       "line": 277,
       "cyclomatic": 3.0,
@@ -94647,7 +94647,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "prefill_same_request_reread_bytes",
       "line": 249,
       "cyclomatic": 1.0,
@@ -94656,7 +94656,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "print_comparison_summary",
       "line": 332,
       "cyclomatic": 2.0,
@@ -94665,7 +94665,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "read_interaction_reports",
       "line": 14,
       "cyclomatic": 1.0,
@@ -94674,7 +94674,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/reports.rs",
       "function": "read_json_lines",
       "line": 33,
       "cyclomatic": 1.0,
@@ -94683,7 +94683,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "InteractionLiveEvidence::observe",
       "line": 220,
       "cyclomatic": 2.0,
@@ -94692,7 +94692,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "MemorySample::from_status",
       "line": 272,
       "cyclomatic": 1.0,
@@ -94701,7 +94701,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "acceptance_evidence_directory",
       "line": 108,
       "cyclomatic": 1.0,
@@ -94710,7 +94710,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "acceptance_evidence_root",
       "line": 104,
       "cyclomatic": 1.0,
@@ -94719,7 +94719,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "copy_worker_log_files",
       "line": 128,
       "cyclomatic": 4.0,
@@ -94728,7 +94728,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "interaction_instance_paths",
       "line": 198,
       "cyclomatic": 1.0,
@@ -94737,7 +94737,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "persist_acceptance_evidence",
       "line": 78,
       "cyclomatic": 3.0,
@@ -94746,7 +94746,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "print_worker_diagnostic_logs",
       "line": 145,
       "cyclomatic": 18.0,
@@ -94755,7 +94755,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "production_shaped_tools",
       "line": 18,
       "cyclomatic": 1.0,
@@ -94764,7 +94764,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "write_interaction_config",
       "line": 39,
       "cyclomatic": 1.0,
@@ -94773,7 +94773,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/support.rs",
+      "file": "verification/acceptance/tests/expert_paging/journeys/astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey/support.rs",
       "function": "write_json_document",
       "line": 116,
       "cyclomatic": 2.0,
@@ -99156,7 +99156,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "assert_f32_close",
       "line": 277,
       "cyclomatic": 2.0,
@@ -99165,7 +99165,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "direct_mlx_runtime",
       "line": 235,
       "cyclomatic": 1.0,
@@ -99174,7 +99174,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "page_manifest",
       "line": 246,
       "cyclomatic": 1.0,
@@ -99183,7 +99183,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "should_preserve_weighted_expert_output_across_compact_retained_and_missing_routes",
       "line": 18,
       "cyclomatic": 1.0,
@@ -99192,8 +99192,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
-      "function": "should_reject_a_cached_plus_streamed_route_with_an_empty_assignment_side",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
+      "function": "should_reject_a_astro_expert_cache_plus_streamed_route_with_an_empty_assignment_side",
       "line": 28,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99201,8 +99201,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
-      "function": "should_reject_an_expert_absent_from_its_declared_cached_plus_streamed_page",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
+      "function": "should_reject_an_expert_absent_from_its_declared_astro_expert_cache_plus_streamed_page",
       "line": 62,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99210,7 +99210,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "should_restore_single_page_assignment_order_across_partial_routes",
       "line": 298,
       "cyclomatic": 4.0,
@@ -99219,8 +99219,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
-      "function": "verify_compact_cached_plus_streamed_page_route_parity",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
+      "function": "verify_compact_astro_expert_cache_plus_streamed_page_route_parity",
       "line": 102,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99228,7 +99228,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/cached_plus_streamed_page_route.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/astro_expert_cache_plus_streamed_page_route.rs",
       "function": "weighted_page_output",
       "line": 258,
       "cyclomatic": 1.0,
@@ -103531,7 +103531,7 @@
     },
     {
       "file": "verification/acceptance/tests/performance/throughput/completion.rs",
-      "function": "read_decode_cache_diagnostic_evidence",
+      "function": "read_decode_astro_expert_cache_diagnostic_evidence",
       "line": 324,
       "cyclomatic": 21.0,
       "coverage": null,
@@ -103738,7 +103738,7 @@
     },
     {
       "file": "verification/acceptance/tests/performance/throughput/decode_cache_experiment.rs",
-      "function": "run_paired_decode_cache_trials",
+      "function": "run_paired_decode_astro_expert_cache_trials",
       "line": 62,
       "cyclomatic": 7.0,
       "coverage": null,

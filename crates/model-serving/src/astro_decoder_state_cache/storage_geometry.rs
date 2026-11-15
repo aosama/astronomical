@@ -54,7 +54,7 @@ impl AstroDecoderStateCacheLayout {
         )
     }
 
-    /// Returns the largest source payload live during one incremental cache restore step.
+    /// Returns the largest source payload live during one incremental astro decoder state cache restore step.
     ///
     /// A restore loads one sequence block (every sequence tensor at block length) and,
     /// separately, the complete boundary snapshot (every boundary tensor). Because the two

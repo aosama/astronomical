@@ -34,7 +34,7 @@ pub(super) struct StreamingMeasurement {
     pub(super) first_output_at: Instant,
     pub(super) response_completed_at: Instant,
     pub(super) completion_token_count: u64,
-    pub(super) cached_token_count: u64,
+    pub(super) astro_ssd_prompt_cache_token_count: u64,
     pub(super) generated_text: String,
     pub(super) prefill_progress_samples: Vec<PrefillProgressSample>,
     pub(super) prompt_token_count: u64,
@@ -74,7 +74,7 @@ impl PrefillProgressSample {
 
 struct CompletedTokenCounts {
     completion_token_count: u64,
-    cached_token_count: u64,
+    astro_ssd_prompt_cache_token_count: u64,
     prompt_token_count: u64,
 }
 
@@ -256,23 +256,23 @@ fn astro_ssd_prompt_cache_safetensors_disk_usage(
             .expect("the persistent astro-ssd-prompt-cache directory should be readable")
             .flatten()
         {
-            let cache_entry_path = directory_entry.path();
-            if cache_entry_path.is_dir() {
-                pending_directories.push(cache_entry_path);
+            let astro_ssd_prompt_cache_entry_path = directory_entry.path();
+            if astro_ssd_prompt_cache_entry_path.is_dir() {
+                pending_directories.push(astro_ssd_prompt_cache_entry_path);
                 continue;
             }
-            if cache_entry_path.is_file()
-                && cache_entry_path
+            if astro_ssd_prompt_cache_entry_path.is_file()
+                && astro_ssd_prompt_cache_entry_path
                     .extension()
                     .is_some_and(|extension| extension == "safetensors")
             {
-                if cache_entry_path
+                if astro_ssd_prompt_cache_entry_path
                     .file_name()
                     .is_some_and(|file_name| file_name == "sequence.safetensors")
                 {
                     kv_block_file_count += 1;
                     if let Some(header_token_count) =
-                        sequence_state_header_token_count(&cache_entry_path)
+                        sequence_state_header_token_count(&astro_ssd_prompt_cache_entry_path)
                     {
                         sequence_state_token_counts.push(header_token_count);
                     }
@@ -419,12 +419,14 @@ async fn measure_worker_summarization(
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 ..
             } => {
                 completed_token_counts = Some(CompletedTokenCounts {
                     completion_token_count: u64::from(generated_token_count),
-                    cached_token_count: u64::from(cached_token_count),
+                    astro_ssd_prompt_cache_token_count: u64::from(
+                        astro_ssd_prompt_cache_token_count,
+                    ),
                     prompt_token_count: u64::from(prompt_token_count),
                 });
                 break;
@@ -447,7 +449,8 @@ async fn measure_worker_summarization(
         first_output_at: first_output_at.unwrap_or(response_completed_at),
         response_completed_at,
         completion_token_count: completed_token_counts.completion_token_count,
-        cached_token_count: completed_token_counts.cached_token_count,
+        astro_ssd_prompt_cache_token_count: completed_token_counts
+            .astro_ssd_prompt_cache_token_count,
         generated_text,
         prefill_progress_samples,
         prompt_token_count: completed_token_counts.prompt_token_count,

@@ -1,4 +1,4 @@
-//! Streams missing experts, stores each one, and runs this forward from the cache.
+//! Streams missing experts, stores each one, and runs this forward from the astro expert cache.
 
 use mlx_bridge::MlxArray;
 

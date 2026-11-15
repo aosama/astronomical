@@ -13,7 +13,7 @@ use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 
 use super::super::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
-use super::cached_plus_streamed_page_route;
+use super::astro_expert_cache_plus_streamed_page_route;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination;
 use super::routing::{
@@ -90,7 +90,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let page_slot_indices =
-            cached_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
+            astro_expert_cache_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
                 &self.runtime,
                 selected_indices,
                 sorted_unique_expert_ids,

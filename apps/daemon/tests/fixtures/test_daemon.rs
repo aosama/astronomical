@@ -129,7 +129,7 @@ fn discovered_image_model_from_environment() -> Option<DiscoveredModel> {
 }
 
 /// Builds the live configuration the IPC service consults, mirroring the real
-/// daemon's wiring: the discovered model list, the worker path, and the cache
+/// daemon's wiring: the discovered model list, the worker path, and the astro SSD astro SSD prompt cache
 /// and log directories under the test state root. The model-policy catalog
 /// stays empty because the scripted worker admits every generation.
 fn fixture_resolved_runtime_config(

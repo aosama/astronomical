@@ -3,7 +3,7 @@
 //! `cache` treats memory as perfectly divisible. An engine cannot: a layer's
 //! experts live in one stacked tensor, so an empty slot frees nothing and
 //! memory moves between layers only by reallocating a table. This module is
-//! the same cache under that constraint, and every decision it takes is a
+//! the same astro expert cache under that constraint, and every decision it takes is a
 //! `TableChange` an engine can carry out on its tensors.
 //!
 //! A table behaves like a growable vector. A miss takes a free slot if the
@@ -17,12 +17,12 @@
 //! Replayed on two recorded replies (`recorded_reply_replay_tests`), this
 //! reads about 1.2 experts per token on a first reply and 0.1 when the same
 //! text is served again, where dividing memory by layer in advance read 10
-//! to 13 on every token. It beats even the ideal divisible cache on a first
+//! to 13 on every token. It beats even the ideal divisible astro expert cache on a first
 //! reply (2.7), because a batch compaction takes the never-used experts of
 //! one layer at once instead of guessing among experts that all look alike.
 
-use super::cache::{AstroExpertCacheLayerGeometry, ExpertKey};
-use super::cache_record::AstroExpertCacheRecord;
+use super::astro_expert_cache::{AstroExpertCacheLayerGeometry, ExpertKey};
+use super::astro_expert_cache_record::AstroExpertCacheRecord;
 
 /// How tables grow and what counts as idle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

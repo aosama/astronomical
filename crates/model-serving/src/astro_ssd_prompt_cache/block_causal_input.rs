@@ -1,8 +1,8 @@
-//! Architecture-neutral causal input attached to one decoder-state cache block.
+//! Architecture-neutral causal input attached to one decoder-state astro SSD astro SSD prompt cache block.
 //!
 //! Model families own the canonical bytes because only they understand which
 //! non-token inputs enter the decoder at each prompt position. The persistent
-//! cache treats those bytes as opaque identity and never interprets model syntax.
+//! astro SSD astro SSD prompt cache treats those bytes as opaque identity and never interprets model syntax.
 
 use sha2::{Digest, Sha256};
 

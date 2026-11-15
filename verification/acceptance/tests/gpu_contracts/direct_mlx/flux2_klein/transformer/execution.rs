@@ -60,7 +60,7 @@ fn adjacent_pair_rope_scalar_oracle(
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::MlxDtype;
 
@@ -413,7 +413,7 @@ fn patterned_weights(
 fn test_runtime() -> MlxRuntime {
     let limits = MlxMemoryLimits::new(
         DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-        DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+        DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the bounded test MLX limits should be valid");
     MlxRuntime::initialize(limits).expect("the native MLX test runtime should initialize")

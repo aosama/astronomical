@@ -129,7 +129,7 @@ fn should_bound_incremental_restore_workspace_by_one_block_or_boundary_snapshot(
             ),
         ]),
     ])
-    .expect("the mixed cache layout should be valid");
+    .expect("the mixed astro decoder state cache layout should be valid");
 
     assert_eq!(
         astro_decoder_state_cache_layout

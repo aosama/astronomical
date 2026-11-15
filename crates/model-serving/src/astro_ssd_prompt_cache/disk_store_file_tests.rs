@@ -52,7 +52,7 @@ fn should_refuse_a_64_byte_name_with_a_multibyte_character_instead_of_panicking(
 #[test]
 fn should_refuse_names_that_only_number_parsing_accepts() {
     // from_str_radix accepts a leading sign and uppercase digits; neither is
-    // a name the cache ever writes, and accepting them lets two directories
+    // a name the astro SSD astro SSD prompt cache ever writes, and accepting them lets two directories
     // claim one hash on a case-sensitive volume.
     let signed_name = format!("+f{}", &LOWERCASE_HASH_HEX[2..]);
     let uppercase_name = LOWERCASE_HASH_HEX.to_ascii_uppercase();

@@ -22,7 +22,7 @@ use crate::{PerformanceAttribution, PerformanceCounter};
 pub(crate) struct OptimisticServingHistory {
     /// Whether the token before this one was served without reading any
     /// expert from storage. It starts false: the first token of a model has
-    /// no token before it to vouch for the cache.
+    /// no token before it to vouch for the astro expert cache.
     previous_token_was_served_from_memory: Cell<bool>,
     /// Reply tokens served optimistically since the model loaded, and how
     /// many of them had to be run again.
@@ -227,7 +227,7 @@ impl Qwen3_5Model {
                     history
                         .rerun_token_count
                         .set(history.rerun_token_count.get() + 1);
-                    // A warming cache can miss on many tokens of one reply,
+                    // A warming astro expert cache can miss on many tokens of one reply,
                     // so this stays out of the default log.
                     tracing::debug!(
                         optimistic_token_count = history.optimistic_token_count.get(),
@@ -264,7 +264,7 @@ impl Qwen3_5Model {
     }
 
     /// A reply token is served optimistically only after a token that read nothing from
-    /// storage: misses come in runs while a cache warms, and serving optimistically
+    /// storage: misses come in runs while an astro expert cache warms, and serving optimistically
     /// through a run would pay for two forwards on every token of it.
     fn should_serve_optimistically(&self, token_count: i32) -> bool {
         if token_count != 1

@@ -1,5 +1,5 @@
 //! User journey: a two-turn conversation whose second turn extends the first
-//! turn's prompt by fewer tokens than one cache block. The first turn's final
+//! turn's prompt by fewer tokens than one astro SSD astro SSD prompt cache block. The first turn's final
 //! partial block ("tail") must be restored on the second turn so the engine
 //! prefills only the newly added suffix instead of the tail tokens again.
 
@@ -74,7 +74,7 @@ async fn run_partial_tail_reuse_acceptance() {
         .await
         .expect("the engine should accept the first turn");
     assert_eq!(
-        turn_one_start.cached_token_count(),
+        turn_one_start.astro_ssd_prompt_cache_token_count(),
         0,
         "the first turn on a fresh cache directory must prefill cold"
     );
@@ -112,7 +112,7 @@ async fn run_partial_tail_reuse_acceptance() {
         "the tail should end exactly one token short of turn one's prompt"
     );
     assert_eq!(
-        turn_two_start.cached_token_count(),
+        turn_two_start.astro_ssd_prompt_cache_token_count(),
         expected_restored_token_count,
         "the second turn should restore both complete blocks and the first turn's partial tail"
     );

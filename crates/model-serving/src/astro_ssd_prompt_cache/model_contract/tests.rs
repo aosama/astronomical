@@ -4,7 +4,7 @@ use crate::astro_decoder_state_cache::{
 };
 use crate::astro_ssd_prompt_cache::model_contract_error::AstroSsdPromptCacheModelContractError;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::decoder::cache_layout::{
+use crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::{
     Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
 };
 use crate::qwen3_5_core::frozen_config_test_support::{

@@ -10,14 +10,14 @@ const BUILD_CACHED_PLUS_STREAMED_PAGE_ROUTE_OPERATION: &str =
 const REMAP_EXPERT_PAGE_SLOTS_OPERATION: &str = "remap Qwen3.5-MoE expert page slots";
 
 /// Assignment arrays for one cached-plus-streamed expert route: retained-page plus missing-page projections.
-pub struct Qwen3_5MoECachedPlusStreamedPageRoute {
+pub struct Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute {
     pub retained_page_slot_indices: MlxArray,
     pub retained_scores: MlxArray,
     pub missing_page_slot_indices: MlxArray,
     pub missing_scores: MlxArray,
 }
 
-impl Qwen3_5MoECachedPlusStreamedPageRoute {
+impl Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute {
     /// Builds disjoint compact arrays without copying selected route values to the host.
     pub fn build(
         runtime: &MlxRuntime,
@@ -27,7 +27,7 @@ impl Qwen3_5MoECachedPlusStreamedPageRoute {
         retained_page_manifest: &QuantizedExpertPageManifest,
         missing_page_manifest: &QuantizedExpertPageManifest,
     ) -> Result<Self, MlxRuntimeError> {
-        let assignment_count = validate_cached_plus_streamed_page_route(
+        let assignment_count = validate_astro_expert_cache_plus_streamed_page_route(
             selected_indices,
             selected_scores,
             route_partition,
@@ -105,7 +105,7 @@ pub(super) fn qwen3_5_moe_remap_expert_page_slots(
     Ok(runtime.take_axis(&page_slots, selected_indices, 0)?)
 }
 
-fn validate_cached_plus_streamed_page_route(
+fn validate_astro_expert_cache_plus_streamed_page_route(
     selected_indices: &MlxArray,
     selected_scores: &MlxArray,
     route_partition: &ExpertPageRoutePartition,
@@ -119,7 +119,7 @@ fn validate_cached_plus_streamed_page_route(
             + route_partition.missing_assignment_positions.len()
             != assignment_count
     {
-        return Err(cached_plus_streamed_page_route_error(
+        return Err(astro_expert_cache_plus_streamed_page_route_error(
             "selected indices, scores, and non-empty route sides must cover the same assignments",
         ));
     }
@@ -133,12 +133,12 @@ fn validate_cached_plus_streamed_page_route(
         .chain(&route_partition.missing_assignment_positions)
     {
         let Some(is_covered) = is_assignment_position_covered.get_mut(*assignment_position) else {
-            return Err(cached_plus_streamed_page_route_error(
+            return Err(astro_expert_cache_plus_streamed_page_route_error(
                 "a route assignment position exceeds the selected assignment count",
             ));
         };
         if *is_covered {
-            return Err(cached_plus_streamed_page_route_error(
+            return Err(astro_expert_cache_plus_streamed_page_route_error(
                 "a route assignment position appears more than once",
             ));
         }
@@ -148,13 +148,15 @@ fn validate_cached_plus_streamed_page_route(
         .iter()
         .any(|is_covered| !is_covered)
     {
-        return Err(cached_plus_streamed_page_route_error(
+        return Err(astro_expert_cache_plus_streamed_page_route_error(
             "the cached-plus-streamed route does not cover every selected assignment",
         ));
     }
 
     i32::try_from(assignment_count).map_err(|_| {
-        cached_plus_streamed_page_route_error("expert assignment count exceeds the MLX shape range")
+        astro_expert_cache_plus_streamed_page_route_error(
+            "expert assignment count exceeds the MLX shape range",
+        )
     })
 }
 
@@ -167,19 +169,21 @@ fn assignment_position_array(
         .copied()
         .map(|assignment_position| {
             u32::try_from(assignment_position).map_err(|_| {
-                cached_plus_streamed_page_route_error("expert assignment position exceeds u32")
+                astro_expert_cache_plus_streamed_page_route_error(
+                    "expert assignment position exceeds u32",
+                )
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
     let compact_assignment_count = i32::try_from(assignment_positions.len()).map_err(|_| {
-        cached_plus_streamed_page_route_error(
+        astro_expert_cache_plus_streamed_page_route_error(
             "compact assignment count exceeds the MLX shape range",
         )
     })?;
     Ok(runtime.array_from_u32(&assignment_positions, &[compact_assignment_count])?)
 }
 
-fn cached_plus_streamed_page_route_error(description: &str) -> MlxRuntimeError {
+fn astro_expert_cache_plus_streamed_page_route_error(description: &str) -> MlxRuntimeError {
     MlxRuntimeError::RuntimeOperation {
         operation: BUILD_CACHED_PLUS_STREAMED_PAGE_ROUTE_OPERATION,
         description: description.to_owned(),

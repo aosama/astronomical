@@ -8,7 +8,7 @@ use astronomical_model_serving::{
 
 use crate::common::qwen3_5_moe;
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 1_000_000_000;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 1_000_000_000;
 
 #[test]
 fn should_classify_startup_cleanup_and_consume_evidence_once() {
@@ -60,7 +60,7 @@ fn should_classify_startup_cleanup_and_consume_evidence_once() {
     let astro_ssd_prompt_cache = open_store(
         global_astro_ssd_prompt_cache_root.path(),
         active_model_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     );
     let startup_cleanup_evidence = astro_ssd_prompt_cache
         .startup_cleanup_evidence()
@@ -101,7 +101,8 @@ fn should_classify_startup_cleanup_and_consume_evidence_once() {
 }
 
 #[test]
-fn should_remove_retired_speculative_prefill_trees_without_touching_other_cache_data() {
+fn should_remove_retired_speculative_prefill_trees_without_touching_other_astro_ssd_prompt_cache_data()
+ {
     let global_astro_ssd_prompt_cache_root =
         tempfile::tempdir().expect("the test should create a global astro-ssd-prompt-cache root");
     let active_model_directory = global_astro_ssd_prompt_cache_root
@@ -127,13 +128,15 @@ fn should_remove_retired_speculative_prefill_trees_without_touching_other_cache_
     .expect("the test should write retired target-state bytes");
     let retired_byte_count = directory_file_size_bytes(&retired_selection_directory)
         .saturating_add(directory_file_size_bytes(&retired_target_state_directory));
-    let unrelated_cache_file = active_model_directory.join("unrelated-cache-metadata");
-    fs::write(&unrelated_cache_file, b"preserve").expect("the test should write unrelated data");
+    let unrelated_astro_ssd_prompt_cache_file =
+        active_model_directory.join("unrelated-cache-metadata");
+    fs::write(&unrelated_astro_ssd_prompt_cache_file, b"preserve")
+        .expect("the test should write unrelated data");
 
     let astro_ssd_prompt_cache = open_store(
         global_astro_ssd_prompt_cache_root.path(),
         active_model_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     );
     let obsolete_format_cleanup = astro_ssd_prompt_cache
         .startup_cleanup_evidence()
@@ -144,7 +147,7 @@ fn should_remove_retired_speculative_prefill_trees_without_touching_other_cache_
     assert_eq!(obsolete_format_cleanup.byte_count, retired_byte_count);
     assert!(!retired_selection_directory.exists());
     assert!(!retired_target_state_directory.exists());
-    assert!(unrelated_cache_file.exists());
+    assert!(unrelated_astro_ssd_prompt_cache_file.exists());
 }
 
 #[test]

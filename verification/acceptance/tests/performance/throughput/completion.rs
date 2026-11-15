@@ -37,7 +37,8 @@ pub(crate) struct ThroughputMeasurement {
     pub(crate) decode_tokens_per_second: f64,
     pub(crate) mlx_peak_memory_bytes: Option<u64>,
     pub(crate) measured_output_text: Option<String>,
-    pub(crate) decode_cache_diagnostic_evidence: Option<DecodeCacheDiagnosticEvidence>,
+    pub(crate) decode_astro_expert_cache_diagnostic_evidence:
+        Option<DecodeAstroExpertCacheDiagnosticEvidence>,
     /// Which completion of this worker's life the measurement came from:
     /// the warmup is ordinal one, the first measured completion ordinal two,
     /// and every later measured completion counts on. First-touch graph
@@ -49,7 +50,7 @@ pub(crate) struct ThroughputMeasurement {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct DecodeCacheDiagnosticEvidence {
+pub(crate) struct DecodeAstroExpertCacheDiagnosticEvidence {
     pub(crate) decode_token_forward_latency_p95_nanoseconds: Option<u64>,
     pub(crate) decode_token_forward_latency_sample_count: Option<u64>,
     pub(crate) decode_advance_span: Option<PerformanceOperationEvidence>,
@@ -93,7 +94,7 @@ pub(crate) struct PerformanceOperationEvidence {
 #[derive(Debug, Deserialize)]
 struct ThroughputSample {
     prompt_token_count: u32,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_token_count: u32,
     generated_token_count: u16,
     prefill_tok_per_second: Option<f64>,
     generation_tok_per_second: Option<f64>,
@@ -284,14 +285,14 @@ fn sample_to_measurement(
         decode_astro_expert_cache_policy,
         total_input_tokens: measured.prompt_token_count,
         total_output_tokens: measured.generated_token_count,
-        cached_tokens: measured.cached_token_count,
+        cached_tokens: measured.astro_ssd_prompt_cache_token_count,
         prefill_time_seconds: measured.prefill_elapsed_millis as f64 / 1_000.0,
         decode_time_seconds: measured.generation_elapsed_millis as f64 / 1_000.0,
         prefill_tokens_per_second: measured.prefill_tok_per_second.unwrap_or(0.0),
         decode_tokens_per_second: measured.generation_tok_per_second.unwrap_or(0.0),
         mlx_peak_memory_bytes: measured.mlx_peak_memory_bytes,
         measured_output_text: None,
-        decode_cache_diagnostic_evidence: None,
+        decode_astro_expert_cache_diagnostic_evidence: None,
         completion_ordinal_in_worker,
     }
 }
@@ -321,10 +322,10 @@ fn final_generation_report_for_request(
 }
 
 #[expect(clippy::too_many_lines)]
-pub(crate) fn read_decode_cache_diagnostic_evidence(
+pub(crate) fn read_decode_astro_expert_cache_diagnostic_evidence(
     logging_directory: &Path,
     request_id: u64,
-) -> Option<DecodeCacheDiagnosticEvidence> {
+) -> Option<DecodeAstroExpertCacheDiagnosticEvidence> {
     let attribution_log =
         fs::read_to_string(logging_directory.join("performance-attribution.jsonl")).ok()?;
     let generation_report = final_generation_report_for_request(&attribution_log, request_id)?;
@@ -352,7 +353,7 @@ pub(crate) fn read_decode_cache_diagnostic_evidence(
                 })
         });
 
-    Some(DecodeCacheDiagnosticEvidence {
+    Some(DecodeAstroExpertCacheDiagnosticEvidence {
         decode_token_forward_latency_p95_nanoseconds: generation_report
             .get("decode_token_forward_latency_p95_nanoseconds")
             .and_then(serde_json::Value::as_u64),

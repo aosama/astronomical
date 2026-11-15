@@ -207,7 +207,7 @@ async fn serve_scripted_application() -> String {
             prompt_token_count: 3,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));

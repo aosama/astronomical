@@ -77,7 +77,8 @@ async fn run_visual_astro_ssd_prompt_cache_acceptance() {
         .await
         .expect("the restored visual request should start");
     assert!(
-        restored_generation_start.cached_token_count() >= VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS
+        restored_generation_start.astro_ssd_prompt_cache_token_count()
+            >= VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS
     );
     let (restored_token_id, _restored_prefill_chunk_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_101)).await;
@@ -134,7 +135,7 @@ async fn run_appended_visual_astro_ssd_prompt_cache_acceptance() {
         / VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS as usize
         * VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS as usize;
     assert_eq!(
-        restored_generation_start.cached_token_count() as usize,
+        restored_generation_start.astro_ssd_prompt_cache_token_count() as usize,
         reusable_causal_prefix_token_count,
         "the restored appended-image request must reuse exactly the complete published blocks of the causal prefix"
     );
@@ -143,7 +144,7 @@ async fn run_appended_visual_astro_ssd_prompt_cache_acceptance() {
     assert_eq!(cold_appended_token_id, restored_appended_token_id);
     eprintln!(
         "[appended-image-astro-ssd-prompt-cache-acceptance] status=success restored_tokens={} token_id={restored_appended_token_id}",
-        restored_generation_start.cached_token_count()
+        restored_generation_start.astro_ssd_prompt_cache_token_count()
     );
 }
 

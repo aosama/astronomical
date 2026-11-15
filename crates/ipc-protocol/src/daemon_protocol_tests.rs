@@ -184,7 +184,7 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             prompt_token_count: 12,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            cached_token_count: 4,
+            astro_ssd_prompt_cache_token_count: 4,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
         DaemonResponse::ChatGenerationFailed {

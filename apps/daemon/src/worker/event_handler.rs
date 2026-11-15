@@ -121,8 +121,8 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::ExpertStreamingStats { .. }) => {
             dispatch_observability_worker_event(observability_event, health_snapshot);
         }
-        cache_cleared_event @ WorkerEvent::AstroSsdPromptCacheCleared { .. } => {
-            return Err(outside_cache_clear_wait_violation(&cache_cleared_event));
+        event @ WorkerEvent::AstroSsdPromptCacheCleared { .. } => {
+            return Err(outside_astro_ssd_prompt_cache_clear_wait_violation(&event));
         }
         stepped_event @ (WorkerEvent::ImageGenerationProgress { .. }
         | WorkerEvent::ImageGenerationCompleted { .. }
@@ -551,7 +551,7 @@ fn apply_worker_completed(
         prompt_token_count,
         generated_token_count,
         reasoning_token_count,
-        cached_token_count,
+        astro_ssd_prompt_cache_token_count,
         astro_ssd_prompt_cache_diagnostics,
         reason,
     } = worker_completed_event
@@ -563,7 +563,7 @@ fn apply_worker_completed(
         prompt_token_count,
         generated_token_count,
         reasoning_token_count,
-        cached_token_count,
+        astro_ssd_prompt_cache_token_count,
         astro_ssd_prompt_cache_diagnostics,
         reason,
         health_snapshot,
@@ -640,9 +640,9 @@ pub(super) fn outside_model_swap_wait_violation(
     protocol_violation(description)
 }
 
-/// The protocol violation for a astro-ssd-prompt-cache clear acknowledgement outside
+/// The protocol violation for an astro-ssd-prompt-cache clear acknowledgement outside
 /// cache-clear wait.
-pub(super) fn outside_cache_clear_wait_violation(
+pub(super) fn outside_astro_ssd_prompt_cache_clear_wait_violation(
     astro_ssd_prompt_cache_cleared_event: &WorkerEvent,
 ) -> WorkerControlError {
     let _ = astro_ssd_prompt_cache_cleared_event;

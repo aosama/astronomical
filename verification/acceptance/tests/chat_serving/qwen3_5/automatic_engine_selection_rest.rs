@@ -27,8 +27,9 @@ const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
 const SMALL_PROMPT_TOKEN_COUNT: usize = 256;
 const SHORT_PROMPT_TOKEN_COUNT: usize = 40;
 const MULTI_CHUNK_PROMPT_TOKEN_COUNT: usize = 5_000;
-const CACHE_SEED_PROMPT_TOKEN_COUNT: usize = FIXED_PREFILL_CHUNK_SIZE_TOKENS as usize;
-const CACHE_APPEND_PROMPT_TOKEN_COUNT: usize = 512;
+const ASTRO_SSD_PROMPT_CACHE_SEED_PROMPT_TOKEN_COUNT: usize =
+    FIXED_PREFILL_CHUNK_SIZE_TOKENS as usize;
+const ASTRO_SSD_PROMPT_CACHE_APPEND_PROMPT_TOKEN_COUNT: usize = 512;
 /// Shared with the speculative-decoding sibling journey in this module.
 pub(super) const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
@@ -143,7 +144,7 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
         );
         let worker_home = tempfile::tempdir()
             .expect("the multi-chunk resident worker home should be created");
-        // The persistent prompt cache stops a terminal chunk one token short,
+        // The astro SSD astro SSD prompt cache stops a terminal chunk one token short,
         // so the short request leaves a one-token prefill observation. That
         // observation once extrapolated to a 2,048-token chunk as a ~23 GB
         // phantom transient and demoted a fitting request to SSD streaming.
@@ -280,15 +281,15 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
         let model_directory = configured_installed_model_directory_by_id(model_id);
         let residency_geometry =
             measure_sparse_artifact_residency_geometry(&model_directory);
-        let cache_seed_context_bytes =
-            context_memory_reservation_bytes(&model_directory, CACHE_SEED_PROMPT_TOKEN_COUNT + 2);
+        let astro_ssd_prompt_cache_seed_context_bytes =
+            context_memory_reservation_bytes(&model_directory, ASTRO_SSD_PROMPT_CACHE_SEED_PROMPT_TOKEN_COUNT + 2);
         // The seed request has to be served in memory, so the limit holds
         // one prompt chunk's MLX working buffers too. Without it the seed request
         // itself moves to the streaming engine and nothing is cached for
         // the retry to restore.
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
-            .saturating_add(cache_seed_context_bytes)
+            .saturating_add(astro_ssd_prompt_cache_seed_context_bytes)
             .saturating_add(prompt_chunk_mlx_working_buffer_allowance_bytes(
                 &residency_geometry.model_geometry,
             ));
@@ -300,13 +301,13 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
             &model_directory,
             ROMEO_AND_JULIET_SOURCE,
             "Read this Romeo and Juliet excerpt and answer with one concise sentence.",
-            CACHE_SEED_PROMPT_TOKEN_COUNT,
+            ASTRO_SSD_PROMPT_CACHE_SEED_PROMPT_TOKEN_COUNT,
         );
         let appended_user_message = exact_model_prompt::build_exact_model_prompt_content(
             &model_directory,
             ROMEO_AND_JULIET_SOURCE,
             "Use this additional Romeo and Juliet context without quoting it.",
-            CACHE_APPEND_PROMPT_TOKEN_COUNT,
+            ASTRO_SSD_PROMPT_CACHE_APPEND_PROMPT_TOKEN_COUNT,
         );
         let worker_home = tempfile::tempdir()
             .expect("the retry/cache worker home should be created");

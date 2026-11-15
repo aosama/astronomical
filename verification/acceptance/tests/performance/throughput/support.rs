@@ -31,8 +31,8 @@ use astronomical_ipc_protocol::{
 };
 
 pub(crate) use crate::performance_throughput::completion::{
-    drive_completion, dump_worker_logging_directory, read_decode_cache_diagnostic_evidence,
-    read_measured_completion, wait_until_idle,
+    drive_completion, dump_worker_logging_directory,
+    read_decode_astro_expert_cache_diagnostic_evidence, read_measured_completion, wait_until_idle,
 };
 
 // The evidence lane composes the same measurement type, so it stays reachable
@@ -329,8 +329,11 @@ fn measured_completion_measurement(
         None => panic!("the measured completion should produce a performance sample"),
     };
     if journey.attribution_enabled {
-        measurement.decode_cache_diagnostic_evidence =
-            read_decode_cache_diagnostic_evidence(logging_directory, MEASURED_REQUEST_ID);
+        measurement.decode_astro_expert_cache_diagnostic_evidence =
+            read_decode_astro_expert_cache_diagnostic_evidence(
+                logging_directory,
+                MEASURED_REQUEST_ID,
+            );
     }
     measurement
 }

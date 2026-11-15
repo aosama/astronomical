@@ -1,6 +1,6 @@
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[tokio::test]
 async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under_quota_pressure() {
@@ -10,7 +10,7 @@ async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under
         .expect("the test should create a measurement astro-ssd-prompt-cache directory");
     let measurement_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &measurement_astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the measurement prompt cache should open");
     let parent_astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);

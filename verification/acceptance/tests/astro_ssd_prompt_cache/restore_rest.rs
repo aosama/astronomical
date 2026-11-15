@@ -2,9 +2,10 @@ use serde_json::Value;
 use tokio::time::{Duration, Instant, sleep, timeout};
 
 use super::rest_support::{
-    MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT, cache_pressure_model_id,
-    get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt, read_performance_records,
-    required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
+    MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT,
+    astro_ssd_prompt_cache_pressure_model_id, get_json_endpoint,
+    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
+    send_streaming_chat_request, user_message, write_astro_ssd_prompt_cache_pressure_worker_config,
 };
 use crate::openai_rest;
 use crate::openai_rest::E2E_TIMEOUT;
@@ -18,8 +19,8 @@ use crate::support::serving_rest;
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and publishes then restores a Romeo and Juliet cache"]
-async fn should_publish_and_restore_the_romeo_and_juliet_cache_through_rest() {
+#[ignore = "launches the production REST server and publishes then restores a Romeo and Juliet astro SSD astro SSD prompt cache"]
+async fn should_publish_and_restore_the_romeo_and_juliet_astro_ssd_prompt_cache_through_rest() {
     timeout(
         E2E_TIMEOUT,
         run_astro_ssd_prompt_cache_memory_rest_journey(
@@ -45,25 +46,26 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     thinking_budget_token_count: u16,
 ) {
     let acceptance_log_prefix = "[astro-ssd-prompt-cache-rest]";
-    let model_directory =
-        crate::support::configured_installed_model_directory_by_id(cache_pressure_model_id());
+    let model_directory = crate::support::configured_installed_model_directory_by_id(
+        astro_ssd_prompt_cache_pressure_model_id(),
+    );
     let configured_worker_home = tempfile::tempdir()
         .expect("the cache-pressure REST journey should create an isolated home");
     let performance_log_directory = tempfile::tempdir()
         .expect("the cache-pressure REST journey should create a performance log directory");
-    write_cache_pressure_worker_config(
+    write_astro_ssd_prompt_cache_pressure_worker_config(
         configured_worker_home.path(),
         &model_directory,
         maximum_mlx_memory_bytes,
     );
     // Build a textual request instead of injecting token IDs: only the public REST tokenizer
     // may define the actual user journey. The local tokenizer is used solely to size a stable
-    // Romeo-and-Juliet fixture near the cache boundary before it is sent as ordinary text.
+    // Romeo-and-Juliet fixture near the astro SSD astro SSD prompt cache boundary before it is sent as ordinary text.
     let prepared_romeo_and_juliet_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, cacheable_prompt_token_count);
     let model_artifact_rest_server =
         serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
-            cache_pressure_model_id(),
+            astro_ssd_prompt_cache_pressure_model_id(),
             model_directory,
             Some(configured_worker_home.path()),
             Some(performance_log_directory.path()),
@@ -122,7 +124,7 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     );
 
     // Warm request: the same messages and model identity must recover the cold request prefix.
-    // Cache counters, rather than timing, are the durable proof because machines differ widely.
+    // Astro SSD astro SSD prompt cache counters, rather than timing, are the durable proof because machines differ widely.
     eprintln!("{acceptance_log_prefix} status=progress phase=warm_request");
     let warm_response = if let Some(expected_warm_request_expert_memory_mode) =
         expected_warm_request_expert_memory_mode

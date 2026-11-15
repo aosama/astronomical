@@ -152,15 +152,14 @@ impl Qwen3_5EngineState {
         self.govern_request_end_at_finalization(request_id.value());
         self.keep_dense_layers_again_at_finalization(request_id.value());
         if let Some(model) = self.model.as_ref() {
-            let expert_weight_memory_cache_statistics =
-                model.expert_weight_memory_cache_statistics();
+            let astro_expert_cache_statistics = model.astro_expert_cache_statistics();
             tracing::info!(
                 request_id = request_id.value(),
                 expert_memory_mode = ?model.expert_memory_mode(),
                 retained_expert_payload_bytes =
-                    expert_weight_memory_cache_statistics.resident_payload_byte_count,
+                    astro_expert_cache_statistics.resident_payload_byte_count,
                 maximum_retained_expert_payload_bytes =
-                    expert_weight_memory_cache_statistics.maximum_resident_payload_byte_count,
+                    astro_expert_cache_statistics.maximum_resident_payload_byte_count,
                 "kept the astro expert cache for the next request"
             );
         }

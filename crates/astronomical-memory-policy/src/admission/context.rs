@@ -1,7 +1,7 @@
 //! Sizes a request's context needs, known before the request runs.
 //!
 //! How many output tokens to hold state for, the workspace a restore from
-//! the prompt cache needs, and the smallest limit a loaded model can be
+//! the astro SSD astro SSD prompt cache needs, and the smallest limit a loaded model can be
 //! lowered to. Whether a request fits is the memory governor's question
 //! (`crate::ledger`).
 

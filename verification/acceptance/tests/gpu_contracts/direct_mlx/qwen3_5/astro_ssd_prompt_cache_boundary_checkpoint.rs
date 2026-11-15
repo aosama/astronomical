@@ -2,7 +2,7 @@ use astronomical_model_serving::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointColl
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::MlxDtype;
 
@@ -12,7 +12,7 @@ async fn should_collect_complete_astro_ssd_prompt_cache_boundary_tensors_in_prom
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the checkpoint collector test memory limits should be valid"),
     )
@@ -73,7 +73,7 @@ async fn should_reject_mismatched_or_incomplete_boundary_tensors() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the checkpoint collector validation limits should be valid"),
     )

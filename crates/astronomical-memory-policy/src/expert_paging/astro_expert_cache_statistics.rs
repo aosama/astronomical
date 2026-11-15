@@ -1,8 +1,8 @@
-//! Cache accounting DTOs and exact retained-weight payload sizing.
+//! Astro astro expert cache accounting DTOs and exact retained-weight payload sizing.
 
-/// Cumulative cache counters for transparent low-level performance tests.
+/// Cumulative astro expert cache counters for transparent low-level performance tests.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ExpertWeightMemoryCacheStatistics {
+pub struct AstroExpertCacheStatistics {
     pub entry_count: usize,
     pub resident_payload_byte_count: u64,
     pub maximum_resident_payload_byte_count: u64,

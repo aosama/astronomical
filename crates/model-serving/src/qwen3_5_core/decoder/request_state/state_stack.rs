@@ -33,7 +33,7 @@ pub struct RequestDecoderStateStackAllocationCheckpoint {
 }
 
 impl RequestDecoderStateStack {
-    /// Creates Qwen's live state owners from the validated, model-owned cache layout.
+    /// Creates Qwen's live state owners from the validated, model-owned astro decoder state cache layout.
     pub fn empty_from_astro_decoder_state_cache_layout(
         astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     ) -> Result<Self, MlxRuntimeError> {
@@ -96,24 +96,24 @@ impl RequestDecoderStateStack {
         // This config-only constructor is retained for synthetic tests that have
         // no bound weights to inspect. Production model loading derives each
         // layer's exact dtype from the live affine graph before creating state.
-        let configured_activation_cache_dtype =
+        let configured_activation_astro_decoder_state_cache_dtype =
             crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype::BFloat16;
         let astro_decoder_state_cache_layer_dtypes = (0..qwen3_5_config.layer_count() as usize)
             .map(|decoder_layer_index| {
                 if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
                     crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
-                        keys: configured_activation_cache_dtype,
-                        values: configured_activation_cache_dtype,
+                        keys: configured_activation_astro_decoder_state_cache_dtype,
+                        values: configured_activation_astro_decoder_state_cache_dtype,
                     }
                 } else {
                     crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
-                        convolution: configured_activation_cache_dtype,
+                        convolution: configured_activation_astro_decoder_state_cache_dtype,
                     }
                 }
             })
             .collect::<Vec<_>>();
         let astro_decoder_state_cache_layout =
-            crate::qwen3_5_core::decoder::cache_layout::qwen3_5_astro_decoder_state_cache_layout(
+            crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::qwen3_5_astro_decoder_state_cache_layout(
                 qwen3_5_config,
                 usize::try_from(full_attention_kv_state_growth_tokens).map_err(|_| {
                     request_decoder_state_error(

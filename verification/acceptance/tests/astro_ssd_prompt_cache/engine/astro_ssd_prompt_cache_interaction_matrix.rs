@@ -22,7 +22,7 @@ use super::engine_astro_ssd_prompt_cache::{
 };
 use super::large_prefill_prompt::representative_long_generation_prompt_token_ids_capped_at;
 
-const CACHE_INTERACTION_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
+const ASTRO_SSD_PROMPT_CACHE_INTERACTION_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 const FIXED_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 /// Enough tokens that a state difference has room to show; one token proves little.
 const COMPARED_OUTPUT_TOKEN_COUNT: u16 = 64;
@@ -47,23 +47,23 @@ impl StorageTransition {
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves the LiveReuse cache interaction matrix cell"]
+#[ignore = "loads Ornith and proves the LiveReuse astro SSD astro SSD prompt cache interaction matrix cell"]
 #[serial]
-async fn should_run_pinned_ornith_cache_interaction_live_reuse() {
+async fn should_run_pinned_ornith_astro_ssd_prompt_cache_interaction_live_reuse() {
     run_selected_acceptance_cell(StorageTransition::LiveReuse).await;
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves the WorkerRestart cache interaction matrix cell"]
+#[ignore = "loads Ornith and proves the WorkerRestart astro SSD astro SSD prompt cache interaction matrix cell"]
 #[serial]
-async fn should_run_pinned_ornith_cache_interaction_worker_restart() {
+async fn should_run_pinned_ornith_astro_ssd_prompt_cache_interaction_worker_restart() {
     run_selected_acceptance_cell(StorageTransition::WorkerRestart).await;
 }
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves the DeletedWhileLive cache interaction matrix cell"]
+#[ignore = "loads Ornith and proves the DeletedWhileLive astro SSD astro SSD prompt cache interaction matrix cell"]
 #[serial]
-async fn should_run_pinned_ornith_cache_interaction_deleted_while_live() {
+async fn should_run_pinned_ornith_astro_ssd_prompt_cache_interaction_deleted_while_live() {
     run_selected_acceptance_cell(StorageTransition::DeletedWhileLive).await;
 }
 
@@ -71,10 +71,10 @@ async fn run_selected_acceptance_cell(storage_transition: StorageTransition) {
     eprintln!(
         "[astro-ssd-prompt-cache-interaction-matrix] status=start cell={} timeout_seconds={}",
         storage_transition.label(),
-        CACHE_INTERACTION_ACCEPTANCE_TIMEOUT.as_secs()
+        ASTRO_SSD_PROMPT_CACHE_INTERACTION_ACCEPTANCE_TIMEOUT.as_secs()
     );
     timeout(
-        CACHE_INTERACTION_ACCEPTANCE_TIMEOUT,
+        ASTRO_SSD_PROMPT_CACHE_INTERACTION_ACCEPTANCE_TIMEOUT,
         run_acceptance_cell(storage_transition),
     )
     .await
@@ -102,14 +102,14 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
         astro_ssd_prompt_cache_block_token_count * 2 + 16,
     );
 
-    let (cold_cached_token_count, cold_generated_token_ids) = run_greedy_request(
+    let (cold_astro_ssd_prompt_cache_token_count, cold_generated_token_ids) = run_greedy_request(
         &mut qwen3_5_engine,
         RequestId::new(30_001),
         &prompt_token_ids,
     )
     .await;
     assert_eq!(
-        cold_cached_token_count, 0,
+        cold_astro_ssd_prompt_cache_token_count, 0,
         "the empty-cache request must miss"
     );
     wait_for_astro_ssd_prompt_cache_blocks(&qwen3_5_engine, 2).await;
@@ -128,15 +128,17 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
         StorageTransition::DeletedWhileLive => {
             fs::remove_dir_all(astro_ssd_prompt_cache_directory.path())
                 .expect("the acceptance should delete the cache while the engine remains live");
-            let (replacement_cold_cached_token_count, replacement_cold_generated_token_ids) =
-                run_greedy_request(
-                    &mut qwen3_5_engine,
-                    RequestId::new(30_002),
-                    &prompt_token_ids,
-                )
-                .await;
+            let (
+                replacement_cold_astro_ssd_prompt_cache_token_count,
+                replacement_cold_generated_token_ids,
+            ) = run_greedy_request(
+                &mut qwen3_5_engine,
+                RequestId::new(30_002),
+                &prompt_token_ids,
+            )
+            .await;
             assert_eq!(
-                replacement_cold_cached_token_count, 0,
+                replacement_cold_astro_ssd_prompt_cache_token_count, 0,
                 "the first request after cache deletion must fall back to cold prefill"
             );
             assert_eq!(
@@ -151,11 +153,12 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
         StorageTransition::DeletedWhileLive => RequestId::new(30_003),
         StorageTransition::LiveReuse | StorageTransition::WorkerRestart => RequestId::new(30_002),
     };
-    let (warm_cached_token_count, warm_generated_token_ids) =
+    let (warm_astro_ssd_prompt_cache_token_count, warm_generated_token_ids) =
         run_greedy_request(&mut qwen3_5_engine, warm_request_id, &prompt_token_ids).await;
     assert!(
-        warm_cached_token_count >= (astro_ssd_prompt_cache_block_token_count * 2) as u32,
-        "the pre-existing cache restored {warm_cached_token_count} tokens but must restore both complete prompt blocks"
+        warm_astro_ssd_prompt_cache_token_count
+            >= (astro_ssd_prompt_cache_block_token_count * 2) as u32,
+        "the pre-existing cache restored {warm_astro_ssd_prompt_cache_token_count} tokens but must restore both complete prompt blocks"
     );
     assert_eq!(
         warm_generated_token_ids, cold_generated_token_ids,
@@ -188,7 +191,7 @@ async fn run_greedy_request(
         .start_generation(
             // `new` samples at temperature 1.0 with no seed, so two runs would compare two
             // random draws. Greedy makes the token a function of the logits alone, so a
-            // changed token means the restored cache changed them.
+            // changed token means the restored astro SSD astro SSD prompt cache changed them.
             Qwen3_5InferenceRequest::new_sampling(
                 request_id,
                 prompt_token_ids.to_vec(),
@@ -201,7 +204,7 @@ async fn run_greedy_request(
         )
         .await
         .expect("the acceptance engine should accept the request");
-    let cached_token_count = generation_start.cached_token_count();
+    let astro_ssd_prompt_cache_token_count = generation_start.astro_ssd_prompt_cache_token_count();
     let (generated_token_ids, _) = generate_token_ids(
         qwen3_5_engine,
         request_id,
@@ -215,5 +218,5 @@ async fn run_greedy_request(
             && generated_token_ids.len() <= usize::from(COMPARED_OUTPUT_TOKEN_COUNT),
         "a greedy request must emit between one and {COMPARED_OUTPUT_TOKEN_COUNT} tokens"
     );
-    (cached_token_count, generated_token_ids)
+    (astro_ssd_prompt_cache_token_count, generated_token_ids)
 }

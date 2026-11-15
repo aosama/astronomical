@@ -12,7 +12,8 @@ use std::time::SystemTime;
 use super::disk_store::AstroSsdPromptCacheDiskStore;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
-    AstroSsdPromptCacheFileKind, remove_cache_owned_file_or_confirm_absent, synchronize_directory,
+    AstroSsdPromptCacheFileKind, remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent,
+    synchronize_directory,
 };
 use super::retention_policy;
 use super::startup_cleanup_evidence::AstroSsdPromptCacheStartupCleanupEvidence;
@@ -121,7 +122,9 @@ impl AstroSsdPromptCacheDiskStore {
             if committed_size_bytes <= self.global_astro_ssd_prompt_cache_maximum_size_bytes {
                 break;
             }
-            remove_cache_owned_file_or_confirm_absent(&reclaimable_boundary.boundary_file_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
+                &reclaimable_boundary.boundary_file_path,
+            )?;
             synchronize_directory(&reclaimable_boundary.block_directory_path)?;
             self.lock_tracked_files().remove_file(
                 AstroSsdPromptCacheFileKind::BoundaryStateSnapshot,

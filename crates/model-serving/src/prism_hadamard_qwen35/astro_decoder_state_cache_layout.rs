@@ -8,7 +8,7 @@
 //! recurrent accumulator is pinned to `float32` by the pack schema
 //! (`FOLDED_SSM_DTYPE`) exactly as the live GDN kernels require. Pinning the
 //! storage contract to the schema the pack already enforces keeps a future
-//! dtype change from silently producing unreadable cache files.
+//! dtype change from silently producing unreadable astro decoder state cache files.
 
 use crate::{
     AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,

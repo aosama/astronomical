@@ -217,7 +217,7 @@ fn journey_run_outcome_with_budget_stage(
             decode_tokens_per_second: 0.0,
             mlx_peak_memory_bytes: None,
             measured_output_text: None,
-            decode_cache_diagnostic_evidence: None,
+            decode_astro_expert_cache_diagnostic_evidence: None,
             completion_ordinal_in_worker: 2,
         },
         measured_budget_exhausted: budget_exhausted_stage.is_some(),

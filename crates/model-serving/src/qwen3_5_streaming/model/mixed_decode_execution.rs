@@ -17,7 +17,7 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::qwen3_5_streaming::model::Qwen3_5MoEPagedExecutionMode;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
-use crate::qwen3_5_streaming::model::cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;
+use crate::qwen3_5_streaming::model::astro_expert_cache_plus_streamed_page_route::Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute;
 use crate::qwen3_5_streaming::model::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_streaming::model::routing;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
@@ -64,12 +64,12 @@ impl Qwen3_5Model {
     /// mixed serving cannot change generated tokens through floating-point
     /// reassociation.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn forward_moe_cached_plus_streamed_route_with_performance_attribution(
+    pub(super) fn forward_moe_astro_expert_cache_plus_streamed_route_with_performance_attribution(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         retained_expert_weights: &Qwen3_5PagedExpertWeights,
-        cached_plus_streamed_route: &Qwen3_5MoECachedPlusStreamedPageRoute,
+        astro_expert_cache_plus_streamed_route: &Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,
         missing_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_scores: &MlxArray,
         concatenated_assignment_order: &[usize],
@@ -79,11 +79,11 @@ impl Qwen3_5Model {
         let sparse_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
             |measured_attribution| {
-                self.build_cached_plus_streamed_sparse_output(
+                self.build_astro_expert_cache_plus_streamed_sparse_output(
                     hidden_states,
                     mixture_of_experts_weights,
                     retained_expert_weights,
-                    cached_plus_streamed_route,
+                    astro_expert_cache_plus_streamed_route,
                     missing_expert_weights,
                     selected_scores,
                     concatenated_assignment_order,
@@ -104,12 +104,12 @@ impl Qwen3_5Model {
     /// Extracted from the `PagedMoeGraphConstruction` measurement so the
     /// measured region reads as one named step instead of an inline closure.
     #[allow(clippy::too_many_arguments)]
-    fn build_cached_plus_streamed_sparse_output(
+    fn build_astro_expert_cache_plus_streamed_sparse_output(
         &self,
         hidden_states: &MlxArray,
         mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
         retained_expert_weights: &Qwen3_5PagedExpertWeights,
-        cached_plus_streamed_route: &Qwen3_5MoECachedPlusStreamedPageRoute,
+        astro_expert_cache_plus_streamed_route: &Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,
         missing_expert_weights: &Qwen3_5PagedExpertWeights,
         selected_scores: &MlxArray,
         concatenated_assignment_order: &[usize],
@@ -118,13 +118,13 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let (retained_slot_indices, _retained_scores) = route_side_arrays(
             &self.runtime,
-            &cached_plus_streamed_route.retained_page_slot_indices,
-            &cached_plus_streamed_route.retained_scores,
+            &astro_expert_cache_plus_streamed_route.retained_page_slot_indices,
+            &astro_expert_cache_plus_streamed_route.retained_scores,
         )?;
         let (missing_slot_indices, _missing_scores) = route_side_arrays(
             &self.runtime,
-            &cached_plus_streamed_route.missing_page_slot_indices,
-            &cached_plus_streamed_route.missing_scores,
+            &astro_expert_cache_plus_streamed_route.missing_page_slot_indices,
+            &astro_expert_cache_plus_streamed_route.missing_scores,
         )?;
         let retained_rows = self.unsorted_assignment_rows(
             hidden_states,
@@ -236,24 +236,25 @@ impl Qwen3_5Model {
             )?;
         let route_partition =
             retained_page_manifest.partition_route_assignments(route_order_expert_ids);
-        let cached_plus_streamed_route = Qwen3_5MoECachedPlusStreamedPageRoute::build(
-            &self.runtime,
-            selected_indices,
-            selected_scores,
-            &route_partition,
-            &retained_page_manifest,
-            &missing_page_manifest,
-        )
-        .map_err(|_route_error| Qwen3_5ExecutionError::InvalidInput {
-            description: "the cached-plus-streamed route could not be built",
-        })?;
+        let astro_expert_cache_plus_streamed_route =
+            Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
+                &self.runtime,
+                selected_indices,
+                selected_scores,
+                &route_partition,
+                &retained_page_manifest,
+                &missing_page_manifest,
+            )
+            .map_err(|_route_error| Qwen3_5ExecutionError::InvalidInput {
+                description: "the cached-plus-streamed route could not be built",
+            })?;
         let concatenated_assignment_order =
             concatenated_assignment_order(&route_partition, route_order_expert_ids.len());
-        self.forward_moe_cached_plus_streamed_route_with_performance_attribution(
+        self.forward_moe_astro_expert_cache_plus_streamed_route_with_performance_attribution(
             hidden_states,
             mixture_of_experts_weights,
             &retained_expert_weights,
-            &cached_plus_streamed_route,
+            &astro_expert_cache_plus_streamed_route,
             &missing_expert_weights,
             selected_scores,
             &concatenated_assignment_order,

@@ -37,7 +37,7 @@ fn should_report_every_astro_ssd_prompt_cache_boundary_crossed_by_one_prefill_ch
 }
 
 #[test]
-fn should_clamp_cache_enabled_prefill_to_the_next_persistent_boundary() {
+fn should_clamp_astro_ssd_prompt_cache_enabled_prefill_to_the_next_persistent_boundary() {
     for (
         prefill_chunk_start,
         requested_prefill_chunk_end,
@@ -161,7 +161,7 @@ fn should_report_no_pending_prompt_work_when_the_cursor_passed_the_end() {
 }
 
 #[test]
-fn should_keep_the_configured_chunk_when_no_cache_is_available() {
+fn should_keep_the_configured_chunk_when_no_astro_ssd_prompt_cache_is_available() {
     let span = resolve_prompt_prefill_chunk_span(0, 2_048, 1_792, false, true, 512)
         .expect("prompt work is pending");
     assert_eq!(span.prefill_start, 0);
@@ -169,7 +169,7 @@ fn should_keep_the_configured_chunk_when_no_cache_is_available() {
 }
 
 #[test]
-fn should_keep_the_configured_chunk_when_the_request_cannot_use_the_cache() {
+fn should_keep_the_configured_chunk_when_the_request_cannot_use_the_astro_ssd_prompt_cache() {
     // Availability alone must not clamp: the request's own permission bit
     // decides, so a cache-configured engine serving a cache-ineligible request
     // keeps the configured chunk.
@@ -179,7 +179,7 @@ fn should_keep_the_configured_chunk_when_the_request_cannot_use_the_cache() {
 }
 
 #[test]
-fn should_clamp_the_chunk_to_one_durable_boundary_when_the_cache_applies() {
+fn should_clamp_the_chunk_to_one_durable_boundary_when_the_astro_ssd_prompt_cache_applies() {
     // A 1,792-token configured chunk starting at 0 with 512-token blocks
     // would publish three complete blocks; the clamp keeps it to one.
     let span = resolve_prompt_prefill_chunk_span(0, 2_048, 1_792, true, true, 512)

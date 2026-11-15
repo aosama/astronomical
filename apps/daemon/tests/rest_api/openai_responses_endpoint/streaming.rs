@@ -8,7 +8,7 @@ async fn should_return_semantic_sse_events_without_a_done_sentinel() {
             prompt_token_count: 10,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -37,7 +37,7 @@ async fn should_stream_responses_visible_text_separately_from_reasoning_for_open
             prompt_token_count: 10,
             generated_token_count: 2,
             reasoning_token_count: 1,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -108,7 +108,7 @@ async fn should_stream_responses_parallel_function_call_lifecycle_for_opencode()
             prompt_token_count: 10,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::ToolCalls,
         },
     ]));

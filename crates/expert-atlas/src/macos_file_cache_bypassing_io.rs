@@ -2,9 +2,9 @@
 //!
 //! Measured on Apple Silicon: `F_NOCACHE` gives a direct (uncached) transfer
 //! only when the file offset, the length and the buffer are all 16 KiB
-//! aligned; otherwise it silently goes through the cache. A conversion reads
-//! and writes tens of gigabytes once, so keeping it out of the cache leaves
-//! the cache to the models the machine is serving.
+//! aligned; otherwise it silently goes through the macOS file cache. A conversion reads
+//! and writes tens of gigabytes once, so keeping it out of the macOS file cache leaves
+//! the macOS file cache to the models the machine is serving.
 
 use std::fs::{File, OpenOptions};
 use std::os::fd::AsRawFd;
@@ -15,7 +15,7 @@ use crate::atlas_manifest::ATLAS_RECORD_ALIGNMENT_BYTES;
 
 pub(crate) fn open_bypassing_macos_file_cache(path: &Path) -> std::io::Result<File> {
     let file = File::open(path)?;
-    set_no_cache(&file)?;
+    set_no_macos_file_cache(&file)?;
     Ok(file)
 }
 
@@ -25,11 +25,11 @@ pub(crate) fn create_bypassing_macos_file_cache(path: &Path) -> std::io::Result<
         .read(true)
         .write(true)
         .open(path)?;
-    set_no_cache(&file)?;
+    set_no_macos_file_cache(&file)?;
     Ok(file)
 }
 
-fn set_no_cache(file: &File) -> std::io::Result<()> {
+fn set_no_macos_file_cache(file: &File) -> std::io::Result<()> {
     // SAFETY: fcntl on a live descriptor with an integer argument.
     let status = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_NOCACHE, 1) };
     if status == -1 {

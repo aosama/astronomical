@@ -4,7 +4,7 @@
 //!
 //! 1. **Visual prefill** — the current chunk contains image-pad tokens and the
 //!    request still owns visual embeddings. A request-level vision tensor alone
-//!    is not enough; text-only suffixes must use the text path so cache restore
+//!    is not enough; text-only suffixes must use the text path so astro SSD astro SSD prompt cache restore
 //!    and cold prefill seed the first generated token the same way.
 //! 2. **Plain text prefill** — the common path; may seed the first generated
 //!    token if this is the terminal chunk, or forward with optional astro-ssd-prompt-cache

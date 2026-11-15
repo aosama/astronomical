@@ -10,7 +10,7 @@ use tokio::{
     time::{Instant, MissedTickBehavior, interval, sleep},
 };
 
-use super::astro_ssd_prompt_cache_stats_worker_launcher::create_cache_stats_worker_configuration;
+use super::astro_ssd_prompt_cache_stats_worker_launcher::create_astro_ssd_prompt_cache_stats_worker_configuration;
 use crate::support::discovered_model_artifact;
 
 pub(super) fn model_id() -> &'static str {
@@ -28,7 +28,8 @@ mod live_progress;
 mod scenario;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads Ornith and exercises the persistent prompt cache end-to-end with a 5K-word Romeo and Juliet prompt"]
-async fn should_observe_a_cache_miss_then_a_cache_hit_with_5k_romeo_and_juliet_words() {
-    scenario::run_cache_stats_e2e_with_timeout(scenario::five_thousand_word_case()).await;
+#[ignore = "loads Ornith and exercises the astro SSD astro SSD prompt cache end-to-end with a 5K-word Romeo and Juliet prompt"]
+async fn should_observe_an_astro_ssd_prompt_cache_miss_then_an_astro_ssd_prompt_cache_hit_with_5k_romeo_and_juliet_words()
+ {
+    scenario::run_astro_ssd_prompt_cache_stats_e2e_with_timeout(scenario::five_thousand_word_case()).await;
 }

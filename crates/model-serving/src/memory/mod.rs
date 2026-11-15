@@ -29,7 +29,7 @@
 //! - **3 layer states** — when a reply begins, `residency` plans one
 //!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or
 //!   `Absent`. What to do about a layer follows from its state and from
-//!   what the cache holds.
+//!   what the astro expert cache holds.
 //! - **2 page classes** — `StableCompleteLayer` and `ElasticRoutedExperts`,
 //!   the eviction-priority classes for retained *prefill* pages.
 //!
@@ -101,7 +101,7 @@ pub(crate) use astro_expert_cache_arithmetic::source_expert_page_payload_bytes;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use astro_expert_cache_arithmetic::{
     ExpertStreamingSessionCounters, RouteCoverageClass, StreamedPageSourcePlan,
-    expert_layer_topology_from_residency, no_cache_route_source_bytes,
+    expert_layer_topology_from_residency, no_astro_expert_cache_route_source_bytes,
     record_streamed_page_source_plan_in_both_ledgers,
 };
 pub use astronomical_memory_policy::forward_admission::{

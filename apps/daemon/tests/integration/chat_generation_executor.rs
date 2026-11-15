@@ -56,7 +56,7 @@ async fn should_stream_ordered_chat_outputs() {
             prompt_token_count: 2,
             generated_token_count: 4,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::ToolCalls,
         }
     );
@@ -214,7 +214,7 @@ async fn should_send_large_but_bounded_chat_commands_to_the_worker_in_one_ipc_fr
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         }
     );

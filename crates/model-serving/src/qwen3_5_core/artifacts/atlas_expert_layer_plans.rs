@@ -101,7 +101,7 @@ fn build_atlas_expert_layer_plans(
 ) -> Result<Vec<QuantizedExpertLayerPlan>, ExpertManifestError> {
     let mut atlas_weight_map = weight_map.clone();
     let mut atlas_stored_names = stored_tensor_name_by_canonical_name.clone();
-    let mut header_cache = HashMap::new();
+    let mut safetensors_header_cache = HashMap::new();
     let mut record_stride_by_layer_file = HashMap::new();
     for expert_layer in &expert_atlas.expert_layers {
         let layer_file_path = model_dir.join(&expert_layer.file_name);
@@ -113,7 +113,7 @@ fn build_atlas_expert_layer_plans(
             );
             atlas_stored_names.remove(&tensor_entry.tensor_name);
         }
-        header_cache.insert(layer_file_path.clone(), synthesized_header);
+        safetensors_header_cache.insert(layer_file_path.clone(), synthesized_header);
         record_stride_by_layer_file.insert(layer_file_path, expert_layer.record_stride_bytes);
     }
     let mut layer_plans = Vec::with_capacity(decoder_layer_count);
@@ -125,7 +125,7 @@ fn build_atlas_expert_layer_plans(
             &atlas_stored_names,
             &layer_prefix,
             config,
-            &mut header_cache,
+            &mut safetensors_header_cache,
         )?;
         apply_record_strides(&mut layer_plan, &record_stride_by_layer_file)?;
         layer_plans.push(layer_plan);

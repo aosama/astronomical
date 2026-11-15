@@ -282,13 +282,13 @@ fn stream_event_to_daemon_response(
             prompt_token_count,
             generated_token_count,
             reasoning_token_count,
-            cached_token_count,
+            astro_ssd_prompt_cache_token_count,
             reason,
         } => Some(DaemonResponse::ChatGenerationCompleted {
             prompt_token_count,
             generated_token_count,
             reasoning_token_count,
-            cached_token_count,
+            astro_ssd_prompt_cache_token_count,
             reason,
         }),
         ChatGenerationStreamEvent::Failed { reason } => {

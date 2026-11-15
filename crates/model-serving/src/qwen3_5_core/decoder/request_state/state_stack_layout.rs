@@ -94,9 +94,9 @@ fn qwen_composite_state(
         ));
     };
     if convolution_tensor.tensor_role_name()
-        != crate::qwen3_5_core::decoder::cache_layout::QWEN_CONVOLUTION_TENSOR_ROLE
+        != crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::QWEN_CONVOLUTION_TENSOR_ROLE
         || recurrent_tensor.tensor_role_name()
-            != crate::qwen3_5_core::decoder::cache_layout::QWEN_RECURRENCE_TENSOR_ROLE
+            != crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::QWEN_RECURRENCE_TENSOR_ROLE
     {
         return Err(request_decoder_state_error(
             "Qwen linear attention tensor roles do not match the model contract",

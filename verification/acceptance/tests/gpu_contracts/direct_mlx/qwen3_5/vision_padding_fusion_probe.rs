@@ -57,7 +57,7 @@ impl PaddingProbe {
         self,
         runtime: &MlxRuntime,
         block_attention_states: &[MlxArray],
-        padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+        vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
     ) -> Vec<MlxArray> {
         let mut outputs = Vec::new();
         for block_index in 0..VISION_BLOCK_COUNT {
@@ -69,7 +69,7 @@ impl PaddingProbe {
                     )),
                     PaddingProbe::Cached => outputs.push(cached_padding(
                         runtime,
-                        padding_zero_cache,
+                        vision_padding_zero_cache,
                         &block_attention_states[block_index],
                     )),
                 }
@@ -111,10 +111,10 @@ fn uncached_padding(runtime: &MlxRuntime, attention_states: &MlxArray) -> MlxArr
 /// Cached padding through the production cache type.
 fn cached_padding(
     runtime: &MlxRuntime,
-    padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+    vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
     attention_states: &MlxArray,
 ) -> MlxArray {
-    padding_zero_cache
+    vision_padding_zero_cache
         .pad_attention_head_dimension(
             runtime,
             attention_states,
@@ -144,10 +144,10 @@ fn build_block_attention_states(runtime: &MlxRuntime) -> Vec<MlxArray> {
 fn warm_up_probes(
     runtime: &MlxRuntime,
     block_attention_states: &[MlxArray],
-    padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+    vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
 ) {
     for probe in PROBE_ORDER {
-        let outputs = probe.run(runtime, block_attention_states, padding_zero_cache);
+        let outputs = probe.run(runtime, block_attention_states, vision_padding_zero_cache);
         let output_references = outputs.iter().collect::<Vec<_>>();
         runtime
             .evaluate_arrays(&output_references)
@@ -164,7 +164,7 @@ fn warm_up_probes(
 fn collect_probe_samples(
     runtime: &MlxRuntime,
     block_attention_states: &[MlxArray],
-    padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+    vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
 ) -> Vec<Vec<f64>> {
     let mut samples: Vec<Vec<f64>> = vec![Vec::new(); PROBE_ORDER.len()];
     let ramp_started_at = Instant::now();
@@ -173,7 +173,7 @@ fn collect_probe_samples(
     {
         for (probe_index, probe) in PROBE_ORDER.iter().enumerate() {
             let started_at = Instant::now();
-            let outputs = probe.run(runtime, block_attention_states, padding_zero_cache);
+            let outputs = probe.run(runtime, block_attention_states, vision_padding_zero_cache);
             let output_references = outputs.iter().collect::<Vec<_>>();
             runtime
                 .evaluate_arrays(&output_references)
@@ -252,17 +252,31 @@ async fn probe_vision_padding_cache() {
             .expect("the probe memory limits should be valid"),
     )
     .expect("the direct MLX runtime should initialize");
-    let padding_zero_cache = Qwen3_5VisionPaddingZeroCache::new();
+    let vision_padding_zero_cache = Qwen3_5VisionPaddingZeroCache::new();
     let block_attention_states = build_block_attention_states(&runtime);
-    warm_up_probes(&runtime, &block_attention_states, &padding_zero_cache);
+    warm_up_probes(
+        &runtime,
+        &block_attention_states,
+        &vision_padding_zero_cache,
+    );
 
-    let samples = collect_probe_samples(&runtime, &block_attention_states, &padding_zero_cache);
+    let samples = collect_probe_samples(
+        &runtime,
+        &block_attention_states,
+        &vision_padding_zero_cache,
+    );
     report_probe_medians(&samples);
 
-    let per_call_outputs =
-        PaddingProbe::PerCallZeros.run(&runtime, &block_attention_states, &padding_zero_cache);
-    let cached_outputs =
-        PaddingProbe::Cached.run(&runtime, &block_attention_states, &padding_zero_cache);
+    let per_call_outputs = PaddingProbe::PerCallZeros.run(
+        &runtime,
+        &block_attention_states,
+        &vision_padding_zero_cache,
+    );
+    let cached_outputs = PaddingProbe::Cached.run(
+        &runtime,
+        &block_attention_states,
+        &vision_padding_zero_cache,
+    );
     assert_cached_padding_bit_exact(&runtime, &per_call_outputs, &cached_outputs);
 }
 

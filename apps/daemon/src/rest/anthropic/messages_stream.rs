@@ -98,13 +98,13 @@ impl AnthropicMessagesStreamEncoder {
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 reason,
                 ..
             } => {
                 let worker_token_counts = WorkerTokenCounts {
                     prompt_token_count,
-                    cached_token_count,
+                    astro_ssd_prompt_cache_token_count,
                     generated_token_count,
                 };
                 self.complete(worker_token_counts, reason)

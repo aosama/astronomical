@@ -10,7 +10,7 @@ use crate::error::QuantizationError;
 
 use super::astro_decoder_state_cache_sensitivity::AstroDecoderStateCacheSensitivityResult;
 
-/// One layer's cache decision.
+/// One layer's astro decoder state cache decision.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AstroDecoderStateCacheLayerConfig {
     pub layer_index: usize,
@@ -19,12 +19,12 @@ pub struct AstroDecoderStateCacheLayerConfig {
     pub group_size: GroupSize,
 }
 
-/// Greedy allocation under an average cache bits target, OptiQ's
+/// Greedy allocation under an average astro decoder state cache bits target, OptiQ's
 /// `optimize_astro_decoder_state_cache`: every layer starts at the lowest width, and the
 /// upgrade with the largest KL reduction per added bit is taken until the
 /// plain mean of the per-layer widths meets the target. The target is a
 /// floor, so the discrete ladder may overshoot it. The mean is unweighted
-/// because every cached layer of one model holds the same heads and head
+/// because every astro decoder state cache layer of one model holds the same heads and head
 /// dimension, so bytes per token are equal across layers.
 pub fn optimize_astro_decoder_state_cache(
     results: &[AstroDecoderStateCacheSensitivityResult],
@@ -54,7 +54,7 @@ pub fn optimize_astro_decoder_state_cache(
     Ok(configs)
 }
 
-/// Cache bytes for a context length under a per-layer config, for the
+/// Astro decoder state astro decoder state cache bytes for a context length under a per-layer config, for the
 /// memory report: each layer's float16 elements per token at its width,
 /// plus a float16 scale and bias per group when it is quantized.
 #[must_use]
@@ -72,7 +72,7 @@ pub fn estimate_astro_decoder_state_cache_bytes(
         let Some(result) = result_by_layer_index.get(&config.layer_index) else {
             continue;
         };
-        let elements_per_token = result.cache_bytes_per_token / FLOAT16_BYTES;
+        let elements_per_token = result.astro_decoder_state_cache_bytes_per_token / FLOAT16_BYTES;
         let mut bytes_per_token = elements_per_token * f64::from(config.bit_width.bits()) / 8.0;
         if !config.bit_width.keeps_bfloat16() {
             let groups_per_token = elements_per_token / f64::from(config.group_size.elements());

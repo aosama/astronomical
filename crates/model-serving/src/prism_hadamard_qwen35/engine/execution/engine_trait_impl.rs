@@ -14,9 +14,9 @@ use mlx_bridge::MlxArray;
 use super::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
     prefill_chunk::{
-        capture_completed_prefill_cache_block, forward_prefill_chunk_hidden_states,
-        prefill_chunk_length, prefill_progress_token, queue_prefill_first_token,
-        submit_prefill_state_evaluation,
+        capture_completed_prefill_astro_ssd_prompt_cache_block,
+        forward_prefill_chunk_hidden_states, prefill_chunk_length, prefill_progress_token,
+        queue_prefill_first_token, submit_prefill_state_evaluation,
     },
     record_emitted_token,
     sampling::{
@@ -162,7 +162,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let structured_generation = inference_request.take_structured_generation();
         let mut performance_attribution = inference_request.take_performance_attribution();
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
-        let mut cached_token_count: u32 = 0;
+        let mut astro_ssd_prompt_cache_token_count: u32 = 0;
         let mut last_published_block_key = None;
         let mut generation_state = StraightGenerationState::empty();
         if let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.clone() {
@@ -175,7 +175,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                     &mut self.astro_ssd_prompt_cache_counters,
                     &mut performance_attribution,
                 )?;
-            cached_token_count = restore_outcome.restored_token_count;
+            astro_ssd_prompt_cache_token_count = restore_outcome.restored_token_count;
             last_published_block_key =
                 restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
         }
@@ -183,9 +183,11 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             request_id,
             remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
             prompt_token_ids: prompt_token_ids.clone(),
-            remaining_prompt_token_ids: prompt_token_ids[cached_token_count as usize..].to_vec(),
-            processed_prompt_token_count: cached_token_count,
-            cached_token_count,
+            remaining_prompt_token_ids: prompt_token_ids
+                [astro_ssd_prompt_cache_token_count as usize..]
+                .to_vec(),
+            processed_prompt_token_count: astro_ssd_prompt_cache_token_count,
+            astro_ssd_prompt_cache_token_count,
             generation_state,
             pending_sampled_token: None,
             penalized_token_ids,
@@ -197,7 +199,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             performance_attribution,
         });
         Ok(EngineGenerationStart::with_expert_memory_mode(
-            cached_token_count,
+            astro_ssd_prompt_cache_token_count,
             ExpertMemoryMode::Resident,
         ))
     }
@@ -517,10 +519,14 @@ impl PrismHadamardQwen35InferenceExecution {
         // published tensors chain onto the lazy arrays and materialize during
         // publication, so no extra device synchronization happens here.
         active.processed_prompt_token_count += chunk_length as u32;
-        capture_completed_prefill_cache_block(model, astro_ssd_prompt_cache.as_deref(), active)?;
+        capture_completed_prefill_astro_ssd_prompt_cache_block(
+            model,
+            astro_ssd_prompt_cache.as_deref(),
+            active,
+        )?;
         let prompt_work_reuse = WorkerPromptWorkReuse {
             target_eligible_token_count: active.prompt_token_ids.len() as u64,
-            target_restored_token_count: u64::from(active.cached_token_count),
+            target_restored_token_count: u64::from(active.astro_ssd_prompt_cache_token_count),
         };
         Ok(prefill_progress_token(
             chunk_length,

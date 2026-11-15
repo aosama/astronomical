@@ -6,7 +6,7 @@ use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 
 impl Qwen3_5StreamingModel {
     /// Builds the residency claim from the reconciled breakdown of the same MLX
-    /// measurement. The retained cache counts adopted lazy pages —
+    /// measurement. The retained astro expert cache counts adopted lazy pages —
     /// layers seated for ownership before their arrays are materialized by the
     /// layer-interval eval — so its bookkeeping payload exceeds the physically
     /// resident bytes during the seat-to-first-eval window. The only truthful
@@ -24,7 +24,7 @@ impl Qwen3_5StreamingModel {
         &self,
         mlx_memory_breakdown: &MlxActiveMemoryBreakdown,
     ) -> ExpertResidencyTelemetry {
-        let expert_statistics = self.expert_weight_memory_cache_statistics();
+        let expert_statistics = self.astro_expert_cache_statistics();
         let (total_layer_count, complete_expert_payload_byte_count, expert_capacity) =
             match self.expert_pager.as_ref() {
                 Some(expert_pager) => {

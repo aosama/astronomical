@@ -106,10 +106,11 @@ async fn attribute_paged_prefill_chunks() {
             &mut request_open_attribution,
         )
         .expect("the request-open residency plan should publish");
-    let opening_cache_statistics = qwen3_5_model.expert_weight_memory_cache_statistics();
+    let opening_astro_expert_cache_statistics = qwen3_5_model.astro_expert_cache_statistics();
     eprintln!(
         "[paged-prefill-attribution] request_open cache_ceiling_gb={:.3}",
-        opening_cache_statistics.maximum_resident_payload_byte_count as f64 / 1_073_741_824.0
+        opening_astro_expert_cache_statistics.maximum_resident_payload_byte_count as f64
+            / 1_073_741_824.0
     );
 
     let mut total_positional_read_bytes = 0_u64;
@@ -208,14 +209,15 @@ async fn attribute_paged_prefill_chunks() {
             read_bytes > 0,
             "every streamed chunk must issue positional reads"
         );
-        let cache_statistics = qwen3_5_model.expert_weight_memory_cache_statistics();
+        let astro_expert_cache_statistics = qwen3_5_model.astro_expert_cache_statistics();
         eprintln!(
             "[paged-prefill-attribution] chunk={chunk_index} cache_after: entries={} resident_gb={:.3} complete_layers={} evictions={} max_gb={:.3}",
-            cache_statistics.entry_count,
-            cache_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
-            cache_statistics.complete_layer_count,
-            cache_statistics.eviction_count,
-            cache_statistics.maximum_resident_payload_byte_count as f64 / 1_073_741_824.0,
+            astro_expert_cache_statistics.entry_count,
+            astro_expert_cache_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
+            astro_expert_cache_statistics.complete_layer_count,
+            astro_expert_cache_statistics.eviction_count,
+            astro_expert_cache_statistics.maximum_resident_payload_byte_count as f64
+                / 1_073_741_824.0,
         );
     }
 

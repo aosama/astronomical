@@ -12,8 +12,8 @@ use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
     AstroSsdPromptCacheFileKind, open_without_following_symlinks,
     parse_astro_ssd_prompt_cache_file_hash_from_path,
-    remove_cache_owned_directory_or_confirm_absent, remove_cache_owned_file_or_confirm_absent,
-    validate_current_file_header,
+    remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent,
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent, validate_current_file_header,
 };
 use super::disk_store_index::{
     AstroSsdPromptCacheDiskStoreIndex, TrackedAstroSsdPromptCacheBlock,
@@ -57,8 +57,8 @@ where
             .extension()
             .is_some_and(|extension| extension == "tmp")
         {
-            let removed_byte_count = cache_owned_file_byte_count(&entry_path)?;
-            remove_cache_owned_file_or_confirm_absent(&entry_path)?;
+            let removed_byte_count = astro_ssd_prompt_cache_owned_file_byte_count(&entry_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&entry_path)?;
             startup_cleanup_evidence
                 .interrupted_transaction_recovery
                 .record_artifact(removed_byte_count);
@@ -74,8 +74,8 @@ where
         let Some(astro_ssd_prompt_cache_file_hash) =
             parse_astro_ssd_prompt_cache_file_hash_from_path(&entry_path)
         else {
-            let removed_byte_count = cache_owned_file_byte_count(&entry_path)?;
-            remove_cache_owned_file_or_confirm_absent(&entry_path)?;
+            let removed_byte_count = astro_ssd_prompt_cache_owned_file_byte_count(&entry_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&entry_path)?;
             startup_cleanup_evidence
                 .corrupt_current_format
                 .record_artifact(removed_byte_count);
@@ -96,7 +96,7 @@ where
             }
         })?;
         if !header_validator(&file, &entry_path) {
-            remove_cache_owned_file_or_confirm_absent(&entry_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&entry_path)?;
             startup_cleanup_evidence
                 .corrupt_current_format
                 .record_artifact(file_size_bytes);
@@ -275,8 +275,9 @@ fn discard_block_directory(
     startup_cleanup_evidence: &mut AstroSsdPromptCacheStartupCleanupEvidence,
     discard_reason: BlockDirectoryDiscardReason,
 ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
-    let removed_byte_count = cache_owned_directory_byte_count(block_directory_path)?;
-    remove_cache_owned_directory_or_confirm_absent(block_directory_path)?;
+    let removed_byte_count =
+        astro_ssd_prompt_cache_owned_directory_byte_count(block_directory_path)?;
+    remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(block_directory_path)?;
     match discard_reason {
         BlockDirectoryDiscardReason::CorruptCurrentFormat => startup_cleanup_evidence
             .corrupt_current_format
@@ -511,9 +512,10 @@ fn remove_invalid_block_candidates(
 ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
     for invalid_block_hash in invalid_block_hashes {
         if let Some(invalid_block_candidate) = block_candidate_by_hash.remove(invalid_block_hash) {
-            let removed_byte_count =
-                cache_owned_directory_byte_count(&invalid_block_candidate.block_directory_path)?;
-            remove_cache_owned_directory_or_confirm_absent(
+            let removed_byte_count = astro_ssd_prompt_cache_owned_directory_byte_count(
+                &invalid_block_candidate.block_directory_path,
+            )?;
+            remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
                 &invalid_block_candidate.block_directory_path,
             )?;
             startup_cleanup_evidence
@@ -524,7 +526,9 @@ fn remove_invalid_block_candidates(
     Ok(())
 }
 
-fn cache_owned_file_byte_count(file_path: &Path) -> Result<u64, AstroSsdPromptCacheDiskStoreError> {
+fn astro_ssd_prompt_cache_owned_file_byte_count(
+    file_path: &Path,
+) -> Result<u64, AstroSsdPromptCacheDiskStoreError> {
     std::fs::symlink_metadata(file_path)
         .map(|file_metadata| file_metadata.len())
         .map_err(
@@ -535,7 +539,7 @@ fn cache_owned_file_byte_count(file_path: &Path) -> Result<u64, AstroSsdPromptCa
         )
 }
 
-fn cache_owned_directory_byte_count(
+fn astro_ssd_prompt_cache_owned_directory_byte_count(
     directory_path: &Path,
 ) -> Result<u64, AstroSsdPromptCacheDiskStoreError> {
     let mut pending_directories = vec![directory_path.to_path_buf()];
@@ -564,8 +568,8 @@ fn cache_owned_directory_byte_count(
             if entry_file_type.is_dir() {
                 pending_directories.push(entry_path);
             } else {
-                total_byte_count =
-                    total_byte_count.saturating_add(cache_owned_file_byte_count(&entry_path)?);
+                total_byte_count = total_byte_count
+                    .saturating_add(astro_ssd_prompt_cache_owned_file_byte_count(&entry_path)?);
             }
         }
     }

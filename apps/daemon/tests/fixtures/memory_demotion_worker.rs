@@ -223,7 +223,7 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         prompt_token_count: 1,
                         generated_token_count: 1,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
+                        astro_ssd_prompt_cache_token_count: 0,
                         astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })

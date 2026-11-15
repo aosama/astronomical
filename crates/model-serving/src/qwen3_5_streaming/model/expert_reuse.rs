@@ -25,7 +25,7 @@ pub(crate) enum ExpertPageDisposition {
 }
 
 impl Qwen3_5Model {
-    /// Complete-layer cache hit when every expert of the decoder index is seated.
+    /// Complete-layer astro expert cache hit when every expert of the decoder index is seated.
     pub(super) fn expert_page_disposition(
         &self,
         layer_index: usize,
@@ -131,8 +131,12 @@ impl Qwen3_5Model {
         expert_capacity: usize,
     ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
         let astro_expert_cache = self.astro_expert_cache.as_ref()?;
-        let cache = astro_expert_cache.borrow();
-        cache.full_coverage_page(layer_index, complete_expert_ids, expert_capacity)
+        let borrowed_astro_expert_cache = astro_expert_cache.borrow();
+        borrowed_astro_expert_cache.full_coverage_page(
+            layer_index,
+            complete_expert_ids,
+            expert_capacity,
+        )
     }
 
     /// Returns the routed experts of a seated complete layer as their own
@@ -338,10 +342,10 @@ impl Qwen3_5Model {
             );
             let warm_slot_count = self.hot_expert_warm_slot_count();
             let (resident_expert_count, layer_has_complete_table) = {
-                let astro_expert_cache = astro_expert_cache.borrow();
+                let borrowed_astro_expert_cache = astro_expert_cache.borrow();
                 (
-                    astro_expert_cache.occupied_slot_count(layer_index),
-                    astro_expert_cache.has_complete_layer(layer_index, expert_capacity),
+                    borrowed_astro_expert_cache.occupied_slot_count(layer_index),
+                    borrowed_astro_expert_cache.has_complete_layer(layer_index, expert_capacity),
                 )
             };
             self.offer_multi_token_union_to_retained_ownership(
@@ -530,7 +534,7 @@ impl Qwen3_5Model {
             read_expert_ids.len(),
             streamed_manifest.source_manifests.len(),
         );
-        // Growth is bounded by the cache ceiling and the structural slot
+        // Growth is bounded by the astro expert cache ceiling and the structural slot
         // count; the expert capacity is the largest honest slot bound, and
         // passing it deliberately rides the warm-insert counter for
         // completion reads — the growth cap and the insert-evidence counter
@@ -611,13 +615,16 @@ impl Qwen3_5Model {
     ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
         let astro_expert_cache = self.astro_expert_cache.as_ref()?;
         {
-            let cache = astro_expert_cache.borrow();
-            if cache.has_complete_layer(layer_index, expert_capacity) {
+            let borrowed_astro_expert_cache = astro_expert_cache.borrow();
+            if borrowed_astro_expert_cache.has_complete_layer(layer_index, expert_capacity) {
                 return None;
             }
-            let full_coverage_page =
-                cache.full_coverage_page(layer_index, routed_expert_ids, expert_capacity)?;
-            drop(cache);
+            let full_coverage_page = borrowed_astro_expert_cache.full_coverage_page(
+                layer_index,
+                routed_expert_ids,
+                expert_capacity,
+            )?;
+            drop(borrowed_astro_expert_cache);
             astro_expert_cache
                 .borrow_mut()
                 .record_routed_reads(layer_index, routed_expert_ids);

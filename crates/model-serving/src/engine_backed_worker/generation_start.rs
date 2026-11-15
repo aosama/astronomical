@@ -344,7 +344,7 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
-        let cached_prompt_token_count = generation_start.cached_token_count();
+        let cached_prompt_token_count = generation_start.astro_ssd_prompt_cache_token_count();
         let restored_prompt_prefix_token_count =
             generation_start.restored_prompt_prefix_token_count();
         let initial_expert_memory_mode = generation_start.expert_memory_mode();

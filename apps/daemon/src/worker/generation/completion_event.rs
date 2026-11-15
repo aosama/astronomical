@@ -2,7 +2,7 @@
 //!
 //! Worker completion has four audiences with different contracts: protocol
 //! validation protects daemon state, the local performance log receives
-//! cache diagnostics, the completion attribution log receives emitted tool
+//! astro SSD astro SSD prompt cache diagnostics, the completion attribution log receives emitted tool
 //! calls when enabled, and the public stream receives only OpenAI-compatible
 //! completion fields. Keeping the fan-out here makes that separation explicit.
 
@@ -31,7 +31,7 @@ struct CompletionMeasurements {
     prompt_token_count: u32,
     generated_token_count: u16,
     reasoning_token_count: u16,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_token_count: u32,
     reason: ChatGenerationCompletionReason,
 }
 
@@ -62,7 +62,7 @@ pub(in crate::worker) fn handle_worker_completion_event(
     prompt_token_count: u32,
     generated_token_count: u16,
     reasoning_token_count: u16,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_token_count: u32,
     astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
     reason: ChatGenerationCompletionReason,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -75,10 +75,10 @@ pub(in crate::worker) fn handle_worker_completion_event(
         prompt_token_count,
         generated_token_count,
         reasoning_token_count,
-        cached_token_count,
+        astro_ssd_prompt_cache_token_count,
         reason,
     };
-    // Cache diagnostics are request-scoped completion evidence. They go only to
+    // Astro SSD astro SSD prompt cache diagnostics are request-scoped completion evidence. They go only to
     // the local performance row; the public generation stream keeps its stable
     // OpenAI-compatible completion shape unchanged.
     let Some(active_request) = active_worker_request
@@ -114,7 +114,8 @@ pub(in crate::worker) fn handle_worker_completion_event(
             prompt_token_count: completion_measurements.prompt_token_count,
             generated_token_count: completion_measurements.generated_token_count,
             reasoning_token_count: completion_measurements.reasoning_token_count,
-            cached_token_count: completion_measurements.cached_token_count,
+            astro_ssd_prompt_cache_token_count: completion_measurements
+                .astro_ssd_prompt_cache_token_count,
             reason: completion_measurements.reason,
         },
     )
@@ -171,7 +172,7 @@ fn measure_completion_timings(
     let (prefill_tok_per_second, generation_tok_per_second) =
         GenerationPerformanceRecord::compute_throughput(
             completion_measurements.prompt_token_count,
-            completion_measurements.cached_token_count,
+            completion_measurements.astro_ssd_prompt_cache_token_count,
             completion_measurements.generated_token_count,
             prefill_elapsed_millis,
             generation_elapsed_millis,
@@ -254,7 +255,7 @@ fn log_completed_generation(completion_observation: &CompletionObservation<'_>) 
         prompt_token_count = completion_observation.completion_measurements.prompt_token_count,
         generated_token_count =
             completion_observation.completion_measurements.generated_token_count,
-        cached_token_count = completion_observation.completion_measurements.cached_token_count,
+        astro_ssd_prompt_cache_token_count = completion_observation.completion_measurements.astro_ssd_prompt_cache_token_count,
         completion_reason = ?completion_observation.completion_measurements.reason,
         prefill_elapsed_millis = completion_observation.completion_timings.prefill_elapsed_millis,
         generation_elapsed_millis =
@@ -292,9 +293,9 @@ fn record_completion_performance_and_attribution(
         prompt_token_count: completion_observation
             .completion_measurements
             .prompt_token_count,
-        cached_token_count: completion_observation
+        astro_ssd_prompt_cache_token_count: completion_observation
             .completion_measurements
-            .cached_token_count,
+            .astro_ssd_prompt_cache_token_count,
         generated_token_count: completion_observation
             .completion_measurements
             .generated_token_count,
@@ -368,7 +369,7 @@ fn publish_post_completion_activity(
             .prompt_token_count,
         completion_observation
             .completion_measurements
-            .cached_token_count,
+            .astro_ssd_prompt_cache_token_count,
         completion_observation
             .completion_timings
             .prefill_tok_per_second,

@@ -323,8 +323,8 @@ fn remaining_tokens_for_activity(
 pub(super) fn print_request_records(reports: &InteractionReports) {
     for (request_index, performance_record) in reports.performance_records.iter().enumerate() {
         eprintln!(
-            "{LOG_MARKER} request=record index={request_index} cached_token_count={} prefill_tok_per_second={} generation_tok_per_second={} outcome={}",
-            performance_record["cached_token_count"],
+            "{LOG_MARKER} request=record index={request_index} astro_ssd_prompt_cache_token_count={} prefill_tok_per_second={} generation_tok_per_second={} outcome={}",
+            performance_record["astro_ssd_prompt_cache_token_count"],
             performance_record["prefill_tok_per_second"],
             performance_record["generation_tok_per_second"],
             performance_record["outcome"],

@@ -11,9 +11,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerW
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_resident::Qwen3_5ResidentExpertWeights;
-use crate::{
-    AstroDecoderStateCacheState, ExpertWeightMemoryCacheStatistics, PerformanceAttribution,
-};
+use crate::{AstroDecoderStateCacheState, AstroExpertCacheStatistics, PerformanceAttribution};
 
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
@@ -49,7 +47,7 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qw
     }
 
     fn held_expert_payload_bytes(&self) -> u64 {
-        self.expert_weight_memory_cache_statistics()
+        self.astro_expert_cache_statistics()
             .resident_payload_byte_count
     }
 
@@ -260,7 +258,7 @@ impl Qwen3_5ResidentModel {
         &self,
         active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
     ) -> crate::inference_engine::contract::ExpertResidencyTelemetry {
-        let resident_expert_statistics = self.expert_weight_memory_cache_statistics();
+        let resident_expert_statistics = self.astro_expert_cache_statistics();
         let (complete_expert_payload_byte_count, expert_capacity) =
             resident_expert_library_facts(&self.expert_layer_plans);
         crate::inference_engine::contract::ExpertResidencyTelemetry {
@@ -278,9 +276,9 @@ impl Qwen3_5ResidentModel {
 
     /// Returns complete-owner expert-memory telemetry without page counters.
     #[must_use]
-    pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
+    pub fn astro_expert_cache_statistics(&self) -> AstroExpertCacheStatistics {
         if let Some(resident_expert_weights) = self.resident_expert_weights.as_ref() {
-            return ExpertWeightMemoryCacheStatistics {
+            return AstroExpertCacheStatistics {
                 entry_count: resident_expert_weights.expert_entry_count(),
                 resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
                 maximum_resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
@@ -296,7 +294,7 @@ impl Qwen3_5ResidentModel {
                 partial_layer_eviction_count: 0,
             };
         }
-        ExpertWeightMemoryCacheStatistics::default()
+        AstroExpertCacheStatistics::default()
     }
 
     /// Executes one prompt chunk, injecting visual embeddings at image_pad positions.

@@ -13,19 +13,23 @@ use serde_json::Value;
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use mlx_bridge::{MlxArray, MlxDtype};
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[tokio::test]
 async fn should_remove_the_complete_staging_transaction_when_sequence_validation_fails() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
-    let cache_directory = tempfile::tempdir().expect("the test should create a cache directory");
-    let cache = open_astro_ssd_prompt_cache_disk_store(&cache_directory, LARGE_CACHE_LIMIT_BYTES)
-        .expect("the cache should open");
+    let astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create a cache directory");
+    let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
+        &astro_ssd_prompt_cache_directory,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
+    )
+    .expect("the cache should open");
     let mut invalid_sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
     replace_one_tensor_with_invalid_shape(&runtime, &mut invalid_sequence_state_tensors);
 
-    let publication_error = cache
+    let publication_error = astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &astro_ssd_prompt_cache_block_key_for_seed(0),
@@ -39,20 +43,24 @@ async fn should_remove_the_complete_staging_transaction_when_sequence_validation
         publication_error,
         AstroSsdPromptCacheDiskStoreError::ValidateBlock { .. }
     ));
-    assert_no_visible_or_staged_blocks(cache_directory.path());
+    assert_no_visible_or_staged_blocks(astro_ssd_prompt_cache_directory.path());
 }
 
 #[tokio::test]
 async fn should_remove_the_sequence_file_and_transaction_when_boundary_validation_fails() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
-    let cache_directory = tempfile::tempdir().expect("the test should create a cache directory");
-    let cache = open_astro_ssd_prompt_cache_disk_store(&cache_directory, LARGE_CACHE_LIMIT_BYTES)
-        .expect("the cache should open");
+    let astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create a cache directory");
+    let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
+        &astro_ssd_prompt_cache_directory,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
+    )
+    .expect("the cache should open");
     let mut invalid_boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     replace_one_tensor_with_invalid_shape(&runtime, &mut invalid_boundary_state_tensors);
 
-    let publication_error = cache
+    let publication_error = astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &astro_ssd_prompt_cache_block_key_for_seed(0),
@@ -66,7 +74,7 @@ async fn should_remove_the_sequence_file_and_transaction_when_boundary_validatio
         publication_error,
         AstroSsdPromptCacheDiskStoreError::ValidateBlock { .. }
     ));
-    assert_no_visible_or_staged_blocks(cache_directory.path());
+    assert_no_visible_or_staged_blocks(astro_ssd_prompt_cache_directory.path());
 }
 
 #[tokio::test]
@@ -75,16 +83,20 @@ async fn should_leave_the_durable_parent_unchanged_after_a_child_storage_fault()
     // acknowledged to a previous request, so a child failure must not roll it back.
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
-    let cache_directory = tempfile::tempdir().expect("the test should create a cache directory");
-    let cache = open_astro_ssd_prompt_cache_disk_store(&cache_directory, LARGE_CACHE_LIMIT_BYTES)
-        .expect("the cache should open");
+    let astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create a cache directory");
+    let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
+        &astro_ssd_prompt_cache_directory,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
+    )
+    .expect("the cache should open");
     let parent_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = parent_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
         .expect("the child identity should resolve");
     let sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
-    cache
+    astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &parent_block_key,
@@ -96,7 +108,7 @@ async fn should_leave_the_durable_parent_unchanged_after_a_child_storage_fault()
     let mut invalid_child_boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     replace_one_tensor_with_invalid_shape(&runtime, &mut invalid_child_boundary_state_tensors);
 
-    cache
+    astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &child_block_key,
@@ -106,13 +118,13 @@ async fn should_leave_the_durable_parent_unchanged_after_a_child_storage_fault()
         )
         .expect_err("the child storage fault must remain a hard error");
 
-    assert!(cache.has_kv_block(&parent_block_key.block_hash()));
-    assert!(cache.has_recurrent_snapshot(&parent_block_key.block_hash()));
-    assert!(!cache.has_kv_block(&child_block_key.block_hash()));
-    assert!(!cache.has_recurrent_snapshot(&child_block_key.block_hash()));
-    assert_eq!(cache.sequence_state_block_count(), 1);
-    assert_eq!(cache.boundary_state_snapshot_count(), 1);
-    assert_no_staging_directories(cache_directory.path());
+    assert!(astro_ssd_prompt_cache.has_kv_block(&parent_block_key.block_hash()));
+    assert!(astro_ssd_prompt_cache.has_recurrent_snapshot(&parent_block_key.block_hash()));
+    assert!(!astro_ssd_prompt_cache.has_kv_block(&child_block_key.block_hash()));
+    assert!(!astro_ssd_prompt_cache.has_recurrent_snapshot(&child_block_key.block_hash()));
+    assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 1);
+    assert_eq!(astro_ssd_prompt_cache.boundary_state_snapshot_count(), 1);
+    assert_no_staging_directories(astro_ssd_prompt_cache_directory.path());
 }
 
 #[tokio::test]
@@ -121,11 +133,15 @@ async fn should_remove_staging_when_a_conflicting_final_directory_appears_before
     // Publication must preserve unknown final content rather than replacing it.
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
-    let cache_directory = tempfile::tempdir().expect("the test should create a cache directory");
-    let cache = open_astro_ssd_prompt_cache_disk_store(&cache_directory, LARGE_CACHE_LIMIT_BYTES)
-        .expect("the cache should open");
+    let astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create a cache directory");
+    let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
+        &astro_ssd_prompt_cache_directory,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
+    )
+    .expect("the cache should open");
     let block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
-    let conflicting_final_directory = cache_directory
+    let conflicting_final_directory = astro_ssd_prompt_cache_directory
         .path()
         .join("blocks")
         .join(hex::encode(block_key.block_hash()));
@@ -137,7 +153,7 @@ async fn should_remove_staging_when_a_conflicting_final_directory_appears_before
     )
     .expect("the conflicting directory marker should write");
 
-    let publication_error = cache
+    let publication_error = astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &block_key,
@@ -152,8 +168,8 @@ async fn should_remove_staging_when_a_conflicting_final_directory_appears_before
         AstroSsdPromptCacheDiskStoreError::ExistingBlockTopologyMismatch { .. }
     ));
     assert!(conflicting_final_directory.join("foreign-marker").is_file());
-    assert_no_staging_directories(cache_directory.path());
-    assert_eq!(cache.sequence_state_block_count(), 0);
+    assert_no_staging_directories(astro_ssd_prompt_cache_directory.path());
+    assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 0);
 }
 
 #[tokio::test]
@@ -162,11 +178,15 @@ async fn should_keep_state_file_metadata_bounded_to_the_storage_contract() {
     // Repeating names/revisions in every large state file leaks detail and grows headers.
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
-    let cache_directory = tempfile::tempdir().expect("the test should create a cache directory");
-    let cache = open_astro_ssd_prompt_cache_disk_store(&cache_directory, LARGE_CACHE_LIMIT_BYTES)
-        .expect("the cache should open");
+    let astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create a cache directory");
+    let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
+        &astro_ssd_prompt_cache_directory,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
+    )
+    .expect("the cache should open");
     let block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
-    cache
+    astro_ssd_prompt_cache
         .publish_block(
             &runtime,
             &block_key,
@@ -176,7 +196,7 @@ async fn should_keep_state_file_metadata_bounded_to_the_storage_contract() {
         )
         .expect("the block should publish");
 
-    let sequence_state_path = cache_directory
+    let sequence_state_path = astro_ssd_prompt_cache_directory
         .path()
         .join("blocks")
         .join(hex::encode(block_key.block_hash()))
@@ -218,8 +238,8 @@ fn replace_one_tensor_with_invalid_shape(
     );
 }
 
-fn assert_no_visible_or_staged_blocks(cache_directory: &Path) {
-    let blocks_directory = cache_directory.join("blocks");
+fn assert_no_visible_or_staged_blocks(astro_ssd_prompt_cache_directory: &Path) {
+    let blocks_directory = astro_ssd_prompt_cache_directory.join("blocks");
     assert_eq!(
         fs::read_dir(blocks_directory)
             .expect("the blocks directory should remain readable")
@@ -228,8 +248,8 @@ fn assert_no_visible_or_staged_blocks(cache_directory: &Path) {
     );
 }
 
-fn assert_no_staging_directories(cache_directory: &Path) {
-    let blocks_directory = cache_directory.join("blocks");
+fn assert_no_staging_directories(astro_ssd_prompt_cache_directory: &Path) {
+    let blocks_directory = astro_ssd_prompt_cache_directory.join("blocks");
     assert!(
         fs::read_dir(blocks_directory)
             .expect("the blocks directory should remain readable")

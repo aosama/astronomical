@@ -12,7 +12,7 @@ use mlx_bridge::MlxDtype;
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 
 const ONE_MEBIBYTE_QUOTA_BYTES: u64 = 1024 * 1024;
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[tokio::test]
 async fn should_rollback_a_new_visual_embedding_when_global_eviction_fails() {
@@ -93,7 +93,7 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
         tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open an empty directory");
     let root_astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);

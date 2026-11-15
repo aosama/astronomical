@@ -20,7 +20,7 @@ impl Qwen3_5Model {
     /// Kept weights the memory governor's capacity covers: retained experts,
     /// plus a dense model's kept layers, which stream once given back.
     pub(crate) fn reclaimable_retained_payload_bytes(&self) -> u64 {
-        self.expert_weight_memory_cache_statistics()
+        self.astro_expert_cache_statistics()
             .resident_payload_byte_count
             .saturating_add(self.dense_kept_layer_payload_bytes())
     }

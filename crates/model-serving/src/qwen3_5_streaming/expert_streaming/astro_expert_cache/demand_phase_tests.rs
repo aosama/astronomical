@@ -22,14 +22,14 @@ const EXPERT_CAPACITY: usize = 16;
 
 #[test]
 fn should_record_each_phase_into_its_own_stream() {
-    let mut cache = AstroExpertCache::new(1);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
     // Default phase is Prefill: every generation opens by processing its
     // prompt before any generated token exists.
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[7]);
-    cache.begin_decode_forward();
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[7, 9]);
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[7]);
+    astro_expert_cache.begin_decode_forward();
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[7, 9]);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(7, 1)])],
@@ -44,16 +44,16 @@ fn should_record_each_phase_into_its_own_stream() {
 
 #[test]
 fn should_apply_the_assignment_weight_to_prefill_evidence_only() {
-    let mut cache = AstroExpertCache::new(1);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
     // The final-chunk boost multiplier scales prefill evidence...
-    cache.set_prefill_demand_assignment_weight(3);
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[5]);
+    astro_expert_cache.set_prefill_demand_assignment_weight(3);
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[5]);
     // ...but decode evidence records at plain weight: the phase switch
     // restores plain weight itself.
-    cache.begin_decode_forward();
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[5, 6]);
+    astro_expert_cache.begin_decode_forward();
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[5, 6]);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(5, 3)])],
@@ -68,18 +68,18 @@ fn should_apply_the_assignment_weight_to_prefill_evidence_only() {
 
 #[test]
 fn should_clear_only_the_prefill_window_between_requests() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[2, 2]);
-    cache.begin_decode_forward();
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[1, 1, 1]);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[2, 2]);
+    astro_expert_cache.begin_decode_forward();
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[1, 1, 1]);
 
     // The next request opens its prefill window: prompt evidence is spent,
     // while the lifetime decode stream must survive (issue #955 — this is
     // the exact clear that, in the fused-counter design, also destroyed the
     // decode evidence and left the persisted file one request deep).
-    cache.begin_prefill_demand_window();
+    astro_expert_cache.begin_prefill_demand_window();
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![dense_counts(&[])]
@@ -93,11 +93,11 @@ fn should_clear_only_the_prefill_window_between_requests() {
 
 #[test]
 fn should_floor_a_configured_zero_weight_at_one_sighting() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.set_prefill_demand_assignment_weight(0);
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[1]);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.set_prefill_demand_assignment_weight(0);
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[1]);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(1, 1)])],
@@ -107,12 +107,12 @@ fn should_floor_a_configured_zero_weight_at_one_sighting() {
 
 #[test]
 fn should_ignore_recording_beyond_the_model_layer_shape() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.record_expert_demand(5, EXPERT_CAPACITY, &[1]);
-    cache.begin_decode_forward();
-    cache.record_expert_demand(5, EXPERT_CAPACITY, &[1]);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.record_expert_demand(5, EXPERT_CAPACITY, &[1]);
+    astro_expert_cache.begin_decode_forward();
+    astro_expert_cache.record_expert_demand(5, EXPERT_CAPACITY, &[1]);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![Vec::<u64>::new()],
@@ -127,21 +127,21 @@ fn should_ignore_recording_beyond_the_model_layer_shape() {
 
 #[test]
 fn should_report_historical_hotness_from_the_decode_record_only() {
-    let mut cache = AstroExpertCache::new(1);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
     // A prompt-heavy past session left expert 1 with broad prefill evidence
     // while expert 2 carried genuine conversational depth.
-    cache.seed_expert_demand_history(PersistedExpertUsage {
+    astro_expert_cache.seed_expert_demand_history(PersistedExpertUsage {
         prefill_demand_counts_by_layer: vec![vec![0, 400]],
         decode_demand_counts_by_layer: vec![vec![0, 0, 4]],
     });
 
     assert_eq!(
-        cache.historical_demand_count(0, 1),
+        astro_expert_cache.historical_demand_count(0, 1),
         0,
         "prefill breadth must never masquerade as conversational heat"
     );
     assert_eq!(
-        cache.historical_demand_count(0, 2),
+        astro_expert_cache.historical_demand_count(0, 2),
         4,
         "decode depth is the only seed of historical hotness"
     );
@@ -149,14 +149,14 @@ fn should_report_historical_hotness_from_the_decode_record_only() {
 
 #[test]
 fn should_record_an_earlier_route_under_the_prompt_weight_it_was_built_with() {
-    let mut cache = AstroExpertCache::new(1);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
     // The weight has moved on to the last span's by the time the first
     // span's route is recorded.
-    cache.set_prefill_demand_assignment_weight(4);
-    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[2], 1);
-    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[3], 4);
+    astro_expert_cache.set_prefill_demand_assignment_weight(4);
+    astro_expert_cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[2], 1);
+    astro_expert_cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[3], 4);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(2, 1), (3, 4)])],
@@ -166,11 +166,11 @@ fn should_record_an_earlier_route_under_the_prompt_weight_it_was_built_with() {
 
 #[test]
 fn should_ignore_a_route_prompt_weight_once_the_reply_has_begun() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.begin_decode_forward();
-    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[6], 9);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.begin_decode_forward();
+    astro_expert_cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[6], 9);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.decode_demand_counts_by_layer,
         vec![dense_counts(&[(6, 1)])],
@@ -180,11 +180,11 @@ fn should_ignore_a_route_prompt_weight_once_the_reply_has_begun() {
 
 #[test]
 fn should_floor_a_zero_route_weight_at_one() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[1], 0);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.record_expert_demand_at_prefill_weight(0, EXPERT_CAPACITY, &[1], 0);
 
     assert_eq!(
-        cache
+        astro_expert_cache
             .take_persisted_expert_usage()
             .prefill_demand_counts_by_layer,
         vec![dense_counts(&[(1, 1)])]
@@ -193,8 +193,8 @@ fn should_floor_a_zero_route_weight_at_one() {
 
 #[test]
 fn should_report_the_prompt_weight_a_new_route_would_record_under() {
-    let mut cache = AstroExpertCache::new(1);
-    assert_eq!(cache.prefill_demand_assignment_weight(), 1);
-    cache.set_prefill_demand_assignment_weight(5);
-    assert_eq!(cache.prefill_demand_assignment_weight(), 5);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    assert_eq!(astro_expert_cache.prefill_demand_assignment_weight(), 1);
+    astro_expert_cache.set_prefill_demand_assignment_weight(5);
+    assert_eq!(astro_expert_cache.prefill_demand_assignment_weight(), 5);
 }

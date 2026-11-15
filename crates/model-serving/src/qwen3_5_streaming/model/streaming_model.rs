@@ -6,7 +6,7 @@ use mlx_bridge::MlxArray;
 
 use std::cell::{Cell, RefCell};
 
-use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
+use crate::expert_paging::AstroExpertCacheStatistics;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
@@ -104,7 +104,7 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
     }
 
     fn held_expert_payload_bytes(&self) -> u64 {
-        self.expert_weight_memory_cache_statistics()
+        self.astro_expert_cache_statistics()
             .resident_payload_byte_count
     }
 
@@ -130,14 +130,15 @@ impl std::ops::DerefMut for Qwen3_5StreamingModel {
 impl Qwen3_5StreamingModel {
     /// Returns the retained pager cache's expert-memory snapshot.
     #[must_use]
-    pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
+    pub fn astro_expert_cache_statistics(&self) -> AstroExpertCacheStatistics {
         if self.expert_pager.is_none() {
-            return ExpertWeightMemoryCacheStatistics::default();
+            return AstroExpertCacheStatistics::default();
         }
-        self.astro_expert_cache.as_ref().map_or_else(
-            ExpertWeightMemoryCacheStatistics::default,
-            |astro_expert_cache| astro_expert_cache.borrow().statistics(),
-        )
+        self.astro_expert_cache
+            .as_ref()
+            .map_or_else(AstroExpertCacheStatistics::default, |astro_expert_cache| {
+                astro_expert_cache.borrow().statistics()
+            })
     }
 
     /// Sets the warm-table slot capacity for decode-time hot-expert warming.

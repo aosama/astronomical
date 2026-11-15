@@ -158,7 +158,7 @@ const MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT: Duration = Duration::from_
 pub(crate) const DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) const DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]

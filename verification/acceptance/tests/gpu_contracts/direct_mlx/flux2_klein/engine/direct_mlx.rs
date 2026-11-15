@@ -10,7 +10,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::MlxDtype;
 
@@ -26,7 +26,7 @@ fn should_clear_replacement_mlx_buffer_cache_and_persist_a_bounded_failed_load_r
         model_directory.path(),
         Flux2KleinArtifactProvenance::official(),
         DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-        DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+        DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         true,
         attribution_log_path.clone(),
     );
@@ -61,7 +61,7 @@ fn should_preserve_bf16_and_determinism_for_small_keyed_noise_and_euler_geometry
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the direct-MLX limits should be valid"),
     )
@@ -112,7 +112,7 @@ fn should_accumulate_the_euler_update_in_float32_before_casting_to_bf16() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the direct-MLX limits should be valid"),
     )

@@ -3,9 +3,9 @@ use tokio::time::timeout;
 
 use super::rest_support::{
     MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT, assistant_message,
-    cache_pressure_model_id, get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt,
-    read_performance_records, required_u64, send_streaming_chat_request, user_message,
-    write_cache_pressure_worker_config,
+    astro_ssd_prompt_cache_pressure_model_id, get_json_endpoint,
+    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
+    send_streaming_chat_request, user_message, write_astro_ssd_prompt_cache_pressure_worker_config,
 };
 use crate::openai_rest;
 use crate::openai_rest::E2E_TIMEOUT;
@@ -15,7 +15,7 @@ use crate::support::serving_rest;
 const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and restores completed cold cache blocks on an appended Romeo chat"]
+#[ignore = "launches the production REST server and restores completed cold astro SSD astro SSD prompt cache blocks on an appended Romeo chat"]
 async fn should_restore_every_completed_cold_block_for_an_appended_chat_through_rest() {
     timeout(E2E_TIMEOUT, run_append_only_rest_journey())
         .await
@@ -25,18 +25,23 @@ async fn should_restore_every_completed_cold_block_for_an_appended_chat_through_
 #[expect(clippy::too_many_lines)]
 async fn run_append_only_rest_journey() {
     let acceptance_log_prefix = "[astro-ssd-prompt-cache-append-only-rest]";
-    let model_directory =
-        crate::support::configured_installed_model_directory_by_id(cache_pressure_model_id());
+    let model_directory = crate::support::configured_installed_model_directory_by_id(
+        astro_ssd_prompt_cache_pressure_model_id(),
+    );
     let configured_worker_home = tempfile::tempdir()
         .expect("the append-only REST journey should create an isolated worker home");
     let performance_log_directory = tempfile::tempdir()
         .expect("the append-only REST journey should create a performance log directory");
-    write_cache_pressure_worker_config(configured_worker_home.path(), &model_directory, None);
+    write_astro_ssd_prompt_cache_pressure_worker_config(
+        configured_worker_home.path(),
+        &model_directory,
+        None,
+    );
     let prepared_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, CACHEABLE_PROMPT_TOKEN_COUNT);
     let model_artifact_rest_server =
         serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
-            cache_pressure_model_id(),
+            astro_ssd_prompt_cache_pressure_model_id(),
             model_directory,
             Some(configured_worker_home.path()),
             Some(performance_log_directory.path()),
@@ -153,10 +158,14 @@ fn assert_cold_publication_diagnostics(
     block_token_count: u64,
     expected_published_block_count: u64,
 ) {
-    let cache_diagnostics = &performance_record["astro_ssd_prompt_cache_diagnostics"];
-    assert_eq!(cache_diagnostics["block_token_count"], block_token_count);
+    let astro_ssd_prompt_cache_diagnostics =
+        &performance_record["astro_ssd_prompt_cache_diagnostics"];
     assert_eq!(
-        cache_diagnostics["published_block_count"],
+        astro_ssd_prompt_cache_diagnostics["block_token_count"],
+        block_token_count
+    );
+    assert_eq!(
+        astro_ssd_prompt_cache_diagnostics["published_block_count"],
         expected_published_block_count
     );
 }
@@ -166,23 +175,27 @@ fn assert_warm_restore_diagnostics(
     block_token_count: u64,
     expected_restored_block_count: u64,
 ) {
-    let cache_diagnostics = &performance_record["astro_ssd_prompt_cache_diagnostics"];
-    assert_eq!(cache_diagnostics["lookup_outcome"], "hit");
-    assert_eq!(cache_diagnostics["block_token_count"], block_token_count);
+    let astro_ssd_prompt_cache_diagnostics =
+        &performance_record["astro_ssd_prompt_cache_diagnostics"];
+    assert_eq!(astro_ssd_prompt_cache_diagnostics["lookup_outcome"], "hit");
     assert_eq!(
-        cache_diagnostics["matched_sequence_state_block_count"],
+        astro_ssd_prompt_cache_diagnostics["block_token_count"],
+        block_token_count
+    );
+    assert_eq!(
+        astro_ssd_prompt_cache_diagnostics["matched_sequence_state_block_count"],
         expected_restored_block_count
     );
     assert_eq!(
-        cache_diagnostics["restored_block_count"],
+        astro_ssd_prompt_cache_diagnostics["restored_block_count"],
         expected_restored_block_count
     );
     let first_missing_block_index =
-        cache_diagnostics["first_missing_sequence_state_block_index"].as_u64();
+        astro_ssd_prompt_cache_diagnostics["first_missing_sequence_state_block_index"].as_u64();
     assert!(
         first_missing_block_index
             .is_none_or(|missing_block_index| missing_block_index >= expected_restored_block_count),
-        "the first missing block must not fall within the restorable cold prefix: {cache_diagnostics}"
+        "the first missing block must not fall within the restorable cold prefix: {astro_ssd_prompt_cache_diagnostics}"
     );
 }
 

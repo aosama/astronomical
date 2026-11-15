@@ -24,7 +24,7 @@ impl Qwen3_5Model {
     /// adopting it is pure reuse — without this offer every later chunk
     /// re-read the same bytes from storage (the 2026-10-23 Ornith flight
     /// streamed 389 GB for one 23,976-token prompt while 26.95 GB of ceiling
-    /// sat unused). Budget admission inside the cache remains the only refusal
+    /// sat unused). Budget admission inside the astro expert cache remains the only refusal
     /// path.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn offer_multi_token_union_to_retained_ownership(

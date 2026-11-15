@@ -458,7 +458,7 @@ pub fn spawn_stub_daemon(
                                         prompt_token_count: 7,
                                         generated_token_count: 2,
                                         reasoning_token_count: 0,
-                                        cached_token_count: 0,
+                                        astro_ssd_prompt_cache_token_count: 0,
                                         reason:
                                             astronomical_ipc_protocol::ChatGenerationCompletionReason::EndOfSequence,
                                     },

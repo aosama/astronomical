@@ -9,14 +9,14 @@
 //! could move memory from an idle expert in one layer to a busy expert in
 //! another.
 //!
-//! So this cache has no per-layer division of its own. A miss gives up the
+//! So this astro expert cache has no per-layer division of its own. A miss gives up the
 //! least valuable expert anywhere. `LayerSlotLimit::FixedPerLayer` exists to
 //! reproduce the old division in a replay and for an engine whose weight
 //! tables cannot yet change size; it is not the design.
 
 use std::collections::BTreeSet;
 
-use super::cache_record::AstroExpertCacheRecord;
+use super::astro_expert_cache_record::AstroExpertCacheRecord;
 
 /// One expert of one layer.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -25,7 +25,7 @@ pub struct ExpertKey {
     pub expert_id: u16,
 }
 
-/// What the cache needs to know about a layer.
+/// What the astro expert cache needs to know about a layer.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AstroExpertCacheLayerGeometry {
     pub expert_count: u16,
@@ -35,7 +35,7 @@ pub struct AstroExpertCacheLayerGeometry {
 /// Which held expert is given up first.
 ///
 /// Both are textbook orders. On the recorded replies they read exactly the
-/// same number of experts, so the cache defaults to the simpler one and the
+/// same number of experts, so the astro expert cache defaults to the simpler one and the
 /// replay test keeps comparing them, in case another kind of text differs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EvictionOrder {

@@ -13,9 +13,9 @@
 //! (`prompt_reads_complete_expert_layer`). Otherwise nothing is held and
 //! each span reads the experts it routes to, as a chunk does.
 //!
-//! A layer the cache keeps only part of is held like any other: the whole
+//! A layer the astro expert cache keeps only part of is held like any other: the whole
 //! page is read once and its hot table is left alone unless the residency
-//! plan lets the cache adopt the complete layer in its place.
+//! plan lets the astro expert cache adopt the complete layer in its place.
 
 use mlx_bridge::MlxArray;
 
@@ -120,7 +120,7 @@ impl Qwen3_5Model {
             self.expert_layer_state(layer_index),
             expert_capacity,
             expert_capacity,
-        ) && self.adopt_held_layer_into_cache(
+        ) && self.adopt_held_layer_into_astro_expert_cache(
             astro_expert_cache,
             layer_index,
             &manifest,
@@ -138,9 +138,9 @@ impl Qwen3_5Model {
         });
     }
 
-    /// Offers the page to the cache, which shares its arrays when the layer
+    /// Offers the page to the astro expert cache, which shares its arrays when the layer
     /// fits. A runtime failure leaves the layer streamed for this prompt.
-    fn adopt_held_layer_into_cache(
+    fn adopt_held_layer_into_astro_expert_cache(
         &self,
         astro_expert_cache: &std::cell::RefCell<
             crate::qwen3_5_streaming::expert_streaming::AstroExpertCache,

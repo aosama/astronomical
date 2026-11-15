@@ -4,19 +4,19 @@
 //! layers held whole and 3 layers starved reports 96% hits while those three
 //! layers read from storage on every token. So the record keeps a row per
 //! layer and a row per expert, separates a first read (unavoidable: the
-//! expert was never in memory) from a repeat read (the cache gave up an
+//! expert was never in memory) from a repeat read (the astro expert cache gave up an
 //! expert it needed again), and logs what each eviction gave up.
 
 use std::collections::VecDeque;
 
-use super::cache::ExpertKey;
+use super::astro_expert_cache::ExpertKey;
 
 /// Most recent evictions kept for inspection. A reply of a few thousand
-/// tokens with a healthy cache evicts far fewer experts than this; a cache
+/// tokens with a healthy astro expert cache evicts far fewer experts than this; an astro expert cache
 /// that thrashes fills it, and the dropped count says by how much.
 const RETAINED_EVICTION_EVENT_COUNT: usize = 4_096;
 
-/// One expert's history in the cache.
+/// One expert's history in the astro expert cache.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ExpertUse {
     /// Tokens that routed to this expert.
@@ -29,7 +29,7 @@ pub struct ExpertUse {
 }
 
 /// One eviction: what was needed, what was given up for it, and how much the
-/// evicted expert had been used, which is the question to ask of any cache.
+/// evicted expert had been used, which is the question to ask of any astro expert cache.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EvictionEvent {
     pub token_index: u64,
@@ -40,13 +40,13 @@ pub struct EvictionEvent {
 
 /// One layer's totals.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct LayerCacheSummary {
+pub struct LayerAstroExpertCacheSummary {
     pub layer_index: usize,
     pub lookup_count: u64,
     pub hit_count: u64,
     /// Reads of experts that had never been in memory.
     pub first_read_count: u64,
-    /// Reads of experts the cache had held before and gave up.
+    /// Reads of experts the astro expert cache had held before and gave up.
     pub repeat_read_count: u64,
     /// Reads served without keeping the expert, because nothing could be
     /// given up for it.
@@ -59,11 +59,11 @@ pub struct LayerCacheSummary {
     pub held_never_used_expert_count: usize,
 }
 
-/// Everything the cache did since it was created.
+/// Everything the astro expert cache did since it was created.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AstroExpertCacheRecord {
     token_count: u64,
-    layer_totals: Vec<LayerCacheSummary>,
+    layer_totals: Vec<LayerAstroExpertCacheSummary>,
     expert_uses_by_layer: Vec<Vec<ExpertUse>>,
     eviction_events: VecDeque<EvictionEvent>,
     dropped_eviction_event_count: u64,
@@ -75,9 +75,9 @@ impl AstroExpertCacheRecord {
             .map(|expert_count| vec![ExpertUse::default(); usize::from(expert_count)])
             .collect::<Vec<_>>();
         let layer_totals = (0..expert_uses_by_layer.len())
-            .map(|layer_index| LayerCacheSummary {
+            .map(|layer_index| LayerAstroExpertCacheSummary {
                 layer_index,
-                ..LayerCacheSummary::default()
+                ..LayerAstroExpertCacheSummary::default()
             })
             .collect();
         Self {
@@ -152,7 +152,7 @@ impl AstroExpertCacheRecord {
 
     /// One row per layer, with what it holds counted now.
     #[must_use]
-    pub fn layer_summaries(&self) -> Vec<LayerCacheSummary> {
+    pub fn layer_summaries(&self) -> Vec<LayerAstroExpertCacheSummary> {
         self.layer_totals
             .iter()
             .zip(&self.expert_uses_by_layer)
@@ -185,7 +185,7 @@ impl AstroExpertCacheRecord {
             .sum()
     }
 
-    /// Reads of experts the cache once held: the cache's own failures.
+    /// Reads of experts the astro expert cache once held: the astro expert cache's own failures.
     #[must_use]
     pub fn repeat_read_count(&self) -> u64 {
         self.layer_totals
@@ -195,7 +195,10 @@ impl AstroExpertCacheRecord {
     }
 }
 
-fn summarize_layer(layer_total: LayerCacheSummary, expert_uses: &[ExpertUse]) -> LayerCacheSummary {
+fn summarize_layer(
+    layer_total: LayerAstroExpertCacheSummary,
+    expert_uses: &[ExpertUse],
+) -> LayerAstroExpertCacheSummary {
     let mut layer_summary = layer_total;
     for expert_use in expert_uses {
         if expert_use.is_held {

@@ -28,7 +28,8 @@ use super::disk_store::AstroSsdPromptCacheDiskStore;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
     AstroSsdPromptCacheFileKind, StagedAstroSsdPromptCacheStateFile, read_file_size_bytes,
-    remove_cache_owned_directory_or_confirm_absent, remove_cache_owned_file_or_confirm_absent,
+    remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent,
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent,
     save_direct_safetensors_file_with_name, synchronize_directory,
 };
 use super::disk_store_index::{TrackedAstroSsdPromptCacheBlock, TrackedAstroSsdPromptCacheFile};
@@ -80,7 +81,9 @@ impl AstroSsdPromptCacheDiskStore {
             performance_attribution.measure_operation(
                 PerformanceOperation::AstroSsdPromptCacheRetentionCleanup,
                 |_performance_attribution| {
-                    remove_cache_owned_file_or_confirm_absent(&parent_boundary_reclaim.file_path)?;
+                    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
+                        &parent_boundary_reclaim.file_path,
+                    )?;
                     synchronize_directory(&parent_boundary_reclaim.block_directory_path)
                 },
             )?;
@@ -179,7 +182,7 @@ impl AstroSsdPromptCacheDiskStore {
                     })
             },
         )?;
-        remove_cache_owned_directory_or_confirm_absent(&staging_directory)?;
+        remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(&staging_directory)?;
         performance_attribution.measure_operation(
             PerformanceOperation::AstroSsdPromptCachePublicationSynchronizationWait,
             |_performance_attribution| {
@@ -231,7 +234,9 @@ impl AstroSsdPromptCacheDiskStore {
         ) {
             Ok(staged_files) => staged_files,
             Err(staging_error) => {
-                remove_cache_owned_directory_or_confirm_absent(staging_block_directory)?;
+                remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
+                    staging_block_directory,
+                )?;
                 return Err(staging_error);
             }
         };
@@ -268,7 +273,9 @@ impl AstroSsdPromptCacheDiskStore {
                 cleanup_staging_after_error(staging_block_directory, quota_error)
             })?;
         if final_block_directory.exists() {
-            remove_cache_owned_directory_or_confirm_absent(staging_block_directory)?;
+            remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
+                staging_block_directory,
+            )?;
             return Err(
                 AstroSsdPromptCacheDiskStoreError::ExistingBlockTopologyMismatch {
                     block_hash: block_key.block_hash(),
@@ -298,7 +305,9 @@ impl AstroSsdPromptCacheDiskStore {
             |_performance_attribution| {
                 std::fs::rename(staging_block_directory, final_block_directory).map_err(|source| {
                     let _cleanup_result =
-                        remove_cache_owned_directory_or_confirm_absent(staging_block_directory);
+                        remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
+                            staging_block_directory,
+                        );
                     AstroSsdPromptCacheDiskStoreError::RenameTempFile {
                         temp_file_path: staging_block_directory.to_path_buf(),
                         block_file_path: final_block_directory.to_path_buf(),
@@ -522,7 +531,7 @@ fn cleanup_staging_after_error(
     // A cleanup failure wins because it leaves bytes that startup must recover
     // and may prevent the quota from being satisfied. Otherwise retain the
     // operation's original, more useful failure.
-    remove_cache_owned_directory_or_confirm_absent(staging_directory)
+    remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(staging_directory)
         .err()
         .unwrap_or(original_error)
 }

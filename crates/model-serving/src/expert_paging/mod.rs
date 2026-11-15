@@ -3,7 +3,7 @@
 //! and the retained-expert ownership records stay beside the bindings and
 //! the families. The pure safetensors-header parsing (over
 //! `astronomical-memory-policy`'s `safetensors` and `strict_json`) and the
-//! cache statistics are re-exported from the policy crate; the module
+//! astro expert cache statistics are re-exported from the policy crate; the module
 //! re-export keeps `crate::expert_paging::safetensors_header::...` paths
 //! resolving for their consumers.
 
@@ -21,7 +21,7 @@ mod retained_expert_ownership_tests;
 #[cfg(test)]
 mod route_observation_tests;
 
-pub use astronomical_memory_policy::expert_paging::ExpertWeightMemoryCacheStatistics;
+pub use astronomical_memory_policy::expert_paging::AstroExpertCacheStatistics;
 // Module re-export: qwen3_5_core reaches the parser by module path
 // (`crate::expert_paging::safetensors_header::parse_safetensors_header`).
 pub use astronomical_memory_policy::expert_paging::safetensors_header;

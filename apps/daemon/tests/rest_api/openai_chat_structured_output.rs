@@ -28,7 +28,7 @@ async fn should_return_extracted_json_and_a_warning_for_json_schema_chat() {
             prompt_token_count: 12,
             generated_token_count: 8,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -91,7 +91,7 @@ async fn should_keep_original_text_when_json_cannot_be_extracted() {
             prompt_token_count: 8,
             generated_token_count: 8,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -135,7 +135,7 @@ async fn should_forward_enforced_regex_constraint_to_the_worker() {
             prompt_token_count: 8,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]);

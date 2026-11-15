@@ -3,7 +3,7 @@ use serde_json::json;
 use super::rename_renamed_config_fields;
 
 #[test]
-fn should_move_the_prompt_cache_section_and_chunking_keys_to_their_new_names() {
+fn should_move_the_prompt_astro_ssd_prompt_cache_section_and_chunking_keys_to_their_new_names() {
     let mut config_json = json!({
         "prompt_cache": {"enabled": true, "maximum_size_gb": 50},
         "chunking": {

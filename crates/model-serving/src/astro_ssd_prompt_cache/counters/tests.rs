@@ -1,9 +1,9 @@
 use super::AstroSsdPromptCacheCounters;
 
 #[test]
-fn should_increment_misses_on_a_cache_miss() {
+fn should_increment_misses_on_an_astro_ssd_prompt_cache_miss() {
     let mut astro_ssd_prompt_cache_counters = AstroSsdPromptCacheCounters::default();
-    astro_ssd_prompt_cache_counters.record_cache_miss();
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_miss();
     assert_eq!(
         astro_ssd_prompt_cache_counters.astro_ssd_prompt_cache_misses(),
         1
@@ -21,8 +21,8 @@ fn should_increment_misses_on_a_cache_miss() {
 #[test]
 fn should_accumulate_tokens_saved_across_multiple_hits() {
     let mut astro_ssd_prompt_cache_counters = AstroSsdPromptCacheCounters::default();
-    astro_ssd_prompt_cache_counters.record_cache_hit(2_048);
-    astro_ssd_prompt_cache_counters.record_cache_hit(4_096);
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_hit(2_048);
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_hit(4_096);
     assert_eq!(
         astro_ssd_prompt_cache_counters.astro_ssd_prompt_cache_hits(),
         2
@@ -34,7 +34,7 @@ fn should_accumulate_tokens_saved_across_multiple_hits() {
 }
 
 #[test]
-fn should_return_a_hit_rate_of_zero_when_no_cache_queries_have_occurred() {
+fn should_return_a_hit_rate_of_zero_when_no_astro_ssd_prompt_cache_queries_have_occurred() {
     let astro_ssd_prompt_cache_counters = AstroSsdPromptCacheCounters::default();
     assert_eq!(
         astro_ssd_prompt_cache_counters.astro_ssd_prompt_cache_hit_rate(),
@@ -45,9 +45,9 @@ fn should_return_a_hit_rate_of_zero_when_no_cache_queries_have_occurred() {
 #[test]
 fn should_compute_hit_rate_as_hits_over_total_queries() {
     let mut astro_ssd_prompt_cache_counters = AstroSsdPromptCacheCounters::default();
-    astro_ssd_prompt_cache_counters.record_cache_hit(2_048);
-    astro_ssd_prompt_cache_counters.record_cache_hit(4_096);
-    astro_ssd_prompt_cache_counters.record_cache_miss();
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_hit(2_048);
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_hit(4_096);
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_miss();
     // 2 hits / 3 total = 0.6667 rounded to 4 decimals
     assert_eq!(
         astro_ssd_prompt_cache_counters.astro_ssd_prompt_cache_hit_rate(),
@@ -56,7 +56,8 @@ fn should_compute_hit_rate_as_hits_over_total_queries() {
 }
 
 #[test]
-fn should_increment_visual_embedding_hits_and_rows_loaded_on_a_visual_embedding_cache_hit() {
+fn should_increment_visual_embedding_hits_and_rows_loaded_on_a_visual_embedding_astro_ssd_prompt_cache_hit()
+ {
     let mut astro_ssd_prompt_cache_counters = AstroSsdPromptCacheCounters::default();
     astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_visual_embedding_hit(64);
     astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_visual_embedding_hit(128);
@@ -97,7 +98,7 @@ fn should_increment_visual_embedding_misses_without_rows_loaded() {
 #[test]
 fn should_count_partial_tail_hits_separately_from_full_block_hits() {
     let mut astro_ssd_prompt_cache_counters = AstroSsdPromptCacheCounters::default();
-    astro_ssd_prompt_cache_counters.record_cache_hit(2_048);
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_hit(2_048);
     astro_ssd_prompt_cache_counters.record_partial_tail_hit();
     astro_ssd_prompt_cache_counters.record_partial_tail_hit();
 

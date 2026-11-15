@@ -1,4 +1,4 @@
-//! Layer-major span plans: the chunk path's spans with the prompt cache on
+//! Layer-major span plans: the chunk path's spans with the astro SSD astro SSD prompt cache on
 //! and off, a prompt one span long, a block-aligned prompt, and a cursor
 //! that does not start at zero.
 
@@ -39,7 +39,7 @@ fn should_run_the_cached_chunks_and_leave_the_tail_token_alone() {
 }
 
 #[test]
-fn should_run_configured_chunks_to_the_end_without_the_cache() {
+fn should_run_configured_chunks_to_the_end_without_the_astro_ssd_prompt_cache() {
     let span_plan = layer_major_span_plan(0, 10_000, CHUNK_TOKENS, None)
         .expect("three spans should make a layer-major plan");
 

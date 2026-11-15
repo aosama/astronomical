@@ -303,7 +303,7 @@ impl AstroDecoderStateCacheLayout {
         })
     }
 
-    /// Returns the number of decoder layers with cache state.
+    /// Returns the number of decoder layers with astro decoder state cache state.
     #[must_use]
     pub fn layer_count(&self) -> usize {
         self.layers.len()

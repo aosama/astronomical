@@ -19,7 +19,7 @@ use mlx_bridge::MlxArray;
 use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
 use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
 use crate::astro_ssd_prompt_cache::quota_bounded_contract::resolve_quota_bounded_astro_ssd_prompt_cache_contract;
-use crate::prism_hadamard_qwen35::cache_layout;
+use crate::prism_hadamard_qwen35::astro_decoder_state_cache_layout;
 use crate::prism_hadamard_qwen35::engine::execution::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
 };
@@ -45,8 +45,10 @@ pub(super) fn open_astro_ssd_prompt_cache_store(
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Arc<AstroSsdPromptCacheDiskStore>, InferenceEngineError> {
     let astro_decoder_state_cache_layout =
-        cache_layout::prism_hadamard_qwen35_astro_decoder_state_cache_layout(model.pack.config())
-            .map_err(|layout_error| InferenceEngineError::Fatal {
+        astro_decoder_state_cache_layout::prism_hadamard_qwen35_astro_decoder_state_cache_layout(
+            model.pack.config(),
+        )
+        .map_err(|layout_error| InferenceEngineError::Fatal {
             reason: format!(
                 "folded-ternary astro-ssd-prompt-cache layout is invalid: {layout_error}"
             ),
@@ -119,7 +121,7 @@ pub(super) fn lookup_and_restore_prompt_prefix(
         restored_token_count = restored_token_count.saturating_sub(block_token_count);
     }
     if restored_token_count == 0 {
-        astro_ssd_prompt_cache_counters.record_cache_miss();
+        astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_miss();
         return Ok(PrismAstroSsdPromptCacheRestoreOutcome {
             restored_token_count: 0,
             last_restored_astro_ssd_prompt_cache_block_key: None,
@@ -150,7 +152,7 @@ pub(super) fn lookup_and_restore_prompt_prefix(
         performance_attribution,
     )?;
     generation_state.set_sequence_position_offset(restored_token_count as i32);
-    astro_ssd_prompt_cache_counters.record_cache_hit(restored_token_count);
+    astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_hit(restored_token_count);
     Ok(PrismAstroSsdPromptCacheRestoreOutcome {
         restored_token_count: u32::try_from(restored_token_count).unwrap_or(u32::MAX),
         last_restored_astro_ssd_prompt_cache_block_key: last_restored_block_key,
@@ -307,7 +309,7 @@ fn block_tensors_by_name<'tensors>(
 ///
 /// Capture failures stop the request (typed `InvalidRequest`), matching the
 /// required-persistence policy every family with mandatory capture follows.
-pub(super) fn capture_completed_cache_block(
+pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
     runtime: &MlxRuntime,
     astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
     active_generation: &mut PrismHadamardQwen35ActiveGeneration,

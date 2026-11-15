@@ -9,7 +9,7 @@
 //! contiguous span of its layer file instead of nine slices gigabytes apart,
 //! so serving reads a page of experts as a few large sequential reads.
 //!
-//! Measured cold (file cache evicted) on one 8-expert page (26.7 MB) of a
+//! Measured cold (macOS file cache evicted) on one 8-expert page (26.7 MB) of a
 //! 35B A3B 8-bit model: about 2.8 ms through the serving reader for the
 //! Atlas, against about 5.0 ms for the stock layout read the way MLX loads
 //! it.

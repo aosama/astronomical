@@ -14,7 +14,7 @@
 //! - **Bounded multi-range reads** — expert paging must load only the
 //!   router-selected expert rows out of a shard that is far larger than one
 //!   forward pass needs; the virtual-payload reader below is that mechanism.
-//! - **Streaming writes without duplication** — a astro-ssd-prompt-cache capture can be
+//! - **Streaming writes without duplication** — an astro-ssd-prompt-cache capture can be
 //!   many gigabytes; serializing it into one Rust byte vector would
 //!   temporarily duplicate the complete capture, so the writers hand MLX a
 //!   descriptor and let it materialize one tensor at a time.

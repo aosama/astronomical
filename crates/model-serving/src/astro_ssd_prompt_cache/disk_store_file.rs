@@ -41,7 +41,7 @@ pub(super) fn save_direct_safetensors_file_with_name(
         state_file_kind_and_serialization_operation(file_name)?;
     let block_file_path = directory.join(file_name);
     let temporary_file_path = directory.join(format!("{file_name}.tmp"));
-    remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
     let temporary_file = OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -72,7 +72,7 @@ pub(super) fn save_direct_safetensors_file_with_name(
     ) {
         Ok(write_outcome) => write_outcome,
         Err(source) => {
-            remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
             return Err(map_safetensors_writer_error(source));
         }
     };
@@ -83,14 +83,14 @@ pub(super) fn save_direct_safetensors_file_with_name(
         match confirm_written_file_size_bytes(&temporary_file_path, &write_outcome) {
             Ok(actual_file_size_bytes) => actual_file_size_bytes,
             Err(metadata_error) => {
-                remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
+                remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
                 return Err(metadata_error);
             }
         };
     let temporary_file = match open_without_following_symlinks(&temporary_file_path) {
         Ok(temporary_file) => temporary_file,
         Err(source) => {
-            remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
             return Err(AstroSsdPromptCacheDiskStoreError::OpenBlockFile {
                 block_file_path: temporary_file_path,
                 source,
@@ -108,7 +108,7 @@ pub(super) fn save_direct_safetensors_file_with_name(
             )
         },
     ) {
-        remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
+        remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
         return Err(AstroSsdPromptCacheDiskStoreError::ValidateBlock {
             block_file_path: temporary_file_path,
             source,
@@ -122,7 +122,7 @@ pub(super) fn save_direct_safetensors_file_with_name(
             block_file_path: block_file_path.clone(),
             source,
         };
-        remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
+        remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
         return Err(rename_error);
     }
     Ok(StagedAstroSsdPromptCacheStateFile {
@@ -250,7 +250,7 @@ pub(crate) fn synchronize_directory(
     })
 }
 
-pub(crate) fn remove_cache_owned_directory_or_confirm_absent(
+pub(crate) fn remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
     astro_ssd_prompt_cache_directory_path: &Path,
 ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
     fs::remove_dir_all(astro_ssd_prompt_cache_directory_path).or_else(|removal_error| {
@@ -367,7 +367,7 @@ pub(crate) fn open_without_following_symlinks(path: &Path) -> Result<File, std::
 /// temp removal, oversize/invalid-format rollback, eviction of an already-gone
 /// file, and corrupt-load deletion after a concurrent remover. Callers that
 /// must observe a present file (load `open`) do not use this helper.
-pub(crate) fn remove_cache_owned_file_or_confirm_absent(
+pub(crate) fn remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
     astro_ssd_prompt_cache_file_path: &Path,
 ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
     fs::remove_file(astro_ssd_prompt_cache_file_path).or_else(|removal_error| {

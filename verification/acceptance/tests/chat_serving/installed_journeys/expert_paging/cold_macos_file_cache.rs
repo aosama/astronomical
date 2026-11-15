@@ -2,14 +2,14 @@
 //! serves, so expert reads cost what they cost on a Mac whose RAM is no
 //! larger than the MLX limit.
 //!
-//! A probe's MLX limit caps MLX's own memory, not the file cache: on a Mac
-//! with more RAM than the limit, the cache holds most of the model and
+//! A probe's MLX limit caps MLX's own memory, not the macOS file cache: on a Mac
+//! with more RAM than the limit, the macOS file cache holds most of the model and
 //! "storage" reads come from memory (measured: 96% of decode expert bytes on
 //! a 48 GB Mac at a 16 GB limit). `msync(MS_INVALIDATE)` on a read-only
 //! shared mapping drops a file's clean cached pages (measured with `mincore`:
 //! a 0.86 GB layer file went from fully resident to none in 7 ms), so a
-//! background thread that sweeps every weight file keeps the cache empty.
-//! This is the pessimistic end of a small Mac, which still caches a little.
+//! background thread that sweeps every weight file keeps the macOS file cache empty.
+//! This is the pessimistic end of a small Mac, which still macOS file caches a little.
 
 use std::fs::File;
 use std::os::fd::AsRawFd;
@@ -98,7 +98,7 @@ impl Drop for MappedWeightFile {
 
 /// The running sweeper; `finish` stops it and returns its sweep count.
 /// Dropping it also stops it, so a journey that times out or panics never
-/// leaves the cache being evicted under the next serial test.
+/// leaves the macOS file cache being evicted under the next serial test.
 pub(super) struct ColdMacosFileCache {
     should_stop: Arc<AtomicBool>,
     sweeping_thread: Option<JoinHandle<u64>>,

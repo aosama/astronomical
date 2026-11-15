@@ -51,7 +51,7 @@ pub(crate) async fn create_non_streaming_chat_completion(
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_token_count,
                 reason,
                 ..
             } => {
@@ -61,7 +61,7 @@ pub(crate) async fn create_non_streaming_chat_completion(
                 return match chat_completion_collector.into_response(
                     prompt_token_count,
                     generated_token_count,
-                    cached_token_count,
+                    astro_ssd_prompt_cache_token_count,
                     reason,
                 ) {
                     Ok(chat_completion_response) => Json(chat_completion_response).into_response(),
@@ -219,7 +219,7 @@ impl OpenAiChatCompletionCollector {
         self,
         prompt_token_count: u32,
         generated_token_count: u16,
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_token_count: u32,
         completion_reason: ChatGenerationCompletionReason,
     ) -> Result<OpenAiChatCompletionResponse, OpenAiChatCompletionCollectorError> {
         let finish_reason = match completion_reason {
@@ -246,7 +246,7 @@ impl OpenAiChatCompletionCollector {
                     prompt_token_count,
                     generated_token_count,
                 })?
-                .with_cached_tokens(cached_token_count);
+                .with_cached_tokens(astro_ssd_prompt_cache_token_count);
         Ok(OpenAiChatCompletionResponse::new(
             self.completion_id,
             self.created,

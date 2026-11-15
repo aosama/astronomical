@@ -3,7 +3,7 @@
 use super::super::serving_phase::SessionStreamingPhase;
 use super::{
     ExpertStreamingSessionCounters, RouteCoverageClass, expert_layer_topology_from_residency,
-    no_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
+    no_astro_expert_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
 };
 use crate::performance_attribution::StreamedPageSourcePlan;
 use astronomical_memory_policy::residency::{CurrentExpertLayerResidency, RetainedExpertPageClass};
@@ -195,7 +195,8 @@ fn should_credit_routed_expert_bytes_not_layer_payload_for_a_resident_decode_tok
     // A decode token routes to 8 of 256 experts; only those 8 experts' bytes
     // were avoided, not the whole seated layer's payload (issue #1715).
     let complete_layer_payload_bytes = 4_096_000_000;
-    let avoided_bytes = no_cache_route_source_bytes(complete_layer_payload_bytes, 256, 8);
+    let avoided_bytes =
+        no_astro_expert_cache_route_source_bytes(complete_layer_payload_bytes, 256, 8);
     assert_eq!(avoided_bytes, complete_layer_payload_bytes / 256 * 8);
     assert!(avoided_bytes < complete_layer_payload_bytes);
 }
@@ -204,32 +205,33 @@ fn should_credit_routed_expert_bytes_not_layer_payload_for_a_resident_decode_tok
 fn should_credit_the_routed_union_for_a_resident_prefill_chunk() {
     let complete_layer_payload_bytes = 4_096_000_000;
     // Duplicate expert ids across the chunk's tokens are one storage read.
-    let duplicate_union_bytes = no_cache_route_source_bytes(complete_layer_payload_bytes, 256, 12);
+    let duplicate_union_bytes =
+        no_astro_expert_cache_route_source_bytes(complete_layer_payload_bytes, 256, 12);
     assert_eq!(
         duplicate_union_bytes,
         complete_layer_payload_bytes / 256 * 12
     );
     // A route that touches every expert equals exactly one layer payload.
     let whole_layer_union_bytes =
-        no_cache_route_source_bytes(complete_layer_payload_bytes, 256, 256);
+        no_astro_expert_cache_route_source_bytes(complete_layer_payload_bytes, 256, 256);
     assert_eq!(whole_layer_union_bytes, complete_layer_payload_bytes);
 }
 
 #[test]
-fn should_never_credit_more_avoided_bytes_than_a_no_cache_baseline() {
+fn should_never_credit_more_avoided_bytes_than_a_no_astro_expert_cache_baseline() {
     let complete_layer_payload_bytes = 4_096_000_000;
     // An over-full route saturates at the layer payload instead of exceeding it.
     assert_eq!(
-        no_cache_route_source_bytes(complete_layer_payload_bytes, 256, 300),
+        no_astro_expert_cache_route_source_bytes(complete_layer_payload_bytes, 256, 300),
         complete_layer_payload_bytes
     );
     // Degenerate geometry credits nothing rather than dividing by zero.
     assert_eq!(
-        no_cache_route_source_bytes(complete_layer_payload_bytes, 0, 8),
+        no_astro_expert_cache_route_source_bytes(complete_layer_payload_bytes, 0, 8),
         0
     );
     // A zero-capacity claim with no payload stays zero.
-    assert_eq!(no_cache_route_source_bytes(0, 256, 8), 0);
+    assert_eq!(no_astro_expert_cache_route_source_bytes(0, 256, 8), 0);
 }
 
 #[test]

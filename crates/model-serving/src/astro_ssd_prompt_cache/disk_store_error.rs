@@ -213,11 +213,11 @@ impl From<AstroSsdPromptCacheModelContractError> for AstroSsdPromptCacheDiskStor
 }
 
 impl AstroSsdPromptCacheDiskStoreError {
-    // A cache file can disappear or its model-bound header can fail validation after lookup.
+    // An astro SSD astro SSD prompt cache file can disappear or its model-bound header can fail validation after lookup.
     // Treat those pre-materialization failures as misses; payload corruption remains fatal
     // because array restoration may already have started.
     #[must_use]
-    pub fn is_treatable_as_cache_miss(&self) -> bool {
+    pub fn is_treatable_as_astro_ssd_prompt_cache_miss(&self) -> bool {
         match self {
             Self::OpenBlockFile { source, .. }
                 if matches!(source.kind(), std::io::ErrorKind::NotFound) =>

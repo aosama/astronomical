@@ -80,7 +80,7 @@ pub(super) fn budget_exhausted_measurement(
         decode_tokens_per_second: 0.0,
         mlx_peak_memory_bytes: None,
         measured_output_text: None,
-        decode_cache_diagnostic_evidence: None,
+        decode_astro_expert_cache_diagnostic_evidence: None,
         completion_ordinal_in_worker: measured_completion_ordinal_for_journey(journey),
     }
 }

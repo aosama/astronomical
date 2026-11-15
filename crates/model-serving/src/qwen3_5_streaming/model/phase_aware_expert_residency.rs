@@ -49,7 +49,7 @@ impl Qwen3_5StreamingModel {
     /// Puts a model loaded directly into the memory state the engine would
     /// have it in for `phase`, for parity and speed measurements: the
     /// governor is opened and told a request or a reply starts, and for a
-    /// reply the layer states are planned. Without it the cache has no
+    /// reply the layer states are planned. Without it the astro expert cache has no
     /// capacity and nothing a probe observes matches serving.
     #[doc(hidden)]
     pub fn enter_memory_phase_for_tests(
@@ -174,7 +174,7 @@ impl Qwen3_5StreamingModel {
             .unwrap_or(ExpertLayerState::Kept)
     }
 
-    /// What the cache holds of each layer now, for decisions that compare a
+    /// What the astro expert cache holds of each layer now, for decisions that compare a
     /// layer's state with it.
     pub(super) fn current_expert_layer_residencies(&self) -> Vec<CurrentExpertLayerResidency> {
         let (Some(expert_pager), Some(astro_expert_cache)) =
@@ -207,7 +207,7 @@ fn count_layers_in_state(
 }
 
 /// Records the reply plan's telemetry: how many layers are kept whole, hot
-/// and absent, and how much of what the cache held the plan leaves in place.
+/// and absent, and how much of what the astro expert cache held the plan leaves in place.
 fn record_reply_plan_counters(
     performance_attribution: &mut PerformanceAttribution,
     residency_plan: &ExpertResidencyPlan,

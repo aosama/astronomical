@@ -8,7 +8,7 @@
 use super::partial_tail_probe;
 use super::prefix_lookup::{
     AstroSsdPromptCacheLookupDiagnostics, AstroSsdPromptCacheMissReason,
-    AstroSsdPromptCachePrefixLookupResult, cache_miss_lookup_result,
+    AstroSsdPromptCachePrefixLookupResult, astro_ssd_prompt_cache_miss_lookup_result,
 };
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::{AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheModelContract};
@@ -60,7 +60,7 @@ pub(super) fn complete_and_maximum_restorable_block_counts(
 
 /// Produces the lookup outcome for a prompt too short for one restorable
 /// block: a root partial tail when the probe finds one, otherwise a plain
-/// cache miss.
+/// astro SSD astro SSD prompt cache miss.
 pub(super) fn prompt_too_short_lookup_result<KvBlockExists, RecurrentSnapshotExists>(
     lookup_inputs: &AstroSsdPromptCachePrefixLookupInputs<
         '_,
@@ -105,7 +105,7 @@ where
     }
     lookup_diagnostics
         .record_miss_reason(AstroSsdPromptCacheMissReason::PromptTooShortForAstroSsdPromptCache);
-    cache_miss_lookup_result(prompt_tokens, lookup_diagnostics)
+    astro_ssd_prompt_cache_miss_lookup_result(prompt_tokens, lookup_diagnostics)
 }
 
 /// Walks the complete prompt blocks in chain order and returns every block
@@ -265,7 +265,7 @@ where
     {
         lookup_diagnostics
             .record_miss_reason(AstroSsdPromptCacheMissReason::BoundaryStateSnapshotMissing);
-        return cache_miss_lookup_result(prompt_tokens, lookup_diagnostics);
+        return astro_ssd_prompt_cache_miss_lookup_result(prompt_tokens, lookup_diagnostics);
     }
     // Multi-turn prompts grow by a partial final block. When the previous
     // turn published that suffix as a tail, restore it on top of the

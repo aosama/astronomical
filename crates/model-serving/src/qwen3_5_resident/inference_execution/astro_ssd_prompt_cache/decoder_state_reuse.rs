@@ -201,7 +201,8 @@ impl Qwen3_5EngineState {
                 .startup_cleanup_evidence
                 .as_ref(),
         );
-        self.astro_ssd_prompt_cache_counters.record_cache_miss();
+        self.astro_ssd_prompt_cache_counters
+            .record_astro_ssd_prompt_cache_miss();
         AstroSsdPromptCacheRestoreOutcome {
             astro_ssd_prompt_cache_token_count: 0,
             restored_token_count: 0,
@@ -251,7 +252,7 @@ impl Qwen3_5EngineState {
                 )
             })?;
         self.astro_ssd_prompt_cache_counters
-            .record_cache_hit(hit_finalization.restored_token_count);
+            .record_astro_ssd_prompt_cache_hit(hit_finalization.restored_token_count);
         if hit_finalization.restored_partial_tail_block_key.is_some() {
             self.astro_ssd_prompt_cache_counters
                 .record_partial_tail_hit();

@@ -10,7 +10,8 @@ use astronomical_ipc_protocol::{
 use tokio::sync::{Semaphore, mpsc};
 
 use crate::worker::event_handler::{
-    handle_worker_event, outside_cache_clear_wait_violation, outside_model_swap_wait_violation,
+    handle_worker_event, outside_astro_ssd_prompt_cache_clear_wait_violation,
+    outside_model_swap_wait_violation,
 };
 use crate::worker::loop_types::{ActiveGeneration, ActiveWorkerRequest};
 use crate::{
@@ -164,8 +165,9 @@ fn should_report_the_violation_for_a_cache_clear_acknowledgement_outside_wait() 
         blocks_removed: 0,
         bytes_freed: 0,
     };
-    let violation =
-        outside_cache_clear_wait_violation(&astro_ssd_prompt_cache_clear_acknowledgement);
+    let violation = outside_astro_ssd_prompt_cache_clear_wait_violation(
+        &astro_ssd_prompt_cache_clear_acknowledgement,
+    );
     assert!(
         matches!(
             violation,

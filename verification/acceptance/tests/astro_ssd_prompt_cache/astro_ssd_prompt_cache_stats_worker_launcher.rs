@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use astronomical_daemon::{ResolvedRuntimeConfigResolver, RuntimeModelPolicy};
 use astronomical_ipc_protocol::WorkerStartupConfiguration;
 
-pub(super) fn create_cache_stats_worker_configuration() -> (
+pub(super) fn create_astro_ssd_prompt_cache_stats_worker_configuration() -> (
     tempfile::TempDir,
     PathBuf,
     PathBuf,

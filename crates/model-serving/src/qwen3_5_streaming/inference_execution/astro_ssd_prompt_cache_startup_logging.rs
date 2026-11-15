@@ -3,7 +3,7 @@
 use crate::AstroSsdPromptCacheDiskStore;
 
 pub(super) fn log_astro_ssd_prompt_cache_startup_cleanup(
-    cache_role: &'static str,
+    astro_ssd_prompt_cache_role: &'static str,
     astro_ssd_prompt_cache: &AstroSsdPromptCacheDiskStore,
 ) {
     let Some(startup_cleanup_evidence) = astro_ssd_prompt_cache.startup_cleanup_evidence() else {
@@ -14,7 +14,7 @@ pub(super) fn log_astro_ssd_prompt_cache_startup_cleanup(
     let corrupt_current_format = startup_cleanup_evidence.corrupt_current_format;
     let quota_eviction = startup_cleanup_evidence.quota_eviction;
     tracing::info!(
-        cache_role,
+        astro_ssd_prompt_cache_role,
         interrupted_transaction_artifact_count = interrupted_transaction.artifact_count,
         interrupted_transaction_block_count = interrupted_transaction.block_count,
         interrupted_transaction_byte_count = interrupted_transaction.byte_count,

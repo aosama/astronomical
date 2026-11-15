@@ -39,12 +39,12 @@
 //! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_clean_streaming_sparse_moe_decode_cache_policy_throughput --ignored`
 //! Each paired command alternates policy order across three trials.
 
-use crate::performance_throughput::decode_cache_experiment::{
-    MeasuredShapeWindow, PAIRED_TRIAL_COUNT, run_paired_decode_cache_trials,
+use crate::performance_throughput::decode_astro_expert_cache_experiment::{
+    MeasuredShapeWindow, PAIRED_TRIAL_COUNT, run_paired_decode_astro_expert_cache_trials,
 };
 use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 
-use super::decode_cache_experiment::{
+use super::decode_astro_expert_cache_experiment::{
     report_attributed_policy_comparison, report_clean_policy_comparison,
     report_streaming_decode_stage_evidence,
 };
@@ -172,7 +172,7 @@ fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
         measured_throughput.total_output_tokens,
     );
     let diagnostic_evidence = measured_throughput
-        .decode_cache_diagnostic_evidence
+        .decode_astro_expert_cache_diagnostic_evidence
         .as_ref()
         .expect("the attributed streaming run should produce stage evidence");
     assert!(
@@ -259,7 +259,7 @@ fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
 #[serial]
 fn should_compare_streaming_sparse_moe_decode_cache_policies_with_attribution() {
     let journey = streaming_single_chunk_journey(true, 0);
-    let paired_trials = run_paired_decode_cache_trials(
+    let paired_trials = run_paired_decode_astro_expert_cache_trials(
         support::large_sparse_moe_streaming_model_id(),
         &journey,
         PAIRED_TRIAL_COUNT,
@@ -284,7 +284,7 @@ fn should_compare_clean_streaming_sparse_moe_decode_cache_policy_throughput() {
         "clean paired throughput must run without the diagnostics environment switch"
     );
     let journey = streaming_single_chunk_journey(false, 0);
-    let paired_trials = run_paired_decode_cache_trials(
+    let paired_trials = run_paired_decode_astro_expert_cache_trials(
         support::large_sparse_moe_streaming_model_id(),
         &journey,
         PAIRED_TRIAL_COUNT,
@@ -376,7 +376,7 @@ fn should_serve_two_sequential_single_chunk_streaming_completions_in_one_worker(
         measured_throughput.total_output_tokens,
     );
     let diagnostic_evidence = measured_throughput
-        .decode_cache_diagnostic_evidence
+        .decode_astro_expert_cache_diagnostic_evidence
         .expect("the attributed journey should retain decode-cache evidence");
     assert!(
         diagnostic_evidence
@@ -514,13 +514,13 @@ async fn run_two_turn_streaming_journey(
     .expect("the second turn should write a performance sample");
 
     let first_positional_read_bytes =
-        crate::performance_throughput::completion::read_decode_cache_diagnostic_evidence(
+        crate::performance_throughput::completion::read_decode_astro_expert_cache_diagnostic_evidence(
             &logging_directory,
             1,
         )
         .map(|evidence| evidence.positional_file_read_byte_count);
     let second_positional_read_bytes =
-        crate::performance_throughput::completion::read_decode_cache_diagnostic_evidence(
+        crate::performance_throughput::completion::read_decode_astro_expert_cache_diagnostic_evidence(
             &logging_directory,
             throughput_support::MEASURED_REQUEST_ID,
         )

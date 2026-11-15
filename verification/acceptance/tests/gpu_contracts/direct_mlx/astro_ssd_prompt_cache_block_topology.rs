@@ -10,7 +10,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[tokio::test]
 async fn should_reopen_a_chain_with_one_compacted_non_checkpoint_ancestor() {
@@ -29,7 +29,7 @@ async fn should_reopen_a_chain_with_one_compacted_non_checkpoint_ancestor() {
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open");
     save_three_block_chain(
@@ -50,7 +50,7 @@ async fn should_reopen_a_chain_with_one_compacted_non_checkpoint_ancestor() {
 
     let reopened_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("a valid compacted ancestor should survive startup reconciliation");
 
@@ -87,7 +87,7 @@ async fn should_recapture_only_a_compacted_boundary_without_rewriting_sequence_s
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open");
     save_three_block_chain(
@@ -111,7 +111,7 @@ async fn should_recapture_only_a_compacted_boundary_without_rewriting_sequence_s
     drop(astro_ssd_prompt_cache);
     let reopened_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the compacted chain should reopen");
 
@@ -155,7 +155,7 @@ async fn should_complete_interrupted_parent_boundary_compaction_before_startup_e
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open");
     save_three_block_chain(
@@ -223,7 +223,7 @@ async fn should_evict_unprotected_content_before_compacting_the_active_startup_c
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open");
     save_three_block_chain(
@@ -278,7 +278,7 @@ async fn should_remove_descendants_when_their_sequence_ancestor_is_missing_on_re
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open");
     astro_ssd_prompt_cache
@@ -308,7 +308,7 @@ async fn should_remove_descendants_when_their_sequence_ancestor_is_missing_on_re
 
     let reopened_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("startup reconciliation should prune the orphan subtree");
 
@@ -343,7 +343,7 @@ async fn should_not_acknowledge_an_existing_block_after_its_state_is_corrupted()
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
     .expect("the persistent prompt cache should open");
     astro_ssd_prompt_cache

@@ -26,7 +26,7 @@
 //! `--filter <full_test_name> --exact --ignored`. Set `sweep_cell_order` in the
 //! JSON configuration passed with `--configuration PATH` to the cell's position
 //! in the sweep; without a selection it defaults to 0. The recommended protocol brackets the sweep with a 32 GB
-//! reference cell and interleaves ceilings so page-cache warmth cannot
+//! reference cell and interleaves ceilings so macOS file cache warmth cannot
 //! masquerade as a ceiling effect.
 
 use std::fs;

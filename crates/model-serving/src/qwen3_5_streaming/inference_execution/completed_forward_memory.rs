@@ -112,7 +112,7 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_forward(
 fn resize_hot_expert_tables_to_the_capacity(model: &Qwen3_5Model) {
     let hot_expert_warm_slot_count = super::decode_expert_memory_handoff::decode_warm_slot_count(
         model,
-        model.expert_weight_memory_cache_statistics(),
+        model.astro_expert_cache_statistics(),
     );
     if hot_expert_warm_slot_count != model.hot_expert_warm_slot_count() {
         model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);

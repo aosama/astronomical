@@ -2,7 +2,7 @@
 //!
 //! Entering the reply phase is one event for the memory governor: a reply
 //! step needs far fewer MLX working buffers than a prompt step, so the expert
-//! cache's capacity rises (issue #2221). This file then fills that capacity:
+//! astro expert cache's capacity rises (issue #2221). This file then fills that capacity:
 //! whole layers the plan chose, and hot-expert slots on the layers left.
 //! Filling is best-effort because missing routes remain correct through
 //! operation-local streaming.
@@ -81,9 +81,9 @@ impl Qwen3_5EngineState {
                 );
             }
         }
-        // Cache bookkeeping after seating and materialization. Decode admission
+        // Astro astro expert cache bookkeeping after seating and materialization. Decode admission
         // takes its own MLX snapshot next.
-        let expert_statistics = model.expert_weight_memory_cache_statistics();
+        let expert_statistics = model.astro_expert_cache_statistics();
         let total_layer_count = model
             .expert_pager
             .as_ref()
@@ -106,7 +106,7 @@ impl Qwen3_5EngineState {
             usize::try_from(model.config.experts_per_token()).unwrap_or(1),
         );
         let hot_expert_warm_slot_count =
-            decode_warm_slot_count(model, model.expert_weight_memory_cache_statistics());
+            decode_warm_slot_count(model, model.astro_expert_cache_statistics());
         model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
         tracing::info!(
             request_id = request_id.value(),
@@ -117,10 +117,10 @@ impl Qwen3_5EngineState {
     }
 }
 
-/// Sizes the hot-expert tables from the room the cache has left (issue
+/// Sizes the hot-expert tables from the room the astro expert cache has left (issue
 /// #372).
 ///
-/// The cache's capacity for the reply phase, less what it already keeps,
+/// The astro expert cache's capacity for the reply phase, less what it already keeps,
 /// divided across the sparse layers the tables may cover. With room to
 /// spare the tables run at the full policy size; with little they run
 /// narrower or not at all, because tables that do not fit would only be
@@ -131,7 +131,7 @@ impl Qwen3_5EngineState {
 /// (issue #512).
 pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
     model: &Qwen3_5Model,
-    expert_statistics: crate::ExpertWeightMemoryCacheStatistics,
+    expert_statistics: crate::AstroExpertCacheStatistics,
 ) -> usize {
     let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
     let Some(layer_geometry) = decode_warm_layer_geometry(model) else {
@@ -145,7 +145,7 @@ pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
     let unseated_sparse_layer_count = layer_geometry
         .sparse_layer_count
         .saturating_sub(complete_layer_count);
-    // The warm capacity scales down to what the room left in the cache
+    // The warm capacity scales down to what the room left in the astro expert cache
     // affords across the unseated layers; zero disables warming.
     let budget_affordable_capacity = budget_affordable_slot_count(
         warm_budget_bytes,
@@ -227,13 +227,13 @@ fn budget_affordable_slot_count(
 }
 
 /// What the cache may still take in: the capacity the memory governor set
-/// for the reply phase, less what the cache already keeps.
+/// for the reply phase, less what the astro expert cache already keeps.
 ///
 /// Every sizing decision in this file reads the room through this one
 /// function, so they agree.
 fn decode_warm_budget_bytes(
     model: &Qwen3_5Model,
-    expert_statistics: crate::ExpertWeightMemoryCacheStatistics,
+    expert_statistics: crate::AstroExpertCacheStatistics,
 ) -> u64 {
     model
         .kept_expert_capacity_bytes()
@@ -267,7 +267,7 @@ fn enforce_decode_warm_slot_floor(
     {
         return;
     }
-    let expert_statistics = model.expert_weight_memory_cache_statistics();
+    let expert_statistics = model.astro_expert_cache_statistics();
     let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
     let retained_topology_snapshot = match model.astro_expert_cache.as_ref() {
         Some(astro_expert_cache) => astro_expert_cache
@@ -332,7 +332,7 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
                         .map_or(0, |geometry| geometry.expert_capacity),
                 )
             });
-    let expert_statistics = model.expert_weight_memory_cache_statistics();
+    let expert_statistics = model.astro_expert_cache_statistics();
     let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
     crate::memory::decode_seating::complete_layers_within_decode_warm_budget(
         &geometries,

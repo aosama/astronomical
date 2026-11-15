@@ -24,7 +24,7 @@
 //!    only the missing experts stream from SSD
 //!    (`forward_moe_mixed_decode_route_with_performance_attribution` in
 //!    `mixed_decode_execution.rs`, built on
-//!    `cached_plus_streamed_page_route.rs`).
+//!    `astro_expert_cache_plus_streamed_page_route.rs`).
 //! 5. **Single-token miss, fully warm** — the astro expert cache hit serves the
 //!    whole routed set from RAM (`hot_expert_partial_page` in
 //!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.

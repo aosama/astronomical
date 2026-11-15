@@ -29,5 +29,5 @@ pub use page_materialization::source_expert_page_payload_bytes;
 #[cfg(any(feature = "direct-mlx", test))]
 pub(crate) use streaming_stats::{
     ExpertStreamingSessionCounters, RouteCoverageClass, expert_layer_topology_from_residency,
-    no_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
+    no_astro_expert_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
 };

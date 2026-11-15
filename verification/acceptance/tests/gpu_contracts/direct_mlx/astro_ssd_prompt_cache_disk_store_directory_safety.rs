@@ -12,7 +12,7 @@ use crate::direct_mlx::astro_ssd_prompt_cache_disk_store_support::{
     synthetic_kv_block_tensors, synthetic_recurrent_snapshot_tensors,
 };
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[tokio::test]
 async fn should_recreate_deleted_active_model_directories_before_replacement_write() {
@@ -31,7 +31,7 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
             global_astro_ssd_prompt_cache_root_directory
                 .path()
                 .to_path_buf(),
-            LARGE_CACHE_LIMIT_BYTES,
+            LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )

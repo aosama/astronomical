@@ -1,4 +1,4 @@
-//! Finds experts whose bytes are not in the file cache and plans disjoint
+//! Finds experts whose bytes are not in the macOS file cache and plans disjoint
 //! routed pages of them, so every measured read reaches the SSD.
 
 use std::collections::HashMap;

@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use super::disk_store::AstroSsdPromptCacheDiskStore;
 use super::disk_store_error::AstroSsdPromptCacheDiskStoreError;
 use super::disk_store_file::{
-    AstroSsdPromptCacheFileKind, remove_cache_owned_directory_or_confirm_absent,
-    remove_cache_owned_file_or_confirm_absent,
+    AstroSsdPromptCacheFileKind, remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent,
+    remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent,
 };
 use super::disk_store_global_quota_candidate::{
     GlobalAstroSsdPromptCacheCleanupClassification, GlobalAstroSsdPromptCacheEvictionCandidate,
@@ -23,16 +23,16 @@ use super::disk_store_global_quota_scan::{
 };
 use super::startup_cleanup_evidence::AstroSsdPromptCacheStartupCleanupEvidence;
 
-const RETIRED_SPECULATIVE_PREFILL_CACHE_DIRECTORIES: [&str; 2] = [
+const RETIRED_SPECULATIVE_PREFILL_ASTRO_SSD_PROMPT_CACHE_DIRECTORIES: [&str; 2] = [
     "speculative_prefill_selections",
     "speculative_prefill_target_states",
 ];
 
-pub(super) fn remove_retired_speculative_prefill_cache_directories(
+pub(super) fn remove_retired_speculative_prefill_astro_ssd_prompt_cache_directories(
     active_model_astro_ssd_prompt_cache_directory: &Path,
     startup_cleanup_evidence: &mut AstroSsdPromptCacheStartupCleanupEvidence,
 ) -> Result<(), AstroSsdPromptCacheDiskStoreError> {
-    for retired_directory_name in RETIRED_SPECULATIVE_PREFILL_CACHE_DIRECTORIES {
+    for retired_directory_name in RETIRED_SPECULATIVE_PREFILL_ASTRO_SSD_PROMPT_CACHE_DIRECTORIES {
         let retired_directory_path =
             active_model_astro_ssd_prompt_cache_directory.join(retired_directory_name);
         let retired_directory_metadata = match fs::symlink_metadata(&retired_directory_path) {
@@ -51,9 +51,11 @@ pub(super) fn remove_retired_speculative_prefill_cache_directories(
             retired_directory_metadata.len()
         };
         if retired_directory_metadata.is_dir() {
-            remove_cache_owned_directory_or_confirm_absent(&retired_directory_path)?;
+            remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
+                &retired_directory_path,
+            )?;
         } else {
-            remove_cache_owned_file_or_confirm_absent(&retired_directory_path)?;
+            remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(&retired_directory_path)?;
         }
         startup_cleanup_evidence
             .obsolete_format
@@ -269,7 +271,8 @@ impl AstroSsdPromptCacheDiskStore {
     ) -> AstroSsdPromptCacheDiskStoreError {
         let mut first_rollback_error = None;
         for newly_saved_file_path in newly_saved_file_paths {
-            match remove_cache_owned_file_or_confirm_absent(newly_saved_file_path) {
+            match remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(newly_saved_file_path)
+            {
                 Ok(()) => self
                     .lock_tracked_files()
                     .remove_files_by_path(std::slice::from_ref(newly_saved_file_path)),
@@ -470,12 +473,12 @@ fn remove_global_astro_ssd_prompt_cache_eviction_candidate(
     match global_astro_ssd_prompt_cache_eviction_candidate {
         GlobalAstroSsdPromptCacheEvictionCandidate::StandaloneFile(
             global_astro_ssd_prompt_cache_file,
-        ) => {
-            remove_cache_owned_file_or_confirm_absent(&global_astro_ssd_prompt_cache_file.file_path)
-        }
+        ) => remove_astro_ssd_prompt_cache_owned_file_or_confirm_absent(
+            &global_astro_ssd_prompt_cache_file.file_path,
+        ),
         GlobalAstroSsdPromptCacheEvictionCandidate::StaleDirectory(
             global_astro_ssd_prompt_cache_stale_directory,
-        ) => remove_cache_owned_directory_or_confirm_absent(
+        ) => remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
             &global_astro_ssd_prompt_cache_stale_directory.directory_path,
         ),
         GlobalAstroSsdPromptCacheEvictionCandidate::BlockSubtree(
@@ -484,7 +487,9 @@ fn remove_global_astro_ssd_prompt_cache_eviction_candidate(
             for block_directory_path in
                 &global_astro_ssd_prompt_cache_block_subtree.block_directory_paths
             {
-                remove_cache_owned_directory_or_confirm_absent(block_directory_path)?;
+                remove_astro_ssd_prompt_cache_owned_directory_or_confirm_absent(
+                    block_directory_path,
+                )?;
             }
             Ok(())
         }

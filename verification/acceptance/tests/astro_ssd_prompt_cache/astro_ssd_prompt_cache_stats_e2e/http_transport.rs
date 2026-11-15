@@ -1,7 +1,10 @@
 use super::*;
 
-pub(super) fn log_cache_directory_contents(cache_directory: &std::path::Path, context: &str) {
-    let blocks_directory = cache_directory.join("blocks");
+pub(super) fn log_astro_ssd_prompt_cache_directory_contents(
+    astro_ssd_prompt_cache_directory: &std::path::Path,
+    context: &str,
+) {
+    let blocks_directory = astro_ssd_prompt_cache_directory.join("blocks");
     let block_directories = std::fs::read_dir(&blocks_directory)
         .map(|directory_entries| {
             directory_entries

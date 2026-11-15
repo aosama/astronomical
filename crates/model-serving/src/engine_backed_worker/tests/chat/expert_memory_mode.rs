@@ -11,17 +11,18 @@ use astronomical_ipc_protocol::{
 use tokio::io::{duplex, split};
 #[tokio::test]
 async fn should_emit_only_changed_expert_memory_modes_without_losing_token_output() {
-    let mut scripted_engine = ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
-        0,
-        vec![GeneratedToken::TokenId {
-            token_id: 1,
-            is_reasoning_token: false,
-            expert_memory_mode: Some(ExpertMemoryMode::Paged),
-            mlx_memory_telemetry: None,
-            first_decode_forward_elapsed_millis: None,
-            generation_finalization: None,
-        }],
-    );
+    let mut scripted_engine =
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count_and_generated_tokens(
+            0,
+            vec![GeneratedToken::TokenId {
+                token_id: 1,
+                is_reasoning_token: false,
+                expert_memory_mode: Some(ExpertMemoryMode::Paged),
+                mlx_memory_telemetry: None,
+                first_decode_forward_elapsed_millis: None,
+                generation_finalization: None,
+            }],
+        );
     scripted_engine.initial_expert_memory_mode = Some(ExpertMemoryMode::Resident);
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(1),
@@ -82,27 +83,28 @@ async fn should_emit_only_changed_expert_memory_modes_without_losing_token_outpu
 
 #[tokio::test]
 async fn should_emit_the_recovered_resident_mode_before_completing_the_same_request() {
-    let mut scripted_engine = ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
-        0,
-        vec![
-            GeneratedToken::TokenId {
-                token_id: 1,
-                is_reasoning_token: false,
-                expert_memory_mode: Some(ExpertMemoryMode::Paged),
-                mlx_memory_telemetry: None,
-                first_decode_forward_elapsed_millis: None,
-                generation_finalization: None,
-            },
-            GeneratedToken::TokenId {
-                token_id: 2,
-                is_reasoning_token: false,
-                expert_memory_mode: Some(ExpertMemoryMode::Resident),
-                mlx_memory_telemetry: None,
-                first_decode_forward_elapsed_millis: None,
-                generation_finalization: None,
-            },
-        ],
-    );
+    let mut scripted_engine =
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count_and_generated_tokens(
+            0,
+            vec![
+                GeneratedToken::TokenId {
+                    token_id: 1,
+                    is_reasoning_token: false,
+                    expert_memory_mode: Some(ExpertMemoryMode::Paged),
+                    mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
+                    generation_finalization: None,
+                },
+                GeneratedToken::TokenId {
+                    token_id: 2,
+                    is_reasoning_token: false,
+                    expert_memory_mode: Some(ExpertMemoryMode::Resident),
+                    mlx_memory_telemetry: None,
+                    first_decode_forward_elapsed_millis: None,
+                    generation_finalization: None,
+                },
+            ],
+        );
     scripted_engine.initial_expert_memory_mode = Some(ExpertMemoryMode::Resident);
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(1),
@@ -249,7 +251,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_token_count: 0,
             astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::Cancelled,
         }
@@ -332,10 +334,11 @@ async fn assert_follow_up_request_after_terminal_finalization<
 
 #[tokio::test]
 async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
-    let mut scripted_engine = ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
-        0,
-        vec![finalized_resident_generation_token()],
-    );
+    let mut scripted_engine =
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count_and_generated_tokens(
+            0,
+            vec![finalized_resident_generation_token()],
+        );
     scripted_engine.initial_expert_memory_mode = Some(ExpertMemoryMode::Paged);
     let cancellation_count = scripted_engine.cancellation_count();
     let engine_worker = EngineBackedWorker::new(

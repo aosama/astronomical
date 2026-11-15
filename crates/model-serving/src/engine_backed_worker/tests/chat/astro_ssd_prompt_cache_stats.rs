@@ -27,7 +27,7 @@ async fn should_report_astro_ssd_prompt_cache_lookup_counters_when_generation_st
     };
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(4_096),
-        ScriptedChatEngine::with_cached_token_count(2_048)
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count(2_048)
             .with_active_generation_astro_ssd_prompt_cache_stats(
                 astro_ssd_prompt_cache_stats_after_lookup.clone(),
             ),

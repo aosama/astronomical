@@ -5,7 +5,7 @@
 //! When the model does not fit in memory, the experts that are not held have
 //! to be read from storage, so the whole game is to hold the experts the
 //! conversation actually uses. That is an ordinary caching problem, and this
-//! module treats it as one: a single cache across all layers, one capacity,
+//! module treats it as one: a single astro expert cache across all layers, one capacity,
 //! one eviction order, and a record of every decision so a slow reply can be
 //! explained from data instead of guessed at.
 //!
@@ -19,18 +19,18 @@
 //!   real reply, and the compact file such a recording is kept in.
 //! - `cache` — the cache with memory perfectly divisible, as a bound to
 //!   compare against.
-//! - `expert_tables` — the cache as an engine can hold it, one table per
+//! - `expert_tables` — the astro expert cache as an engine can hold it, one table per
 //!   layer, with every decision stated as a change to a table.
-//! - `cache_record` — what the cache did, per layer, per expert and per
+//! - `astro_expert_cache_record` — what the astro expert cache did, per layer, per expert and per
 //!   eviction.
 
-mod cache;
-mod cache_record;
+mod astro_expert_cache;
+mod astro_expert_cache_record;
 mod expert_tables;
 mod routed_reply;
 
 #[cfg(test)]
-mod cache_tests;
+mod astro_expert_cache_tests;
 #[cfg(test)]
 mod expert_tables_tests;
 #[cfg(test)]
@@ -38,10 +38,12 @@ mod recorded_reply_replay_tests;
 #[cfg(test)]
 mod routed_reply_tests;
 
-pub use cache::{
+pub use astro_expert_cache::{
     AstroExpertCacheLayerGeometry, DivisibleAstroExpertCache, EvictionOrder, ExpertKey,
     LayerSlotLimit, ServedRoute,
 };
-pub use cache_record::{AstroExpertCacheRecord, EvictionEvent, ExpertUse, LayerCacheSummary};
+pub use astro_expert_cache_record::{
+    AstroExpertCacheRecord, EvictionEvent, ExpertUse, LayerAstroExpertCacheSummary,
+};
 pub use expert_tables::{AstroExpertCacheTableRules, AstroExpertCacheTables, TableChange};
 pub use routed_reply::{RoutedReply, RoutedReplyDecodeError};

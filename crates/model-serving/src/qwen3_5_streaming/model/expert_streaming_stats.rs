@@ -1,7 +1,7 @@
 //! Observatory-facing session statistics assembled from pager-owned counters.
 //!
 //! The pager owns always-on counters and the always-on positional-read
-//! aggregate; this module composes them with the warm-cache topology and the
+//! aggregate; this module composes them with the astro expert cache topology and the
 //! finalization residency claim into one `ExpertStreamingStats` snapshot. The
 //! composition is read-only over model state and performs no MLX work, so it
 //! stays safe to call at every generation finalization.

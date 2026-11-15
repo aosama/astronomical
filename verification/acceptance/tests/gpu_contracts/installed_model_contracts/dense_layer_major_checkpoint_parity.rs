@@ -22,7 +22,7 @@ use tokio::time::timeout;
 #[path = "../../support/romeo_and_juliet.rs"]
 mod romeo_and_juliet;
 
-/// The engine's SSD-streaming chunk and the 9B model's cache block.
+/// The engine's SSD-streaming chunk and the 9B model's astro SSD astro SSD prompt cache block.
 const CHUNK_TOKEN_COUNT: usize = 4096;
 const BLOCK_TOKEN_COUNT: usize = 1792;
 /// About 4,600 tokens: two spans, with boundaries at 1,792 and 3,584.

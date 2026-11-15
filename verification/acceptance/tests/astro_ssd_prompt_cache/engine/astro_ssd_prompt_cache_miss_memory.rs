@@ -282,7 +282,7 @@ async fn measured_expert_payload_bytes(
             .expect("the resident model should report its complete expert payload")
     } else {
         qwen3_5_engine
-            .expert_weight_memory_cache_statistics_for_tests()
+            .astro_expert_cache_statistics_for_tests()
             .await
             .expect("the engine should report paged expert payload")
             .resident_payload_byte_count

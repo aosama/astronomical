@@ -1,15 +1,15 @@
-//! Capacity enforcement for the retained expert slot-table cache: the
+//! Capacity enforcement for the retained expert astro expert cache: the
 //! whole-table eviction order and the admission check the insert path uses.
 
 use mlx_bridge::MlxArray;
 
-use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, RetainedExpertReclamation};
+use crate::expert_paging::{AstroExpertCacheStatistics, RetainedExpertReclamation};
 
 use super::AstroExpertCache;
 
 impl AstroExpertCache {
     #[must_use]
-    pub fn statistics(&self) -> ExpertWeightMemoryCacheStatistics {
+    pub fn statistics(&self) -> AstroExpertCacheStatistics {
         let occupied_layer_count = self
             .tables_by_layer
             .iter()
@@ -21,7 +21,7 @@ impl AstroExpertCache {
             .filter_map(|table| table.as_ref())
             .map(|table| table.occupied_slot_count)
             .sum::<usize>();
-        ExpertWeightMemoryCacheStatistics {
+        AstroExpertCacheStatistics {
             entry_count: total_expert_count,
             resident_payload_byte_count: self.resident_payload_bytes,
             maximum_resident_payload_byte_count: self.capacity_bytes,
@@ -38,7 +38,7 @@ impl AstroExpertCache {
         }
     }
 
-    /// How many bytes of experts the cache may keep.
+    /// How many bytes of experts the astro expert cache may keep.
     #[must_use]
     pub(crate) const fn capacity_bytes(&self) -> u64 {
         self.capacity_bytes

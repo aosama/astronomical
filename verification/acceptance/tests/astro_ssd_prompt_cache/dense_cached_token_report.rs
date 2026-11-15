@@ -1,9 +1,10 @@
 use tokio::time::timeout;
 
 use super::rest_support::{
-    MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT, cache_pressure_model_id,
-    get_json_endpoint, prepare_cacheable_romeo_and_juliet_prompt, read_performance_records,
-    required_u64, send_streaming_chat_request, user_message, write_cache_pressure_worker_config,
+    MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT,
+    astro_ssd_prompt_cache_pressure_model_id, get_json_endpoint,
+    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
+    send_streaming_chat_request, user_message, write_astro_ssd_prompt_cache_pressure_worker_config,
 };
 use crate::openai_rest;
 use crate::openai_rest::E2E_TIMEOUT;
@@ -24,18 +25,23 @@ async fn should_report_the_exact_dense_restored_prefix_in_warm_request_usage() {
 
 async fn run_dense_cached_token_report_journey() {
     let acceptance_log_prefix = "[dense-cached-token-report]";
-    let model_directory =
-        crate::support::configured_installed_model_directory_by_id(cache_pressure_model_id());
+    let model_directory = crate::support::configured_installed_model_directory_by_id(
+        astro_ssd_prompt_cache_pressure_model_id(),
+    );
     let configured_worker_home =
         tempfile::tempdir().expect("the dense-report journey should create an isolated home");
     let performance_log_directory = tempfile::tempdir()
         .expect("the dense-report journey should create a performance log directory");
-    write_cache_pressure_worker_config(configured_worker_home.path(), &model_directory, None);
+    write_astro_ssd_prompt_cache_pressure_worker_config(
+        configured_worker_home.path(),
+        &model_directory,
+        None,
+    );
     let prepared_romeo_and_juliet_prompt =
         prepare_cacheable_romeo_and_juliet_prompt(&model_directory, CACHEABLE_PROMPT_TOKEN_COUNT);
     let model_artifact_rest_server =
         serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
-            cache_pressure_model_id(),
+            astro_ssd_prompt_cache_pressure_model_id(),
             model_directory,
             Some(configured_worker_home.path()),
             Some(performance_log_directory.path()),
@@ -103,11 +109,12 @@ async fn run_dense_cached_token_report_journey() {
         2,
         "the cold and warm requests should each produce one performance record"
     );
-    let warm_cached_token_count = performance_records[1]["cached_token_count"]
-        .as_u64()
-        .expect("the warm performance record should report cached_token_count");
+    let warm_astro_ssd_prompt_cache_token_count =
+        performance_records[1]["astro_ssd_prompt_cache_token_count"]
+            .as_u64()
+            .expect("the warm performance record should report astro_ssd_prompt_cache_token_count");
     assert_eq!(
-        warm_cached_token_count, expected_restored_token_count,
+        warm_astro_ssd_prompt_cache_token_count, expected_restored_token_count,
         "issue #657 dense-path guard: the warm request must report exactly the block-aligned \
          dense restored prefix (expected {expected_restored_token_count})",
     );
@@ -119,7 +126,7 @@ async fn run_dense_cached_token_report_journey() {
 
     openai_rest::stop_serving_rest_server(model_artifact_rest_server).await;
     eprintln!(
-        "{acceptance_log_prefix} status=success prompt_tokens={} cached_tokens={warm_cached_token_count}",
+        "{acceptance_log_prefix} status=success prompt_tokens={} cached_tokens={warm_astro_ssd_prompt_cache_token_count}",
         warm_response.prompt_token_count,
     );
 }

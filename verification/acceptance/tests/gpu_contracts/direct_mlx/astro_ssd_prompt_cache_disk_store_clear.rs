@@ -8,13 +8,24 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 async fn should_clear_every_model_astro_ssd_prompt_cache_from_the_global_root() {
     run_bounded_test(async {
         eprintln!("[cache-clear] arranging two model cache namespaces");
-        let cache_root = tempfile::tempdir().expect("cache root should be created");
-        create_cache_block(cache_root.path(), "publisher/model-a", "revision-a", 5);
-        create_cache_block(cache_root.path(), "publisher/model-b", "revision-b", 7);
+        let astro_ssd_prompt_cache_root =
+            tempfile::tempdir().expect("cache root should be created");
+        create_astro_ssd_prompt_cache_block(
+            astro_ssd_prompt_cache_root.path(),
+            "publisher/model-a",
+            "revision-a",
+            5,
+        );
+        create_astro_ssd_prompt_cache_block(
+            astro_ssd_prompt_cache_root.path(),
+            "publisher/model-b",
+            "revision-b",
+            7,
+        );
 
         eprintln!("[cache-clear] clearing the global cache root");
         let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
-            cache_root.path(),
+            astro_ssd_prompt_cache_root.path(),
             None,
         )
         .expect("global cache clear should succeed");
@@ -22,7 +33,7 @@ async fn should_clear_every_model_astro_ssd_prompt_cache_from_the_global_root() 
         assert_eq!(clear_outcome.model_id, None);
         assert_eq!(clear_outcome.blocks_removed, 2);
         assert_eq!(clear_outcome.bytes_freed, 12);
-        assert_directory_is_empty(cache_root.path());
+        assert_directory_is_empty(astro_ssd_prompt_cache_root.path());
     })
     .await;
 }
@@ -31,12 +42,23 @@ async fn should_clear_every_model_astro_ssd_prompt_cache_from_the_global_root() 
 async fn should_clear_only_the_requested_model_and_preserve_other_models() {
     run_bounded_test(async {
         eprintln!("[cache-clear] arranging scoped model cache namespaces");
-        let cache_root = tempfile::tempdir().expect("cache root should be created");
-        create_cache_block(cache_root.path(), "publisher/model-a", "revision-a", 5);
-        create_cache_block(cache_root.path(), "publisher/model-b", "revision-b", 7);
+        let astro_ssd_prompt_cache_root =
+            tempfile::tempdir().expect("cache root should be created");
+        create_astro_ssd_prompt_cache_block(
+            astro_ssd_prompt_cache_root.path(),
+            "publisher/model-a",
+            "revision-a",
+            5,
+        );
+        create_astro_ssd_prompt_cache_block(
+            astro_ssd_prompt_cache_root.path(),
+            "publisher/model-b",
+            "revision-b",
+            7,
+        );
 
         let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
-            cache_root.path(),
+            astro_ssd_prompt_cache_root.path(),
             Some("publisher/model-a"),
         )
         .expect("model-scoped cache clear should succeed");
@@ -44,8 +66,18 @@ async fn should_clear_only_the_requested_model_and_preserve_other_models() {
         assert_eq!(clear_outcome.model_id.as_deref(), Some("publisher/model-a"));
         assert_eq!(clear_outcome.blocks_removed, 1);
         assert_eq!(clear_outcome.bytes_freed, 5);
-        assert!(!cache_root.path().join("publisher/model-a").exists());
-        assert!(cache_root.path().join("publisher/model-b").exists());
+        assert!(
+            !astro_ssd_prompt_cache_root
+                .path()
+                .join("publisher/model-a")
+                .exists()
+        );
+        assert!(
+            astro_ssd_prompt_cache_root
+                .path()
+                .join("publisher/model-b")
+                .exists()
+        );
     })
     .await;
 }
@@ -53,10 +85,11 @@ async fn should_clear_only_the_requested_model_and_preserve_other_models() {
 #[tokio::test]
 async fn should_treat_a_missing_model_astro_ssd_prompt_cache_as_an_idempotent_clear() {
     run_bounded_test(async {
-        let cache_root = tempfile::tempdir().expect("cache root should be created");
+        let astro_ssd_prompt_cache_root =
+            tempfile::tempdir().expect("cache root should be created");
 
         let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
-            cache_root.path(),
+            astro_ssd_prompt_cache_root.path(),
             Some("publisher/missing-model"),
         )
         .expect("missing model cache should already be clear");
@@ -68,15 +101,16 @@ async fn should_treat_a_missing_model_astro_ssd_prompt_cache_as_an_idempotent_cl
 }
 
 #[tokio::test]
-async fn should_reject_model_paths_that_can_escape_the_cache_root() {
+async fn should_reject_model_paths_that_can_escape_the_astro_ssd_prompt_cache_root() {
     run_bounded_test(async {
-        let cache_root = tempfile::tempdir().expect("cache root should be created");
-        let preserved_file = cache_root.path().join("preserved.txt");
+        let astro_ssd_prompt_cache_root =
+            tempfile::tempdir().expect("cache root should be created");
+        let preserved_file = astro_ssd_prompt_cache_root.path().join("preserved.txt");
         fs::write(&preserved_file, b"preserved").expect("preserved fixture should be written");
 
         for unsafe_model_id in ["../outside", "publisher/../outside", "/outside", "."] {
             let clear_error = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
-                cache_root.path(),
+                astro_ssd_prompt_cache_root.path(),
                 Some(unsafe_model_id),
             )
             .expect_err("unsafe model path should be rejected");
@@ -92,7 +126,8 @@ async fn should_reject_an_intermediate_symlink_without_deleting_its_target() {
     run_bounded_test(async {
         use std::os::unix::fs::symlink;
 
-        let cache_root = tempfile::tempdir().expect("cache root should be created");
+        let astro_ssd_prompt_cache_root =
+            tempfile::tempdir().expect("cache root should be created");
         let external_directory = tempfile::tempdir().expect("external directory should be created");
         let external_model_directory = external_directory.path().join("model");
         fs::create_dir_all(&external_model_directory)
@@ -101,12 +136,12 @@ async fn should_reject_an_intermediate_symlink_without_deleting_its_target() {
         fs::write(&preserved_file, b"preserved").expect("external fixture should be written");
         symlink(
             external_directory.path(),
-            cache_root.path().join("publisher"),
+            astro_ssd_prompt_cache_root.path().join("publisher"),
         )
         .expect("cache namespace symlink should be created");
 
         astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
-            cache_root.path(),
+            astro_ssd_prompt_cache_root.path(),
             Some("publisher/model"),
         )
         .expect_err("cache clear should reject an intermediate symlink");
@@ -143,26 +178,29 @@ async fn should_reject_a_global_root_with_parent_directory_components() {
 }
 
 #[tokio::test]
-async fn should_unlink_a_global_cache_symlink_without_following_its_target() {
+async fn should_unlink_a_global_astro_ssd_prompt_cache_symlink_without_following_its_target() {
     run_bounded_test(async {
         use std::os::unix::fs::symlink;
 
-        let cache_root = tempfile::tempdir().expect("cache root should be created");
+        let astro_ssd_prompt_cache_root =
+            tempfile::tempdir().expect("cache root should be created");
         let external_directory = tempfile::tempdir().expect("external directory should be created");
         let preserved_file = external_directory.path().join("preserved.safetensors");
         fs::write(&preserved_file, b"preserved").expect("external fixture should be written");
-        let cache_symlink = cache_root.path().join("linked-cache-entry");
-        symlink(external_directory.path(), &cache_symlink)
+        let astro_ssd_prompt_cache_symlink = astro_ssd_prompt_cache_root
+            .path()
+            .join("linked-cache-entry");
+        symlink(external_directory.path(), &astro_ssd_prompt_cache_symlink)
             .expect("cache symlink should be created");
 
         let clear_outcome = astronomical_model_serving::clear_astro_ssd_prompt_cache_directory(
-            cache_root.path(),
+            astro_ssd_prompt_cache_root.path(),
             None,
         )
         .expect("global clear should unlink cache-owned symlinks");
 
         assert!(clear_outcome.bytes_freed > 0);
-        assert!(!cache_symlink.exists());
+        assert!(!astro_ssd_prompt_cache_symlink.exists());
         assert!(preserved_file.exists());
     })
     .await;
@@ -174,20 +212,21 @@ async fn run_bounded_test(test_journey: impl Future<Output = ()>) {
         .expect("cache-clear test should finish within five seconds");
 }
 
-fn create_cache_block(
-    cache_root: &std::path::Path,
+fn create_astro_ssd_prompt_cache_block(
+    astro_ssd_prompt_cache_root: &std::path::Path,
     model_id: &str,
     model_revision: &str,
     file_size_bytes: usize,
 ) {
-    let cache_block_directory = cache_root
+    let astro_ssd_prompt_cache_block_directory = astro_ssd_prompt_cache_root
         .join(model_id)
         .join(model_revision)
         .join("blocks")
         .join("fictional-block-hash");
-    fs::create_dir_all(&cache_block_directory).expect("cache block directory should be created");
+    fs::create_dir_all(&astro_ssd_prompt_cache_block_directory)
+        .expect("cache block directory should be created");
     fs::write(
-        cache_block_directory.join("sequence_state.safetensors"),
+        astro_ssd_prompt_cache_block_directory.join("sequence_state.safetensors"),
         vec![0_u8; file_size_bytes],
     )
     .expect("cache block fixture should be written");

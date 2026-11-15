@@ -2,7 +2,7 @@
 //!
 //! Prefill of the complete prompt already produced last-prompt logits. Sampling
 //! those logits is the first generated token. Re-forwarding the last prompt token
-//! at the next position is a different graph and diverges from a cache restore
+//! at the next position is a different graph and diverges from an astro SSD astro SSD prompt cache restore
 //! whose leftover tail is short enough to seed directly.
 
 use super::engine_request::Qwen3_5EngineRequest;
@@ -72,7 +72,7 @@ pub(super) fn seed_first_generated_token_from_terminal_prefill_chunk(
 /// carries both logits and pre-normalization hidden states.
 ///
 /// Used by the terminal checkpointed prefill path, which produces logits and
-/// cache checkpoints in a single forward.
+/// astro SSD astro SSD prompt cache checkpoints in a single forward.
 fn seed_first_generated_token_from_terminal_forward_output(
     model: &Qwen3_5ResidentModel,
     active_request: &mut Qwen3_5EngineRequest,

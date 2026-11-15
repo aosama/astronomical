@@ -25,16 +25,16 @@ fn dense_counts(sightings_by_expert_id: &[(usize, u64)]) -> Vec<u64> {
 
 #[test]
 fn should_carry_seeded_decode_heat_forward_through_persist_snapshots() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.seed_expert_demand_history(PersistedExpertUsage {
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.seed_expert_demand_history(PersistedExpertUsage {
         prefill_demand_counts_by_layer: vec![vec![0, 900]],
         decode_demand_counts_by_layer: vec![vec![0, 0, 4]],
     });
-    cache.begin_decode_forward();
+    astro_expert_cache.begin_decode_forward();
     // One in-session sighting joins the seeded warmth.
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[2]);
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[2]);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.decode_demand_counts_by_layer,
         vec![dense_counts(&[(2, 5)])],
@@ -52,13 +52,13 @@ fn should_carry_seeded_decode_heat_forward_through_persist_snapshots() {
 
 #[test]
 fn should_age_both_records_at_each_generation_finalization() {
-    let mut cache = AstroExpertCache::new(1);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
 
     // Generation one: a prompt window of 2, one decode sighting.
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[0, 0]);
-    cache.begin_decode_forward();
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[0]);
-    let first_generation = cache.take_persisted_expert_usage();
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[0, 0]);
+    astro_expert_cache.begin_decode_forward();
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[0]);
+    let first_generation = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         first_generation.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(0, 2)])],
@@ -72,11 +72,11 @@ fn should_age_both_records_at_each_generation_finalization() {
 
     // Generation two re-earns the same demand: prior evidence halves, the
     // fresh window joins at full weight.
-    cache.begin_prefill_demand_window();
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[0, 0]);
-    cache.begin_decode_forward();
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[0]);
-    let second_generation = cache.take_persisted_expert_usage();
+    astro_expert_cache.begin_prefill_demand_window();
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[0, 0]);
+    astro_expert_cache.begin_decode_forward();
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[0]);
+    let second_generation = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         second_generation.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(0, 3)])],
@@ -91,17 +91,17 @@ fn should_age_both_records_at_each_generation_finalization() {
 
 #[test]
 fn should_fade_idle_experts_with_a_one_generation_half_life() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.seed_expert_demand_history(PersistedExpertUsage {
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.seed_expert_demand_history(PersistedExpertUsage {
         prefill_demand_counts_by_layer: vec![Vec::new()],
         decode_demand_counts_by_layer: vec![vec![16]],
     });
 
     // A session that loads but never routes this expert again: each
     // generation boundary halves the untouched accumulation.
-    let first_snapshot = cache.take_persisted_expert_usage();
-    let second_snapshot = cache.take_persisted_expert_usage();
-    let third_snapshot = cache.take_persisted_expert_usage();
+    let first_snapshot = astro_expert_cache.take_persisted_expert_usage();
+    let second_snapshot = astro_expert_cache.take_persisted_expert_usage();
+    let third_snapshot = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         first_snapshot.decode_demand_counts_by_layer,
         vec![vec![16]],
@@ -121,18 +121,18 @@ fn should_fade_idle_experts_with_a_one_generation_half_life() {
 
 #[test]
 fn should_reject_a_shape_mismatched_seed_and_stay_cold() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.seed_expert_demand_history(PersistedExpertUsage {
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.seed_expert_demand_history(PersistedExpertUsage {
         prefill_demand_counts_by_layer: vec![vec![9], vec![9]],
         decode_demand_counts_by_layer: vec![vec![9], vec![9]],
     });
 
     assert_eq!(
-        cache.historical_demand_count(0, 0),
+        astro_expert_cache.historical_demand_count(0, 0),
         0,
         "a history written for a differently shaped model must not seed hotness"
     );
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.decode_demand_counts_by_layer,
         vec![Vec::<u64>::new()],
@@ -142,16 +142,16 @@ fn should_reject_a_shape_mismatched_seed_and_stay_cold() {
 
 #[test]
 fn should_merge_persisted_prefill_records_of_differing_expert_widths() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.seed_expert_demand_history(PersistedExpertUsage {
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.seed_expert_demand_history(PersistedExpertUsage {
         prefill_demand_counts_by_layer: vec![vec![0, 0, 8]],
         decode_demand_counts_by_layer: vec![Vec::new()],
     });
     // The next request's window only touched expert 0; the aged prior record
     // still reaches expert 2 and must widen the merged record.
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[0]);
+    astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[0]);
 
-    let persisted_usage = cache.take_persisted_expert_usage();
+    let persisted_usage = astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(0, 1), (2, 4)])],
@@ -166,13 +166,13 @@ fn should_accumulate_usage_across_sessions_through_the_persisted_file() {
 
     // Session one: four decode sightings of expert 2 — the historically hot
     // threshold — and prompt breadth on expert 1 that must stay prefill-only.
-    let mut first_session_cache = AstroExpertCache::new(1);
-    first_session_cache.record_expert_demand(0, EXPERT_CAPACITY, &[1]);
-    first_session_cache.begin_decode_forward();
+    let mut first_session_astro_expert_cache = AstroExpertCache::new(1);
+    first_session_astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[1]);
+    first_session_astro_expert_cache.begin_decode_forward();
     for _ in 0..4 {
-        first_session_cache.record_expert_demand(0, EXPERT_CAPACITY, &[2]);
+        first_session_astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[2]);
     }
-    let first_session_usage = first_session_cache.take_persisted_expert_usage();
+    let first_session_usage = first_session_astro_expert_cache.take_persisted_expert_usage();
     assert!(write_expert_usage(
         &usage_file_path,
         Some("test-model"),
@@ -183,17 +183,17 @@ fn should_accumulate_usage_across_sessions_through_the_persisted_file() {
     // the second persistence accumulates on top.
     let second_session_seed =
         read_expert_usage(&usage_file_path, 1).expect("the freshly written history should reload");
-    let mut second_session_cache = AstroExpertCache::new(1);
-    second_session_cache.seed_expert_demand_history(second_session_seed);
+    let mut second_session_astro_expert_cache = AstroExpertCache::new(1);
+    second_session_astro_expert_cache.seed_expert_demand_history(second_session_seed);
     assert_eq!(
-        second_session_cache.historical_demand_count(0, 2),
+        second_session_astro_expert_cache.historical_demand_count(0, 2),
         4,
         "last session's conversational depth reloads as historical hotness"
     );
-    second_session_cache.begin_decode_forward();
-    second_session_cache.record_expert_demand(0, EXPERT_CAPACITY, &[2]);
+    second_session_astro_expert_cache.begin_decode_forward();
+    second_session_astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[2]);
     // The live stream started at the seeded 4, so the sighting makes 5.
-    let second_session_usage = second_session_cache.take_persisted_expert_usage();
+    let second_session_usage = second_session_astro_expert_cache.take_persisted_expert_usage();
     assert_eq!(
         second_session_usage.decode_demand_counts_by_layer,
         vec![dense_counts(&[(2, 5)])],

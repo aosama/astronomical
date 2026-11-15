@@ -12,7 +12,7 @@ fn should_round_trip_bounded_astro_ssd_prompt_cache_request_diagnostics_on_compl
         prompt_token_count: 40_001,
         generated_token_count: 12,
         reasoning_token_count: 3,
-        cached_token_count: 38_912,
+        astro_ssd_prompt_cache_token_count: 38_912,
         astro_ssd_prompt_cache_diagnostics: Some(WorkerAstroSsdPromptCacheRequestDiagnostics {
             lookup_outcome: WorkerAstroSsdPromptCacheLookupOutcome::Miss,
             block_token_count: 2_048,

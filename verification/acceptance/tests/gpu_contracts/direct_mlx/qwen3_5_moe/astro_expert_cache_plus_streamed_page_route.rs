@@ -1,14 +1,15 @@
 use std::time::Duration;
 
 use astronomical_model_serving::{
-    ExpertPageRoutePartition, QuantizedExpertPageManifest, Qwen3_5MoECachedPlusStreamedPageRoute,
+    ExpertPageRoutePartition, QuantizedExpertPageManifest,
+    Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,
     qwen3_5_moe_combine_partial_route_outputs_for_tests, qwen3_5_moe_unsorted_expert_weighted_sum,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::MlxArray;
 
@@ -18,14 +19,14 @@ const CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT: Duration = Duration::from_se
 async fn should_preserve_weighted_expert_output_across_compact_retained_and_missing_routes() {
     timeout(
         CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT,
-        verify_compact_cached_plus_streamed_page_route_parity(),
+        verify_compact_astro_expert_cache_plus_streamed_page_route_parity(),
     )
     .await
     .expect("the cached-plus-streamed direct MLX contract must finish within 30 seconds");
 }
 
 #[tokio::test]
-async fn should_reject_a_cached_plus_streamed_route_with_an_empty_assignment_side() {
+async fn should_reject_a_astro_expert_cache_plus_streamed_route_with_an_empty_assignment_side() {
     timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = direct_mlx_runtime();
@@ -38,7 +39,7 @@ async fn should_reject_a_cached_plus_streamed_route_with_an_empty_assignment_sid
             .expect("selected expert scores should be valid");
         let route_partition = retained_page_manifest.partition_route_assignments(&[3, 1]);
 
-        let route_error = Qwen3_5MoECachedPlusStreamedPageRoute::build(
+        let route_error = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
             &runtime,
             &selected_indices,
             &selected_scores,
@@ -59,7 +60,7 @@ async fn should_reject_a_cached_plus_streamed_route_with_an_empty_assignment_sid
 }
 
 #[tokio::test]
-async fn should_reject_an_expert_absent_from_its_declared_cached_plus_streamed_page() {
+async fn should_reject_an_expert_absent_from_its_declared_astro_expert_cache_plus_streamed_page() {
     timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = direct_mlx_runtime();
@@ -78,7 +79,7 @@ async fn should_reject_an_expert_absent_from_its_declared_cached_plus_streamed_p
             missing_expert_ids: vec![3],
         };
 
-        let route_error = Qwen3_5MoECachedPlusStreamedPageRoute::build(
+        let route_error = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
             &runtime,
             &selected_indices,
             &selected_scores,
@@ -99,7 +100,7 @@ async fn should_reject_an_expert_absent_from_its_declared_cached_plus_streamed_p
 }
 
 #[expect(clippy::too_many_lines)]
-async fn verify_compact_cached_plus_streamed_page_route_parity() {
+async fn verify_compact_astro_expert_cache_plus_streamed_page_route_parity() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = direct_mlx_runtime();
 
@@ -115,7 +116,7 @@ async fn verify_compact_cached_plus_streamed_page_route_parity() {
         .expect("the selected expert scores should be valid");
 
     eprintln!("[cached-plus-streamed-page-route] status=progress phase=build_compact_route_arrays");
-    let cached_plus_streamed_page_route = Qwen3_5MoECachedPlusStreamedPageRoute::build(
+    let astro_expert_cache_plus_streamed_page_route = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
         &runtime,
         &selected_indices,
         &selected_scores,
@@ -128,48 +129,52 @@ async fn verify_compact_cached_plus_streamed_page_route_parity() {
     );
 
     assert_eq!(
-        cached_plus_streamed_page_route
+        astro_expert_cache_plus_streamed_page_route
             .retained_page_slot_indices
             .shape(),
         vec![2]
     );
     assert_eq!(
-        cached_plus_streamed_page_route.retained_scores.shape(),
+        astro_expert_cache_plus_streamed_page_route
+            .retained_scores
+            .shape(),
         vec![2]
     );
     assert_eq!(
-        cached_plus_streamed_page_route
+        astro_expert_cache_plus_streamed_page_route
             .missing_page_slot_indices
             .shape(),
         vec![2]
     );
     assert_eq!(
-        cached_plus_streamed_page_route.missing_scores.shape(),
+        astro_expert_cache_plus_streamed_page_route
+            .missing_scores
+            .shape(),
         vec![2]
     );
     assert_eq!(
-        cached_plus_streamed_page_route
+        astro_expert_cache_plus_streamed_page_route
             .retained_page_slot_indices
             .to_vec_u32()
             .expect("retained page slots should evaluate"),
         vec![1, 0]
     );
     assert_eq!(
-        cached_plus_streamed_page_route
+        astro_expert_cache_plus_streamed_page_route
             .missing_page_slot_indices
             .to_vec_u32()
             .expect("missing page slots should evaluate"),
         vec![0, 1]
     );
     assert_f32_close(
-        &cached_plus_streamed_page_route
+        &astro_expert_cache_plus_streamed_page_route
             .retained_scores
             .to_vec_f32()
             .expect("retained scores should evaluate"),
         &[0.1, 0.3],
     );
     assert_f32_close(
-        &cached_plus_streamed_page_route
+        &astro_expert_cache_plus_streamed_page_route
             .missing_scores
             .to_vec_f32()
             .expect("missing scores should evaluate"),
@@ -185,16 +190,16 @@ async fn verify_compact_cached_plus_streamed_page_route_parity() {
     let retained_weighted_output = weighted_page_output(
         &runtime,
         &retained_page_expert_outputs,
-        &cached_plus_streamed_page_route.retained_page_slot_indices,
-        &cached_plus_streamed_page_route.retained_scores,
+        &astro_expert_cache_plus_streamed_page_route.retained_page_slot_indices,
+        &astro_expert_cache_plus_streamed_page_route.retained_scores,
     );
     let missing_weighted_output = weighted_page_output(
         &runtime,
         &missing_page_expert_outputs,
-        &cached_plus_streamed_page_route.missing_page_slot_indices,
-        &cached_plus_streamed_page_route.missing_scores,
+        &astro_expert_cache_plus_streamed_page_route.missing_page_slot_indices,
+        &astro_expert_cache_plus_streamed_page_route.missing_scores,
     );
-    let cached_plus_streamed_weighted_output = runtime
+    let astro_expert_cache_plus_streamed_weighted_output = runtime
         .add(&retained_weighted_output, &missing_weighted_output)
         .expect("retained and missing weighted outputs should combine");
 
@@ -217,17 +222,18 @@ async fn verify_compact_cached_plus_streamed_page_route_parity() {
         .sum_axis(&combined_weighted_assignments, 0, false)
         .expect("the combined route should sum weighted assignments");
 
-    let actual_cached_plus_streamed_output = cached_plus_streamed_weighted_output
-        .to_vec_f32()
-        .expect("the cached-plus-streamed weighted output should evaluate");
+    let actual_astro_expert_cache_plus_streamed_output =
+        astro_expert_cache_plus_streamed_weighted_output
+            .to_vec_f32()
+            .expect("the cached-plus-streamed weighted output should evaluate");
     let expected_combined_output = combined_weighted_output
         .to_vec_f32()
         .expect("the combined weighted output should evaluate");
     eprintln!(
-        "[cached-plus-streamed-page-route] status=success cached_plus_streamed_output={actual_cached_plus_streamed_output:?} combined_output={expected_combined_output:?}"
+        "[cached-plus-streamed-page-route] status=success astro_expert_cache_plus_streamed_output={actual_astro_expert_cache_plus_streamed_output:?} combined_output={expected_combined_output:?}"
     );
     assert_f32_close(
-        &actual_cached_plus_streamed_output,
+        &actual_astro_expert_cache_plus_streamed_output,
         &expected_combined_output,
     );
 }
@@ -236,7 +242,7 @@ fn direct_mlx_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the cached-plus-streamed route memory limits should be valid"),
     )
@@ -315,15 +321,16 @@ async fn should_restore_single_page_assignment_order_across_partial_routes() {
             .array_from_f32(&[0.1, 0.2, 0.3, 0.4], &[1, 1, top_k])
             .expect("the selected expert scores should be valid");
 
-        let cached_plus_streamed_page_route = Qwen3_5MoECachedPlusStreamedPageRoute::build(
-            &runtime,
-            &selected_indices,
-            &selected_scores,
-            &route_partition,
-            &retained_page_manifest,
-            &missing_page_manifest,
-        )
-        .expect("the partial route should build");
+        let astro_expert_cache_plus_streamed_page_route =
+            Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
+                &runtime,
+                &selected_indices,
+                &selected_scores,
+                &route_partition,
+                &retained_page_manifest,
+                &missing_page_manifest,
+            )
+            .expect("the partial route should build");
 
         // Each page stores its experts in compact slot order, so the test
         // builds one output tensor per page from the global expert rows its
@@ -369,11 +376,11 @@ async fn should_restore_single_page_assignment_order_across_partial_routes() {
         };
         let retained_rows = page_rows(
             &retained_page_outputs,
-            &cached_plus_streamed_page_route.retained_page_slot_indices,
+            &astro_expert_cache_plus_streamed_page_route.retained_page_slot_indices,
         );
         let missing_rows = page_rows(
             &missing_page_outputs,
-            &cached_plus_streamed_page_route.missing_page_slot_indices,
+            &astro_expert_cache_plus_streamed_page_route.missing_page_slot_indices,
         );
 
         let mut concatenated_position_by_assignment = vec![0_usize; top_k as usize];

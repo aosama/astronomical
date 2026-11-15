@@ -1,5 +1,5 @@
 //! Warm-table creation, growth, and routed-expert slot inserts for the
-//! retained cache.
+//! retained astro expert cache.
 //!
 //! A decode miss streams one token's routed experts, and this module decides
 //! whether that page becomes a retained warm table. The first insert adopts
@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::decode_cache_policy::{
+use super::decode_astro_expert_cache_policy::{
     DecodeExpertSlotState, MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER,
 };
 use super::demand_history::HISTORICAL_HOT_DEMAND_COUNT;
@@ -131,7 +131,7 @@ impl AstroExpertCache {
                 warm_slot_count,
             );
         }
-        let cache_ceiling_bytes = self.capacity_bytes;
+        let astro_expert_cache_ceiling_bytes = self.capacity_bytes;
         let table = self
             .tables_by_layer
             .get_mut(layer_index)
@@ -159,7 +159,7 @@ impl AstroExpertCache {
                 runtime,
                 table,
                 resident_payload_bytes,
-                cache_ceiling_bytes,
+                astro_expert_cache_ceiling_bytes,
                 warm_slot_count,
                 free_slot_deficit,
                 free_slots,

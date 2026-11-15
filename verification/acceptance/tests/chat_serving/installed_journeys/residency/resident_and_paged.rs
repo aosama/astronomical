@@ -89,7 +89,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
             "startup admission must seat complete experts when the ceiling covers weights plus headroom"
         );
         let native_cache_statistics_before_request = qwen3_5_engine
-            .expert_weight_memory_cache_statistics_for_tests()
+            .astro_expert_cache_statistics_for_tests()
             .await
             .expect("the resident model should expose expert statistics");
 
@@ -102,7 +102,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
         )
         .await;
         let native_cache_statistics_after_request = qwen3_5_engine
-            .expert_weight_memory_cache_statistics_for_tests()
+            .astro_expert_cache_statistics_for_tests()
             .await
             .expect("the resident model should retain expert statistics");
 
