@@ -138,7 +138,7 @@ fn should_accept_native_function_tools_and_harmless_compatibility_fields() {
             "service_tier":"auto",
             "user":"single-user",
             "safety_identifier":"local-user",
-            "astro_ssd_prompt_cache_key":"session-prefix"
+            "prompt_cache_key":"session-prefix"
         }"#,
     )
     .expect("the broad local Responses request should deserialize");

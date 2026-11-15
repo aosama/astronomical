@@ -73,6 +73,9 @@ async fn should_list_a_second_model_and_download_it_after_the_first() {
             Arc::new(AvailableCapacity),
         );
         assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
+        // The accepted download names its model only once its job is written,
+        // a moment after the answer; reading the list before then saw no name.
+        wait_for_download_state(&application, "downloading").await;
 
         let (status, queued_document) =
             post_json(&application, "/v1/library/download", OTHER_REPOSITORY_ID).await;
