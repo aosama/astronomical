@@ -61,6 +61,7 @@ jobs:
       native_inputs_changed: ${{ steps.classify.outputs.native_inputs_changed }}
       macos_verification_required: ${{ steps.classify.outputs.macos_verification_required }}
       notices_inputs_changed: ${{ steps.classify.outputs.notices_inputs_changed }}
+      catalog_check_required: ${{ steps.classify.outputs.catalog_check_required }}
       swift_node_required: ${{ steps.classify.outputs.swift_node_required }}
       head_tree_id: ${{ steps.head-tree.outputs.tree_id }}
     steps:
@@ -921,6 +922,28 @@ jobs:
         run: scripts/ci/publish-ci-timing-summary.sh
         timeout-minutes: 1
 
+  # The release catalog and its parser, on Linux. The engine compiles the
+  # catalog in, so a catalog edit is a code change; but the parser lives in its
+  # own crate with no native build, so this lane proves a catalog edit in about
+  # a minute. The classifier opens it whenever the catalog data or the crate
+  # changes, and a change to the catalog data alone (with only static content
+  # beside it) is classified catalog_only and skips the macOS lanes.
+  catalog-check:
+    name: Catalog check
+    needs: detect-changes
+    if: ${{ always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.catalog_check_required == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Test the catalog and its parser
+        run: cargo test --locked -p astronomical-download-catalog
+        timeout-minutes: 8
+
   # Committed dependency notices freshness, before merge. A dependency bump
   # rewrites Cargo.lock; without this lane a bot pull request that never ran
   # `cargo xtask notices` merged green and the nightly notices-freshness
@@ -1280,7 +1303,7 @@ jobs:
   # skipped for any other reason fails the gate.
   verdict:
     name: CI verdict
-    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, neural-engine, swift-node, static, config-contracts, notices-freshness]
+    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, neural-engine, swift-node, static, config-contracts, notices-freshness, catalog-check]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -1306,6 +1329,8 @@ jobs:
           config_contracts_result="${{ needs.config-contracts.result }}"
           notices_inputs_changed="${{ needs.detect-changes.outputs.notices_inputs_changed }}"
           notices_freshness_result="${{ needs.notices-freshness.result }}"
+          catalog_check_required="${{ needs.detect-changes.outputs.catalog_check_required }}"
+          catalog_check_result="${{ needs.catalog-check.result }}"
           [ "$classification_result" = "success" ] \
             || fail "classification-result=$classification_result"
           macos_lanes_may_skip=false
@@ -1350,6 +1375,16 @@ jobs:
               printf '[ci-verdict] lane=notices-freshness result=skipped classification=notices-inputs-unchanged\n'
               ;;
             *) fail "lane=notices-freshness result=$notices_freshness_result" ;;
+          esac
+          case "$catalog_check_result" in
+            success) printf '[ci-verdict] lane=catalog-check result=success\n' ;;
+            skipped)
+              if [ "$catalog_check_required" = "true" ]; then
+                fail "lane=catalog-check skipped while classification requires a catalog check"
+              fi
+              printf '[ci-verdict] lane=catalog-check result=skipped classification=catalog-inputs-unchanged\n'
+              ;;
+            *) fail "lane=catalog-check result=$catalog_check_result" ;;
           esac
           printf '[ci-verdict] status=pass\n'
 

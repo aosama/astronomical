@@ -1,9 +1,15 @@
 //! Validated release-authored selection of executable files from an immutable repository tree.
 
-use crate::library::hub::hugging_face_bounds;
+use crate::canonical_path::is_canonical_ascii_path;
 
 const MAXIMUM_INCLUDED_PATH_COUNT: usize = 64;
 const MAXIMUM_INCLUDED_PATH_BYTES: usize = 1_024;
+
+/// A catalog entry's included paths were empty, too many, unsafe, or
+/// overlapping, so no download could know which files belong to the model.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("the catalog entry's included paths are empty, too many, unsafe or overlapping")]
+pub struct InvalidDownloadPathSelection;
 
 /// Exact files and directory prefixes that belong to one executable model package.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -12,24 +18,26 @@ pub struct DownloadPathSelection {
 }
 
 impl DownloadPathSelection {
-    pub(crate) fn try_new(included_paths: Option<Vec<String>>) -> Result<Self, ()> {
+    pub fn try_new(
+        included_paths: Option<Vec<String>>,
+    ) -> Result<Self, InvalidDownloadPathSelection> {
         let Some(included_paths) = included_paths else {
             return Ok(Self::default());
         };
         if included_paths.is_empty() || included_paths.len() > MAXIMUM_INCLUDED_PATH_COUNT {
-            return Err(());
+            return Err(InvalidDownloadPathSelection);
         }
         let mut validated_paths: Vec<String> = Vec::with_capacity(included_paths.len());
         for included_path in included_paths {
             if !is_valid_included_path(&included_path) {
-                return Err(());
+                return Err(InvalidDownloadPathSelection);
             }
             let normalized_path = included_path.to_ascii_lowercase();
             if validated_paths
                 .iter()
                 .any(|existing_path| selectors_overlap(existing_path, &normalized_path))
             {
-                return Err(());
+                return Err(InvalidDownloadPathSelection);
             }
             validated_paths.push(normalized_path);
         }
@@ -68,10 +76,7 @@ fn is_valid_included_path(included_path: &str) -> bool {
     if path_without_directory_marker.is_empty() || path_without_directory_marker.ends_with('/') {
         return false;
     }
-    hugging_face_bounds::is_canonical_ascii_path(
-        path_without_directory_marker,
-        MAXIMUM_INCLUDED_PATH_BYTES,
-    )
+    is_canonical_ascii_path(path_without_directory_marker, MAXIMUM_INCLUDED_PATH_BYTES)
 }
 
 fn selectors_overlap(first_path: &str, second_path: &str) -> bool {

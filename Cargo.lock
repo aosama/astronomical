@@ -120,6 +120,7 @@ version = "0.2.107"
 dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
+ "astronomical-download-catalog",
  "astronomical-ipc-protocol",
  "astronomical-lowercase-hex",
  "astronomical-rest-contract",
@@ -152,6 +153,17 @@ dependencies = [
 name = "astronomical-decision-contract"
 version = "0.2.107"
 dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "astronomical-download-catalog"
+version = "0.2.107"
+dependencies = [
+ "astronomical-config",
+ "astronomical-lowercase-hex",
  "serde",
  "serde_json",
  "thiserror",

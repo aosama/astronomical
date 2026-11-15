@@ -3,20 +3,20 @@
 //! A model has one name, its model ID, so the only presentation text an entry
 //! carries beside its description is a one-line summary saying what it is for.
 
-use super::download_catalog::DownloadCatalogError;
+use crate::download_catalog::DownloadCatalogError;
 
 // One line at the row's reading size; a longer summary wraps and the list stops
 // being scannable, which is the reason the summary exists beside the description.
-pub(super) const MAXIMUM_SUMMARY_BYTES: usize = 120;
+pub(crate) const MAXIMUM_SUMMARY_BYTES: usize = 120;
 
 /// The optional presentation text of one entry, already validated.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(super) struct CatalogEntryPresentation {
+pub(crate) struct CatalogEntryPresentation {
     pub summary: Option<String>,
 }
 
 /// Validates the authored summary of one entry.
-pub(super) fn parse_entry_presentation(
+pub(crate) fn parse_entry_presentation(
     authored_summary: Option<&str>,
     entry_index: usize,
 ) -> Result<CatalogEntryPresentation, DownloadCatalogError> {

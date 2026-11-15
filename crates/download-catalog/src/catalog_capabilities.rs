@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use super::download_catalog::DownloadCatalogError;
+use crate::download_catalog::DownloadCatalogError;
 
 /// Human-facing capability badges surfaced from the catalog so users can compare models.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -22,23 +22,23 @@ pub struct DownloadCatalogCapabilities {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct DownloadCatalogCapabilitiesDocument {
+pub(crate) struct DownloadCatalogCapabilitiesDocument {
     #[serde(default)]
-    pub(super) supports_reasoning: bool,
+    pub(crate) supports_reasoning: bool,
     #[serde(default)]
-    pub(super) supports_vision: bool,
+    pub(crate) supports_vision: bool,
     #[serde(default)]
-    pub(super) supports_tool_calls: bool,
-    pub(super) context_window: Option<u32>,
-    pub(super) max_output_tokens: Option<u32>,
+    pub(crate) supports_tool_calls: bool,
+    pub(crate) context_window: Option<u32>,
+    pub(crate) max_output_tokens: Option<u32>,
     #[serde(default)]
-    pub(super) supports_image_generation: bool,
+    pub(crate) supports_image_generation: bool,
     #[serde(default)]
-    pub(super) supports_embeddings: bool,
+    pub(crate) supports_embeddings: bool,
     #[serde(default)]
-    pub(super) supports_decisions: bool,
+    pub(crate) supports_decisions: bool,
     #[serde(default)]
-    pub(super) supports_speech: bool,
+    pub(crate) supports_speech: bool,
 }
 
 impl DownloadCatalogCapabilitiesDocument {
@@ -58,7 +58,7 @@ impl DownloadCatalogCapabilitiesDocument {
 
 /// An absent capabilities document means no badges; a present one must declare
 /// at least one badge, otherwise the catalog would advertise an empty model.
-pub(super) fn parse_entry_capabilities(
+pub(crate) fn parse_entry_capabilities(
     capabilities_document: Option<&DownloadCatalogCapabilitiesDocument>,
     entry_index: usize,
 ) -> Result<DownloadCatalogCapabilities, DownloadCatalogError> {

@@ -5,7 +5,6 @@ pub(crate) mod disk_preflight;
 pub(crate) mod endpoint;
 pub(crate) mod executable_preflight;
 pub(crate) mod manifest_preflight;
-pub(crate) mod path_selection;
 pub(crate) mod progress_snapshot;
 pub(crate) mod publication;
 pub(crate) mod queue;
@@ -20,6 +19,7 @@ mod manifest_preflight_tests;
 pub(crate) mod job;
 pub(crate) mod transfer;
 
+pub use astronomical_download_catalog::DownloadPathSelection;
 pub use coordinator::installed_model_removal::InstalledModelRemovalError;
 pub use coordinator::queue_controls::DownloadEnqueueOutcome;
 pub use coordinator::{LibraryDownloadCoordinator, LibraryDownloadCoordinatorError};
@@ -30,6 +30,5 @@ pub use disk_preflight::{
 pub(crate) use endpoint::library_download_routes;
 pub use executable_preflight::{DownloadExecutablePreflight, DownloadExecutablePreflightError};
 pub use manifest_preflight::{DownloadManifestPreflight, DownloadManifestPreflightError};
-pub use path_selection::DownloadPathSelection;
 pub use progress_snapshot::DownloadProgressSnapshot;
 pub use publication::{DownloadPublication, DownloadPublicationError, DownloadPublicationRefresh};

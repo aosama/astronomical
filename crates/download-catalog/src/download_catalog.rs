@@ -5,11 +5,11 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use thiserror::Error;
 
-pub use super::catalog_capabilities::DownloadCatalogCapabilities;
-use super::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
-pub use super::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
-use super::catalog_presentation::{CatalogEntryPresentation, parse_entry_presentation};
-use crate::library::DownloadPathSelection;
+pub use crate::catalog_capabilities::DownloadCatalogCapabilities;
+use crate::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
+pub use crate::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
+use crate::catalog_presentation::{CatalogEntryPresentation, parse_entry_presentation};
+use crate::path_selection::DownloadPathSelection;
 
 // Version 5 removes every name but the model ID: the display name, short name
 // and version label gave one model up to four names, and people could not tell
@@ -28,8 +28,7 @@ const MAXIMUM_QUANTIZATION_LABEL_BYTES: usize = 64;
 const MAXIMUM_UPSTREAM_LICENSE_BYTES: usize = 128;
 const GIT_COMMIT_SHA_HEX_CHARACTER_COUNT: usize = 40;
 const MAXIMUM_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-const BUNDLED_DOWNLOAD_CATALOG_JSON: &str =
-    include_str!("../../../../../registry/download_catalog.json");
+const BUNDLED_DOWNLOAD_CATALOG_JSON: &str = include_str!("../../../registry/download_catalog.json");
 
 /// Validated release-bundled entries in authored presentation order.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -278,7 +277,7 @@ fn parse_catalog_entry(
     let capabilities = parse_entry_capabilities(entry_document.capabilities.as_ref(), entry_index)?;
     let entry_texts = parse_entry_texts(&entry_document, entry_index)?;
     let download_path_selection = DownloadPathSelection::try_new(entry_document.included_paths)
-        .map_err(|()| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
+        .map_err(|_invalid_selection| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
     Ok(DownloadCatalogEntry {
         huggingface_id: entry_document.huggingface_id,
         revision: entry_document.revision,
@@ -582,7 +581,7 @@ impl SeenEntryIdentities {
     }
 }
 
-pub(crate) fn is_valid_huggingface_id(huggingface_id: &str) -> bool {
+pub fn is_valid_huggingface_id(huggingface_id: &str) -> bool {
     let mut identity_components = huggingface_id.split('/');
     let organization = identity_components.next().unwrap_or_default();
     let model_name = identity_components.next().unwrap_or_default();
@@ -592,7 +591,7 @@ pub(crate) fn is_valid_huggingface_id(huggingface_id: &str) -> bool {
         && !model_name.ends_with(".git")
 }
 
-pub(crate) fn is_valid_immutable_revision(revision: &str) -> bool {
+pub fn is_valid_immutable_revision(revision: &str) -> bool {
     astronomical_lowercase_hex::is_lowercase_hex_of_length(
         revision,
         GIT_COMMIT_SHA_HEX_CHARACTER_COUNT,

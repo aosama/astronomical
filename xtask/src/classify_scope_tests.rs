@@ -447,3 +447,66 @@ fn should_keep_the_swift_lane_off_on_a_push_that_needs_no_macos_lanes() {
     let full_verdict = classify_change_scope(CiEvent::Push, &rust_paths, false, false);
     assert!(!verdict_for_verified_tree(full_verdict).swift_node_required);
 }
+
+fn pull_request_verdict(changed_paths: &[&str]) -> crate::classify_scope::ChangeScopeVerdict {
+    classify_change_scope(CiEvent::PullRequest, &paths(changed_paths), false, false)
+}
+
+#[test]
+fn should_check_a_catalog_edit_alone_in_the_catalog_lane_without_the_macos_lanes() {
+    let verdict = pull_request_verdict(&["registry/download_catalog.json"]);
+
+    assert_eq!(verdict.classification, "catalog_only");
+    assert!(verdict.code_changed);
+    assert!(verdict.catalog_check_required);
+    assert!(!verdict.macos_verification_required);
+    assert!(!verdict.swift_node_required);
+}
+
+#[test]
+fn should_keep_a_catalog_edit_with_static_content_beside_it_catalog_only() {
+    let verdict = pull_request_verdict(&[
+        "registry/download_catalog.json",
+        "README.md",
+        "site/index.html",
+    ]);
+
+    assert_eq!(verdict.classification, "catalog_only");
+    assert!(!verdict.macos_verification_required);
+}
+
+#[test]
+fn should_run_every_lane_when_a_catalog_edit_comes_with_code() {
+    let verdict = pull_request_verdict(&[
+        "registry/download_catalog.json",
+        "apps/daemon/src/library/catalog.rs",
+    ]);
+
+    assert_eq!(verdict.classification, "code_or_build");
+    assert!(verdict.macos_verification_required);
+    assert!(verdict.catalog_check_required);
+}
+
+#[test]
+fn should_treat_a_change_to_the_catalog_crate_as_code_and_also_open_the_catalog_lane() {
+    let verdict = pull_request_verdict(&["crates/download-catalog/src/download_catalog.rs"]);
+
+    assert_eq!(verdict.classification, "code_or_build");
+    assert!(verdict.macos_verification_required);
+    assert!(verdict.catalog_check_required);
+}
+
+#[test]
+fn should_not_open_the_catalog_lane_for_static_content_or_other_registry_files() {
+    assert!(!pull_request_verdict(&["README.md"]).catalog_check_required);
+    let other_registry_verdict = pull_request_verdict(&["registry/e2e_test_model_names.json"]);
+    assert!(!other_registry_verdict.catalog_check_required);
+    assert!(other_registry_verdict.macos_verification_required);
+}
+
+#[test]
+fn should_open_the_catalog_lane_on_a_manual_run() {
+    let verdict = classify_change_scope(CiEvent::WorkflowDispatch, &[], false, false);
+
+    assert!(verdict.catalog_check_required);
+}
