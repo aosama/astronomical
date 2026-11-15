@@ -13,7 +13,7 @@ use tokio::io::{duplex, split};
 const MACHINE_MLX_MEMORY_CEILING_BYTES: u64 = 42_949_672_960;
 const WIRED_RESIDENCY_BUDGET_BYTES: u64 = 42_097_180_672;
 /// The wired budget minus its 2.5% Metal working-set margin.
-const PLANNABLE_WIRED_RESIDENCY_BYTES: u64 = 41_044_751_172;
+const PLANNABLE_WIRED_RESIDENCY_BYTES: u64 = 38_939_892_172;
 const STARTUP_MLX_MEMORY_CEILING_BYTES: u64 = 23_622_320_128;
 
 async fn applied_live_mlx_memory_ceiling_bytes(
