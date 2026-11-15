@@ -9,7 +9,8 @@ import type { ModelDownloadProgress } from "./ModelDownload";
 const STATUS_BY_PHASE: Partial<Record<ModelDownloadPhase, string>> = {
   [ModelDownloadPhase.READY]: "The image model is ready.",
   [ModelDownloadPhase.FAILED]: "The download stopped. You can try again.",
-  [ModelDownloadPhase.BUSY]: "Another download is running. Try again when it finishes.",
+  [ModelDownloadPhase.WAITING]: "Another model is downloading first. This one starts right after.",
+  [ModelDownloadPhase.BUSY]: "Another download is paused. Resume or cancel it on the Models page, then try again.",
 };
 
 /**

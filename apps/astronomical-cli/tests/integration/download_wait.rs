@@ -48,6 +48,17 @@ async fn run_download(
     download_jobs: Vec<Option<DaemonDownloadJob>>,
     stall_bound: Duration,
 ) -> DownloadRun {
+    run_download_behind(test_name, download_jobs, Vec::new(), stall_bound).await
+}
+
+/// `run_download` where the daemon also reports its download list on each
+/// poll, in step with `download_jobs`.
+async fn run_download_behind(
+    test_name: &str,
+    download_jobs: Vec<Option<DaemonDownloadJob>>,
+    download_waiting_huggingface_ids: Vec<Vec<String>>,
+    stall_bound: Duration,
+) -> DownloadRun {
     let test_directory = fresh_test_directory("dlwait", test_name);
     let socket_path = test_directory.join(SOCKET_FILE_NAME);
     let stub_daemon_task = spawn_stub_daemon(
@@ -60,6 +71,7 @@ async fn run_download(
                 true,
             )]),
             download_jobs,
+            download_waiting_huggingface_ids,
             ..Default::default()
         },
     );
@@ -376,4 +388,66 @@ async fn should_give_up_when_the_daemon_never_comes_back() {
         failure.to_string().contains("daemon was unreachable"),
         "{failure}"
     );
+}
+
+const AHEAD_MODEL: &str = "test/model-ahead";
+
+/// Asked for while another model downloads, the model waits on the daemon's
+/// list. The wait says where it stands and stays alive on the other model's
+/// progress, then follows its own download once its turn comes.
+#[tokio::test]
+async fn should_wait_its_turn_behind_another_download_and_then_follow_its_own() {
+    let mut download_jobs = Vec::new();
+    let mut waiting_lists = Vec::new();
+    for step in 1..=6_u64 {
+        download_jobs.push(Some(stub_download_job(
+            AHEAD_MODEL,
+            "downloading",
+            step * MEGABYTE,
+            TOTAL_BYTES,
+            None,
+        )));
+        waiting_lists.push(vec![MODEL.to_owned()]);
+    }
+    download_jobs.push(job("downloading", MEGABYTE));
+    waiting_lists.push(Vec::new());
+    download_jobs.push(None);
+    // Longer than a stall bound: only the model ahead moves meanwhile.
+    let stall_bound = Duration::from_millis(80);
+
+    let download_run =
+        run_download_behind("behind-another", download_jobs, waiting_lists, stall_bound).await;
+
+    download_run
+        .outcome
+        .expect("a model waiting its turn must not be cut off while the one ahead moves");
+    assert!(
+        download_run.stderr.contains(
+            "test/downloaded-model is 2nd in line; waiting for test/model-ahead to finish"
+        ),
+        "{}",
+        download_run.stderr
+    );
+}
+
+#[tokio::test]
+async fn should_give_up_when_the_download_ahead_stops_moving() {
+    let download_run = run_download_behind(
+        "behind-stalled",
+        vec![Some(stub_download_job(
+            AHEAD_MODEL,
+            "paused",
+            MEGABYTE,
+            TOTAL_BYTES,
+            None,
+        ))],
+        vec![vec![MODEL.to_owned()]],
+        Duration::from_millis(100),
+    )
+    .await;
+
+    let failure = failure_text(&download_run);
+
+    assert!(failure.contains("made no progress"), "{failure}");
+    assert!(failure.contains("while paused"), "{failure}");
 }

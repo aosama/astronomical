@@ -338,7 +338,12 @@ impl ModelLifecycle {
             tokio::time::sleep(self.download_poll_interval).await;
             let elapsed = wait_started_at.elapsed();
             let wait_outcome = self
-                .poll_download(model_id, elapsed, &mut download_wait, progress)
+                .poll_download(
+                    (model_id, &catalog_entry.huggingface_id),
+                    elapsed,
+                    &mut download_wait,
+                    progress,
+                )
                 .await?;
             if wait_outcome == WaitOutcome::Ready {
                 return Ok(());
@@ -353,23 +358,58 @@ impl ModelLifecycle {
     /// as paused, so the request to download is repeated to continue it.
     async fn poll_download(
         &self,
-        model_id: &str,
+        (model_id, huggingface_id): (&str, &str),
         elapsed: Duration,
         download_wait: &mut DownloadWait,
         progress: &mut dyn ProgressSink,
     ) -> Result<WaitOutcome, ModelLifecycleError> {
-        let active_job = match self.daemon_probe.download_status().await {
-            Ok(active_job) => active_job,
-            Err(probe_error @ DaemonProbeError::DaemonRejected { .. }) => {
-                return Err(probe_error.into());
-            }
-            Err(_daemon_unreachable) => {
-                return download_wait.observe_unreachable_daemon(elapsed, model_id, progress);
-            }
-        };
+        let (active_job, waiting_huggingface_ids) =
+            match self.daemon_probe.download_status_and_queue().await {
+                Ok(download_reading) => download_reading,
+                Err(probe_error @ DaemonProbeError::DaemonRejected { .. }) => {
+                    return Err(probe_error.into());
+                }
+                Err(_daemon_unreachable) => {
+                    return download_wait.observe_unreachable_daemon(elapsed, model_id, progress);
+                }
+            };
         if download_wait.daemon_was_unreachable {
             download_wait.daemon_was_unreachable = false;
             self.daemon_probe.download_start(model_id).await?;
+        }
+        self.observe_download_reading(
+            (model_id, huggingface_id),
+            (active_job, &waiting_huggingface_ids),
+            elapsed,
+            download_wait,
+            progress,
+        )
+        .await
+    }
+
+    /// Reads one status reply: this model waiting on the daemon's list, its
+    /// download running, or its job gone.
+    async fn observe_download_reading(
+        &self,
+        (model_id, huggingface_id): (&str, &str),
+        (active_job, waiting_huggingface_ids): (Option<DaemonDownloadJob>, &[String]),
+        elapsed: Duration,
+        download_wait: &mut DownloadWait,
+        progress: &mut dyn ProgressSink,
+    ) -> Result<WaitOutcome, ModelLifecycleError> {
+        // Another model downloads first and this one waits its turn on the
+        // daemon's list; the other model's progress keeps the wait alive.
+        if let Some(waiting_index) = waiting_huggingface_ids
+            .iter()
+            .position(|waiting_id| waiting_id == huggingface_id)
+        {
+            return download_wait.observe_queued_wait(
+                active_job.as_ref(),
+                waiting_index + 1,
+                elapsed,
+                model_id,
+                progress,
+            );
         }
         match active_job {
             Some(active_job) => download_wait.observe_active_job(&active_job, elapsed, progress),
@@ -459,6 +499,34 @@ impl DownloadWait {
             active_job.bytes_completed,
             &active_job.huggingface_id,
         )?;
+        Ok(WaitOutcome::KeepWaiting)
+    }
+
+    /// Reports a model waiting on the daemon's list. `waiting_position` 1 is
+    /// the next to download, so second in line overall.
+    fn observe_queued_wait(
+        &mut self,
+        active_job: Option<&DaemonDownloadJob>,
+        waiting_position: usize,
+        elapsed: Duration,
+        model_id: &str,
+        progress: &mut dyn ProgressSink,
+    ) -> Result<WaitOutcome, ModelLifecycleError> {
+        let place_in_line = formatting::ordinal_place(waiting_position + 1);
+        let (ahead_state, ahead_bytes) = match active_job {
+            Some(ahead_job) => {
+                progress.report(&format!(
+                    "{model_id} is {place_in_line} in line; waiting for {} to finish …",
+                    ahead_job.huggingface_id
+                ));
+                (ahead_job.state.as_str(), ahead_job.bytes_completed)
+            }
+            None => {
+                progress.report(&format!("{model_id} is {place_in_line} in line …"));
+                ("waiting in line", 0)
+            }
+        };
+        self.check_stall(elapsed, ahead_state, ahead_bytes, model_id)?;
         Ok(WaitOutcome::KeepWaiting)
     }
 

@@ -1,4 +1,6 @@
-//! Background ownership for one daemon-wide durable Library download.
+//! Background ownership of the daemon-wide durable Library download: one
+//! model downloads at a time, and the others asked for wait on the download
+//! list that `queue_controls` keeps.
 
 use std::{
     collections::BTreeSet,
@@ -9,9 +11,15 @@ use std::{
 };
 
 use thiserror::Error;
-use tokio::{sync::Mutex, task::JoinHandle};
+use tokio::{
+    sync::{Mutex, Notify},
+    task::JoinHandle,
+};
 
 use crate::DaemonPerformanceAttributionLog;
+use crate::library::download::queue::{
+    DownloadQueueStore, DownloadQueueStoreError, QueueDiskShortfall,
+};
 use crate::library::{
     DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadDiskPreflight,
     DownloadExecutablePreflightError, DownloadJob, DownloadJobPublicErrorCode, DownloadJobState,
@@ -52,7 +60,8 @@ impl DownloadPublicationRefresh for ProgressPublishingRefresh {
     }
 }
 
-/// Coordinates REST controls with one restart-safe background journey.
+/// Coordinates REST and command-line controls with one restart-safe
+/// background download and the list of models waiting after it.
 pub struct LibraryDownloadCoordinator {
     download_catalog: Arc<DownloadCatalog>,
     job_store: DownloadJobStore,
@@ -63,9 +72,20 @@ pub struct LibraryDownloadCoordinator {
     attribution_log: DaemonPerformanceAttributionLog,
     active_task: Mutex<Option<JoinHandle<()>>>,
     active_control: Mutex<Option<DownloadTransferControl>>,
+    /// The model the running task works on. Its job file is written a moment
+    /// after the task starts, so until then this is the only record of which
+    /// model holds the Library.
+    active_huggingface_id: Mutex<Option<String>>,
     command_lock: Mutex<()>,
     validated_publications: Arc<Mutex<BTreeSet<String>>>,
     progress_snapshot: DownloadProgressSnapshot,
+    queue_store: DownloadQueueStore,
+    /// Woken whenever a download ends or the list gains a model while the
+    /// Library is free, so the queue driver starts the next model.
+    queue_wakeup: Arc<Notify>,
+    /// Both the daemon and its application builders start the queue driver,
+    /// so starting it twice must not run two loops.
+    queue_driver_started: std::sync::atomic::AtomicBool,
 }
 
 #[derive(Debug, Error)]
@@ -80,6 +100,10 @@ pub enum LibraryDownloadCoordinatorError {
     JobStore(#[from] DownloadJobStoreError),
     #[error("Library background task failed: {0}")]
     BackgroundTask(#[from] tokio::task::JoinError),
+    #[error("the download list would not fit on the disk: {} bytes needed, {} free", .0.required_bytes, .0.available_bytes)]
+    QueueDoesNotFit(QueueDiskShortfall),
+    #[error("the download list could not be saved: {0}")]
+    QueueStore(#[from] DownloadQueueStoreError),
 }
 
 impl LibraryDownloadCoordinator {
@@ -95,7 +119,10 @@ impl LibraryDownloadCoordinator {
     ) -> Self {
         Self {
             download_catalog,
-            job_store: DownloadJobStore::new(models_directory),
+            job_store: DownloadJobStore::new(models_directory.clone()),
+            queue_store: DownloadQueueStore::new(models_directory),
+            queue_wakeup: Arc::new(Notify::new()),
+            queue_driver_started: std::sync::atomic::AtomicBool::new(false),
             capacity_query: SharedDiskCapacityQuery(capacity_query),
             metadata_transport,
             payload_transport,
@@ -103,6 +130,7 @@ impl LibraryDownloadCoordinator {
             attribution_log,
             active_task: Mutex::new(None),
             active_control: Mutex::new(None),
+            active_huggingface_id: Mutex::new(None),
             command_lock: Mutex::new(()),
             validated_publications: Arc::new(Mutex::new(BTreeSet::new())),
             progress_snapshot: DownloadProgressSnapshot::new(),
@@ -190,26 +218,6 @@ impl LibraryDownloadCoordinator {
         self.job_store.models_directory().join(huggingface_id)
     }
 
-    /// Starts a fresh download. A failed job of another model is discarded
-    /// first (see `yields_library_to`). Running and paused jobs still hold the
-    /// Library, and a failed job of the same model is continued through
-    /// `resume`, not `start`. The model is looked up before anything is
-    /// discarded, so a refused request deletes nothing.
-    pub async fn start(&self, huggingface_id: &str) -> Result<(), LibraryDownloadCoordinatorError> {
-        let _command_guard = self.command_lock.lock().await;
-        self.clear_finished_task().await;
-        let catalog_entry = self
-            .download_catalog
-            .entries()
-            .iter()
-            .find(|catalog_entry| catalog_entry.huggingface_id() == huggingface_id)
-            .cloned()
-            .ok_or(LibraryDownloadCoordinatorError::CatalogEntryNotFound)?;
-        self.make_room_for(huggingface_id).await?;
-        self.spawn_download_task(catalog_entry).await;
-        Ok(())
-    }
-
     pub async fn resume(&self) -> Result<(), LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
         self.clear_finished_task().await;
@@ -262,7 +270,10 @@ impl LibraryDownloadCoordinator {
     pub async fn cancel(&self) -> Result<bool, LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
         self.abort_active_task().await;
-        self.remove_current_job().await
+        let removal_outcome = self.remove_current_job().await;
+        // Cancelling stops only this model; the list moves on to the next.
+        self.queue_wakeup.notify_one();
+        removal_outcome
     }
 
     /// Removes the current job and its staged bytes; the caller holds the
@@ -325,6 +336,7 @@ impl LibraryDownloadCoordinator {
         self.progress_snapshot.clear();
         let transfer_control = DownloadTransferControl::new();
         *self.active_control.lock().await = Some(transfer_control.clone());
+        *self.active_huggingface_id.lock().await = Some(catalog_entry.huggingface_id().to_owned());
         let task_dependencies = DownloadTaskDependencies {
             job_store: self.job_store.clone(),
             capacity_query: self.capacity_query.clone(),
@@ -336,10 +348,12 @@ impl LibraryDownloadCoordinator {
             validated_publications: Arc::clone(&self.validated_publications),
             progress_snapshot: self.progress_snapshot.clone(),
         };
+        let queue_wakeup = Arc::clone(&self.queue_wakeup);
         *self.active_task.lock().await = Some(tokio::spawn(async move {
             if let Err(download_error) = run_download(catalog_entry, task_dependencies).await {
                 tracing::warn!(error = %download_error, "Library download stopped");
             }
+            queue_wakeup.notify_one();
         }));
     }
 
@@ -349,6 +363,7 @@ impl LibraryDownloadCoordinator {
             .await?
             .ok_or(LibraryDownloadCoordinatorError::JobNotFound)?;
         let huggingface_id = publishing_job.huggingface_id().to_owned();
+        *self.active_huggingface_id.lock().await = Some(huggingface_id.clone());
         let publication =
             DownloadPublication::new(self.job_store.clone(), self.attribution_log.clone());
         let discovery_refresh = Arc::new(ProgressPublishingRefresh {
@@ -357,6 +372,7 @@ impl LibraryDownloadCoordinator {
             publishing_job,
         });
         let validated_publications = Arc::clone(&self.validated_publications);
+        let queue_wakeup = Arc::clone(&self.queue_wakeup);
         *self.active_task.lock().await = Some(tokio::spawn(async move {
             match publication.publish(discovery_refresh).await {
                 Ok(_) => {
@@ -366,6 +382,7 @@ impl LibraryDownloadCoordinator {
                     tracing::warn!(error = %publication_error, "Library publication recovery stopped");
                 }
             }
+            queue_wakeup.notify_one();
         }));
         Ok(())
     }
@@ -536,3 +553,5 @@ fn current_unix_millis() -> u64 {
 // validated publications, which a sibling module could not reach.
 #[path = "installed_model_removal.rs"]
 pub(crate) mod installed_model_removal;
+#[path = "queue_controls.rs"]
+pub(crate) mod queue_controls;

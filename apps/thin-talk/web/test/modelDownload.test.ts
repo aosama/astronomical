@@ -8,8 +8,15 @@ import type { ModelDownloadDependencies, ModelDownloadProgress } from "../src/as
 
 const CHAT_MODEL_ID = "example-org/chat-model-4bit";
 
-function status(state: string, bytesCompleted = 0, bytesTotal = 0, huggingfaceID: string | null = CHAT_MODEL_ID, errorCode: string | null = null): LibraryDownloadStatus {
-  return { state, huggingfaceID, bytesCompleted, bytesTotal, errorCode };
+function status(
+  state: string,
+  bytesCompleted = 0,
+  bytesTotal = 0,
+  huggingfaceID: string | null = CHAT_MODEL_ID,
+  errorCode: string | null = null,
+  waitingHuggingfaceIDs: readonly string[] = [],
+): LibraryDownloadStatus {
+  return { state, huggingfaceID, bytesCompleted, bytesTotal, errorCode, waitingHuggingfaceIDs };
 }
 
 /** A daemon and clock under the test's control: each poll is run by hand. */
@@ -94,13 +101,47 @@ test("should_join_a_download_of_the_same_model_that_is_already_running", async (
   assert.equal(library.pendingPolls.length, 1);
 });
 
-test("should_report_busy_without_requesting_when_another_model_holds_the_library", async () => {
+test("should_report_busy_without_requesting_when_a_paused_download_of_another_model_holds_the_list", async () => {
   const library = new ScriptedLibrary();
-  library.statusAnswers = [status("downloading", 1, 2, "someone-else/other-model")];
+  library.statusAnswers = [status("paused", 1, 2, "someone-else/other-model")];
   const { reports } = await startedDownload(library);
   assert.deepEqual(library.startedIDs, []);
   assert.deepEqual(reports.map((report) => report.phase), [ModelDownloadPhase.STARTING, ModelDownloadPhase.BUSY]);
   assert.equal(library.pendingPolls.length, 0);
+});
+
+test("should_join_the_list_behind_a_running_download_and_wait_its_turn_with_its_place", async () => {
+  const library = new ScriptedLibrary();
+  library.statusAnswers = [
+    status("downloading", 1, 2, "someone-else/other-model"),
+    status("downloading", 2, 4, "someone-else/other-model", null, [CHAT_MODEL_ID]),
+    status("downloading", 1, 10, CHAT_MODEL_ID),
+  ];
+  const { reports } = await startedDownload(library);
+  assert.deepEqual(library.startedIDs, [CHAT_MODEL_ID]);
+
+  await library.runNextPoll();
+  await library.runNextPoll();
+
+  assert.deepEqual(
+    reports.map((report) => [report.phase, report.placeInLine]),
+    [[ModelDownloadPhase.STARTING, null], [ModelDownloadPhase.WAITING, 2], [ModelDownloadPhase.DOWNLOADING, null]],
+  );
+});
+
+test("should_keep_waiting_past_the_idle_limit_while_the_model_stays_on_the_list", async () => {
+  const library = new ScriptedLibrary();
+  const waitingStatus = status("downloading", 1, 2, "someone-else/other-model", null, ["another/model", CHAT_MODEL_ID]);
+  library.statusAnswers = [IDLE_DOWNLOAD_STATUS, ...Array.from({ length: 15 }, () => waitingStatus)];
+  const { reports } = await startedDownload(library);
+
+  for (let pollNumber = 0; pollNumber < 15; pollNumber += 1) {
+    await library.runNextPoll();
+  }
+
+  assert.equal(reports[reports.length - 1]!.phase, ModelDownloadPhase.WAITING);
+  assert.equal(reports[reports.length - 1]!.placeInLine, 3);
+  assert.equal(library.pendingPolls.length, 1, "it is still listening for its turn");
 });
 
 test("should_tell_busy_from_failed_when_the_daemon_refuses_to_start", async () => {

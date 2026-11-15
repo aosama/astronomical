@@ -1,5 +1,6 @@
 //! A failed download must not hold the Library against other models (#1897): the REST journeys
-//! for replacing it, and for the requests that must still be refused.
+//! for replacing it, for asking again for the failed model, and for a model asked for behind a
+//! paused download, which waits on the list without starting.
 
 use std::{
     path::{Path, PathBuf},
@@ -54,6 +55,12 @@ async fn should_start_another_model_after_a_failed_download_through_rest() {
             !failed_staging_directory.exists(),
             "the failed model's staged bytes are discarded with its job"
         );
+        // The failed model stays listed as failed, so the person can retry it.
+        let download_document = get_download_document(&application).await;
+        assert_eq!(
+            download_document["queue"]["failed"][0]["huggingface_id"],
+            REPOSITORY_ID
+        );
         // Stop the replacing download so no transfer outlives this test.
         let cancel_response = post_without_body(&application, "/v1/library/download/cancel").await;
         assert!(cancel_response.status().is_success());
@@ -85,7 +92,7 @@ async fn should_keep_a_failed_download_when_the_requested_model_is_not_in_the_ca
 }
 
 #[tokio::test]
-async fn should_refuse_to_start_the_failed_model_again_and_keep_its_bytes_for_resume() {
+async fn should_answer_current_for_the_failed_model_and_keep_its_bytes_for_resume() {
     timeout(Duration::from_secs(5), async {
         let test_directory = tempfile::tempdir().expect("temporary directory should be available");
         let (application, failed_staging_directory) =
@@ -93,7 +100,9 @@ async fn should_refuse_to_start_the_failed_model_again_and_keep_its_bytes_for_re
 
         let same_model_response = start_download(&application).await;
 
-        assert_eq!(same_model_response, StatusCode::CONFLICT);
+        // Asking again for the current model starts nothing new: it stays
+        // the current job, which the person resumes to keep its bytes.
+        assert_eq!(same_model_response, StatusCode::OK);
         assert!(
             failed_staging_directory.is_dir(),
             "the same model resumes, keeping its bytes"
@@ -104,7 +113,7 @@ async fn should_refuse_to_start_the_failed_model_again_and_keep_its_bytes_for_re
 }
 
 #[tokio::test]
-async fn should_refuse_another_model_while_a_download_is_paused() {
+async fn should_list_another_model_behind_a_paused_download_without_starting_it() {
     timeout(Duration::from_secs(5), async {
         let test_directory = tempfile::tempdir().expect("temporary directory should be available");
         let catalog = two_model_catalog();
@@ -125,10 +134,17 @@ async fn should_refuse_another_model_while_a_download_is_paused() {
 
         let other_model_response = start_download_of(&application, OTHER_REPOSITORY_ID).await;
 
-        assert_eq!(other_model_response, StatusCode::CONFLICT);
+        // Pausing pauses the whole list: the other model waits its turn and
+        // the paused download keeps the Library.
+        assert_eq!(other_model_response, StatusCode::ACCEPTED);
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let paused_job = get_download_document(&application).await;
         assert_eq!(paused_job["state"], "paused");
         assert_eq!(paused_job["huggingface_id"], REPOSITORY_ID);
+        assert_eq!(
+            paused_job["queue"]["waiting"][0]["huggingface_id"],
+            OTHER_REPOSITORY_ID
+        );
     })
     .await
     .expect("the paused journey should remain bounded");

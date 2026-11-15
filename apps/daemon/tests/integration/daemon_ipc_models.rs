@@ -256,7 +256,10 @@ async fn should_report_no_active_download_without_a_coordinator() {
         .expect("the daemon should answer the download status request");
     assert_eq!(
         status_response,
-        DaemonResponse::DownloadStatus { job: None },
+        DaemonResponse::DownloadStatus {
+            job: None,
+            waiting_huggingface_ids: Vec::new(),
+        },
         "without a download coordinator the daemon reports no active job"
     );
 

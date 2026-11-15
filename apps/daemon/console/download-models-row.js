@@ -51,6 +51,12 @@ function createDownloadModelsRowAction(catalogRow) {
     if (catalogRow.readyOnThisMac) {
         return createDownloadModelsElement("span", "download-models-row-status download-models-row-status-ready", "On this Mac");
     }
+    const waitingPosition = downloadModelsWaitingPosition(catalogRow.huggingfaceId);
+    if (waitingPosition !== null) {
+        return createDownloadModelsElement(
+            "span", "download-models-row-status", downloadModelsWaitingStatusText(waitingPosition)
+        );
+    }
     const downloadState = downloadModelsRowDownloadState(catalogRow);
     if (downloadState && downloadState !== "idle") {
         return createDownloadModelsElement(

@@ -161,8 +161,12 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
                 bytes_total: 456,
                 error: None,
             }),
+            waiting_huggingface_ids: vec!["example/next-model".to_owned()],
         },
-        DaemonResponse::DownloadStatus { job: None },
+        DaemonResponse::DownloadStatus {
+            job: None,
+            waiting_huggingface_ids: Vec::new(),
+        },
         DaemonResponse::DefaultModelSet {
             default_model_id: "Qwen3.5-2B-4bit".to_owned(),
         },

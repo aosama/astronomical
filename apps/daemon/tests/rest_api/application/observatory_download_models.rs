@@ -144,3 +144,40 @@ async fn should_serve_the_embedded_linked_model_javascript() {
     .await
     .expect("the linked-model script journey must finish within five seconds");
 }
+
+// The page names the download list's script and the selection guard in tags
+// of their own, so a missing route would leave Get unable to add a model to
+// the list, or text unselectable while a download runs.
+#[tokio::test]
+async fn should_serve_the_embedded_download_list_and_selection_javascript() {
+    timeout(Duration::from_secs(5), async {
+        for (script_path, expected_function) in [
+            ("/download-models-queue.js", "startDownloadModelsDownload"),
+            (
+                "/download-models-selection.js",
+                "isDownloadModelsSelectionHeld",
+            ),
+        ] {
+            let application =
+                astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
+            let response = application
+                .oneshot(
+                    Request::builder()
+                        .uri(script_path)
+                        .body(Body::empty())
+                        .expect("the script request should be valid"),
+                )
+                .await
+                .expect("the application should return the script");
+
+            assert_eq!(response.status(), StatusCode::OK, "{script_path}");
+            let response_body = to_bytes(response.into_body(), 1024 * 1024)
+                .await
+                .expect("the script should be readable");
+            let script_text = String::from_utf8_lossy(&response_body);
+            assert!(script_text.contains(expected_function), "{script_path}");
+        }
+    })
+    .await
+    .expect("the Models page script journey must finish within five seconds");
+}

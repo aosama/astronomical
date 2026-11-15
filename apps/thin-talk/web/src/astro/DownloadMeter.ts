@@ -1,3 +1,4 @@
+import { formatPlaceInLine } from "./PlaceInLine";
 import { makeElement } from "./AstroDom";
 import { formatGigabytes } from "../ModelDescription";
 import { describeTimeLeft } from "./DownloadTimeEstimate";
@@ -60,6 +61,8 @@ export class DownloadMeter {
         return "almost there: unpacking…";
       case ModelDownloadPhase.READY:
         return "done";
+      case ModelDownloadPhase.WAITING:
+        return progress.placeInLine === null ? "waiting its turn…" : `waiting · ${formatPlaceInLine(progress.placeInLine)} in line`;
       case ModelDownloadPhase.FAILED:
       case ModelDownloadPhase.BUSY:
         return "";
