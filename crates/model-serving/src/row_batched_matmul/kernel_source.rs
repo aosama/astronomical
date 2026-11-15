@@ -64,8 +64,6 @@ pub(crate) const ROW_BATCHED_MATMUL_SOURCE: &str = r#"
   constexpr int FRAGMENT_COUNT = NT / 16;
   const int first_column = threadgroup_position_in_grid.x * NT;
   const int first_row = threadgroup_position_in_grid.y * 16 * TMR;
-  const int first_group = (slice_index * GROUP_COUNT) / SK;
-  const int end_group = ((slice_index + 1) * GROUP_COUNT) / SK;
 
   constexpr auto descriptor = matmul2d_descriptor(
       16 * TMR, NT, GS, false, true, false, matmul2d_descriptor::mode::multiply);
@@ -82,7 +80,12 @@ pub(crate) const ROW_BATCHED_MATMUL_SOURCE: &str = r#"
   for (int column_fragment = 0; column_fragment < FRAGMENT_COUNT; column_fragment++)
     column_in_range[column_fragment] = first_column + column_fragment * 16 + fragment_column < N;
 
-  for (int group = first_group; group < end_group; group++) {
+  // The SK simdgroups of a column tile take groups in turn (slice s reads
+  // groups s, s + SK, ...), so together they stream SK consecutive groups of
+  // each column: one run of SK x 32 bytes where contiguous slices made SK
+  // reads a whole slice apart. The order of each slice's sum still depends on
+  // the shape and SK only, never on the row count.
+  for (int group = slice_index; group < GROUP_COUNT; group += SK) {
     float scales[FRAGMENT_COUNT][4];
     float biases[FRAGMENT_COUNT][4];
     // MLX stores one scale and bias per column and group, [N, K / GS]. Scalar
