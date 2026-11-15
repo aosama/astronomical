@@ -422,6 +422,18 @@ test-direct-mlx = "test --no-fail-fast -p astronomical-acceptance --features ast
 
 # Every native memory-contract phase in one bounded invocation; the probe
 # binary must exist first (see check-mlx-memory-contract).
+# MLX-only memory-fill speed probe (issue #2221): fills MLX with plain tables
+# to a target, then times the same step (gathers, multiplies and page writes
+# into small tables), with no Astronomical engine code. MLX fixes its limit
+# once per process, so pass one test per run after `--exact`. The sweep
+# raises the fill a tenth of a gigabyte at a time under a 36.5 GB limit and
+# prints the memory macOS has wired across the whole system beside each:
+#   cargo measure-memory-fill-speed memory_fill_speed_probe::should_time_fixed_work_as_the_fill_rises_from_34_5_to_36_gb_under_a_36_5_gb_limit
+# The single fills are 35 GB/33.5, 36 GB/34.7, 36.5 GB/35.3 and 36.5 GB/34.7
+# held (`should_time_fixed_work_at_a_..._limit_holding_..._gb`). Needs the
+# GPU free; each run takes under a minute.
+measure-memory-fill-speed = "test --release -p astronomical-acceptance --features direct-mlx,mlx-memory-contract-probe --test memory_contracts -- --ignored --nocapture --test-threads=1 --exact"
+
 test-mlx-memory = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx,mlx-memory-contract-probe --test memory_contracts -- --ignored --test-threads=1"
 
 # Compile-only drift gate for the mlx-memory-contract-probe feature world,

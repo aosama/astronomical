@@ -15,6 +15,8 @@ pub(crate) const fn worker_memory_ledger_snapshot(
         core_weight_bytes: accounts.core_weight_bytes,
         context_bytes: accounts.context_bytes,
         mlx_working_buffer_bytes: accounts.mlx_working_buffer_bytes,
+        mlx_buffer_cache_bytes: accounts.mlx_buffer_cache_bytes,
+        system_wired_reserve_bytes: accounts.system_wired_reserve_bytes,
         stream_slot_bytes: accounts.stream_slot_bytes,
         lease_bytes: accounts.lease_bytes,
         margin_bytes: accounts.margin_bytes,

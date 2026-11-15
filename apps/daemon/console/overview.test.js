@@ -365,11 +365,12 @@ test("should_divide_the_limit_into_parts_that_add_up_to_it", () => {
 
     assert.equal(limitPresentation.isAvailable, true);
     assert.deepEqual(limitPresentation.parts.map((part) => part.key),
-        ["fixed", "conversation", "working", "reading", "margin", "rest", "spare"]);
+        ["fixed", "conversation", "working", "reading", "margin", "system", "rest", "spare"]);
     const totalWidthPercent = limitPresentation.parts.reduce((total, part) => total + part.widthPercent, 0);
     assert.ok(Math.abs(totalWidthPercent - 100) < 0.01, "the parts must fill the bar: " + totalWidthPercent);
     assert.equal(limitPresentation.parts[0].text, "3.0 GB");
-    assert.equal(limitPresentation.parts[5].text, "8.7 GB · 8.5 GB in use");
+    assert.equal(limitPresentation.parts[5].text, "0.0 GB");
+    assert.equal(limitPresentation.parts[6].text, "8.7 GB · 8.5 GB in use");
     assert.equal(limitPresentation.note, "Checked against the graphics system after every step. Largest difference seen: 64 MB.");
 });
 
@@ -379,13 +380,30 @@ test("should_count_room_lent_for_a_retry_as_room_to_work", () => {
     assert.equal(limitPresentation.parts[2].text, "3.0 GB");
 });
 
+test("should_show_what_is_left_free_for_macos_and_say_why", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({
+        system_wired_reserve_bytes: 0.5 * GIBIBYTE, kept_weight_capacity_bytes: 8.18 * GIBIBYTE
+    }));
+
+    assert.equal(limitPresentation.parts[5].key, "system");
+    assert.equal(limitPresentation.parts[5].text, "0.5 GB · keeps replies fast");
+    const totalWidthPercent = limitPresentation.parts.reduce((total, part) => total + part.widthPercent, 0);
+    assert.ok(Math.abs(totalWidthPercent - 100) < 0.01, "the parts must still fill the bar: " + totalWidthPercent);
+});
+
+test("should_count_room_kept_for_the_mlx_buffer_cache_as_room_to_work", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({ mlx_buffer_cache_bytes: 0.5 * GIBIBYTE, kept_weight_capacity_bytes: 8.18 * GIBIBYTE }));
+
+    assert.equal(limitPresentation.parts[2].text, "2.5 GB");
+});
+
 test("should_say_that_room_to_work_is_held_until_a_step_is_measured", () => {
     const limitPresentation = limitPresentationFor(ledgerForTest({
         mlx_working_buffers_are_measured: false, mlx_working_buffer_bytes: 10.68 * GIBIBYTE, kept_weight_capacity_bytes: 0, held_kept_weight_bytes: 0, observed_step_count: 0
     }));
 
     assert.equal(limitPresentation.parts[2].text, "10.7 GB · held until a step is measured");
-    assert.equal(limitPresentation.parts[5].text, "0.0 GB · 0.0 GB in use");
+    assert.equal(limitPresentation.parts[6].text, "0.0 GB · 0.0 GB in use");
     assert.equal(limitPresentation.note, "Nothing has run yet, so nothing has been checked.");
 });
 

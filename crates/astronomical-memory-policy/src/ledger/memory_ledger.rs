@@ -16,6 +16,7 @@ use super::mlx_working_buffers::MlxWorkingBufferMeasurements;
 use super::model_shape::ModelMemoryShape;
 use super::phase::LedgerPhase;
 use super::reconciliation::{HeldMemory, LedgerReconciliation};
+use super::system_wired_ceiling::next_system_wired_reserve_bytes;
 
 /// A request the ledger cannot carry out.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -35,6 +36,7 @@ pub struct MemoryLedger {
     phase: LedgerPhase,
     mlx_working_buffers: MlxWorkingBufferMeasurements,
     leases: LeaseBook,
+    system_wired_reserve_bytes: u64,
 }
 
 impl MemoryLedger {
@@ -51,6 +53,7 @@ impl MemoryLedger {
             phase: LedgerPhase::Idle,
             mlx_working_buffers: MlxWorkingBufferMeasurements::default(),
             leases: LeaseBook::default(),
+            system_wired_reserve_bytes: 0,
         })
     }
 
@@ -64,6 +67,7 @@ impl MemoryLedger {
             phase: self.phase,
             mlx_working_buffer_reserve: self.mlx_working_buffers.reserve_for(self.phase),
             lease_bytes: self.leases.held_bytes(),
+            system_wired_reserve_bytes: self.system_wired_reserve_bytes,
         })
     }
 
@@ -79,6 +83,7 @@ impl MemoryLedger {
             phase,
             mlx_working_buffer_reserve: self.mlx_working_buffers.reserve_for(phase),
             lease_bytes: self.leases.held_bytes(),
+            system_wired_reserve_bytes: self.system_wired_reserve_bytes,
         })
     }
 
@@ -144,6 +149,24 @@ impl MemoryLedger {
     ) -> LedgerAccounts {
         self.mlx_working_buffers
             .record(phase, observed_mlx_working_buffer_bytes);
+        self.accounts()
+    }
+
+    /// Moves the system wired reserve after a reading of the memory macOS
+    /// has wired across the whole system.
+    pub fn observe_system_wired(
+        &mut self,
+        system_wired_bytes: u64,
+        system_wire_limit_bytes: u64,
+    ) -> LedgerAccounts {
+        // What the limit cannot give is not carried forward, or a reserve
+        // run up on a small limit would take many readings to come down.
+        self.system_wired_reserve_bytes = next_system_wired_reserve_bytes(
+            self.system_wired_reserve_bytes,
+            system_wired_bytes,
+            system_wire_limit_bytes,
+        )
+        .min(self.limit_bytes);
         self.accounts()
     }
 

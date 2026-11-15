@@ -244,6 +244,19 @@ impl MemoryGovernor {
         )
     }
 
+    /// A reading of the memory macOS has wired across the whole system; the
+    /// capacity moves so that total stays under the system's wired ceiling.
+    pub fn observe_system_wired(
+        &mut self,
+        system_wired_bytes: u64,
+        system_wire_limit_bytes: u64,
+    ) -> KeptWeightCapacity {
+        capacity_of(
+            self.ledger
+                .observe_system_wired(system_wired_bytes, system_wire_limit_bytes),
+        )
+    }
+
     pub fn change_limit(
         &mut self,
         limit_bytes: u64,

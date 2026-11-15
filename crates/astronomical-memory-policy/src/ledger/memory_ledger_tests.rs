@@ -349,3 +349,49 @@ fn should_keep_the_accounts_adding_up_through_any_sequence_of_events() {
         );
     }
 }
+
+#[test]
+fn should_move_the_system_wired_reserve_with_each_reading_and_take_it_from_capacity() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    let capacity_before_bytes = memory_ledger.accounts().kept_weight_capacity_bytes;
+    let system_wire_limit_bytes = 100 * GIBIBYTE;
+
+    let accounts_over_the_limit = memory_ledger
+        .observe_system_wired(system_wire_limit_bytes + GIBIBYTE, system_wire_limit_bytes);
+    assert_eq!(accounts_over_the_limit.system_wired_reserve_bytes, GIBIBYTE);
+    assert_eq!(
+        accounts_over_the_limit.kept_weight_capacity_bytes,
+        capacity_before_bytes - GIBIBYTE
+    );
+
+    // Well under the limit: everything beyond the 1 GiB slack is given back.
+    let accounts_under_the_limit = memory_ledger.observe_system_wired(
+        system_wire_limit_bytes - 3 * GIBIBYTE,
+        system_wire_limit_bytes,
+    );
+    assert_eq!(accounts_under_the_limit.system_wired_reserve_bytes, 0);
+    assert_eq!(
+        accounts_under_the_limit.kept_weight_capacity_bytes,
+        capacity_before_bytes
+    );
+}
+
+#[test]
+fn should_never_carry_a_system_wired_reserve_larger_than_the_limit() {
+    let mut memory_ledger = ledger_at_16_gibibytes();
+    let system_wire_limit_bytes = 100 * GIBIBYTE;
+
+    let _ = memory_ledger.observe_system_wired(
+        system_wire_limit_bytes + 60 * GIBIBYTE,
+        system_wire_limit_bytes,
+    );
+    // One reading at the slack's edge keeps the reserve; had 60 GiB been
+    // carried, the next reading under the limit could not bring it down.
+    let accounts = memory_ledger.observe_system_wired(
+        system_wire_limit_bytes - 18 * GIBIBYTE,
+        system_wire_limit_bytes,
+    );
+
+    assert_eq!(accounts.system_wired_reserve_bytes, 0);
+    assert_eq!(accounts.shortfall_bytes, 0);
+}

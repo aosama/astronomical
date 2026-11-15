@@ -21,6 +21,8 @@
 //! - `governor` — the one owner an engine talks to: every event answers
 //!   with the kept-weight capacity now in force.
 //! - `reconciliation` — the ledger compared with what MLX reports.
+//! - `system_wired_ceiling` — how much of the limit to leave unused so macOS
+//!   keeps MLX's memory wired.
 
 pub mod accounts;
 pub mod governor;
@@ -30,6 +32,7 @@ pub mod mlx_working_buffers;
 pub mod model_shape;
 pub mod phase;
 pub mod reconciliation;
+pub mod system_wired_ceiling;
 
 pub use accounts::LedgerAccounts;
 pub use governor::{

@@ -216,9 +216,10 @@ function renderOverviewMemory(statusDocument) {
 const OVERVIEW_LIMIT_PARTS = [
     { key: "fixed", accountBytes: (memoryLedger) => memoryLedger.core_weight_bytes },
     { key: "conversation", accountBytes: (memoryLedger) => memoryLedger.context_bytes },
-    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.mlx_working_buffer_bytes || 0) + (memoryLedger.lease_bytes || 0) },
+    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.mlx_working_buffer_bytes || 0) + (memoryLedger.mlx_buffer_cache_bytes || 0) + (memoryLedger.lease_bytes || 0) },
     { key: "reading", accountBytes: (memoryLedger) => memoryLedger.stream_slot_bytes },
     { key: "margin", accountBytes: (memoryLedger) => memoryLedger.margin_bytes },
+    { key: "system", accountBytes: (memoryLedger) => memoryLedger.system_wired_reserve_bytes },
     { key: "rest", accountBytes: (memoryLedger) => memoryLedger.kept_weight_capacity_bytes },
     { key: "spare", accountBytes: (memoryLedger) => memoryLedger.unassigned_bytes }
 ];
@@ -263,6 +264,12 @@ function overviewMemoryLimitPresentation(mlxMemorySnapshot, isWorking) {
     // left for the unknown, and says so instead of showing a guess as a fact.
     if (memoryLedger.mlx_working_buffers_are_measured === false) {
         parts.find((part) => part.key === "working").text += " · held until a step is measured";
+    }
+    // macOS slows the graphics chip once too much memory is pinned across
+    // the whole Mac, so the engine gives some of the limit back; the row says
+    // why the rest of the model got less than the limit allows.
+    if ((memoryLedger.system_wired_reserve_bytes || 0) > 0) {
+        parts.find((part) => part.key === "system").text += " · keeps replies fast";
     }
     parts.find((part) => part.key === "rest").text += " · "
         + formatOverviewGigabytes(memoryLedger.held_kept_weight_bytes || 0) + " in use";

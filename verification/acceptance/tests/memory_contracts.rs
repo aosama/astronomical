@@ -21,3 +21,7 @@ mod mlx_c_memory;
 #[cfg(feature = "mlx-memory-contract-probe")]
 #[path = "memory_contracts/native_probe.rs"]
 mod native_probe;
+
+#[cfg(feature = "mlx-memory-contract-probe")]
+#[path = "memory_contracts/memory_fill_speed_probe.rs"]
+mod memory_fill_speed_probe;

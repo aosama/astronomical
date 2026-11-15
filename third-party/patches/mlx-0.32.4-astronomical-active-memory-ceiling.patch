@@ -52,7 +52,31 @@ index 903cce218..81c610e60 100644
  MetalAllocator::MetalAllocator(Device& d)
      : device_(d.mtl_device()),
        residency_sets_(d.residency_sets()),
-@@ -128,6 +164,21 @@ Buffer MetalAllocator::malloc(size_t size) {
+@@ -87,9 +123,20 @@ size_t MetalAllocator::set_cache_limit(s
+ size_t MetalAllocator::set_memory_limit(size_t limit) {
+   std::unique_lock lk(mutex_);
+   std::swap(limit, block_limit_);
+-  gc_limit_ = std::min(
+-      block_limit_,
+-      static_cast<size_t>(0.95 * device_->recommendedMaxWorkingSetSize()));
++  // Stock MLX starts releasing cached buffers at 95% of Metal's recommended
++  // working set whatever limit the caller set. Astronomical sets the limit
++  // a person chose, up to 97.5% of that working set, and enforces active
++  // memory against it, so a 95% line drains the cache on every allocation
++  // once a model fills its share and nothing is reused. Measured on a 48 GB
++  // Mac: a 122B model replied at 10 to 11 tokens per second above the 95%
++  // line and 28 to 30 below it. The line follows the limit instead, never
++  // above the recommended working set. Peak memory does not rise: cached
++  // buffers are still released once active plus cached memory reaches the
++  // line, and active memory keeps its own enforced ceiling. Limits below the
++  // 95% line behave exactly as upstream.
++  gc_limit_ = std::min(
++      block_limit_,
++      static_cast<size_t>(device_->recommendedMaxWorkingSetSize()));
+   return limit;
+ };
+ 
+@@ -128,6 +175,21 @@ Buffer MetalAllocator::malloc(size_t siz
    // Try the cache
    std::unique_lock lk(mutex_);
    MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
@@ -74,7 +98,7 @@ index 903cce218..81c610e60 100644
    if (!buf) {
      size_t mem_required = get_active_memory() + get_cache_memory() + size;
  
-@@ -144,6 +195,12 @@ Buffer MetalAllocator::malloc(size_t size) {
+@@ -144,6 +206,12 @@ Buffer MetalAllocator::malloc(size_t siz
            << ") exceeded.";
        throw std::runtime_error(msg.str());
      }
@@ -87,7 +111,7 @@ index 903cce218..81c610e60 100644
      lk.unlock();
      if (size < small_size_ && heap_) {
        buf = heap_->newBuffer(size, resource_options);
-@@ -157,6 +214,22 @@ Buffer MetalAllocator::malloc(size_t size) {
+@@ -157,6 +225,22 @@ Buffer MetalAllocator::malloc(size_t siz
        throw std::runtime_error(msg.str());
      }
      lk.lock();
@@ -110,7 +134,7 @@ index 903cce218..81c610e60 100644
      num_resources_++;
      if (!buf->heap()) {
        residency_sets_.insert(buf);
-@@ -205,11 +278,36 @@ size_t MetalAllocator::size(Buffer buffer) const {
+@@ -205,11 +289,36 @@ size_t MetalAllocator::size(Buffer buffe
  }
  
  Buffer MetalAllocator::make_buffer(void* ptr, size_t size) {

@@ -35,7 +35,7 @@ When a step finishes, MLX does not hand its buffers back to the system. It keeps
 - MLX's own name for it is "cache memory": `get_cache_memory`, `set_cache_limit` and `clear_cache` in `mlx/memory.h`, backed by the class `BufferCache` in MLX's Metal allocator.
 - It is not counted in MLX's active memory, but it does occupy memory under the limit.
 - MLX starts releasing it once active memory plus the cache reaches its collection line, which stock MLX places at 95% of the working set Metal recommends for the Mac. Past that line no buffer is reused and every step allocates afresh; a large sparse model then replies at about a third of its speed.
-- The memory ledger has no account for it yet. It lives inside the ledger's 2% margin.
+- While a reply is written, the memory ledger keeps room for it in the account `mlx_buffer_cache_bytes`: one reply step's measured working buffers, taken from what would otherwise be kept experts, and never more than fits. Reading a prompt keeps no such room yet.
 
 ## `metal_kernel_cache`
 
@@ -53,8 +53,10 @@ For a sparse model being streamed, the memory limit a person sets is divided as:
 limit = core weights that always stay in memory
       + the conversation's stored state
       + mlx_working_buffers for one step
+      + room for the mlx_buffer_cache (while a reply is written)
+      + room left unused for the system's wired ceiling
       + slots for weights being read
-      + margin (where the mlx_buffer_cache lives today)
+      + margin
       + astro_expert_cache
 ```
 
@@ -81,6 +83,14 @@ The `astro_expert_cache` is always the remainder. Whatever the other accounts ne
 - **Folders on disk** keep the names they were created with, so an update never orphans what a person already has.
 - **"Cached"** as an adjective is replaced by what it means: "held in the `astro_expert_cache`", "restored from the `astro_ssd_prompt_cache`", or "memoized".
 
+## The system's wired ceiling
+
+macOS wires (pins in memory) what the graphics processor works on, and its kernel publishes how much it will keep wired (`vm.global_user_wire_limit`). Once the memory wired across the whole system passes that limit, macOS no longer keeps all of MLX's memory wired and every piece of graphics-processor work slows. That total includes what the kernel and other applications have wired, so it changes as a person opens and closes applications.
+
+- After every measured step the engine reads the system's wired total and moves the ledger account `system_wired_reserve_bytes` by how far the total is over or under the line. The reserve comes out of what would otherwise be kept experts, shrinks to what fits, and is zero on a Mac with room to spare.
+- The memory limit a person sets keeps its full range. Near its top the engine uses a little less than the limit allows, and Observatory shows how much as "Left free for macOS and other apps".
+- The MLX-only probe `cargo measure-memory-fill-speed` measures the line without any Astronomical engine code.
+
 ## On screen
 
 Screens do not show these names; they use plain words, such as "Prompt cache" in Settings or "Restoring prompt cache" in the menu bar. On Observatory's Overview, where the limit is divided:
@@ -88,5 +98,6 @@ Screens do not show these names; they use plain words, such as "Prompt cache" in
 | On screen | Formal name |
 |---|---|
 | "Room for the rest of the model" | The capacity of the `astro_expert_cache` (kept layers on a dense model) |
-| "Room to work" | `mlx_working_buffers`, plus any lease |
-| "Safety margin" | The margin, where the `mlx_buffer_cache` lives today |
+| "Room to work" | `mlx_working_buffers`, the room kept for the `mlx_buffer_cache` while a reply is written, and any lease |
+| "Safety margin" | The margin |
+| "Left free for macOS and other apps" | `system_wired_reserve_bytes`, the room kept under the system's wired ceiling |
