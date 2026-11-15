@@ -82,11 +82,11 @@ const CELLS: [Cell; 4] = [
     },
 ];
 
-struct JourneyPair {
-    target: Qwen3_5ResidentModel,
-    tokenizer: Qwen3_5Tokenizer,
-    drafter_configuration: DFlash2DrafterConfiguration,
-    drafter_weights: DFlash2DrafterWeights,
+pub(crate) struct JourneyPair {
+    pub(crate) target: Qwen3_5ResidentModel,
+    pub(crate) tokenizer: Qwen3_5Tokenizer,
+    pub(crate) drafter_configuration: DFlash2DrafterConfiguration,
+    pub(crate) drafter_weights: DFlash2DrafterWeights,
     /// Keeps the drafter's lazily mapped tensors alive.
     _drafter_checkpoint: MlxSafetensors,
 }
@@ -131,7 +131,7 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
     );
 }
 
-fn load_pair() -> JourneyPair {
+pub(crate) fn load_pair() -> JourneyPair {
     let target_directory = huggingface_hub_snapshot(TARGET_REPOSITORY);
     let drafter_directory = huggingface_hub_snapshot(DRAFTER_REPOSITORY);
     let runtime = MlxRuntime::initialize(
@@ -189,7 +189,7 @@ fn load_pair() -> JourneyPair {
     }
 }
 
-fn prompt_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
+pub(crate) fn prompt_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
     let command = astronomical_ipc_protocol::ChatGenerationCommand {
         request_id: RequestId::new(0),
         model: TARGET_REPOSITORY.to_owned(),

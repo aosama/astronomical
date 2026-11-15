@@ -65,4 +65,4 @@ pub use resident_model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use resident_model::Qwen3_5ResidentModel as Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
-pub use verification_forward::VerificationLogitsMode;
+pub use verification_forward::{Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode};
