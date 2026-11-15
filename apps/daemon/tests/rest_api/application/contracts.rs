@@ -75,7 +75,7 @@ async fn should_keep_the_openai_stream_open_after_internal_prefill_progress() {
             forward_prefill_chunk_elapsed_millis: Some(1_200),
             completed_prefill_chunk_tokens: Some(2_048),
             mlx_active_memory_bytes: Some(22_164_699_392),
-            mlx_allocator_cache_memory_bytes: Some(0),
+            mlx_buffer_cache_bytes: Some(0),
             mlx_peak_memory_bytes: Some(24_754_436_684),
         },
         ChatGenerationStreamEvent::TextFragment("still connected".to_owned()),

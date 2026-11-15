@@ -13,7 +13,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::{MlxArray, MlxDtype};
 
@@ -23,7 +23,7 @@ fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("sparse-expert projection test memory limits should be valid"),
     )

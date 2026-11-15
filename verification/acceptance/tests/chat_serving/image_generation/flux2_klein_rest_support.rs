@@ -182,13 +182,10 @@ pub(crate) fn assert_image_attribution(
                 .bytes()
                 .all(|byte| byte.is_ascii_hexdigit())
         );
-        assert_eq!(
-            required_u64(final_memory, "mlx_allocator_cache_memory_bytes"),
-            0
-        );
+        assert_eq!(required_u64(final_memory, "mlx_buffer_cache_bytes"), 0);
     }
     eprintln!(
-        "[flux-acceptance] phase=cleanup reports={} allocator_cache_bytes=0",
+        "[flux-acceptance] phase=cleanup reports={} mlx_buffer_cache_bytes=0",
         image_reports.len()
     );
 }
@@ -315,10 +312,7 @@ pub(super) fn assert_worker_reuse_state(
         matches!(memory_snapshot_source, Some("finalized" | "idle_poll")),
         "status should retain finalized cleanup or a newer idle sample: {memory_snapshot}"
     );
-    assert_eq!(
-        required_u64(memory_snapshot, "allocator_cache_memory_bytes"),
-        0
-    );
+    assert_eq!(required_u64(memory_snapshot, "mlx_buffer_cache_bytes"), 0);
     assert_eq!(required_u64(memory_snapshot, "expert_payload_bytes"), 0);
     assert_eq!(
         required_u64(memory_snapshot, "context_state_payload_bytes"),

@@ -90,7 +90,7 @@ async fn run_cache_restore_peak_acceptance() {
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         memory_limits.active_memory_limit_bytes(),
-        memory_limits.allocator_cache_memory_limit_bytes(),
+        memory_limits.mlx_buffer_cache_limit_bytes(),
         Some(PersistentPromptCacheDiskStoreConfig::new(
             persistent_prompt_cache_directory.path().to_path_buf(),
             persistent_prompt_cache_directory.path().to_path_buf(),

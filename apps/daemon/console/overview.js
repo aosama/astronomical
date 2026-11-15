@@ -216,7 +216,7 @@ function renderOverviewMemory(statusDocument) {
 const OVERVIEW_LIMIT_PARTS = [
     { key: "fixed", accountBytes: (memoryLedger) => memoryLedger.core_weight_bytes },
     { key: "conversation", accountBytes: (memoryLedger) => memoryLedger.context_bytes },
-    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.working_memory_bytes || 0) + (memoryLedger.lease_bytes || 0) },
+    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.mlx_working_buffer_bytes || 0) + (memoryLedger.lease_bytes || 0) },
     { key: "reading", accountBytes: (memoryLedger) => memoryLedger.stream_slot_bytes },
     { key: "margin", accountBytes: (memoryLedger) => memoryLedger.margin_bytes },
     { key: "rest", accountBytes: (memoryLedger) => memoryLedger.kept_weight_capacity_bytes },
@@ -261,7 +261,7 @@ function overviewMemoryLimitPresentation(mlxMemorySnapshot, isWorking) {
     });
     // Until one step has been measured the engine holds everything that is
     // left for the unknown, and says so instead of showing a guess as a fact.
-    if (memoryLedger.working_memory_is_measured === false) {
+    if (memoryLedger.mlx_working_buffers_are_measured === false) {
         parts.find((part) => part.key === "working").text += " · held until a step is measured";
     }
     parts.find((part) => part.key === "rest").text += " · "

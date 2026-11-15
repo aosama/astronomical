@@ -170,7 +170,7 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
     drop(kv_block_tensors);
     drop(recurrent_snapshot_tensors);
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         .expect("the test should release serialized source tensors before restore evaluation");
     let loaded_state_arrays = loaded_kv_block_tensors
         .values()

@@ -42,7 +42,7 @@
 use crate::performance_throughput::decode_cache_experiment::{
     MeasuredShapeWindow, PAIRED_TRIAL_COUNT, run_paired_decode_cache_trials,
 };
-use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 
 use super::decode_cache_experiment::{
     report_attributed_policy_comparison, report_clean_policy_comparison,
@@ -122,7 +122,7 @@ fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() 
 #[serial]
 fn should_measure_streaming_sparse_moe_prompt_processing_throughput() {
     let mut journey = sparse_moe_text_journey(false);
-    journey.decode_expert_cache_policy = WorkerDecodeExpertCachePolicy::Baseline;
+    journey.decode_astro_expert_cache_policy = WorkerDecodeAstroExpertCachePolicy::Baseline;
     let measured_throughput = throughput_support::run_journey_with_timeout(
         support::large_sparse_moe_streaming_model_id(),
         journey,
@@ -155,7 +155,7 @@ fn should_measure_streaming_sparse_moe_prompt_processing_throughput() {
 #[serial]
 fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
     let mut journey = streaming_single_chunk_journey(true, 0);
-    journey.decode_expert_cache_policy = WorkerDecodeExpertCachePolicy::Baseline;
+    journey.decode_astro_expert_cache_policy = WorkerDecodeAstroExpertCachePolicy::Baseline;
     let measured_throughput = throughput_support::run_journey_with_timeout(
         support::large_sparse_moe_streaming_model_id(),
         journey,
@@ -499,7 +499,7 @@ async fn run_two_turn_streaming_journey(
     let first = throughput_support::read_completion_by_index(
         performance_log_path_ref,
         model_id,
-        WorkerDecodeExpertCachePolicy::Baseline,
+        WorkerDecodeAstroExpertCachePolicy::Baseline,
         throughput_support::CompletionIndex::First,
         1,
     )
@@ -507,7 +507,7 @@ async fn run_two_turn_streaming_journey(
     let second = throughput_support::read_completion_by_index(
         performance_log_path_ref,
         model_id,
-        WorkerDecodeExpertCachePolicy::Baseline,
+        WorkerDecodeAstroExpertCachePolicy::Baseline,
         throughput_support::CompletionIndex::Last,
         2,
     )

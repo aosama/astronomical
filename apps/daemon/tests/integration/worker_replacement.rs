@@ -10,7 +10,7 @@ use astronomical_daemon::{
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerDecodeExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLogLevel, WorkerModelConfiguration,
     WorkerStartupConfiguration,
 };
@@ -410,7 +410,7 @@ fn startup_configuration(
         persistent_prompt_cache_enabled: true,
         configured_maximum_mlx_memory_bytes: None,
         performance_attribution_enabled: true,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         diagnostic_qwen3_5_engine_override:
             astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
         logging_directory: temporary_directory.to_path_buf(),

@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
 };
 
 #[tokio::test]
@@ -10,7 +10,7 @@ async fn should_keep_the_candidate_that_crosses_the_top_p_threshold() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the sampler test memory limits should be valid"),
     )
@@ -56,7 +56,7 @@ async fn should_reject_zero_mass_when_sampling_the_residual_correction() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the sampler test memory limits should be valid"),
     )
@@ -89,7 +89,7 @@ async fn should_draw_acceptance_coins_at_their_probabilities() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the sampler test memory limits should be valid"),
     )
@@ -178,7 +178,7 @@ async fn should_keep_logits_unchanged_for_a_neutral_repetition_penalty() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the sampler test memory limits should be valid"),
     )
@@ -208,7 +208,7 @@ async fn should_scale_seen_token_logits_by_the_repetition_penalty() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the sampler test memory limits should be valid"),
     )
@@ -257,7 +257,7 @@ async fn should_sample_one_tempered_token_per_logit_row() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the sampler test memory limits should be valid"),
     )

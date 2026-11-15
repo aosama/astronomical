@@ -82,7 +82,7 @@ impl MlxAllocationAdmission {
         let memory_snapshot = runtime.memory_snapshot()?;
         Ok(AllocationAdmissionObservation::new(
             memory_snapshot.active_memory_bytes() as u64,
-            memory_snapshot.allocator_cache_memory_bytes() as u64,
+            memory_snapshot.mlx_buffer_cache_bytes() as u64,
             pending_allocation_bytes,
             self.active_memory_ceiling_bytes,
         ))

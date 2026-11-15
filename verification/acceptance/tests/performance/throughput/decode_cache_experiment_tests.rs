@@ -5,15 +5,15 @@ fn should_alternate_baseline_first_and_candidate_first_pairs() {
     assert_eq!(
         policy_order_for_trial(0),
         [
-            WorkerDecodeExpertCachePolicy::Baseline,
-            WorkerDecodeExpertCachePolicy::Candidate,
+            WorkerDecodeAstroExpertCachePolicy::Baseline,
+            WorkerDecodeAstroExpertCachePolicy::Candidate,
         ]
     );
     assert_eq!(
         policy_order_for_trial(1),
         [
-            WorkerDecodeExpertCachePolicy::Candidate,
-            WorkerDecodeExpertCachePolicy::Baseline,
+            WorkerDecodeAstroExpertCachePolicy::Candidate,
+            WorkerDecodeAstroExpertCachePolicy::Baseline,
         ]
     );
 }

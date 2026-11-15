@@ -27,7 +27,7 @@ pub(super) struct PrefillChunkPlan {
     pub(super) persistent_prompt_cache_block_token_count: Option<usize>,
 
     /// The tokens the completed forward's memory is measured under: the
-    /// largest span's, whose working memory the peak is; never the whole
+    /// largest span's, whose MLX working buffers the peak is; never the whole
     /// stretch's.
     pub(super) measured_forward_token_count: usize,
 

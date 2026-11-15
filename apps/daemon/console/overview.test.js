@@ -332,14 +332,14 @@ function ledgerForTest(overrides = {}) {
         limit_bytes: 16 * GIBIBYTE,
         core_weight_bytes: 3 * GIBIBYTE,
         context_bytes: 1 * GIBIBYTE,
-        working_memory_bytes: 2 * GIBIBYTE,
+        mlx_working_buffer_bytes: 2 * GIBIBYTE,
         lease_bytes: 0,
         stream_slot_bytes: 1 * GIBIBYTE,
         margin_bytes: 0.32 * GIBIBYTE,
         kept_weight_capacity_bytes: 8.68 * GIBIBYTE,
         unassigned_bytes: 0,
         shortfall_bytes: 0,
-        working_memory_is_measured: true,
+        mlx_working_buffers_are_measured: true,
         held_kept_weight_bytes: 8.5 * GIBIBYTE,
         observed_step_count: 40,
         largest_unaccounted_bytes: 64 * 1048576,
@@ -381,7 +381,7 @@ test("should_count_room_lent_for_a_retry_as_room_to_work", () => {
 
 test("should_say_that_room_to_work_is_held_until_a_step_is_measured", () => {
     const limitPresentation = limitPresentationFor(ledgerForTest({
-        working_memory_is_measured: false, working_memory_bytes: 10.68 * GIBIBYTE, kept_weight_capacity_bytes: 0, held_kept_weight_bytes: 0, observed_step_count: 0
+        mlx_working_buffers_are_measured: false, mlx_working_buffer_bytes: 10.68 * GIBIBYTE, kept_weight_capacity_bytes: 0, held_kept_weight_bytes: 0, observed_step_count: 0
     }));
 
     assert.equal(limitPresentation.parts[2].text, "10.7 GB · held until a step is measured");

@@ -5,7 +5,7 @@ use mlx_bridge::MlxDtype;
 
 const GRAPH_DIMENSION: i32 = 4096;
 const ACTIVE_MEMORY_ENFORCEMENT_LIMIT_BYTES: usize = 32 * 1024 * 1024;
-const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 0;
+const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 0;
 
 #[test]
 #[ignore = "allocates and evaluates real MLX GPU arrays through the Rust MLX-C boundary"]
@@ -23,8 +23,8 @@ fn run_native_memory_transitions_contract() {
     let runtime = crate::runtime_common::runtime_test_support::runtime();
     eprintln!("[mlx-c-memory-contract] status=progress phase=clear_baseline_cache");
     runtime
-        .clear_allocator_cache()
-        .expect("the Rust MLX-C boundary should clear the allocator cache");
+        .clear_mlx_buffer_cache()
+        .expect("the Rust MLX-C boundary should clear the MLX buffer cache");
     runtime
         .reset_peak_memory()
         .expect("the Rust MLX-C boundary should reset peak memory");
@@ -56,9 +56,9 @@ fn run_native_memory_transitions_contract() {
             "lazy graph construction must not allocate the final sum payload"
         );
         assert_eq!(
-            after_lazy_graph.allocator_cache_memory_bytes(),
-            before_graph.allocator_cache_memory_bytes(),
-            "lazy graph construction must not change reclaimable allocator-cache bytes"
+            after_lazy_graph.mlx_buffer_cache_bytes(),
+            before_graph.mlx_buffer_cache_bytes(),
+            "lazy graph construction must not change reclaimable MLX buffer-cache bytes"
         );
         eprintln!("[mlx-c-memory-contract] status=progress phase=evaluate_lazy_sum");
         runtime
@@ -105,7 +105,7 @@ fn run_native_memory_transitions_contract() {
         "dropping all evaluated array owners should restore baseline active MLX bytes"
     );
     assert!(
-        after_owner_drop.allocator_cache_memory_bytes() > 0,
+        after_owner_drop.mlx_buffer_cache_bytes() > 0,
         "dropping the evaluated array should retain reclaimable allocator bytes"
     );
 
@@ -118,20 +118,20 @@ fn run_native_memory_transitions_contract() {
         .expect("the Rust MLX-C boundary should submit asynchronous evaluation");
     eprintln!("[mlx-c-memory-contract] status=progress phase=synchronize_async_cleanup");
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         .expect("request-boundary cleanup should synchronize before clearing the cache");
     let after_synchronized_cleanup = runtime
         .memory_snapshot()
         .expect("the Rust MLX-C boundary should read memory after synchronized cleanup");
     print_memory_snapshot("async_live_after_cleanup", &after_synchronized_cleanup);
-    assert_eq!(after_synchronized_cleanup.allocator_cache_memory_bytes(), 0);
+    assert_eq!(after_synchronized_cleanup.mlx_buffer_cache_bytes(), 0);
     assert!(
         after_synchronized_cleanup.active_memory_bytes() > before_graph.active_memory_bytes(),
         "synchronized allocator cleanup must preserve the live asynchronous array"
     );
     drop(async_array);
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         .expect("the final Rust MLX-C cleanup should complete");
     let after_final_owner_drop = runtime
         .memory_snapshot()
@@ -142,7 +142,7 @@ fn run_native_memory_transitions_contract() {
         before_graph.active_memory_bytes(),
         "dropping the final asynchronous array should restore baseline active MLX bytes"
     );
-    assert_eq!(after_final_owner_drop.allocator_cache_memory_bytes(), 0);
+    assert_eq!(after_final_owner_drop.mlx_buffer_cache_bytes(), 0);
     eprintln!("[mlx-c-memory-contract] status=success");
 }
 
@@ -164,8 +164,8 @@ fn run_typed_capacity_rejections_contract() {
     )
     .expect("the high-memory test runtime should initialize");
     high_memory_runtime
-        .clear_allocator_cache()
-        .expect("the high-memory test runtime should start with a clear allocator cache");
+        .clear_mlx_buffer_cache()
+        .expect("the high-memory test runtime should start with a clear MLX buffer cache");
     let cached_array = high_memory_runtime
         .zeros(&[GRAPH_DIMENSION, GRAPH_DIMENSION], MlxDtype::Float32)
         .expect("the high-memory test runtime should create the cache fixture");
@@ -179,13 +179,13 @@ fn run_typed_capacity_rejections_contract() {
     let cached_memory_snapshot = high_memory_runtime
         .memory_snapshot()
         .expect("the high-memory test runtime should report the cache fixture");
-    assert!(cached_memory_snapshot.allocator_cache_memory_bytes() > 0);
+    assert!(cached_memory_snapshot.mlx_buffer_cache_bytes() > 0);
 
     high_memory_runtime
         .update_memory_limits(
             MlxMemoryLimits::new(
                 ACTIVE_MEMORY_ENFORCEMENT_LIMIT_BYTES,
-                ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+                MLX_BUFFER_CACHE_LIMIT_BYTES,
             )
             .expect("the low test memory limits should be valid"),
         )
@@ -196,7 +196,7 @@ fn run_typed_capacity_rejections_contract() {
     assert_capacity_error(&cached_rejection);
 
     high_memory_runtime
-        .clear_allocator_cache()
+        .clear_mlx_buffer_cache()
         .expect("capacity rejection cleanup should leave the runtime usable");
     let fitting_array = high_memory_runtime
         .zeros(&[1, 1], MlxDtype::Float32)
@@ -222,7 +222,7 @@ fn run_host_backed_capacity_rejection_contract() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             ACTIVE_MEMORY_ENFORCEMENT_LIMIT_BYTES,
-            ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the low test memory limits should be valid"),
     )
@@ -268,7 +268,7 @@ fn print_memory_snapshot(phase_name: &str, memory_snapshot: &MlxMemorySnapshot) 
     eprintln!(
         "[mlx-c-memory-contract] status=progress phase={phase_name} active_bytes={} cache_bytes={} peak_bytes={}",
         memory_snapshot.active_memory_bytes(),
-        memory_snapshot.allocator_cache_memory_bytes(),
+        memory_snapshot.mlx_buffer_cache_bytes(),
         memory_snapshot.peak_memory_bytes(),
     );
 }

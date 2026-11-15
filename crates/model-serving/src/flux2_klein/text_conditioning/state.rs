@@ -81,8 +81,8 @@ impl Flux2KleinTextConditioningState {
         drop(embedding);
         if weights.is_streamed() {
             performance_attribution
-                .measure_operation(PerformanceOperation::MlxAllocatorCacheCleanup, |_| {
-                    runtime.clear_allocator_cache()
+                .measure_operation(PerformanceOperation::MlxBufferCacheCleanup, |_| {
+                    runtime.clear_mlx_buffer_cache()
                 })?;
         }
         Ok(Self {
@@ -157,8 +157,8 @@ impl Flux2KleinTextConditioningState {
         self.weights.release_layer(layer_weights);
         if is_streamed {
             performance_attribution
-                .measure_operation(PerformanceOperation::MlxAllocatorCacheCleanup, |_| {
-                    runtime.clear_allocator_cache()
+                .measure_operation(PerformanceOperation::MlxBufferCacheCleanup, |_| {
+                    runtime.clear_mlx_buffer_cache()
                 })?;
         }
         Ok(())

@@ -42,10 +42,8 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
             scripted_engine = scripted_engine
                 .with_idle_mlx_memory_telemetry(created_engine_idle_mlx_memory_telemetry);
         }
-        let (active_memory_limit_bytes, allocator_cache_memory_limit_bytes) =
-            self.mlx_memory_limits;
-        scripted_engine.maximum_allocator_cache_memory_limit_bytes =
-            allocator_cache_memory_limit_bytes;
+        let (active_memory_limit_bytes, mlx_buffer_cache_limit_bytes) = self.mlx_memory_limits;
+        scripted_engine.maximum_mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_bytes;
         if let Some(scripted_replacement_required_reason) =
             &self.scripted_replacement_required_reason
         {
@@ -55,10 +53,7 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
         self.model_creation_memory_limits
             .lock()
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
-            .push((
-                active_memory_limit_bytes,
-                allocator_cache_memory_limit_bytes,
-            ));
+            .push((active_memory_limit_bytes, mlx_buffer_cache_limit_bytes));
         Ok(ModelFactoryRuntime::autoregressive(
             ScriptedChatProcessor::new(),
             scripted_engine,
@@ -69,11 +64,11 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
     fn update_mlx_memory_limits(
         &mut self,
         effective_mlx_memory_ceiling_bytes: u64,
-        allocator_cache_memory_limit_bytes: u64,
+        mlx_buffer_cache_limit_bytes: u64,
     ) {
         self.mlx_memory_limits = (
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
         );
     }
 }

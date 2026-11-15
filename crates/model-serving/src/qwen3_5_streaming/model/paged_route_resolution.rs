@@ -86,15 +86,15 @@ impl Qwen3_5Model {
         self.paged_forward_missing_route_collector.clear();
     }
 
-    pub(crate) fn begin_decode_expert_cache_forward(&self) {
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().begin_decode_forward();
+    pub(crate) fn begin_decode_astro_expert_cache_forward(&self) {
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache.borrow_mut().begin_decode_forward();
         }
     }
 
-    pub(crate) fn end_decode_expert_cache_forward(&self) {
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().end_decode_forward();
+    pub(crate) fn end_decode_astro_expert_cache_forward(&self) {
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache.borrow_mut().end_decode_forward();
         }
     }
 
@@ -218,16 +218,16 @@ impl Qwen3_5Model {
             );
         }
         let decode_slot_eviction_count =
-            self.retained_experts
+            self.astro_expert_cache
                 .as_ref()
-                .map_or(0, |retained_experts| {
-                    retained_experts
+                .map_or(0, |astro_expert_cache| {
+                    astro_expert_cache
                         .borrow_mut()
                         .take_decode_slot_eviction_count()
                 });
         if decode_slot_eviction_count > 0 {
             performance_attribution.record_counter(
-                PerformanceCounter::DecodeExpertCacheSlotEvictionCount,
+                PerformanceCounter::DecodeAstroExpertCacheSlotEvictionCount,
                 decode_slot_eviction_count,
             );
         }
@@ -253,10 +253,10 @@ impl Qwen3_5Model {
     }
 
     pub(crate) fn take_previous_token_prefetch_statistics(&self) -> (u64, u64, u64) {
-        self.retained_experts
+        self.astro_expert_cache
             .as_ref()
-            .map_or((0, 0, 0), |retained_experts| {
-                retained_experts
+            .map_or((0, 0, 0), |astro_expert_cache| {
+                astro_expert_cache
                     .borrow_mut()
                     .take_prefetch_flush_statistics()
             })
@@ -264,8 +264,8 @@ impl Qwen3_5Model {
 
     /// Counted variant of the post-evaluation warm insert flush.
     fn flush_pending_expert_slot_inserts_internal(&self) -> Result<u64, Qwen3_5ExecutionError> {
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            return retained_experts
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            return astro_expert_cache
                 .borrow_mut()
                 .flush_pending_inserts(&self.runtime)
                 .map_err(Qwen3_5ExecutionError::from);

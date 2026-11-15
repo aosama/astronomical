@@ -419,7 +419,7 @@ impl Qwen3_5Model {
         layer_major_prefill_run: &mut LayerMajorPrefillRun,
         request_decoder_state: &RequestDecoderStateStack,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        if self.retained_experts.is_none() {
+        if self.astro_expert_cache.is_none() {
             return Ok(());
         }
         layer_major_prefill_run

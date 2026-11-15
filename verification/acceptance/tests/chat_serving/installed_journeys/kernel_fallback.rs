@@ -78,7 +78,7 @@ async fn run_forced_fallback_romeo_continuation() {
     let mut qwen3_5_engine = Qwen3_5StreamingEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
         Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(16)
             .expect("the test streaming prefill chunk size should be valid"),

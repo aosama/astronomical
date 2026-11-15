@@ -56,7 +56,7 @@ pub(crate) enum LayerSubmission {
     /// A layer in a one-token forward that is not a streamed dense layer:
     /// only a configured layer group submits it.
     ConfiguredGroup,
-    /// Any layer in a multi-token forward: its working memory is the
+    /// Any layer in a multi-token forward: its MLX working buffers are the
     /// largest term of the forward, so the previous layer finishes before
     /// it starts. A streamed dense layer's read starts before that wait so
     /// it still overlaps the previous layer's compute.

@@ -9,7 +9,7 @@ impl Qwen3_5PromptCacheCapture for Qwen3_5EngineState {
     type Model = Qwen3_5Model;
     type RequestExtension = StreamingRequestExtension;
 
-    /// Leases the deficit from the memory governor, so the expert cache
+    /// Leases the deficit from the memory governor, so the astro expert cache
     /// gives back that much, measured on its own
     /// so performance reports can attribute why publication paused, and adds
     /// the expert bytes freed to the request's diagnostics.

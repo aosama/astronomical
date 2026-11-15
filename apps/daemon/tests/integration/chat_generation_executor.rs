@@ -90,7 +90,7 @@ async fn should_replace_prefill_memory_with_finalized_residency_memory() {
             forward_prefill_chunk_elapsed_millis: Some(1_400),
             completed_prefill_chunk_tokens: Some(2_048),
             mlx_active_memory_bytes: Some(11_000),
-            mlx_allocator_cache_memory_bytes: Some(12_000),
+            mlx_buffer_cache_bytes: Some(12_000),
             mlx_peak_memory_bytes: Some(13_000),
         }
     );

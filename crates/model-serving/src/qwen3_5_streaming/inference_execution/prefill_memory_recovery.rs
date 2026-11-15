@@ -1,7 +1,7 @@
 //! Redoes one prompt-processing forward that ran out of memory instead of
 //! failing the request.
 //!
-//! The memory governor leases room for another attempt and the expert cache
+//! The memory governor leases room for another attempt and the astro expert cache
 //! gives back just the experts that room displaces (issue #2221). The
 //! forward that failed is then run again unchanged. A forward that fits is
 //! measured, and that measurement replaces the guess that was too small.
@@ -73,7 +73,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let decoder_cache_layout = model.decoder_cache_layout().clone();
         // Drop the possibly half-updated decoder state first so its buffers are
-        // unreferenced before the allocator cache is cleared below.
+        // unreferenced before the MLX buffer cache is cleared below.
         active_request.request_decoder_state =
             RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
                 &decoder_cache_layout,
@@ -84,7 +84,7 @@ impl Qwen3_5EngineState {
         model.forget_expert_layer_states();
         model
             .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .map_err(qwen3_5_runtime_error)?;
         let mut restored_prefill_cursor = 0_usize;
         let mut restored_next_position_tokens = 0_u32;
@@ -282,7 +282,7 @@ impl Qwen3_5EngineState {
         }
         model
             .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .map_err(qwen3_5_runtime_error)?;
         tracing::warn!(
             request_id = request_id.value(),

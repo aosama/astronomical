@@ -17,7 +17,7 @@ mod forward_attribution_generation;
 #[cfg(feature = "direct-mlx")]
 mod forward_graph;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod forward_working_memory_probe;
+pub(crate) mod forward_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod live_memory_limit;
 #[cfg(feature = "direct-mlx")]

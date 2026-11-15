@@ -1,7 +1,7 @@
 //! Prepares pager-backed expert retention for decode after prompt prefill.
 //!
 //! Entering the reply phase is one event for the memory governor: a reply
-//! step needs far less working memory than a prompt step, so the expert
+//! step needs far fewer MLX working buffers than a prompt step, so the expert
 //! cache's capacity rises (issue #2221). This file then fills that capacity:
 //! whole layers the plan chose, and hot-expert slots on the layers left.
 //! Filling is best-effort because missing routes remain correct through
@@ -189,10 +189,12 @@ fn decode_warm_layer_geometry(model: &Qwen3_5Model) -> Option<DecodeWarmLayerGeo
 /// whose experts are already fully resident, so warm tables would duplicate
 /// them. Layers without retained-expert seating report zero.
 fn stable_complete_layer_count(model: &Qwen3_5Model, expert_capacity: usize) -> usize {
-    let Some(retained_experts) = model.retained_experts.as_ref() else {
+    let Some(astro_expert_cache) = model.astro_expert_cache.as_ref() else {
         return 0;
     };
-    let topology_snapshot = retained_experts.borrow().topology_snapshot(expert_capacity);
+    let topology_snapshot = astro_expert_cache
+        .borrow()
+        .topology_snapshot(expert_capacity);
     let mut complete_layer_count = 0;
     for residency in topology_snapshot {
         if residency.class == crate::RetainedExpertPageClass::StableCompleteLayer {
@@ -267,8 +269,8 @@ fn enforce_decode_warm_slot_floor(
     }
     let expert_statistics = model.expert_weight_memory_cache_statistics();
     let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
-    let retained_topology_snapshot = match model.retained_experts.as_ref() {
-        Some(retained_experts) => retained_experts
+    let retained_topology_snapshot = match model.astro_expert_cache.as_ref() {
+        Some(astro_expert_cache) => astro_expert_cache
             .borrow()
             .topology_snapshot(layer_geometry.expert_capacity),
         None => Vec::new(),
@@ -321,10 +323,10 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
     };
     let current_residencies =
         model
-            .retained_experts
+            .astro_expert_cache
             .as_ref()
-            .map_or_else(Vec::new, |retained_experts| {
-                retained_experts.borrow().topology_snapshot(
+            .map_or_else(Vec::new, |astro_expert_cache| {
+                astro_expert_cache.borrow().topology_snapshot(
                     geometries
                         .first()
                         .map_or(0, |geometry| geometry.expert_capacity),

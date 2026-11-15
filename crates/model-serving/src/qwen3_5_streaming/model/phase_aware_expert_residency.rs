@@ -26,8 +26,10 @@ impl Qwen3_5StreamingModel {
     /// prefill evidence is spent, while lifetime decode evidence persists
     /// (see `demand_phase`).
     pub(crate) fn begin_prefill_demand_window_for_residency(&self) {
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().begin_prefill_demand_window();
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache
+                .borrow_mut()
+                .begin_prefill_demand_window();
         }
     }
 
@@ -37,8 +39,8 @@ impl Qwen3_5StreamingModel {
         &self,
         assignment_weight: u64,
     ) {
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache
                 .borrow_mut()
                 .set_prefill_demand_assignment_weight(assignment_weight);
         }
@@ -82,7 +84,7 @@ impl Qwen3_5StreamingModel {
         operation_token_count: u64,
     ) {
         if self.governed_memory.governor.borrow().is_none() {
-            self.probe_expert_layer_working_memory(super::LayerProbeShape {
+            self.probe_expert_layer_mlx_working_buffers(super::LayerProbeShape {
                 prefill_chunk_token_count: usize::try_from(operation_token_count)
                     .unwrap_or(usize::MAX),
                 full_attention_kv_state_growth_tokens: 256,
@@ -107,14 +109,14 @@ impl Qwen3_5StreamingModel {
     }
 
     /// Plans where each layer should end up for the reply, against the
-    /// capacity the memory governor has given the expert cache. No storage
+    /// capacity the memory governor has given the astro expert cache. No storage
     /// is read here and nothing is given back.
     pub(crate) fn plan_expert_layer_states_for_reply(
         &self,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        let (Some(expert_pager), Some(retained_experts)) =
-            (self.expert_pager.as_ref(), self.retained_experts.as_ref())
+        let (Some(expert_pager), Some(astro_expert_cache)) =
+            (self.expert_pager.as_ref(), self.astro_expert_cache.as_ref())
         else {
             self.forget_expert_layer_states();
             return Ok(());
@@ -127,7 +129,9 @@ impl Qwen3_5StreamingModel {
         let expert_capacity = layer_geometries
             .first()
             .map_or(0, |geometry| geometry.expert_capacity);
-        let current_residencies = retained_experts.borrow().topology_snapshot(expert_capacity);
+        let current_residencies = astro_expert_cache
+            .borrow()
+            .topology_snapshot(expert_capacity);
         let residency_plan = performance_attribution
             .measure_operation(
                 PerformanceOperation::ExpertResidencyPlanning,
@@ -173,8 +177,8 @@ impl Qwen3_5StreamingModel {
     /// What the cache holds of each layer now, for decisions that compare a
     /// layer's state with it.
     pub(super) fn current_expert_layer_residencies(&self) -> Vec<CurrentExpertLayerResidency> {
-        let (Some(expert_pager), Some(retained_experts)) =
-            (self.expert_pager.as_ref(), self.retained_experts.as_ref())
+        let (Some(expert_pager), Some(astro_expert_cache)) =
+            (self.expert_pager.as_ref(), self.astro_expert_cache.as_ref())
         else {
             return Vec::new();
         };
@@ -182,7 +186,9 @@ impl Qwen3_5StreamingModel {
             .layer_plans()
             .first()
             .map_or(0, |layer_plan| layer_plan.expert_capacity);
-        retained_experts.borrow().topology_snapshot(expert_capacity)
+        astro_expert_cache
+            .borrow()
+            .topology_snapshot(expert_capacity)
     }
 }
 

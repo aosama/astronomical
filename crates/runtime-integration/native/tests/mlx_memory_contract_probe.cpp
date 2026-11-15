@@ -125,7 +125,7 @@ void require_lazy_evaluation_boundary(const Stream& gpu_stream) {
       "lazy graph construction allocated the final evaluated payload before evaluation");
   require_condition(
       after_graph.cache_bytes == before_graph.cache_bytes,
-      "lazy graph construction changed allocator-cache bytes before evaluation");
+      "lazy graph construction changed MLX buffer-cache bytes before evaluation");
 
   lazy_sum.eval();
   synchronize(gpu_stream);
@@ -278,7 +278,7 @@ void require_active_memory_limit_rejection(
 
 void require_evaluation_rejection_preserves_prior_tape_work(const Stream& gpu_stream) {
   clear_cache();
-  const auto previous_allocator_cache_limit_bytes = set_cache_limit(0);
+  const auto previous_mlx_buffer_cache_limit_bytes = set_cache_limit(0);
   const auto previous_active_memory_limit_bytes =
       set_memory_limit(kActiveMemoryEnforcementLimitBytes);
   try {
@@ -330,17 +330,17 @@ void require_evaluation_rejection_preserves_prior_tape_work(const Stream& gpu_st
   } catch (...) {
     clear_cache();
     set_memory_limit(previous_active_memory_limit_bytes);
-    set_cache_limit(previous_allocator_cache_limit_bytes);
+    set_cache_limit(previous_mlx_buffer_cache_limit_bytes);
     throw;
   }
   clear_cache();
   set_memory_limit(previous_active_memory_limit_bytes);
-  set_cache_limit(previous_allocator_cache_limit_bytes);
+  set_cache_limit(previous_mlx_buffer_cache_limit_bytes);
 }
 
 void require_strict_active_memory_limit(const Stream& gpu_stream) {
   clear_cache();
-  const auto previous_allocator_cache_limit_bytes = set_cache_limit(kCacheLimitBytes);
+  const auto previous_mlx_buffer_cache_limit_bytes = set_cache_limit(kCacheLimitBytes);
   const auto previous_active_memory_limit_bytes =
       set_memory_limit(kActiveMemoryEnforcementLimitBytes);
   try {
@@ -412,12 +412,12 @@ void require_strict_active_memory_limit(const Stream& gpu_stream) {
   } catch (...) {
     clear_cache();
     set_memory_limit(previous_active_memory_limit_bytes);
-    set_cache_limit(previous_allocator_cache_limit_bytes);
+    set_cache_limit(previous_mlx_buffer_cache_limit_bytes);
     throw;
   }
   clear_cache();
   set_memory_limit(previous_active_memory_limit_bytes);
-  set_cache_limit(previous_allocator_cache_limit_bytes);
+  set_cache_limit(previous_mlx_buffer_cache_limit_bytes);
 }
 
 void require_async_evaluation_cleanup_boundary(const Stream& gpu_stream) {
@@ -453,7 +453,7 @@ void require_async_evaluation_cleanup_boundary(const Stream& gpu_stream) {
       "dropping the asynchronous result did not restore baseline active bytes");
   require_condition(
       after_owner_drop.cache_bytes == 0,
-      "final asynchronous owner cleanup retained allocator-cache bytes");
+      "final asynchronous owner cleanup retained MLX buffer-cache bytes");
   print_counters("async_evaluation_owners_dropped", after_owner_drop);
 }
 
@@ -501,7 +501,7 @@ void run_probe() {
   require_async_evaluation_cleanup_boundary(gpu_stream);
   // Reach the exact allocator boundary before the rejected-tape contract. MLX
   // may retain a tiny live bookkeeping allocation after that rejection even
-  // though every array owner and allocator-cache entry has been released.
+  // though every array owner and MLX buffer-cache entry has been released.
   require_strict_active_memory_limit(gpu_stream);
   require_evaluation_rejection_preserves_prior_tape_work(gpu_stream);
   synchronize(gpu_stream);

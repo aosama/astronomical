@@ -31,7 +31,7 @@ async fn should_measure_isolated_convolution_chain_costs_at_prefill_shapes() {
 async fn measure_convolution_chain_costs() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     // Production-shaped memory limits: the tiny direct-MLX test defaults (8 MB
-    // allocator cache) force fresh Metal buffer allocations for every op and
+    // MLX buffer cache) force fresh Metal buffer allocations for every op and
     // would measure allocator churn instead of kernel cost.
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(16 * 1024 * 1024 * 1024, 4 * 1024 * 1024 * 1024)

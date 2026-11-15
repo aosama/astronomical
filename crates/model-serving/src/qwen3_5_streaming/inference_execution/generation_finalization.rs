@@ -59,9 +59,9 @@ impl Qwen3_5EngineState {
             .map_err(|_| {
                 super::fatal_engine_error("MLX active memory bytes exceed the u64 range")
             })?;
-        let allocator_cache_memory_bytes =
-            u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(|_| {
-                super::fatal_engine_error("MLX allocator-cache memory bytes exceed the u64 range")
+        let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
+            .map_err(|_| {
+                super::fatal_engine_error("MLX buffer cache memory bytes exceed the u64 range")
             })?;
         let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
             .map_err(|_| super::fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
@@ -73,7 +73,7 @@ impl Qwen3_5EngineState {
         Ok(Some(
             MlxMemoryTelemetry::new(
                 active_memory_bytes,
-                allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes,
                 peak_memory_bytes,
                 active_memory_breakdown,
             )
@@ -161,13 +161,13 @@ impl Qwen3_5EngineState {
                     expert_weight_memory_cache_statistics.resident_payload_byte_count,
                 maximum_retained_expert_payload_bytes =
                     expert_weight_memory_cache_statistics.maximum_resident_payload_byte_count,
-                "kept the expert cache for the next request"
+                "kept the astro expert cache for the next request"
             );
         }
         // `release_request_memory` synchronizes the model stream before clearing
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
-            PerformanceOperation::MlxAllocatorCacheCleanup,
+            PerformanceOperation::MlxBufferCacheCleanup,
             |_performance_attribution| self.release_request_memory(request_id),
         );
         let generation_finalization = self.collect_generation_finalization(
@@ -202,15 +202,15 @@ impl Qwen3_5EngineState {
         ) {
             Ok(mlx_memory_snapshot) => match (
                 u64::try_from(mlx_memory_snapshot.active_memory_bytes()),
-                u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()),
+                u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes()),
                 u64::try_from(mlx_memory_snapshot.peak_memory_bytes()),
             ) {
                 (
                     Ok(active_memory_bytes),
-                    Ok(allocator_cache_memory_bytes),
+                    Ok(mlx_buffer_cache_bytes),
                     Ok(sampled_peak_memory_bytes),
                 ) => {
-                    // The MLX peak counter resets at allocator-cache cleanups,
+                    // The MLX peak counter resets at MLX buffer-cache cleanups,
                     // so this post-cleanup sample can read a lower window peak
                     // than the synchronized release sample taken moments
                     // earlier. The finalized claim is a request maximum, so it
@@ -236,7 +236,7 @@ impl Qwen3_5EngineState {
                         Some(
                             MlxMemoryTelemetry::new(
                                 active_memory_bytes,
-                                allocator_cache_memory_bytes,
+                                mlx_buffer_cache_bytes,
                                 peak_memory_bytes,
                                 active_memory_breakdown,
                             )
@@ -292,13 +292,15 @@ impl Qwen3_5EngineState {
         let Some(model) = self.model.as_ref() else {
             return;
         };
-        let Some(retained_experts) = model.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = model.astro_expert_cache.as_ref() else {
             return;
         };
         let usage_file_path = crate::qwen3_5_streaming::expert_streaming::expert_usage_file_path(
             &self.model_directory,
         );
-        let persisted_usage = retained_experts.borrow_mut().take_persisted_expert_usage();
+        let persisted_usage = astro_expert_cache
+            .borrow_mut()
+            .take_persisted_expert_usage();
         crate::qwen3_5_streaming::expert_streaming::write_expert_usage(
             &usage_file_path,
             self.model_id.as_deref(),
@@ -327,26 +329,26 @@ impl Qwen3_5EngineState {
             );
             return;
         };
-        let measured_prompt_working_memory_bytes = self.model.as_ref().and_then(
-            crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_working_memory_bytes,
+        let measured_prompt_mlx_working_buffer_bytes = self.model.as_ref().and_then(
+            crate::qwen3_5_streaming::model::Qwen3_5Model::measured_prompt_mlx_working_buffer_bytes,
         );
         let Some(performance_attribution_report) =
             performance_attribution.finish_generation(GenerationPerformanceAttributionMetadata {
                 outcome,
                 model_id,
                 model_revision,
-                prefill_transient_observation_completed: measured_prompt_working_memory_bytes
+                prefill_transient_observation_completed: measured_prompt_mlx_working_buffer_bytes
                     .is_some(),
-                prefill_observed_transient_high_water_bytes: measured_prompt_working_memory_bytes
-                    .unwrap_or(0),
+                prefill_observed_transient_high_water_bytes:
+                    measured_prompt_mlx_working_buffer_bytes.unwrap_or(0),
                 request_id: request_id.value(),
                 configured_maximum_output_tokens,
                 mlx_active_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(|snapshot| u64::try_from(snapshot.active_memory_bytes()).ok()),
-                mlx_allocator_cache_memory_bytes: mlx_memory_snapshot.as_ref().and_then(
-                    |snapshot| u64::try_from(snapshot.allocator_cache_memory_bytes()).ok(),
-                ),
+                mlx_buffer_cache_bytes: mlx_memory_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| u64::try_from(snapshot.mlx_buffer_cache_bytes()).ok()),
                 mlx_peak_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),

@@ -126,7 +126,7 @@ pub struct WorkerPersistentPromptCacheRequestDiagnostics {
     pub startup_cleanup_evidence: Option<WorkerPersistentPromptCacheStartupCleanupEvidence>,
     /// Blocks physically committed by this request; idempotent reuse is excluded.
     pub published_block_count: u64,
-    /// Allocator cache released before direct tensor materialization.
+    /// MLX buffer cache released before direct tensor materialization.
     pub allocator_bytes_cleared_for_publication: u64,
     /// Pageable expert payload evicted to satisfy publication memory pressure.
     pub expert_bytes_reclaimed_for_publication: u64,

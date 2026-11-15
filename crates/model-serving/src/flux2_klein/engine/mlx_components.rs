@@ -58,8 +58,8 @@ pub(super) struct Flux2KleinMlxComponents {
     /// user's own limit, or unbounded when they set none. Zero until the
     /// factory reports it, which keeps the load refusing below its floor.
     floor_raise_limit_bytes: u64,
-    original_allocator_cache_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    original_mlx_buffer_cache_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
     performance_attribution_log: Option<PerformanceAttributionLog>,
@@ -221,7 +221,7 @@ impl Flux2KleinMlxComponents {
             Err(error) => {
                 let limits = MlxMemoryLimits::new(
                     self.effective_mlx_memory_ceiling_bytes,
-                    self.allocator_cache_memory_limit_bytes,
+                    self.mlx_buffer_cache_limit_bytes,
                 )
                 .map_err(|limit_error| {
                     format!("{error}; MLX cleanup runtime recovery failed: {limit_error}")

@@ -17,7 +17,7 @@ use astronomical_daemon::{
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatImageInput, ChatMessage, ChatToolChoice,
-    RequestId, WorkerDecodeExpertCachePolicy,
+    RequestId, WorkerDecodeAstroExpertCachePolicy,
 };
 use serde::Deserialize;
 
@@ -27,7 +27,7 @@ const PERFORMANCE_THROUGHPUT_SAMPLING_SEED: u64 = 42;
 #[derive(Clone, Debug)]
 pub(crate) struct ThroughputMeasurement {
     pub(crate) model_id: String,
-    pub(crate) decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub(crate) decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     pub(crate) total_input_tokens: u32,
     pub(crate) total_output_tokens: u16,
     pub(crate) cached_tokens: u32,
@@ -71,7 +71,7 @@ pub(crate) struct DecodeCacheDiagnosticEvidence {
     pub(crate) hot_expert_route_fully_covered_count: u64,
     pub(crate) hot_expert_route_partially_covered_count: u64,
     pub(crate) hot_expert_route_fully_missed_count: u64,
-    pub(crate) decode_expert_cache_slot_eviction_count: u64,
+    pub(crate) decode_astro_expert_cache_slot_eviction_count: u64,
     pub(crate) positional_file_read_call_count: u64,
     pub(crate) positional_file_read_byte_count: u64,
     pub(crate) positional_file_read_elapsed_nanoseconds: u64,
@@ -218,13 +218,13 @@ pub(crate) async fn wait_until_idle(worker_handle: &WorkerHandle, ready_attempt_
 pub(crate) fn read_measured_completion(
     log_path: &Path,
     model_id: &str,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     completion_ordinal_in_worker: u32,
 ) -> Option<ThroughputMeasurement> {
     read_completion_by_index(
         log_path,
         model_id,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         CompletionIndex::Last,
         completion_ordinal_in_worker,
     )
@@ -247,7 +247,7 @@ pub(crate) enum CompletionIndex {
 pub(crate) fn read_completion_by_index(
     log_path: &Path,
     model_id: &str,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     completion_index: CompletionIndex,
     completion_ordinal_in_worker: u32,
 ) -> Option<ThroughputMeasurement> {
@@ -258,7 +258,7 @@ pub(crate) fn read_completion_by_index(
     };
     Some(sample_to_measurement(
         model_id,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         completion_ordinal_in_worker,
         sample,
     ))
@@ -275,13 +275,13 @@ fn read_throughput_samples(log_path: &Path) -> Option<Vec<ThroughputSample>> {
 
 fn sample_to_measurement(
     model_id: &str,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     completion_ordinal_in_worker: u32,
     measured: &ThroughputSample,
 ) -> ThroughputMeasurement {
     ThroughputMeasurement {
         model_id: model_id.to_owned(),
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         total_input_tokens: measured.prompt_token_count,
         total_output_tokens: measured.generated_token_count,
         cached_tokens: measured.cached_token_count,
@@ -423,9 +423,9 @@ pub(crate) fn read_decode_cache_diagnostic_evidence(
             counters,
             "hot_expert_route_fully_missed_count",
         )?,
-        decode_expert_cache_slot_eviction_count: counter_amount(
+        decode_astro_expert_cache_slot_eviction_count: counter_amount(
             counters,
-            "decode_expert_cache_slot_eviction_count",
+            "decode_astro_expert_cache_slot_eviction_count",
         )?,
         positional_file_read_call_count: counter_amount(
             counters,

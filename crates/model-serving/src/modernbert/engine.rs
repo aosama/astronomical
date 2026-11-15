@@ -37,7 +37,7 @@ use crate::{
 pub struct ModernBertEmbeddingEngine {
     model_id: String,
     effective_mlx_memory_ceiling_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     weights_payload_bytes: u64,
     performance_attribution_enabled: bool,
     performance_attribution_log: PerformanceAttributionLog,
@@ -60,7 +60,7 @@ impl ModernBertEmbeddingEngine {
         model_id: impl Into<String>,
         model_directory: &Path,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         performance_attribution_enabled: bool,
         performance_attribution_log_path: PathBuf,
     ) -> Result<Self, EmbeddingsFailureReason> {
@@ -73,7 +73,7 @@ impl ModernBertEmbeddingEngine {
         Ok(Self {
             model_id: model_id.into(),
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             weights_payload_bytes: artifact.weights_payload_bytes,
             performance_attribution_enabled,
             performance_attribution_log,
@@ -130,7 +130,7 @@ impl ModernBertEmbeddingEngine {
         let active_memory_bytes = memory_snapshot.active_memory_bytes() as u64;
         let mut telemetry = MlxMemoryTelemetry::new(
             active_memory_bytes,
-            memory_snapshot.allocator_cache_memory_bytes() as u64,
+            memory_snapshot.mlx_buffer_cache_bytes() as u64,
             memory_snapshot.peak_memory_bytes() as u64,
             MlxActiveMemoryBreakdown::default(),
         );
@@ -154,7 +154,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
         let mut performance_attribution = self.new_attribution();
         let memory_limits = MlxMemoryLimits::new(
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|_| EmbeddingsFailureReason::FatalExecution {
             reason: "embedding runtime memory limits are invalid".to_owned(),
@@ -215,7 +215,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
                 resident_model_payload_bytes: None,
                 model_shard_count: Some(1),
                 mlx_active_memory_bytes: None,
-                mlx_allocator_cache_memory_bytes: None,
+                mlx_buffer_cache_bytes: None,
                 mlx_peak_memory_bytes: None,
                 failure_description: None,
             },
@@ -279,12 +279,12 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
         let elapsed_millis = u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
         // The forward arrays are owned inside embed_token_ids and dropped on
         // return, so this snapshot is the honest post-cleanup observation.
-        // Synchronizing and clearing the allocator cache first keeps the
+        // Synchronizing and clearing the MLX buffer cache first keeps the
         // captured state free of reusable-cache bytes, exactly like the
         // image engine's cleanup observation.
         let _cleanup_result = loaded_state
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache();
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
         if let Ok(memory_snapshot) = loaded_state.runtime.memory_snapshot() {
             self.post_cleanup_memory_telemetry =
                 Some(self.memory_telemetry_from_snapshot(&memory_snapshot));

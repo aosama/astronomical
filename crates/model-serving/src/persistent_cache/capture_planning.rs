@@ -19,7 +19,7 @@ use crate::persistent_cache::block_key::{
 use crate::persistent_cache::model_contract::PersistentPromptCacheModelContract;
 
 /// Comfort margin below the active-memory ceiling at which block publication
-/// stops wiping the MLX allocator cache. Publication materializes tens of MB;
+/// stops wiping the MLX buffer cache. Publication materializes tens of MB;
 /// only a ceiling within this margin of the live active memory needs the
 /// reclaimed room.
 pub(crate) const PUBLICATION_COMFORT_HEADROOM_BYTES: u64 = 4 * 1024 * 1024 * 1024;
@@ -161,7 +161,7 @@ pub(crate) fn block_key_for_captured_block(
 /// Decides whether block publication must first release allocator workspace.
 ///
 /// Publication materializes the block's state tensors (tens of MB). Wiping the
-/// whole allocator cache for that forced the chunk after each published block
+/// whole MLX buffer cache for that forced the chunk after each published block
 /// to re-allocate every intermediate buffer fresh, which measured as a large
 /// hidden prefill cost on roomy ceilings. Only pay the wipe when the
 /// active-memory ceiling actually needs the room; an unreadable snapshot or
@@ -178,16 +178,16 @@ pub(crate) fn publication_workspace_decision(
     }
 }
 
-/// Allocator-cache bytes a publication workspace release actually cleared,
+/// MLX buffer-cache bytes a publication workspace release actually cleared,
 /// measured between the snapshots taken before and after the cleanup. An
 /// unreadable before-snapshot counts as zero cleared bytes; an unreadable
 /// after-snapshot reads as zero bytes remaining, so the full before value
 /// counts as cleared.
 pub(crate) fn allocator_bytes_cleared(
-    allocator_cache_memory_bytes_before_cleanup: Option<u64>,
-    allocator_cache_memory_bytes_after_cleanup: Option<u64>,
+    mlx_buffer_cache_bytes_before_cleanup: Option<u64>,
+    mlx_buffer_cache_bytes_after_cleanup: Option<u64>,
 ) -> u64 {
-    allocator_cache_memory_bytes_before_cleanup
+    mlx_buffer_cache_bytes_before_cleanup
         .unwrap_or(0)
-        .saturating_sub(allocator_cache_memory_bytes_after_cleanup.unwrap_or(0))
+        .saturating_sub(mlx_buffer_cache_bytes_after_cleanup.unwrap_or(0))
 }

@@ -3,10 +3,10 @@
 //! This engine keeps every weight in memory, so the memory governor has
 //! nothing to give back on its behalf. The engine asks it one question
 //! before each forward: do the weights, the stored state after the forward,
-//! the forward's working memory and the margin fit the limit? A forward
+//! the forward's MLX working buffers and the margin fit the limit? A forward
 //! that does not fit is never made smaller; the request moves to the
 //! streaming engine. After the forward the engine reports what MLX
-//! measured, which is where the working-memory figure comes from.
+//! measured, which is where the MLX working-buffer figure comes from.
 
 use astronomical_memory_policy::ledger::{
     HeldMemory, LedgerAccounts, LedgerPhase, MeasuredStep, MemoryGovernor,
@@ -259,14 +259,14 @@ impl ForwardFit {
                 shortfall_bytes,
                 prefill_chunk_token_count,
             } => format!(
-                "a prompt chunk of {prefill_chunk_token_count} tokens needs {} bytes of working memory, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
-                self.accounts_after_forward.working_memory_bytes
+                "a prompt chunk of {prefill_chunk_token_count} tokens needs {} bytes of MLX working buffers, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
+                self.accounts_after_forward.mlx_working_buffer_bytes
             ),
             StreamingEngineRequirement::TransientPeakShortfallWithoutPrefillChunk {
                 shortfall_bytes,
             } => format!(
-                "one reply step needs {} bytes of working memory, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
-                self.accounts_after_forward.working_memory_bytes
+                "one reply step needs {} bytes of MLX working buffers, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
+                self.accounts_after_forward.mlx_working_buffer_bytes
             ),
             // The causes below are raised elsewhere: before any forward for
             // the request's context, and after a forward that failed.

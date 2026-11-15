@@ -14,14 +14,14 @@ pub(crate) const fn worker_memory_ledger_snapshot(
         limit_bytes: accounts.limit_bytes,
         core_weight_bytes: accounts.core_weight_bytes,
         context_bytes: accounts.context_bytes,
-        working_memory_bytes: accounts.working_memory_bytes,
+        mlx_working_buffer_bytes: accounts.mlx_working_buffer_bytes,
         stream_slot_bytes: accounts.stream_slot_bytes,
         lease_bytes: accounts.lease_bytes,
         margin_bytes: accounts.margin_bytes,
         kept_weight_capacity_bytes: accounts.kept_weight_capacity_bytes,
         unassigned_bytes: accounts.unassigned_bytes,
         shortfall_bytes: accounts.shortfall_bytes,
-        working_memory_is_measured: accounts.working_memory_is_measured,
+        mlx_working_buffers_are_measured: accounts.mlx_working_buffers_are_measured,
         held_context_bytes: held_memory.context_bytes,
         held_kept_weight_bytes: held_memory.kept_weight_bytes,
         held_stream_slot_bytes: held_memory.stream_slot_bytes,
@@ -38,7 +38,7 @@ pub(crate) const fn worker_memory_ledger_snapshot(
             .largest_reading_step_peak_beyond_held_bytes,
         largest_writing_step_peak_beyond_held_bytes: ledger_reading
             .largest_writing_step_peak_beyond_held_bytes,
-        probed_working_memory_bytes: ledger_reading.probed_working_memory_bytes,
+        probed_mlx_working_buffer_bytes: ledger_reading.probed_mlx_working_buffer_bytes,
         lowest_kept_share_while_reading_permille: ledger_reading
             .lowest_kept_share_while_reading_permille,
     }

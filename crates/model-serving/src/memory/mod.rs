@@ -59,9 +59,9 @@ mod decode_seating_tests;
 // The dense-resident ceiling policy is consumed only by the direct-MLX
 // engine, so an isolated default-feature build would otherwise flag the
 // whole module as dead (workspace builds unify the feature away).
+mod astro_expert_cache_arithmetic;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
-mod expert_cache;
 // Only the direct-MLX decision and speech engines report through it.
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod forward_pass_telemetry;
@@ -94,6 +94,16 @@ pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_by
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
 // direct-MLX admission callers and the unit artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) use astro_expert_cache_arithmetic::expert_page_peak_allocation_bytes;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use astro_expert_cache_arithmetic::source_expert_page_payload_bytes;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use astro_expert_cache_arithmetic::{
+    ExpertStreamingSessionCounters, RouteCoverageClass, StreamedPageSourcePlan,
+    expert_layer_topology_from_residency, no_cache_route_source_bytes,
+    record_streamed_page_source_plan_in_both_ledgers,
+};
 pub use astronomical_memory_policy::forward_admission::{
     ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
@@ -105,16 +115,6 @@ pub use astronomical_memory_policy::placement::{
 };
 pub use astronomical_memory_policy::reclamation::ExpertMemoryAdmissionError;
 pub use astronomical_memory_policy::residency::seated_complete_layer_count;
-#[cfg(any(feature = "direct-mlx", test))]
-pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use expert_cache::source_expert_page_payload_bytes;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use expert_cache::{
-    ExpertStreamingSessionCounters, RouteCoverageClass, StreamedPageSourcePlan,
-    expert_layer_topology_from_residency, no_cache_route_source_bytes,
-    record_streamed_page_source_plan_in_both_ledgers,
-};
 pub use serving_phase::SessionStreamingPhase;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path

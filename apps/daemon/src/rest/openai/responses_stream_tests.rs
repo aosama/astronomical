@@ -24,7 +24,7 @@ fn should_emit_the_exact_fragmented_text_lifecycle_and_skip_prefill_telemetry() 
                 forward_prefill_chunk_elapsed_millis: Some(900),
                 completed_prefill_chunk_tokens: Some(2_048),
                 mlx_active_memory_bytes: Some(20_000),
-                mlx_allocator_cache_memory_bytes: Some(0),
+                mlx_buffer_cache_bytes: Some(0),
                 mlx_peak_memory_bytes: Some(22_000),
             })
             .expect("prefill telemetry encoding should succeed"),

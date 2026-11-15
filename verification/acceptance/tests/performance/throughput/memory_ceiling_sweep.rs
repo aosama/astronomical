@@ -32,7 +32,7 @@
 use std::fs;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatImageInput, WorkerDecodeExpertCachePolicy};
+use astronomical_ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
 use astronomical_test_harness::test_run::TestRunContext;
 use serial_test::serial;
 
@@ -202,7 +202,7 @@ async fn append_memory_cell_record(
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: ThroughputJourneyKind::MemoryCeilingSweep,
-        decode_expert_cache_policy: measurement.decode_expert_cache_policy,
+        decode_astro_expert_cache_policy: measurement.decode_astro_expert_cache_policy,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: Some(worker_build_identity.source_commit.clone()),
@@ -297,7 +297,7 @@ fn apply_partial_progress_rates(
 fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
     ThroughputJourney {
         journey_kind: ThroughputJourneyKind::MemoryCeilingSweep,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         warmup_input_prompt: throughput_support::romeo_and_juliet_warmup_prompt(
             WARMUP_INPUT_INSTRUCTION,
             WARMUP_ROMEO_AND_JULIET_SOURCE,

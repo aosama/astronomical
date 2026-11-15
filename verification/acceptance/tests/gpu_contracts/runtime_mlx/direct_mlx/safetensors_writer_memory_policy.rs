@@ -148,6 +148,6 @@ impl Drop for RuntimeMemoryLimitGuard {
         }
         let _cleanup_result = self
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache();
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
     }
 }

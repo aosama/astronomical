@@ -83,7 +83,7 @@ pub(super) fn cloned_events(lifecycle_events: &Arc<Mutex<Vec<String>>>) -> Vec<S
 pub(super) fn assert_final_cleanup_memory(memory_telemetry: Option<MlxMemoryTelemetry>) {
     let memory_telemetry =
         memory_telemetry.expect("finalized FLUX requests should expose MLX memory");
-    assert_eq!(memory_telemetry.allocator_cache_memory_bytes, 0);
+    assert_eq!(memory_telemetry.mlx_buffer_cache_bytes, 0);
     assert!(memory_telemetry.active_memory_bytes <= memory_telemetry.peak_memory_bytes);
     assert_eq!(
         memory_telemetry.active_memory_breakdown,

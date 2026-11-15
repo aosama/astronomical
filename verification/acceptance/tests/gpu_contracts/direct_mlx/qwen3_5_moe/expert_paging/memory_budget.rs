@@ -7,7 +7,7 @@ use astronomical_model_serving::{
 fn should_recommend_cache_cleanup_when_active_allocation_fits_but_total_memory_does_not() {
     assert_eq!(
         AllocationAdmissionObservation::new(9_000, 1_000, 500, 9_500).decide(),
-        AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit,
+        AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit,
     );
 }
 

@@ -124,7 +124,7 @@ impl Qwen3_5ModelBase {
     /// Releases the vision tower's weights once an image request has resolved
     /// its embeddings, and returns their bytes to the system.
     ///
-    /// The allocator cache is cleared here rather than at request end, so the
+    /// The MLX buffer cache is cleared here rather than at request end, so the
     /// freed bytes are available to this request's own prefill: on a small
     /// Mac that prefill is the peak that matters. A failed release only logs,
     /// because the request already has its embeddings; the tower then stays
@@ -137,7 +137,7 @@ impl Qwen3_5ModelBase {
             Ok(false) => {}
             Ok(true) => match self
                 .runtime
-                .synchronize_gpu_stream_and_clear_allocator_cache()
+                .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             {
                 Ok(()) => tracing::debug!(
                     released_vision_payload_bytes = vision_model.tower_payload_bytes(),
@@ -145,7 +145,7 @@ impl Qwen3_5ModelBase {
                 ),
                 Err(cache_clear_error) => tracing::warn!(
                     error = %cache_clear_error,
-                    "released the vision tower weights but could not clear the allocator cache"
+                    "released the vision tower weights but could not clear the MLX buffer cache"
                 ),
             },
             Err(release_error) => tracing::warn!(

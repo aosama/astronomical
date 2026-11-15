@@ -231,7 +231,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
             mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                 source: MlxMemorySnapshotSource::Finalized,
                 active_memory_bytes: 24_000,
-                allocator_cache_memory_bytes: 0,
+                mlx_buffer_cache_bytes: 0,
                 peak_memory_bytes: 25_000,
                 expert_payload_bytes: 19_000,
                 model_core_payload_bytes: 3_000,
@@ -378,7 +378,7 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
             mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                 source: MlxMemorySnapshotSource::Finalized,
                 active_memory_bytes: 24_000,
-                allocator_cache_memory_bytes: 0,
+                mlx_buffer_cache_bytes: 0,
                 peak_memory_bytes: 25_000,
                 expert_payload_bytes: 19_000,
                 model_core_payload_bytes: 3_000,

@@ -100,7 +100,7 @@ where
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
-        decode_expert_cache_policy = ?worker_startup_configuration.decode_expert_cache_policy,
+        decode_astro_expert_cache_policy = ?worker_startup_configuration.decode_astro_expert_cache_policy,
         diagnostic_qwen3_5_engine_override = ?worker_startup_configuration.diagnostic_qwen3_5_engine_override,
         machine_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
@@ -121,7 +121,7 @@ where
         effective_mlx_memory_ceiling_bytes,
         prompt_cache_config,
         performance_attribution_enabled,
-        worker_startup_configuration.decode_expert_cache_policy,
+        worker_startup_configuration.decode_astro_expert_cache_policy,
         performance_attribution_log_path,
         persistent_prompt_cache_enabled,
     )

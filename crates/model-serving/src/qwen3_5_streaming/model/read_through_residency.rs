@@ -38,7 +38,7 @@ impl Qwen3_5Model {
                 &copied_sorted_unique_expert_ids
             }
         };
-        if self.retained_experts.is_some() {
+        if self.astro_expert_cache.is_some() {
             let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
             let (packed_weights, packed_manifest) = if route_token_count > 1 {
                 self.stream_complete_expert_layer(
@@ -52,7 +52,7 @@ impl Qwen3_5Model {
                     performance_attribution,
                 )?
             } else {
-                // Hot-expert cache hit: the warm table covers every routed
+                // astro expert cache hit: the warm table covers every routed
                 // expert of this token, so the whole routed set is served from
                 // retained RAM and no storage read happens for this layer
                 // (issue #372).
@@ -79,8 +79,8 @@ impl Qwen3_5Model {
                     )?,
                 }
             };
-            if let Some(retained_experts) = self.retained_experts.as_ref() {
-                retained_experts.borrow_mut().record_expert_demand(
+            if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+                astro_expert_cache.borrow_mut().record_expert_demand(
                     layer_index,
                     expert_pager.layer_plan(layer_index)?.expert_capacity,
                     sorted_unique_expert_ids,

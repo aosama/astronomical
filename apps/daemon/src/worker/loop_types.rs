@@ -363,7 +363,7 @@ impl ActiveGeneration {
     /// Folds one observed MLX peak sample into the request's durable peak
     /// record.
     ///
-    /// The MLX peak counter resets at allocator-cache cleanups, so a later
+    /// The MLX peak counter resets at MLX buffer-cache cleanups, so a later
     /// sample can read a lower window peak than an earlier one; the durable
     /// claim is a request maximum, so it must retain the highest window seen.
     /// Every event that carries a worker memory snapshot must route through

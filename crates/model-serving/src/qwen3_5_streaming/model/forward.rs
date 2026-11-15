@@ -25,12 +25,12 @@
 //!    (`forward_moe_mixed_decode_route_with_performance_attribution` in
 //!    `mixed_decode_execution.rs`, built on
 //!    `cached_plus_streamed_page_route.rs`).
-//! 5. **Single-token miss, fully warm** — the hot-expert cache hit serves the
+//! 5. **Single-token miss, fully warm** — the astro expert cache hit serves the
 //!    whole routed set from RAM (`hot_expert_partial_page` in
 //!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.
 //!
 //! The warm tables themselves live in
-//! `expert_streaming/warm_expert_slot_table_cache.rs`; the byte plans and the
+//! `expert_streaming/astro_expert_cache.rs`; the byte plans and the
 //! bounded SSD reader are family-neutral under `crate::expert_paging` and
 //! `astronomical-runtime-integration`'s safetensors module.
 
@@ -109,7 +109,7 @@ impl Qwen3_5Model {
             return Ok(handled);
         }
         if should_use_loaded_model_mode
-            && self.retained_experts.is_some()
+            && self.astro_expert_cache.is_some()
             && let Some(handled) = self.dispatch_table_page_without_host_route(
                 expert_pager,
                 layer_index,
@@ -141,7 +141,7 @@ impl Qwen3_5Model {
         if should_use_loaded_model_mode
             && let Some(selected_expert_ids) = selected_expert_ids.as_ref()
             && let Some(routed_expert_ids) = sorted_unique_expert_ids.as_ref()
-            && self.retained_experts.is_some()
+            && self.astro_expert_cache.is_some()
             && let Some(handled) = self.dispatch_routed_disposition(
                 expert_pager,
                 layer_index,
@@ -310,8 +310,8 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().record_expert_demand(
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache.borrow_mut().record_expert_demand(
                 layer_index,
                 expert_capacity,
                 selected_expert_ids,
@@ -505,7 +505,7 @@ impl Qwen3_5Model {
                 routed_expert_ids,
                 performance_attribution,
             ) {
-                // Hot-expert cache hit: the warm table covers every
+                // astro expert cache hit: the warm table covers every
                 // routed expert of this token, so the routed set is
                 // served from retained RAM with no storage read
                 // (issue #372).

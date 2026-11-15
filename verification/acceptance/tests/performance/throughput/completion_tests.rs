@@ -69,7 +69,7 @@ fn measured_generation_cache_report() -> serde_json::Value {
             {"counter": "hot_expert_route_fully_covered_count", "amount": 1},
             {"counter": "hot_expert_route_partially_covered_count", "amount": 2},
             {"counter": "hot_expert_route_fully_missed_count", "amount": 3},
-            {"counter": "decode_expert_cache_slot_eviction_count", "amount": 4},
+            {"counter": "decode_astro_expert_cache_slot_eviction_count", "amount": 4},
             {"counter": "positional_file_read_call_count", "amount": 8},
             {"counter": "positional_file_read_byte_count", "amount": 1_024},
             {"counter": "positional_file_read_elapsed_nanoseconds", "amount": 9_000},
@@ -228,7 +228,7 @@ fn should_parse_every_counter_from_the_measured_generation_report() {
     );
     assert_eq!(diagnostic_evidence.hot_expert_route_fully_missed_count, 3);
     assert_eq!(
-        diagnostic_evidence.decode_expert_cache_slot_eviction_count,
+        diagnostic_evidence.decode_astro_expert_cache_slot_eviction_count,
         4
     );
     assert_eq!(diagnostic_evidence.positional_file_read_call_count, 8);
@@ -308,7 +308,7 @@ fn should_treat_omitted_zero_counters_as_zero() {
 
     assert_eq!(diagnostic_evidence.decode_expert_source_payload_bytes, 0);
     assert_eq!(
-        diagnostic_evidence.decode_expert_cache_slot_eviction_count,
+        diagnostic_evidence.decode_astro_expert_cache_slot_eviction_count,
         0
     );
     assert_eq!(

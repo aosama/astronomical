@@ -115,9 +115,9 @@ fn decode_mlx_memory_telemetry_from_completed_forward(
         mlx_active_memory_bytes,
         0,
     );
-    let allocator_cache_memory_bytes =
-        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(|_| {
-            super::fatal_engine_error("MLX allocator-cache memory bytes exceed the u64 range")
+    let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
+        .map_err(|_| {
+            super::fatal_engine_error("MLX buffer cache memory bytes exceed the u64 range")
         })?;
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
         .map_err(|_| super::fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
@@ -127,7 +127,7 @@ fn decode_mlx_memory_telemetry_from_completed_forward(
     // or demote (issue #337).
     Ok(crate::memory::telemetry::MlxMemoryTelemetry::new(
         mlx_active_memory_bytes,
-        allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes,
         peak_memory_bytes,
         active_memory_breakdown,
     )

@@ -4,7 +4,7 @@ use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollecto
 use std::cell::RefCell;
 use std::path::Path;
 
-use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::model::disk_embedding_rows::Qwen3_5DiskEmbeddingRows;
@@ -61,13 +61,13 @@ impl Qwen3_5Model {
         chunking: super::Qwen3_5ModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        Self::load_with_performance_attribution_and_decode_expert_cache_policy(
+        Self::load_with_performance_attribution_and_decode_astro_expert_cache_policy(
             runtime,
             validated_artifact,
             model_directory,
             should_bind_vision_weights,
             chunking,
-            WorkerDecodeExpertCachePolicy::Baseline,
+            WorkerDecodeAstroExpertCachePolicy::Baseline,
             performance_attribution,
         )
     }
@@ -77,13 +77,13 @@ impl Qwen3_5Model {
     /// sorted-reduction kernel), derives the decoder cache layout, collects
     /// the capability-verdict kernels and invariant scales, and assembles the
     /// memory facts with the fused-kernel verdict.
-    pub(crate) fn load_with_performance_attribution_and_decode_expert_cache_policy(
+    pub(crate) fn load_with_performance_attribution_and_decode_astro_expert_cache_policy(
         runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         should_bind_vision_weights: bool,
         chunking: super::Qwen3_5ModelChunkingConfiguration,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         // Both taken before binding, which consumes parts of the artifact.
@@ -103,7 +103,7 @@ impl Qwen3_5Model {
             should_bind_vision_weights,
             performance_attribution,
         )?;
-        let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) =
+        let (expert_pager, astro_expert_cache, sorted_expert_weighted_sum_kernel) =
             match config.feed_forward_architecture() {
                 Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
                 Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
@@ -113,7 +113,7 @@ impl Qwen3_5Model {
                     &shard_index,
                     &tensor_inventory,
                     expert_atlas.as_ref(),
-                    decode_expert_cache_policy,
+                    decode_astro_expert_cache_policy,
                     performance_attribution,
                 )?,
             };
@@ -171,7 +171,7 @@ impl Qwen3_5Model {
             },
             expert_pager,
             dense_layer_streamer,
-            retained_experts,
+            astro_expert_cache,
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
             prompt_expert_pages_in_hand: Default::default(),
@@ -183,7 +183,7 @@ impl Qwen3_5Model {
             optimistic_serving_history: Default::default(),
             request_expert_storage_read_tally: Default::default(),
             governed_memory: Default::default(),
-            probed_prompt_layer_working_memory: std::cell::Cell::new(None),
+            probed_prompt_layer_mlx_working_buffers: std::cell::Cell::new(None),
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
         })
@@ -228,7 +228,7 @@ struct DenseStreamingGeometry {
 /// tensors that never stream are fixed. The two layer slots a streamed
 /// forward reads into become the per-operation page the floor reserves once.
 /// They stay out of the complete-expert-layer field, whose prefill rule
-/// would reserve three of it; prefill working memory is measured instead.
+/// would reserve three of it; prefill MLX working buffers are measured instead.
 fn dense_streaming_geometry(
     bound_model_core_payload_bytes: u64,
     dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
@@ -309,7 +309,7 @@ fn dense_disk_embedding_rows(
 /// the sorted-reduction kernel verdict.
 type StreamingExpertRuntimeTrio = (
     Option<Qwen3_5ExpertPager>,
-    Option<RefCell<qwen3_5_streaming::WarmExpertSlotTableCache>>,
+    Option<RefCell<qwen3_5_streaming::AstroExpertCache>>,
     Option<MlxMetalKernel>,
 );
 
@@ -324,7 +324,7 @@ fn load_streaming_expert_runtime(
     shard_index: &super::Qwen3_5ShardIndex,
     tensor_inventory: &crate::TensorInventory,
     expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
     let tensor_name_to_shard_file_name: std::collections::HashMap<String, String> = shard_index
@@ -377,10 +377,10 @@ fn load_streaming_expert_runtime(
             );
             None
         };
-    let retained_experts = RefCell::new(
-        qwen3_5_streaming::WarmExpertSlotTableCache::new_with_decode_cache_policy(
+    let astro_expert_cache = RefCell::new(
+        qwen3_5_streaming::AstroExpertCache::new_with_decode_cache_policy(
             expert_pager.layer_count(),
-            decode_expert_cache_policy,
+            decode_astro_expert_cache_policy,
         ),
     );
     // Seed demand ranking from the persisted usage history beside
@@ -393,7 +393,7 @@ fn load_streaming_expert_runtime(
         expert_pager.layer_count(),
     ) {
         Some(persisted_usage) => {
-            retained_experts
+            astro_expert_cache
                 .borrow_mut()
                 .seed_expert_demand_history(persisted_usage);
         }
@@ -404,7 +404,7 @@ fn load_streaming_expert_runtime(
     }
     Ok((
         Some(expert_pager),
-        Some(retained_experts),
+        Some(astro_expert_cache),
         sorted_expert_weighted_sum_kernel,
     ))
 }

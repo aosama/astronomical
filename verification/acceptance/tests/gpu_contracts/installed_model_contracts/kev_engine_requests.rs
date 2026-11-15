@@ -23,7 +23,7 @@ mod romeo_and_juliet;
 
 /// Kev-9B in bfloat16 is about 18 GB; this leaves its forward workspace.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 32 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 /// Kev's serving limit on a state, its state token included.
 const KEV_MAXIMUM_STATE_TOKENS: usize = 65_536;
 
@@ -35,7 +35,7 @@ fn loaded_engine() -> KevDecisionEngine {
         "kev",
         &TestRunContext::current().required_model_directory(),
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the converted Kev folder should validate");
     decision_engine
@@ -162,7 +162,7 @@ async fn should_refuse_to_decide_before_it_is_loaded() {
         "kev",
         &TestRunContext::current().required_model_directory(),
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the converted Kev folder should validate");
 

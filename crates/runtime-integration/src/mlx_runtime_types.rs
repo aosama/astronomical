@@ -1,5 +1,5 @@
 //! The typed vocabulary of the MLX boundary: memory limits, memory snapshots,
-//! error taxonomy, and the allocator-cache reclaim policy constants.
+//! error taxonomy, and the MLX buffer-cache reclaim policy constants.
 //!
 //! # Why this module is not behind the `mlx` feature
 //!
@@ -32,22 +32,22 @@ use thiserror::Error;
 /// These values change no kernel setting; both are process-local MLX
 /// guidance. The active-memory value is reused as the process residency-set
 /// limit because worker startup already resolved it against the machine
-/// ceiling. The allocator-cache value independently controls reclaimable
+/// ceiling. The MLX buffer-cache value independently controls reclaimable
 /// allocation reuse.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxMemoryLimits {
     pub(crate) active_memory_limit_bytes: usize,
-    pub(crate) allocator_cache_memory_limit_bytes: usize,
+    pub(crate) mlx_buffer_cache_limit_bytes: usize,
 }
 
 impl MlxMemoryLimits {
-    /// Validates explicit active memory and allocator-cache byte limits.
+    /// Validates explicit active memory and MLX buffer-cache byte limits.
     ///
     /// # Errors
     ///
     /// - The active limit must be positive: a zero limit would make every
     ///   allocation request fail the ceiling check.
-    /// - The allocator-cache limit cannot exceed the active limit — the cache
+    /// - The MLX buffer-cache limit cannot exceed the active limit — the cache
     ///   holds buffers reclaimed from the active set, so a cache allowed to
     ///   retain more than the process may ever hold is incoherent.
     ///
@@ -55,21 +55,21 @@ impl MlxMemoryLimits {
     /// which is why zero is accepted here.
     pub fn new(
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
     ) -> Result<Self, MlxRuntimeError> {
         if active_memory_limit_bytes == 0 {
             return Err(MlxRuntimeError::InvalidMemoryLimits {
                 description: "active memory limit must be positive",
             });
         }
-        if allocator_cache_memory_limit_bytes > active_memory_limit_bytes {
+        if mlx_buffer_cache_limit_bytes > active_memory_limit_bytes {
             return Err(MlxRuntimeError::InvalidMemoryLimits {
-                description: "allocator cache memory limit cannot exceed the active memory limit",
+                description: "MLX buffer cache memory limit cannot exceed the active memory limit",
             });
         }
         Ok(Self {
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
         })
     }
 
@@ -82,10 +82,10 @@ impl MlxMemoryLimits {
         self.active_memory_limit_bytes
     }
 
-    /// Returns the allocator cache-reclamation threshold in bytes.
+    /// Returns the MLX buffer cache-reclamation threshold in bytes.
     #[must_use]
-    pub const fn allocator_cache_memory_limit_bytes(self) -> usize {
-        self.allocator_cache_memory_limit_bytes
+    pub const fn mlx_buffer_cache_limit_bytes(self) -> usize {
+        self.mlx_buffer_cache_limit_bytes
     }
 
     /// Returns the active-memory ceiling plus the approved one-percent transient allowance.
@@ -118,11 +118,11 @@ impl MlxMemoryLimits {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxMemorySnapshot {
     pub(crate) active_memory_bytes: usize,
-    pub(crate) allocator_cache_memory_bytes: usize,
+    pub(crate) mlx_buffer_cache_bytes: usize,
     pub(crate) peak_memory_bytes: usize,
 }
 
-/// Reclaimable allocator-cache bytes that justify an IOGPU-visible clear.
+/// Reclaimable MLX buffer-cache bytes that justify an IOGPU-visible clear.
 ///
 /// Performance conclusion memorialized from direct-MLX streaming
 /// measurements: clearing after every prefill chunk can stall WindowServer
@@ -130,19 +130,19 @@ pub struct MlxMemorySnapshot {
 /// unbounded reproduced a 20 GB throughput cliff. This threshold is a
 /// portable byte floor, not a machine-specific RAM fraction, so the policy
 /// behaves identically on every Mac.
-pub const ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES: usize = 256_000_000;
+pub const MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES: usize = 256_000_000;
 
-/// Returns whether a synchronized allocator cache is large enough to reclaim.
+/// Returns whether a synchronized MLX buffer cache is large enough to reclaim.
 ///
 /// Boundary semantics: exactly at the threshold counts as reclaimable. The
 /// beside-source tests pin that boundary so a future refactor cannot quietly
 /// strand the cache at the policy edge.
 #[must_use]
-pub const fn allocator_cache_exceeds_reclaim_threshold(
-    allocator_cache_memory_bytes: usize,
+pub const fn mlx_buffer_cache_exceeds_reclaim_threshold(
+    mlx_buffer_cache_bytes: usize,
     reclaim_threshold_bytes: usize,
 ) -> bool {
-    allocator_cache_memory_bytes >= reclaim_threshold_bytes
+    mlx_buffer_cache_bytes >= reclaim_threshold_bytes
 }
 
 impl MlxMemorySnapshot {
@@ -166,10 +166,10 @@ impl MlxMemorySnapshot {
         self.active_memory_bytes
     }
 
-    /// Returns bytes retained in the MLX allocator cache.
+    /// Returns bytes retained in the MLX buffer cache.
     #[must_use]
-    pub const fn allocator_cache_memory_bytes(self) -> usize {
-        self.allocator_cache_memory_bytes
+    pub const fn mlx_buffer_cache_bytes(self) -> usize {
+        self.mlx_buffer_cache_bytes
     }
 
     /// Returns peak active allocator bytes since the last reset.
@@ -192,11 +192,11 @@ pub enum MlxRuntimeError {
     #[error("invalid MLX memory limits: {description}")]
     InvalidMemoryLimits { description: &'static str },
     #[error(
-        "MLX runtime already uses active limit {active_memory_limit_bytes} bytes and allocator cache limit {allocator_cache_memory_limit_bytes} bytes"
+        "MLX runtime already uses active limit {active_memory_limit_bytes} bytes and MLX buffer cache limit {mlx_buffer_cache_limit_bytes} bytes"
     )]
     RuntimeAlreadyConfigured {
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
     },
     #[error(
         "MLX active memory ceiling rejected allocation: active={active_memory_bytes} attempted={attempted_allocation_bytes} allowed={allowed_active_memory_bytes}"

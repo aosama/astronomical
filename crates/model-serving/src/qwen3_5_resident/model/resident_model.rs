@@ -28,7 +28,7 @@ pub struct Qwen3_5ResidentModel {
     pub(crate) neural_engine_mlp_prefill:
         Option<crate::qwen3_5_resident::neural_engine_mlp_prefill::NeuralEngineMlpPrefill>,
     /// The owner of this model's memory ledger, opened once the model has
-    /// loaded and its working memory has been measured.
+    /// loaded and its MLX working buffers have been measured.
     pub(crate) memory_governor:
         std::cell::RefCell<Option<astronomical_memory_policy::ledger::MemoryGovernor>>,
 }
@@ -236,7 +236,7 @@ impl Qwen3_5ResidentModel {
     /// Direct-MLX probes need the same weight residency the daemon serves
     /// with: `load` alone binds shared metadata without evaluating the
     /// payload, so the first forward would fail with a missing resident
-    /// expert tensor. The allocator-cache drain between the two stages
+    /// expert tensor. The MLX buffer-cache drain between the two stages
     /// mirrors production so transient load buffers cannot outlive the
     /// materialization the same way they must not in serving.
     #[cfg(feature = "direct-mlx")]
@@ -245,7 +245,7 @@ impl Qwen3_5ResidentModel {
     ) -> Result<(), Qwen3_5ExecutionError> {
         self.materialize_target_weights()?;
         self.runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()?;
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()?;
         if !self.expert_layer_plans.is_empty() {
             let resident_expert_weights =
                 Qwen3_5ResidentExpertWeights::load(self.runtime(), &self.expert_layer_plans, None)?;

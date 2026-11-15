@@ -165,7 +165,7 @@ async fn load_visual_acceptance_engine(
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         Some(PersistentPromptCacheDiskStoreConfig::new(
             prompt_cache_directory.to_path_buf(),
             prompt_cache_directory.to_path_buf(),

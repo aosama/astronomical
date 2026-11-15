@@ -24,7 +24,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::time::timeout;
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 
@@ -311,7 +311,7 @@ async fn prepare_runtime_and_kernel() -> (
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the prework numerics test memory limits should be valid"),
     )

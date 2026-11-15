@@ -55,7 +55,7 @@ pub enum PrismHadamardQwen35StartupError {
 pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
     model_directory: &Path,
     effective_mlx_memory_ceiling_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     performance_attribution_enabled: bool,
     serving_settings: PrismHadamardQwen35ServingSettings,
 ) -> Result<(Qwen3_5GenerationProcessor, PrismHadamardQwen35Engine), PrismHadamardQwen35StartupError>
@@ -123,7 +123,7 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
     let pending_startup = PrismHadamardQwen35PendingStartup {
         validated_pack: pack,
         effective_mlx_memory_ceiling_bytes,
-        allocator_cache_memory_limit_bytes,
+        mlx_buffer_cache_limit_bytes,
         maximum_context_tokens: context_window,
         prompt_processing_chunk_tokens: serving_settings.prompt_processing_chunk_tokens,
         prompt_cache_disk_store_config,

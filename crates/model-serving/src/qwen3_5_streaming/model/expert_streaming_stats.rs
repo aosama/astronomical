@@ -74,14 +74,14 @@ impl Qwen3_5Model {
         // layer shares, the same source the decode warm handoff trusts.
         let (complete_expert_payload_byte_count, expert_capacity) =
             expert_library_facts(expert_pager);
-        let layer_topology = match self.retained_experts.as_ref() {
-            Some(retained_experts) => {
+        let layer_topology = match self.astro_expert_cache.as_ref() {
+            Some(astro_expert_cache) => {
                 // The observatory contract stores the uniform expert count as
                 // u32. The warm-slot table still keys slots by usize, and
                 // every supported target can hold that count.
                 let topology_expert_capacity =
                     usize::try_from(expert_capacity).unwrap_or(usize::MAX);
-                let topology_residencies = retained_experts
+                let topology_residencies = astro_expert_cache
                     .borrow()
                     .topology_snapshot(topology_expert_capacity);
                 expert_pager.session_layer_topology(&topology_residencies)

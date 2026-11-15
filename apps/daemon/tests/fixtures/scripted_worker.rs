@@ -525,7 +525,7 @@ async fn dispatch_unstructured_chat(
                     mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                         source: MlxMemorySnapshotSource::Prefill,
                         active_memory_bytes: 11_000,
-                        allocator_cache_memory_bytes: 12_000,
+                        mlx_buffer_cache_bytes: 12_000,
                         peak_memory_bytes: 13_000,
                         expert_payload_bytes: 4_000,
                         model_core_payload_bytes: 3_000,
@@ -563,7 +563,7 @@ async fn dispatch_unstructured_chat(
                     mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                         source: MlxMemorySnapshotSource::Finalized,
                         active_memory_bytes: 24_000,
-                        allocator_cache_memory_bytes: 0,
+                        mlx_buffer_cache_bytes: 0,
                         peak_memory_bytes: 25_000,
                         expert_payload_bytes: 19_000,
                         model_core_payload_bytes: 3_000,

@@ -7,6 +7,8 @@ mod dense_layer_counts;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_measurement;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod dense_layer_mlx_working_buffer_probe;
+#[cfg(feature = "direct-mlx")]
 mod dense_layer_payload;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod dense_layer_reads;
@@ -17,11 +19,9 @@ mod dense_layer_residency;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod dense_layer_streamer;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod dense_layer_working_memory_probe;
-#[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod expert_layer_working_memory_probe;
+pub(crate) mod expert_layer_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
 #[cfg(feature = "direct-mlx")]

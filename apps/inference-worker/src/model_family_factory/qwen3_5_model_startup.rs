@@ -9,7 +9,7 @@ use astronomical_config::{
     remove_other_weights_of_model,
 };
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy,
+    WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy,
     WorkerDiagnosticQwen3_5EngineOverride,
 };
 use astronomical_model_serving::{
@@ -63,7 +63,7 @@ fn model_program_cache_directory(
 pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
     neural_engine_program_directory: Option<PathBuf>,
     requested_model_id: String,
@@ -71,7 +71,7 @@ pub(crate) fn initialize_qwen3_5_model(
     max_output_tokens: u32,
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
 
@@ -166,7 +166,7 @@ pub(crate) fn initialize_qwen3_5_model(
         selected_engine,
         validated_artifact,
         active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
+        mlx_buffer_cache_limit_bytes,
         persistent_prompt_cache_disk_store_config,
         neural_engine_program_cache_directory,
         think_end_token_id,
@@ -175,7 +175,7 @@ pub(crate) fn initialize_qwen3_5_model(
         chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         &artifact_model_id,
         &artifact_model_revision,
         artifact_payload_bytes,
@@ -191,7 +191,7 @@ fn construct_selected_qwen3_5_engine(
     selected_engine: Qwen3_5SelectedEngine,
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
@@ -200,7 +200,7 @@ fn construct_selected_qwen3_5_engine(
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: PerformanceAttributionLog,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -210,7 +210,7 @@ fn construct_selected_qwen3_5_engine(
         Qwen3_5SelectedEngine::Resident => construct_resident_engine(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             persistent_prompt_cache_disk_store_config,
             neural_engine_program_cache_directory,
             think_end_token_id,
@@ -227,7 +227,7 @@ fn construct_selected_qwen3_5_engine(
         Qwen3_5SelectedEngine::Streaming => construct_streaming_engine(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             persistent_prompt_cache_disk_store_config,
             think_end_token_id,
             model_directory_path,
@@ -235,7 +235,7 @@ fn construct_selected_qwen3_5_engine(
             chunking,
             model_loading_performance_attribution,
             performance_attribution_log,
-            decode_expert_cache_policy,
+            decode_astro_expert_cache_policy,
             artifact_model_id,
             artifact_model_revision,
             artifact_payload_bytes,
@@ -417,7 +417,7 @@ fn initialize_generation_processor(
 fn construct_resident_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
@@ -457,7 +457,7 @@ fn construct_resident_engine(
     Qwen3_5ResidentEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
+        mlx_buffer_cache_limit_bytes,
         persistent_prompt_cache_disk_store_config,
         prompt_processing_chunk_sizer,
         think_end_token_id,
@@ -481,7 +481,7 @@ fn construct_resident_engine(
 fn construct_streaming_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
@@ -489,7 +489,7 @@ fn construct_streaming_engine(
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     mut performance_attribution_log: PerformanceAttributionLog,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -520,7 +520,7 @@ fn construct_streaming_engine(
     Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
         validated_artifact,
         active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
+        mlx_buffer_cache_limit_bytes,
         persistent_prompt_cache_disk_store_config,
         prompt_processing_chunk_sizer,
         think_end_token_id,
@@ -529,7 +529,7 @@ fn construct_streaming_engine(
         chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
     )
     .map(ModelFamilyInferenceEngine::Qwen3_5Streaming)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
@@ -662,7 +662,7 @@ fn record_failed_model_loading_performance_attribution(
             resident_model_payload_bytes: None,
             model_shard_count,
             mlx_active_memory_bytes: None,
-            mlx_allocator_cache_memory_bytes: None,
+            mlx_buffer_cache_bytes: None,
             mlx_peak_memory_bytes: None,
             failure_description: Some(failure_description.to_owned()),
         })

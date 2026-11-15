@@ -11,7 +11,7 @@ use super::{SpeechMemoryGrant, unloaded_speech_engine};
 fn memory_grant() -> SpeechMemoryGrant {
     SpeechMemoryGrant {
         effective_mlx_memory_ceiling_bytes: 1 << 30,
-        allocator_cache_memory_limit_bytes: 1 << 28,
+        mlx_buffer_cache_limit_bytes: 1 << 28,
     }
 }
 

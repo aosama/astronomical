@@ -34,7 +34,7 @@ async fn run_prompt_cache_disabled_cold_prefill_acceptance() {
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
         Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
             2_048,

@@ -65,7 +65,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
         ) = construct_resident_engine(
             model_directory,
             mlx_memory_limits.active_memory_limit_bytes(),
-            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+            mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
             request_id,
             RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT,
         );
@@ -178,7 +178,7 @@ async fn should_transition_the_complete_sparse_model_across_live_memory_limits()
         ) = construct_automatic_residency_engine(
             model_directory,
             mlx_memory_limits.active_memory_limit_bytes(),
-            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+            mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
             squeezed_request_id,
             RESIDENCY_LIFECYCLE_PROMPT_TOKEN_COUNT,
         );

@@ -166,7 +166,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 Some(WorkerMlxMemorySnapshot {
                     source: MlxMemorySnapshotSource::Prefill,
                     active_memory_bytes: 11_000,
-                    allocator_cache_memory_bytes: 12_000,
+                    mlx_buffer_cache_bytes: 12_000,
                     peak_memory_bytes: 13_000,
                     expert_payload_bytes: 1_000,
                     model_core_payload_bytes: 4_000,

@@ -54,11 +54,11 @@ impl Qwen3_5Model {
             return Ok(None);
         }
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             missing_route_collector.abandon_optimistic_serving();
             return Ok(None);
         };
-        let table_page = retained_experts
+        let table_page = astro_expert_cache
             .borrow()
             .optimistic_table_page(layer_index, expert_capacity);
         let Some(table_page) = table_page else {
@@ -284,18 +284,18 @@ impl Qwen3_5Model {
     /// checkpoint for nothing (measured: 57.3 against 58.9 tokens per second
     /// on a 40-layer model held whole).
     fn has_a_partly_held_layer_and_no_empty_one(&self) -> bool {
-        let (Some(retained_experts), Some(expert_pager)) =
-            (self.retained_experts.as_ref(), self.expert_pager.as_ref())
+        let (Some(astro_expert_cache), Some(expert_pager)) =
+            (self.astro_expert_cache.as_ref(), self.expert_pager.as_ref())
         else {
             return false;
         };
-        let retained_experts = retained_experts.borrow();
+        let astro_expert_cache = astro_expert_cache.borrow();
         let mut has_partly_held_layer = false;
         for layer_index in 0..expert_pager.layer_count() {
             let Ok(layer_plan) = expert_pager.layer_plan(layer_index) else {
                 return false;
             };
-            let held_expert_count = retained_experts.occupied_slot_count(layer_index);
+            let held_expert_count = astro_expert_cache.occupied_slot_count(layer_index);
             if held_expert_count == 0 {
                 return false;
             }

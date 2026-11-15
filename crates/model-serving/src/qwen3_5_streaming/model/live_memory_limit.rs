@@ -195,7 +195,7 @@ impl Qwen3_5Model {
         )?;
         let post_reclamation_mlx_memory_snapshot = self
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .and_then(|()| self.runtime.memory_snapshot())
             .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
         let post_reclamation_active_memory_bytes = u64::try_from(
@@ -248,7 +248,7 @@ impl Qwen3_5Model {
                     model_memory_facts_error.to_string(),
                 )
             })?;
-        // The governor follows the installed limit, and the expert cache or
+        // The governor follows the installed limit, and the astro expert cache or
         // a dense model's kept layers give back what no longer fits.
         self.govern_limit_change();
         let Some(expert_pager) = self.expert_pager.as_mut() else {

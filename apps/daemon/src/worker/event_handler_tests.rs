@@ -21,7 +21,7 @@ fn standalone_sample(peak_memory_bytes: u64) -> WorkerMlxMemorySnapshot {
     WorkerMlxMemorySnapshot {
         source: MlxMemorySnapshotSource::DecodeSubmitted,
         active_memory_bytes: peak_memory_bytes / 2,
-        allocator_cache_memory_bytes: 0,
+        mlx_buffer_cache_bytes: 0,
         peak_memory_bytes,
         expert_payload_bytes: 0,
         model_core_payload_bytes: 0,

@@ -39,10 +39,10 @@ pub(in crate::qwen3_5_resident::inference_execution) fn mlx_active_memory_bytes_
     super::fatal_engine_error("MLX active memory bytes exceed the u64 range")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_allocator_cache_memory_bytes_exceed_u64_range_error(
+pub(in crate::qwen3_5_resident::inference_execution) fn mlx_buffer_cache_bytes_exceed_u64_range_error(
     _try_from_error: std::num::TryFromIntError,
 ) -> InferenceEngineError {
-    super::fatal_engine_error("MLX allocator-cache memory bytes exceed the u64 range")
+    super::fatal_engine_error("MLX buffer cache memory bytes exceed the u64 range")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn mlx_peak_memory_bytes_exceed_u64_range_error(
@@ -134,10 +134,10 @@ pub(in crate::qwen3_5_resident::inference_execution) fn mlx_active_memory_exceed
     super::fatal_engine_error("MLX active memory exceeds the u64 range")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn mlx_allocator_cache_memory_exceeds_u64_range_error(
+pub(in crate::qwen3_5_resident::inference_execution) fn mlx_buffer_cache_exceeds_u64_range_error(
     _try_from_error: std::num::TryFromIntError,
 ) -> InferenceEngineError {
-    super::fatal_engine_error("MLX allocator-cache memory exceeds the u64 range")
+    super::fatal_engine_error("MLX buffer cache memory exceeds the u64 range")
 }
 
 pub(in crate::qwen3_5_resident::inference_execution) fn mlx_peak_memory_exceeds_u64_range_error(

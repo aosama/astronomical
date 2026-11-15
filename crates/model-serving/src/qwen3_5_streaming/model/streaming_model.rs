@@ -14,8 +14,8 @@ use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector;
 use crate::qwen3_5_streaming::{
-    PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedExecutionMode,
-    WarmExpertSlotTableCache,
+    AstroExpertCache, PagedForwardMissingRouteCollector, Qwen3_5ExpertPager,
+    Qwen3_5MoEPagedExecutionMode,
 };
 use crate::{DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution};
 
@@ -32,7 +32,7 @@ pub struct Qwen3_5StreamingModel {
     pub(crate) dense_layer_streamer:
         Option<crate::qwen3_5_streaming::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer>,
     /// Individual routed experts retained within the paged-mode RAM ceiling.
-    pub(crate) retained_experts: Option<RefCell<WarmExpertSlotTableCache>>,
+    pub(crate) astro_expert_cache: Option<RefCell<AstroExpertCache>>,
     /// Where each expert layer should end up for the reply being written;
     /// `None` while a prompt is read, when every layer may be kept whole.
     pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,
@@ -53,12 +53,12 @@ pub struct Qwen3_5StreamingModel {
     /// streams reads is observed as Resident.
     pub(super) request_expert_storage_read_tally:
         super::request_expert_storage_read_tally::RequestExpertStorageReadTally,
-    /// One layer's prompt working memory, measured at load, for the memory
+    /// One layer's prompt MLX working buffers, measured at load, for the memory
     /// governor: an expert layer's for a sparse model, a streamed decoder
     /// layer's for a dense one. `None` when the probe could not run.
-    pub(crate) probed_prompt_layer_working_memory: Cell<
+    pub(crate) probed_prompt_layer_mlx_working_buffers: Cell<
         Option<
-            crate::qwen3_5_streaming::model::expert_layer_working_memory_probe::ProbedPromptLayerWorkingMemory,
+            crate::qwen3_5_streaming::model::expert_layer_mlx_working_buffer_probe::ProbedPromptLayerMlxWorkingBuffers,
         >,
     >,
     /// The memory governor and what this engine holds from it (issue
@@ -134,9 +134,9 @@ impl Qwen3_5StreamingModel {
         if self.expert_pager.is_none() {
             return ExpertWeightMemoryCacheStatistics::default();
         }
-        self.retained_experts.as_ref().map_or_else(
+        self.astro_expert_cache.as_ref().map_or_else(
             ExpertWeightMemoryCacheStatistics::default,
-            |retained_experts| retained_experts.borrow().statistics(),
+            |astro_expert_cache| astro_expert_cache.borrow().statistics(),
         )
     }
 
@@ -152,9 +152,11 @@ impl Qwen3_5StreamingModel {
 
     /// Removes one retained expert layer, returning whether it existed.
     pub(crate) fn remove_retained_expert_layer(&self, layer_index: usize) -> bool {
-        self.retained_experts
+        self.astro_expert_cache
             .as_ref()
-            .is_some_and(|retained_experts| retained_experts.borrow_mut().remove_layer(layer_index))
+            .is_some_and(|astro_expert_cache| {
+                astro_expert_cache.borrow_mut().remove_layer(layer_index)
+            })
     }
 
     /// Executes one prompt chunk, injecting visual embeddings at image_pad positions.

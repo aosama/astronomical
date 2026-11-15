@@ -143,7 +143,7 @@ fn should_request_allocator_cleanup_without_confusing_cache_with_active_memory()
 
     assert_eq!(
         observation.decide(),
-        AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit
+        AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit
     );
 }
 

@@ -41,7 +41,7 @@ impl SpeechMemoryAccount {
     pub(crate) fn clean_up_after_request(&mut self, runtime: &MlxRuntime) {
         // A failed clean-up leaves the memory cached, not lost; the next
         // request reuses it, so it is not worth failing the request over.
-        let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_allocator_cache();
+        let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_mlx_buffer_cache();
         self.post_cleanup_memory_telemetry = self.observe(runtime);
     }
 

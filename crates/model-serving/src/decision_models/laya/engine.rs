@@ -41,7 +41,7 @@ const QUANTIZED_EMBEDDING_SCALES_TENSOR: &str = "encoder.embeddings.tok_embeddin
 pub struct LayaDecisionEngine {
     model_id: String,
     effective_mlx_memory_ceiling_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     resident_weight_bytes: u64,
     preloaded_artifact: Option<LayaArtifact>,
     loaded_state: Option<LoadedLayaState>,
@@ -62,7 +62,7 @@ impl LayaDecisionEngine {
         model_id: impl Into<String>,
         model_directory: &Path,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
     ) -> Result<Self, DecisionFailure> {
         let artifact = match LayaArtifact::load(model_directory) {
             Ok(artifact) => artifact,
@@ -75,7 +75,7 @@ impl LayaDecisionEngine {
         Ok(Self {
             model_id: model_id.into(),
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             resident_weight_bytes: artifact.weights_file_bytes,
             preloaded_artifact: Some(artifact),
             loaded_state: None,
@@ -215,7 +215,7 @@ impl DecisionEngine for LayaDecisionEngine {
         };
         let Ok(memory_limits) = MlxMemoryLimits::new(
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         ) else {
             return Err(DecisionFailure::fatal_execution(
                 "decision runtime memory limits are invalid",
@@ -281,11 +281,11 @@ impl DecisionEngine for LayaDecisionEngine {
         let question_sequences = loaded_state.build_question_sequences(state, questions)?;
         let forward_result = loaded_state.option_logits_by_question(questions, &question_sequences);
         // The pass arrays are dropped by now, whether or not a pass failed;
-        // synchronizing and clearing the allocator cache returns their memory
+        // synchronizing and clearing the MLX buffer cache returns their memory
         // before the next request.
         let _cleanup_result = loaded_state
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache();
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
         // Taken after the cleanup, so it holds no reusable-cache bytes and is
         // the state the next request starts from.
         let post_cleanup_memory_telemetry = match loaded_state.runtime.memory_snapshot() {

@@ -517,8 +517,8 @@ pub(crate) fn materialize_and_release_restored_state(
         )?;
     performance_attribution
         .measure_operation(
-            PerformanceOperation::MlxAllocatorCacheCleanup,
-            |_performance_attribution| runtime.clear_allocator_cache(),
+            PerformanceOperation::MlxBufferCacheCleanup,
+            |_performance_attribution| runtime.clear_mlx_buffer_cache(),
         )
         .map_err(|runtime_error| InferenceEngineError::Fatal {
             reason: format!(

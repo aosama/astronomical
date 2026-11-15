@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 
 use astronomical_ipc_protocol::{
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
     WorkerStartupConfiguration,
 };
 use tokio::process::Command;
@@ -18,7 +18,7 @@ fn startup_configuration(is_refresh_enabled: bool) -> WorkerStartupConfiguration
         persistent_prompt_cache_enabled: false,
         configured_maximum_mlx_memory_bytes: None,
         performance_attribution_enabled: false,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
         logging_directory: PathBuf::from("logs"),
         logging_level: WorkerLogLevel::Warn,

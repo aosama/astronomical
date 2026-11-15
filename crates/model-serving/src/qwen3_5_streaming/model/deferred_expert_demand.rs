@@ -132,11 +132,12 @@ impl Qwen3_5Model {
         expert_capacity: usize,
         selected_indices: &MlxArray,
     ) {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
-        let prefill_demand_assignment_weight =
-            retained_experts.borrow().prefill_demand_assignment_weight();
+        let prefill_demand_assignment_weight = astro_expert_cache
+            .borrow()
+            .prefill_demand_assignment_weight();
         self.deferred_expert_demand.borrow_mut().retain_layer_route(
             layer_index,
             expert_capacity,
@@ -155,11 +156,12 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         resident_layer_payload_byte_count: u64,
     ) {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
-        let prefill_demand_assignment_weight =
-            retained_experts.borrow().prefill_demand_assignment_weight();
+        let prefill_demand_assignment_weight = astro_expert_cache
+            .borrow()
+            .prefill_demand_assignment_weight();
         self.deferred_expert_demand
             .borrow_mut()
             .retain_resident_layer_route(
@@ -185,7 +187,7 @@ impl Qwen3_5Model {
             .deferred_expert_demand
             .borrow_mut()
             .take_pending_layer_routes();
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
         for pending_layer_route in pending_layer_routes {
@@ -195,7 +197,7 @@ impl Qwen3_5Model {
                         .into_iter()
                         .map(|expert_id| expert_id as usize)
                         .collect();
-                    retained_experts
+                    astro_expert_cache
                         .borrow_mut()
                         .record_expert_demand_at_prefill_weight(
                             pending_layer_route.layer_index,

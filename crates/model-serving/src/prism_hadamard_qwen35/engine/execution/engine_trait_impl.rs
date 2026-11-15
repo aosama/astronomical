@@ -54,7 +54,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let mut performance_attribution = pending.performance_attribution;
         let memory_limits = MlxMemoryLimits::new(
             pending.effective_mlx_memory_ceiling_bytes,
-            pending.allocator_cache_memory_limit_bytes,
+            pending.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|error| InferenceEngineError::Fatal {
             reason: format!("folded-ternary MLX limits failed: {error}"),
@@ -354,11 +354,11 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         self.ceiling_bytes = requested_mlx_memory_ceiling_bytes.max(1);
-        self.allocator_cache_bytes = self.allocator_cache_bytes.min(self.ceiling_bytes);
+        self.mlx_buffer_cache_bytes = self.mlx_buffer_cache_bytes.min(self.ceiling_bytes);
         if let Some(model) = self.model.as_mut() {
             let memory_limits = MlxMemoryLimits::new(
                 usize::try_from(self.ceiling_bytes).unwrap_or(usize::MAX),
-                usize::try_from(self.allocator_cache_bytes).unwrap_or(usize::MAX),
+                usize::try_from(self.mlx_buffer_cache_bytes).unwrap_or(usize::MAX),
             )
             .map_err(|error| InferenceEngineError::Fatal {
                 reason: format!("folded-ternary MLX limits failed: {error}"),
@@ -375,7 +375,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         Ok(MlxMemoryLimitAdjustment::new(
             self.ceiling_bytes,
-            self.allocator_cache_bytes,
+            self.mlx_buffer_cache_bytes,
             self.minimum_ceiling_bytes,
             ExpertMemoryMode::Resident,
             mlx_memory_telemetry,
@@ -427,8 +427,8 @@ impl PrismHadamardQwen35InferenceExecution {
             }
         };
         let active_memory_bytes = u64::try_from(memory_snapshot.active_memory_bytes()).ok()?;
-        let allocator_cache_memory_bytes =
-            u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()?;
+        let mlx_buffer_cache_bytes =
+            u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()?;
         let peak_memory_bytes = u64::try_from(memory_snapshot.peak_memory_bytes()).ok()?;
         let model_core_payload_bytes = model.pack().total_payload_bytes();
         let context_state_payload_bytes = self.active.as_ref().map_or(0, |active_generation| {
@@ -442,7 +442,7 @@ impl PrismHadamardQwen35InferenceExecution {
         );
         Some(MlxMemoryTelemetry::new(
             active_memory_bytes,
-            allocator_cache_memory_bytes,
+            mlx_buffer_cache_bytes,
             peak_memory_bytes,
             active_memory_breakdown,
         ))

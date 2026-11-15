@@ -173,7 +173,7 @@ pub trait ModelFactory<
     fn update_mlx_memory_limits(
         &mut self,
         _effective_mlx_memory_ceiling_bytes: u64,
-        _allocator_cache_memory_limit_bytes: u64,
+        _mlx_buffer_cache_limit_bytes: u64,
     ) {
     }
 

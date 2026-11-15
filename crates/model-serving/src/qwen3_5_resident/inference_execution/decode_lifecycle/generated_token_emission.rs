@@ -118,11 +118,11 @@ fn decode_mlx_memory_telemetry_from_completed_forward(
         mlx_active_memory_bytes,
         0,
     );
-    let allocator_cache_memory_bytes = u64::try_from(
-        mlx_memory_snapshot.allocator_cache_memory_bytes(),
+    let mlx_buffer_cache_bytes = u64::try_from(
+        mlx_memory_snapshot.mlx_buffer_cache_bytes(),
     )
     .map_err(
-        super::super::generation_session_lifecycle::generation_error_constructors::mlx_allocator_cache_memory_bytes_exceed_u64_range_error,
+        super::super::generation_session_lifecycle::generation_error_constructors::mlx_buffer_cache_bytes_exceed_u64_range_error,
     )?;
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
         super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error,
@@ -133,7 +133,7 @@ fn decode_mlx_memory_telemetry_from_completed_forward(
     // or demote (issue #337).
     Ok(crate::memory::telemetry::MlxMemoryTelemetry::new(
         mlx_active_memory_bytes,
-        allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes,
         peak_memory_bytes,
         active_memory_breakdown,
     )

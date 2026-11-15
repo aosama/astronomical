@@ -51,14 +51,14 @@ impl PhononSpeechEngine {
         model_id: impl Into<String>,
         model_directory: PathBuf,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
     ) -> Self {
         Self {
             settings: SpeechEngineSettings {
                 model_id: model_id.into(),
                 model_directory,
                 effective_mlx_memory_ceiling_bytes,
-                allocator_cache_memory_limit_bytes,
+                mlx_buffer_cache_limit_bytes,
             },
             loaded: None,
             request_slot: SpeechRequestSlot::empty(),

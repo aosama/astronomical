@@ -200,7 +200,7 @@ pub enum MlxMemorySnapshotSource {
 pub struct WorkerMlxMemorySnapshot {
     pub source: MlxMemorySnapshotSource,
     pub active_memory_bytes: u64,
-    pub allocator_cache_memory_bytes: u64,
+    pub mlx_buffer_cache_bytes: u64,
     pub peak_memory_bytes: u64,
     pub expert_payload_bytes: u64,
     pub model_core_payload_bytes: u64,
@@ -234,7 +234,7 @@ pub struct WorkerMemoryLedgerSnapshot {
     pub limit_bytes: u64,
     pub core_weight_bytes: u64,
     pub context_bytes: u64,
-    pub working_memory_bytes: u64,
+    pub mlx_working_buffer_bytes: u64,
     pub stream_slot_bytes: u64,
     pub lease_bytes: u64,
     pub margin_bytes: u64,
@@ -242,7 +242,7 @@ pub struct WorkerMemoryLedgerSnapshot {
     pub kept_weight_capacity_bytes: u64,
     pub unassigned_bytes: u64,
     pub shortfall_bytes: u64,
-    pub working_memory_is_measured: bool,
+    pub mlx_working_buffers_are_measured: bool,
     pub held_context_bytes: u64,
     pub held_kept_weight_bytes: u64,
     pub held_stream_slot_bytes: u64,
@@ -262,10 +262,10 @@ pub struct WorkerMemoryLedgerSnapshot {
     /// around it, and the same for one reply step.
     pub largest_reading_step_peak_beyond_held_bytes: u64,
     pub largest_writing_step_peak_beyond_held_bytes: u64,
-    /// The working memory of one layer step measured at load; `None` when
+    /// The MLX working buffers of one layer step measured at load; `None` when
     /// nothing was probed.
     #[serde(default)]
-    pub probed_working_memory_bytes: Option<u64>,
+    pub probed_mlx_working_buffer_bytes: Option<u64>,
     /// The emptiest the kept weights were against the capacity while a
     /// prompt was read, in thousandths.
     pub lowest_kept_share_while_reading_permille: Option<u32>,

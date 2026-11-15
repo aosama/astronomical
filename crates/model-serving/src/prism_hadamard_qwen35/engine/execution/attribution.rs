@@ -40,9 +40,9 @@ impl PrismHadamardQwen35InferenceExecution {
                 mlx_active_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(|snapshot| u64::try_from(snapshot.active_memory_bytes()).ok()),
-                mlx_allocator_cache_memory_bytes: mlx_memory_snapshot.as_ref().and_then(
-                    |snapshot| u64::try_from(snapshot.allocator_cache_memory_bytes()).ok(),
-                ),
+                mlx_buffer_cache_bytes: mlx_memory_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| u64::try_from(snapshot.mlx_buffer_cache_bytes()).ok()),
                 mlx_peak_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
@@ -111,9 +111,9 @@ impl PrismHadamardQwen35InferenceExecution {
                 mlx_active_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(|snapshot| u64::try_from(snapshot.active_memory_bytes()).ok()),
-                mlx_allocator_cache_memory_bytes: mlx_memory_snapshot.as_ref().and_then(
-                    |snapshot| u64::try_from(snapshot.allocator_cache_memory_bytes()).ok(),
-                ),
+                mlx_buffer_cache_bytes: mlx_memory_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| u64::try_from(snapshot.mlx_buffer_cache_bytes()).ok()),
                 mlx_peak_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),

@@ -100,7 +100,7 @@ fn should_keep_head_dim_256_attention_peak_below_the_score_tensor_size() {
         AttentionBenchmarkInputs::new(&runtime, AttentionBenchmarkShape::new(1_024, 4_096));
     materialize_inputs(&runtime, &attention_benchmark_inputs);
     runtime
-        .clear_allocator_cache()
+        .clear_mlx_buffer_cache()
         .expect("the memory contract should start without reclaimable allocations");
     runtime
         .reset_peak_memory()
@@ -162,7 +162,7 @@ fn measure_attention_implementation(
         elapsed_millis.push(started_at.elapsed().as_secs_f64() * 1_000.0);
     }
     runtime
-        .clear_allocator_cache()
+        .clear_mlx_buffer_cache()
         .expect("the benchmark should release reclaimable MLX allocations");
     elapsed_millis.sort_by(f64::total_cmp);
     let middle_index = elapsed_millis.len() / 2;

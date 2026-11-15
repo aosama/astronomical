@@ -61,9 +61,9 @@ impl Qwen3_5EngineState {
             mlx_memory_snapshot_after_adjustment.active_memory_bytes(),
         )
         .map_err(super::super::generation_session_lifecycle::generation_error_constructors::mlx_active_memory_exceeds_u64_range_error)?;
-        let allocator_cache_memory_bytes =
-            u64::try_from(mlx_memory_snapshot_after_adjustment.allocator_cache_memory_bytes())
-.map_err(super::super::generation_session_lifecycle::generation_error_constructors::mlx_allocator_cache_memory_exceeds_u64_range_error)?;
+        let mlx_buffer_cache_bytes =
+            u64::try_from(mlx_memory_snapshot_after_adjustment.mlx_buffer_cache_bytes())
+.map_err(super::super::generation_session_lifecycle::generation_error_constructors::mlx_buffer_cache_exceeds_u64_range_error)?;
         let peak_memory_bytes =
             u64::try_from(mlx_memory_snapshot_after_adjustment.peak_memory_bytes())
                 .map_err(super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_exceeds_u64_range_error)?;
@@ -80,7 +80,7 @@ impl Qwen3_5EngineState {
         let mlx_memory_telemetry = Some(
             MlxMemoryTelemetry::new(
                 active_memory_bytes,
-                allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes,
                 peak_memory_bytes,
                 active_memory_breakdown,
             )
@@ -106,18 +106,18 @@ impl Qwen3_5EngineState {
             adjustment_elapsed_millis = adjustment_started_at.elapsed().as_millis(),
             active_mlx_memory_bytes_before = mlx_memory_snapshot_before_adjustment.active_memory_bytes(),
             active_mlx_memory_bytes_after = mlx_memory_snapshot_after_adjustment.active_memory_bytes(),
-            allocator_cache_memory_bytes_before = mlx_memory_snapshot_before_adjustment.allocator_cache_memory_bytes(),
-            allocator_cache_memory_bytes_after = mlx_memory_snapshot_after_adjustment.allocator_cache_memory_bytes(),
+            mlx_buffer_cache_bytes_before = mlx_memory_snapshot_before_adjustment.mlx_buffer_cache_bytes(),
+            mlx_buffer_cache_bytes_after = mlx_memory_snapshot_after_adjustment.mlx_buffer_cache_bytes(),
             expert_memory_mode = ?expert_memory_mode,
             expert_residency_transition_occurred,
             "applied live MLX memory ceiling adjustment"
         );
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
-            u64::try_from(updated_mlx_memory_limits.allocator_cache_memory_limit_bytes()).map_err(
+            u64::try_from(updated_mlx_memory_limits.mlx_buffer_cache_limit_bytes()).map_err(
                 |_| {
                     super::fatal_engine_error(
-                        "updated MLX allocator-cache limit exceeds the u64 range",
+                        "updated MLX buffer cache limit exceeds the u64 range",
                     )
                 },
             )?,

@@ -144,7 +144,7 @@ pub(super) fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMl
     WorkerMlxMemorySnapshot {
         source: MlxMemorySnapshotSource::Finalized,
         active_memory_bytes,
-        allocator_cache_memory_bytes: 2_000,
+        mlx_buffer_cache_bytes: 2_000,
         peak_memory_bytes: active_memory_bytes + 1_000,
         expert_payload_bytes: 20_000,
         model_core_payload_bytes: 10_000,

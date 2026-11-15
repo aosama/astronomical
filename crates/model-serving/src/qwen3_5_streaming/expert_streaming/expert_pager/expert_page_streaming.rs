@@ -211,14 +211,14 @@ fn require_streamed_page_admission(
             )
         },
     )?;
-    if allocation_admission_decision != AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit {
+    if allocation_admission_decision != AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit {
         return Ok(());
     }
     // Policy recommends cleanup; this paging owner executes the mechanism
     // and asks policy to re-evaluate the fresh counters before loading.
     performance_attribution.measure_operation(
-        PerformanceOperation::MlxAllocatorCacheCleanup,
-        |_performance_attribution| runtime.synchronize_gpu_stream_and_clear_allocator_cache(),
+        PerformanceOperation::MlxBufferCacheCleanup,
+        |_performance_attribution| runtime.synchronize_gpu_stream_and_clear_mlx_buffer_cache(),
     )?;
     performance_attribution.measure_operation(
         PerformanceOperation::MemoryAdmissionSnapshot,

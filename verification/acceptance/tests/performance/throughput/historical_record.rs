@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use serde_json::Value;
 
-use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use astronomical_test_harness::test_run::TestRunContext;
 
 use crate::performance_throughput::machine_specs::MachineSpecs;
@@ -123,7 +123,7 @@ pub struct ThroughputRecord {
     pub timestamp: String,
     pub model_id: String,
     pub journey: ThroughputJourneyKind,
-    pub decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     pub prefill_tokens_per_second: u32,
     pub decode_tokens_per_second: u32,
     pub git_commit: Option<String>,

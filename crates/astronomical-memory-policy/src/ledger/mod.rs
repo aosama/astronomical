@@ -2,7 +2,7 @@
 //!
 //! Every byte under the limit belongs to exactly one named account. The
 //! accounts that have to exist come first: the weights that never stream,
-//! the conversation's stored state, one layer's working memory, the slots a
+//! the conversation's stored state, one layer's MLX working buffers, the slots a
 //! streamed layer is read into, any short-lived leases, and a safety margin.
 //! Whatever is left is the capacity for kept weights. Nothing sets that
 //! capacity directly; it is always the remainder, so it can only change when
@@ -14,7 +14,7 @@
 //!
 //! - `phase` — what the model is doing, as far as memory is concerned.
 //! - `model_shape` — what a loaded model occupies and could keep.
-//! - `working_memory` — the measured working memory of one layer, by phase.
+//! - `mlx_working_buffers` — the measured MLX working buffers of one layer, by phase.
 //! - `lease` — short-lived needs outside the normal pattern.
 //! - `accounts` — the accounts at one instant and the rule that composes them.
 //! - `memory_ledger` — the accounts' arithmetic: the events that change them.
@@ -26,10 +26,10 @@ pub mod accounts;
 pub mod governor;
 pub mod lease;
 pub mod memory_ledger;
+pub mod mlx_working_buffers;
 pub mod model_shape;
 pub mod phase;
 pub mod reconciliation;
-pub mod working_memory;
 
 pub use accounts::LedgerAccounts;
 pub use governor::{
@@ -38,7 +38,7 @@ pub use governor::{
 };
 pub use lease::{LeaseId, LeasePurpose};
 pub use memory_ledger::{MemoryLedger, MemoryLedgerError};
+pub use mlx_working_buffers::{MlxWorkingBufferMeasurements, MlxWorkingBufferReserve};
 pub use model_shape::ModelMemoryShape;
 pub use phase::LedgerPhase;
 pub use reconciliation::{HeldMemory, LedgerReconciliation};
-pub use working_memory::{WorkingMemoryMeasurements, WorkingMemoryReserve};

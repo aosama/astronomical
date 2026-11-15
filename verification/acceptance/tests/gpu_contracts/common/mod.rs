@@ -158,7 +158,7 @@ const MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT: Duration = Duration::from_
 pub(crate) const DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) const DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
@@ -180,7 +180,7 @@ pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLi
         machine_mlx_memory_ceiling_bytes,
     );
     eprintln!(
-        "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
+        "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} mlx_buffer_cache_limit_bytes={}",
         machine_mlx_memory_ceiling_bytes,
         configured_mlx_memory_ceiling_bytes,
         effective_mlx_memory_ceiling_bytes,
@@ -199,7 +199,7 @@ pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLi
 /// MLX memory limits are process-global (one Metal device, one policy), and the serving
 /// invariant is one policy per process — the daemon restarts the worker instead of
 /// reconfiguring. Journeys that legitimately need a distinct policy (for example a cold
-/// allocator cache) adopt the shared policy first and then transition through the production
+/// MLX buffer cache) adopt the shared policy first and then transition through the production
 /// live-transition seam (`update_memory_limits`), restoring it on both success and panic so
 /// later journeys in the same test process keep composing.
 #[cfg(feature = "direct-mlx")]
@@ -239,7 +239,7 @@ impl Drop for MlxMemoryPolicyGuard {
         let _restore_result = self.runtime.update_memory_limits(self.shared_memory_limits);
         let _cache_release_result = self
             .runtime
-            .synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(0);
+            .synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(0);
     }
 }
 

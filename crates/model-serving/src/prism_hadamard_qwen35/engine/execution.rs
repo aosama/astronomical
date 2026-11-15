@@ -29,7 +29,7 @@ use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperat
 pub struct PrismHadamardQwen35PendingStartup {
     pub validated_pack: ValidatedFoldedPack,
     pub effective_mlx_memory_ceiling_bytes: usize,
-    pub allocator_cache_memory_limit_bytes: usize,
+    pub mlx_buffer_cache_limit_bytes: usize,
     pub maximum_context_tokens: u32,
     pub prompt_processing_chunk_tokens: u32,
     pub prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
@@ -49,7 +49,7 @@ pub struct PrismHadamardQwen35InferenceExecution {
     pub(super) model: Option<PrismHadamardTextModel>,
     pub(super) active: Option<PrismHadamardQwen35ActiveGeneration>,
     pub(super) ceiling_bytes: u64,
-    pub(super) allocator_cache_bytes: u64,
+    pub(super) mlx_buffer_cache_bytes: u64,
     pub(super) minimum_ceiling_bytes: u64,
     pub(super) maximum_context_tokens: u32,
     prompt_processing_chunk_tokens: u32,
@@ -119,7 +119,7 @@ impl PrismHadamardQwen35ActiveGeneration {
 impl PrismHadamardQwen35InferenceExecution {
     pub(crate) fn pending(pending_startup: PrismHadamardQwen35PendingStartup) -> Self {
         let ceiling_bytes = pending_startup.effective_mlx_memory_ceiling_bytes as u64;
-        let allocator_cache_bytes = pending_startup.allocator_cache_memory_limit_bytes as u64;
+        let mlx_buffer_cache_bytes = pending_startup.mlx_buffer_cache_limit_bytes as u64;
         let maximum_context_tokens = pending_startup.maximum_context_tokens;
         let prompt_processing_chunk_tokens = pending_startup.prompt_processing_chunk_tokens.max(1);
         let PrismHadamardQwen35PendingStartup {
@@ -132,7 +132,7 @@ impl PrismHadamardQwen35InferenceExecution {
             model: None,
             active: None,
             ceiling_bytes,
-            allocator_cache_bytes,
+            mlx_buffer_cache_bytes,
             minimum_ceiling_bytes: 1,
             maximum_context_tokens,
             prompt_processing_chunk_tokens,

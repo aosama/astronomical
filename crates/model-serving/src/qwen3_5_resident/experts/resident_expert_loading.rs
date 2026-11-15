@@ -141,7 +141,7 @@ fn materialize_resident_layers(
         if gate_up_fusion_applied {
             // Synchronous evaluation detached the fused owner from its source
             // concatenation. Drain reclaimable buffers before the next layer.
-            runtime.clear_allocator_cache()?;
+            runtime.clear_mlx_buffer_cache()?;
         }
         if gate_up_fusion_applied {
             fused_gate_up_layer_count = fused_gate_up_layer_count.saturating_add(1);

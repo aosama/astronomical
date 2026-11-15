@@ -7,7 +7,7 @@ use astronomical_model_serving::{SpeechEngine, SpeechEngineStep};
 use astronomical_speech_contract::{SpeechRequest, wav_bytes};
 
 pub(crate) const TEST_MLX_MEMORY_CEILING_BYTES: usize = 4 * 1024 * 1024 * 1024;
-pub(crate) const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
+pub(crate) const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 pub(crate) const ROMEO_PASSAGE: &str = "But soft, what light through yonder window breaks? It is the east, and Juliet is the sun. \
 Arise, fair sun, and kill the envious moon, who is already sick and pale with grief.";
 /// The passage's 30 words take a person about 8 to 12 seconds to say.

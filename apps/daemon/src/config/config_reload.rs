@@ -15,7 +15,7 @@ use astronomical_config::{
     ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, PromptCacheConfig, ResolvedModelConfig,
 };
 use astronomical_ipc_protocol::{
-    WorkerDecodeExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
 };
 use thiserror::Error;
 
@@ -237,7 +237,7 @@ impl ResolvedRuntimeConfig {
             persistent_prompt_cache_enabled: self.persistent_prompt_cache_enabled,
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             performance_attribution_enabled: self.performance_attribution_enabled,
-            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+            decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             diagnostic_qwen3_5_engine_override:
                 astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             logging_directory: self.logging_config.directory().to_path_buf(),

@@ -1,5 +1,5 @@
 //! Live MLX memory policy: the two process-local limits, their once-per-process
-//! enforcement, snapshots, and the allocator-cache reclamation cadence.
+//! enforcement, snapshots, and the MLX buffer-cache reclamation cadence.
 //!
 //! # The two limits
 //!
@@ -10,17 +10,17 @@
 //!   evaluation; the Astronomical allocator patch turns it into a real,
 //!   reported ceiling (the source of
 //!   [`MlxRuntimeError::ActiveMemoryLimitExceeded`]);
-//! - the **allocator-cache limit** (`mlx_set_cache_limit`) bounds how many
+//! - the **MLX buffer-cache limit** (`mlx_set_cache_limit`) bounds how many
 //!   freed allocations MLX retains for reuse instead of returning them to the
 //!   operating system.
 //!
 //! # Reclamation cadence — a measured three-way tradeoff
 //!
-//! When to clear the allocator cache was settled by measurement, and the
+//! When to clear the MLX buffer cache was settled by measurement, and the
 //! conclusions are memorialized on the two reclamation methods below: clearing
 //! after every prefill chunk stalls WindowServer; never clearing reproduced a
 //! 20 GB throughput cliff; clearing above the
-//! [`ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES`] floor is the balance the
+//! [`MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES`] floor is the balance the
 //! product ships.
 //!
 //! # The residency-set decision
@@ -38,10 +38,11 @@ use std::sync::Mutex;
 
 use crate::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
-    allocator_cache_exceeds_reclaim_threshold,
+    mlx_buffer_cache_exceeds_reclaim_threshold,
 };
 use mlx_bridge::{
-    clear_allocator_cache, reset_peak_memory, set_cache_limit, set_memory_limit, synchronize,
+    clear_allocator_cache as clear_mlx_buffer_cache, reset_peak_memory, set_cache_limit,
+    set_memory_limit, synchronize,
 };
 
 use super::error_classification;
@@ -104,8 +105,7 @@ impl MlxRuntime {
         {
             return Err(MlxRuntimeError::RuntimeAlreadyConfigured {
                 active_memory_limit_bytes: existing_limits.active_memory_limit_bytes,
-                allocator_cache_memory_limit_bytes: existing_limits
-                    .allocator_cache_memory_limit_bytes,
+                mlx_buffer_cache_limit_bytes: existing_limits.mlx_buffer_cache_limit_bytes,
             });
         }
         if self.memory_limits == memory_limits {
@@ -136,7 +136,7 @@ impl MlxRuntime {
         Ok(MlxMemorySnapshot {
             active_memory_bytes: mlx_bridge::active_memory_bytes()
                 .map_err(MlxRuntimeError::from)?,
-            allocator_cache_memory_bytes: mlx_bridge::cache_memory_bytes()
+            mlx_buffer_cache_bytes: mlx_bridge::cache_memory_bytes()
                 .map_err(MlxRuntimeError::from)?,
             peak_memory_bytes: mlx_bridge::peak_memory_bytes().map_err(MlxRuntimeError::from)?,
         })
@@ -151,14 +151,14 @@ impl MlxRuntime {
         reset_peak_memory().map_err(MlxRuntimeError::from)
     }
 
-    /// Releases reclaimable MLX allocator-cache allocations.
+    /// Releases reclaimable MLX buffer cache allocations.
     ///
     /// The cache exists to make reallocation cheap; releasing it trades that
     /// speed for memory. Call this only at points where the next allocations
     /// are unpredictable (request finalization) or the cache has grown past
     /// the reclaim threshold.
-    pub fn clear_allocator_cache(&self) -> Result<(), MlxRuntimeError> {
-        clear_allocator_cache().map_err(MlxRuntimeError::from)
+    pub fn clear_mlx_buffer_cache(&self) -> Result<(), MlxRuntimeError> {
+        clear_mlx_buffer_cache().map_err(MlxRuntimeError::from)
     }
 
     /// Waits for submitted work on the runtime GPU stream to complete.
@@ -171,31 +171,31 @@ impl MlxRuntime {
     /// Request finalization must use this operation because decode submits one
     /// token ahead asynchronously. Clearing the allocator while that submission
     /// remains in flight can race Metal buffer completion.
-    pub fn synchronize_gpu_stream_and_clear_allocator_cache(&self) -> Result<(), MlxRuntimeError> {
+    pub fn synchronize_gpu_stream_and_clear_mlx_buffer_cache(&self) -> Result<(), MlxRuntimeError> {
         self.synchronize_gpu_stream()?;
-        self.clear_allocator_cache()
+        self.clear_mlx_buffer_cache()
     }
 
-    /// Clears the allocator cache only when it is large enough to justify IOGPU work.
+    /// Clears the MLX buffer cache only when it is large enough to justify IOGPU work.
     ///
     /// Prefill already retires the chunk tape through `evaluate_arrays`. A stream
     /// drain after every chunk was a second full GPU wait and showed up as lost
     /// prompt tokens per second; the chunk tape is evaluated once and moves on.
     /// The threshold itself lives in [`crate::mlx_runtime_types`] with the
     /// measurement history behind its value.
-    pub fn synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(
+    pub fn synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(
         &self,
         reclaim_threshold_bytes: usize,
     ) -> Result<(), MlxRuntimeError> {
         let memory_snapshot = self.memory_snapshot()?;
-        if !allocator_cache_exceeds_reclaim_threshold(
-            memory_snapshot.allocator_cache_memory_bytes(),
+        if !mlx_buffer_cache_exceeds_reclaim_threshold(
+            memory_snapshot.mlx_buffer_cache_bytes(),
             reclaim_threshold_bytes,
         ) {
             return Ok(());
         }
         self.synchronize_gpu_stream()?;
-        self.clear_allocator_cache()
+        self.clear_mlx_buffer_cache()
     }
 }
 
@@ -234,8 +234,7 @@ pub(super) fn admit_runtime_memory_limits(
         Some(existing_limits) if process_policy.live_runtime_count > 0 => {
             return Err(MlxRuntimeError::RuntimeAlreadyConfigured {
                 active_memory_limit_bytes: existing_limits.active_memory_limit_bytes,
-                allocator_cache_memory_limit_bytes: existing_limits
-                    .allocator_cache_memory_limit_bytes,
+                mlx_buffer_cache_limit_bytes: existing_limits.mlx_buffer_cache_limit_bytes,
             });
         }
         _ => {
@@ -266,19 +265,18 @@ pub(super) fn release_runtime_from(process_policy: &Mutex<ProcessMemoryPolicy>) 
 ///
 /// Neither control changes any kernel setting; both are process-local MLX
 /// guidance. Rollback preserves the previous process policy if the
-/// allocator-cache control fails.
+/// MLX buffer-cache control fails.
 fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
     let previous_memory_limit_bytes =
         set_memory_limit(memory_limits.active_memory_limit_bytes).map_err(MlxRuntimeError::from)?;
 
-    if let Err(allocator_cache_error) =
-        set_cache_limit(memory_limits.allocator_cache_memory_limit_bytes)
-            .map_err(MlxRuntimeError::from)
+    if let Err(mlx_buffer_cache_error) =
+        set_cache_limit(memory_limits.mlx_buffer_cache_limit_bytes).map_err(MlxRuntimeError::from)
     {
         // Best-effort rollback restores the previous valid limit after the
         // handler has been installed; nothing depends on the restore result.
         let _ = set_memory_limit(previous_memory_limit_bytes);
-        return Err(allocator_cache_error);
+        return Err(mlx_buffer_cache_error);
     }
     Ok(())
 }

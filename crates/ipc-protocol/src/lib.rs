@@ -126,6 +126,6 @@ pub use worker_model_configuration::{
     WorkerSpeechModelFamily,
 };
 pub use worker_startup_configuration::{
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };

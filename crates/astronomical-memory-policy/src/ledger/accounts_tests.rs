@@ -1,7 +1,7 @@
 use super::{AccountInputs, LedgerAccounts, compose_accounts};
+use crate::ledger::mlx_working_buffers::MlxWorkingBufferReserve;
 use crate::ledger::model_shape::ModelMemoryShape;
 use crate::ledger::phase::LedgerPhase;
-use crate::ledger::working_memory::WorkingMemoryReserve;
 
 const GIBIBYTE: u64 = 1 << 30;
 const READING: LedgerPhase = LedgerPhase::ReadingPrompt {
@@ -23,7 +23,7 @@ fn inputs_at(limit_bytes: u64) -> AccountInputs {
         model_shape: MODEL_SHAPE,
         context_bytes: GIBIBYTE / 2,
         phase: READING,
-        working_memory_reserve: WorkingMemoryReserve::Measured(GIBIBYTE),
+        mlx_working_buffer_reserve: MlxWorkingBufferReserve::Measured(GIBIBYTE),
         lease_bytes: 0,
     }
 }
@@ -83,14 +83,14 @@ fn should_keep_slot_bytes_fewer_weights_when_one_byte_short_of_fitting() {
 }
 
 #[test]
-fn should_keep_nothing_and_hold_the_rest_while_working_memory_is_unmeasured() {
+fn should_keep_nothing_and_hold_the_rest_while_mlx_working_buffers_are_unmeasured() {
     let mut account_inputs = inputs_at(16 * GIBIBYTE);
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Unmeasured;
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Unmeasured;
     let accounts = compose_accounts(account_inputs);
-    assert!(!accounts.working_memory_is_measured);
+    assert!(!accounts.mlx_working_buffers_are_measured);
     assert_eq!(accounts.kept_weight_capacity_bytes, 0);
     assert_eq!(accounts.stream_slot_bytes, 2 * GIBIBYTE);
-    assert!(accounts.working_memory_bytes > 0);
+    assert!(accounts.mlx_working_buffer_bytes > 0);
     assert_accounts_add_up(accounts);
 }
 
@@ -105,9 +105,9 @@ fn should_report_a_shortfall_instead_of_refusing_below_the_streaming_floor() {
 #[test]
 fn should_report_a_shortfall_below_the_floor_even_when_unmeasured() {
     let mut account_inputs = inputs_at(4 * GIBIBYTE);
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Unmeasured;
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Unmeasured;
     let accounts = compose_accounts(account_inputs);
-    assert_eq!(accounts.working_memory_bytes, 0);
+    assert_eq!(accounts.mlx_working_buffer_bytes, 0);
     assert!(accounts.shortfall_bytes > 0);
     assert_accounts_add_up(accounts);
 }
@@ -126,12 +126,12 @@ fn should_take_a_lease_straight_out_of_the_kept_weight_capacity() {
 }
 
 #[test]
-fn should_need_no_working_memory_or_slots_while_idle() {
+fn should_need_no_mlx_working_buffers_or_slots_while_idle() {
     let mut account_inputs = inputs_at(16 * GIBIBYTE);
     account_inputs.phase = LedgerPhase::Idle;
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Measured(0);
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Measured(0);
     let accounts = compose_accounts(account_inputs);
-    assert_eq!(accounts.working_memory_bytes, 0);
+    assert_eq!(accounts.mlx_working_buffer_bytes, 0);
     assert_eq!(accounts.stream_slot_bytes, 0);
     assert_accounts_add_up(accounts);
 }
@@ -140,7 +140,7 @@ fn should_need_no_working_memory_or_slots_while_idle() {
 fn should_use_the_small_reply_slot_while_writing_a_reply() {
     let mut account_inputs = inputs_at(16 * GIBIBYTE);
     account_inputs.phase = LedgerPhase::WritingReply;
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Measured(GIBIBYTE / 16);
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Measured(GIBIBYTE / 16);
     let accounts = compose_accounts(account_inputs);
     assert_eq!(accounts.stream_slot_bytes, GIBIBYTE / 8);
     assert!(

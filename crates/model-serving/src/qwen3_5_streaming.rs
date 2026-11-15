@@ -11,7 +11,7 @@ pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use expert_streaming::WarmExpertSlotTableCache;
+pub(crate) use expert_streaming::AstroExpertCache;
 pub use expert_streaming::route_observation::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };

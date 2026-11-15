@@ -55,7 +55,7 @@ pub struct MemoryCeilingUtilization {
     pub reserved_model_core_slack_bytes: u64,
     /// Context-window reserve that persistent request state does not occupy.
     pub reserved_context_growth_bytes: u64,
-    /// Working memory, the margin, leases and the slots for weights being
+    /// MLX working buffers, the margin, leases and the slots for weights being
     /// read.
     pub reserved_activation_and_workspace_bytes: u64,
     /// Expert entitlement the budget owner granted but warming never filled.

@@ -37,7 +37,7 @@ impl Qwen3_5Model {
         };
         self.apply_kept_weight_capacity(capacity);
         self.runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .map_err(crate::qwen3_5_streaming::inference_execution::qwen3_5_runtime_error)
     }
 

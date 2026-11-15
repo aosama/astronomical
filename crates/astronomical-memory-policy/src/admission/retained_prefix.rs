@@ -33,7 +33,7 @@ impl RetainedPrefixRetentionRequirements {
     /// next request.
     ///
     /// A retained state above half the ceiling is dropped: an unrelated next
-    /// conversation would otherwise start with half of its working memory
+    /// conversation would otherwise start with half of its MLX working buffers
     /// already promised to a state it will never adopt. Smaller states are
     /// cheap to keep (the bytes are already active) and any pressure they
     /// cause is relieved by dropping them when a new request fails to adopt.

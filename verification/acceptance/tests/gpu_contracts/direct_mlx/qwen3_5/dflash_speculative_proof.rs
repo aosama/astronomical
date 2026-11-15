@@ -54,7 +54,7 @@ use crate::common::{
 /// and both key-value caches. The active limit stays under the machine's
 /// wired ceiling with headroom for activation workspaces.
 const PROOF_ACTIVE_MEMORY_LIMIT_BYTES: usize = 34 * 1024 * 1024 * 1024;
-const PROOF_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
+const PROOF_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
 
 /// The warmup contract for throughput journeys: untimed decode tokens.
 const WARMUP_OUTPUT_TOKENS: usize = 50;
@@ -260,7 +260,7 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             PROOF_ACTIVE_MEMORY_LIMIT_BYTES,
-            PROOF_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            PROOF_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the proof journey memory limits should be valid"),
     )

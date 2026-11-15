@@ -19,7 +19,7 @@ use astronomical_model_serving::{
 };
 
 use crate::common::qwen_image_21::{
-    JOURNEY_ALLOCATOR_CACHE_LIMIT_BYTES, artifact_directory, journey_effective_ceiling_bytes,
+    JOURNEY_MLX_BUFFER_CACHE_LIMIT_BYTES, artifact_directory, journey_effective_ceiling_bytes,
 };
 
 const ENGINE_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
@@ -57,7 +57,7 @@ async fn should_serve_two_image_generation_requests_through_the_engine() {
                 QWEN_IMAGE_21_LICENSE_IDENTIFIER,
             ),
             journey_effective_ceiling_bytes(),
-            JOURNEY_ALLOCATOR_CACHE_LIMIT_BYTES,
+            JOURNEY_MLX_BUFFER_CACHE_LIMIT_BYTES,
             true,
             attribution_log_path.clone(),
         );
@@ -133,7 +133,7 @@ async fn should_serve_two_image_generation_requests_through_the_engine() {
             .take_post_cleanup_memory_telemetry()
             .expect("each finalized request should expose its post-cleanup MLX observation");
         assert_eq!(
-            post_cleanup_telemetry.allocator_cache_memory_bytes, 0,
+            post_cleanup_telemetry.mlx_buffer_cache_bytes, 0,
             "request finalization must clear reclaimable allocator storage"
         );
         assert!(

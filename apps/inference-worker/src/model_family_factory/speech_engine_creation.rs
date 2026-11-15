@@ -12,7 +12,7 @@ use astronomical_model_serving::{KokoroSpeechEngine, PhononSpeechEngine, SpeechE
 /// The memory a speech engine is granted, as the factory holds it.
 pub(super) struct SpeechMemoryGrant {
     pub(super) effective_mlx_memory_ceiling_bytes: usize,
-    pub(super) allocator_cache_memory_limit_bytes: usize,
+    pub(super) mlx_buffer_cache_limit_bytes: usize,
 }
 
 /// The unloaded speech engine for `model_family`, or the mismatch reason the
@@ -33,13 +33,13 @@ pub(super) fn unloaded_speech_engine(
             model_id,
             model_directory_path,
             memory_grant.effective_mlx_memory_ceiling_bytes,
-            memory_grant.allocator_cache_memory_limit_bytes,
+            memory_grant.mlx_buffer_cache_limit_bytes,
         ))),
         Some(ModelFamily::Phonon) => Ok(Box::new(PhononSpeechEngine::new(
             model_id,
             model_directory_path,
             memory_grant.effective_mlx_memory_ceiling_bytes,
-            memory_grant.allocator_cache_memory_limit_bytes,
+            memory_grant.mlx_buffer_cache_limit_bytes,
         ))),
         _ => Err(MISMATCHED_FAMILY_REASON.to_owned()),
     }

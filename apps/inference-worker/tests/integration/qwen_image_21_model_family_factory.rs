@@ -159,7 +159,7 @@ fn model_family_factory(fixture_directory: &std::path::Path) -> ModelFamilyFacto
         200_000_000,
         PromptCacheConfig::new(fixture_directory.join("prompt-cache"), 1_000_000_000),
         true,
-        astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy::Baseline,
+        astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Baseline,
         fixture_directory.join("performance-attribution.jsonl"),
         true,
     )

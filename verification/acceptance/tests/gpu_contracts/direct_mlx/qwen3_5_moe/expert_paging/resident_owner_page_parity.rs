@@ -27,7 +27,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetenso
 use serde_json::json;
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
     qwen3_5_moe::frozen_ornith_1_0_config_bytes,
 };
 use mlx_bridge::{MlxArray, MlxDtype};
@@ -137,7 +137,7 @@ fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("direct MLX test memory limits should be valid"),
     )

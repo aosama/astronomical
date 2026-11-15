@@ -76,7 +76,7 @@ async fn load_and_generate_with_configured_ornith_artifact() {
         Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
             mlx_memory_limits.active_memory_limit_bytes(),
-            mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+            mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
             None,
             Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
                 ORNITH_ACCEPTANCE_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,

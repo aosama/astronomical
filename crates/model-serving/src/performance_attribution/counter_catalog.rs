@@ -123,7 +123,7 @@ pub enum PerformanceCounter {
     /// amortizes (or fails to) over prompt tokens.
     Jangtq2CodebookDecodedOutputByteCount,
     /// Candidate-policy demand inserts that replaced an occupied decode slot.
-    DecodeExpertCacheSlotEvictionCount,
+    DecodeAstroExpertCacheSlotEvictionCount,
     /// Complete-layer payload a prefill chunk read ahead of its route while
     /// earlier layers computed on the graphics processor.
     PrefillCompleteLayerPrefetchPayloadBytes,
@@ -211,7 +211,7 @@ impl PerformanceCounter {
         Self::PreviousTokenPrefetchByteCount,
         Self::PreviousTokenPrefetchCapacityDropCount,
         Self::Jangtq2CodebookDecodedOutputByteCount,
-        Self::DecodeExpertCacheSlotEvictionCount,
+        Self::DecodeAstroExpertCacheSlotEvictionCount,
         Self::PrefillCompleteLayerPrefetchPayloadBytes,
         Self::SpeculativeRoundCount,
         Self::SpeculativeProposedTokenCount,
@@ -364,7 +364,9 @@ impl PerformanceCounter {
             Self::Jangtq2CodebookDecodedOutputByteCount => {
                 "jangtq2_codebook_decoded_output_byte_count"
             }
-            Self::DecodeExpertCacheSlotEvictionCount => "decode_expert_cache_slot_eviction_count",
+            Self::DecodeAstroExpertCacheSlotEvictionCount => {
+                "decode_astro_expert_cache_slot_eviction_count"
+            }
             Self::SpeculativeRoundCount => "speculative_round_count",
             Self::SpeculativeProposedTokenCount => "speculative_proposed_token_count",
             Self::SpeculativeAcceptedTokenCount => "speculative_accepted_token_count",

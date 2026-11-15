@@ -234,7 +234,7 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
         mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
             source: MlxMemorySnapshotSource::IdlePoll,
             active_memory_bytes: 28_510_000_000,
-            allocator_cache_memory_bytes: 0,
+            mlx_buffer_cache_bytes: 0,
             peak_memory_bytes: 29_120_000_000,
             expert_payload_bytes: 18_000_000_000,
             model_core_payload_bytes: 8_000_000_000,

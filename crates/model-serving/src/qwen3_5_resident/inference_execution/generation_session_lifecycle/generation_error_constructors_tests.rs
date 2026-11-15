@@ -55,8 +55,7 @@ fn should_carry_the_exact_mlx_memory_range_failure_texts() {
     // Any genuinely failing integer conversion yields the one TryFromIntError.
     let try_from_int_error = u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32");
     let active_memory_error = mlx_active_memory_bytes_exceed_u64_range_error(try_from_int_error);
-    let allocator_cache_error =
-        mlx_allocator_cache_memory_bytes_exceed_u64_range_error(try_from_int_error);
+    let mlx_buffer_cache_error = mlx_buffer_cache_bytes_exceed_u64_range_error(try_from_int_error);
     let peak_memory_error = mlx_peak_memory_bytes_exceed_u64_range_error(try_from_int_error);
 
     assert!(matches!(
@@ -64,8 +63,8 @@ fn should_carry_the_exact_mlx_memory_range_failure_texts() {
         crate::InferenceEngineError::Fatal { reason } if reason == "MLX active memory bytes exceed the u64 range"
     ));
     assert!(matches!(
-        allocator_cache_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "MLX allocator-cache memory bytes exceed the u64 range"
+        mlx_buffer_cache_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "MLX buffer cache memory bytes exceed the u64 range"
     ));
     assert!(matches!(
         peak_memory_error,
@@ -162,8 +161,7 @@ fn should_carry_the_exact_memory_governance_failure_texts() {
     let ceiling_range_error =
         current_mlx_memory_ceiling_exceeds_u64_range_error(try_from_int_error);
     let active_memory_error = mlx_active_memory_exceeds_u64_range_error(try_from_int_error);
-    let allocator_cache_error =
-        mlx_allocator_cache_memory_exceeds_u64_range_error(try_from_int_error);
+    let mlx_buffer_cache_error = mlx_buffer_cache_exceeds_u64_range_error(try_from_int_error);
     let peak_memory_error = mlx_peak_memory_exceeds_u64_range_error(try_from_int_error);
 
     assert!(matches!(
@@ -187,8 +185,8 @@ fn should_carry_the_exact_memory_governance_failure_texts() {
         crate::InferenceEngineError::Fatal { reason } if reason == "MLX active memory exceeds the u64 range"
     ));
     assert!(matches!(
-        allocator_cache_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "MLX allocator-cache memory exceeds the u64 range"
+        mlx_buffer_cache_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "MLX buffer cache memory exceeds the u64 range"
     ));
     assert!(matches!(
         peak_memory_error,

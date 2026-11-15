@@ -60,7 +60,7 @@ fn adjacent_pair_rope_scalar_oracle(
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::MlxDtype;
 
@@ -249,8 +249,8 @@ fn should_cancel_after_a_middle_group_without_executing_later_groups_and_reuse_t
     drop(cancelled_forward_state);
     transformer
         .runtime()
-        .synchronize_gpu_stream_and_clear_allocator_cache()
-        .expect("cancellation cleanup should retire work and clear allocator cache");
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("cancellation cleanup should retire work and clear MLX buffer cache");
 
     assert_eq!(completed_groups.len(), 2);
     let mut never_cancelled = || false;
@@ -413,7 +413,7 @@ fn patterned_weights(
 fn test_runtime() -> MlxRuntime {
     let limits = MlxMemoryLimits::new(
         DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-        DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the bounded test MLX limits should be valid");
     MlxRuntime::initialize(limits).expect("the native MLX test runtime should initialize")

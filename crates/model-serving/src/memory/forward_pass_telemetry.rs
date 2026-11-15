@@ -26,7 +26,7 @@ pub(crate) fn forward_pass_memory_telemetry(
     let peak_memory_bytes = memory_snapshot.peak_memory_bytes() as u64;
     MlxMemoryTelemetry::new(
         active_memory_bytes,
-        memory_snapshot.allocator_cache_memory_bytes() as u64,
+        memory_snapshot.mlx_buffer_cache_bytes() as u64,
         peak_memory_bytes,
         MlxActiveMemoryBreakdown::default(),
     )

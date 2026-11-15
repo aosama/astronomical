@@ -120,7 +120,7 @@ For readers who want the precise vocabulary:
 
 - The serving path is written in Rust and C++ and runs on Apple MLX through MLX-C.
 - "Read from the SSD" is sparse-expert paging: router-selected expert pages move into MLX memory on demand. "Fully in memory" is expert residency in contiguous arrays. The mode always describes the complete sparse payload.
-- "Measures how much memory a step needs" is the memory ledger: one owner of the whole limit with named accounts for the fixed weights, the conversation's stored state, one step's working memory, the weights being read and a small margin. What is left is the capacity for kept experts. The ledger is checked against what MLX reports at every layer boundary. [One request, start to finish](memory-walkthrough.md) follows it through a request.
+- "Measures how much memory a step needs" is the memory ledger: one owner of the whole limit with named accounts for the fixed weights, the conversation's stored state, one step's MLX working buffers, the weights being read and a small margin. What is left is the capacity for kept experts. The ledger is checked against what MLX reports at every layer boundary. [One request, start to finish](memory-walkthrough.md) follows it through a request.
 - "Pieces of a set size, one layer at a time" is deterministic prompt spans read layer by layer, with exact terminal remainders. A step that still hits the limit is run again once with more room set aside; the span size is not reduced.
 - "Saved prompt work" is the persistent prompt store: validated prompt state, recurrent snapshots and projected image embeddings in a bounded SSD store.
 - "Chooses each next word on the graphics chip" is GPU-native sampling, submitting one token ahead to avoid host synchronization.

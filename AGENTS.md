@@ -54,6 +54,12 @@
 
 - A gigabyte in Astronomical is 1,073,741,824 bytes (2^30), labelled "GB", the one Apple uses when it describes a Mac's memory. Every screen, message, log summary, test printout and reply to the user divides bytes by 1,073,741,824, never by 1,000,000,000, so a figure always matches what the menu bar and Observatory show.
 
+## The Memory Areas Have Formal Names
+
+- You MUST read `<repo-root>/docs/glossary.md` before you read, write, review or discuss anything about memory, MLX, caching or streaming. It defines the four memory areas: `astro_expert_cache`, `mlx_working_buffers`, `mlx_buffer_cache` and `metal_kernel_cache`.
+- Use those names, and no others, for those areas in code, comments, tests, logs, documentation, GitHub content and replies. Screens keep their plain words; the glossary lists which is which.
+- When you find an area under another name, such as "allocator cache", "working memory" or "kernel cache" for memory MLX holds, rename it to the formal name as part of your work.
+
 ## Hints About This Repo
 
 - Pins and patches are under "<repo-root>/third-party".

@@ -23,10 +23,10 @@ impl Qwen3_5Model {
     }
 
     fn has_seated_complete_layer(&self, layer_index: usize, expert_capacity: usize) -> bool {
-        self.retained_experts
+        self.astro_expert_cache
             .as_ref()
-            .is_some_and(|retained_experts| {
-                retained_experts
+            .is_some_and(|astro_expert_cache| {
+                astro_expert_cache
                     .borrow()
                     .has_complete_layer(layer_index, expert_capacity)
             })
@@ -110,12 +110,12 @@ impl Qwen3_5Model {
     /// generate token materializes those pages, admission records them as
     /// activation, and leftover publication evicts the same pages.
     pub(crate) fn materialize_seated_complete_layers(&self) -> Result<(), Qwen3_5ExecutionError> {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok(());
         };
-        let retained_experts = retained_experts.borrow();
+        let astro_expert_cache = astro_expert_cache.borrow();
         let mut seated_weight_arrays = Vec::new();
-        retained_experts.append_resident_array_references(&mut seated_weight_arrays);
+        astro_expert_cache.append_resident_array_references(&mut seated_weight_arrays);
         if seated_weight_arrays.is_empty() {
             return Ok(());
         }

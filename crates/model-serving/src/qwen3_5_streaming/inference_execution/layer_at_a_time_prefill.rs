@@ -81,7 +81,7 @@ pub(super) struct PromptPrefillChunkOutcome {
     pub(super) active_memory_bytes_before_forward: usize,
     pub(super) forward_chunk_elapsed_millis: u64,
     /// The tokens the forward's memory is measured under: one span's,
-    /// whose working memory the peak is.
+    /// whose MLX working buffers the peak is.
     pub(super) measured_forward_token_count: usize,
     pub(super) boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 }

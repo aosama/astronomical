@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::{
     ProtocolReader, ProtocolWriter, WorkerAutoregressiveModelConfiguration,
-    WorkerChunkingConfiguration, WorkerCommand, WorkerDecodeExpertCachePolicy,
+    WorkerChunkingConfiguration, WorkerCommand, WorkerDecodeAstroExpertCachePolicy,
     WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
     WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel, WorkerModelConfiguration,
     WorkerQwenImage21ModelConfiguration, WorkerStartupConfiguration,
@@ -25,7 +25,7 @@ async fn should_round_trip_worker_startup_configuration() {
         persistent_prompt_cache_enabled: false,
         configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
         performance_attribution_enabled: false,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         diagnostic_qwen3_5_engine_override: crate::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
         logging_directory: PathBuf::from("/tmp/fictional-logs"),
         logging_level: WorkerLogLevel::Warn,
@@ -51,16 +51,18 @@ async fn should_round_trip_worker_startup_configuration() {
 }
 
 #[test]
-fn should_serialize_the_candidate_decode_expert_cache_policy() {
+fn should_serialize_the_candidate_decode_astro_expert_cache_policy() {
     assert_eq!(
-        serde_json::to_value(WorkerDecodeExpertCachePolicy::Candidate)
+        serde_json::to_value(WorkerDecodeAstroExpertCachePolicy::Candidate)
             .expect("candidate policy should serialize"),
         serde_json::json!("candidate")
     );
     assert_eq!(
-        serde_json::from_value::<WorkerDecodeExpertCachePolicy>(serde_json::json!("candidate"))
-            .expect("candidate policy should deserialize"),
-        WorkerDecodeExpertCachePolicy::Candidate
+        serde_json::from_value::<WorkerDecodeAstroExpertCachePolicy>(serde_json::json!(
+            "candidate"
+        ))
+        .expect("candidate policy should deserialize"),
+        WorkerDecodeAstroExpertCachePolicy::Candidate
     );
 }
 

@@ -43,7 +43,7 @@ struct StreamingMeasurement {
     cached_token_count: u64,
     generated_text: String,
     maximum_prefill_mlx_active_memory_bytes: Option<u64>,
-    maximum_prefill_mlx_allocator_cache_memory_bytes: Option<u64>,
+    maximum_prefill_mlx_buffer_cache_bytes: Option<u64>,
     maximum_prefill_mlx_peak_memory_bytes: Option<u64>,
     prompt_token_count: u64,
 }
@@ -224,7 +224,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
         "machine_mlx_memory_ceiling_bytes": machine_mlx_memory_ceiling_bytes,
         "max_output_tokens": measurement_case.maximum_output_tokens,
         "maximum_prefill_mlx_active_memory_bytes": streaming_measurement.maximum_prefill_mlx_active_memory_bytes,
-        "maximum_prefill_mlx_allocator_cache_memory_bytes": streaming_measurement.maximum_prefill_mlx_allocator_cache_memory_bytes,
+        "maximum_prefill_mlx_buffer_cache_bytes": streaming_measurement.maximum_prefill_mlx_buffer_cache_bytes,
         "maximum_prefill_mlx_peak_memory_bytes": streaming_measurement.maximum_prefill_mlx_peak_memory_bytes,
         "model": model_id(),
         "output_paragraphs": output_paragraph_count,
@@ -336,7 +336,7 @@ async fn measure_worker_summarization(
     let mut completion_token_count: Option<u64> = None;
     let mut cached_token_count: Option<u64> = None;
     let mut maximum_prefill_mlx_active_memory_bytes: Option<u64> = None;
-    let mut maximum_prefill_mlx_allocator_cache_memory_bytes: Option<u64> = None;
+    let mut maximum_prefill_mlx_buffer_cache_bytes: Option<u64> = None;
     let mut maximum_prefill_mlx_peak_memory_bytes: Option<u64> = None;
     let mut progress_interval = interval(Duration::from_secs(10));
     progress_interval.tick().await;
@@ -383,7 +383,7 @@ async fn measure_worker_summarization(
             }
             ChatGenerationStreamEvent::PrefillProgress {
                 mlx_active_memory_bytes,
-                mlx_allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes,
                 mlx_peak_memory_bytes,
                 ..
             } => {
@@ -391,9 +391,9 @@ async fn measure_worker_summarization(
                     maximum_prefill_mlx_active_memory_bytes,
                     mlx_active_memory_bytes,
                 );
-                maximum_prefill_mlx_allocator_cache_memory_bytes = maximum_optional_u64(
-                    maximum_prefill_mlx_allocator_cache_memory_bytes,
-                    mlx_allocator_cache_memory_bytes,
+                maximum_prefill_mlx_buffer_cache_bytes = maximum_optional_u64(
+                    maximum_prefill_mlx_buffer_cache_bytes,
+                    mlx_buffer_cache_bytes,
                 );
                 maximum_prefill_mlx_peak_memory_bytes = maximum_optional_u64(
                     maximum_prefill_mlx_peak_memory_bytes,
@@ -430,7 +430,7 @@ async fn measure_worker_summarization(
             .expect("the terminal worker event should report cached prompt tokens"),
         generated_text,
         maximum_prefill_mlx_active_memory_bytes,
-        maximum_prefill_mlx_allocator_cache_memory_bytes,
+        maximum_prefill_mlx_buffer_cache_bytes,
         maximum_prefill_mlx_peak_memory_bytes,
         prompt_token_count: prompt_token_count
             .expect("the terminal worker event should report prompt tokens"),

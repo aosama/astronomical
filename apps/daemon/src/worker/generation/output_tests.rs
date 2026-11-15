@@ -16,7 +16,7 @@ fn decode_snapshot(peak_memory_bytes: u64) -> WorkerMlxMemorySnapshot {
     WorkerMlxMemorySnapshot {
         source: MlxMemorySnapshotSource::DecodeSubmitted,
         active_memory_bytes: peak_memory_bytes / 2,
-        allocator_cache_memory_bytes: 0,
+        mlx_buffer_cache_bytes: 0,
         peak_memory_bytes,
         expert_payload_bytes: 0,
         model_core_payload_bytes: 0,
@@ -104,7 +104,7 @@ fn should_retain_the_highest_decode_peak_across_lower_later_snapshots() {
         outputs: vec![ChatGenerationOutput::Text {
             text: "hello".to_owned(),
         }],
-        // The MLX peak counter resets at allocator-cache cleanups, so a later
+        // The MLX peak counter resets at MLX buffer-cache cleanups, so a later
         // decode sample can observe a lower window peak than an earlier one.
         mlx_memory_snapshot: Some(decode_snapshot(35_293_875_951)),
         expert_residency: None,

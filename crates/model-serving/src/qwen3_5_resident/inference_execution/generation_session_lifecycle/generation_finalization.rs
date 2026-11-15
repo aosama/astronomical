@@ -35,11 +35,11 @@ fn snapshot_active_memory_bytes_option(
     u64::try_from(memory_snapshot.active_memory_bytes()).ok()
 }
 
-/// Converts one memory snapshot's allocator-cache counter to a u64 when it fits.
-fn snapshot_allocator_cache_memory_bytes_option(
+/// Converts one memory snapshot's MLX buffer-cache counter to a u64 when it fits.
+fn snapshot_mlx_buffer_cache_bytes_option(
     memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
 ) -> Option<u64> {
-    u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()
+    u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()
 }
 
 impl Qwen3_5EngineState {
@@ -57,12 +57,10 @@ impl Qwen3_5EngineState {
             .map_err(
             super::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error,
         )?;
-        let allocator_cache_memory_bytes = u64::try_from(
-            mlx_memory_snapshot.allocator_cache_memory_bytes(),
-        )
-        .map_err(
-            super::generation_error_constructors::mlx_allocator_cache_memory_bytes_exceed_u64_range_error,
-        )?;
+        let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
+            .map_err(
+                super::generation_error_constructors::mlx_buffer_cache_bytes_exceed_u64_range_error,
+            )?;
         let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
             super::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error,
         )?;
@@ -74,7 +72,7 @@ impl Qwen3_5EngineState {
         Ok(Some(
             MlxMemoryTelemetry::new(
                 active_memory_bytes,
-                allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes,
                 peak_memory_bytes,
                 active_memory_breakdown,
             )
@@ -150,7 +148,7 @@ impl Qwen3_5EngineState {
         // `release_request_memory` synchronizes the model stream before clearing
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
-            PerformanceOperation::MlxAllocatorCacheCleanup,
+            PerformanceOperation::MlxBufferCacheCleanup,
             |_performance_attribution| self.release_request_memory(request_id),
         );
         self.govern_request_end();
@@ -272,15 +270,15 @@ impl Qwen3_5EngineState {
         ) {
             Ok(mlx_memory_snapshot) => match (
                 u64::try_from(mlx_memory_snapshot.active_memory_bytes()),
-                u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()),
+                u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes()),
                 u64::try_from(mlx_memory_snapshot.peak_memory_bytes()),
             ) {
                 (
                     Ok(active_memory_bytes),
-                    Ok(allocator_cache_memory_bytes),
+                    Ok(mlx_buffer_cache_bytes),
                     Ok(sampled_peak_memory_bytes),
                 ) => {
-                    // The MLX peak counter resets at allocator-cache cleanups,
+                    // The MLX peak counter resets at MLX buffer-cache cleanups,
                     // so this post-cleanup sample can read a lower window peak
                     // than the synchronized release sample taken moments
                     // earlier. The finalized claim is a request maximum, so it
@@ -306,7 +304,7 @@ impl Qwen3_5EngineState {
                         Some(
                             MlxMemoryTelemetry::new(
                                 active_memory_bytes,
-                                allocator_cache_memory_bytes,
+                                mlx_buffer_cache_bytes,
                                 peak_memory_bytes,
                                 active_memory_breakdown,
                             )
@@ -359,11 +357,11 @@ impl Qwen3_5EngineState {
         u64::try_from(memory_snapshot.active_memory_bytes()).ok()
     }
 
-    /// Converts one memory snapshot's allocator-cache counter to a u64 when it fits.
-    fn snapshot_allocator_cache_memory_bytes_option(
+    /// Converts one memory snapshot's MLX buffer-cache counter to a u64 when it fits.
+    fn snapshot_mlx_buffer_cache_bytes_option(
         memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
     ) -> Option<u64> {
-        u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()
+        u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()
     }
 
     pub(in crate::qwen3_5_resident::inference_execution) fn record_generation_performance_attribution(
@@ -393,19 +391,19 @@ impl Qwen3_5EngineState {
                 model_id,
                 model_revision,
                 prefill_transient_observation_completed: self
-                    .measured_prompt_chunk_working_memory_bytes()
+                    .measured_prompt_chunk_mlx_working_buffer_bytes()
                     .is_some(),
                 prefill_observed_transient_high_water_bytes: self
-                    .measured_prompt_chunk_working_memory_bytes()
+                    .measured_prompt_chunk_mlx_working_buffer_bytes()
                     .unwrap_or(0),
                 request_id: request_id.value(),
                 configured_maximum_output_tokens,
                 mlx_active_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(snapshot_active_memory_bytes_option),
-                mlx_allocator_cache_memory_bytes: mlx_memory_snapshot
+                mlx_buffer_cache_bytes: mlx_memory_snapshot
                     .as_ref()
-                    .and_then(snapshot_allocator_cache_memory_bytes_option),
+                    .and_then(snapshot_mlx_buffer_cache_bytes_option),
                 mlx_peak_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(snapshot_peak_memory_bytes_option),

@@ -406,7 +406,7 @@ impl NeuralEnginePrefillPreparation {
         if has_written_package
             && let Err(release_error) = model
                 .runtime()
-                .synchronize_gpu_stream_and_clear_allocator_cache()
+                .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         {
             tracing::warn!(error = %release_error, "could not release Neural Engine weight copies");
         }

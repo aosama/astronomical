@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use std::time::Instant;
 
 use crate::performance_throughput::completion::ThroughputMeasurement;
@@ -76,17 +76,17 @@ pub(crate) fn run_paired_decode_cache_trials(
     for pair_index in 0..paired_trial_count {
         let mut baseline_measurement = None;
         let mut candidate_measurement = None;
-        for decode_expert_cache_policy in policy_order_for_trial(pair_index) {
+        for decode_astro_expert_cache_policy in policy_order_for_trial(pair_index) {
             let current_progress_percent = completed_policy_run_count
                 .saturating_mul(100)
                 .checked_div(total_policy_run_count)
                 .unwrap_or(0);
             eprintln!(
-                "[decode-cache-experiment] progress_percent={current_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} pair_index={} policy={decode_expert_cache_policy:?} status=starting",
+                "[decode-cache-experiment] progress_percent={current_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} pair_index={} policy={decode_astro_expert_cache_policy:?} status=starting",
                 pair_index + 1
             );
             let mut journey = journey_template.clone();
-            journey.decode_expert_cache_policy = decode_expert_cache_policy;
+            journey.decode_astro_expert_cache_policy = decode_astro_expert_cache_policy;
             let measured_throughput =
                 throughput_support::run_journey_with_timeout(model_id, journey.clone());
             completed_policy_run_count += 1;
@@ -100,12 +100,13 @@ pub(crate) fn run_paired_decode_cache_trials(
             let estimated_remaining_seconds = average_policy_run_seconds
                 * total_policy_run_count.saturating_sub(completed_policy_run_count) as f64;
             eprintln!(
-                "[decode-cache-experiment] progress_percent={completed_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} eta_seconds={estimated_remaining_seconds:.0} pair_index={} policy={decode_expert_cache_policy:?} status=completed",
+                "[decode-cache-experiment] progress_percent={completed_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} eta_seconds={estimated_remaining_seconds:.0} pair_index={} policy={decode_astro_expert_cache_policy:?} status=completed",
                 pair_index + 1
             );
             measured_shape_window.assert_measurement_fits(&measured_throughput);
             assert_eq!(
-                measured_throughput.decode_expert_cache_policy, decode_expert_cache_policy,
+                measured_throughput.decode_astro_expert_cache_policy,
+                decode_astro_expert_cache_policy,
                 "the worker measurement must retain the selected cache policy"
             );
             assert!(
@@ -136,11 +137,11 @@ pub(crate) fn run_paired_decode_cache_trials(
                     "the decode source counter must agree with its phase summaries"
                 );
             }
-            match decode_expert_cache_policy {
-                WorkerDecodeExpertCachePolicy::Baseline => {
+            match decode_astro_expert_cache_policy {
+                WorkerDecodeAstroExpertCachePolicy::Baseline => {
                     baseline_measurement = Some(measured_throughput);
                 }
-                WorkerDecodeExpertCachePolicy::Candidate => {
+                WorkerDecodeAstroExpertCachePolicy::Candidate => {
                     candidate_measurement = Some(measured_throughput);
                 }
             }
@@ -252,16 +253,16 @@ fn student_t_critical_value_975(degrees_of_freedom: usize) -> f64 {
         .unwrap_or(1.96)
 }
 
-fn policy_order_for_trial(pair_index: usize) -> [WorkerDecodeExpertCachePolicy; 2] {
+fn policy_order_for_trial(pair_index: usize) -> [WorkerDecodeAstroExpertCachePolicy; 2] {
     if pair_index.is_multiple_of(2) {
         [
-            WorkerDecodeExpertCachePolicy::Baseline,
-            WorkerDecodeExpertCachePolicy::Candidate,
+            WorkerDecodeAstroExpertCachePolicy::Baseline,
+            WorkerDecodeAstroExpertCachePolicy::Candidate,
         ]
     } else {
         [
-            WorkerDecodeExpertCachePolicy::Candidate,
-            WorkerDecodeExpertCachePolicy::Baseline,
+            WorkerDecodeAstroExpertCachePolicy::Candidate,
+            WorkerDecodeAstroExpertCachePolicy::Baseline,
         ]
     }
 }
@@ -406,8 +407,8 @@ pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeC
         format_confidence_interval(source_bytes_confidence_interval),
         format_confidence_interval(decode_throughput_confidence_interval),
         format_confidence_interval(prefill_throughput_confidence_interval),
-        aggregate_cache_evidence(paired_trials, WorkerDecodeExpertCachePolicy::Baseline),
-        aggregate_cache_evidence(paired_trials, WorkerDecodeExpertCachePolicy::Candidate),
+        aggregate_cache_evidence(paired_trials, WorkerDecodeAstroExpertCachePolicy::Baseline),
+        aggregate_cache_evidence(paired_trials, WorkerDecodeAstroExpertCachePolicy::Candidate),
         if has_primary_improvement && has_no_material_regression {
             "candidate_win"
         } else {
@@ -503,21 +504,21 @@ pub(super) fn nanoseconds_to_milliseconds(elapsed_nanoseconds: u64) -> f64 {
 
 pub(super) fn aggregate_cache_evidence(
     paired_trials: &[PairedDecodeCacheTrial],
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
 ) -> String {
     let mut retained_route_assignment_hit_count = 0_u64;
     let mut retained_route_assignment_miss_count = 0_u64;
     let mut hot_expert_route_fully_covered_count = 0_u64;
     let mut hot_expert_route_partially_covered_count = 0_u64;
     let mut hot_expert_route_fully_missed_count = 0_u64;
-    let mut decode_expert_cache_slot_eviction_count = 0_u64;
+    let mut decode_astro_expert_cache_slot_eviction_count = 0_u64;
     let mut positional_file_read_byte_count = 0_u64;
     let mut process_physical_disk_read_bytes = Some(0_u64);
     let mut peak_mlx_memory_bytes = None;
     for paired_trial in paired_trials {
-        let measured_throughput = match decode_expert_cache_policy {
-            WorkerDecodeExpertCachePolicy::Baseline => &paired_trial.baseline,
-            WorkerDecodeExpertCachePolicy::Candidate => &paired_trial.candidate,
+        let measured_throughput = match decode_astro_expert_cache_policy {
+            WorkerDecodeAstroExpertCachePolicy::Baseline => &paired_trial.baseline,
+            WorkerDecodeAstroExpertCachePolicy::Candidate => &paired_trial.candidate,
         };
         let diagnostic_evidence = measured_throughput
             .decode_cache_diagnostic_evidence
@@ -533,8 +534,9 @@ pub(super) fn aggregate_cache_evidence(
             .saturating_add(diagnostic_evidence.hot_expert_route_partially_covered_count);
         hot_expert_route_fully_missed_count = hot_expert_route_fully_missed_count
             .saturating_add(diagnostic_evidence.hot_expert_route_fully_missed_count);
-        decode_expert_cache_slot_eviction_count = decode_expert_cache_slot_eviction_count
-            .saturating_add(diagnostic_evidence.decode_expert_cache_slot_eviction_count);
+        decode_astro_expert_cache_slot_eviction_count =
+            decode_astro_expert_cache_slot_eviction_count
+                .saturating_add(diagnostic_evidence.decode_astro_expert_cache_slot_eviction_count);
         positional_file_read_byte_count = positional_file_read_byte_count
             .saturating_add(diagnostic_evidence.positional_file_read_byte_count);
         process_physical_disk_read_bytes =
@@ -558,7 +560,7 @@ pub(super) fn aggregate_cache_evidence(
         }
     }
     format!(
-        "retained_route_assignment_hit_count={retained_route_assignment_hit_count}, retained_route_assignment_miss_count={retained_route_assignment_miss_count}, hot_expert_route_fully_covered_count={hot_expert_route_fully_covered_count}, hot_expert_route_partially_covered_count={hot_expert_route_partially_covered_count}, hot_expert_route_fully_missed_count={hot_expert_route_fully_missed_count}, decode_expert_cache_slot_eviction_count={decode_expert_cache_slot_eviction_count}, positional_file_read_byte_count={positional_file_read_byte_count}, process_physical_disk_read_bytes={process_physical_disk_read_bytes:?}, peak_mlx_memory_bytes={peak_mlx_memory_bytes:?}"
+        "retained_route_assignment_hit_count={retained_route_assignment_hit_count}, retained_route_assignment_miss_count={retained_route_assignment_miss_count}, hot_expert_route_fully_covered_count={hot_expert_route_fully_covered_count}, hot_expert_route_partially_covered_count={hot_expert_route_partially_covered_count}, hot_expert_route_fully_missed_count={hot_expert_route_fully_missed_count}, decode_astro_expert_cache_slot_eviction_count={decode_astro_expert_cache_slot_eviction_count}, positional_file_read_byte_count={positional_file_read_byte_count}, process_physical_disk_read_bytes={process_physical_disk_read_bytes:?}, peak_mlx_memory_bytes={peak_mlx_memory_bytes:?}"
     )
 }
 

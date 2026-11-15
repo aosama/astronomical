@@ -18,7 +18,7 @@ pub enum WorkerLogLevel {
 /// Internal decode-cache arm selected only by controlled benchmarks.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkerDecodeExpertCachePolicy {
+pub enum WorkerDecodeAstroExpertCachePolicy {
     #[default]
     Baseline,
     Candidate,
@@ -72,7 +72,7 @@ pub struct WorkerStartupConfiguration {
     pub performance_attribution_enabled: bool,
     /// Benchmark-only policy selector; never read from the user configuration.
     #[serde(default)]
-    pub decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     /// Diagnostic-only engine override; never read from the user configuration.
     #[serde(default)]
     pub diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,

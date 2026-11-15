@@ -277,7 +277,7 @@ pub(super) struct ProgressSample {
 #[derive(Default)]
 pub(super) struct MemorySample {
     pub(super) active_memory_bytes: u64,
-    pub(super) allocator_cache_memory_bytes: u64,
+    pub(super) mlx_buffer_cache_bytes: u64,
     pub(super) peak_memory_bytes: u64,
     pub(super) expert_payload_bytes: u64,
     pub(super) model_core_payload_bytes: u64,
@@ -290,9 +290,7 @@ impl MemorySample {
         let memory = &status_document["mlx_memory_snapshot"];
         Self {
             active_memory_bytes: memory["active_memory_bytes"].as_u64().unwrap_or(0),
-            allocator_cache_memory_bytes: memory["allocator_cache_memory_bytes"]
-                .as_u64()
-                .unwrap_or(0),
+            mlx_buffer_cache_bytes: memory["mlx_buffer_cache_bytes"].as_u64().unwrap_or(0),
             peak_memory_bytes: memory["peak_memory_bytes"].as_u64().unwrap_or(0),
             expert_payload_bytes: memory["expert_payload_bytes"].as_u64().unwrap_or(0),
             model_core_payload_bytes: memory["model_core_payload_bytes"].as_u64().unwrap_or(0),

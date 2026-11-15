@@ -3,7 +3,7 @@
 //!
 //! The memory governor is told about every completed forward and answers
 //! with how much the kept weights may hold (issue #2221). Nothing else is
-//! learned here: the working memory a step needs is what the governor
+//! learned here: the MLX working buffers a step needs is what the governor
 //! measured, not an estimate fitted to earlier forwards.
 //!
 //! The sequence:

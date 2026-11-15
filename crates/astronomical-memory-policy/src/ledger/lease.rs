@@ -1,7 +1,7 @@
 //! Short-lived needs outside the normal pattern.
 //!
 //! Most memory follows the same shape every request: weights, context, one
-//! layer's working memory. A few jobs do not: saving or restoring prompt
+//! layer's MLX working buffers. A few jobs do not: saving or restoring prompt
 //! cache blocks, the vision tower for one image, a draft model. Each asks
 //! the ledger for a lease naming its purpose and size, and gives it back
 //! when done. That is how the code that allocates declares its cost.

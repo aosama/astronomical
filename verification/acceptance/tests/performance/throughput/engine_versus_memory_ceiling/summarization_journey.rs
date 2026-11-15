@@ -3,7 +3,7 @@
 //! engine and never from the prompt.
 
 use astronomical_ipc_protocol::{
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
 };
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
@@ -86,7 +86,7 @@ fn summarization_journey(
         TEMPERATURE_THOUSANDTHS,
     );
     journey.maximum_mlx_memory_bytes = Some(assigned_ceiling_gigabytes * BYTES_PER_GIGABYTE);
-    journey.decode_expert_cache_policy = WorkerDecodeExpertCachePolicy::Baseline;
+    journey.decode_astro_expert_cache_policy = WorkerDecodeAstroExpertCachePolicy::Baseline;
     journey.attribution_enabled = false;
     journey
 }

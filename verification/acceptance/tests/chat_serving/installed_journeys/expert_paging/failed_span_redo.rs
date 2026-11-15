@@ -25,7 +25,7 @@ async fn kept_expert_bytes(qwen3_5_engine: &Qwen3_5StreamingEngine) -> u64 {
     qwen3_5_engine
         .expert_weight_memory_cache_statistics_for_tests()
         .await
-        .expect("the loaded model should report its expert cache")
+        .expect("the loaded model should report its astro expert cache")
         .resident_payload_byte_count
 }
 

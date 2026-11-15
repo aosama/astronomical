@@ -336,7 +336,7 @@ where
             mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                 source,
                 active_memory_bytes: 1_000_000_000,
-                allocator_cache_memory_bytes: 0,
+                mlx_buffer_cache_bytes: 0,
                 peak_memory_bytes: 1_000_000_000,
                 expert_payload_bytes: 0,
                 model_core_payload_bytes: 0,

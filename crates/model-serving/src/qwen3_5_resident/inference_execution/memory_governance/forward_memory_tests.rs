@@ -8,11 +8,11 @@ const LIMIT_BYTES: u64 = 10_000;
 const MARGIN_BYTES: u64 = 200;
 const EVERY_WEIGHT_BYTES: u64 = 6_000;
 const PROMPT_CHUNK_TOKEN_COUNT: usize = 2_048;
-const PROMPT_CHUNK_WORKING_MEMORY_BYTES: u64 = 1_000;
-const REPLY_TOKEN_WORKING_MEMORY_BYTES: u64 = 100;
+const PROMPT_CHUNK_MLX_WORKING_BUFFER_BYTES: u64 = 1_000;
+const REPLY_TOKEN_MLX_WORKING_BUFFER_BYTES: u64 = 100;
 /// The most stored state a prompt chunk fits beside.
 const LARGEST_STORED_STATE_BESIDE_A_CHUNK_BYTES: u64 =
-    LIMIT_BYTES - EVERY_WEIGHT_BYTES - PROMPT_CHUNK_WORKING_MEMORY_BYTES - MARGIN_BYTES;
+    LIMIT_BYTES - EVERY_WEIGHT_BYTES - PROMPT_CHUNK_MLX_WORKING_BUFFER_BYTES - MARGIN_BYTES;
 
 fn governor_with_both_phases_measured() -> MemoryGovernor {
     let mut memory_governor = MemoryGovernor::new(
@@ -27,10 +27,12 @@ fn governor_with_both_phases_measured() -> MemoryGovernor {
     .expect("the limit is not zero");
     let _ = memory_governor.record_probe(
         ForwardShape::prompt_chunk(PROMPT_CHUNK_TOKEN_COUNT).phase(),
-        PROMPT_CHUNK_WORKING_MEMORY_BYTES,
+        PROMPT_CHUNK_MLX_WORKING_BUFFER_BYTES,
     );
-    let _ =
-        memory_governor.record_probe(LedgerPhase::WritingReply, REPLY_TOKEN_WORKING_MEMORY_BYTES);
+    let _ = memory_governor.record_probe(
+        LedgerPhase::WritingReply,
+        REPLY_TOKEN_MLX_WORKING_BUFFER_BYTES,
+    );
     memory_governor
 }
 
@@ -64,7 +66,7 @@ fn should_admit_a_prompt_chunk_that_lands_exactly_on_the_limit() {
 }
 
 #[test]
-fn should_name_the_chunk_when_its_working_memory_is_one_byte_over() {
+fn should_name_the_chunk_when_its_mlx_working_buffers_are_one_byte_over() {
     assert_eq!(
         decision_for(
             ForwardShape::prompt_chunk(PROMPT_CHUNK_TOKEN_COUNT),
@@ -124,7 +126,7 @@ fn should_count_temporary_workspace_against_the_peak_and_not_against_what_stays(
 #[test]
 fn should_name_no_chunk_when_a_reply_step_is_over() {
     let largest_stored_state_beside_a_reply_step_bytes =
-        LIMIT_BYTES - EVERY_WEIGHT_BYTES - REPLY_TOKEN_WORKING_MEMORY_BYTES - MARGIN_BYTES;
+        LIMIT_BYTES - EVERY_WEIGHT_BYTES - REPLY_TOKEN_MLX_WORKING_BUFFER_BYTES - MARGIN_BYTES;
     assert_eq!(
         decision_for(
             ForwardShape::reply_token(),
@@ -149,7 +151,7 @@ fn should_name_no_chunk_when_a_reply_step_is_over() {
 
 #[test]
 fn should_admit_a_chunk_larger_than_any_measured_when_what_stays_fits() {
-    // Nothing has measured a chunk this large, so there is no working-memory
+    // Nothing has measured a chunk this large, so there is no MLX working-buffer
     // figure to hold against it. It runs, and is measured when it has.
     let largest_stored_state_bytes = LIMIT_BYTES - EVERY_WEIGHT_BYTES - MARGIN_BYTES;
     assert_eq!(
@@ -182,7 +184,7 @@ fn should_say_in_the_reason_how_far_over_the_limit_the_chunk_is() {
 
 #[test]
 fn should_charge_a_one_token_prompt_chunk_what_a_reply_step_needs() {
-    // Beside this much stored state a whole chunk's working memory does not
+    // Beside this much stored state a whole chunk's MLX working buffers do not
     // fit, but one token's does.
     let stored_state_bytes = LARGEST_STORED_STATE_BESIDE_A_CHUNK_BYTES + 1;
     assert_eq!(
@@ -198,7 +200,7 @@ fn should_charge_a_one_token_prompt_chunk_what_a_reply_step_needs() {
 #[test]
 fn should_still_name_the_prompt_chunk_when_its_one_token_does_not_fit() {
     let largest_stored_state_beside_a_reply_step_bytes =
-        LIMIT_BYTES - EVERY_WEIGHT_BYTES - REPLY_TOKEN_WORKING_MEMORY_BYTES - MARGIN_BYTES;
+        LIMIT_BYTES - EVERY_WEIGHT_BYTES - REPLY_TOKEN_MLX_WORKING_BUFFER_BYTES - MARGIN_BYTES;
     assert_eq!(
         decision_for(
             ForwardShape::prompt_chunk(1),

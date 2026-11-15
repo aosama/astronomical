@@ -39,9 +39,9 @@ impl Qwen3_5StreamingModel {
                 }
                 None => (0, 0, 0),
             };
-        let layer_seating = match self.retained_experts.as_ref() {
-            Some(retained_experts) => {
-                let retained_expert_counts = retained_experts.borrow().retained_expert_counts();
+        let layer_seating = match self.astro_expert_cache.as_ref() {
+            Some(astro_expert_cache) => {
+                let retained_expert_counts = astro_expert_cache.borrow().retained_expert_counts();
                 astronomical_ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(
                     &retained_expert_counts,
                 )
@@ -63,10 +63,10 @@ impl Qwen3_5StreamingModel {
     #[must_use]
     pub fn expert_memory_mode(&self) -> ExpertMemoryMode {
         let retained_paged_expert_payload_bytes =
-            self.retained_experts
+            self.astro_expert_cache
                 .as_ref()
-                .map_or(0, |retained_experts| {
-                    retained_experts
+                .map_or(0, |astro_expert_cache| {
+                    astro_expert_cache
                         .borrow()
                         .statistics()
                         .resident_payload_byte_count

@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::{
-    RequestId, WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy, WorkerEvent,
+    RequestId, WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy, WorkerEvent,
 };
 use astronomical_runtime_integration::MlxMemoryLimits;
 
@@ -65,7 +65,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub fn new_with_prompt_processing_chunk_sizer(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
         prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
         think_end_token_id: u32,
@@ -75,7 +75,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         Self::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             persistent_prompt_cache_disk_store_config,
             prompt_processing_chunk_sizer,
             think_end_token_id,
@@ -90,7 +90,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub fn new_with_runtime_chunking_and_performance_attribution(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
         prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
         think_end_token_id: u32,
@@ -103,7 +103,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         Self::new_with_effective_context_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             persistent_prompt_cache_disk_store_config,
             prompt_processing_chunk_sizer,
             think_end_token_id,
@@ -120,7 +120,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub fn new_with_effective_context_runtime_chunking_and_performance_attribution(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
         prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
         think_end_token_id: u32,
@@ -133,7 +133,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         Self::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             persistent_prompt_cache_disk_store_config,
             prompt_processing_chunk_sizer,
             think_end_token_id,
@@ -142,7 +142,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             chunking,
             model_loading_performance_attribution,
             performance_attribution_log,
-            WorkerDecodeExpertCachePolicy::Baseline,
+            WorkerDecodeAstroExpertCachePolicy::Baseline,
         )
     }
 
@@ -151,7 +151,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub fn new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
         prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
         think_end_token_id: u32,
@@ -160,7 +160,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         chunking: WorkerChunkingConfiguration,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     ) -> Result<Qwen3_5StreamingEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
@@ -183,14 +183,12 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             .config()
             .context_memory_reservation_bytes(1)
             .ok_or_else(|| fatal_engine_error("Qwen3.5 context memory reservation overflowed"))?;
-        let memory_limits = MlxMemoryLimits::new(
-            active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-        )
-        .map_err(qwen3_5_runtime_error)?;
+        let memory_limits =
+            MlxMemoryLimits::new(active_memory_limit_bytes, mlx_buffer_cache_limit_bytes)
+                .map_err(qwen3_5_runtime_error)?;
         MlxInferenceEngine::new(move || Qwen3_5InferenceExecution {
             active_request: None,
-            decode_expert_cache_policy,
+            decode_astro_expert_cache_policy,
             persistent_prompt_cache_disk_store_config,
             persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
             context_memory_reservation_bytes_per_token,
@@ -221,7 +219,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
 
 pub struct Qwen3_5InferenceExecution {
     pub(super) active_request: Option<Qwen3_5EngineRequest>,
-    pub(super) decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub(super) decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     pub(crate) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
     pub(super) context_memory_reservation_bytes_per_token: usize,

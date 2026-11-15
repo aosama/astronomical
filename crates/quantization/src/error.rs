@@ -135,7 +135,7 @@ impl From<mlx_bridge::MlxCError> for QuantizationError {
     }
 }
 
-/// Runtime-policy failures (allocator cache, memory snapshots, safetensors
+/// Runtime-policy failures (MLX buffer cache, memory snapshots, safetensors
 /// engines) carry their context in the message rather than a separate
 /// operation field.
 #[cfg(feature = "direct-mlx")]

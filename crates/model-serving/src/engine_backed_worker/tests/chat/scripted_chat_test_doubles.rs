@@ -233,7 +233,7 @@ pub(crate) struct ScriptedChatEngine {
     cancelled_generation_finalization: GenerationFinalization,
     active_generation_prompt_cache_stats: Option<WorkerEvent>,
     prompt_cache_clear_event: Option<WorkerEvent>,
-    pub(super) maximum_allocator_cache_memory_limit_bytes: u64,
+    pub(super) maximum_mlx_buffer_cache_limit_bytes: u64,
     idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     scripted_replacement_required_reason: Option<String>,
     /// Floor reported at load; 1 byte unless a test needs a model larger than its ceiling.
@@ -287,7 +287,7 @@ impl ScriptedChatEngine {
             cancelled_generation_finalization: GenerationFinalization::default(),
             active_generation_prompt_cache_stats: None,
             prompt_cache_clear_event: None,
-            maximum_allocator_cache_memory_limit_bytes: u64::MAX,
+            maximum_mlx_buffer_cache_limit_bytes: u64::MAX,
             idle_mlx_memory_telemetry: None,
             scripted_replacement_required_reason: None,
             load_floor_bytes: 1,
@@ -311,7 +311,7 @@ impl ScriptedChatEngine {
 
     /// Scripts the live-limit update to report a ceiling this engine cannot
     /// adopt in place whenever the request sits below its loaded memory
-    /// (modeled by the allocator-cache limit field).
+    /// (modeled by the MLX buffer-cache limit field).
     pub(super) fn with_scripted_replacement_required_reason(
         mut self,
         scripted_replacement_required_reason: &str,
@@ -339,7 +339,7 @@ impl ScriptedChatEngine {
     pub(super) fn with_cancelled_generation_finalization(
         expert_memory_mode: ExpertMemoryMode,
         active_memory_bytes: u64,
-        allocator_cache_memory_bytes: u64,
+        mlx_buffer_cache_bytes: u64,
         peak_memory_bytes: u64,
         expert_payload_bytes: u64,
         model_core_payload_bytes: u64,
@@ -350,7 +350,7 @@ impl ScriptedChatEngine {
             Some(expert_memory_mode),
             Some(MlxMemoryTelemetry::new(
                 active_memory_bytes,
-                allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes,
                 peak_memory_bytes,
                 MlxActiveMemoryBreakdown {
                     expert_payload_bytes,
@@ -469,7 +469,7 @@ impl InferenceEngine for ScriptedChatEngine {
             .expect("the adopted-ceiling record should not be poisoned")
             .push(requested_mlx_memory_ceiling_bytes);
         if let Some(rejection_reason) = &self.scripted_replacement_required_reason
-            && requested_mlx_memory_ceiling_bytes < self.maximum_allocator_cache_memory_limit_bytes
+            && requested_mlx_memory_ceiling_bytes < self.maximum_mlx_buffer_cache_limit_bytes
         {
             return Err(InferenceEngineError::ResidentStreamingReplacementRequired {
                 reason: rejection_reason.clone(),
@@ -477,7 +477,7 @@ impl InferenceEngine for ScriptedChatEngine {
         }
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
-            self.maximum_allocator_cache_memory_limit_bytes
+            self.maximum_mlx_buffer_cache_limit_bytes
                 .min(requested_mlx_memory_ceiling_bytes),
             1,
             ExpertMemoryMode::Resident,

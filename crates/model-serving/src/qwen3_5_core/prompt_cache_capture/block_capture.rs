@@ -312,11 +312,11 @@ fn release_publication_workspace_if_needed<RequestExtension>(
     active_request
         .performance_attribution
         .measure_operation(
-            PerformanceOperation::MlxAllocatorCacheCleanup,
+            PerformanceOperation::MlxBufferCacheCleanup,
             |_performance_attribution| {
                 model
                     .runtime()
-                    .synchronize_gpu_stream_and_clear_allocator_cache()
+                    .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             },
         )
         .map_err(qwen3_5_runtime_error)?;
@@ -327,10 +327,10 @@ fn release_publication_workspace_if_needed<RequestExtension>(
         let allocator_bytes_cleared = capture_planning::allocator_bytes_cleared(
             memory_snapshot_before_cleanup
                 .as_ref()
-                .map(memory_snapshot_allocator_cache_bytes),
+                .map(memory_snapshot_mlx_buffer_cache_bytes),
             memory_snapshot_after_cleanup
                 .as_ref()
-                .map(memory_snapshot_allocator_cache_bytes),
+                .map(memory_snapshot_mlx_buffer_cache_bytes),
         );
         persistent_prompt_cache_diagnostics.allocator_bytes_cleared_for_publication =
             persistent_prompt_cache_diagnostics
@@ -381,8 +381,8 @@ fn memory_snapshot_active_memory_bytes(memory_snapshot: &MlxMemorySnapshot) -> u
     u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX)
 }
 
-fn memory_snapshot_allocator_cache_bytes(memory_snapshot: &MlxMemorySnapshot) -> u64 {
-    u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).unwrap_or(u64::MAX)
+fn memory_snapshot_mlx_buffer_cache_bytes(memory_snapshot: &MlxMemorySnapshot) -> u64 {
+    u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).unwrap_or(u64::MAX)
 }
 
 fn configured_memory_limit_bytes_u64(configured_memory_limit_bytes: usize) -> u64 {

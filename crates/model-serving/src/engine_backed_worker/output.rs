@@ -628,7 +628,7 @@ pub(crate) fn worker_memory_snapshot(
     WorkerMlxMemorySnapshot {
         source: mlx_memory_snapshot_source,
         active_memory_bytes: mlx_memory_telemetry.active_memory_bytes,
-        allocator_cache_memory_bytes: mlx_memory_telemetry.allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes: mlx_memory_telemetry.mlx_buffer_cache_bytes,
         peak_memory_bytes: mlx_memory_telemetry.peak_memory_bytes,
         expert_payload_bytes: mlx_active_memory_breakdown.expert_payload_bytes,
         model_core_payload_bytes: mlx_active_memory_breakdown.model_core_payload_bytes,

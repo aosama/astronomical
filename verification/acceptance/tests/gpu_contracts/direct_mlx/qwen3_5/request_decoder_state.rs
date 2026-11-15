@@ -10,7 +10,7 @@ use crate::common::qwen3_5_moe::{
     frozen_ornith_1_0_config, persistent_prompt_cache_model_contract,
 };
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
 };
 
 async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
@@ -18,7 +18,7 @@ async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the in-memory state test memory limits should be valid"),
     )

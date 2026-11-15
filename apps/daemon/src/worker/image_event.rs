@@ -147,7 +147,7 @@ fn validate_image_generation_progress(
 /// Records a completed image as the request's terminal outcome.
 ///
 /// The encoded bytes stay private until finalization proves request arrays
-/// and allocator cache were released, so a cleanup failure cannot let a
+/// and MLX buffer cache were released, so a cleanup failure cannot let a
 /// partial success escape.
 fn apply_image_generation_completed(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
@@ -360,7 +360,7 @@ pub(super) fn publish_image_finalized_memory_snapshot(
         .map(|snapshot| snapshot.mlx_memory_ceiling_bytes)
         .unwrap_or(0);
     if mlx_memory_snapshot.source != MlxMemorySnapshotSource::Finalized
-        || mlx_memory_snapshot.allocator_cache_memory_bytes != 0
+        || mlx_memory_snapshot.mlx_buffer_cache_bytes != 0
         || mlx_memory_snapshot.active_memory_bytes > mlx_memory_snapshot.peak_memory_bytes
         || attributed_memory_bytes > mlx_memory_snapshot.active_memory_bytes
         || mlx_memory_snapshot.expert_payload_bytes != 0

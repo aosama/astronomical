@@ -50,7 +50,7 @@ const THREADGROUP_SIZE: i32 = 256;
 /// avoids materializing a second full expert-weight tensor in the native basis.
 ///
 /// The decoded page is evaluated and detached before it is returned so the
-/// retained output never pins its packed source in the allocator cache.
+/// retained output never pins its packed source in the MLX buffer cache.
 pub fn decode_expert_weight_rows(
     runtime: &MlxRuntime,
     packed_code_words: &MlxArray,

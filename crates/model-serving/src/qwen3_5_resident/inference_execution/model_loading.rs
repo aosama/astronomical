@@ -267,7 +267,7 @@ fn resolve_validated_model_identity(
     Ok((resolved_model_id, resolved_model_revision))
 }
 
-/// Synchronizes the graphics stream and clears the allocator cache after the
+/// Synchronizes the graphics stream and clears the MLX buffer cache after the
 /// weights land, then loads the resident expert weights when the model plans
 /// expert layers.
 fn synchronize_gpu_stream_then_load_experts(
@@ -276,7 +276,7 @@ fn synchronize_gpu_stream_then_load_experts(
 ) -> Result<(), InferenceEngineError> {
     model
         .runtime()
-        .synchronize_gpu_stream_and_clear_allocator_cache()
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         .map_err(qwen3_5_runtime_error)?;
     load_resident_expert_weights_when_planned(model, model_loading_performance_attribution)
 }
@@ -308,7 +308,7 @@ fn load_and_materialize_resident_model(
 }
 
 /// Initializes the MLX runtime under attribution and immediately clears the
-/// allocator cache. Dropping the prior model moves its Metal buffers into
+/// MLX buffer cache. Dropping the prior model moves its Metal buffers into
 /// MLX's process-global allocator pool; releasing them before replacement
 /// weights load keeps stale residency from competing during first-request
 /// paging.
@@ -324,8 +324,8 @@ fn initialize_mlx_runtime_with_cleanup(
         .map_err(qwen3_5_runtime_error)?;
     model_loading_performance_attribution
         .measure_operation(
-            PerformanceOperation::MlxAllocatorCacheCleanup,
-            |_performance_attribution| runtime.clear_allocator_cache(),
+            PerformanceOperation::MlxBufferCacheCleanup,
+            |_performance_attribution| runtime.clear_mlx_buffer_cache(),
         )
         .map_err(qwen3_5_runtime_error)?;
     Ok(runtime)

@@ -50,12 +50,12 @@ impl Qwen3_5EngineState {
         let mlx_memory_snapshot_after_adjustment = model
             .memory_snapshot_with_forward_peak()
             .map_err(super::qwen3_5_runtime_error)?;
-        let (active_memory_bytes, allocator_cache_memory_bytes, peak_memory_bytes) =
+        let (active_memory_bytes, mlx_buffer_cache_bytes, peak_memory_bytes) =
             snapshot_memory_triple(&mlx_memory_snapshot_after_adjustment)?;
         let (expert_residency, mlx_memory_telemetry_value) = adjustment_telemetry(
             model,
             active_memory_bytes,
-            allocator_cache_memory_bytes,
+            mlx_buffer_cache_bytes,
             peak_memory_bytes,
         );
         let mlx_memory_telemetry = Some(mlx_memory_telemetry_value);
@@ -69,18 +69,18 @@ impl Qwen3_5EngineState {
             adjustment_elapsed_millis = adjustment_started_at.elapsed().as_millis(),
             active_mlx_memory_bytes_before = mlx_memory_snapshot_before_adjustment.active_memory_bytes(),
             active_mlx_memory_bytes_after = mlx_memory_snapshot_after_adjustment.active_memory_bytes(),
-            allocator_cache_memory_bytes_before = mlx_memory_snapshot_before_adjustment.allocator_cache_memory_bytes(),
-            allocator_cache_memory_bytes_after = mlx_memory_snapshot_after_adjustment.allocator_cache_memory_bytes(),
+            mlx_buffer_cache_bytes_before = mlx_memory_snapshot_before_adjustment.mlx_buffer_cache_bytes(),
+            mlx_buffer_cache_bytes_after = mlx_memory_snapshot_after_adjustment.mlx_buffer_cache_bytes(),
             expert_memory_mode = ?expert_memory_mode,
             expert_residency_transition_occurred,
             "applied live MLX memory ceiling adjustment"
         );
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
-            u64::try_from(updated_mlx_memory_limits.allocator_cache_memory_limit_bytes()).map_err(
+            u64::try_from(updated_mlx_memory_limits.mlx_buffer_cache_limit_bytes()).map_err(
                 |_| {
                     super::fatal_engine_error(
-                        "updated MLX allocator-cache limit exceeds the u64 range",
+                        "updated MLX buffer cache limit exceeds the u64 range",
                     )
                 },
             )?,
@@ -135,15 +135,13 @@ fn snapshot_memory_triple(
 ) -> Result<(u64, u64, u64), InferenceEngineError> {
     let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
         .map_err(|_| super::fatal_engine_error("MLX active memory exceeds the u64 range"))?;
-    let allocator_cache_memory_bytes =
-        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(|_| {
-            super::fatal_engine_error("MLX allocator-cache memory exceeds the u64 range")
-        })?;
+    let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
+        .map_err(|_| super::fatal_engine_error("MLX buffer cache memory exceeds the u64 range"))?;
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
         .map_err(|_| super::fatal_engine_error("MLX peak memory exceeds the u64 range"))?;
     Ok((
         active_memory_bytes,
-        allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes,
         peak_memory_bytes,
     ))
 }
@@ -159,7 +157,7 @@ fn snapshot_memory_triple(
 fn adjustment_telemetry(
     model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
     active_memory_bytes: u64,
-    allocator_cache_memory_bytes: u64,
+    mlx_buffer_cache_bytes: u64,
     peak_memory_bytes: u64,
 ) -> (crate::ExpertResidencyTelemetry, MlxMemoryTelemetry) {
     let active_memory_breakdown = model.finalized_active_memory_breakdown(
@@ -170,7 +168,7 @@ fn adjustment_telemetry(
     let expert_residency = model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown);
     let mlx_memory_telemetry = MlxMemoryTelemetry::new(
         active_memory_bytes,
-        allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes,
         peak_memory_bytes,
         active_memory_breakdown,
     )

@@ -251,8 +251,8 @@ pub(crate) async fn run_prefill_snapshot(
     );
     qwen3_5_model
         .runtime()
-        .clear_allocator_cache()
-        .expect("the test should release reclaimable MLX allocator cache between model loads");
+        .clear_mlx_buffer_cache()
+        .expect("the test should release reclaimable MLX buffer cache between model loads");
     PrefillSnapshot {
         highest_logit_token_id,
         final_position_logits,

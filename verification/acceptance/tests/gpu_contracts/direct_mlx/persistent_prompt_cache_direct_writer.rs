@@ -221,7 +221,7 @@ async fn should_retry_the_same_captured_arrays_after_releasing_artificial_active
             .saturating_sub(pressure_release_credit_bytes);
         let constrained_memory_limits = MlxMemoryLimits::new(
             constrained_active_memory_limit_bytes,
-            original_memory_limits.allocator_cache_memory_limit_bytes(),
+            original_memory_limits.mlx_buffer_cache_limit_bytes(),
         )
         .expect("the constrained publication limits should be valid");
         let mut memory_limit_guard = RuntimeMemoryLimitGuard::new(
@@ -250,7 +250,7 @@ async fn should_retry_the_same_captured_arrays_after_releasing_artificial_active
         drop(artificial_active_pressure);
         memory_limit_guard
             .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .expect("releasing artificial ownership should reclaim publication capacity");
         let retry_outcome = persistent_prompt_cache
             .publish_block(
@@ -334,6 +334,6 @@ impl Drop for RuntimeMemoryLimitGuard {
         }
         let _cleanup_result = self
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache();
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
     }
 }

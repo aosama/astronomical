@@ -3,7 +3,7 @@
 //! Kept-weight capacity is never stored. It is composed from the accounts in
 //! front of it each time it is asked for, so it changes only when one of
 //! them does: a request starts or ends, the phase changes, the context
-//! grows, the limit moves, a layer step measures more working memory than
+//! grows, the limit moves, a layer step measures more MLX working buffers than
 //! was known, or a lease is granted or given back. Between those events it
 //! does not move, which is what keeps a request from trimming and refilling
 //! the same weights.
@@ -12,10 +12,10 @@ use thiserror::Error;
 
 use super::accounts::{AccountInputs, LedgerAccounts, compose_accounts};
 use super::lease::{LeaseBook, LeaseId, LeasePurpose};
+use super::mlx_working_buffers::MlxWorkingBufferMeasurements;
 use super::model_shape::ModelMemoryShape;
 use super::phase::LedgerPhase;
 use super::reconciliation::{HeldMemory, LedgerReconciliation};
-use super::working_memory::WorkingMemoryMeasurements;
 
 /// A request the ledger cannot carry out.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
@@ -33,7 +33,7 @@ pub struct MemoryLedger {
     model_shape: ModelMemoryShape,
     context_bytes: u64,
     phase: LedgerPhase,
-    working_memory: WorkingMemoryMeasurements,
+    mlx_working_buffers: MlxWorkingBufferMeasurements,
     leases: LeaseBook,
 }
 
@@ -49,7 +49,7 @@ impl MemoryLedger {
             model_shape,
             context_bytes: 0,
             phase: LedgerPhase::Idle,
-            working_memory: WorkingMemoryMeasurements::default(),
+            mlx_working_buffers: MlxWorkingBufferMeasurements::default(),
             leases: LeaseBook::default(),
         })
     }
@@ -62,7 +62,7 @@ impl MemoryLedger {
             model_shape: self.model_shape,
             context_bytes: self.context_bytes,
             phase: self.phase,
-            working_memory_reserve: self.working_memory.reserve_for(self.phase),
+            mlx_working_buffer_reserve: self.mlx_working_buffers.reserve_for(self.phase),
             lease_bytes: self.leases.held_bytes(),
         })
     }
@@ -77,7 +77,7 @@ impl MemoryLedger {
             model_shape: self.model_shape,
             context_bytes,
             phase,
-            working_memory_reserve: self.working_memory.reserve_for(phase),
+            mlx_working_buffer_reserve: self.mlx_working_buffers.reserve_for(phase),
             lease_bytes: self.leases.held_bytes(),
         })
     }
@@ -92,7 +92,7 @@ impl MemoryLedger {
         self.model_shape
     }
 
-    /// Moves the limit. Measurements are kept: one layer's working memory
+    /// Moves the limit. Measurements are kept: one layer's MLX working buffers
     /// does not depend on how much else is in memory.
     pub fn change_limit(&mut self, limit_bytes: u64) -> Result<LedgerAccounts, MemoryLedgerError> {
         if limit_bytes == 0 {
@@ -134,16 +134,16 @@ impl MemoryLedger {
         self.accounts()
     }
 
-    /// One layer step of `phase` needed this much working memory. A step
+    /// One layer step of `phase` needed this many MLX working buffers. A step
     /// that hit the limit reports at least what it reached, so the next
     /// attempt is planned around the larger number.
-    pub fn record_working_memory(
+    pub fn record_mlx_working_buffers(
         &mut self,
         phase: LedgerPhase,
-        observed_working_memory_bytes: u64,
+        observed_mlx_working_buffer_bytes: u64,
     ) -> LedgerAccounts {
-        self.working_memory
-            .record(phase, observed_working_memory_bytes);
+        self.mlx_working_buffers
+            .record(phase, observed_mlx_working_buffer_bytes);
         self.accounts()
     }
 
@@ -179,17 +179,17 @@ impl MemoryLedger {
         &mut self,
         headroom_lease: LeaseId,
         phase: LedgerPhase,
-        observed_working_memory_bytes: u64,
+        observed_mlx_working_buffer_bytes: u64,
     ) -> Result<LedgerAccounts, MemoryLedgerError> {
         if self.leases.give_back(headroom_lease).is_none() {
             return Err(MemoryLedgerError::UnknownLease);
         }
-        Ok(self.record_working_memory(phase, observed_working_memory_bytes))
+        Ok(self.record_mlx_working_buffers(phase, observed_mlx_working_buffer_bytes))
     }
 
     /// Compares what the ledger expects in memory with one MLX reading.
-    /// Working memory is absent on purpose: at a layer boundary the step is
-    /// over and its working memory has been released. A redo's headroom is
+    /// MLX working buffers are absent on purpose: at a layer boundary the step is
+    /// over and its MLX working buffers have been released. A redo's headroom is
     /// absent too: it is room set aside, not memory anything holds.
     #[must_use]
     pub fn reconcile(

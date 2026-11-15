@@ -6,7 +6,7 @@
 //! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
 //! 3. Ask the memory governor whether that chunk fits, then execute exactly it.
 //! 4. Publish required prompt-cache state before advancing the in-memory cursor.
-//! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
+//! 5. Synchronize the chunk tape and reclaim MLX buffer cache only above threshold.
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
 //! 7. Emit progress only after all required state transitions succeeded.
 //!
@@ -30,14 +30,14 @@ use crate::{
 };
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::{
-    ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot,
+    MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot,
 };
 
 use super::super::engine_request::Qwen3_5EngineRequest;
 use super::super::generation_session_lifecycle::generation_error_constructors::completed_prefill_chunk_tokens_exceed_u32_range_error;
 use super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error;
 use super::super::generation_session_lifecycle::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error;
-use super::super::generation_session_lifecycle::generation_error_constructors::mlx_allocator_cache_memory_bytes_exceed_u64_range_error;
+use super::super::generation_session_lifecycle::generation_error_constructors::mlx_buffer_cache_bytes_exceed_u64_range_error;
 use super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error;
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
@@ -97,7 +97,7 @@ impl Qwen3_5EngineState {
             prefill_end,
             boundary_checkpoints,
         )?;
-        self.reclaim_allocator_cache_after_prefill_chunk(
+        self.reclaim_mlx_buffer_cache_after_prefill_chunk(
             request_id,
             active_request,
             prefill_start,
@@ -395,10 +395,10 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
-    /// Retires the chunk tape and reclaims the allocator cache above the
+    /// Retires the chunk tape and reclaims the MLX buffer cache above the
     /// IOGPU-visible threshold, logging both memory snapshots. Mirrors the
     /// inlined block.
-    fn reclaim_allocator_cache_after_prefill_chunk(
+    fn reclaim_mlx_buffer_cache_after_prefill_chunk(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
@@ -409,7 +409,7 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(engine_lost_loaded_model_error)?;
-        // Retire the chunk tape. Reclaim the allocator cache only when it is
+        // Retire the chunk tape. Reclaim the MLX buffer cache only when it is
         // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunk_cleanup =
             model.runtime().memory_snapshot().ok();
@@ -417,12 +417,12 @@ impl Qwen3_5EngineState {
         active_request
             .performance_attribution
             .measure_operation(
-                PerformanceOperation::MlxAllocatorCacheCleanup,
+                PerformanceOperation::MlxBufferCacheCleanup,
                 |_performance_attribution| {
                     model
                         .runtime()
-                        .synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(
-                            ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
+                        .synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(
+                            MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES,
                         )
                 },
             )
@@ -438,23 +438,23 @@ impl Qwen3_5EngineState {
                 memory_snapshot_before_end_of_prefill_chunk_cleanup
                     .as_ref()
                     .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
-            allocator_cache_memory_bytes_before_cleanup =
+            mlx_buffer_cache_bytes_before_cleanup =
                 memory_snapshot_before_end_of_prefill_chunk_cleanup
                     .as_ref()
-                    .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+                    .map(|memory_snapshot| memory_snapshot.mlx_buffer_cache_bytes()),
             active_memory_bytes_after_cleanup = memory_snapshot_after_end_of_prefill_chunk_cleanup
                 .as_ref()
                 .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
-            allocator_cache_memory_bytes_after_cleanup =
+            mlx_buffer_cache_bytes_after_cleanup =
                 memory_snapshot_after_end_of_prefill_chunk_cleanup
                     .as_ref()
-                    .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+                    .map(|memory_snapshot| memory_snapshot.mlx_buffer_cache_bytes()),
             runtime_active_memory_limit_bytes =
                 model.runtime().memory_limits().active_memory_limit_bytes(),
             cleanup_elapsed_millis = end_of_prefill_chunk_cleanup_started_at
                 .elapsed()
                 .as_millis(),
-            "cleared MLX allocator-cache storage after prompt-processing chunk"
+            "cleared MLX buffer cache storage after prompt-processing chunk"
         );
         Ok(())
     }
@@ -562,14 +562,13 @@ fn prefill_mlx_memory_telemetry_from_snapshot(
         active_memory_bytes,
         0,
     );
-    let allocator_cache_memory_bytes =
-        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes())
-            .map_err(mlx_allocator_cache_memory_bytes_exceed_u64_range_error)?;
+    let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
+        .map_err(mlx_buffer_cache_bytes_exceed_u64_range_error)?;
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
         .map_err(mlx_peak_memory_bytes_exceed_u64_range_error)?;
     Ok(crate::memory::telemetry::MlxMemoryTelemetry::new(
         active_memory_bytes,
-        allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes,
         peak_memory_bytes,
         active_memory_breakdown,
     )

@@ -5,7 +5,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
 };
 
 #[tokio::test]
@@ -14,7 +14,7 @@ async fn should_apply_one_ops_based_gated_delta_recurrent_step() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the gated-delta test memory limits should be valid"),
     )
@@ -75,7 +75,7 @@ async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() 
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the gated-delta test memory limits should be valid"),
     )
@@ -200,7 +200,7 @@ async fn should_apply_fused_gated_delta_tail_after_full_persistent_prompt_cache_
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the gated-delta test memory limits should be valid"),
     )

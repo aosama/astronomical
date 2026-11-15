@@ -51,12 +51,12 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
         );
         let prompt_context_bytes =
             context_memory_reservation_bytes(&model_directory, SMALL_PROMPT_TOKEN_COUNT + 2);
-        // The ceiling has to hold one prompt chunk's working memory on top
+        // The ceiling has to hold one prompt chunk's MLX working buffers on top
         // of the startup residency terms, or the in-memory engine is chosen
         // at startup and then moves the first request to the streaming
         // engine (issue #1508).
         let prefill_activation_workspace_bytes =
-            prompt_chunk_working_memory_allowance_bytes(&residency_geometry.model_geometry);
+            prompt_chunk_mlx_working_buffer_allowance_bytes(&residency_geometry.model_geometry);
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
             .saturating_add(prompt_context_bytes)
@@ -126,7 +126,7 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
             MULTI_CHUNK_PROMPT_TOKEN_COUNT,
         );
         // The ceiling purchases complete residency, the multi-chunk context,
-        // and an allowance for one prompt chunk's working memory, so the
+        // and an allowance for one prompt chunk's MLX working buffers, so the
         // second request fits.
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
@@ -134,7 +134,7 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
                 &model_directory,
                 MULTI_CHUNK_PROMPT_TOKEN_COUNT + 2,
             ))
-            .saturating_add(prompt_chunk_working_memory_allowance_bytes(
+            .saturating_add(prompt_chunk_mlx_working_buffer_allowance_bytes(
                 &residency_geometry.model_geometry,
             ));
         assert!(
@@ -283,13 +283,13 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
         let cache_seed_context_bytes =
             context_memory_reservation_bytes(&model_directory, CACHE_SEED_PROMPT_TOKEN_COUNT + 2);
         // The seed request has to be served in memory, so the limit holds
-        // one prompt chunk's working memory too. Without it the seed request
+        // one prompt chunk's MLX working buffers too. Without it the seed request
         // itself moves to the streaming engine and nothing is cached for
         // the retry to restore.
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
             .saturating_add(cache_seed_context_bytes)
-            .saturating_add(prompt_chunk_working_memory_allowance_bytes(
+            .saturating_add(prompt_chunk_mlx_working_buffer_allowance_bytes(
                 &residency_geometry.model_geometry,
             ));
         assert!(
@@ -588,11 +588,11 @@ fn attribution_counter(report: &Value, counter_identifier: &str) -> u64 {
         .unwrap_or(0)
 }
 
-/// Room these journeys leave for one prompt chunk's working memory when
+/// Room these journeys leave for one prompt chunk's MLX working buffers when
 /// they pick a limit the in-memory engine should serve under. The engine
 /// measures the real figure at load; three times the largest expert layer
 /// has been ample for the models these journeys load.
-pub(super) const fn prompt_chunk_working_memory_allowance_bytes(
+pub(super) const fn prompt_chunk_mlx_working_buffer_allowance_bytes(
     model_geometry: &ModelMemoryGeometry,
 ) -> u64 {
     model_geometry

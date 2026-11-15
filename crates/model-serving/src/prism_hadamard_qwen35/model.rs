@@ -82,12 +82,12 @@ impl PrismHadamardTextModel {
         let weights = load_family_weights(&runtime, &pack, &loaded_tensors)?;
         // Fusing stacked copies of the sibling projections, so the members'
         // own arrays are garbage once the tensor map drops; without this
-        // release their buffers stay in the MLX allocator cache for the
+        // release their buffers stay in the MLX buffer cache for the
         // life of the process, inflating the worker's resident footprint by
         // most of the pack size.
         drop(loaded_tensors);
         runtime
-            .clear_allocator_cache()
+            .clear_mlx_buffer_cache()
             .map_err(PrismHadamardModelError::ForwardRuntime)?;
         let head_dimension = pack.config().text().linear_key_head_dim;
         let (gdn_query_scale_weight, gdn_key_scale_weight) =

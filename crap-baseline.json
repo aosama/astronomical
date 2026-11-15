@@ -42529,7 +42529,7 @@
     },
     {
       "file": "crates/model-serving/src/flux2_klein/engine/mlx_components/engine_components.rs",
-      "function": "allocator_cache_limit_for_ceiling",
+      "function": "mlx_buffer_cache_limit_for_ceiling",
       "line": 291,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -47352,7 +47352,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/page_materialization.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/page_materialization.rs",
       "function": "expert_page_peak_allocation_bytes",
       "line": 14,
       "cyclomatic": 3.0,
@@ -47361,7 +47361,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/page_materialization.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/page_materialization.rs",
       "function": "source_expert_page_payload_bytes",
       "line": 29,
       "cyclomatic": 2.0,
@@ -47370,7 +47370,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/page_materialization.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/page_materialization.rs",
       "function": "tensor_element_count",
       "line": 50,
       "cyclomatic": 3.0,
@@ -47379,7 +47379,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/page_materialization.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/page_materialization.rs",
       "function": "total_tensor_storage_bytes",
       "line": 36,
       "cyclomatic": 1.0,
@@ -47388,7 +47388,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
       "function": "ExpertStreamingSessionCounters::record_avoided_complete_layer_source_bytes",
       "line": 90,
       "cyclomatic": 1.0,
@@ -47397,7 +47397,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
       "function": "ExpertStreamingSessionCounters::record_mandatory_source_bytes",
       "line": 99,
       "cyclomatic": 3.0,
@@ -47406,7 +47406,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
       "function": "ExpertStreamingSessionCounters::record_phase_source_read_elapsed",
       "line": 120,
       "cyclomatic": 3.0,
@@ -47415,7 +47415,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
       "function": "ExpertStreamingSessionCounters::record_route_coverage",
       "line": 58,
       "cyclomatic": 4.0,
@@ -47424,7 +47424,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
       "function": "expert_layer_topology_from_residency",
       "line": 179,
       "cyclomatic": 1.0,
@@ -47433,7 +47433,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
       "function": "no_cache_route_source_bytes",
       "line": 150,
       "cyclomatic": 2.0,
@@ -47442,7 +47442,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats.rs",
       "function": "record_streamed_page_source_plan_in_both_ledgers",
       "line": 24,
       "cyclomatic": 1.0,
@@ -47451,7 +47451,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats_tests.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats_tests.rs",
       "function": "one_layer_residency",
       "line": 11,
       "cyclomatic": 1.0,
@@ -47460,7 +47460,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/expert_cache/streaming_stats_tests.rs",
+      "file": "crates/model-serving/src/memory/astro_expert_cache_arithmetic/streaming_stats_tests.rs",
       "function": "replay_streamed_page_in_both_ledgers",
       "line": 31,
       "cyclomatic": 1.0,
@@ -47479,7 +47479,7 @@
     },
     {
       "file": "crates/model-serving/src/memory/telemetry.rs",
-      "function": "MlxMemoryLimitAdjustment::allocator_cache_memory_limit_bytes",
+      "function": "MlxMemoryLimitAdjustment::mlx_buffer_cache_limit_bytes",
       "line": 161,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -59458,7 +59458,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
-      "function": "memory_snapshot_allocator_cache_bytes",
+      "function": "memory_snapshot_mlx_buffer_cache_bytes",
       "line": 384,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -64273,7 +64273,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_error_constructors.rs",
-      "function": "mlx_allocator_cache_memory_bytes_exceed_u64_range_error",
+      "function": "mlx_buffer_cache_bytes_exceed_u64_range_error",
       "line": 42,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -64282,7 +64282,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_error_constructors.rs",
-      "function": "mlx_allocator_cache_memory_exceeds_u64_range_error",
+      "function": "mlx_buffer_cache_exceeds_u64_range_error",
       "line": 139,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -64435,7 +64435,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
-      "function": "Qwen3_5EngineState::snapshot_allocator_cache_memory_bytes_option",
+      "function": "Qwen3_5EngineState::snapshot_mlx_buffer_cache_bytes_option",
       "line": 363,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -64462,7 +64462,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
-      "function": "snapshot_allocator_cache_memory_bytes_option",
+      "function": "snapshot_mlx_buffer_cache_bytes_option",
       "line": 39,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -65326,7 +65326,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
-      "function": "Qwen3_5EngineState::reclaim_allocator_cache_after_prefill_chunk",
+      "function": "Qwen3_5EngineState::reclaim_mlx_buffer_cache_after_prefill_chunk",
       "line": 430,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69393,7 +69393,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
       "function": "ExpertSlotTable::slot_count",
       "line": 82,
       "cyclomatic": 1.0,
@@ -69402,8 +69402,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::begin_decode_forward",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::begin_decode_forward",
       "line": 198,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -69411,8 +69411,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::end_decode_forward",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::end_decode_forward",
       "line": 217,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69420,8 +69420,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::full_coverage_page",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::full_coverage_page",
       "line": 282,
       "cyclomatic": 6.0,
       "coverage": null,
@@ -69429,8 +69429,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::has_complete_layer",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::has_complete_layer",
       "line": 348,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -69438,8 +69438,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::missing_route_expert_ids",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::missing_route_expert_ids",
       "line": 238,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69447,8 +69447,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::new",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::new",
       "line": 161,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69456,8 +69456,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::new_with_decode_cache_policy",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::new_with_decode_cache_policy",
       "line": 165,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69465,8 +69465,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::non_resident_expert_ids",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::non_resident_expert_ids",
       "line": 254,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69474,8 +69474,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::occupied_slot_count",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::occupied_slot_count",
       "line": 268,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69483,8 +69483,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::queue_pending_prefetch_insert",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::queue_pending_prefetch_insert",
       "line": 383,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -69492,8 +69492,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::queue_pending_routed_expert_insert",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::queue_pending_routed_expert_insert",
       "line": 361,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -69501,8 +69501,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::record_disk_load",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::record_disk_load",
       "line": 226,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69510,8 +69510,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::record_routed_reads",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::record_routed_reads",
       "line": 408,
       "cyclomatic": 7.0,
       "coverage": null,
@@ -69519,8 +69519,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::remove_layer",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::remove_layer",
       "line": 463,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69528,8 +69528,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::routed_expert_coverage",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::routed_expert_coverage",
       "line": 437,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69537,8 +69537,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::take_decode_slot_eviction_count",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::take_decode_slot_eviction_count",
       "line": 221,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69546,8 +69546,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::try_adopt_complete_layer",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::try_adopt_complete_layer",
       "line": 319,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69555,8 +69555,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::update_maximum_resident_payload_bytes",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache.rs",
+      "function": "AstroExpertCache::update_maximum_resident_payload_bytes",
       "line": 478,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69564,7 +69564,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::compare_eviction_priority",
       "line": 81,
       "cyclomatic": 1.0,
@@ -69573,7 +69573,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::expire_probationary_admission",
       "line": 44,
       "cyclomatic": 2.0,
@@ -69582,7 +69582,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::is_evictable",
       "line": 76,
       "cyclomatic": 2.0,
@@ -69591,7 +69591,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::is_probationary",
       "line": 65,
       "cyclomatic": 1.0,
@@ -69600,7 +69600,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::mark_historically_hot",
       "line": 38,
       "cyclomatic": 1.0,
@@ -69609,7 +69609,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::mark_probationary",
       "line": 28,
       "cyclomatic": 1.0,
@@ -69618,7 +69618,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::recent_reuse_score_at",
       "line": 109,
       "cyclomatic": 2.0,
@@ -69627,7 +69627,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "DecodeExpertSlotState::record_decode_reuse",
       "line": 53,
       "cyclomatic": 2.0,
@@ -69636,7 +69636,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/decode_cache_policy.rs",
       "function": "available_probationary_slot_count",
       "line": 123,
       "cyclomatic": 1.0,
@@ -69645,8 +69645,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
-      "function": "WarmExpertSlotTableCache::historical_demand_count",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
+      "function": "AstroExpertCache::historical_demand_count",
       "line": 85,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69654,8 +69654,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
-      "function": "WarmExpertSlotTableCache::seed_expert_demand_history",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
+      "function": "AstroExpertCache::seed_expert_demand_history",
       "line": 50,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69663,8 +69663,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
-      "function": "WarmExpertSlotTableCache::take_persisted_expert_usage",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
+      "function": "AstroExpertCache::take_persisted_expert_usage",
       "line": 101,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69672,7 +69672,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
       "function": "aged_prefill_record",
       "line": 166,
       "cyclomatic": 5.0,
@@ -69681,7 +69681,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
       "function": "halve_all_layer_counts",
       "line": 156,
       "cyclomatic": 3.0,
@@ -69690,7 +69690,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
       "function": "merge_layer_counts",
       "line": 145,
       "cyclomatic": 3.0,
@@ -69699,7 +69699,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
       "function": "persisted_usage_matches_layer_shape",
       "line": 117,
       "cyclomatic": 2.0,
@@ -69708,7 +69708,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history.rs",
       "function": "seeded_nonzero_expert_count",
       "line": 127,
       "cyclomatic": 4.0,
@@ -69717,7 +69717,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_history_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_history_tests.rs",
       "function": "dense_counts",
       "line": 18,
       "cyclomatic": 2.0,
@@ -69726,8 +69726,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_phase.rs",
-      "function": "WarmExpertSlotTableCache::begin_prefill_demand_window",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_phase.rs",
+      "function": "AstroExpertCache::begin_prefill_demand_window",
       "line": 43,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -69735,8 +69735,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_phase.rs",
-      "function": "WarmExpertSlotTableCache::current_serving_phase",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_phase.rs",
+      "function": "AstroExpertCache::current_serving_phase",
       "line": 28,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69744,8 +69744,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_phase.rs",
-      "function": "WarmExpertSlotTableCache::set_prefill_demand_assignment_weight",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_phase.rs",
+      "function": "AstroExpertCache::set_prefill_demand_assignment_weight",
       "line": 61,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69753,7 +69753,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_phase_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_phase_tests.rs",
       "function": "dense_counts",
       "line": 13,
       "cyclomatic": 2.0,
@@ -69762,8 +69762,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_recording.rs",
-      "function": "WarmExpertSlotTableCache::record_expert_demand",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_recording.rs",
+      "function": "AstroExpertCache::record_expert_demand",
       "line": 20,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -69771,7 +69771,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand_recording.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/demand_recording.rs",
       "function": "record_selection_into_layer",
       "line": 49,
       "cyclomatic": 4.0,
@@ -69780,8 +69780,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/flush.rs",
-      "function": "WarmExpertSlotTableCache::flush_pending_inserts",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/flush.rs",
+      "function": "AstroExpertCache::flush_pending_inserts",
       "line": 17,
       "cyclomatic": 11.0,
       "coverage": null,
@@ -69789,8 +69789,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert.rs",
-      "function": "WarmExpertSlotTableCache::adopt_streamed_page_as_first_table",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert.rs",
+      "function": "AstroExpertCache::adopt_streamed_page_as_first_table",
       "line": 224,
       "cyclomatic": 6.0,
       "coverage": null,
@@ -69798,8 +69798,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert.rs",
-      "function": "WarmExpertSlotTableCache::insert_candidate_decode_experts",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert.rs",
+      "function": "AstroExpertCache::insert_candidate_decode_experts",
       "line": 69,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69807,8 +69807,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert.rs",
-      "function": "WarmExpertSlotTableCache::insert_first_candidate_decode_table",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert.rs",
+      "function": "AstroExpertCache::insert_first_candidate_decode_table",
       "line": 289,
       "cyclomatic": 12.0,
       "coverage": null,
@@ -69816,8 +69816,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert.rs",
-      "function": "WarmExpertSlotTableCache::insert_streamed_experts",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert.rs",
+      "function": "AstroExpertCache::insert_streamed_experts",
       "line": 48,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69825,8 +69825,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert.rs",
-      "function": "WarmExpertSlotTableCache::insert_streamed_experts_internal",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert.rs",
+      "function": "AstroExpertCache::insert_streamed_experts_internal",
       "line": 91,
       "cyclomatic": 13.0,
       "coverage": null,
@@ -69834,7 +69834,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert_planning.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert_planning.rs",
       "function": "assemble_planned_slots",
       "line": 165,
       "cyclomatic": 4.0,
@@ -69843,7 +69843,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert_planning.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert_planning.rs",
       "function": "grow_free_slots_within_budget",
       "line": 76,
       "cyclomatic": 3.0,
@@ -69852,7 +69852,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert_planning.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert_planning.rs",
       "function": "grow_table_within_budget",
       "line": 254,
       "cyclomatic": 12.0,
@@ -69861,7 +69861,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert_planning.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert_planning.rs",
       "function": "plan_evictable_slots",
       "line": 106,
       "cyclomatic": 3.0,
@@ -69870,7 +69870,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert_planning.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert_planning.rs",
       "function": "plan_new_expert_rows",
       "line": 51,
       "cyclomatic": 2.0,
@@ -69879,7 +69879,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert_planning.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert_planning.rs",
       "function": "snapshot_insert_planning_inputs",
       "line": 24,
       "cyclomatic": 1.0,
@@ -69888,7 +69888,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/insert_planning.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/insert_planning.rs",
       "function": "write_planned_experts",
       "line": 186,
       "cyclomatic": 7.0,
@@ -69897,7 +69897,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/memory_behavior_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/memory_behavior_tests.rs",
       "function": "wide_native_program",
       "line": 164,
       "cyclomatic": 1.0,
@@ -69906,7 +69906,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/memory_behavior_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/memory_behavior_tests.rs",
       "function": "wide_streamed_native_weights",
       "line": 182,
       "cyclomatic": 1.0,
@@ -69915,8 +69915,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/previous_token_prefetch.rs",
-      "function": "WarmExpertSlotTableCache::consume_prefetch_coverage",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/previous_token_prefetch.rs",
+      "function": "AstroExpertCache::consume_prefetch_coverage",
       "line": 96,
       "cyclomatic": 5.0,
       "coverage": null,
@@ -69924,8 +69924,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/previous_token_prefetch.rs",
-      "function": "WarmExpertSlotTableCache::insert_into_free_slots_only",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/previous_token_prefetch.rs",
+      "function": "AstroExpertCache::insert_into_free_slots_only",
       "line": 14,
       "cyclomatic": 6.0,
       "coverage": null,
@@ -69933,8 +69933,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/previous_token_prefetch.rs",
-      "function": "WarmExpertSlotTableCache::mark_prefetched_experts",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/previous_token_prefetch.rs",
+      "function": "AstroExpertCache::mark_prefetched_experts",
       "line": 87,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -69942,8 +69942,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/previous_token_prefetch.rs",
-      "function": "WarmExpertSlotTableCache::take_prefetch_flush_statistics",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/previous_token_prefetch.rs",
+      "function": "AstroExpertCache::take_prefetch_flush_statistics",
       "line": 79,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69951,8 +69951,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::append_resident_array_references",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::append_resident_array_references",
       "line": 98,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -69960,8 +69960,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::can_admit",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::can_admit",
       "line": 107,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69969,8 +69969,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::complete_layer_payload_bytes",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::complete_layer_payload_bytes",
       "line": 90,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69978,8 +69978,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::effective_maximum_resident_payload_bytes",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::effective_maximum_resident_payload_bytes",
       "line": 180,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -69987,8 +69987,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::evict_least_used_table",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::evict_least_used_table",
       "line": 113,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -69996,8 +69996,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::freeze_for_prefill_memory_recovery",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::freeze_for_prefill_memory_recovery",
       "line": 33,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70005,8 +70005,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::lift_prefill_memory_recovery_freeze",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::lift_prefill_memory_recovery_freeze",
       "line": 39,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70014,8 +70014,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::limit_for_request_pressure",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::limit_for_request_pressure",
       "line": 14,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70023,8 +70023,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::limit_for_request_pressure_to_maximum",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::limit_for_request_pressure_to_maximum",
       "line": 21,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70032,8 +70032,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::normal_maximum_resident_payload_bytes",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::normal_maximum_resident_payload_bytes",
       "line": 84,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70041,8 +70041,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::reclaim_to_effective_ceiling",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::reclaim_to_effective_ceiling",
       "line": 145,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -70050,8 +70050,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::resume_after_request_pressure",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::resume_after_request_pressure",
       "line": 43,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70059,8 +70059,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
-      "function": "WarmExpertSlotTableCache::statistics",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
+      "function": "AstroExpertCache::statistics",
       "line": 50,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70068,7 +70068,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/reclamation.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/reclamation.rs",
       "function": "effective_retained_expert_ceiling_bytes",
       "line": 192,
       "cyclomatic": 4.0,
@@ -70077,7 +70077,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/request_pressure_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/request_pressure_tests.rs",
       "function": "effective_ceiling_bytes",
       "line": 12,
       "cyclomatic": 1.0,
@@ -70086,7 +70086,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/request_pressure_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/request_pressure_tests.rs",
       "function": "frozen_cache",
       "line": 16,
       "cyclomatic": 1.0,
@@ -70095,7 +70095,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "Qwen3_5PagedExpertWeights::retained_reference_ok",
       "line": 18,
       "cyclomatic": 1.0,
@@ -70104,7 +70104,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "create_warm_table_weights",
       "line": 38,
       "cyclomatic": 5.0,
@@ -70113,7 +70113,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "materialize_and_detach_table_weights",
       "line": 143,
       "cyclomatic": 4.0,
@@ -70122,7 +70122,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "pad_array_to_warm_capacity",
       "line": 120,
       "cyclomatic": 2.0,
@@ -70131,7 +70131,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "pad_projection_to_warm_capacity",
       "line": 70,
       "cyclomatic": 10.0,
@@ -70140,7 +70140,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "write_expert_into_slot",
       "line": 166,
       "cyclomatic": 6.0,
@@ -70149,7 +70149,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "write_projection_into_slot",
       "line": 205,
       "cyclomatic": 11.0,
@@ -70158,7 +70158,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes.rs",
       "function": "write_row_into_slot",
       "line": 298,
       "cyclomatic": 4.0,
@@ -70167,7 +70167,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes_tests.rs",
       "function": "packed_codebook_page",
       "line": 22,
       "cyclomatic": 1.0,
@@ -70176,7 +70176,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes_tests.rs",
       "function": "packed_words_and_scales",
       "line": 40,
       "cyclomatic": 3.0,
@@ -70185,7 +70185,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/slot_writes_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/slot_writes_tests.rs",
       "function": "tagged_codebook_projection",
       "line": 151,
       "cyclomatic": 1.0,
@@ -70194,8 +70194,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/topology_snapshot.rs",
-      "function": "WarmExpertSlotTableCache::covered_demand",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/topology_snapshot.rs",
+      "function": "AstroExpertCache::covered_demand",
       "line": 60,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -70203,8 +70203,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/topology_snapshot.rs",
-      "function": "WarmExpertSlotTableCache::current_layer_residency",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/topology_snapshot.rs",
+      "function": "AstroExpertCache::current_layer_residency",
       "line": 30,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -70212,8 +70212,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/topology_snapshot.rs",
-      "function": "WarmExpertSlotTableCache::retained_expert_counts",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/topology_snapshot.rs",
+      "function": "AstroExpertCache::retained_expert_counts",
       "line": 85,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -70221,8 +70221,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/topology_snapshot.rs",
-      "function": "WarmExpertSlotTableCache::topology_snapshot",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/topology_snapshot.rs",
+      "function": "AstroExpertCache::topology_snapshot",
       "line": 18,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -70230,7 +70230,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/warm_expert_slot_table_cache_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/astro_expert_cache_tests.rs",
       "function": "streamed_weights",
       "line": 26,
       "cyclomatic": 1.0,
@@ -70239,7 +70239,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/warm_expert_slot_table_cache_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/astro_expert_cache_tests.rs",
       "function": "streamed_weights_for_expert_count",
       "line": 31,
       "cyclomatic": 1.0,
@@ -70248,7 +70248,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/warm_expert_slot_table_cache_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/astro_expert_cache_tests.rs",
       "function": "test_runtime",
       "line": 17,
       "cyclomatic": 1.0,
@@ -70257,7 +70257,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/warm_expert_slot_table_cache_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/astro_expert_cache/astro_expert_cache_tests.rs",
       "function": "warm_two_tokens",
       "line": 264,
       "cyclomatic": 1.0,
@@ -71329,7 +71329,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
-      "function": "Qwen3_5EngineState::reclaim_allocator_cache_after_prefill_chunk",
+      "function": "Qwen3_5EngineState::reclaim_mlx_buffer_cache_after_prefill_chunk",
       "line": 475,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -72004,7 +72004,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/artifact_loading.rs",
-      "function": "Qwen3_5Model::load_with_performance_attribution_and_decode_expert_cache_policy",
+      "function": "Qwen3_5Model::load_with_performance_attribution_and_decode_astro_expert_cache_policy",
       "line": 82,
       "cyclomatic": 11.0,
       "coverage": null,
@@ -72517,7 +72517,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_residency.rs",
-      "function": "Qwen3_5Model::record_dense_working_memory_in_budget",
+      "function": "Qwen3_5Model::record_dense_mlx_working_buffers_in_budget",
       "line": 185,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -72634,7 +72634,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_streamer.rs",
-      "function": "Qwen3_5DenseLayerStreamer::measured_working_memory_bytes",
+      "function": "Qwen3_5DenseLayerStreamer::measured_mlx_working_buffer_bytes",
       "line": 170,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -72661,7 +72661,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_streamer.rs",
-      "function": "Qwen3_5DenseLayerStreamer::record_measured_working_memory_bytes",
+      "function": "Qwen3_5DenseLayerStreamer::record_measured_mlx_working_buffer_bytes",
       "line": 165,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -72732,8 +72732,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_working_memory_probe.rs",
-      "function": "Qwen3_5Model::measure_dense_layer_working_memory",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_mlx_working_buffer_probe.rs",
+      "function": "Qwen3_5Model::measure_dense_layer_mlx_working_buffers",
       "line": 34,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -72741,8 +72741,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_working_memory_probe.rs",
-      "function": "Qwen3_5Model::measure_one_layer_working_memory",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_mlx_working_buffer_probe.rs",
+      "function": "Qwen3_5Model::measure_one_layer_mlx_working_buffers",
       "line": 64,
       "cyclomatic": 13.0,
       "coverage": null,
@@ -72750,7 +72750,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_working_memory_probe.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_mlx_working_buffer_probe.rs",
       "function": "Qwen3_5Model::probe_forward",
       "line": 119,
       "cyclomatic": 2.0,
@@ -72759,7 +72759,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_working_memory_probe.rs",
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/dense_layer_mlx_working_buffer_probe.rs",
       "function": "Qwen3_5Model::probe_layer_indexes",
       "line": 49,
       "cyclomatic": 4.0,
@@ -74227,7 +74227,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/paged_route_resolution.rs",
-      "function": "Qwen3_5Model::begin_decode_expert_cache_forward",
+      "function": "Qwen3_5Model::begin_decode_astro_expert_cache_forward",
       "line": 33,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -74245,7 +74245,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/paged_route_resolution.rs",
-      "function": "Qwen3_5Model::end_decode_expert_cache_forward",
+      "function": "Qwen3_5Model::end_decode_astro_expert_cache_forward",
       "line": 39,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -87403,7 +87403,7 @@
     },
     {
       "file": "crates/runtime-integration/src/mlx_runtime/memory_policy.rs",
-      "function": "MlxRuntime::clear_allocator_cache",
+      "function": "MlxRuntime::clear_mlx_buffer_cache",
       "line": 160,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -87448,7 +87448,7 @@
     },
     {
       "file": "crates/runtime-integration/src/mlx_runtime/memory_policy.rs",
-      "function": "MlxRuntime::synchronize_gpu_stream_and_clear_allocator_cache",
+      "function": "MlxRuntime::synchronize_gpu_stream_and_clear_mlx_buffer_cache",
       "line": 174,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -87457,7 +87457,7 @@
     },
     {
       "file": "crates/runtime-integration/src/mlx_runtime/memory_policy.rs",
-      "function": "MlxRuntime::synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold",
+      "function": "MlxRuntime::synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold",
       "line": 186,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -87646,7 +87646,7 @@
     },
     {
       "file": "crates/runtime-integration/src/mlx_runtime_types.rs",
-      "function": "MlxMemoryLimits::allocator_cache_memory_limit_bytes",
+      "function": "MlxMemoryLimits::mlx_buffer_cache_limit_bytes",
       "line": 87,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -87682,7 +87682,7 @@
     },
     {
       "file": "crates/runtime-integration/src/mlx_runtime_types.rs",
-      "function": "MlxMemorySnapshot::allocator_cache_memory_bytes",
+      "function": "MlxMemorySnapshot::mlx_buffer_cache_bytes",
       "line": 157,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -87718,7 +87718,7 @@
     },
     {
       "file": "crates/runtime-integration/src/mlx_runtime_types.rs",
-      "function": "allocator_cache_exceeds_reclaim_threshold",
+      "function": "mlx_buffer_cache_exceeds_reclaim_threshold",
       "line": 141,
       "cyclomatic": 1.0,
       "coverage": null,

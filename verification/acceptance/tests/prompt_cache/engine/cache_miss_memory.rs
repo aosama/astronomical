@@ -195,8 +195,8 @@ async fn measure_initial_request_expert_reclamation(
                 MlxMemoryLimits::new(
                     usize::try_from(memory_limit_adjustment.effective_mlx_memory_ceiling_bytes())
                         .expect("the effective acceptance ceiling should fit usize"),
-                    usize::try_from(memory_limit_adjustment.allocator_cache_memory_limit_bytes())
-                        .expect("the allocator cache limit should fit usize"),
+                    usize::try_from(memory_limit_adjustment.mlx_buffer_cache_limit_bytes())
+                        .expect("the MLX buffer cache limit should fit usize"),
                 )
                 .expect("the applied acceptance limits should be valid"),
             );
@@ -307,7 +307,7 @@ async fn load_memory_acceptance_engine(
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         persistent_prompt_cache_directory.map(|cache_directory| {
             PersistentPromptCacheDiskStoreConfig::new(
                 cache_directory.to_path_buf(),

@@ -403,7 +403,7 @@ fn assemble_suffix_visual_embeddings(
 }
 
 /// Concatenates the suffix arrays in plan order (a single image needs no
-/// concatenation), clears the allocator cache, and records the cache hit and
+/// concatenation), clears the MLX buffer cache, and records the cache hit and
 /// miss counters.
 fn finalize_visual_embedding_resolution(
     runtime: &MlxRuntime,
@@ -424,7 +424,7 @@ fn finalize_visual_embedding_resolution(
         )
     };
     runtime
-        .clear_allocator_cache()
+        .clear_mlx_buffer_cache()
         .map_err(visual_embedding_runtime_error)?;
     for persistent_prompt_cache_visual_embedding_hit_row_count in
         persistent_prompt_cache_visual_embedding_hit_row_counts

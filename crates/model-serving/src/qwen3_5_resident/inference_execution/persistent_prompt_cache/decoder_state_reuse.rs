@@ -376,7 +376,7 @@ impl Qwen3_5EngineState {
                 }
                 // The retained state lost to the disk store or diverged from
                 // this prompt's chain: drop it. Its arrays return to the
-                // allocator cache here rather than serving a conversation
+                // MLX buffer cache here rather than serving a conversation
                 // they no longer match.
                 super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::ChainMismatch => {
                     InMemoryPrefixAdoptionResolution::NotAdopted(Some(

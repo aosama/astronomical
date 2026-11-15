@@ -39,7 +39,8 @@ pub(super) fn apply_journey_overrides(
 ) {
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         journey.maximum_mlx_memory_bytes;
-    worker_startup_configuration.decode_expert_cache_policy = journey.decode_expert_cache_policy;
+    worker_startup_configuration.decode_astro_expert_cache_policy =
+        journey.decode_astro_expert_cache_policy;
     worker_startup_configuration.diagnostic_qwen3_5_engine_override =
         journey.diagnostic_qwen3_5_engine_override;
 }
@@ -69,7 +70,7 @@ pub(super) fn budget_exhausted_measurement(
     // the shortfall happened in.
     ThroughputMeasurement {
         model_id: model_id.to_owned(),
-        decode_expert_cache_policy: journey.decode_expert_cache_policy,
+        decode_astro_expert_cache_policy: journey.decode_astro_expert_cache_policy,
         total_input_tokens: 0,
         total_output_tokens: 0,
         cached_tokens: 0,

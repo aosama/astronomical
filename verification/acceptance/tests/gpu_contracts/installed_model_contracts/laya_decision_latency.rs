@@ -28,7 +28,7 @@ use astronomical_test_harness::test_run::TestRunContext;
 mod romeo_and_juliet;
 
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 6 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 const QUESTION_COUNTS: [usize; 3] = [1, 5, 10];
 /// Timed requests per question count; the median of these is reported.
 const TIMED_REQUESTS_PER_QUESTION_COUNT: usize = 20;
@@ -59,7 +59,7 @@ fn measure_checkpoint(checkpoint_name: &str, checkpoint_directory: &Path) {
         checkpoint_name,
         checkpoint_directory,
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the Laya artifact should validate");
     let load_result = decision_engine.load().expect("the checkpoint should load");
