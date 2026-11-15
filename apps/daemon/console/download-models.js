@@ -504,7 +504,9 @@ async function performDownloadModelsAction(action, huggingfaceId) {
         if (!actionResponse.ok) {
             throw new Error(actionDocument?.error?.message || "Download control failed");
         }
-        downloadModelsCurrentDownload = actionDocument;
+        // A pause, resume or cancel answers with the download alone; the list
+        // stays as last read until the next poll, rather than vanishing.
+        downloadModelsCurrentDownload = { ...actionDocument, queue: downloadModelsCurrentDownload.queue };
     } catch {
         downloadModelsCurrentDownload = { state: "failed", error_code: "download_failed" };
     }

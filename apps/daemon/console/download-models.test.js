@@ -165,6 +165,21 @@ test("should_explain_each_failure_that_trying_again_cannot_fix_and_fall_back_for
     assert.match(explanationFor(undefined), /picks up where it left off/);
 });
 
+test("should_keep_the_download_list_when_a_pause_answers_with_the_download_alone", async () => {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.renderDownloadModelsCatalogDocument = () => "ready";
+    scriptContext.fetch = async () => ({ ok: true, json: async () => ({ state: "paused", huggingface_id: "a/one" }) });
+    vm.runInContext(`downloadModelsCurrentDownload = {
+        state: "downloading", huggingface_id: "a/one",
+        queue: { waiting: [{ huggingface_id: "a/two", approximate_size_bytes: 1 }], failed: [] }
+    };`, scriptContext);
+
+    await vm.runInContext(`performDownloadModelsAction("pause")`, scriptContext);
+
+    assert.equal(vm.runInContext("downloadModelsCurrentDownload.state", scriptContext), "paused");
+    assert.equal(vm.runInContext("downloadModelsCurrentDownload.queue.waiting[0].huggingface_id", scriptContext), "a/two");
+});
+
 test("should_name_places_in_the_download_line_as_people_say_them", () => {
     const scriptContext = createDownloadModelsContext();
     const spokenPlaces = vm.runInContext(
