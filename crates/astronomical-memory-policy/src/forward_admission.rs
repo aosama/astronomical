@@ -36,9 +36,9 @@ pub enum StreamingEngineRequirement {
 
 /// A concrete action after evaluating one resident forward's memory equation.
 ///
-/// Allocator-cache reclamation is intentionally absent: MLX active-memory
-/// admission excludes allocator-cache bytes, and no resident forward admission
-/// path reclaims that cache to make a projection fit.
+/// MLX buffer cache reclamation is intentionally absent: MLX active-memory
+/// admission excludes MLX buffer cache bytes, and no resident forward admission
+/// path reclaims the MLX buffer cache to make a projection fit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResidentForwardAdmissionDecision {
     /// Stable ownership and expected peak fit.
@@ -58,7 +58,7 @@ impl ResidentForwardAdmissionDecision {
     /// Chooses from what the memory ledger says the forward leaves short
     /// (issue #2221). `stable_shortfall_bytes` is how far the weights and
     /// the stored state after the forward exceed the limit by themselves;
-    /// `peak_shortfall_bytes` adds the forward's working memory. A forward
+    /// `peak_shortfall_bytes` adds the forward's MLX working buffers. A forward
     /// that does not fit is never made smaller: the request changes engine.
     #[must_use]
     pub fn for_measured_shortfalls(

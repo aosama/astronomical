@@ -19,7 +19,7 @@ use astronomical_speech_contract::SpeechRequest;
 use astronomical_test_harness::test_run::TestRunContext;
 
 use super::speech_audio_checks::{
-    ROMEO_PASSAGE, TEST_ALLOCATOR_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES,
+    ROMEO_PASSAGE, TEST_MLX_BUFFER_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES,
     assert_sounds_like_the_passage, save_evidence, speak_through_engine,
 };
 
@@ -44,7 +44,7 @@ fn should_speak_a_shakespeare_passage_at_a_human_pace() {
         "Kokoro-82M-bf16",
         context.required_model_directory(),
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     );
     let load_result = engine.load().expect("Kokoro loads");
     assert!(

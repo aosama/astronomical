@@ -22,7 +22,7 @@ use astronomical_test_harness::test_run::TestRunContext;
 /// Resolves the directory to advertise as the configuration's
 /// `model_directories` entry for `model_directory`.
 ///
-/// For a HuggingFace-cache snapshot (`.../models--org--repo/snapshots/<hash>`),
+/// For a Hugging Face hub cache snapshot (`.../models--org--repo/snapshots/<hash>`),
 /// returns the `models--org--repo` entry root so discovery derives the decoded
 /// `org/repo` identity. For any other layout the directory is already named by
 /// its model id, so it is returned unchanged.
@@ -104,7 +104,7 @@ pub(crate) fn perf_worker_environment(
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
     fs::create_dir_all(&configuration_directory)
         .expect("the throughput worker configuration directory should be created");
-    // A HuggingFace-cache model must be advertised through its `models--org--repo`
+    // A Hugging Face hub cache model must be advertised through its `models--org--repo`
     // entry root, not the raw `snapshots/<hash>` leaf. Discovery only decodes the
     // `org/repo` identity from a `models--` directory; pointed at the snapshot
     // leaf it names the model by the hash, so the requested model id never

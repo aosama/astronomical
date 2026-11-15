@@ -116,13 +116,13 @@ pub use serving::serving_session_snapshot::ServingSessionSnapshot;
 pub use serving::speech_executor::{SpeechExecutionError, SpeechOutput, SpeechTimeouts};
 pub use shutdown_control::ShutdownController;
 pub use system_telemetry::parse_macos_memory_pressure_level;
-pub use worker::cache_clear::PromptCacheClearOutcome;
+pub use worker::astro_ssd_prompt_cache_clear::AstroSsdPromptCacheClearOutcome;
 pub use worker::control_error::WorkerControlError;
 pub use worker::handle::{GenerationQueueDepth, WorkerHandle};
 pub use worker::health::{
-    ActiveRequestProgress, ExpertResidencySnapshot, PendingPromptCacheClear,
-    PersistentPromptCacheSummary, PreparationResidencyCounts, WorkerActivity, WorkerHealthSnapshot,
-    WorkerHealthStatus,
+    ActiveRequestProgress, AstroSsdPromptCacheSummary, ExpertResidencySnapshot,
+    PendingAstroSsdPromptCacheClear, PreparationResidencyCounts, WorkerActivity,
+    WorkerHealthSnapshot, WorkerHealthStatus,
 };
 pub use worker::memory::limit::MlxMemoryLimitUpdateOutcome;
 pub use worker::process::child::{WorkerProcess, WorkerTerminationOutcome};

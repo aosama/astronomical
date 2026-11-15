@@ -40,7 +40,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use super::base::Qwen3_5ModelBase;
-use crate::decoder_cache::FullAttentionKeyValueState;
+use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5FullAttentionWeights,
 };
@@ -56,7 +56,7 @@ const FULL_ATTENTION_OPERATION: &str = "apply one Qwen3.5 full-attention step";
 ///
 /// `active_keys` and `active_values` are the views over `[0..offset]` returned
 /// by `FullAttentionKeyValueState::update_and_fetch`. They already contain the
-/// newly rotated keys and transposed values appended to the cached prefix.
+/// newly rotated keys and transposed values appended to the astro decoder state cache prefix.
 /// `rotated_queries` are the post-RoPE queries ready for the attention call.
 ///
 /// The MLX attention calls in this function execute the complete formula from
@@ -102,7 +102,7 @@ pub fn qwen3_5_full_attention_step(
             attention_scale,
         )?
     } else {
-        // A generated token supplies one query against every cached key. That
+        // A generated token supplies one query against every astro decoder state cache key. That
         // is O(active_tokens) for this individual decode step. Reusing stored
         // K and V is the important optimization over recomputing the prefix.
         runtime.scaled_dot_product_attention(
@@ -318,7 +318,7 @@ impl Qwen3_5ModelBase {
 
         // RoPE and RMS-norm are applied to the new keys before concatenation,
         // exactly as the model expects. The owner then appends these rotated
-        // tensors to the cached slab and returns views over the full prefix.
+        // tensors to the astro decoder state cache slab and returns views over the full prefix.
         // RMS normalization rescales each Q vector before it participates in a
         // dot product. It is a model-defined preparation step, not softmax.
         let normalized_queries = self.rms_normalize_attention_tensor(

@@ -44,7 +44,7 @@ pub(super) struct ProjectionSourceCollection {
 pub(super) fn build_projection_source_collection(
     plan_inputs: &ProjectionPlanInputs<'_>,
     projection_name: &str,
-    header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
+    safetensors_header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
 ) -> Result<ProjectionSourceCollection, ExpertManifestError> {
     let projection_module_name =
         format!("{}.switch_mlp.{projection_name}", plan_inputs.layer_prefix);
@@ -66,7 +66,7 @@ pub(super) fn build_projection_source_collection(
         plan_inputs,
         projection_name,
         &projection_storage,
-        header_cache,
+        safetensors_header_cache,
     )?;
     // Validate the source geometry specific to the storage format.
     validate_projection_storage_geometry(
@@ -94,7 +94,7 @@ fn resolve_projection_tensor_sources(
     plan_inputs: &ProjectionPlanInputs<'_>,
     projection_name: &str,
     projection_storage: &ProjectionStorageContract,
-    header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
+    safetensors_header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
 ) -> Result<HashMap<&'static str, Option<QuantizedTensorSource>>, ExpertManifestError> {
     let mut projection_sources: HashMap<&'static str, Option<QuantizedTensorSource>> =
         HashMap::new();
@@ -113,8 +113,8 @@ fn resolve_projection_tensor_sources(
             .stored_tensor_name_by_canonical_name
             .get(&tensor_name)
             .map_or(tensor_name.as_str(), String::as_str);
-        let header = match header_cache.entry(source_file.clone()) {
-            Entry::Occupied(cached_header_entry) => cached_header_entry.into_mut(),
+        let header = match safetensors_header_cache.entry(source_file.clone()) {
+            Entry::Occupied(memoized_header_entry) => memoized_header_entry.into_mut(),
             Entry::Vacant(vacant_header_entry) => vacant_header_entry.insert(
                 crate::expert_paging::safetensors_header::parse_safetensors_header(&source_file)?,
             ),

@@ -18,9 +18,9 @@ use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{SigningRequest, sign_bundle};
 use super::command::DevOpenPlacement;
-use super::icon_cache::cached_channel_icon;
 use super::info_plist::{render_agent_info_plist, render_info_plist};
 use super::native_metallib::packaged_metallib_source;
+use super::rendered_icon_memo::rendered_channel_icon;
 use super::running_instance::{open_bundle, quit_bundled_applications, wait_for_daemon_exit};
 use super::step_reporter::StepReporter;
 use super::tool_command::run_quiet_tool;
@@ -42,7 +42,7 @@ pub(crate) struct DevPipelinePaths {
     pub(crate) bundle_path: PathBuf,
     pub(crate) staging_bundle_path: PathBuf,
     pub(crate) previous_bundle_path: PathBuf,
-    pub(crate) cache_directory: PathBuf,
+    pub(crate) step_timings_and_icons_directory: PathBuf,
 }
 
 impl DevPipelinePaths {
@@ -59,7 +59,7 @@ impl DevPipelinePaths {
             previous_bundle_path: output_directory
                 .join(".previous")
                 .join(&bundle_directory_name),
-            cache_directory: repository_root.join("target/app-dev-cache"),
+            step_timings_and_icons_directory: repository_root.join("target/app-dev-cache"),
         }
     }
 }
@@ -70,11 +70,13 @@ pub(crate) fn run_dev_pipeline(
 ) -> Result<(), String> {
     let channel_profile = ChannelProfile::for_channel(Channel::Development);
     let pipeline_paths = DevPipelinePaths::for_profile(repository_root, &channel_profile);
-    create_directory(&pipeline_paths.cache_directory)?;
+    create_directory(&pipeline_paths.step_timings_and_icons_directory)?;
     let mut step_reporter = StepReporter::new(
         "app-dev",
         DEV_PIPELINE_STEP_NAMES.to_vec(),
-        pipeline_paths.cache_directory.join("step-timings.json"),
+        pipeline_paths
+            .step_timings_and_icons_directory
+            .join("step-timings.json"),
     );
     step_reporter.start_step("build-identity");
     let build_identity = BuildIdentity::gather(repository_root)?;
@@ -134,7 +136,7 @@ fn run_compile_steps(
     step_reporter.finish_step();
     step_reporter.start_step("thin-talk-web");
     let lockfile_stamp_path = pipeline_paths
-        .cache_directory
+        .step_timings_and_icons_directory
         .join("thin-talk-package-lock.sha256");
     build_thin_talk_web_assets(repository_root, &lockfile_stamp_path, step_reporter)?;
     step_reporter.finish_step();
@@ -204,11 +206,13 @@ fn resolve_bundle_inputs(
         &host_target_triple,
         Path::new(&home_directory),
     )?;
-    let icon_cache_directory = pipeline_paths.cache_directory.join("icons");
-    create_directory(&icon_cache_directory)?;
-    let icon = cached_channel_icon(
+    let rendered_icon_directory = pipeline_paths
+        .step_timings_and_icons_directory
+        .join("icons");
+    create_directory(&rendered_icon_directory)?;
+    let icon = rendered_channel_icon(
         repository_root,
-        &icon_cache_directory,
+        &rendered_icon_directory,
         channel_profile.icon_channel,
     )?;
     let bundle_inputs = BundleInputs::for_repository(

@@ -7,18 +7,18 @@
 //! the `RequestExtension` parameter, so the shared request code compiles once.
 
 use astronomical_ipc_protocol::{
-    RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
+    RequestId, WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
 use mlx_bridge::MlxArray;
 
-use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::qwen3_5_core::text::sampler;
 use crate::{
-    InferenceEngineError, PerformanceAttribution, PerformanceOperation,
-    PersistentPromptCacheBlockKey, Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
+    AstroSsdPromptCacheBlockKey, InferenceEngineError, PerformanceAttribution,
+    PerformanceOperation, Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
 };
 
 /// One request's state in either Qwen3.5 engine. The fields both engines
@@ -29,13 +29,11 @@ pub(crate) struct Qwen3_5EngineRequest<RequestExtension> {
     pub(crate) request_decoder_state: RequestDecoderStateStack,
     pub(crate) generated_token_count: u16,
     pub(crate) input_token_ids: Vec<u32>,
-    pub(crate) last_restored_persistent_prompt_cache_block_key:
-        Option<PersistentPromptCacheBlockKey>,
-    pub(crate) can_use_persistent_prompt_cache: bool,
+    pub(crate) last_restored_astro_ssd_prompt_cache_block_key: Option<AstroSsdPromptCacheBlockKey>,
+    pub(crate) can_use_astro_ssd_prompt_cache: bool,
     pub(crate) maximum_output_tokens: u16,
-    /// Qwen-owned visual identity aligned to ordinary target prompt-cache blocks.
-    pub(crate) persistent_prompt_cache_block_causal_inputs:
-        Vec<PersistentPromptCacheBlockCausalInput>,
+    /// Qwen-owned visual identity aligned to ordinary target astro SSD prompt cache blocks.
+    pub(crate) astro_ssd_prompt_cache_block_causal_inputs: Vec<AstroSsdPromptCacheBlockCausalInput>,
     pub(crate) next_position_tokens: u32,
     /// One-token-ahead successor submitted during the previous advancement.
     pub(crate) pending_generated_token: Option<MlxArray>,
@@ -62,8 +60,8 @@ pub(crate) struct Qwen3_5EngineRequest<RequestExtension> {
     pub(crate) thinking_budget_state: Qwen3_5ThinkingBudgetState,
     pub(crate) performance_attribution: PerformanceAttribution,
     pub(crate) prompt_work_reuse: WorkerPromptWorkReuse,
-    pub(crate) persistent_prompt_cache_diagnostics:
-        Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    pub(crate) astro_ssd_prompt_cache_diagnostics:
+        Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
     /// One-shot guard for no-I/O prefill-to-decode residency reconciliation.
     /// Mandatory decode reads populate any remaining elastic route ownership.
     pub(crate) generation_residency_preparation_attempted: bool,

@@ -3,7 +3,7 @@
 //! The final adaptive norm (`QwenImage21AdaLayerNormContinuous`) modulates each token from a timestep
 //! embedding. Under `causal_condition` the conditioning tensor carries `batch_size + 1` rows: the real
 //! timestep row per sample plus one extra `t = 0` row. Text and condition-image tokens take the `t = 0`
-//! row (making their modulation step-independent, which is what enables KV-cache reuse), while only the
+//! row (making their modulation step-independent, which is what enables reuse of the `astro_image_prefix_key_value_cache`), while only the
 //! **target image's** tokens take their own sample's row.
 //!
 //! This is subtle, high-risk bookkeeping (an off-by-one here silently corrupts every denoise step), so it

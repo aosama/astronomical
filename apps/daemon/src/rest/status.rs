@@ -54,7 +54,7 @@ pub(crate) async fn status_check(State(application_state): State<ApplicationStat
         &worker_health_snapshot,
         &application_state,
     );
-    attach_serving_and_prompt_cache_facts(&mut status_json, &worker_health_snapshot);
+    attach_serving_and_astro_ssd_prompt_cache_facts(&mut status_json, &worker_health_snapshot);
     attach_progress_or_idle_unload(
         &mut status_json,
         &worker_health_snapshot,
@@ -195,22 +195,20 @@ fn neural_engine_session_facts(
     })
 }
 
-/// Attaches the prompt-cache hit summary derived from the worker's stats
+/// Attaches the astro SSD prompt cache hit summary derived from the worker's stats
 /// event.
-fn attach_serving_and_prompt_cache_facts(
+fn attach_serving_and_astro_ssd_prompt_cache_facts(
     status_json: &mut serde_json::Value,
     worker_health_snapshot: &crate::WorkerHealthSnapshot,
 ) {
-    let persistent_prompt_cache_summary = crate::PersistentPromptCacheSummary::from_worker_event(
-        worker_health_snapshot
-            .persistent_prompt_cache_stats
-            .as_ref(),
+    let astro_ssd_prompt_cache_summary = crate::AstroSsdPromptCacheSummary::from_worker_event(
+        worker_health_snapshot.astro_ssd_prompt_cache_stats.as_ref(),
     );
-    status_json["persistent_prompt_cache"] = serde_json::json!({
-        "hits": persistent_prompt_cache_summary.hits,
-        "misses": persistent_prompt_cache_summary.misses,
-        "tokens_saved": persistent_prompt_cache_summary.tokens_saved,
-        "hit_rate": persistent_prompt_cache_summary.hit_rate(),
+    status_json["astro_ssd_prompt_cache"] = serde_json::json!({
+        "hits": astro_ssd_prompt_cache_summary.hits,
+        "misses": astro_ssd_prompt_cache_summary.misses,
+        "tokens_saved": astro_ssd_prompt_cache_summary.tokens_saved,
+        "hit_rate": astro_ssd_prompt_cache_summary.hit_rate(),
     });
 }
 

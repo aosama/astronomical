@@ -115,7 +115,7 @@ pub(crate) fn write_thinking_budget_acceptance_config(
         "$schema": "./astronomical-config.schema.json",
         "schema_version": 1,
         "runtime": { "model_directories": [model_directory] },
-        "prompt_cache": { "enabled": false, "maximum_size_gb": 50 },
+        "ssd_prompt_cache": { "enabled": false, "maximum_size_gb": 50 },
         "models": {
             (model_id): {
                 "generation_defaults": {

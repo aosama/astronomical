@@ -98,8 +98,9 @@ where
                     .await?;
                 Ok(None)
             }
-            WorkerCommand::ClearPromptCache { model_id } => {
-                self.clear_prompt_cache(model_id, event_writer).await?;
+            WorkerCommand::ClearAstroSsdPromptCache { model_id } => {
+                self.clear_astro_ssd_prompt_cache(model_id, event_writer)
+                    .await?;
                 Ok(None)
             }
         }
@@ -144,12 +145,12 @@ where
         Ok(())
     }
 
-    /// Clears the persistent prompt-cache footprint for a scoped or global model identity.
+    /// Clears the persistent astro SSD prompt cache footprint for a scoped or global model identity.
     ///
     /// A loaded engine gets first ownership so its in-memory index is reset on
-    /// the MLX owner thread. Engines without an open cache use the factory's
-    /// startup root, which also supports disabled-cache and idle-worker clears.
-    async fn clear_prompt_cache<WriteTransport>(
+    /// the MLX owner thread. Engines without an open `astro_ssd_prompt_cache` use the factory's
+    /// startup root, which also supports clears while the `astro_ssd_prompt_cache` is disabled and idle-worker clears.
+    async fn clear_astro_ssd_prompt_cache<WriteTransport>(
         &mut self,
         model_id: Option<String>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -157,7 +158,7 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        let _performance_log = PromptCacheClearPerformanceLog::start(
+        let _performance_log = AstroSsdPromptCacheClearPerformanceLog::start(
             self.model_factory
                 .as_ref()
                 .is_some_and(ModelFactory::performance_attribution_enabled),
@@ -167,16 +168,15 @@ where
             self.loaded_runtime.as_mut()
             && let Some(clear_event) = loaded_model
                 .engine
-                .clear_persistent_prompt_cache(model_id.clone())
+                .clear_astro_ssd_prompt_cache(model_id.clone())
                 .await
                 .map_err(
-                    |engine_error| WorkerRuntimeError::PersistentPromptCacheClearFailed {
+                    |engine_error| WorkerRuntimeError::AstroSsdPromptCacheClearFailed {
                         reason: engine_error.to_string(),
                     },
                 )?
         {
-            self.emit_persistent_prompt_cache_stats(event_writer)
-                .await?;
+            self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
             event_writer.send_event(&clear_event).await?;
             return Ok(());
         }
@@ -186,26 +186,26 @@ where
             let clear_outcome = match self
                 .model_factory
                 .as_ref()
-                .and_then(|factory| factory.global_prompt_cache_root_directory())
+                .and_then(|factory| factory.global_astro_ssd_prompt_cache_root_directory())
             {
-                Some(global_prompt_cache_root_directory) => {
-                    crate::clear_persistent_prompt_cache_directory(
-                        global_prompt_cache_root_directory,
+                Some(global_astro_ssd_prompt_cache_root_directory) => {
+                    crate::clear_astro_ssd_prompt_cache_directory(
+                        global_astro_ssd_prompt_cache_root_directory,
                         model_id.as_deref(),
                     )
                     .map_err(|clear_error| {
-                        WorkerRuntimeError::PersistentPromptCacheClearFailed {
+                        WorkerRuntimeError::AstroSsdPromptCacheClearFailed {
                             reason: clear_error.to_string(),
                         }
                     })?
                 }
-                None => crate::PersistentPromptCacheClearOutcome {
+                None => crate::AstroSsdPromptCacheClearOutcome {
                     model_id: model_id.clone(),
                     blocks_removed: 0,
                     bytes_freed: 0,
                 },
             };
-            WorkerEvent::PromptCacheCleared {
+            WorkerEvent::AstroSsdPromptCacheCleared {
                 model_id: clear_outcome.model_id,
                 blocks_removed: clear_outcome.blocks_removed,
                 bytes_freed: clear_outcome.bytes_freed,
@@ -213,7 +213,7 @@ where
         };
 
         #[cfg(not(feature = "direct-mlx"))]
-        let clear_event = WorkerEvent::PromptCacheCleared {
+        let clear_event = WorkerEvent::AstroSsdPromptCacheCleared {
             model_id,
             blocks_removed: 0,
             bytes_freed: 0,
@@ -225,17 +225,17 @@ where
 }
 
 /// Emits paired timing boundaries only when performance attribution is enabled.
-struct PromptCacheClearPerformanceLog {
+struct AstroSsdPromptCacheClearPerformanceLog {
     active_operation: Option<(std::time::Instant, Option<String>)>,
 }
 
-impl PromptCacheClearPerformanceLog {
+impl AstroSsdPromptCacheClearPerformanceLog {
     fn start(is_enabled: bool, model_id: Option<&str>) -> Self {
         let active_operation =
             is_enabled.then(|| (std::time::Instant::now(), model_id.map(str::to_owned)));
         if active_operation.is_some() {
             tracing::info!(
-                operation = "persistent_prompt_cache_clear",
+                operation = "astro_ssd_prompt_cache_clear",
                 phase = "start",
                 model_id,
                 "performance attribution operation started"
@@ -245,11 +245,11 @@ impl PromptCacheClearPerformanceLog {
     }
 }
 
-impl Drop for PromptCacheClearPerformanceLog {
+impl Drop for AstroSsdPromptCacheClearPerformanceLog {
     fn drop(&mut self) {
         if let Some((operation_started_at, model_id)) = self.active_operation.as_ref() {
             tracing::info!(
-                operation = "persistent_prompt_cache_clear",
+                operation = "astro_ssd_prompt_cache_clear",
                 phase = "end",
                 elapsed_millis = operation_started_at.elapsed().as_millis(),
                 model_id,

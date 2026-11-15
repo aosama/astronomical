@@ -13,9 +13,9 @@ The app you use every day and the app you are changing are kept apart, so a brok
 | Address | `127.0.0.1:6732` | `127.0.0.1:6733` |
 | App | `~/Applications/Astronomical.app` | `target/astronomical-macos-development.noindex/Astronomical Development.app` |
 
-- **Kept apart:** settings, logs, prompt caches, background processes, process locks and addresses. Each copy refuses a configured address that belongs to the other.
+- **Kept apart:** settings, logs, astro SSD prompt caches, background processes, process locks and addresses. Each copy refuses a configured address that belongs to the other.
 - **Shared:** both may read the same model folders, which they never write to. Both also share the Mac's graphics chip, memory and SSD, so running a real model in Development slows Stable down.
-- **Tests use Development only.** Tests that run a model read model locations and policy from Development. Tests that write settings, caches or logs use a temporary `.astronomical-dev` folder and never `~/.astronomical`. The only exception is settings tests that build a temporary Stable fixture to prove the two stay apart.
+- **Tests use Development only.** Tests that run a model read model locations and policy from Development. Tests that write settings, astro SSD prompt caches or logs use a temporary `.astronomical-dev` folder and never `~/.astronomical`. The only exception is settings tests that build a temporary Stable fixture to prove the two stay apart.
 
 The settings file each copy creates is described in [Configuration](configuration.md).
 

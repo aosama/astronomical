@@ -1,4 +1,4 @@
-//! Both ways of prefilling a prompt with prompt-cache checkpoints, for the
+//! Both ways of prefilling a prompt with astro SSD prompt cache checkpoints, for the
 //! test that holds them bit-identical (issue #1985).
 //!
 //! The engine publishes a block from the decoder state at each boundary. A
@@ -16,8 +16,8 @@ use super::Qwen3_5Model;
 use super::layer_major_prefill::{
     LayerMajorCheckpointContract, LayerMajorPrefillRequest, LayerMajorSpan,
 };
-use crate::persistent_cache::persistent_prompt_cache_boundary_completed_prefill_chunk_tokens;
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpoint;
+use crate::astro_ssd_prompt_cache::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::inference_execution::layer_major_span_plan::layer_major_span_plan;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
@@ -28,9 +28,9 @@ pub type PublishedBoundarySnapshot = (usize, BTreeMap<String, Vec<f32>>);
 impl Qwen3_5Model {
     /// Prefills `token_ids` layer by layer over the spans the engine plans
     /// for `chunk_token_count`-token chunks and `block_token_count`-token
-    /// cache blocks, returning every boundary it would publish.
+    /// `astro_ssd_prompt_cache` blocks, returning every boundary it would publish.
     #[doc(hidden)]
-    pub fn prefill_layer_major_with_prompt_cache_checkpoints(
+    pub fn prefill_layer_major_with_astro_ssd_prompt_cache_checkpoints(
         &self,
         token_ids: &[u32],
         chunk_token_count: usize,
@@ -68,7 +68,9 @@ impl Qwen3_5Model {
             LayerMajorPrefillRequest {
                 spans: &spans,
                 checkpoint_contract: Some(LayerMajorCheckpointContract {
-                    boundary_tensor_count: self.decoder_cache_layout.boundary_tensor_count(),
+                    boundary_tensor_count: self
+                        .astro_decoder_state_cache_layout
+                        .boundary_tensor_count(),
                     block_token_count,
                 }),
                 should_materialize_logits: false,
@@ -110,7 +112,7 @@ impl Qwen3_5Model {
     /// Prefills the same planned spans one chunk at a time, as the engine
     /// did before layer-major prefill, returning every boundary it publishes.
     #[doc(hidden)]
-    pub fn prefill_chunk_by_chunk_with_prompt_cache_checkpoints(
+    pub fn prefill_chunk_by_chunk_with_astro_ssd_prompt_cache_checkpoints(
         &self,
         token_ids: &[u32],
         chunk_token_count: usize,
@@ -156,7 +158,7 @@ impl Qwen3_5Model {
         span: &LayerMajorSpan,
         block_token_count: usize,
         request_decoder_state: &mut RequestDecoderStateStack,
-    ) -> Result<Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+    ) -> Result<Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
         let mut performance_attribution = PerformanceAttribution::disabled();
         if span.interior_boundary_tokens.is_empty() {
             self.prefill_chunk_with_performance_attribution(
@@ -182,7 +184,7 @@ impl Qwen3_5Model {
     /// Copies every snapshot tensor to the host as Float32, in boundary order.
     pub(super) fn host_snapshots(
         &self,
-        boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+        boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     ) -> Result<Vec<PublishedBoundarySnapshot>, Qwen3_5ExecutionError> {
         let mut published_boundary_snapshots = Vec::with_capacity(boundary_checkpoints.len());
         for boundary_checkpoint in boundary_checkpoints {
@@ -228,12 +230,12 @@ pub(super) fn planned_spans(
 /// Adds the boundary a forward ending at `end_token` publishes from its
 /// final state, as the engine does after each chunk, when one falls there.
 pub(super) fn push_final_state_boundary(
-    boundary_checkpoints: &mut Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    boundary_checkpoints: &mut Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     end_token: usize,
     block_token_count: usize,
     request_decoder_state: &RequestDecoderStateStack,
 ) -> Result<(), Qwen3_5ExecutionError> {
-    let ends_on_boundary = persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+    let ends_on_boundary = astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens(
         0,
         end_token,
         block_token_count,
@@ -253,10 +255,10 @@ pub(super) fn push_final_state_boundary(
             description: "a boundary was captured twice",
         });
     }
-    boundary_checkpoints.push(Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
+    boundary_checkpoints.push(Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint {
         completed_prefill_chunk_tokens: end_token,
         recurrent_snapshot_tensors: request_decoder_state
-            .extract_persistent_prompt_cache_recurrent_snapshot_tensors()
+            .extract_astro_ssd_prompt_cache_recurrent_snapshot_tensors()
             .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
                 description: "the decoder state lacks a published snapshot tensor",
             })?,

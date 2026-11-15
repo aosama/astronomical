@@ -142,22 +142,22 @@ where
         receive_owner_result(completion_receiver).await
     }
 
-    async fn collect_persistent_prompt_cache_stats(
+    async fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         let (completion_sender, completion_receiver) = oneshot::channel();
-        self.send_command(MlxInferenceCommand::CollectPersistentPromptCacheStats(
+        self.send_command(MlxInferenceCommand::CollectAstroSsdPromptCacheStats(
             completion_sender,
         ))?;
         receive_owner_result(completion_receiver).await
     }
 
-    async fn clear_persistent_prompt_cache(
+    async fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         let (completion_sender, completion_receiver) = oneshot::channel();
-        self.send_command(MlxInferenceCommand::ClearPersistentPromptCache {
+        self.send_command(MlxInferenceCommand::ClearAstroSsdPromptCache {
             model_id,
             completion_sender,
         })?;
@@ -225,8 +225,8 @@ where
         completion_sender: OwnerResultSender<GenerationFinalization>,
     },
     AdvanceNeuralEnginePreparation(OwnerResultSender<Option<NeuralEnginePrefillStatus>>),
-    CollectPersistentPromptCacheStats(OwnerResultSender<Option<WorkerEvent>>),
-    ClearPersistentPromptCache {
+    CollectAstroSsdPromptCacheStats(OwnerResultSender<Option<WorkerEvent>>),
+    ClearAstroSsdPromptCache {
         model_id: Option<String>,
         completion_sender: OwnerResultSender<Option<WorkerEvent>>,
     },
@@ -322,17 +322,17 @@ fn serve_maintenance_command<Execution>(
                 .send(Ok(execution.advance_neural_engine_preparation()))
                 .is_err();
         }
-        MlxInferenceCommand::CollectPersistentPromptCacheStats(completion_sender) => {
+        MlxInferenceCommand::CollectAstroSsdPromptCacheStats(completion_sender) => {
             let _receiver_was_dropped = completion_sender
-                .send(execution.collect_persistent_prompt_cache_stats())
+                .send(execution.collect_astro_ssd_prompt_cache_stats())
                 .is_err();
         }
-        MlxInferenceCommand::ClearPersistentPromptCache {
+        MlxInferenceCommand::ClearAstroSsdPromptCache {
             model_id,
             completion_sender,
         } => {
             let _receiver_was_dropped = completion_sender
-                .send(execution.clear_persistent_prompt_cache(model_id))
+                .send(execution.clear_astro_ssd_prompt_cache(model_id))
                 .is_err();
         }
         MlxInferenceCommand::CollectMlxMemoryTelemetry(completion_sender) => {

@@ -75,8 +75,8 @@ impl Flux2KleinMlxComponents {
                     .map(|load_plan| load_plan.model_shard_count),
                 mlx_active_memory_bytes: memory_snapshot
                     .map(|snapshot| snapshot.active_memory_bytes() as u64),
-                mlx_allocator_cache_memory_bytes: memory_snapshot
-                    .map(|snapshot| snapshot.allocator_cache_memory_bytes() as u64),
+                mlx_buffer_cache_bytes: memory_snapshot
+                    .map(|snapshot| snapshot.mlx_buffer_cache_bytes() as u64),
                 mlx_peak_memory_bytes: memory_snapshot
                     .map(|snapshot| snapshot.peak_memory_bytes() as u64),
                 failure_description,
@@ -113,7 +113,7 @@ impl Flux2KleinMlxComponents {
     }
 
     /// Brings the MLX runtime up for this load — bounded initialization
-    /// followed by an allocator-cache cleanup — and validates the artifact
+    /// followed by an MLX buffer-cache cleanup — and validates the artifact
     /// plus its memory admission only when that succeeded. Every step keeps
     /// its own measured region so load-time attribution keeps its original
     /// boundaries.
@@ -163,11 +163,9 @@ impl Flux2KleinMlxComponents {
         }
         let planning_ceiling_bytes = usize::try_from(load_plan.planning_ceiling_bytes)
             .map_err(|_| "the FLUX.2 Klein planning ceiling exceeds this platform".to_owned())?;
-        let memory_limits = MlxMemoryLimits::new(
-            planning_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
-        )
-        .map_err(|error| error.to_string())?;
+        let memory_limits =
+            MlxMemoryLimits::new(planning_ceiling_bytes, self.mlx_buffer_cache_limit_bytes)
+                .map_err(|error| error.to_string())?;
         initialized_runtime
             .update_memory_limits(memory_limits)
             .map_err(|error| error.to_string())?;
@@ -175,15 +173,15 @@ impl Flux2KleinMlxComponents {
     }
 
     /// Initializes the MLX runtime under this load's memory limits and clears
-    /// the allocator cache; both steps sit inside their original
-    /// `ImageRuntimeSetup` and `MlxAllocatorCacheCleanup` regions.
+    /// the MLX buffer cache; both steps sit inside their original
+    /// `ImageRuntimeSetup` and `MlxBufferCacheCleanup` regions.
     fn initialize_flux2_klein_runtime(
         &self,
         attribution: &mut PerformanceAttribution,
     ) -> Result<MlxRuntime, String> {
         let memory_limits = MlxMemoryLimits::new(
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|error| error.to_string())?;
         let initialized_runtime = attribution
@@ -192,8 +190,8 @@ impl Flux2KleinMlxComponents {
             })
             .map_err(|error| error.to_string())?;
         attribution
-            .measure_operation(PerformanceOperation::MlxAllocatorCacheCleanup, |_| {
-                initialized_runtime.clear_allocator_cache()
+            .measure_operation(PerformanceOperation::MlxBufferCacheCleanup, |_| {
+                initialized_runtime.clear_mlx_buffer_cache()
             })
             .map_err(|error| error.to_string())?;
         Ok(initialized_runtime)

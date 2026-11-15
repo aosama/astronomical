@@ -67,7 +67,9 @@ fn forward_one_draft_layer(
     layer_weights: &DFlashDraftLayerWeights,
     attention_kind: DFlashDraftLayerAttentionKind,
     configuration: &DFlashDraftConfiguration,
-    layer_key_value_state: Option<&mut crate::decoder_cache::FullAttentionKeyValueState>,
+    layer_key_value_state: Option<
+        &mut crate::astro_decoder_state_cache::FullAttentionKeyValueState,
+    >,
     layer_input: &MlxArray,
     first_block_absolute_position: i32,
     block_token_count: i32,

@@ -21,20 +21,20 @@ fn should_classify_only_the_metal_command_buffer_out_of_memory_error_as_recovera
 fn should_raise_a_snapshot_peak_to_a_higher_measured_one() {
     let snapshot = MlxMemorySnapshot {
         active_memory_bytes: 10,
-        allocator_cache_memory_bytes: 3,
+        mlx_buffer_cache_bytes: 3,
         peak_memory_bytes: 20,
     };
     let raised_snapshot = snapshot.with_peak_at_least(35);
     assert_eq!(raised_snapshot.peak_memory_bytes(), 35);
     assert_eq!(raised_snapshot.active_memory_bytes(), 10);
-    assert_eq!(raised_snapshot.allocator_cache_memory_bytes(), 3);
+    assert_eq!(raised_snapshot.mlx_buffer_cache_bytes(), 3);
 }
 
 #[test]
 fn should_keep_a_snapshot_peak_that_is_already_the_higher() {
     let snapshot = MlxMemorySnapshot {
         active_memory_bytes: 10,
-        allocator_cache_memory_bytes: 3,
+        mlx_buffer_cache_bytes: 3,
         peak_memory_bytes: 20,
     };
     assert_eq!(snapshot.with_peak_at_least(20).peak_memory_bytes(), 20);

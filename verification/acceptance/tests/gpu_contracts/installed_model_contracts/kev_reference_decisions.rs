@@ -32,7 +32,7 @@ use super::decision_reference_fixture::{
 
 /// Kev-9B in bfloat16 is about 18 GB; this leaves its forward workspace.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 32 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 /// The largest probability difference accepted against the float32 reference.
 ///
 /// The converted backbone holds bfloat16 weights with the adapter merged in,
@@ -191,7 +191,7 @@ async fn should_match_the_reference_decisions_within_the_stated_tolerance() {
         "kev",
         &model_directory,
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the converted Kev folder should validate");
     decision_engine

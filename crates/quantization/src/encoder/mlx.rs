@@ -304,7 +304,7 @@ fn keep_better_candidate(
 
 /// Recomputes the codes from the chosen parameters, packs them, shapes the
 /// scales and biases as `[..., columns / group_size]` in the input dtype,
-/// and drains the allocator cache the search filled.
+/// and drains the MLX buffer cache the search filled.
 fn finish_search(
     runtime: &MlxRuntime,
     weights: &MlxArray,
@@ -336,7 +336,7 @@ fn finish_search(
     )?;
     runtime.evaluate_arrays(&[&packed_weight, &scales, &biases])?;
     drop(codes);
-    runtime.clear_allocator_cache()?;
+    runtime.clear_mlx_buffer_cache()?;
     Ok(MlxAffineQuantizedTensor {
         packed_weight,
         scales,
@@ -374,7 +374,7 @@ fn search_affine_in_leading_axis_slices(
             bit_width,
             group_size,
         )?);
-        runtime.clear_allocator_cache()?;
+        runtime.clear_mlx_buffer_cache()?;
         slice_start = slice_stop;
     }
     concatenate_encoded_slices(runtime, &encoded_slices, bit_width, group_size)
@@ -399,7 +399,7 @@ fn concatenate_encoded_slices(
     let scales = runtime.concatenate_axis(&scale_slices, 0)?;
     let biases = runtime.concatenate_axis(&bias_slices, 0)?;
     runtime.evaluate_arrays(&[&packed_weight, &scales, &biases])?;
-    runtime.clear_allocator_cache()?;
+    runtime.clear_mlx_buffer_cache()?;
     Ok(MlxAffineQuantizedTensor {
         packed_weight,
         scales,

@@ -1,5 +1,5 @@
 //! Reads an artifact from a directory on this machine, following symlinks so a
-//! Hugging Face cache snapshot reads like any other folder. A snapshot's path also
+//! Hugging Face hub cache snapshot reads like any other folder. A snapshot's path also
 //! names its repository and commit, so a local copy keeps its provenance.
 
 use std::fs::{self, File};
@@ -12,9 +12,9 @@ use crate::error::VisionTowerError;
 // Deep enough for sidecars such as `optiq/optiq_vision.safetensors`, and shallow
 // enough that pointing this at a broad folder does not walk a whole disk.
 const MAXIMUM_DIRECTORY_DEPTH: usize = 3;
-const CACHE_REPOSITORY_PREFIX: &str = "models--";
-const CACHE_REPOSITORY_SEPARATOR: &str = "--";
-const CACHE_SNAPSHOTS_FOLDER: &str = "snapshots";
+const HUGGINGFACE_HUB_CACHE_REPOSITORY_PREFIX: &str = "models--";
+const HUGGINGFACE_HUB_CACHE_REPOSITORY_SEPARATOR: &str = "--";
+const HUGGINGFACE_HUB_CACHE_SNAPSHOTS_FOLDER: &str = "snapshots";
 
 #[derive(Debug)]
 pub struct LocalDirectorySource {
@@ -27,10 +27,11 @@ impl LocalDirectorySource {
         let mut files = Vec::new();
         collect_files(root_directory, "", 0, &mut files)?;
         files.sort_by_key(relative_path_of);
-        let (origin_repository, pinned_revision) = match cache_snapshot_origin(root_directory) {
-            Some((origin_repository, revision)) => (Some(origin_repository), Some(revision)),
-            None => (None, None),
-        };
+        let (origin_repository, pinned_revision) =
+            match huggingface_hub_cache_snapshot_origin(root_directory) {
+                Some((origin_repository, revision)) => (Some(origin_repository), Some(revision)),
+                None => (None, None),
+            };
         Ok(Self {
             root_directory: root_directory.to_path_buf(),
             listing: ArtifactListing {
@@ -94,15 +95,17 @@ impl LocalDirectorySource {
 
 /// `(organization/name, commit)` for a path ending
 /// `models--organization--name/snapshots/commit`.
-fn cache_snapshot_origin(root_directory: &Path) -> Option<(String, String)> {
+fn huggingface_hub_cache_snapshot_origin(root_directory: &Path) -> Option<(String, String)> {
     let revision = root_directory.file_name()?.to_str()?;
     let snapshots_folder = root_directory.parent()?;
-    if snapshots_folder.file_name()?.to_str()? != CACHE_SNAPSHOTS_FOLDER {
+    if snapshots_folder.file_name()?.to_str()? != HUGGINGFACE_HUB_CACHE_SNAPSHOTS_FOLDER {
         return None;
     }
-    let cache_folder_name = snapshots_folder.parent()?.file_name()?.to_str()?;
-    let encoded_repository = cache_folder_name.strip_prefix(CACHE_REPOSITORY_PREFIX)?;
-    let (organization, model_name) = encoded_repository.split_once(CACHE_REPOSITORY_SEPARATOR)?;
+    let huggingface_hub_cache_folder_name = snapshots_folder.parent()?.file_name()?.to_str()?;
+    let encoded_repository =
+        huggingface_hub_cache_folder_name.strip_prefix(HUGGINGFACE_HUB_CACHE_REPOSITORY_PREFIX)?;
+    let (organization, model_name) =
+        encoded_repository.split_once(HUGGINGFACE_HUB_CACHE_REPOSITORY_SEPARATOR)?;
     Some((format!("{organization}/{model_name}"), revision.to_owned()))
 }
 
@@ -138,7 +141,7 @@ fn collect_files(
         let Some(entry_name) = directory_entry.file_name().to_str().map(str::to_owned) else {
             continue;
         };
-        // Download bookkeeping such as `.cache` is not part of the artifact.
+        // Download bookkeeping such as the Hugging Face `.cache` folder is not part of the artifact.
         if entry_name.starts_with('.') {
             continue;
         }

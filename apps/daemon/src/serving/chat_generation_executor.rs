@@ -26,14 +26,14 @@ pub enum ChatGenerationStreamEvent {
         forward_prefill_chunk_elapsed_millis: Option<u64>,
         completed_prefill_chunk_tokens: Option<u32>,
         mlx_active_memory_bytes: Option<u64>,
-        mlx_allocator_cache_memory_bytes: Option<u64>,
+        mlx_buffer_cache_bytes: Option<u64>,
         mlx_peak_memory_bytes: Option<u64>,
     },
     Completed {
         prompt_token_count: u32,
         generated_token_count: u16,
         reasoning_token_count: u16,
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         reason: ChatGenerationCompletionReason,
     },
     Failed {

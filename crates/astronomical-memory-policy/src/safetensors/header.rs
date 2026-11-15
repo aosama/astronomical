@@ -71,7 +71,7 @@ impl<'de> Visitor<'de> for UniqueSafetensorsHeaderEntriesVisitor {
     }
 }
 
-/// One raw tensor declaration shared by artifact and persistent-cache readers.
+/// One raw tensor declaration shared by artifact and astro SSD prompt cache readers.
 #[derive(Debug, Deserialize)]
 pub struct SafetensorsTensorView {
     pub dtype: String,

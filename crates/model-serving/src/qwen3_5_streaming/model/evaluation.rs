@@ -4,7 +4,7 @@ use crate::PerformanceAttribution;
 use crate::qwen3_5_streaming::PagedRouteValidationOutcome;
 
 use super::{Qwen3_5ExecutionError, Qwen3_5Model, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 impl Qwen3_5Model {
     /// Returns the highest-logit token ID for one final-position output.
@@ -50,7 +50,7 @@ impl Qwen3_5Model {
         &self,
         request_decoder_state: &RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {

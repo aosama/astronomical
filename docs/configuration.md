@@ -17,7 +17,7 @@ A small file looks like this. Keep the `$schema` line: the app refuses a file th
         "model_directories": ["/path/to/models"],
         "maximum_mlx_memory_gb": 16
       },
-      "prompt_cache": {
+      "ssd_prompt_cache": {
         "enabled": true,
         "maximum_size_gb": 50
       }
@@ -32,8 +32,10 @@ A small file looks like this. Keep the `$schema` line: the app refuses a file th
 | `runtime.default_model` | The model used when a command or request does not name one. | The built-in default, Qwen3.5-2B-4bit. |
 | `runtime.idle_model_unload_seconds` | How long an unused model stays loaded. | 60 seconds. |
 | `runtime.metal_residency_refresh_enabled` | Keeps a model's memory ready for the graphics chip while idle. | Off. |
-| `prompt_cache.enabled` | Saves work on prompts to the SSD so repeated text is not read again. | On. |
-| `prompt_cache.maximum_size_gb` | The most disk space that saved work may use. | 50 GB. |
+| `ssd_prompt_cache.enabled` | Saves work on prompts to the SSD so repeated text is not read again. | On. |
+| `ssd_prompt_cache.maximum_size_gb` | The most disk space that saved work may use. | 50 GB. |
+
+Older files called the `ssd_prompt_cache` section `prompt_cache`, and two chunking settings `prompt_cache_block_tokens` and `prompt_cache_common_prefix_stride_blocks`. Astronomical moves them to the new names the first time it reads the file.
 
 One GB here is the gigabyte Apple uses when it describes a Mac's memory: 1,073,741,824 bytes (2³⁰).
 

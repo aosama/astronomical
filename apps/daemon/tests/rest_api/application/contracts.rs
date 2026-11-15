@@ -53,7 +53,7 @@ async fn should_stream_openai_chat_outputs_and_done() {
             prompt_token_count: 3,
             generated_token_count: 2,
             reasoning_token_count: 1,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -75,7 +75,7 @@ async fn should_keep_the_openai_stream_open_after_internal_prefill_progress() {
             forward_prefill_chunk_elapsed_millis: Some(1_200),
             completed_prefill_chunk_tokens: Some(2_048),
             mlx_active_memory_bytes: Some(22_164_699_392),
-            mlx_allocator_cache_memory_bytes: Some(0),
+            mlx_buffer_cache_bytes: Some(0),
             mlx_peak_memory_bytes: Some(24_754_436_684),
         },
         ChatGenerationStreamEvent::TextFragment("still connected".to_owned()),
@@ -83,7 +83,7 @@ async fn should_keep_the_openai_stream_open_after_internal_prefill_progress() {
             prompt_token_count: 19_485,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            cached_token_count: 8_192,
+            astro_ssd_prompt_cache_restored_token_count: 8_192,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -102,7 +102,7 @@ async fn should_accept_a_streaming_chat_request_with_one_large_user_message() {
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -121,7 +121,7 @@ async fn should_timestamp_openai_chat_chunks_with_current_unix_time() {
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -240,7 +240,7 @@ async fn should_send_tool_call_arguments_with_secret_bearing_lines_unredacted_on
             prompt_token_count: 1,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::ToolCalls,
         },
     ]));
@@ -364,13 +364,10 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         status_document["serving_session"]["average_generation_tok_per_second"],
         0.0
     );
-    assert_eq!(status_document["persistent_prompt_cache"]["hits"], 0);
-    assert_eq!(status_document["persistent_prompt_cache"]["misses"], 0);
-    assert_eq!(
-        status_document["persistent_prompt_cache"]["tokens_saved"],
-        0
-    );
-    assert_eq!(status_document["persistent_prompt_cache"]["hit_rate"], 0.0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["hits"], 0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["misses"], 0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["tokens_saved"], 0);
+    assert_eq!(status_document["astro_ssd_prompt_cache"]["hit_rate"], 0.0);
 }
 
 #[tokio::test]

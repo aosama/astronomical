@@ -70,7 +70,7 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
     # over-budget functions carry #[expect], so this single default-world
     # pass fails when a function crosses the budget without an expect, and
     # an #[expect] self-cleans when its function shrinks below the budget.
-    # Default world only: the pass is warm-cache incremental so commits
+    # Default world only: the pass is incremental over warm Cargo build outputs so commits
     # stay fast. Feature-gated acceptance tests get their own pass below;
     # every other feature-gated path stays linted by the developer's own
     # lane runs.

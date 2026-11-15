@@ -20,7 +20,7 @@ pub(crate) struct ChunkingConfigFile {
         deserialize_with = "deserialize_present_nullable_u32",
         skip_serializing_if = "Option::is_none"
     )]
-    pub(crate) prompt_cache_block_tokens: Option<Option<u32>>,
+    pub(crate) ssd_prompt_cache_block_tokens: Option<Option<u32>>,
     // DFlash speculative decoding is disabled by design, so this key is
     // accepted and deliberately ignored wherever it appears (global or
     // per-model). The field stays on the parse surface only because this
@@ -33,7 +33,7 @@ pub(crate) struct ChunkingConfigFile {
     )]
     pub(crate) speculative_decoding_block_length_tokens: Option<Option<usize>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) prompt_cache_common_prefix_stride_blocks: Option<u32>,
+    pub(crate) ssd_prompt_cache_common_prefix_stride_blocks: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_decode_stage_attribution_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -52,8 +52,8 @@ pub struct ConfiguredChunkingFields {
     pub full_attention_key_value_growth_tokens: bool,
     pub prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
-    pub prompt_cache_block_tokens: bool,
-    pub prompt_cache_common_prefix_stride_blocks: bool,
+    pub ssd_prompt_cache_block_tokens: bool,
+    pub ssd_prompt_cache_common_prefix_stride_blocks: bool,
     pub experimental_decode_stage_attribution_enabled: bool,
     pub experimental_prefill_stage_attribution_enabled: bool,
     pub experimental_in_memory_prefix_adoption_enabled: bool,
@@ -96,9 +96,9 @@ impl ChunkingConfigFile {
             experimental_ssd_paging_generation_graph_submission_layer_interval: self
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .is_some(),
-            prompt_cache_block_tokens: self.prompt_cache_block_tokens.is_some(),
-            prompt_cache_common_prefix_stride_blocks: self
-                .prompt_cache_common_prefix_stride_blocks
+            ssd_prompt_cache_block_tokens: self.ssd_prompt_cache_block_tokens.is_some(),
+            ssd_prompt_cache_common_prefix_stride_blocks: self
+                .ssd_prompt_cache_common_prefix_stride_blocks
                 .is_some(),
             experimental_decode_stage_attribution_enabled: self
                 .experimental_decode_stage_attribution_enabled
@@ -139,12 +139,12 @@ impl ChunkingConfigFile {
             experimental_ssd_paging_generation_graph_submission_layer_interval: model
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .or(global.experimental_ssd_paging_generation_graph_submission_layer_interval),
-            prompt_cache_block_tokens: model
-                .prompt_cache_block_tokens
-                .or(global.prompt_cache_block_tokens),
-            prompt_cache_common_prefix_stride_blocks: model
-                .prompt_cache_common_prefix_stride_blocks
-                .or(global.prompt_cache_common_prefix_stride_blocks),
+            ssd_prompt_cache_block_tokens: model
+                .ssd_prompt_cache_block_tokens
+                .or(global.ssd_prompt_cache_block_tokens),
+            ssd_prompt_cache_common_prefix_stride_blocks: model
+                .ssd_prompt_cache_common_prefix_stride_blocks
+                .or(global.ssd_prompt_cache_common_prefix_stride_blocks),
             experimental_decode_stage_attribution_enabled: model
                 .experimental_decode_stage_attribution_enabled
                 .or(global.experimental_decode_stage_attribution_enabled),
@@ -165,7 +165,7 @@ pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 /// The previously shipped resident-chunk default. Load-time persistence rewrites
 /// this exact value to the current default so config.json files written with the
-/// 4,096-token chunk — whose measured win turned out to be a page-cache warmth
+/// 4,096-token chunk — whose measured win turned out to be a macOS file cache warmth
 /// artifact, with 2,048 reproducibly faster at 10k words — adopt the reverted
 /// default without a manual edit; any other persisted value is deliberate user
 /// intent and is preserved.
@@ -178,8 +178,8 @@ pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// three rounds, resident chunk held at 2,048) measured 4,096 faster in 12 of
 /// 12 pairings: 21% at a 24 GiB ceiling (about 40% fewer bytes read from the
 /// SSD) and 13% at 37 GiB, with identical peak memory and 41k-token prompts
-/// still admitted. The resident chunk's 4,096 win was a page-cache artifact;
-/// this one holds with the cache both cold and warm.
+/// still admitted. The resident chunk's 4,096 win was a macOS file cache artifact;
+/// this one holds with the macOS file cache both cold and warm.
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// The previously shipped SSD-paged chunk default. Load-time persistence moves
 /// this exact value to the current default, as it does for the resident
@@ -209,7 +209,7 @@ pub const fn should_materialize_ssd_streaming_chunk_default(
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
 /// Resident multi-token prefill keeps one lazy tape unless the user raises this.
 pub const DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
-pub const DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
+pub const DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS: u32 = 4;
 
 /// Resolved user-visible boundaries that partition model-serving work.
 ///
@@ -223,8 +223,8 @@ pub struct ChunkingConfig {
     full_attention_key_value_growth_tokens: u32,
     prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
-    prompt_cache_block_tokens: Option<u32>,
-    prompt_cache_common_prefix_stride_blocks: u32,
+    ssd_prompt_cache_block_tokens: Option<u32>,
+    ssd_prompt_cache_common_prefix_stride_blocks: u32,
     experimental_decode_stage_attribution_enabled: bool,
     experimental_prefill_stage_attribution_enabled: bool,
     experimental_in_memory_prefix_adoption_enabled: bool,
@@ -265,10 +265,10 @@ impl ChunkingConfig {
                 .unwrap_or(
                     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
                 ),
-            prompt_cache_block_tokens: configured.prompt_cache_block_tokens.unwrap_or(None),
-            prompt_cache_common_prefix_stride_blocks: configured
-                .prompt_cache_common_prefix_stride_blocks
-                .unwrap_or(DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
+            ssd_prompt_cache_block_tokens: configured.ssd_prompt_cache_block_tokens.unwrap_or(None),
+            ssd_prompt_cache_common_prefix_stride_blocks: configured
+                .ssd_prompt_cache_common_prefix_stride_blocks
+                .unwrap_or(DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
             experimental_decode_stage_attribution_enabled: configured
                 .experimental_decode_stage_attribution_enabled
                 .unwrap_or(false),
@@ -297,8 +297,8 @@ impl ChunkingConfig {
                 self.full_attention_key_value_growth_tokens,
             ),
             (
-                "chunking.prompt_cache_common_prefix_stride_blocks",
-                self.prompt_cache_common_prefix_stride_blocks,
+                "chunking.ssd_prompt_cache_common_prefix_stride_blocks",
+                self.ssd_prompt_cache_common_prefix_stride_blocks,
             ),
         ] {
             if field_value == 0 {
@@ -314,9 +314,9 @@ impl ChunkingConfig {
                 description: "must be positive",
             });
         }
-        if self.prompt_cache_block_tokens == Some(0) {
+        if self.ssd_prompt_cache_block_tokens == Some(0) {
             return Err(AstronomicalConfigError::InvalidChunkingValue {
-                field_name: "chunking.prompt_cache_block_tokens",
+                field_name: "chunking.ssd_prompt_cache_block_tokens",
                 description: "must be null for automatic sizing or a positive token count",
             });
         }
@@ -357,13 +357,13 @@ impl ChunkingConfig {
         self.experimental_ssd_paging_generation_graph_submission_layer_interval
     }
 
-    pub const fn prompt_cache_block_tokens(&self) -> Option<u32> {
-        self.prompt_cache_block_tokens
+    pub const fn ssd_prompt_cache_block_tokens(&self) -> Option<u32> {
+        self.ssd_prompt_cache_block_tokens
     }
 
     #[must_use]
-    pub const fn prompt_cache_common_prefix_stride_blocks(&self) -> u32 {
-        self.prompt_cache_common_prefix_stride_blocks
+    pub const fn ssd_prompt_cache_common_prefix_stride_blocks(&self) -> u32 {
+        self.ssd_prompt_cache_common_prefix_stride_blocks
     }
 
     /// Returns whether decode forwards may run stage-split evaluations for
@@ -392,8 +392,8 @@ impl ChunkingConfig {
     /// Default on: the A/B on the resident measurement journey showed the
     /// byte-moving KV-block reads eliminated (six restore spans to three,
     /// the remainder being the lookup and the small boundary snapshot), with
-    /// unchanged rates at the journey's cache depth and the production win
-    /// growing with cache depth and cold stores.
+    /// unchanged rates at the journey's astro SSD prompt cache depth and the production win
+    /// growing with astro SSD prompt cache depth and cold stores.
     #[must_use]
     pub const fn experimental_in_memory_prefix_adoption_enabled(&self) -> bool {
         self.experimental_in_memory_prefix_adoption_enabled
@@ -425,9 +425,9 @@ impl Default for ChunkingConfig {
                 DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
             experimental_ssd_paging_generation_graph_submission_layer_interval:
                 DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            prompt_cache_block_tokens: None,
-            prompt_cache_common_prefix_stride_blocks:
-                DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
+            ssd_prompt_cache_block_tokens: None,
+            ssd_prompt_cache_common_prefix_stride_blocks:
+                DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
         }
     }
 }

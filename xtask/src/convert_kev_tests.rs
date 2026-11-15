@@ -97,7 +97,7 @@ fn write_synthetic_adapter(adapter_directory: &Path) {
     .expect("the tokenizer should be writable");
     std::fs::write(
         adapter_directory.join("tokenizer_config.json"),
-        json!({"eos_token": "<|endoftext|>", "cache_dir": "/fictional-home/fictional-person/cache"}).to_string(),
+        json!({"eos_token": "<|endoftext|>", "cache_dir": "/fictional-home/fictional-person/hub-folder"}).to_string(),
     )
     .expect("the tokenizer settings should be writable");
 }

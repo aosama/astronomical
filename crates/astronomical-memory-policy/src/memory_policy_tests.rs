@@ -138,12 +138,12 @@ fn should_not_request_demotion_for_raised_or_unchanged_ceilings() {
 }
 
 #[test]
-fn should_request_allocator_cleanup_without_confusing_cache_with_active_memory() {
+fn should_request_allocator_cleanup_without_confusing_the_mlx_buffer_cache_with_active_memory() {
     let observation = AllocationAdmissionObservation::new(800, 300, 100, 1_000);
 
     assert_eq!(
         observation.decide(),
-        AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit
+        AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit
     );
 }
 
@@ -188,7 +188,7 @@ fn should_admit_complete_residency_without_prefill_three_layer_weight_headroom()
 }
 
 #[test]
-fn should_classify_complete_owner_as_resident_and_empty_pager_cache_as_paged() {
+fn should_classify_complete_owner_as_resident_and_empty_astro_expert_cache_as_paged() {
     assert_eq!(
         classify_expert_memory_mode(true, true, 0),
         ExpertMemoryMode::Resident

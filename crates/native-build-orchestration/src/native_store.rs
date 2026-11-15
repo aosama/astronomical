@@ -298,7 +298,7 @@ impl NativeBuildStore {
     /// atomically renames the payload into place as the entry.
     ///
     /// Symlinks are rejected everywhere (see the manifest module) so a
-    /// compromised cache cannot smuggle products from elsewhere on the
+    /// compromised `astro_native_build_cache` cannot smuggle products from elsewhere on the
     /// machine into a build input.
     fn publish_entry(
         &self,

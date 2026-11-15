@@ -19,7 +19,7 @@
       "error": null,
       "pending_maximum_bytes": null
     },
-    "prompt_cache": {
+    "astro_ssd_prompt_cache": {
       "capacity_bytes": {
         "configured": null,
         "default": 53687091200,
@@ -58,13 +58,13 @@
           "default": 0,
           "effective": null
         },
-        "prompt_cache_block_tokens": {
+        "ssd_prompt_cache_block_tokens": {
           "configured": null,
           "default": null,
           "effective": null,
           "is_configured": false
         },
-        "prompt_cache_common_prefix_stride_blocks": {
+        "ssd_prompt_cache_common_prefix_stride_blocks": {
           "configured": null,
           "default": 4,
           "effective": null
@@ -121,7 +121,7 @@
   "mlx_memory_limit_error": null,
   "mlx_memory_snapshot": null,
   "pending_mlx_memory_ceiling_bytes": null,
-  "persistent_prompt_cache": {
+  "astro_ssd_prompt_cache": {
     "hit_rate": 0.0,
     "hits": 0,
     "misses": 0,
@@ -156,8 +156,8 @@
       },
       "kind": "flux2_klein"
     },
-    "persistent_prompt_cache_enabled": false,
-    "prompt_cache_maximum_size_bytes": 0
+    "astro_ssd_prompt_cache_enabled": false,
+    "astro_ssd_prompt_cache_maximum_size_bytes": 0
   },
   "worker_runtime_feature_configuration_applied": true
 }

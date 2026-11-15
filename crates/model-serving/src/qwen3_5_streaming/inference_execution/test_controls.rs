@@ -1,4 +1,4 @@
-use crate::{ExpertWeightMemoryCacheStatistics, InferenceEngineError};
+use crate::{AstroExpertCacheStatistics, InferenceEngineError};
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId};
 
 use crate::MlxInferenceEngine;
@@ -17,12 +17,12 @@ impl Qwen3_5EngineState {
             .map(|loaded_model| loaded_model.expert_memory_mode())
     }
 
-    fn expert_weight_memory_cache_statistics_for_tests(
+    fn astro_expert_cache_statistics_for_tests(
         &self,
-    ) -> Result<ExpertWeightMemoryCacheStatistics, InferenceEngineError> {
+    ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
         self.model
             .as_ref()
-            .map(|loaded_model| loaded_model.expert_weight_memory_cache_statistics())
+            .map(|loaded_model| loaded_model.astro_expert_cache_statistics())
             .ok_or_else(|| fatal_engine_error("cannot inspect expert statistics before loading"))
     }
 
@@ -94,14 +94,14 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
 
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.
     #[doc(hidden)]
-    pub async fn expert_weight_memory_cache_statistics_for_tests(
+    pub async fn astro_expert_cache_statistics_for_tests(
         &self,
-    ) -> Result<ExpertWeightMemoryCacheStatistics, InferenceEngineError> {
+    ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
         let (expert_statistics_sender, expert_statistics_receiver) =
             std::sync::mpsc::sync_channel(1);
         self.run_owner_test_operation(move |qwen_inference_execution| {
             let expert_statistics =
-                qwen_inference_execution.expert_weight_memory_cache_statistics_for_tests()?;
+                qwen_inference_execution.astro_expert_cache_statistics_for_tests()?;
             expert_statistics_sender
                 .send(expert_statistics)
                 .map_err(|_| fatal_engine_error("expert statistics receiver stopped unexpectedly"))

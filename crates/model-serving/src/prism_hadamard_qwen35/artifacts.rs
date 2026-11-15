@@ -203,7 +203,7 @@ fn required_file_profile(file_name: &str) -> RequiredFileProfile {
 }
 
 /// Derives a hex revision from the config bytes (zero-padded to at least 12
-/// characters), matching the repository's convention so cache keys change
+/// characters), matching the repository's convention so `astro_ssd_prompt_cache` keys change
 /// when packs change.
 pub(crate) fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
     let mut sha256_hasher = Sha256::new();

@@ -92,13 +92,13 @@ impl OpenAiChatStreamEncoder {
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_restored_token_count,
                 reason,
                 ..
             } => self.completed_events(
                 prompt_token_count,
                 generated_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_restored_token_count,
                 reason,
             ),
             ChatGenerationStreamEvent::Failed { reason } => {
@@ -138,7 +138,7 @@ impl OpenAiChatStreamEncoder {
         &self,
         prompt_token_count: u32,
         generated_token_count: u16,
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         completion_reason: ChatGenerationCompletionReason,
     ) -> Result<VecDeque<Event>, axum::Error> {
         let finish_reason = match completion_reason {
@@ -157,7 +157,9 @@ impl OpenAiChatStreamEncoder {
             && let Some(token_usage) =
                 OpenAiTokenUsage::new(prompt_token_count, u32::from(generated_token_count))
         {
-            let token_usage = token_usage.with_cached_tokens(cached_token_count);
+            let token_usage = token_usage.with_astro_ssd_prompt_cache_restored_tokens(
+                astro_ssd_prompt_cache_restored_token_count,
+            );
             completion_chunk = completion_chunk.with_usage(token_usage);
         }
         let completion_event = self.serialized_event("completion", completion_chunk)?;

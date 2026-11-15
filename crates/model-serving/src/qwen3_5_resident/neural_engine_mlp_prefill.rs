@@ -35,7 +35,7 @@ pub(crate) const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(30
 // 88 percent of layers (18.6 ms against 16.5 ms), and each 64 tokens moves about
 // 1 ms between the engines. The chunk's other half, attention and the mixer, runs
 // on the GPU regardless, which is why real prefill through the daemon measured
-// 1.13× to 1.2× on Ornith-1.5-9B, with the prompt cache on and off, and not more.
+// 1.13× to 1.2× on Ornith-1.5-9B, with the `astro_ssd_prompt_cache` on and off, and not more.
 // A sweep kept it: a 2B model peaked at 704 to 960 tokens of 2,048 and fell below the
 // GPU alone at 1,216, a 9B model gained less at 704, and no share helped a 0.8B model
 // (experiments.md), which `neural_engine_chunk_comparison` turns off instead.

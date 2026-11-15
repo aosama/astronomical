@@ -35,7 +35,7 @@ use super::decision_reference_fixture::{
 
 /// The whole Laya repository is under 2 GB; this leaves ample forward workspace.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 6 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 /// The largest probability difference accepted against the float32 reference.
 ///
 /// The compared weights are quantized to 8 bits, so some movement is expected.
@@ -126,7 +126,7 @@ fn compare_checkpoint(checkpoint_name: &str, checkpoint_directory: &Path) -> Par
         checkpoint_name,
         checkpoint_directory,
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the Laya artifact should validate");
     decision_engine

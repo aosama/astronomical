@@ -124,19 +124,25 @@ fn should_async_evaluate_dependent_arrays_without_losing_their_results() {
 #[test]
 fn should_replace_only_the_selected_static_slice() {
     let runtime = runtime_test_support::runtime();
-    let cache_storage = runtime
+    let decoder_state_storage = runtime
         .array_from_f32(&[0.0; 8], &[2, 4])
-        .expect("the cache storage should be valid");
-    let cache_update = runtime
+        .expect("the astro decoder state cache storage should be valid");
+    let decoder_state_update = runtime
         .array_from_f32(&[5.0, 7.0], &[1, 2])
-        .expect("the cache update should be valid");
-    let updated_cache = runtime
-        .slice_update(&cache_storage, &cache_update, &[1, 1], &[2, 3], &[1, 1])
+        .expect("the astro decoder state cache update should be valid");
+    let updated_decoder_state = runtime
+        .slice_update(
+            &decoder_state_storage,
+            &decoder_state_update,
+            &[1, 1],
+            &[2, 3],
+            &[1, 1],
+        )
         .expect("the static slice update should build a valid graph");
     assert_eq!(
-        updated_cache
+        updated_decoder_state
             .to_vec_f32()
-            .expect("the updated cache should evaluate as float32"),
+            .expect("the updated astro decoder state cache should evaluate as float32"),
         vec![0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 7.0, 0.0]
     );
 }

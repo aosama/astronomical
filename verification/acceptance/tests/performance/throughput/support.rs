@@ -27,12 +27,12 @@ use std::time::{Duration, Instant};
 
 use astronomical_daemon::{ChatGenerationExecutor, WorkerHealthSnapshot};
 use astronomical_ipc_protocol::{
-    ChatImageInput, WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+    ChatImageInput, WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
 };
 
 pub(crate) use crate::performance_throughput::completion::{
-    drive_completion, dump_worker_logging_directory, read_decode_cache_diagnostic_evidence,
-    read_measured_completion, wait_until_idle,
+    drive_completion, dump_worker_logging_directory,
+    read_decode_astro_expert_cache_diagnostic_evidence, read_measured_completion, wait_until_idle,
 };
 
 // The evidence lane composes the same measurement type, so it stays reachable
@@ -85,7 +85,7 @@ pub(crate) fn assert_measurement_shape(measured_throughput: &ThroughputMeasureme
     );
     assert_eq!(
         measured_throughput.cached_tokens, 0,
-        "the measured completion must not reuse the persistent prompt cache",
+        "the measured completion must not reuse the astro SSD prompt cache",
     );
 }
 
@@ -95,7 +95,7 @@ pub(crate) const READY_ATTEMPT_LIMIT: u8 = 70;
 const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
 
 /// The test case for one throughput journey: the journey family recorded in
-/// the durable history line, the internal decode-cache policy arm, the short
+/// the durable history line, the internal decode astro expert cache policy arm, the short
 /// warmup completion (its prompt, images, and output cap), the measured
 /// completion (its prompt, images, and output cap), the sampling temperature,
 /// the per-cell MLX ceiling override, whether the worker runs with performance
@@ -106,7 +106,7 @@ const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
 pub(crate) struct ThroughputJourney {
     pub(crate) journey_kind: ThroughputJourneyKind,
     /// Internal experiment selector passed to the worker, never a user setting.
-    pub(crate) decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub(crate) decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     pub(crate) warmup_input_prompt: String,
     pub(crate) warmup_images: Vec<ChatImageInput>,
     pub(crate) warmup_output_tokens: u16,
@@ -144,7 +144,7 @@ impl ThroughputJourney {
     ) -> Self {
         Self {
             journey_kind,
-            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+            decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             warmup_input_prompt,
             warmup_images,
             warmup_output_tokens,
@@ -260,7 +260,7 @@ pub(crate) async fn run_throughput_journey(
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: journey.journey_kind,
-        decode_expert_cache_policy: measurement.decode_expert_cache_policy,
+        decode_astro_expert_cache_policy: measurement.decode_astro_expert_cache_policy,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: recorded_git_commit(),
@@ -321,7 +321,7 @@ fn measured_completion_measurement(
     let mut measurement = match read_measured_completion(
         &logging_directory.join("performance.jsonl"),
         model_id,
-        journey.decode_expert_cache_policy,
+        journey.decode_astro_expert_cache_policy,
         measured_completion_ordinal_in_worker,
     ) {
         Some(measurement) => measurement,
@@ -329,8 +329,11 @@ fn measured_completion_measurement(
         None => panic!("the measured completion should produce a performance sample"),
     };
     if journey.attribution_enabled {
-        measurement.decode_cache_diagnostic_evidence =
-            read_decode_cache_diagnostic_evidence(logging_directory, MEASURED_REQUEST_ID);
+        measurement.decode_astro_expert_cache_diagnostic_evidence =
+            read_decode_astro_expert_cache_diagnostic_evidence(
+                logging_directory,
+                MEASURED_REQUEST_ID,
+            );
     }
     measurement
 }

@@ -12,7 +12,7 @@ use crate::config::request_generation_defaults::{
     RequestGenerationSettingsPresence, apply_generation_defaults,
 };
 use crate::{ResolvedRuntimeConfig, RuntimeModelGenerationDefaults, RuntimeModelPolicy};
-use astronomical_config::{LogLevel, LoggingConfig, PromptCacheConfig};
+use astronomical_config::{AstroSsdPromptCacheConfig, LogLevel, LoggingConfig};
 use astronomical_ipc_protocol::{
     ChatGenerationSettings, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
     WorkerModelConfiguration,
@@ -133,13 +133,16 @@ fn resolved_runtime_config_with_penalty(
         )])),
         unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        persistent_prompt_cache_enabled: false,
-        configured_persistent_prompt_cache_enabled: None,
+        astro_ssd_prompt_cache_enabled: false,
+        configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         idle_model_unload_seconds: 0,
-        configured_prompt_cache_maximum_size_bytes: None,
+        configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        prompt_cache_config: PromptCacheConfig::new(PathBuf::from("/tmp/prompt-cache"), 1),
+        astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(
+            PathBuf::from("/tmp/astro-ssd-prompt-cache"),
+            1,
+        ),
         bind_address: "127.0.0.1:6733".to_owned(),
         logging_config: LoggingConfig::new(
             PathBuf::from("/tmp/astronomical-logs"),

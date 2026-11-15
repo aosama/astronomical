@@ -11,7 +11,7 @@ pub struct AllocationAdmissionObservation {
     /// Live MLX active bytes before the pending allocation.
     pub active_memory_bytes: u64,
     /// Reclaimable allocator storage, excluded from active-limit enforcement.
-    pub allocator_cache_bytes: u64,
+    pub mlx_buffer_cache_bytes: u64,
     /// Exact byte count of the allocation about to be created.
     pub pending_allocation_bytes: u64,
     /// Worker-resolved stable MLX active-memory ceiling.
@@ -22,19 +22,19 @@ impl AllocationAdmissionObservation {
     #[must_use]
     pub const fn new(
         active_memory_bytes: u64,
-        allocator_cache_bytes: u64,
+        mlx_buffer_cache_bytes: u64,
         pending_allocation_bytes: u64,
         active_memory_ceiling_bytes: u64,
     ) -> Self {
         Self {
             active_memory_bytes,
-            allocator_cache_bytes,
+            mlx_buffer_cache_bytes,
             pending_allocation_bytes,
             active_memory_ceiling_bytes,
         }
     }
 
-    /// Decides active-memory fit independently from allocator-cache ownership.
+    /// Decides active-memory fit independently from MLX buffer-cache ownership.
     #[must_use]
     pub const fn decide(self) -> AllocationAdmissionDecision {
         let Some(projected_active_memory_bytes) = self
@@ -54,14 +54,14 @@ impl AllocationAdmissionObservation {
             };
         }
         let total_memory_after_allocation =
-            projected_active_memory_bytes.checked_add(self.allocator_cache_bytes);
-        if self.allocator_cache_bytes > 0
+            projected_active_memory_bytes.checked_add(self.mlx_buffer_cache_bytes);
+        if self.mlx_buffer_cache_bytes > 0
             && match total_memory_after_allocation {
                 Some(total_memory_bytes) => total_memory_bytes > self.active_memory_ceiling_bytes,
                 None => true,
             }
         {
-            return AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit;
+            return AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit;
         }
         AllocationAdmissionDecision::Admit
     }
@@ -73,7 +73,7 @@ pub enum AllocationAdmissionDecision {
     /// Active and total memory both fit without cleanup.
     Admit,
     /// Active ownership fits, but reclaiming allocator storage avoids total pressure.
-    ClearAllocatorCacheThenAdmit,
+    ClearMlxBufferCacheThenAdmit,
     /// Active ownership cannot fit even if allocator storage is cleared.
     Reject {
         boundary: MemoryBoundary,

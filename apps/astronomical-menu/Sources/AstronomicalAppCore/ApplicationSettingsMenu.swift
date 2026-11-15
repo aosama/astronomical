@@ -5,7 +5,7 @@ import AppKit
 /// updater and the login-item registration of its agent.
 ///
 /// Each item's check mark is read from the live source when the menu opens
-/// (`validateMenuItem`), never cached, so the menu cannot disagree with the
+/// (`validateMenuItem`), never memoized, so the menu cannot disagree with the
 /// updater or with System Settings.
 @MainActor
 final class ApplicationSettingsMenu: NSObject, NSMenuItemValidation {

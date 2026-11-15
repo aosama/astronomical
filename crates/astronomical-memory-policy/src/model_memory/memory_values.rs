@@ -43,7 +43,7 @@ pub struct MemoryReserveSnapshot {
 impl MemoryReserveSnapshot {
     /// The memory ledger's accounts in this shape.
     ///
-    /// Working memory, the margin and any lease are one reserve to a
+    /// MLX working buffers, the margin and any lease are one reserve to a
     /// reader: room held for work in progress. Room left once every
     /// streamable weight is kept is reported as not needed, never as part
     /// of a reserve: a 9B model under a 36 GiB limit once showed 31 GB
@@ -55,7 +55,7 @@ impl MemoryReserveSnapshot {
             model_core_payload_bytes: accounts.core_weight_bytes,
             context_window_reserve_bytes: accounts.context_bytes,
             activation_headroom_bytes: accounts
-                .working_memory_bytes
+                .mlx_working_buffer_bytes
                 .saturating_add(accounts.margin_bytes)
                 .saturating_add(accounts.lease_bytes),
             complete_layer_stream_slot_bytes: accounts.stream_slot_bytes,

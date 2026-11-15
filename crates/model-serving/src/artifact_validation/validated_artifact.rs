@@ -112,7 +112,7 @@ impl ValidatedRequiredFile {
 }
 
 impl ValidatedWeightsFile {
-    /// Returns the validated file's name for cache-retention error context.
+    /// Returns the validated file's name for `astro_expert_cache` retention error context.
     pub fn file_name(&self) -> &str {
         &self.validated_required_file.file_name
     }

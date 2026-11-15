@@ -4,26 +4,26 @@
 
 struct WorkerRuntimeFeatureConfiguration: Codable, Equatable {
   let configurationGeneration: String
-  let persistentPromptCacheEnabled: Bool
-  let promptCacheMaximumSizeBytes: UInt64
+  let astroSsdPromptCacheEnabled: Bool
+  let astroSsdPromptCacheMaximumSizeBytes: UInt64
   let loadedModel: WorkerLoadedModelRuntimeConfiguration?
 
   enum CodingKeys: String, CodingKey, CaseIterable {
     case configurationGeneration = "configuration_generation"
-    case persistentPromptCacheEnabled = "persistent_prompt_cache_enabled"
-    case promptCacheMaximumSizeBytes = "prompt_cache_maximum_size_bytes"
+    case astroSsdPromptCacheEnabled = "astro_ssd_prompt_cache_enabled"
+    case astroSsdPromptCacheMaximumSizeBytes = "astro_ssd_prompt_cache_maximum_size_bytes"
     case loadedModel = "loaded_model"
   }
 
   init(
     configurationGeneration: String,
-    persistentPromptCacheEnabled: Bool,
-    promptCacheMaximumSizeBytes: UInt64,
+    astroSsdPromptCacheEnabled: Bool,
+    astroSsdPromptCacheMaximumSizeBytes: UInt64,
     loadedModel: WorkerLoadedModelRuntimeConfiguration?
   ) {
     self.configurationGeneration = configurationGeneration
-    self.persistentPromptCacheEnabled = persistentPromptCacheEnabled
-    self.promptCacheMaximumSizeBytes = promptCacheMaximumSizeBytes
+    self.astroSsdPromptCacheEnabled = astroSsdPromptCacheEnabled
+    self.astroSsdPromptCacheMaximumSizeBytes = astroSsdPromptCacheMaximumSizeBytes
     self.loadedModel = loadedModel
   }
 
@@ -31,10 +31,10 @@ struct WorkerRuntimeFeatureConfiguration: Codable, Equatable {
     try decoder.rejectUnknownKeys(CodingKeys.self)
     let container = try decoder.container(keyedBy: CodingKeys.self)
     configurationGeneration = try container.decode(String.self, forKey: .configurationGeneration)
-    persistentPromptCacheEnabled = try container.decode(
-      Bool.self, forKey: .persistentPromptCacheEnabled)
-    promptCacheMaximumSizeBytes = try container.decode(
-      UInt64.self, forKey: .promptCacheMaximumSizeBytes)
+    astroSsdPromptCacheEnabled = try container.decode(
+      Bool.self, forKey: .astroSsdPromptCacheEnabled)
+    astroSsdPromptCacheMaximumSizeBytes = try container.decode(
+      UInt64.self, forKey: .astroSsdPromptCacheMaximumSizeBytes)
     loadedModel = try container.decodeRequiredNullable(
       WorkerLoadedModelRuntimeConfiguration.self, forKey: .loadedModel)
   }
@@ -218,14 +218,14 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let fullAttentionKeyValueGrowthTokens: UInt32
   let prefillGraphSubmissionLayerInterval: UInt32
   let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32
-  let promptCacheBlockTokens: UInt32?
+  let ssdPromptCacheBlockTokens: UInt32?
   // The speculation block length crosses the wire absent (not null) when a
   // worker runs classic decoding: the Rust DTO skips serialization for
-  // None, unlike prompt_cache_block_tokens which always serializes. The
+  // None, unlike ssd_prompt_cache_block_tokens which always serializes. The
   // decoder must therefore treat a missing key as nil rather than demand
   // key presence.
   let speculativeDecodingBlockLength: UInt64?
-  let promptCacheCommonPrefixStrideBlocks: UInt32
+  let ssdPromptCacheCommonPrefixStrideBlocks: UInt32
   let experimentalDecodeStageAttributionEnabled: Bool
   let experimentalPrefillStageAttributionEnabled: Bool
   let experimentalInMemoryPrefixAdoptionEnabled: Bool
@@ -237,9 +237,9 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case fullAttentionKeyValueGrowthTokens = "full_attention_key_value_growth_tokens"
     case prefillGraphSubmissionLayerInterval = "prefill_graph_submission_layer_interval"
     case experimentalSsdPagingGenerationGraphSubmissionLayerInterval = "experimental_ssd_paging_generation_graph_submission_layer_interval"
-    case promptCacheBlockTokens = "prompt_cache_block_tokens"
+    case ssdPromptCacheBlockTokens = "ssd_prompt_cache_block_tokens"
     case speculativeDecodingBlockLength = "speculative_decoding_block_length"
-    case promptCacheCommonPrefixStrideBlocks = "prompt_cache_common_prefix_stride_blocks"
+    case ssdPromptCacheCommonPrefixStrideBlocks = "ssd_prompt_cache_common_prefix_stride_blocks"
     case experimentalDecodeStageAttributionEnabled = "experimental_decode_stage_attribution_enabled"
     case experimentalPrefillStageAttributionEnabled = "experimental_prefill_stage_attribution_enabled"
     case experimentalInMemoryPrefixAdoptionEnabled = "experimental_in_memory_prefix_adoption_enabled"
@@ -260,12 +260,12 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     experimentalSsdPagingGenerationGraphSubmissionLayerInterval = try container.decode(
       UInt32.self,
       forKey: .experimentalSsdPagingGenerationGraphSubmissionLayerInterval)
-    promptCacheBlockTokens = try container.decodeRequiredNullable(
-      UInt32.self, forKey: .promptCacheBlockTokens)
+    ssdPromptCacheBlockTokens = try container.decodeRequiredNullable(
+      UInt32.self, forKey: .ssdPromptCacheBlockTokens)
     speculativeDecodingBlockLength = try container.decodeIfPresent(
       UInt64.self, forKey: .speculativeDecodingBlockLength)
-    promptCacheCommonPrefixStrideBlocks = try container.decode(
-      UInt32.self, forKey: .promptCacheCommonPrefixStrideBlocks)
+    ssdPromptCacheCommonPrefixStrideBlocks = try container.decode(
+      UInt32.self, forKey: .ssdPromptCacheCommonPrefixStrideBlocks)
     experimentalDecodeStageAttributionEnabled = try container.decode(
       Bool.self, forKey: .experimentalDecodeStageAttributionEnabled)
     experimentalPrefillStageAttributionEnabled = try container.decode(

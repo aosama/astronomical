@@ -1,6 +1,6 @@
 //! Enacts `memory/`'s pager-backed decode-handoff seating decision.
 //!
-//! Selected complete layers are retained in the expert page cache before the
+//! Selected complete layers are retained in the expert macOS file cache before the
 //! first decode token; remaining routes continue to use the pager.
 
 use crate::memory::SessionStreamingPhase;
@@ -10,7 +10,7 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, kept_layer_indexes_to_seat_before_reply};
 
 impl Qwen3_5Model {
-    /// Layers the reply's plan keeps whole that the cache does not hold
+    /// Layers the reply's plan keeps whole that the astro expert cache does not hold
     /// whole yet: the ones to read in before the first reply token.
     pub(crate) fn expert_layers_to_seat_before_reply(&self) -> Vec<usize> {
         let current_residencies = self.current_expert_layer_residencies();
@@ -23,16 +23,16 @@ impl Qwen3_5Model {
     }
 
     fn has_seated_complete_layer(&self, layer_index: usize, expert_capacity: usize) -> bool {
-        self.retained_experts
+        self.astro_expert_cache
             .as_ref()
-            .is_some_and(|retained_experts| {
-                retained_experts
+            .is_some_and(|astro_expert_cache| {
+                astro_expert_cache
                     .borrow()
                     .has_complete_layer(layer_index, expert_capacity)
             })
     }
 
-    /// Loads planned complete layers into the retained cache until leftover fills.
+    /// Loads planned complete layers into the retained astro expert cache until leftover fills.
     pub(crate) fn seat_complete_layers_before_decode(
         &self,
         layer_indexes: &[usize],
@@ -110,12 +110,12 @@ impl Qwen3_5Model {
     /// generate token materializes those pages, admission records them as
     /// activation, and leftover publication evicts the same pages.
     pub(crate) fn materialize_seated_complete_layers(&self) -> Result<(), Qwen3_5ExecutionError> {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok(());
         };
-        let retained_experts = retained_experts.borrow();
+        let astro_expert_cache = astro_expert_cache.borrow();
         let mut seated_weight_arrays = Vec::new();
-        retained_experts.append_resident_array_references(&mut seated_weight_arrays);
+        astro_expert_cache.append_resident_array_references(&mut seated_weight_arrays);
         if seated_weight_arrays.is_empty() {
             return Ok(());
         }

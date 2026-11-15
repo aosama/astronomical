@@ -14,7 +14,7 @@ pub(crate) struct SpeechEngineSettings {
     pub(crate) model_id: String,
     pub(crate) model_directory: PathBuf,
     pub(crate) effective_mlx_memory_ceiling_bytes: usize,
-    pub(crate) allocator_cache_memory_limit_bytes: usize,
+    pub(crate) mlx_buffer_cache_limit_bytes: usize,
 }
 
 impl SpeechEngineSettings {
@@ -22,7 +22,7 @@ impl SpeechEngineSettings {
     pub(crate) fn initialize_runtime(&self) -> Result<MlxRuntime, SpeechFailure> {
         let memory_limits = MlxMemoryLimits::new(
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|limits_error| SpeechFailure::fatal_execution(limits_error.to_string()))?;
         MlxRuntime::initialize(memory_limits)

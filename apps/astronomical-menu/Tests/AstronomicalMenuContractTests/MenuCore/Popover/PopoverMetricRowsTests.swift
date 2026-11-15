@@ -135,10 +135,10 @@ final class PopoverMetricRowsTests: XCTestCase {
     assertOneMetricLineTall(modelLoad)
   }
 
-  func test_should_keep_one_line_height_without_a_bar_during_a_prompt_cache_restore() throws {
-    let promptCacheRestore = try statusDocument(#"{"status":"ready","activity":"prompt_processing"}"#)
-    XCTAssertFalse(promptCacheRestore.showsProgressBar)
-    assertOneMetricLineTall(promptCacheRestore)
+  func test_should_keep_one_line_height_without_a_bar_during_a_astro_ssd_prompt_cache_restore() throws {
+    let astroSsdPromptCacheRestore = try statusDocument(#"{"status":"ready","activity":"prompt_processing"}"#)
+    XCTAssertFalse(astroSsdPromptCacheRestore.showsProgressBar)
+    assertOneMetricLineTall(astroSsdPromptCacheRestore)
   }
 
   func test_should_keep_one_line_height_while_drawing_the_bar_for_image_denoising() throws {

@@ -42,7 +42,7 @@ impl LayerGroupSubmission {
 }
 
 /// What one completed decoder layer leaves to evaluate: its output, and for
-/// a linear-attention layer the convolution state and any prompt-cache
+/// a linear-attention layer the convolution state and any astro SSD prompt cache
 /// boundary snapshots, which the output does not reach.
 pub(crate) struct CompletedLayerRoots<'layer> {
     pub(crate) layer_output: &'layer MlxArray,
@@ -56,7 +56,7 @@ pub(crate) enum LayerSubmission {
     /// A layer in a one-token forward that is not a streamed dense layer:
     /// only a configured layer group submits it.
     ConfiguredGroup,
-    /// Any layer in a multi-token forward: its working memory is the
+    /// Any layer in a multi-token forward: its MLX working buffers are the
     /// largest term of the forward, so the previous layer finishes before
     /// it starts. A streamed dense layer's read starts before that wait so
     /// it still overlaps the previous layer's compute.

@@ -40,7 +40,7 @@ fn should_name_the_stored_state_when_it_alone_is_over_the_limit() {
 }
 
 #[test]
-fn should_name_the_prompt_chunk_when_only_its_working_memory_is_over() {
+fn should_name_the_prompt_chunk_when_only_its_mlx_working_buffers_are_over() {
     assert_eq!(
         ResidentForwardAdmissionDecision::for_measured_shortfalls(0, 1, Some(2_048)),
         ResidentForwardAdmissionDecision::RequireStreamingEngine {
@@ -53,7 +53,7 @@ fn should_name_the_prompt_chunk_when_only_its_working_memory_is_over() {
 }
 
 #[test]
-fn should_name_the_reply_step_when_its_working_memory_is_over() {
+fn should_name_the_reply_step_when_its_mlx_working_buffers_are_over() {
     assert_eq!(
         ResidentForwardAdmissionDecision::for_measured_shortfalls(0, 5, None),
         ResidentForwardAdmissionDecision::RequireStreamingEngine {

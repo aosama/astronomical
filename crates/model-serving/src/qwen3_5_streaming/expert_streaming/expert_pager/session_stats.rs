@@ -3,7 +3,7 @@
 //! All borrow discipline for `session_counters` and `session_read_metrics`
 //! lives here so the streaming paths call one-line recorders and the
 //! finalization path reads one snapshot. The counters are always-on; see
-//! `memory::expert_cache::streaming_stats` for why they must not gate on
+//! `memory::astro_expert_cache_arithmetic::streaming_stats` for why they must not gate on
 //! diagnostics attribution.
 
 use std::sync::Arc;
@@ -45,7 +45,7 @@ impl Qwen3_5ExpertPager {
     ///
     /// The statistics describe serving. Loading measures one layer step of
     /// each kind through the ordinary read path
-    /// (`expert_layer_working_memory_probe`), and those reads would
+    /// (`expert_layer_mlx_working_buffer_probe`), and those reads would
     /// otherwise count as a request's: the session then reported more bytes
     /// requested than every request's own report added up to.
     pub(crate) fn begin_serving_session(&self) {
@@ -106,7 +106,7 @@ impl Qwen3_5ExpertPager {
         )
     }
 
-    /// Maps warm-cache layer residencies onto observatory topology rows.
+    /// Maps astro expert cache layer residencies onto observatory topology rows.
     pub(crate) fn session_layer_topology(
         &self,
         layer_residencies: &[astronomical_memory_policy::residency::CurrentExpertLayerResidency],

@@ -5,17 +5,17 @@
 use std::path::PathBuf;
 
 use astronomical_config::{
-    PromptCacheConfig, model_weights_fingerprint, neural_engine_program_cache_directory_for_model,
-    remove_other_weights_of_model,
+    AstroSsdPromptCacheConfig, astro_neural_engine_program_cache_directory_for_model,
+    model_weights_fingerprint, remove_other_weights_of_model,
 };
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy,
+    WorkerChunkingConfiguration, WorkerDecodeAstroExpertCachePolicy,
     WorkerDiagnosticQwen3_5EngineOverride,
 };
 use astronomical_model_serving::{
-    CompleteResidencyRequirements, EnginePlacement, ModelFamilyInferenceEngine,
-    ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
-    PerformanceAttributionOutcome, PerformanceOperation, PersistentPromptCacheDiskStoreConfig,
+    AstroSsdPromptCacheDiskStoreConfig, CompleteResidencyRequirements, EnginePlacement,
+    ModelFamilyInferenceEngine, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
+    PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
     Qwen3_5ArtifactValidator, Qwen3_5GenerationProcessor, Qwen3_5MemoryGeometryError,
     Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5StreamingEngine,
     Qwen3_5StreamingPromptProcessingChunkSizer, ValidatedQwen3_5Artifact,
@@ -42,14 +42,14 @@ enum Qwen3_5SelectedEngine {
 
 /// `None` keeps nothing between loads, which also covers weights that cannot be
 /// identified: rebuilding is slow, and reusing another model's programs would be wrong.
-fn model_program_cache_directory(
+fn model_astro_neural_engine_program_cache_directory(
     neural_engine_program_directory: Option<&std::path::Path>,
     model_directory: &std::path::Path,
     model_id: &str,
     model_revision: &str,
 ) -> Option<PathBuf> {
     let program_directory = neural_engine_program_directory?;
-    let model_program_directory = neural_engine_program_cache_directory_for_model(
+    let model_program_directory = astro_neural_engine_program_cache_directory_for_model(
         program_directory,
         model_id,
         model_revision,
@@ -63,15 +63,15 @@ fn model_program_cache_directory(
 pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
-    prompt_cache_config: PromptCacheConfig,
+    mlx_buffer_cache_limit_bytes: usize,
+    astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
     neural_engine_program_directory: Option<PathBuf>,
     requested_model_id: String,
     maximum_context_tokens: u32,
     max_output_tokens: u32,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
 
@@ -139,43 +139,45 @@ pub(crate) fn initialize_qwen3_5_model(
     let think_end_token_id = generation_processor.think_end_token_id();
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    // Derive the model-specific path only when the user enabled persistent
-    // caching. This keeps disabled operation from touching model/revision cache
-    // identity, opening directories, scanning files, or reserving publication
+    // Derive the model-specific path only when the user enabled the
+    // `astro_ssd_prompt_cache`. This keeps disabled operation from touching model/revision
+    // astro SSD prompt cache identity, opening directories, scanning files, or reserving publication
     // workspace later in model loading.
-    let persistent_prompt_cache_disk_store_config = persistent_prompt_cache_enabled.then(|| {
-        let per_model_prompt_cache_config =
-            prompt_cache_config.for_model(&model_id, &model_revision);
-        PersistentPromptCacheDiskStoreConfig::new(
-            per_model_prompt_cache_config
-                .active_model_prompt_cache_directory()
+    let astro_ssd_prompt_cache_disk_store_config = astro_ssd_prompt_cache_enabled.then(|| {
+        let per_model_astro_ssd_prompt_cache_config =
+            astro_ssd_prompt_cache_config.for_model(&model_id, &model_revision);
+        AstroSsdPromptCacheDiskStoreConfig::new(
+            per_model_astro_ssd_prompt_cache_config
+                .active_model_astro_ssd_prompt_cache_directory()
                 .clone(),
-            per_model_prompt_cache_config
-                .global_prompt_cache_root_directory()
+            per_model_astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_root_directory()
                 .clone(),
-            per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
+            per_model_astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_maximum_size_bytes(),
         )
     });
-    let neural_engine_program_cache_directory = model_program_cache_directory(
-        neural_engine_program_directory.as_deref(),
-        &model_directory_path,
-        &model_id,
-        &model_revision,
-    );
+    let astro_neural_engine_program_cache_directory =
+        model_astro_neural_engine_program_cache_directory(
+            neural_engine_program_directory.as_deref(),
+            &model_directory_path,
+            &model_id,
+            &model_revision,
+        );
     let qwen3_5_engine = construct_selected_qwen3_5_engine(
         selected_engine,
         validated_artifact,
         active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
-        persistent_prompt_cache_disk_store_config,
-        neural_engine_program_cache_directory,
+        mlx_buffer_cache_limit_bytes,
+        astro_ssd_prompt_cache_disk_store_config,
+        astro_neural_engine_program_cache_directory,
         think_end_token_id,
         &model_directory_path,
         maximum_context_tokens,
         chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         &artifact_model_id,
         &artifact_model_revision,
         artifact_payload_bytes,
@@ -191,16 +193,16 @@ fn construct_selected_qwen3_5_engine(
     selected_engine: Qwen3_5SelectedEngine,
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
-    persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-    neural_engine_program_cache_directory: Option<PathBuf>,
+    mlx_buffer_cache_limit_bytes: usize,
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    astro_neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
     maximum_context_tokens: u32,
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     performance_attribution_log: PerformanceAttributionLog,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -210,9 +212,9 @@ fn construct_selected_qwen3_5_engine(
         Qwen3_5SelectedEngine::Resident => construct_resident_engine(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
-            neural_engine_program_cache_directory,
+            mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_disk_store_config,
+            astro_neural_engine_program_cache_directory,
             think_end_token_id,
             model_directory_path,
             maximum_context_tokens,
@@ -227,15 +229,15 @@ fn construct_selected_qwen3_5_engine(
         Qwen3_5SelectedEngine::Streaming => construct_streaming_engine(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
+            mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_disk_store_config,
             think_end_token_id,
             model_directory_path,
             maximum_context_tokens,
             chunking,
             model_loading_performance_attribution,
             performance_attribution_log,
-            decode_expert_cache_policy,
+            decode_astro_expert_cache_policy,
             artifact_model_id,
             artifact_model_revision,
             artifact_payload_bytes,
@@ -417,9 +419,9 @@ fn initialize_generation_processor(
 fn construct_resident_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
-    persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-    neural_engine_program_cache_directory: Option<PathBuf>,
+    mlx_buffer_cache_limit_bytes: usize,
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    astro_neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
     maximum_context_tokens: u32,
@@ -457,8 +459,8 @@ fn construct_resident_engine(
     Qwen3_5ResidentEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
         validated_artifact,
         active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
-        persistent_prompt_cache_disk_store_config,
+        mlx_buffer_cache_limit_bytes,
+        astro_ssd_prompt_cache_disk_store_config,
         prompt_processing_chunk_sizer,
         think_end_token_id,
         model_directory_path.to_path_buf(),
@@ -466,7 +468,7 @@ fn construct_resident_engine(
         chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
-        neural_engine_program_cache_directory,
+        astro_neural_engine_program_cache_directory,
     )
     .map(ModelFamilyInferenceEngine::Qwen3_5)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
@@ -481,15 +483,15 @@ fn construct_resident_engine(
 fn construct_streaming_engine(
     validated_artifact: ValidatedQwen3_5Artifact,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
-    persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+    mlx_buffer_cache_limit_bytes: usize,
+    astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
     maximum_context_tokens: u32,
     chunking: WorkerChunkingConfiguration,
     model_loading_performance_attribution: PerformanceAttribution,
     mut performance_attribution_log: PerformanceAttributionLog,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     artifact_model_id: &str,
     artifact_model_revision: &str,
     artifact_payload_bytes: u64,
@@ -517,11 +519,11 @@ fn construct_streaming_engine(
                 );
             }
         };
-    Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
+    Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_astro_expert_cache_policy(
         validated_artifact,
         active_memory_limit_bytes,
-        allocator_cache_memory_limit_bytes,
-        persistent_prompt_cache_disk_store_config,
+        mlx_buffer_cache_limit_bytes,
+        astro_ssd_prompt_cache_disk_store_config,
         prompt_processing_chunk_sizer,
         think_end_token_id,
         model_directory_path.to_path_buf(),
@@ -529,7 +531,7 @@ fn construct_streaming_engine(
         chunking,
         model_loading_performance_attribution,
         performance_attribution_log,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
     )
     .map(ModelFamilyInferenceEngine::Qwen3_5Streaming)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {
@@ -662,7 +664,7 @@ fn record_failed_model_loading_performance_attribution(
             resident_model_payload_bytes: None,
             model_shard_count,
             mlx_active_memory_bytes: None,
-            mlx_allocator_cache_memory_bytes: None,
+            mlx_buffer_cache_bytes: None,
             mlx_peak_memory_bytes: None,
             failure_description: Some(failure_description.to_owned()),
         })

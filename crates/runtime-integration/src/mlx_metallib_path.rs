@@ -1,5 +1,5 @@
 //! Locates the MLX AOT (Ahead-Of-Time compiled) Metal library without
-//! depending on a purgeable cache.
+//! depending on the purgeable `~/Library/Caches` folder.
 //!
 //! # Why this module exists
 //!
@@ -9,10 +9,10 @@
 //!
 //! 1. `~/Library/Caches` is purgeable. macOS, cleanup tools, and users
 //!    regularly delete its contents (issue #521). A shipped app that resolved
-//!    its kernels from the cache would break after the first cleanup.
+//!    its kernels from there would break after the first cleanup.
 //! 2. An unpackaged `cargo run` worker has no app bundle. Development runs
 //!    must still find a metallib — the one the build script published beside
-//!    the cargo target directory is workspace-local and survives cache purges.
+//!    the cargo target directory is workspace-local and survives purges of `~/Library/Caches`.
 //!
 //! The resolution order below encodes those constraints: the app-bundle copy
 //! is the packaged default, the compile-time native-store copy is the

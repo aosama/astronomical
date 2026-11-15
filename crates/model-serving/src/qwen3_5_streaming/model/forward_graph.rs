@@ -1,12 +1,12 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
-use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
+use crate::{AstroDecoderStateCacheState, PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5Model;
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use mlx_bridge::{MlxArray, MlxDtype};
 
 /// Target-model graph outputs retained for specialized consumers.
@@ -90,7 +90,7 @@ impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
     /// Builds decoder-state prefill without the vocabulary head.
     ///
-    /// Intermediate chunks only need cache tensors; no `lm_head` runs until
+    /// Intermediate chunks only need `astro_decoder_state_cache` tensors; no `lm_head` runs until
     /// sampling. Building then dropping logits was host-side waste on every
     /// 2,048-token chunk.
     pub(super) fn build_prefill_decoder_state_graph(
@@ -100,7 +100,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -127,7 +127,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -151,7 +151,7 @@ impl Qwen3_5Model {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -197,7 +197,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -224,7 +224,7 @@ impl Qwen3_5Model {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -252,7 +252,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -278,7 +278,7 @@ impl Qwen3_5Model {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -305,7 +305,7 @@ impl Qwen3_5Model {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         mut boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
@@ -473,20 +473,20 @@ pub(super) fn pre_final_normalization_hidden_state_at(
 }
 
 /// The arrays one completed layer leaves to evaluate: its output, plus the
-/// convolution state and prompt-cache boundary snapshots it does not reach.
+/// convolution state and astro SSD prompt cache boundary snapshots it does not reach.
 fn completed_layer_roots<'layer>(
     layer_output: &'layer MlxArray,
     layer_index: usize,
     request_decoder_state: &'layer RequestDecoderStateStack,
     boundary_checkpoint_collector: Option<
-        &'layer Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        &'layer Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
     >,
 ) -> CompletedLayerRoots<'layer> {
     CompletedLayerRoots {
         layer_output,
         convolution_state: request_decoder_state
             .layer(layer_index)
-            .and_then(DecoderCacheState::convolution_state_array),
+            .and_then(AstroDecoderStateCacheState::convolution_state_array),
         boundary_checkpoint_states: boundary_checkpoint_collector
             .map(|collector| collector.layer_evaluation_arrays(layer_index))
             .unwrap_or_default(),

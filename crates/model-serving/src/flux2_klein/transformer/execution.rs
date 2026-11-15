@@ -393,7 +393,7 @@ impl Flux2KleinTransformer {
             )?;
         }
         if group_streamed_weights {
-            self.runtime.clear_allocator_cache()?;
+            self.runtime.clear_mlx_buffer_cache()?;
         }
         record_event(Flux2KleinBlockGroupEvent::Completed {
             kind: Flux2KleinBlockKind::DoubleStream,
@@ -481,7 +481,7 @@ impl Flux2KleinTransformer {
             )?;
         }
         if group_streamed_weights {
-            self.runtime.clear_allocator_cache()?;
+            self.runtime.clear_mlx_buffer_cache()?;
         }
         record_event(Flux2KleinBlockGroupEvent::Completed {
             kind: Flux2KleinBlockKind::SingleStream,

@@ -16,11 +16,11 @@ impl Qwen3_5EngineState {
         request_id: RequestId,
     ) -> Option<MlxMemorySnapshot> {
         let model = self.model.as_ref()?;
-        if let Err(allocator_cache_error) = model
+        if let Err(mlx_buffer_cache_error) = model
             .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         {
-            tracing::warn!(request_id = request_id.value(), error = %allocator_cache_error,
+            tracing::warn!(request_id = request_id.value(), error = %mlx_buffer_cache_error,
                 "failed to release reclaimable MLX request memory");
             return None;
         }
@@ -29,7 +29,7 @@ impl Qwen3_5EngineState {
                 tracing::info!(
                     request_id = request_id.value(),
                     mlx_active_bytes = mlx_memory_snapshot.active_memory_bytes(),
-                    mlx_allocator_cache_bytes = mlx_memory_snapshot.allocator_cache_memory_bytes(),
+                    mlx_buffer_cache_bytes = mlx_memory_snapshot.mlx_buffer_cache_bytes(),
                     mlx_peak_bytes = mlx_memory_snapshot.peak_memory_bytes(),
                     "released reclaimable MLX request memory"
                 );

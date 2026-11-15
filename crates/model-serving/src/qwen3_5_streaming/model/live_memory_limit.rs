@@ -1,6 +1,6 @@
 //! Coordinates the live MLX ceiling with the streaming pager's retained-page budget.
 //!
-//! Keeping both limits in one transition prevents the retained cache from exceeding
+//! Keeping both limits in one transition prevents the retained `astro_expert_cache` from exceeding
 //! the user's current memory grant.
 
 use astronomical_runtime_integration::MlxMemoryLimits;
@@ -42,7 +42,7 @@ impl Qwen3_5Model {
             minimum_mlx_memory_ceiling_bytes,
             current_active_memory_bytes,
         } = live_memory_observation;
-        let expert_statistics = self.expert_weight_memory_cache_statistics();
+        let expert_statistics = self.astro_expert_cache_statistics();
         let ceiling_change_decision = MemoryCeilingChangeRequirements {
             current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
             requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
@@ -195,7 +195,7 @@ impl Qwen3_5Model {
         )?;
         let post_reclamation_mlx_memory_snapshot = self
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .and_then(|()| self.runtime.memory_snapshot())
             .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
         let post_reclamation_active_memory_bytes = u64::try_from(
@@ -248,7 +248,7 @@ impl Qwen3_5Model {
                     model_memory_facts_error.to_string(),
                 )
             })?;
-        // The governor follows the installed limit, and the expert cache or
+        // The governor follows the installed limit, and the astro expert cache or
         // a dense model's kept layers give back what no longer fits.
         self.govern_limit_change();
         let Some(expert_pager) = self.expert_pager.as_mut() else {

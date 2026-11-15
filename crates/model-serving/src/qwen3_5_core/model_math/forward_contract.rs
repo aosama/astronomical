@@ -1,6 +1,6 @@
 use super::error;
 use super::error::Qwen3_5ExecutionError;
-use crate::DecoderCacheState;
+use crate::AstroDecoderStateCacheState;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use mlx_bridge::{MlxArray, MlxDtype};
 
@@ -30,7 +30,7 @@ fn collect_evaluation_arrays<'state>(
     evaluation_arrays.extend(output);
     for layer_index in 0..decoder_layer_count {
         match request_decoder_state.layer(layer_index) {
-            Some(DecoderCacheState::Composite {
+            Some(AstroDecoderStateCacheState::Composite {
                 convolution,
                 recurrent,
             }) if convolution.state().is_some() && recurrent.state().is_some() => {
@@ -51,7 +51,7 @@ fn collect_evaluation_arrays<'state>(
                     evaluation_arrays.push(recurrent);
                 }
             }
-            Some(DecoderCacheState::AppendOnlyAttention { attention })
+            Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention })
                 if attention.keys_state().is_some() && attention.values_state().is_some() =>
             {
                 let attention_keys = attention.keys_state().ok_or_else(|| {

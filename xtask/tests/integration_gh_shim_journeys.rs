@@ -14,23 +14,26 @@ struct GhShim {
 
 impl GhShim {
     /// Writes a `gh` shim that replays canned responses: a plain `api` call
-    /// prints the default branch, a `--paginate` cache list prints the TSV
-    /// rows, and `cache delete` exits per the map (default 0).
+    /// prints the default branch, a `--paginate` listing of the
+    /// `github_actions_cache` prints the TSV rows, and `gh cache delete` exits
+    /// per the map (default 0).
     fn install(
         root_directory: &std::path::Path,
-        cache_list_tsv: &str,
+        github_actions_cache_list_tsv: &str,
         delete_exit_codes: &HashMap<u64, i32>,
     ) -> Self {
         let shim_directory = root_directory.join("shim-bin");
         std::fs::create_dir_all(&shim_directory).unwrap();
         let delete_lines: Vec<String> = delete_exit_codes
             .iter()
-            .map(|(cache_id, exit_code)| format!("        {cache_id}) exit {exit_code} ;;"))
+            .map(|(github_actions_cache_id, exit_code)| {
+                format!("        {github_actions_cache_id}) exit {exit_code} ;;")
+            })
             .collect();
         // The shim's PATH is the shim directory alone (that is the
         // isolation guarantee), so every command here must be a shell
         // builtin: `printf`, not `cat` or external tools.
-        let tsv_emit_lines: Vec<String> = cache_list_tsv
+        let tsv_emit_lines: Vec<String> = github_actions_cache_list_tsv
             .lines()
             .map(|tsv_line| format!("    printf '%s\\n' '{tsv_line}'"))
             .collect();
@@ -73,7 +76,7 @@ impl Drop for GhShim {
     }
 }
 
-const THREE_FAMILY_CACHE_LIST: &str = "1\tastronomical-v2-native-build-macOS-a\trefs/heads/main\t2026-10-01T00:00:00Z\t100\n\
+const THREE_FAMILY_GITHUB_ACTIONS_CACHE_LIST: &str = "1\tastronomical-v2-native-build-macOS-a\trefs/heads/main\t2026-10-01T00:00:00Z\t100\n\
 2\tastronomical-v2-native-build-macOS-b\trefs/heads/main\t2026-10-02T00:00:00Z\t100\n\
 3\tastronomical-v2-native-build-macOS-c\trefs/heads/main\t2026-10-03T00:00:00Z\t100\n\
 4\tastronomical-v2-sccache-macOS-oversize\trefs/heads/main\t2026-10-09T00:00:00Z\t700000000\n\
@@ -99,7 +102,11 @@ fn prune_deletes_only_surplus_and_oversize_entries_through_gh() {
     let sandbox_directory =
         std::env::temp_dir().join(format!("astronomical-prune-journey-{}", std::process::id()));
     std::fs::create_dir_all(&sandbox_directory).unwrap();
-    let shim = GhShim::install(&sandbox_directory, THREE_FAMILY_CACHE_LIST, &HashMap::new());
+    let shim = GhShim::install(
+        &sandbox_directory,
+        THREE_FAMILY_GITHUB_ACTIONS_CACHE_LIST,
+        &HashMap::new(),
+    );
 
     let mut prune_command =
         shim.command_for_xtask(&["prune-caches", "--repo", "aosama/astronomical"]);
@@ -137,7 +144,7 @@ fn prune_dry_run_reports_deletions_without_calling_delete() {
     blocked_deletions.insert(1u64, 1i32);
     let shim = GhShim::install(
         &sandbox_directory,
-        THREE_FAMILY_CACHE_LIST,
+        THREE_FAMILY_GITHUB_ACTIONS_CACHE_LIST,
         &blocked_deletions,
     );
 
@@ -157,7 +164,11 @@ fn sccache_save_replaces_a_stored_oversize_entry_and_saves() {
         std::process::id()
     ));
     std::fs::create_dir_all(&sandbox_directory).unwrap();
-    let shim = GhShim::install(&sandbox_directory, THREE_FAMILY_CACHE_LIST, &HashMap::new());
+    let shim = GhShim::install(
+        &sandbox_directory,
+        THREE_FAMILY_GITHUB_ACTIONS_CACHE_LIST,
+        &HashMap::new(),
+    );
     let sccache_directory = sandbox_directory.join("sccache-dir");
     std::fs::create_dir_all(sccache_directory.join("nested")).unwrap();
     std::fs::write(sccache_directory.join("top"), vec![0u8; 1000]).unwrap();
@@ -198,7 +209,11 @@ fn sccache_save_skips_when_a_stored_entry_is_already_within_budget() {
         std::process::id()
     ));
     std::fs::create_dir_all(&sandbox_directory).unwrap();
-    let shim = GhShim::install(&sandbox_directory, THREE_FAMILY_CACHE_LIST, &HashMap::new());
+    let shim = GhShim::install(
+        &sandbox_directory,
+        THREE_FAMILY_GITHUB_ACTIONS_CACHE_LIST,
+        &HashMap::new(),
+    );
     let sccache_directory = sandbox_directory.join("sccache-dir");
     std::fs::create_dir_all(&sccache_directory).unwrap();
     std::fs::write(sccache_directory.join("small"), vec![0u8; 10]).unwrap();
@@ -227,7 +242,7 @@ fn sccache_save_skips_when_a_stored_entry_is_already_within_budget() {
 }
 
 #[test]
-fn sccache_save_without_a_listable_cache_degrades_to_skip() {
+fn sccache_save_without_a_listable_github_actions_cache_degrades_to_skip() {
     let sandbox_directory = std::env::temp_dir().join(format!(
         "astronomical-sccache-save-nolist-{}",
         std::process::id()
@@ -257,7 +272,7 @@ fn sccache_save_without_a_listable_cache_degrades_to_skip() {
 #[test]
 fn should_apply_fixed_sccache_save_budgets_despite_retired_environment_entries() {
     // The fixed sccache budget is 680,000,000 bytes (raised from 450,000,000
-    // in the #1688 cache hunt): the boundary entry fits, one byte more is
+    // in the #1688 `sccache` budget hunt): the boundary entry fits, one byte more is
     // oversize, whatever the retired environment entries say.
     for (stored_entry_bytes, directory_budget, entry_budget, expected_decision) in [
         (680_000_000, "1", "1", "fresh-entry-within-budget"),
@@ -271,17 +286,21 @@ fn should_apply_fixed_sccache_save_budgets_despite_retired_environment_entries()
         (680_000_001, "", "", "replace-oversize-entry"),
     ] {
         let test_directory = tempfile::tempdir().expect("the test directory should be created");
-        let cache_list = format!(
-            "1\tprimary-cache-key\trefs/heads/main\t2026-10-01T00:00:00Z\t{stored_entry_bytes}\n"
+        let github_actions_cache_list = format!(
+            "1\tprimary-github-actions-cache-key\trefs/heads/main\t2026-10-01T00:00:00Z\t{stored_entry_bytes}\n"
         );
-        let shim = GhShim::install(test_directory.path(), &cache_list, &HashMap::new());
+        let shim = GhShim::install(
+            test_directory.path(),
+            &github_actions_cache_list,
+            &HashMap::new(),
+        );
         let sccache_directory = test_directory.path().join("sccache");
         std::fs::create_dir_all(&sccache_directory).unwrap();
         std::fs::write(sccache_directory.join("entry"), [0; 10]).unwrap();
         let github_output_path = output_path(test_directory.path());
         std::fs::write(&github_output_path, "").unwrap();
         let save_run = shim
-            .command_for_xtask(&["save-sccache", "primary-cache-key"])
+            .command_for_xtask(&["save-sccache", "primary-github-actions-cache-key"])
             .env("GITHUB_REPOSITORY", "example/project")
             .env("SCCACHE_DIR", &sccache_directory)
             .env("GITHUB_OUTPUT", &github_output_path)

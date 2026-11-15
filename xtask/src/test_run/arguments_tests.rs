@@ -9,13 +9,13 @@ fn arguments(command_line: &str) -> Vec<String> {
 #[test]
 fn should_select_a_named_test_and_explicit_configuration() {
     let request = TestRunRequest::parse(&arguments(
-        "--package astronomical-acceptance --test engine_prompt_cache --features direct-mlx --release --configuration cases.json --filter selected_case --exact --ignored",
+        "--package astronomical-acceptance --test engine_astro_ssd_prompt_cache --features direct-mlx --release --configuration cases.json --filter selected_case --exact --ignored",
     ))
     .expect("the explicit case should parse");
     assert_eq!(request.package, "astronomical-acceptance");
     assert_eq!(
         request.target,
-        TestTarget::Integration("engine_prompt_cache".to_owned())
+        TestTarget::Integration("engine_astro_ssd_prompt_cache".to_owned())
     );
     assert_eq!(request.profile.as_deref(), Some("release"));
     assert_eq!(request.features.as_deref(), Some("direct-mlx"));

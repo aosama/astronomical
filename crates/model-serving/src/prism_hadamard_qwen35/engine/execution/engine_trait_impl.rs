@@ -14,9 +14,9 @@ use mlx_bridge::MlxArray;
 use super::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
     prefill_chunk::{
-        capture_completed_prefill_cache_block, forward_prefill_chunk_hidden_states,
-        prefill_chunk_length, prefill_progress_token, queue_prefill_first_token,
-        submit_prefill_state_evaluation,
+        capture_completed_prefill_astro_ssd_prompt_cache_block,
+        forward_prefill_chunk_hidden_states, prefill_chunk_length, prefill_progress_token,
+        queue_prefill_first_token, submit_prefill_state_evaluation,
     },
     record_emitted_token,
     sampling::{
@@ -54,7 +54,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let mut performance_attribution = pending.performance_attribution;
         let memory_limits = MlxMemoryLimits::new(
             pending.effective_mlx_memory_ceiling_bytes,
-            pending.allocator_cache_memory_limit_bytes,
+            pending.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|error| InferenceEngineError::Fatal {
             reason: format!("folded-ternary MLX limits failed: {error}"),
@@ -83,24 +83,27 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         self.attribution_model_id = Some(pending.attribution_model_id.clone());
         self.attribution_model_revision = Some(pending.attribution_model_revision.clone());
         self.model = Some(model);
-        if let Some(prompt_cache_disk_store_config) = pending.prompt_cache_disk_store_config {
+        if let Some(astro_ssd_prompt_cache_disk_store_config) =
+            pending.astro_ssd_prompt_cache_disk_store_config
+        {
             let loaded_model = self
                 .model
                 .as_ref()
                 .ok_or_else(|| InferenceEngineError::Fatal {
                     reason: "folded-ternary model is not loaded".to_owned(),
                 })?;
-            self.persistent_prompt_cache =
-                Some(super::super::prompt_cache::open_prompt_cache_store(
+            self.astro_ssd_prompt_cache = Some(
+                super::super::astro_ssd_prompt_cache::open_astro_ssd_prompt_cache_store(
                     pending.effective_mlx_memory_ceiling_bytes,
                     loaded_model,
                     &pending.attribution_model_id,
                     &pending.attribution_model_revision,
-                    pending.configured_prompt_cache_block_token_count,
-                    pending.prompt_cache_common_prefix_stride_blocks,
-                    prompt_cache_disk_store_config,
+                    pending.configured_astro_ssd_prompt_cache_block_token_count,
+                    pending.ssd_prompt_cache_common_prefix_stride_blocks,
+                    astro_ssd_prompt_cache_disk_store_config,
                     &mut performance_attribution,
-                )?);
+                )?,
+            );
         }
         self.record_model_loading_performance_attribution(performance_attribution);
         Ok(EngineLoadResult::new()
@@ -159,29 +162,32 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let structured_generation = inference_request.take_structured_generation();
         let mut performance_attribution = inference_request.take_performance_attribution();
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
-        let mut cached_token_count: u32 = 0;
+        let mut astro_ssd_prompt_cache_restored_token_count: u32 = 0;
         let mut last_published_block_key = None;
         let mut generation_state = StraightGenerationState::empty();
-        if let Some(persistent_prompt_cache) = self.persistent_prompt_cache.clone() {
-            let restore_outcome = super::super::prompt_cache::lookup_and_restore_prompt_prefix(
-                model,
-                &persistent_prompt_cache,
-                &prompt_token_ids,
-                &mut generation_state,
-                &mut self.persistent_prompt_cache_counters,
-                &mut performance_attribution,
-            )?;
-            cached_token_count = restore_outcome.restored_token_count;
+        if let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.clone() {
+            let restore_outcome =
+                super::super::astro_ssd_prompt_cache::lookup_and_restore_prompt_prefix(
+                    model,
+                    &astro_ssd_prompt_cache,
+                    &prompt_token_ids,
+                    &mut generation_state,
+                    &mut self.astro_ssd_prompt_cache_counters,
+                    &mut performance_attribution,
+                )?;
+            astro_ssd_prompt_cache_restored_token_count = restore_outcome.restored_token_count;
             last_published_block_key =
-                restore_outcome.last_restored_persistent_prompt_cache_block_key;
+                restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
         }
         self.active = Some(PrismHadamardQwen35ActiveGeneration {
             request_id,
             remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
             prompt_token_ids: prompt_token_ids.clone(),
-            remaining_prompt_token_ids: prompt_token_ids[cached_token_count as usize..].to_vec(),
-            processed_prompt_token_count: cached_token_count,
-            cached_token_count,
+            remaining_prompt_token_ids: prompt_token_ids
+                [astro_ssd_prompt_cache_restored_token_count as usize..]
+                .to_vec(),
+            processed_prompt_token_count: astro_ssd_prompt_cache_restored_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             generation_state,
             pending_sampled_token: None,
             penalized_token_ids,
@@ -193,7 +199,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             performance_attribution,
         });
         Ok(EngineGenerationStart::with_expert_memory_mode(
-            cached_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             ExpertMemoryMode::Resident,
         ))
     }
@@ -354,11 +360,11 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
         self.ceiling_bytes = requested_mlx_memory_ceiling_bytes.max(1);
-        self.allocator_cache_bytes = self.allocator_cache_bytes.min(self.ceiling_bytes);
+        self.mlx_buffer_cache_bytes = self.mlx_buffer_cache_bytes.min(self.ceiling_bytes);
         if let Some(model) = self.model.as_mut() {
             let memory_limits = MlxMemoryLimits::new(
                 usize::try_from(self.ceiling_bytes).unwrap_or(usize::MAX),
-                usize::try_from(self.allocator_cache_bytes).unwrap_or(usize::MAX),
+                usize::try_from(self.mlx_buffer_cache_bytes).unwrap_or(usize::MAX),
             )
             .map_err(|error| InferenceEngineError::Fatal {
                 reason: format!("folded-ternary MLX limits failed: {error}"),
@@ -375,32 +381,34 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         Ok(MlxMemoryLimitAdjustment::new(
             self.ceiling_bytes,
-            self.allocator_cache_bytes,
+            self.mlx_buffer_cache_bytes,
             self.minimum_ceiling_bytes,
             ExpertMemoryMode::Resident,
             mlx_memory_telemetry,
         ))
     }
 
-    fn collect_persistent_prompt_cache_stats(
+    fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        Ok(self.persistent_prompt_cache_stats_event())
+        Ok(self.astro_ssd_prompt_cache_stats_event())
     }
 
-    fn clear_persistent_prompt_cache(
+    fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() else {
+        let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.as_ref() else {
             return Ok(None);
         };
-        let clear_outcome = persistent_prompt_cache
-            .clear_prompt_cache(model_id.as_deref())
+        let clear_outcome = astro_ssd_prompt_cache
+            .clear_astro_ssd_prompt_cache(model_id.as_deref())
             .map_err(|clear_error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary prompt cache could not be cleared: {clear_error}"),
+                reason: format!(
+                    "folded-ternary astro SSD prompt cache could not be cleared: {clear_error}"
+                ),
             })?;
-        Ok(Some(WorkerEvent::PromptCacheCleared {
+        Ok(Some(WorkerEvent::AstroSsdPromptCacheCleared {
             model_id: clear_outcome.model_id,
             blocks_removed: clear_outcome.blocks_removed,
             bytes_freed: clear_outcome.bytes_freed,
@@ -427,8 +435,8 @@ impl PrismHadamardQwen35InferenceExecution {
             }
         };
         let active_memory_bytes = u64::try_from(memory_snapshot.active_memory_bytes()).ok()?;
-        let allocator_cache_memory_bytes =
-            u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()?;
+        let mlx_buffer_cache_bytes =
+            u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()?;
         let peak_memory_bytes = u64::try_from(memory_snapshot.peak_memory_bytes()).ok()?;
         let model_core_payload_bytes = model.pack().total_payload_bytes();
         let context_state_payload_bytes = self.active.as_ref().map_or(0, |active_generation| {
@@ -442,7 +450,7 @@ impl PrismHadamardQwen35InferenceExecution {
         );
         Some(MlxMemoryTelemetry::new(
             active_memory_bytes,
-            allocator_cache_memory_bytes,
+            mlx_buffer_cache_bytes,
             peak_memory_bytes,
             active_memory_breakdown,
         ))
@@ -475,15 +483,15 @@ impl PrismHadamardQwen35InferenceExecution {
                 reason: "folded-ternary prefill request correlation mismatch".to_owned(),
             });
         }
-        let persistent_prompt_cache = self.persistent_prompt_cache.clone();
+        let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.clone();
         let chunk_length = prefill_chunk_length(
             active.processed_prompt_token_count,
             active.remaining_prompt_token_ids.len(),
             prompt_processing_chunk_tokens,
-            persistent_prompt_cache
+            astro_ssd_prompt_cache
                 .as_ref()
-                .map(|persistent_prompt_cache| {
-                    persistent_prompt_cache
+                .map(|astro_ssd_prompt_cache| {
+                    astro_ssd_prompt_cache
                         .model_contract_ref()
                         .block_token_count()
                 }),
@@ -513,10 +521,16 @@ impl PrismHadamardQwen35InferenceExecution {
         // published tensors chain onto the lazy arrays and materialize during
         // publication, so no extra device synchronization happens here.
         active.processed_prompt_token_count += chunk_length as u32;
-        capture_completed_prefill_cache_block(model, persistent_prompt_cache.as_deref(), active)?;
+        capture_completed_prefill_astro_ssd_prompt_cache_block(
+            model,
+            astro_ssd_prompt_cache.as_deref(),
+            active,
+        )?;
         let prompt_work_reuse = WorkerPromptWorkReuse {
             target_eligible_token_count: active.prompt_token_ids.len() as u64,
-            target_restored_token_count: u64::from(active.cached_token_count),
+            target_restored_token_count: u64::from(
+                active.astro_ssd_prompt_cache_restored_token_count,
+            ),
         };
         Ok(prefill_progress_token(
             chunk_length,

@@ -10,7 +10,7 @@ use astronomical_daemon::{
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerDecodeExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLogLevel, WorkerModelConfiguration,
     WorkerStartupConfiguration,
 };
@@ -405,12 +405,12 @@ fn startup_configuration(
     WorkerStartupConfiguration {
         neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: configuration_generation.to_owned(),
-        global_prompt_cache_root_directory: temporary_directory.join("cache"),
-        global_prompt_cache_maximum_size_bytes: 1_000_000_000,
-        persistent_prompt_cache_enabled: true,
+        global_astro_ssd_prompt_cache_root_directory: temporary_directory.join("cache"),
+        global_astro_ssd_prompt_cache_maximum_size_bytes: 1_000_000_000,
+        astro_ssd_prompt_cache_enabled: true,
         configured_maximum_mlx_memory_bytes: None,
         performance_attribution_enabled: true,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         diagnostic_qwen3_5_engine_override:
             astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
         logging_directory: temporary_directory.to_path_buf(),
@@ -446,8 +446,8 @@ fn model_policy_catalog(model_id: &str) -> Arc<HashMap<String, RuntimeModelPolic
                         full_attention_key_value_growth_tokens: 256,
                         prefill_graph_submission_layer_interval: 0,
                         experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                        prompt_cache_block_tokens: None,
-                        prompt_cache_common_prefix_stride_blocks: 4,
+                        ssd_prompt_cache_block_tokens: None,
+                        ssd_prompt_cache_common_prefix_stride_blocks: 4,
                         experimental_decode_stage_attribution_enabled: false,
                         experimental_prefill_stage_attribution_enabled: false,
                         experimental_in_memory_prefix_adoption_enabled: false,

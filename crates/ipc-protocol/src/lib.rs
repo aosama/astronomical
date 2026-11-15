@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+mod astro_ssd_prompt_cache_diagnostics;
+#[cfg(test)]
+mod astro_ssd_prompt_cache_diagnostics_tests;
 mod base64_bytes;
 mod chat_generation;
 #[cfg(test)]
@@ -30,9 +33,6 @@ mod message_codec;
 mod model_load_in_flight;
 mod neural_engine_chunk_report;
 mod neural_engine_prefill_status;
-mod persistent_prompt_cache_diagnostics;
-#[cfg(test)]
-mod persistent_prompt_cache_diagnostics_tests;
 #[cfg(test)]
 mod prompt_processing_progress_protocol_tests;
 mod protocol_error;
@@ -54,6 +54,12 @@ mod worker_startup_configuration;
 #[cfg(test)]
 mod worker_startup_configuration_tests;
 
+pub use astro_ssd_prompt_cache_diagnostics::{
+    WorkerAstroSsdPromptCacheExpectedBlockHashPrefix, WorkerAstroSsdPromptCacheLookupOutcome,
+    WorkerAstroSsdPromptCacheMissReason, WorkerAstroSsdPromptCacheRequestDiagnostics,
+    WorkerAstroSsdPromptCacheStartupCleanupCategory,
+    WorkerAstroSsdPromptCacheStartupCleanupEvidence, WorkerInMemoryPrefixAdoptionOutcome,
+};
 pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
@@ -91,13 +97,6 @@ pub use message_codec::{
 pub use model_load_in_flight::ModelLoadInFlight;
 pub use neural_engine_chunk_report::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};
 pub use neural_engine_prefill_status::NeuralEnginePrefillStatus;
-pub use persistent_prompt_cache_diagnostics::{
-    WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
-    WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,
-    WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPersistentPromptCacheStartupCleanupCategory,
-    WorkerPersistentPromptCacheStartupCleanupEvidence,
-};
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, RequestId, WorkerCommand,
@@ -126,6 +125,6 @@ pub use worker_model_configuration::{
     WorkerSpeechModelFamily,
 };
 pub use worker_startup_configuration::{
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };

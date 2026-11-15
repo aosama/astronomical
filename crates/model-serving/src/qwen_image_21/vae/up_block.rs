@@ -5,8 +5,8 @@
 //! single-frame image decode. Two reference details collapse on this path:
 //!
 //! 1. The `upsampler.time_conv` and its channel-interleave temporal doubling only run when the
-//!    feature cache already holds a state, and `_decode` drives one frame through a freshly
-//!    cleared cache — so a whole-image decode never executes the temporal path, and the
+//!    VAE feature cache already holds a state, and `_decode` drives one frame through a freshly
+//!    cleared VAE feature cache — so a whole-image decode never executes the temporal path, and the
 //!    upsampler is exactly nearest 2× spatial followed by the stored 3×3 convolution.
 //! 2. The parameter-free `avg_shortcut` (`QwenImage21DupUp3D`, `first_chunk = true`) reduces to a
 //!    pixel shuffle whose source channel for output channel `oc` and intra-tile position

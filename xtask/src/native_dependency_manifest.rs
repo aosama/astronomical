@@ -1,7 +1,7 @@
 //! Pinned-manifest policy for the native dependency bootstrap: one line per
 //! archive, four pipe-separated fields, exactly five pinned archives. The
-//! validations mirror what the CMake manifest can express and what the cache
-//! layer must never have to trust: no line-break or empty fields, a path-safe
+//! validations mirror what the CMake manifest can express and what the
+//! `astro_native_build_cache` archive store must never have to trust: no line-break or empty fields, a path-safe
 //! archive file name, HTTPS-only URLs, and a lowercase 64-hex SHA-256.
 
 pub(crate) const EXPECTED_ARCHIVE_COUNT: usize = 5;

@@ -9,23 +9,23 @@ use super::forward_contract;
 use super::visual_embedding_injection;
 use super::{Qwen3_5ExecutionError, Qwen3_5TargetForwardOutput, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::{
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
 };
 
 pub(crate) struct Qwen3_5BoundaryCheckpointPrefillOutcome {
     pub(crate) consumed_visual_embedding_count: usize,
-    pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(crate) boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// Outcome of a terminal prefill that produces both boundary checkpoints and logits.
 ///
 /// Unlike intermediate checkpointed prefill, the terminal chunk needs the vocabulary
 /// head to produce first-token logits. This single-forward outcome carries both the
-/// cache checkpoints and the logits needed for first-token seeding.
+/// `astro_ssd_prompt_cache` checkpoints and the logits needed for first-token seeding.
 pub(crate) struct Qwen3_5TerminalCheckpointPrefillOutcome {
     pub(crate) target_forward_output: Qwen3_5TargetForwardOutput,
-    pub(crate) boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(crate) boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 impl Qwen3_5ResidentModel {
@@ -69,7 +69,7 @@ impl Qwen3_5ResidentModel {
         request_decoder_state: &mut RequestDecoderStateStack,
         image_pad_token_id: u32,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<usize, Qwen3_5ExecutionError> {
@@ -128,9 +128,10 @@ impl Qwen3_5ResidentModel {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
-                self.decoder_cache_layout.boundary_tensor_count(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
                 checkpoint_interval_token_count,
             )?;
         let consumed_visual_embedding_count = self.build_visual_prefill_graph(
@@ -210,9 +211,10 @@ impl Qwen3_5ResidentModel {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
-                self.decoder_cache_layout.boundary_tensor_count(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
                 checkpoint_interval_token_count,
             )?;
         let signed_token_ids = token_ids
@@ -262,9 +264,10 @@ impl Qwen3_5ResidentModel {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TerminalCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let mut boundary_checkpoint_collector =
-            Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
+            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
-                self.decoder_cache_layout.boundary_tensor_count(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
                 checkpoint_interval_token_count,
             )?;
         let target_forward_output = self.build_target_forward_graph(

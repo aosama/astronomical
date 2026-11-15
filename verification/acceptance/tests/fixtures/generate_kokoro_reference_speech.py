@@ -6,7 +6,7 @@ spaCy's `en_core_web_sm` and `huggingface_hub` installed:
     python generate_kokoro_reference_speech.py > kokoro_reference_speech.json
 
 It downloads the original `hexgrad/Kokoro-82M` checkpoint and the `af_heart`
-voice at the pinned revision below into the Hugging Face cache, and records
+voice at the pinned revision below into the Hugging Face hub cache, and records
 that revision and the package versions in the fixture. Each case is spoken by
 the reference implementation in float32 on the CPU.
 

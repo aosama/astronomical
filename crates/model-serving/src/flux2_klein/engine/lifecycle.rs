@@ -38,7 +38,7 @@ impl Flux2KleinImageEngine {
         model_directory: impl AsRef<Path>,
         provenance: Flux2KleinArtifactProvenance,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         performance_attribution_enabled: bool,
         performance_attribution_log_path: PathBuf,
     ) -> Self {
@@ -50,7 +50,7 @@ impl Flux2KleinImageEngine {
                 model_directory.as_ref().to_path_buf(),
                 provenance,
                 effective_mlx_memory_ceiling_bytes,
-                allocator_cache_memory_limit_bytes,
+                mlx_buffer_cache_limit_bytes,
                 performance_attribution_enabled,
                 performance_attribution_log_path,
             )),
@@ -63,7 +63,7 @@ impl Flux2KleinImageEngine {
         model_directory: impl AsRef<Path>,
         provenance: Flux2KleinArtifactProvenance,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         performance_attribution_enabled: bool,
         performance_attribution_log_path: PathBuf,
     ) -> Self {
@@ -71,7 +71,7 @@ impl Flux2KleinImageEngine {
             model_directory,
             provenance,
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             performance_attribution_enabled,
             performance_attribution_log_path,
         )

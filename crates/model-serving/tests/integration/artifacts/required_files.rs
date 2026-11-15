@@ -6,16 +6,16 @@ use astronomical_model_serving::{
     ArtifactValidationError, RequiredFileProfile, validate_required_file_for_tests,
 };
 
-/// Builds a Hugging Face cache entry whose snapshot symlinks `config.json`
+/// Builds a Hugging Face hub cache entry whose snapshot symlinks `config.json`
 /// into its own blob directory, then an install directory that reaches the
 /// snapshot through a symlink — the symlink-farm install shape a conversion
-/// pipeline produces when it links an installed model at the cache's
+/// pipeline produces when it links an installed model at the Hugging Face hub cache's
 /// snapshot instead of copying it.
 fn symlink_farm_over_hugging_face_snapshot() -> (tempfile::TempDir, PathBuf) {
     let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
-    let model_cache_directory = temporary_directory.path().join("models--example--model");
-    let blob_directory = model_cache_directory.join("blobs");
-    let snapshot_directory = model_cache_directory.join("snapshots/commit-hash");
+    let huggingface_hub_model_directory = temporary_directory.path().join("models--example--model");
+    let blob_directory = huggingface_hub_model_directory.join("blobs");
+    let snapshot_directory = huggingface_hub_model_directory.join("snapshots/commit-hash");
     std::fs::create_dir_all(&blob_directory).expect("the test should create the blob directory");
     std::fs::create_dir_all(&snapshot_directory)
         .expect("the test should create the snapshot directory");
@@ -66,7 +66,7 @@ fn should_accept_a_model_directory_symlinked_to_a_hugging_face_snapshot() {
 }
 
 #[test]
-fn should_reject_a_model_directory_symlinked_outside_a_hugging_face_cache() {
+fn should_reject_a_model_directory_symlinked_outside_a_hugging_face_hub_cache() {
     let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
     let plain_model_directory = temporary_directory.path().join("plain-model");
     std::fs::create_dir_all(&plain_model_directory)
@@ -90,7 +90,7 @@ fn should_reject_a_model_directory_symlinked_outside_a_hugging_face_cache() {
             size_bytes: 0,
         },
     )
-    .expect_err("a symlinked model directory outside a Hugging Face cache must stay rejected");
+    .expect_err("a symlinked model directory outside a Hugging Face hub cache must stay rejected");
     assert!(
         matches!(
             validation_error,
@@ -103,9 +103,9 @@ fn should_reject_a_model_directory_symlinked_outside_a_hugging_face_cache() {
 #[test]
 fn should_accept_a_hugging_face_snapshot_symlink_to_its_own_blob_directory() {
     let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
-    let model_cache_directory = temporary_directory.path().join("models--example--model");
-    let blob_directory = model_cache_directory.join("blobs");
-    let snapshot_directory = model_cache_directory.join("snapshots/commit-hash");
+    let huggingface_hub_model_directory = temporary_directory.path().join("models--example--model");
+    let blob_directory = huggingface_hub_model_directory.join("blobs");
+    let snapshot_directory = huggingface_hub_model_directory.join("snapshots/commit-hash");
     std::fs::create_dir_all(&blob_directory).expect("the test should create the blob directory");
     std::fs::create_dir_all(&snapshot_directory)
         .expect("the test should create the snapshot directory");
@@ -158,9 +158,9 @@ impl SharedBlobLayout {
     fn create() -> Self {
         let hub_directory =
             tempfile::tempdir().expect("the test should create a temporary hub root");
-        let model_cache_directory = hub_directory.path().join("models--example--model");
-        let local_blob_directory = model_cache_directory.join("blobs");
-        let snapshot_directory = model_cache_directory.join("snapshots/commit-hash");
+        let huggingface_hub_model_directory = hub_directory.path().join("models--example--model");
+        let local_blob_directory = huggingface_hub_model_directory.join("blobs");
+        let snapshot_directory = huggingface_hub_model_directory.join("snapshots/commit-hash");
         let shared_blob_directory = hub_directory.path().join("blobs/ab");
         std::fs::create_dir_all(&local_blob_directory)
             .expect("the test should create the entry blob directory");
@@ -168,7 +168,7 @@ impl SharedBlobLayout {
             .expect("the test should create the shared blob directory");
         std::fs::create_dir_all(&snapshot_directory)
             .expect("the test should create the snapshot directory");
-        std::fs::create_dir_all(model_cache_directory.join("trees"))
+        std::fs::create_dir_all(huggingface_hub_model_directory.join("trees"))
             .expect("the test should create the tree metadata directory");
         std::fs::write(
             shared_blob_directory.join(SHARED_BLOB_CONTENT_DIGEST),
@@ -302,9 +302,9 @@ fn should_reject_a_shared_blob_without_a_snapshot_tree_record() {
 #[test]
 fn should_reject_a_hugging_face_snapshot_symlink_that_escapes_its_blob_directory() {
     let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
-    let model_cache_directory = temporary_directory.path().join("models--example--model");
-    let blob_directory = model_cache_directory.join("blobs");
-    let snapshot_directory = model_cache_directory.join("snapshots/commit-hash");
+    let huggingface_hub_model_directory = temporary_directory.path().join("models--example--model");
+    let blob_directory = huggingface_hub_model_directory.join("blobs");
+    let snapshot_directory = huggingface_hub_model_directory.join("snapshots/commit-hash");
     std::fs::create_dir_all(&blob_directory).expect("the test should create the blob directory");
     std::fs::create_dir_all(&snapshot_directory)
         .expect("the test should create the snapshot directory");

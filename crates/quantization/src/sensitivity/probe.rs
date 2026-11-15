@@ -59,9 +59,9 @@ pub struct ModuleRestoreToken {
 ///   the vocabulary axis, and averages `sum(p_ref * (log p_ref - log p_probe))`
 ///   over positions, exactly OptiQ's `_kl_from_ref`. Reference logits may be
 ///   stored as float16 to halve memory; the math is float32 regardless.
-/// - After every module the adapter must drain the allocator cache
-///   (`synchronize_gpu_stream_and_clear_allocator_cache`): large fused expert
-///   tensors otherwise accumulate in MLX's page cache and macOS kills the
+/// - After every module the adapter must drain the MLX buffer cache
+///   (`synchronize_gpu_stream_and_clear_mlx_buffer_cache`): large fused expert
+///   tensors otherwise accumulate in the MLX buffer cache and macOS kills the
 ///   process within about ten modules.
 pub trait SensitivityProbeModel {
     /// Opaque logits for one forward pass; stays on device for GPU engines.

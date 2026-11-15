@@ -22,11 +22,11 @@ const OVERVIEW_IMAGE_PHASES = new Set(["preparing", "encoding_prompt", "denoisin
 // The model advertised by /v1/models under the loaded id, kept between polls
 // because limits come from the model list and the rest from /v1/status.
 let overviewLoadedModelListing = null;
-// The SSD prompt cache tile joins two polls: whether the cache is on and how
+// The SSD prompt cache tile joins two polls: whether the astro SSD prompt cache is on and how
 // big it may grow come from /v1/status (the worker reports a zero maximum
-// while no model is loaded), and use and hit rate from /v1/cache/stats.
-let overviewPromptCacheSetting = null;
-let overviewPromptCacheStats = null;
+// while no model is loaded), and use and hit rate from /v1/ssd-prompt-cache/stats.
+let overviewAstroSsdPromptCacheSetting = null;
+let overviewAstroSsdPromptCacheStats = null;
 
 function formatOverviewSeconds(elapsedMilliseconds) {
     return (elapsedMilliseconds / 1000).toFixed(1) + " s";
@@ -216,7 +216,7 @@ function renderOverviewMemory(statusDocument) {
 const OVERVIEW_LIMIT_PARTS = [
     { key: "fixed", accountBytes: (memoryLedger) => memoryLedger.core_weight_bytes },
     { key: "conversation", accountBytes: (memoryLedger) => memoryLedger.context_bytes },
-    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.working_memory_bytes || 0) + (memoryLedger.lease_bytes || 0) },
+    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.mlx_working_buffer_bytes || 0) + (memoryLedger.lease_bytes || 0) },
     { key: "reading", accountBytes: (memoryLedger) => memoryLedger.stream_slot_bytes },
     { key: "margin", accountBytes: (memoryLedger) => memoryLedger.margin_bytes },
     { key: "rest", accountBytes: (memoryLedger) => memoryLedger.kept_weight_capacity_bytes },
@@ -261,7 +261,7 @@ function overviewMemoryLimitPresentation(mlxMemorySnapshot, isWorking) {
     });
     // Until one step has been measured the engine holds everything that is
     // left for the unknown, and says so instead of showing a guess as a fact.
-    if (memoryLedger.working_memory_is_measured === false) {
+    if (memoryLedger.mlx_working_buffers_are_measured === false) {
         parts.find((part) => part.key === "working").text += " · held until a step is measured";
     }
     parts.find((part) => part.key === "rest").text += " · "
@@ -351,7 +351,7 @@ function renderOverviewModel(statusDocument, expertPlacement) {
 }
 
 // The two reuse figures measure different things, so each says which: prompt
-// tokens the loaded model kept in memory, and prompts found in the SSD cache.
+// tokens the loaded model kept in memory, and prompts found in the astro SSD prompt cache.
 function overviewSessionPresentation(servingSession) {
     const completedRequestCount = servingSession?.completed_request_count || 0;
     const averageTokensPerSecond = servingSession?.average_generation_tok_per_second || 0;
@@ -368,8 +368,8 @@ function overviewSessionPresentation(servingSession) {
 }
 
 function renderOverviewSession(statusDocument) {
-    overviewPromptCacheSetting = statusDocument.configuration?.prompt_cache || null;
-    renderOverviewPromptCacheTile();
+    overviewAstroSsdPromptCacheSetting = statusDocument.configuration?.astro_ssd_prompt_cache || null;
+    renderOverviewAstroSsdPromptCacheTile();
     const sessionPresentation = overviewSessionPresentation(statusDocument.serving_session);
     document.getElementById("overview-session-requests").textContent = sessionPresentation.requests;
     document.getElementById("overview-session-speed").textContent = sessionPresentation.speed;
@@ -377,35 +377,35 @@ function renderOverviewSession(statusDocument) {
     document.getElementById("overview-session-memory-reuse-hint").textContent = sessionPresentation.memoryReuseHint;
 }
 
-function overviewPromptCachePresentation(promptCacheSetting, cacheStatsDocument) {
-    if (!promptCacheSetting) return { usage: "—", hint: "" };
+function overviewAstroSsdPromptCachePresentation(astroSsdPromptCacheSetting, astroSsdPromptCacheStatsDocument) {
+    if (!astroSsdPromptCacheSetting) return { usage: "—", hint: "" };
     // Effective values stay null until the worker acknowledges its settings;
     // the configured value, then the default, stands in until then.
-    const enabledSetting = promptCacheSetting.enabled || {};
+    const enabledSetting = astroSsdPromptCacheSetting.enabled || {};
     const isEnabled = enabledSetting.effective ?? enabledSetting.configured ?? enabledSetting.default;
     if (isEnabled === false) {
         return { usage: "Off", hint: "Turned off in Configuration" };
     }
-    const capacitySetting = promptCacheSetting.capacity_bytes || {};
+    const capacitySetting = astroSsdPromptCacheSetting.capacity_bytes || {};
     const capacityBytes = capacitySetting.effective ?? capacitySetting.configured ?? capacitySetting.default ?? 0;
-    const usedBytes = cacheStatsDocument?.persistent_prompt_cache_total_size_bytes || 0;
-    const promptLookups = (cacheStatsDocument?.persistent_prompt_cache_hits || 0)
-        + (cacheStatsDocument?.persistent_prompt_cache_misses || 0);
+    const usedBytes = astroSsdPromptCacheStatsDocument?.astro_ssd_prompt_cache_total_size_bytes || 0;
+    const promptLookups = (astroSsdPromptCacheStatsDocument?.astro_ssd_prompt_cache_hits || 0)
+        + (astroSsdPromptCacheStatsDocument?.astro_ssd_prompt_cache_misses || 0);
     return {
         usage: formatOverviewGigabytes(usedBytes) + " of " + formatOverviewGigabytes(capacityBytes),
         hint: promptLookups > 0
-            ? Math.round((cacheStatsDocument.persistent_prompt_cache_hit_rate || 0) * 100) + "% of prompts found there"
+            ? Math.round((astroSsdPromptCacheStatsDocument.astro_ssd_prompt_cache_hit_rate || 0) * 100) + "% of prompts found there"
             : "No prompts looked up yet"
     };
 }
 
-function renderOverviewPromptCacheTile() {
-    const promptCachePresentation = overviewPromptCachePresentation(overviewPromptCacheSetting, overviewPromptCacheStats);
-    document.getElementById("overview-session-ssd-cache").textContent = promptCachePresentation.usage;
-    document.getElementById("overview-session-ssd-cache-hint").textContent = promptCachePresentation.hint;
+function renderOverviewAstroSsdPromptCacheTile() {
+    const astroSsdPromptCachePresentation = overviewAstroSsdPromptCachePresentation(overviewAstroSsdPromptCacheSetting, overviewAstroSsdPromptCacheStats);
+    document.getElementById("overview-session-astro-ssd-prompt-cache").textContent = astroSsdPromptCachePresentation.usage;
+    document.getElementById("overview-session-astro-ssd-prompt-cache-hint").textContent = astroSsdPromptCachePresentation.hint;
 }
 
-function renderOverviewPromptCache(cacheStatsDocument) {
-    overviewPromptCacheStats = cacheStatsDocument;
-    renderOverviewPromptCacheTile();
+function renderOverviewAstroSsdPromptCache(astroSsdPromptCacheStatsDocument) {
+    overviewAstroSsdPromptCacheStats = astroSsdPromptCacheStatsDocument;
+    renderOverviewAstroSsdPromptCacheTile();
 }

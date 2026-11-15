@@ -28,7 +28,7 @@ pub(crate) fn initialize_automatic_residency_tracing() {
 pub(super) fn construct_resident_engine(
     model_directory: std::path::PathBuf,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     request_id: RequestId,
     required_prompt_token_count: usize,
 ) -> (Qwen3_5ResidentEngine, Vec<u32>, u32, usize) {
@@ -64,7 +64,7 @@ pub(super) fn construct_resident_engine(
         Qwen3_5ResidentEngine::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             None,
             Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
                 2_048,
@@ -88,7 +88,7 @@ pub(super) fn construct_resident_engine(
 pub(super) fn construct_automatic_residency_engine(
     model_directory: std::path::PathBuf,
     active_memory_limit_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     request_id: RequestId,
     required_prompt_token_count: usize,
 ) -> (Qwen3_5StreamingEngine, Vec<u32>, u32, usize) {
@@ -124,7 +124,7 @@ pub(super) fn construct_automatic_residency_engine(
         Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             None,
             Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(2_048)
                 .expect("the test streaming prefill chunk size should be valid"),

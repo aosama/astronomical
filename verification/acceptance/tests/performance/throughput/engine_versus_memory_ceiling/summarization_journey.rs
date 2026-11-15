@@ -3,7 +3,7 @@
 //! engine and never from the prompt.
 
 use astronomical_ipc_protocol::{
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
 };
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
@@ -86,14 +86,14 @@ fn summarization_journey(
         TEMPERATURE_THOUSANDTHS,
     );
     journey.maximum_mlx_memory_bytes = Some(assigned_ceiling_gigabytes * BYTES_PER_GIGABYTE);
-    journey.decode_expert_cache_policy = WorkerDecodeExpertCachePolicy::Baseline;
+    journey.decode_astro_expert_cache_policy = WorkerDecodeAstroExpertCachePolicy::Baseline;
     journey.attribution_enabled = false;
     journey
 }
 
 /// Verifies the measured shape: a ~5,000-token Romeo and Juliet summarization
 /// that filled (within the standard 10 percent tolerance) its 300-token output
-/// cap, with zero persistent-prompt-cache reuse. The bounds are deliberately
+/// cap, with zero astro SSD prompt cache reuse. The bounds are deliberately
 /// wider than the fixture's nominal token count because the tokenizer's exact
 /// count drifts with the instruction prefix.
 fn assert_summarization_measurement_shape(
@@ -115,6 +115,6 @@ fn assert_summarization_measurement_shape(
     assert_eq!(
         measured_throughput.cached_tokens, 0,
         "the {assigned_ceiling_gigabytes} GB cell's measured completion must not reuse the \
-         persistent prompt cache",
+         astro SSD prompt cache",
     );
 }

@@ -5,16 +5,15 @@
 //! is restored when the leftover ceiling admits it so a fitting model is not left
 //! streaming. Final telemetry then reports that restored ownership.
 
-use crate::decoder_cache::DecoderCacheState;
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
+use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
-use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::{
-    GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
-    PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
-    PersistentPromptCacheBlockKey, RetainedPrefixRetentionDecision,
-    RetainedPrefixRetentionRequirements,
+    AstroSsdPromptCacheBlockKey, GenerationFinalization, GenerationPerformanceAttributionMetadata,
+    InferenceEngineError, PerformanceAttribution, PerformanceAttributionOutcome,
+    PerformanceOperation, RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
 };
 
 use super::Qwen3_5EngineState;
@@ -35,11 +34,11 @@ fn snapshot_active_memory_bytes_option(
     u64::try_from(memory_snapshot.active_memory_bytes()).ok()
 }
 
-/// Converts one memory snapshot's allocator-cache counter to a u64 when it fits.
-fn snapshot_allocator_cache_memory_bytes_option(
+/// Converts one memory snapshot's MLX buffer-cache counter to a u64 when it fits.
+fn snapshot_mlx_buffer_cache_bytes_option(
     memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
 ) -> Option<u64> {
-    u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()
+    u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()
 }
 
 impl Qwen3_5EngineState {
@@ -57,12 +56,10 @@ impl Qwen3_5EngineState {
             .map_err(
             super::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error,
         )?;
-        let allocator_cache_memory_bytes = u64::try_from(
-            mlx_memory_snapshot.allocator_cache_memory_bytes(),
-        )
-        .map_err(
-            super::generation_error_constructors::mlx_allocator_cache_memory_bytes_exceed_u64_range_error,
-        )?;
+        let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
+            .map_err(
+                super::generation_error_constructors::mlx_buffer_cache_bytes_exceed_u64_range_error,
+            )?;
         let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
             super::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error,
         )?;
@@ -74,7 +71,7 @@ impl Qwen3_5EngineState {
         Ok(Some(
             MlxMemoryTelemetry::new(
                 active_memory_bytes,
-                allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes,
                 peak_memory_bytes,
                 active_memory_breakdown,
             )
@@ -150,7 +147,7 @@ impl Qwen3_5EngineState {
         // `release_request_memory` synchronizes the model stream before clearing
         // allocator storage, so one-token-ahead decode cannot race reclamation.
         let mlx_memory_snapshot = performance_attribution.measure_operation(
-            PerformanceOperation::MlxAllocatorCacheCleanup,
+            PerformanceOperation::MlxBufferCacheCleanup,
             |_performance_attribution| self.release_request_memory(request_id),
         );
         self.govern_request_end();
@@ -182,15 +179,15 @@ impl Qwen3_5EngineState {
         &mut self,
         active_request: &mut Qwen3_5EngineRequest,
     ) -> Option<RetainedLiveDecoderPrefix> {
-        let model_contract = self.persistent_prompt_cache_model_contract.as_ref()?;
-        if !active_request.can_use_persistent_prompt_cache {
+        let model_contract = self.astro_ssd_prompt_cache_model_contract.as_ref()?;
+        if !active_request.can_use_astro_ssd_prompt_cache {
             return None;
         }
         let block_token_count = model_contract.block_token_count();
         let verified_state_offset_tokens = (0..active_request.request_decoder_state.layer_count())
             .filter_map(|layer_index| {
                 match active_request.request_decoder_state.layer(layer_index) {
-                    Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                    Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                         Some(attention.offset_tokens())
                     }
                     _ => None,
@@ -216,13 +213,13 @@ impl Qwen3_5EngineState {
             return None;
         }
         let mut complete_block_keys = Vec::with_capacity(adoptable_block_count);
-        let mut parent_block_key: Option<PersistentPromptCacheBlockKey> = None;
-        let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
+        let mut parent_block_key: Option<AstroSsdPromptCacheBlockKey> = None;
+        let empty_block_causal_input = AstroSsdPromptCacheBlockCausalInput::empty();
         for block_index in 0..adoptable_block_count {
             let block_start = block_index * block_token_count;
             let block_end = block_start + block_token_count;
             let block_causal_input = active_request
-                .persistent_prompt_cache_block_causal_inputs
+                .astro_ssd_prompt_cache_block_causal_inputs
                 .get(block_index)
                 .unwrap_or(&empty_block_causal_input);
             let block_key = match parent_block_key.as_ref() {
@@ -230,7 +227,7 @@ impl Qwen3_5EngineState {
                     &active_request.input_token_ids[block_start..block_end],
                     block_causal_input,
                 ),
-                None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
+                None => AstroSsdPromptCacheBlockKey::for_root_block_with_causal_input(
                     model_contract,
                     &active_request.input_token_ids[block_start..block_end],
                     block_causal_input,
@@ -241,8 +238,8 @@ impl Qwen3_5EngineState {
             complete_block_keys.push(block_key);
         }
         let placeholder_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                self.model.as_ref()?.decoder_cache_layout(),
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                self.model.as_ref()?.astro_decoder_state_cache_layout(),
                 self.full_attention_kv_state_growth_tokens,
             )
             .ok()?;
@@ -272,15 +269,15 @@ impl Qwen3_5EngineState {
         ) {
             Ok(mlx_memory_snapshot) => match (
                 u64::try_from(mlx_memory_snapshot.active_memory_bytes()),
-                u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()),
+                u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes()),
                 u64::try_from(mlx_memory_snapshot.peak_memory_bytes()),
             ) {
                 (
                     Ok(active_memory_bytes),
-                    Ok(allocator_cache_memory_bytes),
+                    Ok(mlx_buffer_cache_bytes),
                     Ok(sampled_peak_memory_bytes),
                 ) => {
-                    // The MLX peak counter resets at allocator-cache cleanups,
+                    // The MLX peak counter resets at MLX buffer-cache cleanups,
                     // so this post-cleanup sample can read a lower window peak
                     // than the synchronized release sample taken moments
                     // earlier. The finalized claim is a request maximum, so it
@@ -306,7 +303,7 @@ impl Qwen3_5EngineState {
                         Some(
                             MlxMemoryTelemetry::new(
                                 active_memory_bytes,
-                                allocator_cache_memory_bytes,
+                                mlx_buffer_cache_bytes,
                                 peak_memory_bytes,
                                 active_memory_breakdown,
                             )
@@ -359,11 +356,11 @@ impl Qwen3_5EngineState {
         u64::try_from(memory_snapshot.active_memory_bytes()).ok()
     }
 
-    /// Converts one memory snapshot's allocator-cache counter to a u64 when it fits.
-    fn snapshot_allocator_cache_memory_bytes_option(
+    /// Converts one memory snapshot's MLX buffer-cache counter to a u64 when it fits.
+    fn snapshot_mlx_buffer_cache_bytes_option(
         memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
     ) -> Option<u64> {
-        u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()
+        u64::try_from(memory_snapshot.mlx_buffer_cache_bytes()).ok()
     }
 
     pub(in crate::qwen3_5_resident::inference_execution) fn record_generation_performance_attribution(
@@ -393,19 +390,19 @@ impl Qwen3_5EngineState {
                 model_id,
                 model_revision,
                 prefill_transient_observation_completed: self
-                    .measured_prompt_chunk_working_memory_bytes()
+                    .measured_prompt_chunk_mlx_working_buffer_bytes()
                     .is_some(),
                 prefill_observed_transient_high_water_bytes: self
-                    .measured_prompt_chunk_working_memory_bytes()
+                    .measured_prompt_chunk_mlx_working_buffer_bytes()
                     .unwrap_or(0),
                 request_id: request_id.value(),
                 configured_maximum_output_tokens,
                 mlx_active_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(snapshot_active_memory_bytes_option),
-                mlx_allocator_cache_memory_bytes: mlx_memory_snapshot
+                mlx_buffer_cache_bytes: mlx_memory_snapshot
                     .as_ref()
-                    .and_then(snapshot_allocator_cache_memory_bytes_option),
+                    .and_then(snapshot_mlx_buffer_cache_bytes_option),
                 mlx_peak_memory_bytes: mlx_memory_snapshot
                     .as_ref()
                     .and_then(snapshot_peak_memory_bytes_option),

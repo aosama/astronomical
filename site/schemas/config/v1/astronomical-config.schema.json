@@ -11,14 +11,14 @@
     "settings": [
         {"title": "Memory", "description": "How much memory models may use, which model is used when none is named, and when an unused model is released.", "settings": ["runtime.maximum_mlx_memory_gb", "runtime.default_model", "runtime.idle_model_unload_seconds", "runtime.metal_residency_refresh_enabled"]},
         {"title": "Locations", "description": "The folders Astronomical reads models from and writes downloads and compiled programs to.", "settings": ["runtime.model_directories", "runtime.model_download_directory", "runtime.neural_engine_program_directory"]},
-        {"title": "Prompt cache", "description": "A cache on disk that lets a prompt seen before skip most of its processing.", "settings": ["prompt_cache.enabled", "prompt_cache.maximum_size_gb"]},
+        {"title": "Prompt cache", "description": "A cache on disk that lets a prompt seen before skip most of its processing.", "settings": ["ssd_prompt_cache.enabled", "ssd_prompt_cache.maximum_size_gb"]},
         {"title": "Diagnostics", "description": "What Astronomical writes to its logs. Useful when reporting a problem.", "settings": ["diagnostics.log_level", "diagnostics.retained_log_files", "diagnostics.completion_attribution_enabled", "diagnostics.performance_attribution_enabled"]}
     ],
     "tuning": [
         {"title": "Generation", "description": "How this model writes when a request does not say. A request's own values always win.", "settings": ["generation_defaults.temperature", "generation_defaults.top_p", "generation_defaults.repetition_penalty", "generation_defaults.maximum_output_tokens"]},
         {"title": "Limits", "description": "Ceilings for this model that sit below what the model file allows.", "settings": ["limits.maximum_context_tokens"]},
         {"title": "Prompt processing", "description": "How a prompt is split into pieces while the model reads it. These trade memory for speed.", "tier": "advanced", "settings": ["chunking.fixed_prompt_processing_chunk_size_tokens", "chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens", "chunking.prefill_graph_submission_layer_interval", "chunking.full_attention_key_value_growth_tokens"]},
-        {"title": "Prompt cache blocks", "description": "How a prompt is divided when it is stored in the prompt cache.", "tier": "advanced", "settings": ["chunking.prompt_cache_block_tokens", "chunking.prompt_cache_common_prefix_stride_blocks"]},
+        {"title": "Prompt cache blocks", "description": "How a prompt is divided when it is stored in the prompt cache.", "tier": "advanced", "settings": ["chunking.ssd_prompt_cache_block_tokens", "chunking.ssd_prompt_cache_common_prefix_stride_blocks"]},
         {"title": "SSD streaming", "description": "Used only while part of a model is read from the SSD because it does not fit in memory.", "tier": "advanced", "settings": ["chunking.experimental_ssd_paging_generation_graph_submission_layer_interval"]},
         {"title": "Speculative decoding", "description": "Drafting several tokens at once with a small helper model, when one is installed beside this model.", "tier": "advanced", "settings": ["chunking.speculative_decoding_block_length_tokens"]},
         {"title": "Experimental", "description": "Features still being proven. They can change or go away.", "tier": "advanced", "settings": ["chunking.experimental_neural_engine_prefill_enabled", "chunking.experimental_in_memory_prefix_adoption_enabled"]},
@@ -37,8 +37,8 @@
     "runtime": {
       "$ref": "#/$defs/runtime"
     },
-    "prompt_cache": {
-      "$ref": "#/$defs/prompt_cache"
+    "ssd_prompt_cache": {
+      "$ref": "#/$defs/ssd_prompt_cache"
     },
     "chunking": {
       "$ref": "#/$defs/chunking"
@@ -141,9 +141,9 @@
         }
       }
     },
-    "prompt_cache": {
+    "ssd_prompt_cache": {
       "type": "object",
-      "description": "Instance-wide persistent prompt-cache policy.",
+      "description": "Instance-wide persistent astro-ssd-prompt-cache policy.",
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -160,7 +160,7 @@
           "minimum": 1,
           "maximum": 18446744073,
           "default": 50,
-          "description": "Global prompt-cache capacity in gigabytes of 1,073,741,824 bytes (2^30), the unit Apple uses to market the Mac.",
+          "description": "Global astro-ssd-prompt-cache capacity in gigabytes of 1,073,741,824 bytes (2^30), the unit Apple uses to market the Mac.",
           "x-astronomical-unit": "GB",
           "x-astronomical-explanation": "The most disk space the prompt cache may use. When it is full, older entries are removed to make room. A larger cache remembers more long prompts.",
           "x-astronomical-apply-mode": "worker-replacement"
@@ -187,7 +187,7 @@
           "type": "integer",
           "minimum": 1,
           "default": 4096,
-          "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Persistent-cache publication may still clamp each forward to the next durable block boundary.",
+          "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Astro SSD prompt cache publication may still clamp each forward to the next durable block boundary.",
           "x-astronomical-unit": "tokens",
           "x-astronomical-explanation": "The same piece size, used when a model is too large for memory and part of it is read from the SSD. It is set separately because reading from the SSD changes which size is fastest.",
           "x-astronomical-apply-mode": "model-reload"
@@ -251,13 +251,13 @@
           "title": "Neural Engine prefill",
           "type": "boolean",
           "default": false,
-          "description": "Dense models only: runs part of each full prefill chunk on the Apple Neural Engine next to the GPU, through whole MLP programs and the linear-attention output gates. Measured 1.13x to 1.2x prefill speed on a 9B model with the prompt cache on and no change to decode. Each chunk uses the programs only when they fit under the MLX memory ceiling beside what MLX is projected to reach; their cost is measured for each model on this Mac. A model's first load takes a minute or two longer and keeps about 10 GB of compiled programs on disk; later loads take seconds. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone. A model's first long prompts compare the engines on real chunks, and a model that does not gain at least 2 percent is turned off until the next macOS update. Falls back to the GPU when unavailable; /v1/status reports which happened.",
+          "description": "Dense models only: runs part of each full prefill chunk on the Apple Neural Engine next to the GPU, through whole MLP programs and the linear-attention output gates. Measured 1.13x to 1.2x prefill speed on a 9B model with the astro SSD prompt cache on and no change to decode. Each chunk uses the programs only when they fit under the MLX memory ceiling beside what MLX is projected to reach; their cost is measured for each model on this Mac. A model's first load takes a minute or two longer and keeps about 10 GB of compiled programs on disk; later loads take seconds. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone. A model's first long prompts compare the engines on real chunks, and a model that does not gain at least 2 percent is turned off until the next macOS update. Falls back to the GPU when unavailable; /v1/status reports which happened.",
           "x-astronomical-explanation": "Uses the Mac's Neural Engine alongside the graphics processor to read long prompts faster, measured at 1.13 to 1.2 times the speed on a mid-sized model. Writing speed does not change. It only helps dense models, the first load takes a minute or two longer, it keeps about 10 GB on disk, and replies can differ very slightly. A model that does not gain is switched back automatically.",
           "x-astronomical-apply-mode": "model-reload"
         },
-        "prompt_cache_block_tokens": {
+        "ssd_prompt_cache_block_tokens": {
           "title": "Cache block length",
-          "description": "Exact persistent-cache block length, or null for model-derived sizing.",
+          "description": "Exact astro SSD prompt cache block length, or null for model-derived sizing.",
           "default": null,
           "anyOf": [
             {
@@ -290,12 +290,12 @@
           "x-astronomical-explanation": "When a small helper model is installed beside this one, it drafts several words at a time and this model checks them, which can make replies faster. This is how many it drafts per round. Automatic leaves the feature to the app.",
           "x-astronomical-apply-mode": "model-reload"
         },
-        "prompt_cache_common_prefix_stride_blocks": {
+        "ssd_prompt_cache_common_prefix_stride_blocks": {
           "title": "Common prefix stride",
           "type": "integer",
           "minimum": 1,
           "default": 4,
-          "description": "Cache-block interval between retained common-prefix restart checkpoints.",
+          "description": "Astro SSD prompt cache block interval between retained common-prefix restart checkpoints.",
           "x-astronomical-unit": "blocks",
           "x-astronomical-explanation": "How often a restart point is kept inside a saved prompt. More frequent points let a new prompt that shares only its beginning reuse more of the saved work, and use a little more disk.",
           "x-astronomical-apply-mode": "model-reload"

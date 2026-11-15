@@ -54,8 +54,8 @@
 use std::{env, error::Error, path::Path, time::Instant};
 
 use astronomical_native_build_orchestration::{
-    NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NATIVE_BUILD_STATUS_FILE_VARIABLE,
-    NATIVE_BUILD_STORE_VARIABLE, NATIVE_DEPENDENCY_CACHE_VARIABLE, NativeBuildProfile,
+    ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE, NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
+    NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE, NativeBuildProfile,
     NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
     build_pinned_native_runtime, native_build_store_directory, native_parallel_job_count,
     required_path_variable, resolve_native_build_identity, write_native_build_status,
@@ -125,7 +125,7 @@ fn emit_environment_rerun_contracts() {
         MLX_FEATURE_VARIABLE,
         MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE,
         RUSTC_WRAPPER_VARIABLE,
-        NATIVE_DEPENDENCY_CACHE_VARIABLE,
+        ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE,
         NATIVE_BUILD_STORE_VARIABLE,
         NATIVE_BUILD_STATUS_FILE_VARIABLE,
         NATIVE_BUILD_PROGRESS_FILE_VARIABLE,
@@ -184,12 +184,12 @@ fn emit_native_source_rerun_contracts(
     // The build script previously tracked this path only on cold builds;
     // emitting it on every run keeps Cargo's rebuild triggers honest when
     // the store reuses a warm entry.
-    if let Some(native_dependency_cache_directory) =
-        native_build_inputs.native_dependency_cache_directory()
+    if let Some(astro_native_build_cache_directory) =
+        native_build_inputs.astro_native_build_cache_dependencies_directory()
     {
         println!(
             "cargo:rerun-if-changed={}",
-            native_dependency_cache_directory.display()
+            astro_native_build_cache_directory.display()
         );
     }
 }

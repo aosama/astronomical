@@ -1,3 +1,16 @@
 {
-  "admitted_functions": []
+  "admitted_functions": [
+    {
+      "function": "crates/model-serving/src/astro_ssd_prompt_cache/disk_store_write.rs:AstroSsdPromptCacheDiskStore::publish_block_with_performance_attribution",
+      "reason": "Renamed from PersistentPromptCacheDiskStore::publish_block_with_performance_attribution when the cache got its formal name; the body is unchanged and the baseline already holds it at cyclomatic 21."
+    },
+    {
+      "function": "verification/acceptance/tests/performance/throughput/completion.rs:read_decode_astro_expert_cache_diagnostic_evidence",
+      "reason": "Renamed from read_decode_cache_diagnostic_evidence when the cache got its formal name; the body is unchanged and the baseline already holds it at cyclomatic 21."
+    },
+    {
+      "function": "xtask/src/github_actions_cache_prune.rs:run",
+      "reason": "The file was renamed from cache_prune.rs when the cache got its formal name; run is unchanged and the baseline already holds it at cyclomatic 17."
+    }
+  ]
 }

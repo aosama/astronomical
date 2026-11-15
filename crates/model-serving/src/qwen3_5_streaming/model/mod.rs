@@ -1,11 +1,13 @@
 #[cfg(feature = "direct-mlx")]
-mod cached_plus_streamed_page_route;
+mod astro_expert_cache_plus_streamed_page_route;
 #[cfg(feature = "direct-mlx")]
 mod deferred_expert_demand;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_counts;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_measurement;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod dense_layer_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_payload;
 #[cfg(feature = "direct-mlx")]
@@ -17,11 +19,9 @@ mod dense_layer_residency;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod dense_layer_streamer;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod dense_layer_working_memory_probe;
-#[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod expert_layer_working_memory_probe;
+pub(crate) mod expert_layer_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
 #[cfg(feature = "direct-mlx")]
@@ -136,7 +136,7 @@ pub(crate) use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 pub(crate) use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embedding_injection};
 
 #[cfg(feature = "direct-mlx")]
-pub use cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;
+pub use astro_expert_cache_plus_streamed_page_route::Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute;
 pub use mixed_decode_execution::qwen3_5_moe_combine_partial_route_outputs_for_tests;
 #[cfg(feature = "direct-mlx")]
 pub use output_combination::qwen3_5_moe_combine_experts;

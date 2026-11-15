@@ -3,7 +3,7 @@
 //! Viability is evaluated with a start-and-end anchored DFA: a token is
 //! allowed exactly when the DFA state after consuming its bytes is not dead,
 //! which means some continuation can still reach a full match. Allowed token
-//! sets are cached per DFA state because decode revisits far fewer states
+//! sets are memoized per DFA state because decode revisits far fewer states
 //! than it emits tokens.
 
 use std::collections::HashMap;
@@ -15,7 +15,7 @@ use regex_automata::{Input, MatchKind};
 
 use crate::structured_generation;
 
-const MAXIMUM_CACHED_STATES: usize = 64;
+const MAXIMUM_MEMOIZED_STATES: usize = 64;
 
 /// One compiled regex constraint advanced one visible token at a time.
 #[derive(Clone, Debug)]
@@ -54,7 +54,7 @@ impl RegexTokenMask {
     }
 
     /// Returns the allowed token identifiers for the current DFA state,
-    /// computing and caching the set once per distinct state.
+    /// computing and memoizing the set once per distinct state.
     pub(super) fn allowed_token_ids(&mut self) -> Arc<Vec<u32>> {
         let state_key = self.current_state.as_u32();
         if let Some(allowed_token_ids) = self.allowed_token_ids_by_state.get(&state_key) {
@@ -62,8 +62,8 @@ impl RegexTokenMask {
         }
         let allowed_token_ids = self.compute_allowed_token_ids();
         // A pathological pattern could visit unbounded states; the bounded
-        // cache recomputes the rare extra state instead of growing without limit.
-        if self.allowed_token_ids_by_state.len() < MAXIMUM_CACHED_STATES {
+        // memo recomputes the rare extra state instead of growing without limit.
+        if self.allowed_token_ids_by_state.len() < MAXIMUM_MEMOIZED_STATES {
             self.allowed_token_ids_by_state
                 .insert(state_key, Arc::clone(&allowed_token_ids));
         }

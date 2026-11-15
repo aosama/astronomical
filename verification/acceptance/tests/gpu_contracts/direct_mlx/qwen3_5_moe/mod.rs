@@ -1,4 +1,4 @@
-mod cached_plus_streamed_page_route;
+mod astro_expert_cache_plus_streamed_page_route;
 mod error_logging;
 mod expert_paging;
 mod resident_gate_up_fusion;

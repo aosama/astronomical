@@ -1,7 +1,7 @@
 //! Production REST acceptance journeys, one per outcome a person would
 //! notice (issue #2221).
 
-mod cached_suffix_streaming_prefill_rest_journey;
+mod astro_ssd_prompt_cache_suffix_streaming_prefill_rest_journey;
 mod complete_expert_residency_rest_journey;
 mod dense_model_small_limit_rest_journey;
 mod expert_stats_storage_bytes_rest_journey;

@@ -2,7 +2,7 @@
 //!
 //! These ignored journeys load the reviewed artifact's real `transformer/model.safetensors`
 //! (761 tensors: 32 blocks of 4-bit affine-quantized projections plus the shared modulation
-//! network, ~4.0 GB wired) and drive the ported non-cached forward — prefill semantics with the
+//! network, ~4.0 GB wired) and drive the ported forward that does not use the `astro_image_prefix_key_value_cache` — prefill semantics with the
 //! exact multi-segment block-causal attention — end to end on the GPU.
 //!
 //! The journeys prove execution-level properties: the quantized graph loads and runs, a

@@ -18,23 +18,23 @@ use crate::{
 
 /// How one forward should execute one mixture-of-experts layer.
 pub(crate) enum ExpertPageDisposition {
-    /// A complete cached layer covers every possible route.
+    /// A complete layer held in the `astro_expert_cache` covers every possible route.
     FullHit,
     /// This layer is not seated. Prefill streams the complete layer.
     Miss,
 }
 
 impl Qwen3_5Model {
-    /// Complete-layer cache hit when every expert of the decoder index is seated.
+    /// Complete-layer astro expert cache hit when every expert of the decoder index is seated.
     pub(super) fn expert_page_disposition(
         &self,
         layer_index: usize,
         expert_capacity: usize,
     ) -> ExpertPageDisposition {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return ExpertPageDisposition::Miss;
         };
-        if retained_experts
+        if astro_expert_cache
             .borrow()
             .has_complete_layer(layer_index, expert_capacity)
         {
@@ -58,9 +58,9 @@ impl Qwen3_5Model {
         routed_expert_ids: &[usize],
         performance_attribution: &mut PerformanceAttribution,
     ) -> RoutedExpertCoverage {
-        let route_coverage = match self.retained_experts.as_ref() {
-            Some(retained_experts) => route_coverage_with_prefetch_accounting(
-                retained_experts,
+        let route_coverage = match self.astro_expert_cache.as_ref() {
+            Some(astro_expert_cache) => route_coverage_with_prefetch_accounting(
+                astro_expert_cache,
                 layer_index,
                 routed_expert_ids,
                 performance_attribution,
@@ -123,16 +123,20 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Returns the cached complete packed page.
-    pub(super) fn cached_packed_page(
+    /// Returns the complete packed page held in the `astro_expert_cache`.
+    pub(super) fn astro_expert_cache_packed_page(
         &self,
         layer_index: usize,
         complete_expert_ids: &[usize],
         expert_capacity: usize,
     ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
-        let retained_experts = self.retained_experts.as_ref()?;
-        let cache = retained_experts.borrow();
-        cache.full_coverage_page(layer_index, complete_expert_ids, expert_capacity)
+        let astro_expert_cache = self.astro_expert_cache.as_ref()?;
+        let borrowed_astro_expert_cache = astro_expert_cache.borrow();
+        borrowed_astro_expert_cache.full_coverage_page(
+            layer_index,
+            complete_expert_ids,
+            expert_capacity,
+        )
     }
 
     /// Returns the routed experts of a seated complete layer as their own
@@ -145,7 +149,7 @@ impl Qwen3_5Model {
     /// would no longer scale with the chunk's routed union. The subset page holds exactly the routed union and its
     /// manifest maps those global ids to slots 0.., so the caller gathers
     /// with `routed_expert_ids` exactly as it does for a streamed union.
-    pub(super) fn routed_subset_of_cached_page(
+    pub(super) fn routed_subset_of_astro_expert_cache_page(
         &self,
         layer_index: usize,
         routed_expert_ids: &[usize],
@@ -155,7 +159,7 @@ impl Qwen3_5Model {
         Qwen3_5ExecutionError,
     > {
         let Some((complete_page, complete_manifest)) =
-            self.cached_packed_page(layer_index, routed_expert_ids, expert_capacity)
+            self.astro_expert_cache_packed_page(layer_index, routed_expert_ids, expert_capacity)
         else {
             return Ok(None);
         };
@@ -232,8 +236,8 @@ impl Qwen3_5Model {
             serving_phase,
             performance_attribution,
         )?;
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().record_disk_load(
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache.borrow_mut().record_disk_load(
                 complete_expert_ids.len(),
                 streamed_manifest.source_manifests.len(),
             );
@@ -246,7 +250,7 @@ impl Qwen3_5Model {
                 // Adopt the lazy page; the layer interval eval materializes it.
                 // A separate weight eval here double-synced every seated layer
                 // on the first prefill chunk without changing gather inputs.
-                let seated = retained_experts.borrow_mut().try_adopt_complete_layer(
+                let seated = astro_expert_cache.borrow_mut().try_adopt_complete_layer(
                     &self.runtime,
                     layer_index,
                     &complete_expert_ids,
@@ -331,21 +335,21 @@ impl Qwen3_5Model {
             },
             performance_attribution,
         )?;
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().record_disk_load(
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache.borrow_mut().record_disk_load(
                 routed_expert_ids.len(),
                 streamed_manifest.source_manifests.len(),
             );
             let warm_slot_count = self.hot_expert_warm_slot_count();
             let (resident_expert_count, layer_has_complete_table) = {
-                let retained_experts = retained_experts.borrow();
+                let borrowed_astro_expert_cache = astro_expert_cache.borrow();
                 (
-                    retained_experts.occupied_slot_count(layer_index),
-                    retained_experts.has_complete_layer(layer_index, expert_capacity),
+                    borrowed_astro_expert_cache.occupied_slot_count(layer_index),
+                    borrowed_astro_expert_cache.has_complete_layer(layer_index, expert_capacity),
                 )
             };
             self.offer_multi_token_union_to_retained_ownership(
-                retained_experts,
+                astro_expert_cache,
                 layer_index,
                 expert_capacity,
                 route_token_count,
@@ -358,7 +362,7 @@ impl Qwen3_5Model {
                 performance_attribution,
             )?;
             self.queue_decode_warm_inserts(
-                retained_experts,
+                astro_expert_cache,
                 layer_index,
                 expert_capacity,
                 route_token_count,
@@ -392,10 +396,10 @@ impl Qwen3_5Model {
         Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
         Qwen3_5ExecutionError,
     > {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok(None);
         };
-        let Some(missing_route_expert_ids) = retained_experts
+        let Some(missing_route_expert_ids) = astro_expert_cache
             .borrow()
             .missing_route_expert_ids(layer_index, routed_expert_ids)
         else {
@@ -414,7 +418,7 @@ impl Qwen3_5Model {
             expert_capacity,
             production_default_paging,
         );
-        let non_resident_expert_ids = retained_experts
+        let non_resident_expert_ids = astro_expert_cache
             .borrow()
             .non_resident_expert_ids(layer_index, expert_capacity);
         let read_expert_ids = prefill_read_expert_ids(
@@ -431,7 +435,7 @@ impl Qwen3_5Model {
             &read_expert_ids,
             performance_attribution,
         )?;
-        let layer_is_complete_after_insert = retained_experts
+        let layer_is_complete_after_insert = astro_expert_cache
             .borrow()
             .has_complete_layer(layer_index, expert_capacity);
         if should_remember_prefill_completion_refusal(read_scope, layer_is_complete_after_insert) {
@@ -455,7 +459,7 @@ impl Qwen3_5Model {
             missing_route_expert_count = missing_route_expert_ids.len(),
             "warm-table growth left a prefill route partial"
         );
-        let Some(missing_after_refusal) = retained_experts
+        let Some(missing_after_refusal) = astro_expert_cache
             .borrow()
             .missing_route_expert_ids(layer_index, routed_expert_ids)
         else {
@@ -483,8 +487,8 @@ impl Qwen3_5Model {
         production_default_paging: bool,
     ) -> super::prefill_partial_layer_read::PrefillStorageReadScope {
         let mut resident_expert_count = 0;
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            resident_expert_count = retained_experts.borrow().occupied_slot_count(layer_index);
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            resident_expert_count = astro_expert_cache.borrow().occupied_slot_count(layer_index);
         }
         let completion_is_funded = should_complete_partial_layer_on_prefill_read(
             production_default_paging,
@@ -523,14 +527,14 @@ impl Qwen3_5Model {
             },
             performance_attribution,
         )?;
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok((streamed_weights, streamed_manifest));
         };
-        retained_experts.borrow_mut().record_disk_load(
+        astro_expert_cache.borrow_mut().record_disk_load(
             read_expert_ids.len(),
             streamed_manifest.source_manifests.len(),
         );
-        // Growth is bounded by the cache ceiling and the structural slot
+        // Growth is bounded by the astro expert cache ceiling and the structural slot
         // count; the expert capacity is the largest honest slot bound, and
         // passing it deliberately rides the warm-insert counter for
         // completion reads — the growth cap and the insert-evidence counter
@@ -538,7 +542,7 @@ impl Qwen3_5Model {
         // metric pure would defeat the completion this path exists for.
         // The routed experts are protected so completing the table can never
         // evict a resident expert this forward is about to serve.
-        let inserted_expert_count = retained_experts.borrow_mut().insert_streamed_experts(
+        let inserted_expert_count = astro_expert_cache.borrow_mut().insert_streamed_experts(
             &self.runtime,
             layer_index,
             read_expert_ids,
@@ -547,7 +551,7 @@ impl Qwen3_5Model {
             expert_capacity,
         )?;
         if inserted_expert_count > 0
-            && retained_experts
+            && astro_expert_cache
                 .borrow()
                 .has_complete_layer(layer_index, expert_capacity)
         {
@@ -574,20 +578,23 @@ impl Qwen3_5Model {
         Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
         Qwen3_5ExecutionError,
     > {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return Ok(None);
         };
-        retained_experts
+        astro_expert_cache
             .borrow_mut()
             .record_routed_reads(layer_index, routed_expert_ids);
-        let Some(subset_page) =
-            self.routed_subset_of_cached_page(layer_index, routed_expert_ids, expert_capacity)?
+        let Some(subset_page) = self.routed_subset_of_astro_expert_cache_page(
+            layer_index,
+            routed_expert_ids,
+            expert_capacity,
+        )?
         else {
             return Ok(None);
         };
         // Partial-table hits already reported this attribution counter. The
         // subset page holds exactly the routed union, so its payload is the
-        // no-cache baseline; recording it through the shared recorder keeps
+        // baseline of a read with no `astro_expert_cache`; recording it through the shared recorder keeps
         // the attribution counter and the session counter equal, where the
         // session side previously missed these covered routes entirely
         // (issue #1715).
@@ -599,7 +606,7 @@ impl Qwen3_5Model {
     }
 
     /// Returns the warm-table page when it covers every routed expert of this
-    /// decode token (hot-expert cache hit), counting the served reads for the
+    /// decode token (astro expert cache hit), counting the served reads for the
     /// least-frequently-used eviction order. Complete layers are excluded:
     /// they were already served by the upstream full-hit disposition.
     pub(super) fn hot_expert_partial_page(
@@ -609,16 +616,19 @@ impl Qwen3_5Model {
         routed_expert_ids: &[usize],
         performance_attribution: &mut PerformanceAttribution,
     ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
-        let retained_experts = self.retained_experts.as_ref()?;
+        let astro_expert_cache = self.astro_expert_cache.as_ref()?;
         {
-            let cache = retained_experts.borrow();
-            if cache.has_complete_layer(layer_index, expert_capacity) {
+            let borrowed_astro_expert_cache = astro_expert_cache.borrow();
+            if borrowed_astro_expert_cache.has_complete_layer(layer_index, expert_capacity) {
                 return None;
             }
-            let full_coverage_page =
-                cache.full_coverage_page(layer_index, routed_expert_ids, expert_capacity)?;
-            drop(cache);
-            retained_experts
+            let full_coverage_page = borrowed_astro_expert_cache.full_coverage_page(
+                layer_index,
+                routed_expert_ids,
+                expert_capacity,
+            )?;
+            drop(borrowed_astro_expert_cache);
+            astro_expert_cache
                 .borrow_mut()
                 .record_routed_reads(layer_index, routed_expert_ids);
             performance_attribution
@@ -635,17 +645,17 @@ impl Qwen3_5Model {
 /// one named step; both counters are recorded only when non-zero so clean
 /// attribution logs stay quiet.
 fn route_coverage_with_prefetch_accounting(
-    retained_experts: &std::cell::RefCell<
-        crate::qwen3_5_streaming::expert_streaming::WarmExpertSlotTableCache,
+    astro_expert_cache: &std::cell::RefCell<
+        crate::qwen3_5_streaming::expert_streaming::AstroExpertCache,
     >,
     layer_index: usize,
     routed_expert_ids: &[usize],
     performance_attribution: &mut PerformanceAttribution,
 ) -> RoutedExpertCoverage {
-    let route_coverage = retained_experts
+    let route_coverage = astro_expert_cache
         .borrow()
         .routed_expert_coverage(layer_index, routed_expert_ids);
-    let (prefetch_hit_count, prefetch_miss_count) = retained_experts
+    let (prefetch_hit_count, prefetch_miss_count) = astro_expert_cache
         .borrow_mut()
         .consume_prefetch_coverage(layer_index, &route_coverage);
     if prefetch_hit_count > 0 {

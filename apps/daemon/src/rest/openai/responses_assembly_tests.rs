@@ -28,7 +28,7 @@ fn should_collect_reasoning_summary_text_and_function_calls_into_one_response() 
             forward_prefill_chunk_elapsed_millis: Some(900),
             completed_prefill_chunk_tokens: Some(2_048),
             mlx_active_memory_bytes: Some(20_000),
-            mlx_allocator_cache_memory_bytes: Some(0),
+            mlx_buffer_cache_bytes: Some(0),
             mlx_peak_memory_bytes: Some(22_000),
         })
         .expect("internal prefill telemetry should be ignored");

@@ -64,14 +64,14 @@ fn should_record_an_error_returning_operation() {
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     let operation_outcome: Result<(), &'static str> = performance_attribution.measure_operation(
-        PerformanceOperation::PersistentPromptCacheOpenAndScan,
+        PerformanceOperation::AstroSsdPromptCacheOpenAndScan,
         |_performance_attribution| Err("disk read failed"),
     );
 
     assert_eq!(operation_outcome, Err("disk read failed"));
     assert_eq!(
         performance_attribution
-            .operation_measurement(PerformanceOperation::PersistentPromptCacheOpenAndScan)
+            .operation_measurement(PerformanceOperation::AstroSsdPromptCacheOpenAndScan)
             .map(|operation_measurement| operation_measurement.occurrence_count()),
         Some(1)
     );

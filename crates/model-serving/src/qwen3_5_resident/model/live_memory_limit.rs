@@ -98,7 +98,7 @@ impl Qwen3_5ResidentModel {
             // and release allocator memory before native enforcement tightens.
             let post_reclamation_mlx_memory_snapshot = self
                 .runtime
-                .synchronize_gpu_stream_and_clear_allocator_cache()
+                .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
                 .and_then(|()| self.runtime.memory_snapshot())
                 .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
             let post_reclamation_active_memory_bytes = u64::try_from(

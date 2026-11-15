@@ -279,8 +279,8 @@ fn walk_wired_boundary(
     }
 
     drop(held_arrays);
-    if let Err(cleanup_error) = runtime.synchronize_gpu_stream_and_clear_allocator_cache() {
-        eprintln!("WARN allocator cache cleanup after the walk failed: {cleanup_error}");
+    if let Err(cleanup_error) = runtime.synchronize_gpu_stream_and_clear_mlx_buffer_cache() {
+        eprintln!("WARN MLX buffer cache cleanup after the walk failed: {cleanup_error}");
     }
     WalkOutcome {
         healthy_wired_bytes,

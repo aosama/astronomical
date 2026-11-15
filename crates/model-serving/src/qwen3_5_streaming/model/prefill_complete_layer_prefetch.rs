@@ -18,7 +18,7 @@
 //! any multi-token chunk) are excluded from layer geometry before a page is
 //! planned. Planning one and dropping it afterwards did no storage read, but it
 //! still ran memory admission (often draining the pipeline to clear the
-//! allocator cache) and booked a phantom full-layer source plan per streamed
+//! MLX buffer cache) and booked a phantom full-layer source plan per streamed
 //! layer per chunk, which made every codebook layer look streamed twice.
 
 use mlx_bridge::MlxArray;
@@ -93,7 +93,7 @@ pub(crate) fn next_prefill_prefetch_layer_index(
         .find(|&layer_index| is_prefetch_candidate(layer_index))
 }
 
-/// Whether a layer the cache keeps part of may have its complete page read.
+/// Whether a layer the astro expert cache keeps part of may have its complete page read.
 ///
 /// A chunk forward serves such a layer from its hot table and reads only
 /// what the table lacks, so a complete read there would be wasted. A prompt
@@ -121,7 +121,7 @@ impl PrefetchedCompleteLayer {
 impl Qwen3_5Model {
     /// Whether a forward that routes `route_token_count` tokens reads this
     /// layer's complete page from storage: the tokens reach every expert,
-    /// the page multiplies as read, the cache does not already keep the
+    /// the page multiplies as read, the astro expert cache does not already keep the
     /// whole layer, and the residency plan is not giving the layer back.
     pub(super) fn prompt_reads_complete_expert_layer(
         &self,
@@ -130,7 +130,7 @@ impl Qwen3_5Model {
         route_token_count: i32,
         partly_kept_layers: PartlyKeptLayers,
     ) -> bool {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return false;
         };
         let Some(layer_plan) = expert_pager.layer_plans().get(layer_index) else {
@@ -149,7 +149,7 @@ impl Qwen3_5Model {
                 ExpertPageDisposition::Miss
             )
             && (partly_kept_layers == PartlyKeptLayers::Included
-                || retained_experts.borrow().occupied_slot_count(layer_index) == 0)
+                || astro_expert_cache.borrow().occupied_slot_count(layer_index) == 0)
     }
 
     /// Drops a prefetched layer the current forward will not consume.
@@ -196,7 +196,7 @@ impl Qwen3_5Model {
             .map(|prefetched| (prefetched.weights, prefetched.manifest))
     }
 
-    /// A chunk forward's read ahead: the next layer the cache keeps nothing
+    /// A chunk forward's read ahead: the next layer the astro expert cache keeps nothing
     /// of, since the chunk serves a partly kept layer from its hot table.
     pub(super) fn read_next_chunk_layer_ahead(
         &self,
@@ -369,8 +369,8 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache
                 .borrow_mut()
                 .record_disk_load(expert_capacity, prefetched_manifest.source_manifests.len());
             if should_commit_multi_token_union_as_complete_layer(
@@ -379,7 +379,7 @@ impl Qwen3_5Model {
                 self.expert_layer_state(layer_index),
                 expert_capacity,
                 expert_capacity,
-            ) && retained_experts.borrow_mut().try_adopt_complete_layer(
+            ) && astro_expert_cache.borrow_mut().try_adopt_complete_layer(
                 &self.runtime,
                 layer_index,
                 &complete_expert_ids,

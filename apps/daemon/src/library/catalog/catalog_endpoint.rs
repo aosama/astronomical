@@ -69,8 +69,8 @@ async fn get_library_catalog(
 /// keeps showing the folder in Finder instead of a button that can only fail.
 ///
 /// The check reads metadata, resolves two paths and reads a small provenance
-/// file, synchronously inside this async handler. That is a few cached
-/// filesystem calls per downloaded model, well below what a blocking task
+/// file, synchronously inside this async handler. That is a few filesystem calls
+/// served from the macOS file cache per downloaded model, well below what a blocking task
 /// hand-off would cost, so it runs inline.
 fn is_removable_from_disk(
     application_state: &ApplicationState,

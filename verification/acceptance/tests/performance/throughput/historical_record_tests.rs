@@ -92,7 +92,7 @@ fn fixture_throughput_record(configured_maximum_mlx_memory_bytes: Option<u64>) -
         timestamp: "test-timestamp".to_owned(),
         model_id: "test-model".to_owned(),
         journey: ThroughputJourneyKind::ResidentMemoryCeilingProbe,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         prefill_tokens_per_second: 0,
         decode_tokens_per_second: 0,
         git_commit: None,

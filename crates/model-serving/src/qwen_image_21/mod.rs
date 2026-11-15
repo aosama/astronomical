@@ -5,7 +5,7 @@
 //!
 //! The module splits into three layers, each with its own files:
 //!
-//! - **Pure contracts** (`rope`, `mask`, `modulation`, `time`, `norm`, `scheduler`, `kv_cache`,
+//! - **Pure contracts** (`rope`, `mask`, `modulation`, `time`, `norm`, `scheduler`, `astro_image_prefix_key_value_cache`,
 //!   `latent_layout`, `text_conditioning`): the index and formula logic that is easy to get wrong
 //!   and cheap to verify — 3-axis RoPE, the block-causal mask, `causal_condition` modulation-row
 //!   selection, sinusoidal timesteps, the flow-matching schedule, latent packing, and the chat
@@ -24,9 +24,9 @@
 pub(crate) mod oracle_test_support;
 
 pub(crate) mod artifact;
+mod astro_image_prefix_key_value_cache;
 pub(crate) mod configuration;
 mod inventory;
-mod kv_cache;
 pub(crate) mod latent_layout;
 mod mask;
 mod modulation;
@@ -59,14 +59,16 @@ pub use artifact::{
     QWEN_IMAGE_21_PROVIDER_MODEL_ID, QwenImage21ArtifactProvenance, QwenImage21License,
     QwenImage21RetainedArtifactFiles, ValidatedQwenImage21Artifact,
 };
+pub use astro_image_prefix_key_value_cache::{
+    AstroImagePrefixKeyValueCacheMode, astro_image_prefix_key_value_cache_is_valid,
+    astro_image_prefix_key_value_cache_query_slice, astro_image_prefix_key_value_cache_write_slice,
+    prefix_length,
+};
 pub use configuration::{
     QwenImage21ConfigError, QwenImage21PipelineConfig, QwenImage21SchedulerConfig,
     quantized_group_count, quantized_row_count,
 };
 pub use inventory::{QwenImage21TensorDescriptor, QwenImage21TensorInventory};
-pub use kv_cache::{
-    CacheMode, cache_is_valid, cache_query_slice, cache_write_slice, prefix_length,
-};
 pub use latent_layout::{
     QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QWEN_IMAGE_21_VAE_SCALE_FACTOR, VAE_SPATIAL_MULTIPLE,
     calculate_dimensions, latent_spatial_dimensions, pack_latents_seq_len,

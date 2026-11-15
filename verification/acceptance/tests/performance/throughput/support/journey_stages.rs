@@ -31,7 +31,7 @@ pub(super) fn remaining_journey_budget(cell_deadline: tokio::time::Instant) -> D
 }
 
 /// Applies the journey's worker-level overrides to the launch configuration:
-/// the per-cell MLX ceiling, the decode-cache experiment arm, and the two
+/// the per-cell MLX ceiling, the decode astro expert cache experiment arm, and the two
 /// diagnostic Qwen3.5 engine knobs.
 pub(super) fn apply_journey_overrides(
     worker_startup_configuration: &mut WorkerStartupConfiguration,
@@ -39,7 +39,8 @@ pub(super) fn apply_journey_overrides(
 ) {
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         journey.maximum_mlx_memory_bytes;
-    worker_startup_configuration.decode_expert_cache_policy = journey.decode_expert_cache_policy;
+    worker_startup_configuration.decode_astro_expert_cache_policy =
+        journey.decode_astro_expert_cache_policy;
     worker_startup_configuration.diagnostic_qwen3_5_engine_override =
         journey.diagnostic_qwen3_5_engine_override;
 }
@@ -69,7 +70,7 @@ pub(super) fn budget_exhausted_measurement(
     // the shortfall happened in.
     ThroughputMeasurement {
         model_id: model_id.to_owned(),
-        decode_expert_cache_policy: journey.decode_expert_cache_policy,
+        decode_astro_expert_cache_policy: journey.decode_astro_expert_cache_policy,
         total_input_tokens: 0,
         total_output_tokens: 0,
         cached_tokens: 0,
@@ -79,7 +80,7 @@ pub(super) fn budget_exhausted_measurement(
         decode_tokens_per_second: 0.0,
         mlx_peak_memory_bytes: None,
         measured_output_text: None,
-        decode_cache_diagnostic_evidence: None,
+        decode_astro_expert_cache_diagnostic_evidence: None,
         completion_ordinal_in_worker: measured_completion_ordinal_for_journey(journey),
     }
 }

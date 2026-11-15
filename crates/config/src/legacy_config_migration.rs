@@ -11,9 +11,10 @@ use serde::Deserialize;
 
 use crate::chunking_config::ChunkingConfigFile;
 use crate::config_document::{
-    DiagnosticsConfigFile, GenerationDefaultsConfigFile, ModelConfigFile, PromptCacheConfigFile,
-    RuntimeConfigFile, UserConfigFile,
+    AstroSsdPromptCacheConfigFile, DiagnosticsConfigFile, GenerationDefaultsConfigFile,
+    ModelConfigFile, RuntimeConfigFile, UserConfigFile,
 };
+use crate::config_field_renames::rename_renamed_config_fields;
 use crate::config_file::{
     parse_and_validate_v1, read_existing_config_file_bytes, strip_retired_config_fields,
     write_adjacent_schema, write_config_file_bytes_atomically,
@@ -140,6 +141,7 @@ pub(crate) fn prepare_legacy_config_migration(
     config_file_path: &Path,
     mut legacy_json: serde_json::Value,
 ) -> Result<UserConfigFile, AstronomicalConfigError> {
+    rename_renamed_config_fields(&mut legacy_json);
     strip_retired_config_fields(&mut legacy_json);
     let legacy_config: LegacyConfigFile =
         serde_json::from_value(legacy_json).map_err(|source| {
@@ -214,9 +216,9 @@ fn build_migrated_config(
             metal_residency_refresh_enabled: None,
             idle_model_unload_seconds: None,
         },
-        prompt_cache: Some(PromptCacheConfigFile {
-            enabled: legacy_config.persistent_prompt_cache_enabled,
-            maximum_size_gb: legacy_config.prompt_cache_max_size_gb,
+        astro_ssd_prompt_cache: Some(AstroSsdPromptCacheConfigFile {
+            enabled: legacy_config.astro_ssd_prompt_cache_enabled,
+            maximum_size_gb: legacy_config.astro_ssd_prompt_cache_max_size_gb,
         }),
         chunking: Some(legacy_config.chunking),
         models,
@@ -270,14 +272,20 @@ struct LegacyConfigFile {
     chunking: LegacyChunkingConfigFile,
     #[serde(default, deserialize_with = "deserialize_present_boolean")]
     performance_attribution_enabled: Option<bool>,
-    #[serde(default, deserialize_with = "deserialize_present_boolean")]
-    persistent_prompt_cache_enabled: Option<bool>,
+    // Legacy v0 keys keep the spelling those files were written with.
+    #[serde(
+        default,
+        rename = "persistent_prompt_cache_enabled",
+        deserialize_with = "deserialize_present_boolean"
+    )]
+    astro_ssd_prompt_cache_enabled: Option<bool>,
     maximum_mlx_memory_gb: Option<u64>,
     // Legacy v0 files wrote this section under the retired component name; the
     // alias keeps one-way migration silent for configs saved before the rename.
     #[serde(alias = "supervisor")]
     daemon: Option<LegacyDaemonConfigFile>,
-    prompt_cache_max_size_gb: Option<u64>,
+    #[serde(rename = "prompt_cache_max_size_gb")]
+    astro_ssd_prompt_cache_max_size_gb: Option<u64>,
     logging: Option<LegacyLoggingConfigFile>,
 }
 

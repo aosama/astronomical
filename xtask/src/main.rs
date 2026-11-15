@@ -15,9 +15,6 @@ mod bindgen_headers;
 mod bootstrap_native_dependencies;
 #[cfg(test)]
 mod bootstrap_native_dependencies_tests;
-mod cache_prune;
-#[cfg(test)]
-mod cache_prune_tests;
 mod check_architecture;
 #[cfg(test)]
 mod check_architecture_tests;
@@ -38,6 +35,9 @@ mod crap_baseline_tests;
 mod disposable_target;
 #[cfg(test)]
 mod disposable_target_tests;
+mod github_actions_cache_prune;
+#[cfg(test)]
+mod github_actions_cache_prune_tests;
 mod install_verification_tools;
 #[cfg(test)]
 mod install_verification_tools_tests;
@@ -137,7 +137,9 @@ fn main() -> ExitCode {
         Some("audit-test-declarations") => {
             run_command(audit_test_declarations::run(&resolve_root()))
         }
-        Some("prune-caches") => run_command(cache_prune::run(arguments[1..].iter().cloned())),
+        Some("prune-caches") => run_command(github_actions_cache_prune::run(
+            arguments[1..].iter().cloned(),
+        )),
         Some("save-sccache") => run_command(sccache_save::run(&arguments[1..])),
         Some("install-verification-tools") => run_command(install_verification_tools::run(
             arguments[1..].iter().cloned(),

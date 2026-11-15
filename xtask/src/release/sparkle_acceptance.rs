@@ -397,13 +397,13 @@ fn generate_signed_appcast(
     Ok(())
 }
 
-/// Stand-ins for the config, models, cache, and logs that live outside the
-/// app bundle; an update must never touch them.
+/// Stand-ins for the config, models, `astro_ssd_prompt_cache`, and logs that
+/// live outside the app bundle; an update must never touch them.
 fn seed_external_state(state_directory: &Path) -> Result<String, String> {
     for (marker_path, marker_text) in STATE_MARKER_PATHS.into_iter().zip([
         "{\"acceptance\":true}\n",
         "model artifact remains external\n",
-        "cache remains external\n",
+        "astro SSD prompt cache remains external\n",
         "log remains external\n",
     ]) {
         let marker_file = state_directory.join(marker_path);

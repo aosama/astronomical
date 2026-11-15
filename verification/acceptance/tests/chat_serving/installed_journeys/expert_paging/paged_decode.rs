@@ -192,12 +192,12 @@ fn assert_memory_within_policy(
     let active_memory_bytes = generation_report["mlx_active_memory_bytes"]
         .as_u64()
         .expect("successful generation should report MLX active memory");
-    let allocator_cache_memory_bytes = generation_report["mlx_allocator_cache_memory_bytes"]
+    let mlx_buffer_cache_bytes = generation_report["mlx_buffer_cache_bytes"]
         .as_u64()
-        .expect("successful generation should report MLX allocator-cache memory");
+        .expect("successful generation should report MLX buffer cache memory");
     let active_plus_allocator_bytes = active_memory_bytes
-        .checked_add(allocator_cache_memory_bytes)
-        .expect("active and allocator-cache memory should fit u64");
+        .checked_add(mlx_buffer_cache_bytes)
+        .expect("active and MLX buffer-cache memory should fit u64");
     assert!(
         active_plus_allocator_bytes <= configured_mlx_memory_ceiling_bytes,
         "stable MLX residency {active_plus_allocator_bytes} exceeded the configured ceiling {configured_mlx_memory_ceiling_bytes}"

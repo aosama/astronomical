@@ -13,8 +13,8 @@ struct URLSessionUpdateFeedFetcher: UpdateFeedFetching {
 
   func feedData(from feedURL: URL) async throws -> Data {
     // The stored copy is skipped on purpose: a release is announced by
-    // replacing this one file, and a cached answer would hide it for as long
-    // as the cache lives.
+    // replacing this one file, and an answer kept in the URL loading system's
+    // HTTP cache would hide it for as long as that HTTP cache entry lives.
     var feedRequest = URLRequest(
       url: feedURL, cachePolicy: .reloadIgnoringLocalCacheData,
       timeoutInterval: Self.requestTimeoutSeconds)

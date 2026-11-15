@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Reports one cache owner's operation independently so hosted action logs expose
+# Reports one `github_actions_cache` owner's operation independently so hosted action logs expose
 # that owner's duration, key, classification, and compressed transfer bytes.
 
 set -eu
@@ -31,7 +31,7 @@ validate_unsigned_integer() {
 
 classify_restore() {
     if [ "$CACHE_STEP_OUTCOME" != "success" ]; then
-        cache_classification="error"
+        github_actions_cache_classification="error"
         return
     fi
     case "${CACHE_HIT:-}" in
@@ -40,16 +40,16 @@ classify_restore() {
                 print_error "a primary hit must match CACHE_PRIMARY_KEY"
                 exit 2
             }
-            cache_classification="primary"
+            github_actions_cache_classification="primary"
             ;;
         false|'')
             if [ -z "${CACHE_MATCHED_KEY:-}" ]; then
-                cache_classification="miss"
+                github_actions_cache_classification="miss"
             elif [ "$CACHE_MATCHED_KEY" = "$CACHE_PRIMARY_KEY" ]; then
                 print_error "a non-primary restore cannot match CACHE_PRIMARY_KEY"
                 exit 2
             else
-                cache_classification="fallback"
+                github_actions_cache_classification="fallback"
             fi
             ;;
         *)
@@ -77,9 +77,9 @@ main() {
         restore) classify_restore ;;
         save)
             if [ "$CACHE_STEP_OUTCOME" = "success" ]; then
-                cache_classification="published"
+                github_actions_cache_classification="published"
             else
-                cache_classification="error"
+                github_actions_cache_classification="error"
             fi
             ;;
         *) print_error "CACHE_OPERATION must be restore or save"; exit 2 ;;
@@ -87,13 +87,13 @@ main() {
     validate_unsigned_integer CACHE_STARTED_AT_EPOCH_SECONDS "$CACHE_STARTED_AT_EPOCH_SECONDS"
     validate_unsigned_integer CACHE_FINISHED_AT_EPOCH_SECONDS "$CACHE_FINISHED_AT_EPOCH_SECONDS"
     [ "$CACHE_FINISHED_AT_EPOCH_SECONDS" -ge "$CACHE_STARTED_AT_EPOCH_SECONDS" ] || {
-        print_error "cache completion time precedes its start time"
+        print_error "github_actions_cache operation completion time precedes its start time"
         exit 2
     }
     elapsed_seconds="$((CACHE_FINISHED_AT_EPOCH_SECONDS - CACHE_STARTED_AT_EPOCH_SECONDS))"
     matched_key="${CACHE_MATCHED_KEY:-none}"
     printf '[build-cache] owner=%s operation=%s classification=%s elapsed_seconds=%s primary_key=%s matched_key=%s\n' \
-        "$CACHE_OWNER" "$CACHE_OPERATION" "$cache_classification" "$elapsed_seconds" \
+        "$CACHE_OWNER" "$CACHE_OPERATION" "$github_actions_cache_classification" "$elapsed_seconds" \
         "$CACHE_PRIMARY_KEY" "$matched_key"
 
     if [ -n "${ASTRONOMICAL_CI_TIMING_FILE:-}" ]; then
@@ -103,12 +103,12 @@ main() {
 
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
         {
-            printf '### Build cache: %s %s\n\n' "$CACHE_OWNER" "$CACHE_OPERATION"
-            printf '%s\n' "- Classification: \`${cache_classification}\`"
+            printf '### github_actions_cache: %s %s\n\n' "$CACHE_OWNER" "$CACHE_OPERATION"
+            printf '%s\n' "- Classification: \`${github_actions_cache_classification}\`"
             printf '%s\n' "- Elapsed seconds: \`${elapsed_seconds}\`"
             printf '%s\n' "- Primary key: \`${CACHE_PRIMARY_KEY}\`"
             printf '%s\n' "- Matched key: \`${matched_key}\`"
-            printf '\nThe named cache action log records this owner%s exact compressed transfer bytes.\n' "'s"
+            printf '\nThe named github_actions_cache action log records this owner%s exact compressed transfer bytes.\n' "'s"
         } >> "$GITHUB_STEP_SUMMARY"
     fi
 }

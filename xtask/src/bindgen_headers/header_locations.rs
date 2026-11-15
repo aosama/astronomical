@@ -11,10 +11,11 @@ use astronomical_native_identity::{
 };
 
 use crate::bootstrap_native_dependencies::{
-    NATIVE_DEPENDENCY_CACHE_DIRECTORY_VARIABLE, resolve_cache_directory,
+    ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_DIRECTORY_VARIABLE,
+    resolve_astro_native_build_cache_dependencies_directory,
 };
 
-pub(crate) const HEADERS_CACHE_SUBDIRECTORY: &str = "bindgen-headers";
+pub(crate) const BINDGEN_HEADERS_SUBDIRECTORY: &str = "bindgen-headers";
 pub(crate) const EXTRACTION_TREE_MLX: &str = "mlx-src";
 pub(crate) const EXTRACTION_TREE_MLX_C: &str = "mlx_c-src";
 pub(crate) const COMPLETION_MARKER_FILE_NAME: &str = "complete";
@@ -23,16 +24,20 @@ const DEFAULT_NATIVE_BUILD_STORE_SUFFIX: &str = "Library/Caches/Astronomical/nat
 const NATIVE_BUILD_STORE_SCHEMA_VERSION_PATH: &str =
     "crates/native-build-orchestration/src/native-build-store-schema-version";
 
-pub(crate) fn native_dependency_cache_directory(
+pub(crate) fn astro_native_build_cache_dependencies_directory(
     explicit_directory: Option<&str>,
 ) -> Result<PathBuf, String> {
-    let environment_directory = std::env::var(NATIVE_DEPENDENCY_CACHE_DIRECTORY_VARIABLE).ok();
+    let environment_directory =
+        std::env::var(ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_DIRECTORY_VARIABLE).ok();
     let home_directory = std::env::var("HOME").ok();
     let chosen_directory = match explicit_directory {
         Some(explicit_directory) => Some(explicit_directory.to_owned()),
         None => environment_directory,
     };
-    resolve_cache_directory(chosen_directory.as_deref(), home_directory.as_deref())
+    resolve_astro_native_build_cache_dependencies_directory(
+        chosen_directory.as_deref(),
+        home_directory.as_deref(),
+    )
 }
 
 pub(crate) fn native_build_store_directory(
@@ -132,9 +137,12 @@ fn resolve_identity(
     }
 }
 
-pub(crate) fn extraction_directory(cache_directory: &Path, source_identity: &str) -> PathBuf {
-    cache_directory
-        .join(HEADERS_CACHE_SUBDIRECTORY)
+pub(crate) fn extraction_directory(
+    astro_native_build_cache_dependencies_directory: &Path,
+    source_identity: &str,
+) -> PathBuf {
+    astro_native_build_cache_dependencies_directory
+        .join(BINDGEN_HEADERS_SUBDIRECTORY)
         .join(source_identity)
 }
 

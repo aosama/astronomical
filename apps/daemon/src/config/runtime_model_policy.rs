@@ -63,9 +63,9 @@ pub(crate) fn worker_chunking_configuration(
         prefill_graph_submission_layer_interval: chunking.prefill_graph_submission_layer_interval(),
         experimental_ssd_paging_generation_graph_submission_layer_interval: chunking
             .experimental_ssd_paging_generation_graph_submission_layer_interval(),
-        prompt_cache_block_tokens: chunking.prompt_cache_block_tokens(),
-        prompt_cache_common_prefix_stride_blocks: chunking
-            .prompt_cache_common_prefix_stride_blocks(),
+        ssd_prompt_cache_block_tokens: chunking.ssd_prompt_cache_block_tokens(),
+        ssd_prompt_cache_common_prefix_stride_blocks: chunking
+            .ssd_prompt_cache_common_prefix_stride_blocks(),
         experimental_decode_stage_attribution_enabled: chunking
             .experimental_decode_stage_attribution_enabled(),
         experimental_prefill_stage_attribution_enabled: chunking

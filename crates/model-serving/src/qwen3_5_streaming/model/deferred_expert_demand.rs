@@ -17,7 +17,7 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 /// One seated layer's lazily retained route awaiting demand recording. When
 /// `resident_layer_payload_byte_count` is set, the route was served entirely
-/// from a seated complete layer and the honest no-cache read it avoided is
+/// from a seated complete layer and the honest read with no `astro_expert_cache` that it avoided is
 /// still owed to both byte ledgers once the distinct routed union is known.
 #[derive(Debug)]
 struct PendingLayerRoute {
@@ -132,11 +132,12 @@ impl Qwen3_5Model {
         expert_capacity: usize,
         selected_indices: &MlxArray,
     ) {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
-        let prefill_demand_assignment_weight =
-            retained_experts.borrow().prefill_demand_assignment_weight();
+        let prefill_demand_assignment_weight = astro_expert_cache
+            .borrow()
+            .prefill_demand_assignment_weight();
         self.deferred_expert_demand.borrow_mut().retain_layer_route(
             layer_index,
             expert_capacity,
@@ -155,11 +156,12 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         resident_layer_payload_byte_count: u64,
     ) {
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
-        let prefill_demand_assignment_weight =
-            retained_experts.borrow().prefill_demand_assignment_weight();
+        let prefill_demand_assignment_weight = astro_expert_cache
+            .borrow()
+            .prefill_demand_assignment_weight();
         self.deferred_expert_demand
             .borrow_mut()
             .retain_resident_layer_route(
@@ -172,7 +174,7 @@ impl Qwen3_5Model {
     }
 
     /// Records every queued route into the warm table's demand counts and
-    /// credits any owed no-cache avoided bytes.
+    /// credits any owed bytes avoided relative to a read with no `astro_expert_cache`.
     ///
     /// Call after the evaluation whose roots included the queued routes; the
     /// copies are then host reads of computed identifiers. Fail-open: a failed
@@ -185,7 +187,7 @@ impl Qwen3_5Model {
             .deferred_expert_demand
             .borrow_mut()
             .take_pending_layer_routes();
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
         for pending_layer_route in pending_layer_routes {
@@ -195,7 +197,7 @@ impl Qwen3_5Model {
                         .into_iter()
                         .map(|expert_id| expert_id as usize)
                         .collect();
-                    retained_experts
+                    astro_expert_cache
                         .borrow_mut()
                         .record_expert_demand_at_prefill_weight(
                             pending_layer_route.layer_index,
@@ -219,7 +221,7 @@ impl Qwen3_5Model {
             }
         }
     }
-    /// Credits the no-cache read a wholly RAM-served resident route avoided,
+    /// Credits the read with no `astro_expert_cache` that a wholly RAM-served resident route avoided,
     /// using the distinct routed experts of the copied route. Multi-token
     /// routes repeat experts across tokens; each expert is one storage read,
     /// so duplicates count once (issue #1715).

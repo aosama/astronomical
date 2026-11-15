@@ -63,7 +63,7 @@ impl QwenImage21ImageEngine {
         model_directory: impl Into<PathBuf>,
         provenance: crate::qwen_image_21::artifact::QwenImage21ArtifactProvenance,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         performance_attribution_enabled: bool,
         performance_attribution_log_path: PathBuf,
     ) -> Self {
@@ -74,7 +74,7 @@ impl QwenImage21ImageEngine {
                     model_directory,
                     provenance,
                     effective_mlx_memory_ceiling_bytes,
-                    allocator_cache_memory_limit_bytes,
+                    mlx_buffer_cache_limit_bytes,
                     performance_attribution_enabled,
                     performance_attribution_log_path,
                 ),

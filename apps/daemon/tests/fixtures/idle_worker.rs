@@ -69,10 +69,10 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
             }
             let runtime_configuration = WorkerRuntimeFeatureConfiguration {
                 configuration_generation: worker_startup_configuration.configuration_generation,
-                persistent_prompt_cache_enabled: worker_startup_configuration
-                    .persistent_prompt_cache_enabled,
-                prompt_cache_maximum_size_bytes: worker_startup_configuration
-                    .global_prompt_cache_maximum_size_bytes,
+                astro_ssd_prompt_cache_enabled: worker_startup_configuration
+                    .astro_ssd_prompt_cache_enabled,
+                astro_ssd_prompt_cache_maximum_size_bytes: worker_startup_configuration
+                    .global_astro_ssd_prompt_cache_maximum_size_bytes,
                 loaded_model: None,
             };
             acknowledged_runtime_configuration = Some(runtime_configuration);
@@ -119,10 +119,10 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 }
                 let runtime_configuration = WorkerRuntimeFeatureConfiguration {
                     configuration_generation: worker_startup_configuration.configuration_generation,
-                    persistent_prompt_cache_enabled: worker_startup_configuration
-                        .persistent_prompt_cache_enabled,
-                    prompt_cache_maximum_size_bytes: worker_startup_configuration
-                        .global_prompt_cache_maximum_size_bytes,
+                    astro_ssd_prompt_cache_enabled: worker_startup_configuration
+                        .astro_ssd_prompt_cache_enabled,
+                    astro_ssd_prompt_cache_maximum_size_bytes: worker_startup_configuration
+                        .global_astro_ssd_prompt_cache_maximum_size_bytes,
                     loaded_model: None,
                 };
                 event_writer
@@ -159,8 +159,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 prompt_token_count: 1,
                                 generated_token_count: 0,
                                 reasoning_token_count: 0,
-                                cached_token_count: 0,
-                                persistent_prompt_cache_diagnostics: None,
+                                astro_ssd_prompt_cache_restored_token_count: 0,
+                                astro_ssd_prompt_cache_diagnostics: None,
                                 reason: ChatGenerationCompletionReason::EndOfSequence,
                             })
                             .await?;
@@ -244,8 +244,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         prompt_token_count: 1,
                         generated_token_count: 0,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
-                        persistent_prompt_cache_diagnostics: None,
+                        astro_ssd_prompt_cache_restored_token_count: 0,
+                        astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
                     .await?;
@@ -286,16 +286,16 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     runtime_configuration.configuration_generation = configuration_generation;
                 }
             }
-            WorkerCommand::ClearPromptCache { model_id } => {
+            WorkerCommand::ClearAstroSsdPromptCache { model_id } => {
                 let acknowledged_model_id =
                     if model_id.as_deref() == Some("astronomical/mismatched-clear-model") {
                         Some("astronomical/different-model".to_owned())
                     } else {
                         model_id
                     };
-                emit_cleared_cache_stats(&mut event_writer).await?;
+                emit_astro_ssd_prompt_cache_stats_after_clear(&mut event_writer).await?;
                 event_writer
-                    .send_event(&WorkerEvent::PromptCacheCleared {
+                    .send_event(&WorkerEvent::AstroSsdPromptCacheCleared {
                         model_id: acknowledged_model_id,
                         blocks_removed: 3,
                         bytes_freed: 4_096,
@@ -319,7 +319,7 @@ where
             mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                 source: mlx_memory_snapshot_source,
                 active_memory_bytes: 20_000_000_000,
-                allocator_cache_memory_bytes: 0,
+                mlx_buffer_cache_bytes: 0,
                 peak_memory_bytes: 20_000_000_000,
                 expert_payload_bytes: 12_000_000_000,
                 model_core_payload_bytes: 8_000_000_000,
@@ -332,28 +332,28 @@ where
         .await
 }
 
-async fn emit_cleared_cache_stats<WriteTransport>(
+async fn emit_astro_ssd_prompt_cache_stats_after_clear<WriteTransport>(
     event_writer: &mut ProtocolWriter<WriteTransport>,
 ) -> Result<(), astronomical_ipc_protocol::ProtocolError>
 where
     WriteTransport: tokio::io::AsyncWrite + Unpin,
 {
     event_writer
-        .send_event(&WorkerEvent::PersistentPromptCacheStats {
-            persistent_prompt_cache_hits: 0,
-            persistent_prompt_cache_misses: 0,
-            persistent_prompt_cache_tokens_saved: 0,
-            persistent_prompt_cache_block_token_count: 2_048,
-            persistent_prompt_cache_sequence_state_block_count: 0,
-            persistent_prompt_cache_boundary_state_snapshot_count: 0,
-            persistent_prompt_cache_visual_embedding_count: 0,
-            persistent_prompt_cache_total_size_bytes: 0,
-            persistent_prompt_cache_visual_embedding_total_size_bytes: 0,
-            persistent_prompt_cache_maximum_size_bytes: 50_000_000_000,
-            persistent_prompt_cache_visual_embedding_hits: 0,
-            persistent_prompt_cache_visual_embedding_misses: 0,
-            persistent_prompt_cache_visual_embedding_rows_loaded: 0,
-            persistent_prompt_cache_partial_tail_hits: 0,
+        .send_event(&WorkerEvent::AstroSsdPromptCacheStats {
+            astro_ssd_prompt_cache_hits: 0,
+            astro_ssd_prompt_cache_misses: 0,
+            astro_ssd_prompt_cache_tokens_saved: 0,
+            astro_ssd_prompt_cache_block_token_count: 2_048,
+            astro_ssd_prompt_cache_sequence_state_block_count: 0,
+            astro_ssd_prompt_cache_boundary_state_snapshot_count: 0,
+            astro_ssd_prompt_cache_visual_embedding_count: 0,
+            astro_ssd_prompt_cache_total_size_bytes: 0,
+            astro_ssd_prompt_cache_visual_embedding_total_size_bytes: 0,
+            astro_ssd_prompt_cache_maximum_size_bytes: 50_000_000_000,
+            astro_ssd_prompt_cache_visual_embedding_hits: 0,
+            astro_ssd_prompt_cache_visual_embedding_misses: 0,
+            astro_ssd_prompt_cache_visual_embedding_rows_loaded: 0,
+            astro_ssd_prompt_cache_partial_tail_hits: 0,
         })
         .await
 }

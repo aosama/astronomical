@@ -48,10 +48,10 @@ pub(crate) struct Qwen3_5DenseLayerStreamer {
     /// mutability lets request admission give kept layers back, so they
     /// stream, when a request needs their room.
     kept_layer_weights: RefCell<Vec<Rc<Qwen3_5DecoderLayerWeights>>>,
-    /// Working memory the load-time probe measured, reused whenever the kept
+    /// MLX working buffers the load-time probe measured, reused whenever the kept
     /// layers are planned again; `None` when the probe could not run, and
     /// then nothing is kept, since a plan without it would overrun.
-    measured_working_memory_bytes: Cell<Option<u64>>,
+    measured_mlx_working_buffer_bytes: Cell<Option<u64>>,
 }
 
 /// Where a forward finds one decoder layer.
@@ -138,7 +138,7 @@ impl Qwen3_5DenseLayerStreamer {
             layer_tensor_profiles: decoder_layer_tensor_profiles(qwen3_5_config)?,
             layer_payload_bytes,
             kept_layer_weights: RefCell::new(Vec::new()),
-            measured_working_memory_bytes: Cell::new(None),
+            measured_mlx_working_buffer_bytes: Cell::new(None),
         })
     }
 
@@ -162,13 +162,13 @@ impl Qwen3_5DenseLayerStreamer {
         kept_layer_payload_bytes
     }
 
-    pub(crate) fn record_measured_working_memory_bytes(&self, working_memory_bytes: u64) {
-        self.measured_working_memory_bytes
-            .set(Some(working_memory_bytes));
+    pub(crate) fn record_measured_mlx_working_buffer_bytes(&self, mlx_working_buffer_bytes: u64) {
+        self.measured_mlx_working_buffer_bytes
+            .set(Some(mlx_working_buffer_bytes));
     }
 
-    pub(crate) fn measured_working_memory_bytes(&self) -> Option<u64> {
-        self.measured_working_memory_bytes.get()
+    pub(crate) fn measured_mlx_working_buffer_bytes(&self) -> Option<u64> {
+        self.measured_mlx_working_buffer_bytes.get()
     }
 
     /// Bytes the slots occupy when every layer streams: the floor the model

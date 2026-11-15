@@ -154,7 +154,7 @@ fn should_pin_generation_memory_and_attribution_constraints_in_the_checked_in_sc
             serde_json::json!(18_446_744_073_u64),
         ),
         (
-            "/$defs/prompt_cache/properties/maximum_size_gb/maximum",
+            "/$defs/ssd_prompt_cache/properties/maximum_size_gb/maximum",
             serde_json::json!(18_446_744_073_u64),
         ),
         (
@@ -181,7 +181,7 @@ fn should_pin_generation_memory_and_attribution_constraints_in_the_checked_in_sc
         None
     );
     assert_eq!(astronomical_config.chunking().unwrap(), Default::default());
-    assert!(astronomical_config.persistent_prompt_cache_enabled());
+    assert!(astronomical_config.astro_ssd_prompt_cache_enabled());
     assert!(!astronomical_config.performance_attribution_enabled());
     assert!(!astronomical_config.completion_attribution_enabled());
 }
@@ -307,9 +307,9 @@ fn should_keep_each_instances_default_programs_in_its_own_folder() {
 fn should_keep_configuration_generation_stable_across_formatting_only_changes() {
     let compact_home_directory = tempfile::tempdir().expect("compact config home should exist");
     let formatted_home_directory = tempfile::tempdir().expect("formatted config home should exist");
-    let compact_document = r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"prompt_cache":{"enabled":true,"maximum_size_gb":50}}"#;
+    let compact_document = r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"ssd_prompt_cache":{"enabled":true,"maximum_size_gb":50}}"#;
     let formatted_document = r#"{
-        "prompt_cache": { "maximum_size_gb": 50, "enabled": true },
+        "ssd_prompt_cache": { "maximum_size_gb": 50, "enabled": true },
         "runtime": { "model_directories": [] },
         "schema_version": 1,
         "$schema": "./astronomical-config.schema.json"
@@ -337,11 +337,11 @@ fn should_change_configuration_generation_after_a_semantic_change() {
     let second_home_directory = tempfile::tempdir().expect("second config home should exist");
     write_config(
         first_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"prompt_cache":{"enabled":true}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"ssd_prompt_cache":{"enabled":true}}"#,
     );
     write_config(
         second_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"prompt_cache":{"enabled":false}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"ssd_prompt_cache":{"enabled":false}}"#,
     );
 
     let first_config = AstronomicalConfig::load_from_home_directory(first_home_directory.path())

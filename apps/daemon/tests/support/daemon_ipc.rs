@@ -13,10 +13,9 @@ use std::{
 };
 
 use astronomical_config::{
-    AstronomicalInstancePaths, AstronomicalRuntimeInstance,
+    AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
     ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
     ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities, ModelFamily,
-    PromptCacheConfig,
 };
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, DaemonIpcGenerationContext,
@@ -137,8 +136,8 @@ pub(crate) fn ipc_runtime_config(
                                 full_attention_key_value_growth_tokens: 256,
                                 prefill_graph_submission_layer_interval: 0,
                                 experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                                prompt_cache_block_tokens: None,
-                                prompt_cache_common_prefix_stride_blocks: 4,
+                                ssd_prompt_cache_block_tokens: None,
+                                ssd_prompt_cache_common_prefix_stride_blocks: 4,
                                 experimental_decode_stage_attribution_enabled: false,
                                 experimental_prefill_stage_attribution_enabled: false,
                                 experimental_in_memory_prefix_adoption_enabled: false,
@@ -161,14 +160,14 @@ pub(crate) fn ipc_runtime_config(
         model_policy_catalog: Arc::new(model_policy_catalog),
         unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        persistent_prompt_cache_enabled: true,
-        configured_persistent_prompt_cache_enabled: None,
+        astro_ssd_prompt_cache_enabled: true,
+        configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         idle_model_unload_seconds: 0,
-        configured_prompt_cache_maximum_size_bytes: None,
+        configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        prompt_cache_config: PromptCacheConfig::new(
-            PathBuf::from("/tmp/prompt-cache"),
+        astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(
+            PathBuf::from("/tmp/astro-ssd-prompt-cache"),
             1_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
@@ -434,7 +433,7 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
                 prompt_token_count: 5,
                 generated_token_count: 2,
                 reasoning_token_count: 0,
-                cached_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
                 reason: ChatGenerationCompletionReason::EndOfSequence,
             },
         ],

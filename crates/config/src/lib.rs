@@ -2,11 +2,14 @@
 
 use std::{net::SocketAddr, path::PathBuf};
 
+mod astro_neural_engine_program_cache;
+mod astro_ssd_prompt_cache_config;
 mod astronomical_runtime_instance;
 mod chunking_config;
 mod config_document;
 mod config_document_edit;
 mod config_error;
+mod config_field_renames;
 mod config_file;
 mod configuration_generation;
 mod default_model;
@@ -17,25 +20,30 @@ mod logging_config;
 mod maximum_mlx_memory;
 mod model_config_entries;
 mod model_discovery;
-mod model_discovery_huggingface_cache;
+mod model_discovery_huggingface_hub_cache;
 mod model_identity;
 #[cfg(test)]
 mod model_identity_tests;
-mod neural_engine_program_cache;
-mod prompt_cache_config;
 mod resolved_model_config;
 
+pub use astro_neural_engine_program_cache::{
+    ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
+    NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME, NeuralEngineProgramSetManifest,
+    astro_neural_engine_program_cache_directory_for_model, directory_byte_count,
+    list_neural_engine_program_sets, model_weights_fingerprint, remove_other_weights_of_model,
+};
+pub use astro_ssd_prompt_cache_config::AstroSsdPromptCacheConfig;
 pub use astronomical_runtime_instance::{
     AstronomicalInstancePaths, AstronomicalRuntimeInstance, CUSTOM_STATE_DIRECTORY_LABEL,
 };
 pub use chunking_config::{
     ChunkingConfig, ConfiguredChunkingFields,
+    DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
     DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
     DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-    DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
     LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     should_materialize_ssd_streaming_chunk_default,
@@ -82,21 +90,14 @@ pub use model_discovery::{
     kokoro_speech_capabilities, phonon_speech_capabilities,
 };
 pub use model_identity::{
-    configured_model_id_for, decode_huggingface_cache_directory_name, leaf_model_id,
+    configured_model_id_for, decode_huggingface_hub_cache_directory_name, leaf_model_id,
     near_model_matches, resolve_model_id,
 };
-pub use neural_engine_program_cache::{
-    ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
-    NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME, NeuralEngineProgramSetManifest, directory_byte_count,
-    list_neural_engine_program_sets, model_weights_fingerprint,
-    neural_engine_program_cache_directory_for_model, remove_other_weights_of_model,
-};
-pub use prompt_cache_config::PromptCacheConfig;
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 
 use config_document::UserConfigFile;
 
-pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
+pub const DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
 /// One minute covers the pause between turns of a conversation, so a person
 /// chatting keeps a warm model, while a forgotten model stops holding memory.
 pub const DEFAULT_IDLE_MODEL_UNLOAD_SECONDS: u64 = 60;
@@ -106,10 +107,10 @@ pub const MAXIMUM_IDLE_MODEL_UNLOAD_SECONDS: u64 = 604_800;
 /// User-facing gigabyte settings use the convention Apple uses to market the
 /// machine: 1 GB = 1,073,741,824 bytes (2³⁰).
 const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_073_741_824;
-/// The default prompt-cache capacity in bytes, derived from the same
+/// The default astro SSD prompt cache capacity in bytes, derived from the same
 /// marketed-gigabyte conversion the configuration resolution uses.
-pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 =
-    DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB * BYTES_PER_CONFIGURED_GIGABYTE;
+pub const DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 =
+    DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB * BYTES_PER_CONFIGURED_GIGABYTE;
 const DEFAULT_RETAINED_LOG_FILES: usize = 7;
 
 /// User-level Astronomical runtime configuration loaded inside one isolated instance.
@@ -273,51 +274,54 @@ impl AstronomicalConfig {
         parse_loopback_bind_address(&raw_bind_address)
     }
 
-    /// Resolves the always-enabled SSD-backed prompt cache policy.
-    pub fn prompt_cache(&self) -> Result<PromptCacheConfig, AstronomicalConfigError> {
-        let global_prompt_cache_root_directory =
-            self.default_global_prompt_cache_root_directory()?;
-        let global_prompt_cache_maximum_size_bytes = prompt_cache_size_gb_to_bytes(
-            self.user_config_file
-                .prompt_cache
-                .as_ref()
-                .and_then(|prompt_cache| prompt_cache.maximum_size_gb)
-                .unwrap_or(DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB),
-        )?;
-        Ok(PromptCacheConfig::new(
-            global_prompt_cache_root_directory,
-            global_prompt_cache_maximum_size_bytes,
+    /// Resolves the always-enabled `astro_ssd_prompt_cache` policy.
+    pub fn astro_ssd_prompt_cache(
+        &self,
+    ) -> Result<AstroSsdPromptCacheConfig, AstronomicalConfigError> {
+        let global_astro_ssd_prompt_cache_root_directory =
+            self.default_global_astro_ssd_prompt_cache_root_directory()?;
+        let global_astro_ssd_prompt_cache_maximum_size_bytes =
+            astro_ssd_prompt_cache_size_gb_to_bytes(
+                self.user_config_file
+                    .astro_ssd_prompt_cache
+                    .as_ref()
+                    .and_then(|astro_ssd_prompt_cache| astro_ssd_prompt_cache.maximum_size_gb)
+                    .unwrap_or(DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB),
+            )?;
+        Ok(AstroSsdPromptCacheConfig::new(
+            global_astro_ssd_prompt_cache_root_directory,
+            global_astro_ssd_prompt_cache_maximum_size_bytes,
         ))
     }
 
-    /// Returns whether the SSD-backed prompt cache is enabled.
+    /// Returns whether the `astro_ssd_prompt_cache` is enabled.
     #[must_use]
-    pub fn persistent_prompt_cache_enabled(&self) -> bool {
+    pub fn astro_ssd_prompt_cache_enabled(&self) -> bool {
         self.user_config_file
-            .prompt_cache
+            .astro_ssd_prompt_cache
             .as_ref()
-            .and_then(|prompt_cache| prompt_cache.enabled)
+            .and_then(|astro_ssd_prompt_cache| astro_ssd_prompt_cache.enabled)
             .unwrap_or(true)
     }
 
-    /// Returns the authored cache preference without replacing absence with policy.
+    /// Returns the authored `astro_ssd_prompt_cache` preference without replacing absence with policy.
     #[must_use]
-    pub fn configured_persistent_prompt_cache_enabled(&self) -> Option<bool> {
+    pub fn configured_astro_ssd_prompt_cache_enabled(&self) -> Option<bool> {
         self.user_config_file
-            .prompt_cache
+            .astro_ssd_prompt_cache
             .as_ref()
-            .and_then(|prompt_cache| prompt_cache.enabled)
+            .and_then(|astro_ssd_prompt_cache| astro_ssd_prompt_cache.enabled)
     }
 
-    /// Returns the authored decimal-SI cache capacity without applying its default.
-    pub fn configured_prompt_cache_maximum_size_bytes(
+    /// Returns the authored decimal-SI `astro_ssd_prompt_cache` capacity without applying its default.
+    pub fn configured_astro_ssd_prompt_cache_maximum_size_bytes(
         &self,
     ) -> Result<Option<u64>, AstronomicalConfigError> {
         self.user_config_file
-            .prompt_cache
+            .astro_ssd_prompt_cache
             .as_ref()
-            .and_then(|prompt_cache| prompt_cache.maximum_size_gb)
-            .map(prompt_cache_size_gb_to_bytes)
+            .and_then(|astro_ssd_prompt_cache| astro_ssd_prompt_cache.maximum_size_gb)
+            .map(astro_ssd_prompt_cache_size_gb_to_bytes)
             .transpose()
     }
 
@@ -335,10 +339,10 @@ impl AstronomicalConfig {
         ))
     }
 
-    fn default_global_prompt_cache_root_directory(
+    fn default_global_astro_ssd_prompt_cache_root_directory(
         &self,
     ) -> Result<PathBuf, AstronomicalConfigError> {
-        Ok(self.instance_paths.prompt_cache_directory())
+        Ok(self.instance_paths.astro_ssd_prompt_cache_directory())
     }
 
     /// Returns whether detailed critical-path performance attribution is enabled.
@@ -493,17 +497,21 @@ fn parse_loopback_bind_address(
     Ok(daemon_bind_address)
 }
 
-fn prompt_cache_size_gb_to_bytes(
-    prompt_cache_max_size_gb: u64,
+fn astro_ssd_prompt_cache_size_gb_to_bytes(
+    astro_ssd_prompt_cache_max_size_gb: u64,
 ) -> Result<u64, AstronomicalConfigError> {
-    if prompt_cache_max_size_gb == 0 {
-        return Err(AstronomicalConfigError::InvalidPromptCacheMaxSizeGb {
-            description: "prompt-cache max size must be positive",
-        });
+    if astro_ssd_prompt_cache_max_size_gb == 0 {
+        return Err(
+            AstronomicalConfigError::InvalidAstroSsdPromptCacheMaxSizeGb {
+                description: "astro-ssd-prompt-cache max size must be positive",
+            },
+        );
     }
-    prompt_cache_max_size_gb
+    astro_ssd_prompt_cache_max_size_gb
         .checked_mul(BYTES_PER_CONFIGURED_GIGABYTE)
-        .ok_or(AstronomicalConfigError::InvalidPromptCacheMaxSizeGb {
-            description: "prompt-cache max size exceeds the byte range",
-        })
+        .ok_or(
+            AstronomicalConfigError::InvalidAstroSsdPromptCacheMaxSizeGb {
+                description: "astro-ssd-prompt-cache max size exceeds the byte range",
+            },
+        )
 }

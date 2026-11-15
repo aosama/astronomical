@@ -189,7 +189,7 @@ async fn raise_the_limit_and_serve_the_second_turn(
     assert!(!second_assistant_response.is_empty());
     let second_status = wait_for_idle_status(server_address, "turn_2_finalization").await;
     // The raised limit holds every expert while idle. Whether it also holds
-    // a turn's stored state and working memory depends on the limit the
+    // a turn's stored state and MLX working buffers depend on the limit the
     // machine grants, so the engine may give a few experts back to serve
     // the turn. What a person is owed is that the turn is served and that
     // nearly everything stays in memory.

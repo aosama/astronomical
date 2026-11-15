@@ -10,7 +10,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::MlxDtype;
 
@@ -19,21 +19,21 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
 );
 
 #[test]
-fn should_clear_replacement_allocator_cache_and_persist_a_bounded_failed_load_report() {
+fn should_clear_replacement_mlx_buffer_cache_and_persist_a_bounded_failed_load_report() {
     let model_directory = tempfile::tempdir().expect("the invalid artifact directory should exist");
     let attribution_log_path = model_directory.path().join("performance.jsonl");
     let mut engine = Flux2KleinImageEngine::from_model_family_factory(
         model_directory.path(),
         Flux2KleinArtifactProvenance::official(),
         DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-        DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         true,
         attribution_log_path.clone(),
     );
 
     engine
         .load()
-        .expect_err("the empty artifact should fail after replacement cache cleanup");
+        .expect_err("the empty artifact should fail after replacement mlx_buffer_cache cleanup");
 
     let report_line = fs::read_to_string(attribution_log_path)
         .expect("failed loading should persist attribution");
@@ -51,7 +51,7 @@ fn should_clear_replacement_allocator_cache_and_persist_a_bounded_failed_load_re
             .as_array()
             .expect("load operations should be an array")
             .iter()
-            .any(|operation| operation["operation"] == "mlx_allocator_cache_cleanup"),
+            .any(|operation| operation["operation"] == "mlx_buffer_cache_cleanup"),
         "failed load report should attribute replacement cleanup: {report}"
     );
 }
@@ -61,7 +61,7 @@ fn should_preserve_bf16_and_determinism_for_small_keyed_noise_and_euler_geometry
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the direct-MLX limits should be valid"),
     )
@@ -112,7 +112,7 @@ fn should_accumulate_the_euler_update_in_float32_before_casting_to_bf16() {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the direct-MLX limits should be valid"),
     )

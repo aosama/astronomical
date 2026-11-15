@@ -25,8 +25,8 @@ fn governor() -> MemoryGovernor {
 }
 
 /// A step that held `held_bytes` around it, read `in_flight_weight_bytes`
-/// and needed `working_memory_bytes` beyond both.
-fn step(phase: LedgerPhase, kept_weight_bytes: u64, working_memory_bytes: u64) -> MeasuredStep {
+/// and needed `mlx_working_buffer_bytes` beyond both.
+fn step(phase: LedgerPhase, kept_weight_bytes: u64, mlx_working_buffer_bytes: u64) -> MeasuredStep {
     let held_bytes = 3 * GIBIBYTE + kept_weight_bytes;
     MeasuredStep {
         phase,
@@ -38,7 +38,7 @@ fn step(phase: LedgerPhase, kept_weight_bytes: u64, working_memory_bytes: u64) -
         in_flight_weight_bytes: GIBIBYTE / 2,
         active_bytes_before_step: held_bytes,
         active_bytes_after_step: held_bytes,
-        peak_bytes_during_step: held_bytes + GIBIBYTE / 2 + working_memory_bytes,
+        peak_bytes_during_step: held_bytes + GIBIBYTE / 2 + mlx_working_buffer_bytes,
     }
 }
 
@@ -71,20 +71,20 @@ fn should_give_the_remainder_once_a_probe_has_measured_a_step() {
 }
 
 #[test]
-fn should_take_the_weights_in_flight_out_of_a_step_working_memory() {
+fn should_take_the_weights_in_flight_out_of_a_step_mlx_working_buffers() {
     let measured_step = step(READING, 0, GIBIBYTE);
     assert_eq!(
         measured_step.peak_beyond_held_bytes(),
         GIBIBYTE + GIBIBYTE / 2
     );
-    assert_eq!(measured_step.working_memory_bytes(), GIBIBYTE);
+    assert_eq!(measured_step.mlx_working_buffer_bytes(), GIBIBYTE);
 }
 
 #[test]
-fn should_measure_no_working_memory_when_the_peak_never_rose() {
+fn should_measure_no_mlx_working_buffers_when_the_peak_never_rose() {
     let mut quiet_step = step(READING, 0, 0);
     quiet_step.peak_bytes_during_step = quiet_step.active_bytes_after_step;
-    assert_eq!(quiet_step.working_memory_bytes(), 0);
+    assert_eq!(quiet_step.mlx_working_buffer_bytes(), 0);
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn should_say_what_the_capacity_would_be_while_reading_without_changing_anything
     let capacity_while_reading = governor.capacity_while(READING);
     assert!(
         capacity_while_reading.bytes() < idle_capacity.bytes(),
-        "reading a prompt sets working memory and layer slots aside"
+        "reading a prompt sets MLX working buffers and layer slots aside"
     );
     assert_eq!(governor.phase(), LedgerPhase::Idle);
     assert_eq!(governor.kept_weight_capacity(), idle_capacity);
@@ -233,7 +233,7 @@ fn should_show_a_step_that_fits_as_having_no_shortfall() {
 }
 
 #[test]
-fn should_tell_stored_state_that_cannot_fit_from_working_memory_that_cannot() {
+fn should_tell_stored_state_that_cannot_fit_from_mlx_working_buffers_that_cannot() {
     let mut governor = governor();
     let _ = governor.record_probe(READING, 2 * GIBIBYTE);
     // 3 core + 12 stored + 2 working + 1 slots is over the 16 limit, but
@@ -246,10 +246,10 @@ fn should_tell_stored_state_that_cannot_fit_from_working_memory_that_cannot() {
 }
 
 #[test]
-fn should_report_no_working_memory_shortfall_for_a_phase_nothing_has_measured() {
+fn should_report_no_mlx_working_buffers_shortfall_for_a_phase_nothing_has_measured() {
     let governor = governor();
     let accounts = governor.accounts_while(READING, 11 * GIBIBYTE);
-    assert!(!accounts.working_memory_is_measured);
+    assert!(!accounts.mlx_working_buffers_are_measured);
     assert_eq!(accounts.shortfall_bytes, 0);
 }
 
@@ -422,7 +422,10 @@ fn should_carry_the_probe_and_the_step_rise_in_the_reading() {
     let _ = governor.record_probe(READING, GIBIBYTE / 2);
     let _ = governor.start_request(READING, 0);
     let verdict = governor.complete_step(step(READING, 0, GIBIBYTE / 4));
-    assert_eq!(verdict.reading.probed_working_memory_bytes, Some(GIBIBYTE));
+    assert_eq!(
+        verdict.reading.probed_mlx_working_buffer_bytes,
+        Some(GIBIBYTE)
+    );
     assert_eq!(
         verdict.reading.step_peak_beyond_held_bytes,
         GIBIBYTE / 2 + GIBIBYTE / 4

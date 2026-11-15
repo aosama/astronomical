@@ -1,15 +1,15 @@
 //! The accounts at one instant, and the one rule that composes them.
 
+use super::mlx_working_buffers::MlxWorkingBufferReserve;
 use super::model_shape::ModelMemoryShape;
 use super::phase::LedgerPhase;
-use super::working_memory::WorkingMemoryReserve;
 
 /// The safety margin as a divisor of the limit: one fiftieth, two percent.
 ///
 /// The margin is the room for what no account names: allocator rounding,
 /// buffers MLX has freed but not yet returned. MLX itself tolerates one
 /// percent above the limit; planning to within that percent is what turned
-/// a 0.3 GB misjudgment into a discarded cache (issue #2221). Two percent is
+/// a 0.3 GB misjudgment into a discarded astro expert cache (issue #2221). Two percent is
 /// the starting value and is to be settled by measurement.
 const SAFETY_MARGIN_DIVISOR: u64 = 50;
 
@@ -20,7 +20,7 @@ pub(super) struct AccountInputs {
     pub(super) model_shape: ModelMemoryShape,
     pub(super) context_bytes: u64,
     pub(super) phase: LedgerPhase,
-    pub(super) working_memory_reserve: WorkingMemoryReserve,
+    pub(super) mlx_working_buffer_reserve: MlxWorkingBufferReserve,
     pub(super) lease_bytes: u64,
 }
 
@@ -35,7 +35,7 @@ pub struct LedgerAccounts {
     pub limit_bytes: u64,
     pub core_weight_bytes: u64,
     pub context_bytes: u64,
-    pub working_memory_bytes: u64,
+    pub mlx_working_buffer_bytes: u64,
     pub stream_slot_bytes: u64,
     pub lease_bytes: u64,
     pub margin_bytes: u64,
@@ -47,8 +47,8 @@ pub struct LedgerAccounts {
     /// below what streaming everything requires; the model still runs, and
     /// MLX and macOS decide the rest (issue #1902).
     pub shortfall_bytes: u64,
-    /// Whether a measurement covers the working memory of this phase.
-    pub working_memory_is_measured: bool,
+    /// Whether a measurement covers the MLX working buffers of this phase.
+    pub mlx_working_buffers_are_measured: bool,
 }
 
 impl LedgerAccounts {
@@ -57,7 +57,7 @@ impl LedgerAccounts {
     pub const fn needed_bytes(&self) -> u64 {
         self.core_weight_bytes
             .saturating_add(self.context_bytes)
-            .saturating_add(self.working_memory_bytes)
+            .saturating_add(self.mlx_working_buffer_bytes)
             .saturating_add(self.stream_slot_bytes)
             .saturating_add(self.lease_bytes)
             .saturating_add(self.margin_bytes)
@@ -65,7 +65,7 @@ impl LedgerAccounts {
 
     /// How far what stays in memory after a step exceeds the limit: the
     /// fixed weights, the stored state, leases and the margin, without the
-    /// step's working memory. Above zero, no smaller step would fit either.
+    /// step's MLX working buffers. Above zero, no smaller step would fit either.
     #[must_use]
     pub const fn stable_shortfall_bytes(&self) -> u64 {
         self.core_weight_bytes
@@ -76,13 +76,13 @@ impl LedgerAccounts {
     }
 
     /// Everything the accounts set aside apart from kept weights: the
-    /// fixed weights, the stored state, one step's working memory, the
+    /// fixed weights, the stored state, one step's MLX working buffers, the
     /// slots, leases and the margin.
     #[must_use]
     pub const fn set_aside_bytes(&self) -> u64 {
         self.core_weight_bytes
             .saturating_add(self.context_bytes)
-            .saturating_add(self.working_memory_bytes)
+            .saturating_add(self.mlx_working_buffer_bytes)
             .saturating_add(self.stream_slot_bytes)
             .saturating_add(self.lease_bytes)
             .saturating_add(self.margin_bytes)
@@ -115,22 +115,22 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
         limit_bytes: account_inputs.limit_bytes,
         core_weight_bytes: model_shape.core_weight_bytes,
         context_bytes: account_inputs.context_bytes,
-        working_memory_bytes: 0,
+        mlx_working_buffer_bytes: 0,
         stream_slot_bytes: 0,
         lease_bytes: account_inputs.lease_bytes,
         margin_bytes,
         kept_weight_capacity_bytes: 0,
         unassigned_bytes: 0,
         shortfall_bytes: 0,
-        working_memory_is_measured: true,
+        mlx_working_buffers_are_measured: true,
     };
-    let WorkingMemoryReserve::Measured(working_memory_bytes) =
-        account_inputs.working_memory_reserve
+    let MlxWorkingBufferReserve::Measured(mlx_working_buffer_bytes) =
+        account_inputs.mlx_working_buffer_reserve
     else {
-        return with_unmeasured_working_memory(accounts, fixed_bytes, stream_slot_bytes);
+        return with_unmeasured_mlx_working_buffers(accounts, fixed_bytes, stream_slot_bytes);
     };
-    accounts.working_memory_bytes = working_memory_bytes;
-    let needed_without_slots_bytes = fixed_bytes.saturating_add(working_memory_bytes);
+    accounts.mlx_working_buffer_bytes = mlx_working_buffer_bytes;
+    let needed_without_slots_bytes = fixed_bytes.saturating_add(mlx_working_buffer_bytes);
     let room_without_slots_bytes = accounts
         .limit_bytes
         .saturating_sub(needed_without_slots_bytes);
@@ -150,21 +150,21 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
 }
 
 /// With no measurement, nothing is kept and everything streams: the whole
-/// remainder is held for the unknown working memory until a layer step has
+/// remainder is held for the unknown MLX working buffers until a layer step has
 /// been measured.
-const fn with_unmeasured_working_memory(
+const fn with_unmeasured_mlx_working_buffers(
     mut accounts: LedgerAccounts,
     fixed_bytes: u64,
     stream_slot_bytes: u64,
 ) -> LedgerAccounts {
-    let needed_before_working_memory_bytes = fixed_bytes.saturating_add(stream_slot_bytes);
-    accounts.working_memory_is_measured = false;
+    let needed_before_mlx_working_buffer_bytes = fixed_bytes.saturating_add(stream_slot_bytes);
+    accounts.mlx_working_buffers_are_measured = false;
     accounts.stream_slot_bytes = stream_slot_bytes;
-    accounts.working_memory_bytes = accounts
+    accounts.mlx_working_buffer_bytes = accounts
         .limit_bytes
-        .saturating_sub(needed_before_working_memory_bytes);
+        .saturating_sub(needed_before_mlx_working_buffer_bytes);
     accounts.shortfall_bytes =
-        needed_before_working_memory_bytes.saturating_sub(accounts.limit_bytes);
+        needed_before_mlx_working_buffer_bytes.saturating_sub(accounts.limit_bytes);
     accounts
 }
 

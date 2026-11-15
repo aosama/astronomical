@@ -1,9 +1,9 @@
 //! Pre-forward decision logic for a single prompt-processing chunk.
 //!
-//! This module computes cache eligibility, checkpoint boundaries, workspace
+//! This module computes `astro_ssd_prompt_cache` eligibility, checkpoint boundaries, workspace
 //! projection without side effects.
 
-use crate::persistent_prompt_cache_boundary_completed_prefill_chunk_tokens;
+use crate::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
@@ -16,8 +16,8 @@ pub(super) struct PrefillChunkPlan {
     /// Token count of this chunk (`prefill_end - prefill_start`).
     pub(super) prefill_token_count: usize,
 
-    /// Completed chunk-end offsets (relative to chunk start) where a prompt
-    /// cache boundary checkpoint should be captured after the forward.
+    /// Completed chunk-end offsets (relative to chunk start) where an
+    /// `astro_ssd_prompt_cache` boundary checkpoint should be captured after the forward.
     pub(super) all_completed_prefill_chunk_tokens: Vec<usize>,
 
     /// Like `all_completed_prefill_chunk_tokens` but with the final boundary
@@ -25,11 +25,11 @@ pub(super) struct PrefillChunkPlan {
     /// forward.
     pub(super) intermediate_completed_prefill_chunk_tokens: Vec<usize>,
 
-    /// Block token count from the persistent prompt-cache contract, if
+    /// Block token count from the persistent astro SSD prompt cache contract, if
     /// applicable.
-    pub(super) persistent_prompt_cache_block_token_count: Option<usize>,
+    pub(super) astro_ssd_prompt_cache_block_token_count: Option<usize>,
 
-    /// Workspace bytes needed for direct prompt-cache publication.
+    /// Workspace bytes needed for direct astro SSD prompt cache publication.
     pub(super) direct_publication_workspace_bytes: usize,
 
     /// Combined temporary workspace reservation.
@@ -53,28 +53,28 @@ impl Qwen3_5EngineState {
             .as_ref()
 .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let prefill_token_count = prefill_end - prefill_start;
-        let capture_is_eligible = self.persistent_prompt_cache.is_some()
-            && active_request.can_use_persistent_prompt_cache;
+        let capture_is_eligible =
+            self.astro_ssd_prompt_cache.is_some() && active_request.can_use_astro_ssd_prompt_cache;
 
-        // Cache-disabled and request-ineligible paths stop here: they do not
+        // Paths with the `astro_ssd_prompt_cache` disabled and request-ineligible paths stop here: they do not
         // plan checkpoint boundaries, derive a synthetic block length, or
-        // reserve checkpoint/publication memory. Cache-enabled execution uses
+        // reserve checkpoint/publication memory. Execution with the `astro_ssd_prompt_cache` enabled uses
         // the one contract owned by the open store.
-        let (all_completed_prefill_chunk_tokens, persistent_prompt_cache_block_token_count) =
+        let (all_completed_prefill_chunk_tokens, astro_ssd_prompt_cache_block_token_count) =
             if capture_is_eligible {
-                let persistent_prompt_cache_block_token_count = self
-                    .persistent_prompt_cache
+                let astro_ssd_prompt_cache_block_token_count = self
+                    .astro_ssd_prompt_cache
                     .as_ref()
-.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::eligible_prompt_cache_capture_has_no_persistent_cache_owner_error)?
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::eligible_astro_ssd_prompt_cache_capture_has_no_astro_ssd_prompt_cache_owner_error)?
                     .model_contract_ref()
                     .block_token_count();
                 (
-                    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+                    astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens(
                         prefill_start,
                         prefill_end,
-                        persistent_prompt_cache_block_token_count,
+                        astro_ssd_prompt_cache_block_token_count,
                     ),
-                    Some(persistent_prompt_cache_block_token_count),
+                    Some(astro_ssd_prompt_cache_block_token_count),
                 )
             } else {
                 (Vec::new(), None)
@@ -93,7 +93,7 @@ impl Qwen3_5EngineState {
             0
         } else {
             model
-                    .decoder_cache_layout()
+                    .astro_decoder_state_cache_layout()
                     .boundary_snapshot_payload_byte_count()
                     .map_err(|error| {
                         super::fatal_engine_error(format!(
@@ -105,10 +105,10 @@ impl Qwen3_5EngineState {
         };
 
         let direct_publication_workspace_bytes = if !all_completed_prefill_chunk_tokens.is_empty() {
-            self.persistent_prompt_cache
+            self.astro_ssd_prompt_cache
                 .as_ref()
-                .map(|persistent_prompt_cache| {
-                    persistent_prompt_cache
+                .map(|astro_ssd_prompt_cache| {
+                    astro_ssd_prompt_cache
                         .model_contract_ref()
                         .direct_publication_workspace_bytes()
                 })
@@ -119,13 +119,13 @@ impl Qwen3_5EngineState {
 
         let exact_temporary_workspace_bytes = boundary_checkpoint_workspace_bytes
             .checked_add(direct_publication_workspace_bytes)
-.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::prompt_cache_publication_workspace_bytes_overflowed_error)?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::astro_ssd_prompt_cache_publication_workspace_bytes_overflowed_error)?;
 
         Ok(PrefillChunkPlan {
             prefill_token_count,
             all_completed_prefill_chunk_tokens,
             intermediate_completed_prefill_chunk_tokens,
-            persistent_prompt_cache_block_token_count,
+            astro_ssd_prompt_cache_block_token_count,
             direct_publication_workspace_bytes,
             exact_temporary_workspace_bytes,
         })

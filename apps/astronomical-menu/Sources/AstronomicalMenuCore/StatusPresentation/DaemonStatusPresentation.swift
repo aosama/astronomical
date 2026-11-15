@@ -14,10 +14,10 @@ extension DaemonStatusDocument {
   }
 
   // Prompt-processing activity is published as soon as the request starts, but
-  // the first PrefillProgress event arrives only after prompt-cache restore
+  // the first PrefillProgress event arrives only after astro SSD prompt cache restore
   // returns. Missing progress in that window is restore work, not idle and not
   // expert SSD streaming.
-  private var isRestoringPromptCache: Bool {
+  private var isRestoringAstroSsdPromptCache: Bool {
     activity == "prompt_processing" && progress == nil
   }
 
@@ -46,7 +46,7 @@ extension DaemonStatusDocument {
     }
     if activity == "generation_preparation" { return "Preparing…" }
     if activity == "speaking" { return "Speaking…" }
-    if isRestoringPromptCache { return "Restoring…" }
+    if isRestoringAstroSsdPromptCache { return "Restoring…" }
     guard activity == "prompt_processing", let progress else {
       // Only when idle: a generation's own title always says more than a background count.
       return activity == "idle" ? neuralEnginePrefill?.menuBarTitle ?? "" : ""
@@ -73,7 +73,7 @@ extension DaemonStatusDocument {
     }
     if activity == "generation_preparation" { return "Preparing generation…" }
     if activity == "speaking" { return "Reading text aloud" }
-    if isRestoringPromptCache { return "Restoring prompt cache" }
+    if isRestoringAstroSsdPromptCache { return "Restoring prompt cache" }
     guard let progress else { return phaseTitle }
     guard let currentPhaseTokensPerSecond else {
       return "Prompt processing · \(progress.completionPercentageTitle)"
@@ -86,7 +86,7 @@ extension DaemonStatusDocument {
     switch activity {
     case "generating": return "Generating"
     case "generation_preparation": return "Preparing generation"
-    case "prompt_processing" where isRestoringPromptCache: return "Restoring prompt cache"
+    case "prompt_processing" where isRestoringAstroSsdPromptCache: return "Restoring prompt cache"
     case "prompt_processing": return "Prompt processing"
     case "speaking": return "Reading text aloud"
     case "image_generation":
@@ -128,7 +128,7 @@ extension DaemonStatusDocument {
   var progressTitle: String {
     if let modelLoadInFlight { return modelLoadInFlight.progressTitle }
     guard let progress else {
-      return isRestoringPromptCache ? "Restoring prompt cache" : "Standing by"
+      return isRestoringAstroSsdPromptCache ? "Restoring prompt cache" : "Standing by"
     }
     if progress.unit == .steps {
       guard progress.phase == "denoising" else { return progress.imagePhaseTitle }
@@ -165,7 +165,7 @@ extension DaemonStatusDocument {
 
   var elapsedTimeTitle: String {
     if let modelLoadInFlight { return modelLoadInFlight.elapsedTimeTitle }
-    if isRestoringPromptCache { return "Calculating" }
+    if isRestoringAstroSsdPromptCache { return "Calculating" }
     guard let progress else { return "Not active" }
     let elapsedSeconds = Double(progress.elapsedMilliseconds) / 1_000
     guard progress.unit != .steps && progress.phase != "generation"
@@ -194,12 +194,12 @@ extension DaemonStatusDocument {
 
   /// Whether the popover draws its progress bar. It does when there is a
   /// completion fraction, and while idle, where an empty bar keeps the section
-  /// readable. It does not during a model load, a prompt-cache restore, a
+  /// readable. It does not during a model load, an astro SSD prompt cache restore, a
   /// generation against the default budget, or an image phase other than
   /// denoising: the Flight and Progress rows describe those instead.
   var showsProgressBar: Bool {
     if isLoadingModel { return false }
-    if isRestoringPromptCache { return false }
+    if isRestoringAstroSsdPromptCache { return false }
     guard let progress else { return true }
     // A generation against the endpoint's default budget has no meaningful
     // completion fraction; the popover shows no bar instead of ~0%.

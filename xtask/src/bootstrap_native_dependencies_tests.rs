@@ -2,7 +2,8 @@ use std::path::Path;
 
 use crate::bootstrap_native_dependencies::{
     ProvisionDecision, decide_provision, has_required_free_space, parse_arguments,
-    parse_available_kib_blocks, resolve_cache_directory, validate_downloaded_size,
+    parse_available_kib_blocks, resolve_astro_native_build_cache_dependencies_directory,
+    validate_downloaded_size,
 };
 
 #[test]
@@ -47,21 +48,21 @@ fn downloaded_size_bound_is_256_mib() {
 }
 
 #[test]
-fn provision_decision_prefers_a_verified_cache() {
-    let archive_path = Path::new("/cache/mlx.tar.gz");
+fn provision_decision_prefers_an_already_verified_archive() {
+    let archive_path = Path::new("/native-archives/mlx.tar.gz");
     assert_eq!(
         decide_provision(true, true, true, false, "MLX", archive_path).unwrap(),
-        ProvisionDecision::VerifiedCached
+        ProvisionDecision::AlreadyDownloadedAndVerified
     );
     assert_eq!(
         decide_provision(true, true, true, true, "MLX", archive_path).unwrap(),
-        ProvisionDecision::VerifiedCached
+        ProvisionDecision::AlreadyDownloadedAndVerified
     );
 }
 
 #[test]
-fn verify_only_refuses_missing_or_invalid_cache() {
-    let archive_path = Path::new("/cache/mlx.tar.gz");
+fn verify_only_refuses_missing_or_invalid_archive() {
+    let archive_path = Path::new("/native-archives/mlx.tar.gz");
     assert!(
         decide_provision(false, false, false, true, "MLX", archive_path)
             .unwrap_err()
@@ -75,8 +76,8 @@ fn verify_only_refuses_missing_or_invalid_cache() {
 }
 
 #[test]
-fn non_regular_cache_entry_is_refused_even_when_downloading() {
-    let archive_path = Path::new("/cache/mlx.tar.gz");
+fn non_regular_archive_entry_is_refused_even_when_downloading() {
+    let archive_path = Path::new("/native-archives/mlx.tar.gz");
     let directory_error =
         decide_provision(true, false, false, false, "MLX", archive_path).unwrap_err();
     assert!(directory_error.contains("not a regular file"));
@@ -86,8 +87,8 @@ fn non_regular_cache_entry_is_refused_even_when_downloading() {
 }
 
 #[test]
-fn download_is_chosen_when_cache_is_absent_or_stale() {
-    let archive_path = Path::new("/cache/mlx.tar.gz");
+fn download_is_chosen_when_archive_is_absent_or_stale() {
+    let archive_path = Path::new("/native-archives/mlx.tar.gz");
     assert_eq!(
         decide_provision(false, false, false, false, "MLX", archive_path).unwrap(),
         ProvisionDecision::Download
@@ -103,29 +104,54 @@ fn argument_parsing_accepts_cache_dir_verify_and_rejects_unknowns() {
     let options = parse_arguments(&[
         "--verify".to_owned(),
         "--cache-dir".to_owned(),
-        "/tmp/cache".to_owned(),
+        "/tmp/native-archives".to_owned(),
     ])
     .unwrap();
-    assert_eq!(options.cache_directory.as_deref(), Some("/tmp/cache"));
+    assert_eq!(
+        options
+            .astro_native_build_cache_dependencies_directory
+            .as_deref(),
+        Some("/tmp/native-archives")
+    );
     assert!(options.is_verify_only);
 
-    let options = parse_arguments(&["--cache-dir".to_owned(), "/tmp/cache".to_owned()]).unwrap();
-    assert_eq!(options.cache_directory.as_deref(), Some("/tmp/cache"));
+    let options =
+        parse_arguments(&["--cache-dir".to_owned(), "/tmp/native-archives".to_owned()]).unwrap();
+    assert_eq!(
+        options
+            .astro_native_build_cache_dependencies_directory
+            .as_deref(),
+        Some("/tmp/native-archives")
+    );
     assert!(!options.is_verify_only);
 
     assert!(parse_arguments(&["--cache-dir".to_owned()]).is_err());
     assert!(parse_arguments(&["--unknown".to_owned()]).is_err());
-    assert!(parse_arguments(&[]).unwrap().cache_directory.is_none());
+    assert!(
+        parse_arguments(&[])
+            .unwrap()
+            .astro_native_build_cache_dependencies_directory
+            .is_none()
+    );
 }
 
 #[test]
-fn cache_directory_resolution_falls_back_to_home() {
-    let resolved = resolve_cache_directory(None, Some("/Users/builder")).unwrap();
+fn native_archive_directory_resolution_falls_back_to_home() {
+    let resolved =
+        resolve_astro_native_build_cache_dependencies_directory(None, Some("/Users/builder"))
+            .unwrap();
     assert!(resolved.ends_with("Library/Caches/Astronomical/native-dependencies"));
 
-    let resolved = resolve_cache_directory(Some("/tmp/overlay-cache"), None).unwrap();
-    assert_eq!(resolved, Path::new("/tmp/overlay-cache"));
+    let resolved = resolve_astro_native_build_cache_dependencies_directory(
+        Some("/tmp/overlay-archives"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(resolved, Path::new("/tmp/overlay-archives"));
 
-    assert!(resolve_cache_directory(Some("relative/cache"), None).is_err());
-    assert!(resolve_cache_directory(None, None).is_err());
+    assert!(
+        resolve_astro_native_build_cache_dependencies_directory(Some("relative/archives"), None)
+            .is_err()
+    );
+    assert!(resolve_astro_native_build_cache_dependencies_directory(None, None).is_err());
 }

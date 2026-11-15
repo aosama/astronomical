@@ -3,7 +3,7 @@
 //! Unlike the Development loop, a release build starts cold on purpose: it
 //! runs inside the `app-release` disposable target lane with the shipped
 //! `release` profile (thin LTO), always reinstalls npm dependencies from the
-//! lockfile, and never reuses a cached icon, so the bundle depends only on
+//! lockfile, and never reuses an icon rendered by the edit loop, so the bundle depends only on
 //! the commit it was built from.
 
 use std::path::{Path, PathBuf};
@@ -22,7 +22,7 @@ use super::tool_command::run_tool;
 /// The disposable target directory travels as `--target-dir`, never as the
 /// `CARGO_TARGET_DIR` variable: sccache folds every `CARGO_*` variable into
 /// each object's key, and the lane's directory name is new on every run, so
-/// the variable made every release object a cache miss. The flag's path only
+/// the variable made every release object an `sccache` miss. The flag's path only
 /// reaches rustc as output locations, which sccache leaves out of the key.
 pub(crate) fn release_cargo_arguments(
     channel_profile: &ChannelProfile,

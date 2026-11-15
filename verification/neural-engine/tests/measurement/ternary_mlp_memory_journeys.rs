@@ -363,8 +363,11 @@ fn should_measure_where_a_program_load_spends_its_time() {
         rows_per_table: ROWS_PER_LOOKUP_TABLE,
     };
     let directory = tempfile::tempdir().expect("a scratch directory for the model");
-    let cache_directory = tempfile::tempdir().expect("a scratch directory for the cache");
-    let kept_model_path = cache_directory.path().join("layer.mlmodelc");
+    let astro_neural_engine_program_cache_directory =
+        tempfile::tempdir().expect("a scratch directory for the astro Neural Engine program cache");
+    let kept_model_path = astro_neural_engine_program_cache_directory
+        .path()
+        .join("layer.mlmodelc");
 
     let cold_started_at = Instant::now();
     let (mut cold_program, _) = load_program(&layer, weight_encoding, directory.path());

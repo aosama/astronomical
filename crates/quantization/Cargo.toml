@@ -22,8 +22,8 @@ default = []
 # The GPU world: the range-search affine encoder, the shard-wise requantizer,
 # and the KL divergence math all run through MLX. Everything else in the crate
 # (module taxonomy, the knapsack allocator, the static structural scorer,
-# calibration loading, artifact schemas, the roofline latency model, the KV
-# cache allocator, and the sensitivity sweep driver) is pure Rust so it
+# calibration loading, artifact schemas, the roofline latency model, the astro
+# decoder state cache allocator, and the sensitivity sweep driver) is pure Rust so it
 # compiles, unit-tests, and runs on any host, including the CLI's `plan`
 # sub-verb.
 direct-mlx = ["dep:mlx-bridge", "dep:astronomical-runtime-integration"]

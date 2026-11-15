@@ -36,7 +36,7 @@ fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
             continue;
         }
         if entry_path.is_dir() {
-            // Skip subdirectories (e.g. .cache, refs) — the text-only
+            // Skip subdirectories (e.g. the Hugging Face `.cache` metadata folder, refs) — the text-only
             // artifact validator only needs files, not nested directories.
             continue;
         }
@@ -109,7 +109,7 @@ fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
         let file_name_str = file_name.to_string_lossy();
         let target_path = vision_artifact_directory.path().join(&*file_name_str);
         if entry_path.is_dir() {
-            // Skip non-model directories like .cache, .git, refs.
+            // Skip non-model directories like the Hugging Face `.cache` metadata folder, .git, refs.
             // Only copy the optiq vision sidecar directory.
             if file_name_str == "optiq" {
                 fs::create_dir_all(&target_path).expect("the test should create subdirectories");
@@ -122,7 +122,7 @@ fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
                 }
             }
             // Skip other directories — the artifact validator only needs
-            // model files and the optiq vision sidecar, not .cache/refs/etc.
+            // model files and the optiq vision sidecar, not the Hugging Face `.cache` metadata folder, refs, etc.
         } else {
             link_or_copy_file(&entry_path, &target_path);
         }

@@ -123,7 +123,7 @@ where
 
     /// Loads the autoregressive engine and announces readiness with the
     /// processor's ready event, the expert-mode fact, any pending runtime
-    /// feature configuration, and the first memory/prompt-cache samples.
+    /// feature configuration, and the first memory/astro-ssd-prompt-cache samples.
     async fn announce_autoregressive_readiness<WriteTransport>(
         &mut self,
         loaded_model: &mut LoadedModel<Processor, Engine>,
@@ -158,7 +158,7 @@ where
         }
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
-        self.emit_cache_stats_then_neural_engine_status(
+        self.emit_astro_ssd_prompt_cache_stats_then_neural_engine_status(
             event_writer,
             engine_load_result.neural_engine_prefill_event().as_ref(),
         )
@@ -429,8 +429,8 @@ where
                             .await?;
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
-                    WorkerCommand::ClearPromptCache { .. } => {
-                        tracing::warn!(request_id = current_generation.request_id.value(), "received ClearPromptCache command while generation is active; ignoring");
+                    WorkerCommand::ClearAstroSsdPromptCache { .. } => {
+                        tracing::warn!(request_id = current_generation.request_id.value(), "received ClearAstroSsdPromptCache command while generation is active; ignoring");
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
                 }

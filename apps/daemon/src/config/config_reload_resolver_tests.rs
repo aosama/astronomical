@@ -32,10 +32,10 @@ fn should_resolve_reload_config_from_the_config_file() {
                 "full_attention_key_value_growth_tokens": 192,
                 "prefill_graph_submission_layer_interval": 0,
                 "experimental_ssd_paging_generation_graph_submission_layer_interval": 6,
-                "prompt_cache_block_tokens": 768,
-                "prompt_cache_common_prefix_stride_blocks": 8
+                "ssd_prompt_cache_block_tokens": 768,
+                "ssd_prompt_cache_common_prefix_stride_blocks": 8
             },
-            "prompt_cache": {
+            "ssd_prompt_cache": {
                 "maximum_size_gb": 1
             }
         }"#,
@@ -55,8 +55,8 @@ fn should_resolve_reload_config_from_the_config_file() {
     );
     assert_eq!(
         resolved_config
-            .prompt_cache_config
-            .global_prompt_cache_root_directory(),
+            .astro_ssd_prompt_cache_config
+            .global_astro_ssd_prompt_cache_root_directory(),
         &config_home_directory.join(".astronomical-dev/cache")
     );
 }

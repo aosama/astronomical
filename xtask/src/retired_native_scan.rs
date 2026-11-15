@@ -1,6 +1,6 @@
 //! `cargo xtask scan-retired-native-output` — the read-only probe for
 //! issue #1486: counts the retired complete CMake native-output
-//! directories that still linger in Cargo targets and cache checkouts.
+//! directories that still linger in Cargo targets and `astro_native_build_cache` checkouts.
 //! Both retirement phases landed behind this probe's zero-count gate
 //! (Phase 1: the shell cleaner and its contract; Phase 2: the transitional
 //! build-script cleanup, formerly

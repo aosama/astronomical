@@ -18,11 +18,11 @@ use crate::serving::speech_executor::SpeechResultSender;
 use crate::worker::memory::limit::PendingMlxMemoryLimitUpdate;
 use crate::worker::process::failure_relaunch::ContainedFailureRelaunch;
 use crate::{
-    ChatGenerationStreamEvent, CompletedToolCall, CompletionAttributionLog, DecisionsOutput,
-    EmbeddingsExecutionError, EmbeddingsOutput, GenerationPerformanceLog, GenerationStartError,
-    ImageGenerationExecutionError, ImageGenerationOutput, MlxMemoryLimitUpdateOutcome,
-    PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
-    WorkerProcess, WorkerTerminationOutcome,
+    AstroSsdPromptCacheClearOutcome, ChatGenerationStreamEvent, CompletedToolCall,
+    CompletionAttributionLog, DecisionsOutput, EmbeddingsExecutionError, EmbeddingsOutput,
+    GenerationPerformanceLog, GenerationStartError, ImageGenerationExecutionError,
+    ImageGenerationOutput, MlxMemoryLimitUpdateOutcome, RuntimeModelPolicy, WorkerControlError,
+    WorkerHealthSnapshot, WorkerProcess, WorkerTerminationOutcome,
 };
 
 /// The owned, loop-carried state of the worker event loop.
@@ -41,7 +41,7 @@ pub(in crate::worker) struct WorkerLoopRuntime {
     pub completion_log: CompletionAttributionLog,
     pub model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     pub pending_mlx_memory_limit_update: Option<PendingMlxMemoryLimitUpdate>,
-    pub pending_prompt_cache_clear: Option<crate::PendingPromptCacheClear>,
+    pub pending_astro_ssd_prompt_cache_clear: Option<crate::PendingAstroSsdPromptCacheClear>,
     pub active_generation_permits: Arc<Semaphore>,
     pub generation_queue_permits: Arc<Semaphore>,
     pub model_load_timeout: Duration,
@@ -126,9 +126,9 @@ pub(crate) enum WorkerLoopCommand {
         model_policy_catalog: Arc<std::collections::HashMap<String, RuntimeModelPolicy>>,
         update_sender: oneshot::Sender<Result<(), WorkerControlError>>,
     },
-    ClearPromptCache {
+    ClearAstroSsdPromptCache {
         model_id: Option<String>,
-        clear_sender: oneshot::Sender<Result<PromptCacheClearOutcome, WorkerControlError>>,
+        clear_sender: oneshot::Sender<Result<AstroSsdPromptCacheClearOutcome, WorkerControlError>>,
     },
 }
 
@@ -363,7 +363,7 @@ impl ActiveGeneration {
     /// Folds one observed MLX peak sample into the request's durable peak
     /// record.
     ///
-    /// The MLX peak counter resets at allocator-cache cleanups, so a later
+    /// The MLX peak counter resets at MLX buffer-cache cleanups, so a later
     /// sample can read a lower window peak than an earlier one; the durable
     /// claim is a request maximum, so it must retain the highest window seen.
     /// Every event that carries a worker memory snapshot must route through

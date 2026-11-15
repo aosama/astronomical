@@ -32,7 +32,7 @@ const EMBEDDING_MODEL_ID: &str = "nomicai-modernbert-embed-base-8bit";
 const EXCERPT_WORD_COUNTS: [usize; 3] = [8, 120, 600];
 /// The embedding model is about 160 MB; this ceiling leaves ample forward workspace.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 4 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 /// The largest component difference accepted against the recorded vectors.
 ///
 /// The vectors are unit length, so components are below 1. On the machine
@@ -53,7 +53,7 @@ fn embed_the_excerpts() -> Vec<Vec<f32>> {
         EMBEDDING_MODEL_ID,
         &model_directory,
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         false,
         attribution_log_directory.path().join("attribution.jsonl"),
     )

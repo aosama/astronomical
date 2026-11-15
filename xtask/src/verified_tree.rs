@@ -5,7 +5,7 @@
 //! that work for about 12 job-minutes. A passing pull request leaves an artifact
 //! named after its tree, and a default-branch run that really ran the macOS lanes
 //! leaves one saying which commit it was, because those runs are what publish the
-//! caches later pull requests restore. Every doubt answers "unknown", which only
+//! entries of the `github_actions_cache` later pull requests restore. Every doubt answers "unknown", which only
 //! costs the full run the push would have had.
 
 use std::path::Path;
@@ -97,7 +97,7 @@ pub fn is_tree_already_verified(repository_root: &Path, head_sha: &str) -> bool 
     is_verified
 }
 
-/// The commit whose default-branch run last published caches, while that is recent
+/// The commit whose default-branch run last published the `github_actions_cache`, while that is recent
 /// enough for its record to be alive.
 pub fn last_default_branch_run_commit() -> Option<String> {
     let last_run_commit =

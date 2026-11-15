@@ -4,7 +4,7 @@ use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollecto
 use std::cell::RefCell;
 use std::path::Path;
 
-use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::model::disk_embedding_rows::Qwen3_5DiskEmbeddingRows;
@@ -61,29 +61,29 @@ impl Qwen3_5Model {
         chunking: super::Qwen3_5ModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        Self::load_with_performance_attribution_and_decode_expert_cache_policy(
+        Self::load_with_performance_attribution_and_decode_astro_expert_cache_policy(
             runtime,
             validated_artifact,
             model_directory,
             should_bind_vision_weights,
             chunking,
-            WorkerDecodeExpertCachePolicy::Baseline,
+            WorkerDecodeAstroExpertCachePolicy::Baseline,
             performance_attribution,
         )
     }
 
-    /// The decode-cache-policy-aware loader: binds the shared language
+    /// The decode-`astro_expert_cache`-policy-aware loader: binds the shared language
     /// artifact, builds the streaming expert runtime (pager, warm slot table,
-    /// sorted-reduction kernel), derives the decoder cache layout, collects
+    /// sorted-reduction kernel), derives the `astro_decoder_state_cache` layout, collects
     /// the capability-verdict kernels and invariant scales, and assembles the
     /// memory facts with the fused-kernel verdict.
-    pub(crate) fn load_with_performance_attribution_and_decode_expert_cache_policy(
+    pub(crate) fn load_with_performance_attribution_and_decode_astro_expert_cache_policy(
         runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         should_bind_vision_weights: bool,
         chunking: super::Qwen3_5ModelChunkingConfiguration,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         // Both taken before binding, which consumes parts of the artifact.
@@ -103,7 +103,7 @@ impl Qwen3_5Model {
             should_bind_vision_weights,
             performance_attribution,
         )?;
-        let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) =
+        let (expert_pager, astro_expert_cache, sorted_expert_weighted_sum_kernel) =
             match config.feed_forward_architecture() {
                 Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
                 Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
@@ -113,11 +113,11 @@ impl Qwen3_5Model {
                     &shard_index,
                     &tensor_inventory,
                     expert_atlas.as_ref(),
-                    decode_expert_cache_policy,
+                    decode_astro_expert_cache_policy,
                     performance_attribution,
                 )?,
             };
-        let decoder_cache_layout = measured_decoder_cache_layout(
+        let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
             &config,
             &chunking,
             &weights,
@@ -144,14 +144,14 @@ impl Qwen3_5Model {
             &vision_model,
             expert_pager.as_ref(),
             dense_layer_streamer.as_ref(),
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             performance_attribution,
         )?;
         Ok(Self {
             base: Qwen3_5ModelBase {
                 runtime,
                 config,
-                decoder_cache_layout,
+                astro_decoder_state_cache_layout,
                 weights,
                 disk_embedding_rows,
                 vision_model,
@@ -171,7 +171,7 @@ impl Qwen3_5Model {
             },
             expert_pager,
             dense_layer_streamer,
-            retained_experts,
+            astro_expert_cache,
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
             prompt_expert_pages_in_hand: Default::default(),
@@ -183,7 +183,7 @@ impl Qwen3_5Model {
             optimistic_serving_history: Default::default(),
             request_expert_storage_read_tally: Default::default(),
             governed_memory: Default::default(),
-            probed_prompt_layer_working_memory: std::cell::Cell::new(None),
+            probed_prompt_layer_mlx_working_buffers: std::cell::Cell::new(None),
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
         })
@@ -199,20 +199,25 @@ fn compiled_model_graphs()
     ))
 }
 
-/// Derives the decoder cache layout under attribution. It waits for bound
+/// Derives the `astro_decoder_state_cache` layout under attribution. It waits for bound
 /// weights and sparse plans, whose source dtypes decide MLX result-type
 /// promotion, and evaluates no tensor.
-fn measured_decoder_cache_layout(
+fn measured_astro_decoder_state_cache_layout(
     config: &crate::Qwen3_5Config,
     chunking: &super::Qwen3_5ModelChunkingConfiguration,
     weights: &Qwen3_5Weights,
     expert_pager: Option<&Qwen3_5ExpertPager>,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
+) -> Result<crate::AstroDecoderStateCacheLayout, Qwen3_5ExecutionError> {
     performance_attribution.measure_operation(
         PerformanceOperation::ModelTensorBinding,
         |_performance_attribution| {
-            decoder_cache_layout_at_tensor_binding(config, chunking, weights, expert_pager)
+            astro_decoder_state_cache_layout_at_tensor_binding(
+                config,
+                chunking,
+                weights,
+                expert_pager,
+            )
         },
     )
 }
@@ -228,7 +233,7 @@ struct DenseStreamingGeometry {
 /// tensors that never stream are fixed. The two layer slots a streamed
 /// forward reads into become the per-operation page the floor reserves once.
 /// They stay out of the complete-expert-layer field, whose prefill rule
-/// would reserve three of it; prefill working memory is measured instead.
+/// would reserve three of it; prefill MLX working buffers are measured instead.
 fn dense_streaming_geometry(
     bound_model_core_payload_bytes: u64,
     dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
@@ -309,7 +314,7 @@ fn dense_disk_embedding_rows(
 /// the sorted-reduction kernel verdict.
 type StreamingExpertRuntimeTrio = (
     Option<Qwen3_5ExpertPager>,
-    Option<RefCell<qwen3_5_streaming::WarmExpertSlotTableCache>>,
+    Option<RefCell<qwen3_5_streaming::AstroExpertCache>>,
     Option<MlxMetalKernel>,
 );
 
@@ -324,7 +329,7 @@ fn load_streaming_expert_runtime(
     shard_index: &super::Qwen3_5ShardIndex,
     tensor_inventory: &crate::TensorInventory,
     expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
     let tensor_name_to_shard_file_name: std::collections::HashMap<String, String> = shard_index
@@ -377,10 +382,10 @@ fn load_streaming_expert_runtime(
             );
             None
         };
-    let retained_experts = RefCell::new(
-        qwen3_5_streaming::WarmExpertSlotTableCache::new_with_decode_cache_policy(
+    let astro_expert_cache = RefCell::new(
+        qwen3_5_streaming::AstroExpertCache::new_with_decode_astro_expert_cache_policy(
             expert_pager.layer_count(),
-            decode_expert_cache_policy,
+            decode_astro_expert_cache_policy,
         ),
     );
     // Seed demand ranking from the persisted usage history beside
@@ -393,7 +398,7 @@ fn load_streaming_expert_runtime(
         expert_pager.layer_count(),
     ) {
         Some(persisted_usage) => {
-            retained_experts
+            astro_expert_cache
                 .borrow_mut()
                 .seed_expert_demand_history(persisted_usage);
         }
@@ -404,7 +409,7 @@ fn load_streaming_expert_runtime(
     }
     Ok((
         Some(expert_pager),
-        Some(retained_experts),
+        Some(astro_expert_cache),
         sorted_expert_weighted_sum_kernel,
     ))
 }
@@ -430,7 +435,7 @@ fn build_streaming_expert_budget(
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_pager: Option<&Qwen3_5ExpertPager>,
     dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
-    decoder_cache_layout: &crate::DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &crate::AstroDecoderStateCacheLayout,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertBudgetOutcome, Qwen3_5ExecutionError> {
     let DenseStreamingGeometry {
@@ -496,7 +501,7 @@ fn build_streaming_expert_budget(
             largest_complete_expert_layer_bytes,
             largest_routed_expert_page_bytes,
             sequence_state_bytes_per_token: u64::try_from(
-                decoder_cache_layout
+                astro_decoder_state_cache_layout
                     .sequence_state_payload_byte_count_per_token()
                     .unwrap_or(0),
             )
@@ -558,36 +563,36 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
     }
 }
 
-/// Derives the decoder cache layout at the tensor-binding boundary.
+/// Derives the `astro_decoder_state_cache` layout at the tensor-binding boundary.
 ///
-/// Cache geometry cannot be finalized before weights and sparse plans are
+/// The `astro_decoder_state_cache` geometry cannot be finalized before weights and sparse plans are
 /// bound: their source dtypes determine MLX result-type promotion, so the
 /// persistence contract is derived here without evaluating tensors.
-fn decoder_cache_layout_at_tensor_binding(
+fn astro_decoder_state_cache_layout_at_tensor_binding(
     config: &crate::Qwen3_5Config,
     chunking: &super::Qwen3_5ModelChunkingConfiguration,
     weights: &Qwen3_5Weights,
     expert_pager: Option<&Qwen3_5ExpertPager>,
-) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
-    let decoder_layer_cache_dtypes =
-        crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_decoder_layer_cache_dtypes(
+) -> Result<crate::AstroDecoderStateCacheLayout, Qwen3_5ExecutionError> {
+    let astro_decoder_state_cache_layer_dtypes =
+        crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_astro_decoder_state_cache_layer_dtypes(
             weights,
             // A sparse layer without a pager finds no plan here, so the
             // derivation still fails, now with the shared "no layer plan" text.
             expert_pager.map_or(&[], Qwen3_5ExpertPager::layer_plans),
         )?;
-    crate::qwen3_5_core::decoder::qwen3_5_decoder_cache_layout(
+    crate::qwen3_5_core::decoder::qwen3_5_astro_decoder_state_cache_layout(
         config,
         usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "full-attention key/value growth tokens exceed the usize range",
             }
         })?,
-        &decoder_layer_cache_dtypes,
+        &astro_decoder_state_cache_layer_dtypes,
     )
-    .map_err(
-        |decoder_cache_layout_error| Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
-            description: decoder_cache_layout_error.to_string(),
-        },
-    )
+    .map_err(|astro_decoder_state_cache_layout_error| {
+        Qwen3_5ExecutionError::InvalidAstroDecoderStateCacheLayout {
+            description: astro_decoder_state_cache_layout_error.to_string(),
+        }
+    })
 }

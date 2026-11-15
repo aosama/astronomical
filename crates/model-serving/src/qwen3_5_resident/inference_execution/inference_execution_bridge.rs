@@ -11,8 +11,10 @@ use crate::{
 use super::engine_state::Qwen3_5EngineState;
 use super::engine_state::Qwen3_5InferenceExecution;
 
-/// Wraps one prompt-cache clear failure as a fatal engine error.
-fn prompt_cache_clear_failure(clear_error: impl std::fmt::Display) -> InferenceEngineError {
+/// Wraps one astro SSD prompt cache clear failure as a fatal engine error.
+fn astro_ssd_prompt_cache_clear_failure(
+    clear_error: impl std::fmt::Display,
+) -> InferenceEngineError {
     super::fatal_engine_error(clear_error.to_string())
 }
 
@@ -58,25 +60,25 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         Qwen3_5EngineState::advance_neural_engine_preparation(self)
     }
 
-    fn collect_persistent_prompt_cache_stats(
+    fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        Ok(Qwen3_5EngineState::collect_persistent_prompt_cache_stats(
+        Ok(Qwen3_5EngineState::collect_astro_ssd_prompt_cache_stats(
             self,
         ))
     }
 
-    fn clear_persistent_prompt_cache(
+    fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
-        let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() else {
+        let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.as_ref() else {
             return Ok(None);
         };
-        let clear_outcome = persistent_prompt_cache
-            .clear_prompt_cache(model_id.as_deref())
-            .map_err(prompt_cache_clear_failure)?;
-        Ok(Some(WorkerEvent::PromptCacheCleared {
+        let clear_outcome = astro_ssd_prompt_cache
+            .clear_astro_ssd_prompt_cache(model_id.as_deref())
+            .map_err(astro_ssd_prompt_cache_clear_failure)?;
+        Ok(Some(WorkerEvent::AstroSsdPromptCacheCleared {
             model_id: clear_outcome.model_id,
             blocks_removed: clear_outcome.blocks_removed,
             bytes_freed: clear_outcome.bytes_freed,

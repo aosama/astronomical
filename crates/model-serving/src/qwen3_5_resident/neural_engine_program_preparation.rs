@@ -112,7 +112,7 @@ pub(crate) enum ProgramBuildOutcome<Program> {
     Built(Program),
     /// The kept path could not produce a usable program, so this load falls back to
     /// a temporary package, which needs the weights read on the MLX owner thread.
-    NeedsUncachedPackage,
+    NeedsPackageOutsideAstroNeuralEngineProgramCache,
     Failed(&'static str),
 }
 
@@ -309,7 +309,7 @@ impl<Program: Send + 'static> ProgramPreparation<Program> {
             ProgramBuildOutcome::Failed(failure_reason) => {
                 self.failed_programs.push((identity, failure_reason));
             }
-            ProgramBuildOutcome::NeedsUncachedPackage => {
+            ProgramBuildOutcome::NeedsPackageOutsideAstroNeuralEngineProgramCache => {
                 self.waiting_programs.push_front(PlannedProgram {
                     identity,
                     shape: finished_build.shape,

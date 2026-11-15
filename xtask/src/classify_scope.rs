@@ -1,6 +1,6 @@
 //! `cargo xtask classify-scope` — owns the event-specific CI authority
-//! policy so pull-request verification and default-branch cache publication
-//! cannot drift across embedded workflow code. The verdict logic is pure and
+//! policy so pull-request verification and default-branch `github_actions_cache`
+//! publication cannot drift across embedded workflow code. The verdict logic is pure and
 //! unit-tested beside this source; the git and environment edges stay thin
 //! (issue #1250).
 
@@ -52,14 +52,16 @@ const NOTICES_FRESHNESS_INPUT_PATHS: &[&str] = &[
 ];
 
 /// Paths whose change gives a default-branch run something to publish: the
-/// compiler, download and Swift caches are keyed on these, and pull requests can
-/// only restore what the default branch saved. Code-only merges saved nothing in
-/// every default-branch run measured, so only these still need that run. The
-/// workflow and cache action join them because they define the cache keys. What the
-/// cached xtask binary is keyed on stays out on purpose: those paths alone touched 11 of
+/// `sccache`, native download and SwiftPM entries of the `github_actions_cache`
+/// are keyed on these, and pull requests can only restore what the default
+/// branch saved. Code-only merges saved nothing in every default-branch run
+/// measured, so only these still need that run. The workflow and the
+/// `astronomical-cache` action join them because they define the
+/// `github_actions_cache` keys. What the xtask binary saved in the
+/// `github_actions_cache` is keyed on stays out on purpose: those paths alone touched 11 of
 /// 60 merges, each a full run of about 12 job-minutes, while a missed binary costs about
 /// 9 seconds to rebuild until the next full run saves it.
-const CACHE_INPUT_PATH_PREFIXES: &[&str] = &[
+const GITHUB_ACTIONS_CACHE_INPUT_PATH_PREFIXES: &[&str] = &[
     "Cargo.lock",
     "rust-toolchain.toml",
     "third-party/tool-pins/",
@@ -134,10 +136,11 @@ fn is_repository_housekeeping_path(changed_path: &str) -> bool {
         || changed_path.ends_with("/.gitignore")
 }
 
-/// True when a change to this path gives a default-branch run a cache to save.
-pub fn is_cache_input_path(changed_path: &str) -> bool {
-    for cache_input_prefix in CACHE_INPUT_PATH_PREFIXES {
-        if changed_path.starts_with(cache_input_prefix) {
+/// True when a change to this path gives a default-branch run an entry of the
+/// `github_actions_cache` to save.
+pub fn is_github_actions_cache_input_path(changed_path: &str) -> bool {
+    for github_actions_cache_input_prefix in GITHUB_ACTIONS_CACHE_INPUT_PATH_PREFIXES {
+        if changed_path.starts_with(github_actions_cache_input_prefix) {
             return true;
         }
     }
@@ -159,7 +162,7 @@ pub fn may_reuse_verified_tree(
         return false;
     }
     for changed_path in changed_paths {
-        if is_cache_input_path(changed_path) {
+        if is_github_actions_cache_input_path(changed_path) {
             return false;
         }
     }
@@ -247,9 +250,9 @@ pub fn classify_change_scope(
 }
 
 /// A full default-branch run keeps the Swift lane even with no Swift input changed,
-/// because only that run saves its caches and the run's record tells later merges that
-/// every cache is current. Without this, seven quiet days evict the Swift caches while
-/// the record still says otherwise. `verdict_for_verified_tree` still skips it on a merge.
+/// because only that run saves its `github_actions_cache` entries and the run's record
+/// tells later merges that every entry is current. Without this, seven quiet days evict
+/// the SwiftPM entries while the record still says otherwise. `verdict_for_verified_tree` still skips it on a merge.
 fn with_swift_lane_on_every_full_run(verdict: ChangeScopeVerdict) -> ChangeScopeVerdict {
     ChangeScopeVerdict {
         swift_node_required: verdict.macos_verification_required,
@@ -288,7 +291,7 @@ fn classify_changed_paths(
 }
 
 /// Fail-safe verdict for an unresolvable change range (fresh history, forced
-/// pushes): verify everything, publish caches, and label the run so the gap
+/// pushes): verify everything, publish the `github_actions_cache`, and label the run so the gap
 /// is visible in the classification log. Every flag is forced true — the
 /// range is unknown, so no gate may stay closed by accident.
 pub(crate) fn fail_safe_verdict() -> ChangeScopeVerdict {
@@ -380,7 +383,7 @@ fn reuse_verified_tree_when_proven(
 ) -> ChangeScopeVerdict {
     if may_reuse_verified_tree(event, &verdict, changed_paths)
         && is_tree_already_verified(repository_root, head_sha)
-        && are_default_branch_caches_current(repository_root, head_sha)
+        && are_default_branch_github_actions_caches_current(repository_root, head_sha)
     {
         return verdict_for_verified_tree(verdict);
     }
@@ -388,26 +391,33 @@ fn reuse_verified_tree_when_proven(
 }
 
 /// Whether the last default-branch run that really ran the macOS lanes published
-/// caches for this commit's inputs. The range starts at that run rather than the
+/// entries of the `github_actions_cache` for this commit's inputs. The range starts at that run rather than the
 /// last push, because a push that skipped those lanes published nothing: a version
 /// bump changes `Cargo.lock` and skips them, and the merge after it must publish.
-fn are_default_branch_caches_current(repository_root: &Path, head_sha: &str) -> bool {
+fn are_default_branch_github_actions_caches_current(
+    repository_root: &Path,
+    head_sha: &str,
+) -> bool {
     let Some(last_run_commit) = last_default_branch_run_commit() else {
         return false;
     };
     let is_current = commit_exists(repository_root, &last_run_commit)
-        && !has_cache_input_change(repository_root, &last_run_commit, head_sha);
+        && !has_github_actions_cache_input_change(repository_root, &last_run_commit, head_sha);
     eprintln!("[ci-change-scope] default_branch_caches_current={is_current}");
     is_current
 }
 
 /// Anything unreadable counts as a change, which only costs a full run.
-fn has_cache_input_change(repository_root: &Path, base_sha: &str, head_sha: &str) -> bool {
+fn has_github_actions_cache_input_change(
+    repository_root: &Path,
+    base_sha: &str,
+    head_sha: &str,
+) -> bool {
     let Some(changed_paths) = changed_paths_between(repository_root, base_sha, head_sha) else {
         return true;
     };
     for changed_path in &changed_paths {
-        if is_cache_input_path(changed_path) {
+        if is_github_actions_cache_input_path(changed_path) {
             return true;
         }
     }

@@ -5,10 +5,10 @@ use std::path::PathBuf;
 use astronomical_ipc_protocol::WorkerChunkingConfiguration;
 use astronomical_runtime_integration::MlxMemoryLimits;
 
-use crate::persistent_cache::counters::PersistentPromptCacheCounters;
+use crate::astro_ssd_prompt_cache::counters::AstroSsdPromptCacheCounters;
 use crate::{
-    InferenceEngineError, MlxInferenceEngine, PerformanceAttribution, PerformanceAttributionLog,
-    PersistentPromptCacheDiskStoreConfig,
+    AstroSsdPromptCacheDiskStoreConfig, InferenceEngineError, MlxInferenceEngine,
+    PerformanceAttribution, PerformanceAttributionLog,
 };
 
 use super::super::ValidatedQwen3_5Artifact;
@@ -27,8 +27,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub fn new_with_prompt_processing_chunk_sizer(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
-        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+        mlx_buffer_cache_limit_bytes: usize,
+        astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
         prompt_processing_chunk_sizer: Qwen3_5ResidentPromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
@@ -37,8 +37,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         Self::new_with_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
+            mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_disk_store_config,
             prompt_processing_chunk_sizer,
             think_end_token_id,
             model_directory,
@@ -52,8 +52,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub fn new_with_runtime_chunking_and_performance_attribution(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
-        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+        mlx_buffer_cache_limit_bytes: usize,
+        astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
         prompt_processing_chunk_sizer: Qwen3_5ResidentPromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
@@ -65,8 +65,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         Self::new_with_effective_context_runtime_chunking_and_performance_attribution(
             validated_artifact,
             active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-            persistent_prompt_cache_disk_store_config,
+            mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_disk_store_config,
             prompt_processing_chunk_sizer,
             think_end_token_id,
             model_directory,
@@ -83,8 +83,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
     pub fn new_with_effective_context_runtime_chunking_and_performance_attribution(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
-        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+        mlx_buffer_cache_limit_bytes: usize,
+        astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
         prompt_processing_chunk_sizer: Qwen3_5ResidentPromptProcessingChunkSizer,
         think_end_token_id: u32,
         model_directory: PathBuf,
@@ -92,7 +92,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         chunking: WorkerChunkingConfiguration,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
-        neural_engine_program_cache_directory: Option<PathBuf>,
+        astro_neural_engine_program_cache_directory: Option<PathBuf>,
     ) -> Result<Qwen3_5ResidentEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens)
@@ -114,15 +114,13 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             .config()
             .context_memory_reservation_bytes(1)
             .ok_or_else(super::generation_session_lifecycle::generation_error_constructors::context_memory_reservation_overflowed_error)?;
-        let memory_limits = MlxMemoryLimits::new(
-            active_memory_limit_bytes,
-            allocator_cache_memory_limit_bytes,
-        )
-        .map_err(qwen3_5_runtime_error)?;
+        let memory_limits =
+            MlxMemoryLimits::new(active_memory_limit_bytes, mlx_buffer_cache_limit_bytes)
+                .map_err(qwen3_5_runtime_error)?;
         MlxInferenceEngine::new(move || Qwen3_5InferenceExecution {
             active_request: None,
-            persistent_prompt_cache_disk_store_config,
-            persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
+            astro_ssd_prompt_cache_disk_store_config,
+            astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters::default(),
             context_memory_reservation_bytes_per_token,
             end_of_sequence_token_ids,
             think_end_token_id,
@@ -136,14 +134,14 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             maximum_position_count,
             hard_maximum_position_count,
             model: None,
-            persistent_prompt_cache_model_contract: None,
+            astro_ssd_prompt_cache_model_contract: None,
             persistent_visual_embedding_model_contract: None,
-            persistent_prompt_cache: None,
+            astro_ssd_prompt_cache: None,
             prompt_processing_chunk_sizer,
             chunking,
             neural_engine_prefill_status: astronomical_ipc_protocol::NeuralEnginePrefillStatus::Off,
             neural_engine_prefill_preparation: None,
-            neural_engine_program_cache_directory,
+            astro_neural_engine_program_cache_directory,
             retained_live_prefix: None,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,

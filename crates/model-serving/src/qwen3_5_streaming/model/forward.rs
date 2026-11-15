@@ -14,7 +14,7 @@
 //!    completion wait (`deferred_expert_demand.rs`).
 //! 2. **Seated complete codebook layer that would decode the table** — the
 //!    chunk's routed union is gathered as a subset of the seated layer
-//!    (`routed_subset_of_cached_page`, this file's sibling `expert_reuse.rs`).
+//!    (`routed_subset_of_astro_expert_cache_page`, this file's sibling `expert_reuse.rs`).
 //! 3. **Multi-token miss (prefill chunk)** — the chunk's routed-expert union is
 //!    streamed from SSD as an operation-local page
 //!    (`stream_operation_local_routed_experts` in `expert_reuse.rs`; loading in
@@ -24,13 +24,13 @@
 //!    only the missing experts stream from SSD
 //!    (`forward_moe_mixed_decode_route_with_performance_attribution` in
 //!    `mixed_decode_execution.rs`, built on
-//!    `cached_plus_streamed_page_route.rs`).
-//! 5. **Single-token miss, fully warm** — the hot-expert cache hit serves the
+//!    `astro_expert_cache_plus_streamed_page_route.rs`).
+//! 5. **Single-token miss, fully warm** — the astro expert cache hit serves the
 //!    whole routed set from RAM (`hot_expert_partial_page` in
 //!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.
 //!
 //! The warm tables themselves live in
-//! `expert_streaming/warm_expert_slot_table_cache.rs`; the byte plans and the
+//! `expert_streaming/astro_expert_cache.rs`; the byte plans and the
 //! bounded SSD reader are family-neutral under `crate::expert_paging` and
 //! `astronomical-runtime-integration`'s safetensors module.
 
@@ -109,7 +109,7 @@ impl Qwen3_5Model {
             return Ok(handled);
         }
         if should_use_loaded_model_mode
-            && self.retained_experts.is_some()
+            && self.astro_expert_cache.is_some()
             && let Some(handled) = self.dispatch_table_page_without_host_route(
                 expert_pager,
                 layer_index,
@@ -141,7 +141,7 @@ impl Qwen3_5Model {
         if should_use_loaded_model_mode
             && let Some(selected_expert_ids) = selected_expert_ids.as_ref()
             && let Some(routed_expert_ids) = sorted_unique_expert_ids.as_ref()
-            && self.retained_experts.is_some()
+            && self.astro_expert_cache.is_some()
             && let Some(handled) = self.dispatch_routed_disposition(
                 expert_pager,
                 layer_index,
@@ -227,7 +227,7 @@ impl Qwen3_5Model {
         }
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
         if let Some((packed_weights, packed_manifest)) =
-            self.cached_packed_page(layer_index, &complete_expert_ids, expert_capacity)
+            self.astro_expert_cache_packed_page(layer_index, &complete_expert_ids, expert_capacity)
             && packed_weights.multiplies_complete_page_without_transient_decode(
                 token_count,
                 decode_tokens_multiply_packed_pages,
@@ -310,8 +310,8 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().record_expert_demand(
+        if let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() {
+            astro_expert_cache.borrow_mut().record_expert_demand(
                 layer_index,
                 expert_capacity,
                 selected_expert_ids,
@@ -377,9 +377,13 @@ impl Qwen3_5Model {
             // A forward that decodes the page it multiplies gets
             // exactly its routed union of the seated layer.
             let (subset_weights, subset_manifest) = self
-                .routed_subset_of_cached_page(layer_index, routed_expert_ids, expert_capacity)?
+                .routed_subset_of_astro_expert_cache_page(
+                    layer_index,
+                    routed_expert_ids,
+                    expert_capacity,
+                )?
                 .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "cache hit reported a page that vanished",
+                    description: "astro_expert_cache hit reported a page that vanished",
                 })?;
             self.account_resident_subset_hit(
                 token_count,
@@ -401,9 +405,9 @@ impl Qwen3_5Model {
         }
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
         let (packed_weights, packed_manifest) = self
-            .cached_packed_page(layer_index, &complete_expert_ids, expert_capacity)
+            .astro_expert_cache_packed_page(layer_index, &complete_expert_ids, expert_capacity)
             .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                description: "cache hit reported a page that vanished",
+                description: "astro_expert_cache hit reported a page that vanished",
             })?;
         self.record_resident_layer_decode_hit(
             routed_expert_ids.len(),
@@ -426,7 +430,7 @@ impl Qwen3_5Model {
 
     /// Serves a table miss: multi-token chunks stream the chunk's routed-expert
     /// union; decode tokens classify warm-table coverage first (mixed, hot
-    /// cache, or cold stream).
+    /// `astro_expert_cache` hit, or cold stream).
     #[allow(clippy::too_many_arguments)]
     fn dispatch_miss_route(
         &self,
@@ -499,17 +503,19 @@ impl Qwen3_5Model {
                     performance_attribution,
                 );
             }
-            if let Some((cached_weights, cached_manifest)) = self.hot_expert_partial_page(
-                layer_index,
-                expert_capacity,
-                routed_expert_ids,
-                performance_attribution,
-            ) {
-                // Hot-expert cache hit: the warm table covers every
+            if let Some((astro_expert_cache_weights, astro_expert_cache_manifest)) = self
+                .hot_expert_partial_page(
+                    layer_index,
+                    expert_capacity,
+                    routed_expert_ids,
+                    performance_attribution,
+                )
+            {
+                // astro expert cache hit: the warm table covers every
                 // routed expert of this token, so the routed set is
                 // served from retained RAM with no storage read
                 // (issue #372).
-                (cached_weights, cached_manifest)
+                (astro_expert_cache_weights, astro_expert_cache_manifest)
             } else {
                 self.stream_operation_local_routed_experts(
                     expert_pager,

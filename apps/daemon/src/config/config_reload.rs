@@ -9,13 +9,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_config::{
-    AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths,
-    AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError,
+    AstroSsdPromptCacheConfig, AstronomicalConfig, AstronomicalConfigError,
+    AstronomicalInstancePaths, AstronomicalRuntimeInstance, DiscoveredModel, DiscoveredModelError,
     EffectiveModelDiscoveryError, LogLevel, LoggingConfig, ModelCapabilities,
-    ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, PromptCacheConfig, ResolvedModelConfig,
+    ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, ResolvedModelConfig,
 };
 use astronomical_ipc_protocol::{
-    WorkerDecodeExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
 };
 use thiserror::Error;
 
@@ -51,14 +51,14 @@ pub struct ResolvedRuntimeConfig {
     pub idle_model_unload_seconds: u64,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
-    /// Whether the worker may read and write the persistent prompt cache.
-    pub persistent_prompt_cache_enabled: bool,
-    /// Authored cache toggle before the enabled-by-default policy is applied.
-    pub configured_persistent_prompt_cache_enabled: Option<bool>,
-    /// Authored cache capacity before the 50 GB default is applied.
-    pub configured_prompt_cache_maximum_size_bytes: Option<u64>,
-    /// Resolved SSD-backed prompt-cache policy (worker-startup field).
-    pub prompt_cache_config: PromptCacheConfig,
+    /// Whether the worker may read and write the `astro_ssd_prompt_cache`.
+    pub astro_ssd_prompt_cache_enabled: bool,
+    /// Authored `astro_ssd_prompt_cache` toggle before the enabled-by-default policy is applied.
+    pub configured_astro_ssd_prompt_cache_enabled: Option<bool>,
+    /// Authored `astro_ssd_prompt_cache` capacity before the 50 GB default is applied.
+    pub configured_astro_ssd_prompt_cache_maximum_size_bytes: Option<u64>,
+    /// Resolved SSD-backed astro SSD prompt cache policy (worker-startup field).
+    pub astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
     /// Resolved daemon bind address (REST API restart required to change).
     pub bind_address: String,
     /// Resolved logging policy (REST API restart required to change).
@@ -160,7 +160,7 @@ impl ResolvedRuntimeConfigResolver {
             &discovered_models,
             &artifact_context_windows,
         )?;
-        let prompt_cache_config = user_config.prompt_cache()?;
+        let astro_ssd_prompt_cache_config = user_config.astro_ssd_prompt_cache()?;
         let logging_config = user_config.logging()?;
         let configuration_generation = crate::ResolvedConfigurationGeneration::derive(
             user_config.generation(),
@@ -181,12 +181,12 @@ impl ResolvedRuntimeConfigResolver {
             metal_residency_refresh_enabled: user_config.metal_residency_refresh_enabled(),
             idle_model_unload_seconds: user_config.idle_model_unload_seconds(),
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
-            persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
-            configured_persistent_prompt_cache_enabled: user_config
-                .configured_persistent_prompt_cache_enabled(),
-            configured_prompt_cache_maximum_size_bytes: user_config
-                .configured_prompt_cache_maximum_size_bytes()?,
-            prompt_cache_config,
+            astro_ssd_prompt_cache_enabled: user_config.astro_ssd_prompt_cache_enabled(),
+            configured_astro_ssd_prompt_cache_enabled: user_config
+                .configured_astro_ssd_prompt_cache_enabled(),
+            configured_astro_ssd_prompt_cache_maximum_size_bytes: user_config
+                .configured_astro_ssd_prompt_cache_maximum_size_bytes()?,
+            astro_ssd_prompt_cache_config,
             bind_address: daemon_bind_address.to_string(),
             logging_config,
         })
@@ -227,17 +227,17 @@ impl ResolvedRuntimeConfig {
         WorkerStartupConfiguration {
             configuration_generation: self.configuration_generation.clone(),
             neural_engine_program_directory: self.neural_engine_program_directory.clone(),
-            global_prompt_cache_root_directory: self
-                .prompt_cache_config
-                .global_prompt_cache_root_directory()
+            global_astro_ssd_prompt_cache_root_directory: self
+                .astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_root_directory()
                 .clone(),
-            global_prompt_cache_maximum_size_bytes: self
-                .prompt_cache_config
-                .global_prompt_cache_maximum_size_bytes(),
-            persistent_prompt_cache_enabled: self.persistent_prompt_cache_enabled,
+            global_astro_ssd_prompt_cache_maximum_size_bytes: self
+                .astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_maximum_size_bytes(),
+            astro_ssd_prompt_cache_enabled: self.astro_ssd_prompt_cache_enabled,
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             performance_attribution_enabled: self.performance_attribution_enabled,
-            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+            decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             diagnostic_qwen3_5_engine_override:
                 astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             logging_directory: self.logging_config.directory().to_path_buf(),
@@ -420,11 +420,11 @@ fn worker_restart_field_changes(
         // new worker process can pick up the change.
         changed_fields.push("metal_residency_refresh_enabled".to_owned());
     }
-    if current.persistent_prompt_cache_enabled != candidate.persistent_prompt_cache_enabled {
-        changed_fields.push("persistent_prompt_cache_enabled".to_owned());
+    if current.astro_ssd_prompt_cache_enabled != candidate.astro_ssd_prompt_cache_enabled {
+        changed_fields.push("astro_ssd_prompt_cache_enabled".to_owned());
     }
-    if current.prompt_cache_config != candidate.prompt_cache_config {
-        changed_fields.push("prompt_cache".to_owned());
+    if current.astro_ssd_prompt_cache_config != candidate.astro_ssd_prompt_cache_config {
+        changed_fields.push("ssd_prompt_cache".to_owned());
     }
     changed_fields
 }

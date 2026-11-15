@@ -28,7 +28,7 @@ pub(crate) async fn spawn_daemon_with_worker_ready_model(
     worker_ready_model_id: Option<&str>,
 ) -> (Child, SocketAddr) {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
-    // The resolver validates prompt-cache policy before binding the listener.
+    // The resolver validates `astro_ssd_prompt_cache` policy before binding the listener.
     // Keep this fixture valid so individual tests isolate the worker behavior
     // they intend to exercise.
     write_v1_config(

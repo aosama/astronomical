@@ -384,14 +384,17 @@ fn report_comparison(gpu_evidence: &[ArmEvidence], both_engines_evidence: &[ArmE
 }
 
 /// Builds the programs through serving's own steps and waits, keeping compiled ones in
-/// `program_cache_directory` when given.
+/// `astro_neural_engine_program_cache_directory` when given.
 pub(super) fn prepare_programs(
     model: &mut Qwen3_5ResidentModel,
-    program_cache_directory: Option<&std::path::Path>,
+    astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
 ) -> NeuralEnginePrefillStatus {
     let mut chunking = crate::common::standard_worker_chunking_configuration();
     chunking.experimental_neural_engine_prefill_enabled = true;
-    model.prepare_neural_engine_prefill_matching_production(&chunking, program_cache_directory)
+    model.prepare_neural_engine_prefill_matching_production(
+        &chunking,
+        astro_neural_engine_program_cache_directory,
+    )
 }
 
 async fn compare_prefill_arms() {
@@ -480,31 +483,35 @@ fn report_paired_prefill_speedup(
     );
 }
 
-/// The production loader with a program cache, prefill only: what a user gets
+/// The production loader with an astro Neural Engine program cache, prefill only: what a user gets
 /// from the second load of a model onwards.
 async fn compare_prefill_with_kept_programs() {
     let _gpu_exclusive = crate::common::direct_mlx_test_guard().await;
     let development_config =
         AstronomicalConfig::load_from_development_location().expect("the config loads");
     let (mut model, prompt_token_ids) = load_dense_model(&development_config);
-    let program_cache_directory = std::env::temp_dir().join(PROGRAM_CACHE_DIRECTORY_NAME);
+    let astro_neural_engine_program_cache_directory =
+        std::env::temp_dir().join(ASTRO_NEURAL_ENGINE_PROGRAM_CACHE_DIRECTORY_NAME);
     eprintln!(
-        "[{JOURNEY_NAME}] MEASURED cache_existed_at_start={}",
-        program_cache_directory.is_dir()
+        "[{JOURNEY_NAME}] MEASURED astro_neural_engine_program_cache_existed_at_start={}",
+        astro_neural_engine_program_cache_directory.is_dir()
     );
     let load_started_at = Instant::now();
-    let status = prepare_programs(&mut model, Some(&program_cache_directory));
+    let status = prepare_programs(
+        &mut model,
+        Some(&astro_neural_engine_program_cache_directory),
+    );
     eprintln!(
-        "[{JOURNEY_NAME}] MEASURED program_load_s={:.1} cache_gib={:.1} status={status:?}",
+        "[{JOURNEY_NAME}] MEASURED program_load_s={:.1} astro_neural_engine_program_cache_gib={:.1} status={status:?}",
         load_started_at.elapsed().as_secs_f64(),
-        directory_size_gibibytes(&program_cache_directory),
+        directory_size_gibibytes(&astro_neural_engine_program_cache_directory),
     );
     assert!(matches!(status, NeuralEnginePrefillStatus::Active { .. }));
     report_paired_prefill_speedup(&model, &prompt_token_ids, "mlp-and-output-gates");
 }
 
 #[tokio::test]
-#[ignore = "loads a real dense artifact and its Neural Engine programs through a program cache"]
+#[ignore = "loads a real dense artifact and its Neural Engine programs through an astro Neural Engine program cache"]
 #[serial]
 async fn should_serve_real_dense_prefill_from_kept_programs() {
     timeout(JOURNEY_TIMEOUT, compare_prefill_with_kept_programs())
@@ -530,4 +537,5 @@ pub(super) fn directory_size_gibibytes(directory: &std::path::Path) -> f64 {
 
 // A fixed name, because macOS keeps a compiled program's Neural Engine work by its
 // path, and a second run must find what the first one kept.
-const PROGRAM_CACHE_DIRECTORY_NAME: &str = "astronomical-neural-engine-program-cache-journey";
+const ASTRO_NEURAL_ENGINE_PROGRAM_CACHE_DIRECTORY_NAME: &str =
+    "astronomical-neural-engine-program-cache-journey";

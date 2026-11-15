@@ -150,7 +150,7 @@ pub(super) fn sample_physical_ram_bytes() -> Result<u64, QuantizeError> {
     }
 }
 
-/// The ceiling as both the active limit and the allocator-cache limit, the
+/// The ceiling as both the active limit and the MLX buffer-cache limit, the
 /// conversion being the only MLX tenant of this process.
 pub(super) fn memory_limits_for(
     machine_ceiling_bytes: u64,

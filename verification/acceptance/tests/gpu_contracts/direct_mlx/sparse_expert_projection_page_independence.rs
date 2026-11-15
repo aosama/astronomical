@@ -15,7 +15,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 
 /// The Qwen 3.5 35B-A3B layer width in experts, the geometry the defect showed on.
@@ -59,7 +59,7 @@ fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("page independence test memory limits should be valid"),
     )

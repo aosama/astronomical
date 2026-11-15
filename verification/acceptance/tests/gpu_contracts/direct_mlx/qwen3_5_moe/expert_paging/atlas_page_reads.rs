@@ -1,22 +1,22 @@
-//! Routed-expert page reads through MLX from the SSD, not the file cache:
+//! Routed-expert page reads through MLX from the SSD, not the macOS file cache:
 //! stock safetensors against the expert-major Atlas layout, at the lowest
 //! MLX boundary (load + materialize), with no model math, engine or REST in
 //! the way.
 //!
-//! Every measured page is uncached (checked with `mincore` just before it is
+//! Every measured page is absent from the macOS file cache (checked with `mincore` just before it is
 //! read) and is measured under exactly one read shape, because a stock read
-//! warms the file cache for every later read of the same bytes. The one
+//! warms the macOS file cache for every later read of the same bytes. The one
 //! deliberate exception is the warm stock shape: the same stock page read
-//! again at once, which is what a page the file cache still holds costs.
+//! again at once, which is what a page the macOS file cache still holds costs.
 //!
 //! Run it with `cargo measure-cold-expert-page-reads` (see `.cargo/config.toml`).
 
 mod atlas_conversion;
 mod cold_page_plan;
+mod macos_file_cache_bypassing_io;
 mod page_read_shapes;
 mod page_timing_report;
 mod progress_report;
-mod uncached_file_io;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -104,8 +104,8 @@ fn should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts() {
     );
     assert!(
         planned_pages.len() > COLD_READ_SHAPES.len() * MINIMUM_COLD_PAGES_PER_SHAPE,
-        "only {} uncached pages remain; this probe needs expert bytes the file cache does not \
-         hold (they return once macOS reclaims the cache)",
+        "only {} pages outside the macos_file_cache remain; this probe needs expert bytes the macos_file_cache does not \
+         hold (they return once macOS reclaims the macos_file_cache)",
         planned_pages.len()
     );
     // The first planned page stays unread for the byte-equality check.
@@ -172,13 +172,14 @@ fn measure_pages(
     let measuring_started_at = Instant::now();
     for (planned_page_index, planned_page) in planned_pages.iter().enumerate() {
         progress.record(planned_page_index + 1, measuring_started_at);
-        let page_is_cached = residency_checker.stock_page_is_cached(&planned_page.stock_manifest)
-            || residency_checker.atlas_page_is_cached(
+        let page_is_in_macos_file_cache = residency_checker
+            .stock_page_is_in_macos_file_cache(&planned_page.stock_manifest)
+            || residency_checker.atlas_page_is_in_macos_file_cache(
                 atlas,
                 planned_page.atlas_layer_position,
                 &planned_page.expert_ids,
             );
-        if page_is_cached {
+        if page_is_in_macos_file_cache {
             continue;
         }
         let cold_read_shape = cold_read_shape_for(planned_page_index, atlas.layer_indexes.len());
@@ -203,7 +204,7 @@ fn measure_pages(
 }
 
 /// The page under its cold shape; a stock page is then read once more while
-/// the file cache holds it, which is the warm stock shape.
+/// the macOS file cache holds it, which is the warm stock shape.
 fn measure_one_page(
     runtime: &MlxRuntime,
     atlas: &AtlasTestFile,

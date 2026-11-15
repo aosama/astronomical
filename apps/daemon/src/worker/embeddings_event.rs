@@ -95,7 +95,7 @@ pub(super) fn publish_single_shot_finalized_memory_snapshot(
         .map(|snapshot| snapshot.mlx_memory_ceiling_bytes)
         .unwrap_or(0);
     if mlx_memory_snapshot.source != MlxMemorySnapshotSource::Finalized
-        || mlx_memory_snapshot.allocator_cache_memory_bytes != 0
+        || mlx_memory_snapshot.mlx_buffer_cache_bytes != 0
         || mlx_memory_snapshot.active_memory_bytes > mlx_memory_snapshot.peak_memory_bytes
         || attributed_memory_bytes > mlx_memory_snapshot.active_memory_bytes
         || mlx_memory_snapshot.expert_payload_bytes != 0

@@ -323,7 +323,7 @@ where
         }
     }
 
-    /// Emits the post-start events (cache statistics, expert-memory mode,
+    /// Emits the post-start events (`astro_ssd_prompt_cache` statistics, expert-memory mode,
     /// first prefill progress) and assembles the active generation state.
     #[allow(clippy::too_many_arguments)]
     async fn emit_startup_events_and_assemble_generation<WriteTransport>(
@@ -343,9 +343,9 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        self.emit_persistent_prompt_cache_stats(event_writer)
-            .await?;
-        let cached_prompt_token_count = generation_start.cached_token_count();
+        self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
+        let astro_ssd_prompt_cache_restored_token_count =
+            generation_start.astro_ssd_prompt_cache_restored_token_count();
         let restored_prompt_prefix_token_count =
             generation_start.restored_prompt_prefix_token_count();
         let initial_expert_memory_mode = generation_start.expert_memory_mode();
@@ -384,15 +384,15 @@ where
         let mut active_engine_generation = ActiveEngineGeneration::new(
             generation_command,
             prompt_token_count,
-            cached_prompt_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             required_prompt_processing_token_count,
             prepared_request_output,
             streaming_retry_request,
             streaming_retry_attempted,
         );
         active_engine_generation.last_reported_expert_memory_mode = initial_expert_memory_mode;
-        active_engine_generation.persistent_prompt_cache_diagnostics = generation_start
-            .persistent_prompt_cache_diagnostics()
+        active_engine_generation.astro_ssd_prompt_cache_diagnostics = generation_start
+            .astro_ssd_prompt_cache_diagnostics()
             .cloned();
         Ok(Some(active_engine_generation))
     }

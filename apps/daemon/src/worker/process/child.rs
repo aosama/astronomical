@@ -346,12 +346,12 @@ impl WorkerProcess {
         .await
     }
 
-    /// Requests a global or model-scoped persistent prompt-cache deletion.
-    pub async fn clear_prompt_cache(
+    /// Requests a global or model-scoped persistent astro SSD prompt cache deletion.
+    pub async fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,
     ) -> Result<(), WorkerControlError> {
-        self.send_command_with_timeout(&WorkerCommand::ClearPromptCache { model_id })
+        self.send_command_with_timeout(&WorkerCommand::ClearAstroSsdPromptCache { model_id })
             .await
     }
 

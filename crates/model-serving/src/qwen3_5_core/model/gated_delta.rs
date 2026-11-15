@@ -2,9 +2,9 @@ use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
 
 use super::base::Qwen3_5ModelBase;
-use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
+use crate::astro_decoder_state_cache::{ConvolutionState, GatedDeltaRecurrentState};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5LinearAttentionWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::gated_delta_boundary_checkpoints;
@@ -31,7 +31,7 @@ impl Qwen3_5ModelBase {
         convolution_state: &mut ConvolutionState,
         recurrent_state: &mut GatedDeltaRecurrentState,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -76,7 +76,7 @@ impl Qwen3_5ModelBase {
         // Each dispatch entry owns its capability routing: a retained kernel
         // takes the fused Metal route; a demoted kernel falls back to the
         // ops-based public MLX route inside the dispatch, and the checkpoint
-        // fallback preserves the prompt-cache boundary snapshot positions.
+        // fallback preserves the astro SSD prompt cache boundary snapshot positions.
         let (recurrent_output, next_recurrent_state, boundary_recurrent_states) = self
             .run_recurrence_phase(
                 boundary_checkpoint_collector.as_deref(),
@@ -325,7 +325,7 @@ impl Qwen3_5ModelBase {
     fn run_recurrence_phase(
         &self,
         boundary_checkpoint_collector: Option<
-            &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         queries: &MlxArray,
         keys: &MlxArray,

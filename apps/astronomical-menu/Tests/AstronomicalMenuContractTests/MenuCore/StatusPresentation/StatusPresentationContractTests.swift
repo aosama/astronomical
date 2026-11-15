@@ -17,7 +17,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(usageBarFillFraction(.nan), 0)
   }
 
-  func test_should_present_target_prompt_cache_reuse() throws {
+  func test_should_present_target_astro_ssd_prompt_cache_reuse() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(
@@ -234,7 +234,7 @@ final class StatusPresentationContractTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"generating","ready_model_id":"Ornith","ready_model_size_bytes":18420000000,"progress":{"phase":"generation","processed_tokens":27,"total_tokens":512,"elapsed_ms":1000},"expert_memory_mode":"paged","expert_placement":{"stock_sentence":"Size not measured","reply_sentence":"This reply is streaming experts from the SSD."},"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":4,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.4}}
+        {"status":"ready","activity":"generating","ready_model_id":"Ornith","ready_model_size_bytes":18420000000,"progress":{"phase":"generation","processed_tokens":27,"total_tokens":512,"elapsed_ms":1000},"expert_memory_mode":"paged","expert_placement":{"stock_sentence":"Size not measured","reply_sentence":"This reply is streaming experts from the SSD."},"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":12000000000,"mlx_buffer_cache_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":4,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.4}}
         """.utf8)
     )
 
@@ -389,7 +389,7 @@ final class StatusPresentationContractTests: XCTestCase {
         DaemonStatusDocument.self,
         from: Data(
           """
-          {"status":"ready","activity":"idle","mlx_memory_snapshot":{"source":"\(source)","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":0,"peak_memory_bytes":12000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000}
+          {"status":"ready","activity":"idle","mlx_memory_snapshot":{"source":"\(source)","active_memory_bytes":12000000000,"mlx_buffer_cache_bytes":0,"peak_memory_bytes":12000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000}
           """.utf8)
       )
 
@@ -418,9 +418,9 @@ final class StatusPresentationContractTests: XCTestCase {
   }
 
   /// A request is already active, but the first prefill progress event has not
-  /// arrived yet. The menu extra and popover must name prompt-cache restore
+  /// arrived yet. The menu extra and popover must name astro SSD prompt cache restore
   /// instead of looking idle.
-  func test_should_name_prompt_processing_without_progress_as_prompt_cache_restore() throws {
+  func test_should_name_prompt_processing_without_progress_as_astro_ssd_prompt_cache_restore() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(#"{"status":"ready","activity":"prompt_processing"}"#.utf8)
@@ -437,7 +437,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "Calculating")
   }
 
-  func test_should_present_only_prompt_work_remaining_after_cache_restoration() throws {
+  func test_should_present_only_prompt_work_remaining_after_astro_ssd_prompt_cache_restoration() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(
@@ -470,7 +470,7 @@ final class StatusPresentationContractTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"prompt_processing","ready_model_id":"Ornith","progress":{"phase":"target","processed_tokens":1076,"total_tokens":14412,"elapsed_ms":1000},"expert_memory_mode":"resident","mlx_memory_snapshot":{"source":"prefill","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":0,"model_core_payload_bytes":0,"context_state_payload_bytes":0},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":0,"total_prompt_token_count":0,"total_reused_prompt_token_count":0,"average_prefill_tok_per_second":0,"average_generation_tok_per_second":0}}
+        {"status":"ready","activity":"prompt_processing","ready_model_id":"Ornith","progress":{"phase":"target","processed_tokens":1076,"total_tokens":14412,"elapsed_ms":1000},"expert_memory_mode":"resident","mlx_memory_snapshot":{"source":"prefill","active_memory_bytes":12000000000,"mlx_buffer_cache_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":0,"model_core_payload_bytes":0,"context_state_payload_bytes":0},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":0,"total_prompt_token_count":0,"total_reused_prompt_token_count":0,"average_prefill_tok_per_second":0,"average_generation_tok_per_second":0}}
         """.utf8)
     )
 
@@ -485,7 +485,7 @@ final class StatusPresentationContractTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","ready_model_id":"Ornith","progress":null,"expert_memory_mode":"resident","mlx_memory_snapshot":{"source":"finalized","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":0,"model_core_payload_bytes":0,"context_state_payload_bytes":0},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":1,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":70.4}}
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","progress":null,"expert_memory_mode":"resident","mlx_memory_snapshot":{"source":"finalized","active_memory_bytes":12000000000,"mlx_buffer_cache_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":0,"model_core_payload_bytes":0,"context_state_payload_bytes":0},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":1,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":70.4}}
         """.utf8)
     )
 

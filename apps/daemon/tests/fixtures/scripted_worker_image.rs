@@ -116,7 +116,7 @@ where
                     mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                         source: MlxMemorySnapshotSource::ImageGenerationStep,
                         active_memory_bytes: 10_480_000_000,
-                        allocator_cache_memory_bytes: 120_000_000,
+                        mlx_buffer_cache_bytes: 120_000_000,
                         peak_memory_bytes: 10_600_000_000,
                         expert_payload_bytes: 0,
                         model_core_payload_bytes: 0,
@@ -362,7 +362,7 @@ where
             mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                 source: MlxMemorySnapshotSource::Finalized,
                 active_memory_bytes: 96_000_000,
-                allocator_cache_memory_bytes: 0,
+                mlx_buffer_cache_bytes: 0,
                 peak_memory_bytes: 512_000_000,
                 expert_payload_bytes: 0,
                 model_core_payload_bytes: 96_000_000,

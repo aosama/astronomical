@@ -1,7 +1,7 @@
 //! Shared startup-validated expert layer plan construction from SafeTensors headers.
 //!
 //! Complete pager construction shares one SafeTensors header cache across every layer and validates
-//! all tensor geometry. Standalone callers retain a one-layer cache. `build_source_manifests()`
+//! all tensor geometry. Standalone callers retain a one-layer safetensors header cache. `build_source_manifests()`
 //! groups selected expert intervals by shard file for bounded native reads.
 //! `contiguous_selected_runs()` groups adjacent selected experts for efficient
 //! sequential I/O.
@@ -66,17 +66,17 @@ pub fn build_quantized_expert_layer_plans(
     decoder_layer_count: usize,
 ) -> Result<Vec<QuantizedExpertLayerPlan>, ExpertManifestError> {
     let mut layer_plans = Vec::with_capacity(decoder_layer_count);
-    let mut header_cache = HashMap::new();
+    let mut safetensors_header_cache = HashMap::new();
     for decoder_layer_index in 0..decoder_layer_count {
         let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
         layer_plans.push(
-            build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+            build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache(
                 model_dir,
                 weight_map,
                 stored_tensor_name_by_canonical_name,
                 &layer_prefix,
                 config,
-                &mut header_cache,
+                &mut safetensors_header_cache,
             )?,
         );
     }
@@ -90,28 +90,28 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names(
     layer_prefix: &str,
     qwen3_5_config: &Qwen3_5Config,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
-    let mut header_cache = HashMap::new();
-    build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+    let mut safetensors_header_cache = HashMap::new();
+    build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache(
         model_dir,
         weight_map,
         stored_tensor_name_by_canonical_name,
         layer_prefix,
         qwen3_5_config,
-        &mut header_cache,
+        &mut safetensors_header_cache,
     )
 }
 
 /// Builds one layer while reusing headers retained by the complete pager construction pass.
 ///
-/// Qwen sparse layers commonly share a small set of SafeTensors files. Keeping this cache outside
+/// Qwen sparse layers commonly share a small set of SafeTensors files. Keeping this safetensors header cache outside
 /// the per-layer loop guarantees each unique header is parsed once instead of once per layer.
-pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
+pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache(
     model_dir: &Path,
     weight_map: &HashMap<String, String>,
     stored_tensor_name_by_canonical_name: &HashMap<String, String>,
     layer_prefix: &str,
     qwen3_5_config: &Qwen3_5Config,
-    header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
+    safetensors_header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
     let plan_inputs = ProjectionPlanInputs {
         model_dir,
@@ -124,8 +124,11 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
     let mut projection_quantization_modes = Vec::new();
     let mut jangtq2_projection_rotations = Vec::new();
     for projection_name in PROJECTION_NAMES {
-        let projection_collection =
-            build_projection_source_collection(&plan_inputs, projection_name, header_cache)?;
+        let projection_collection = build_projection_source_collection(
+            &plan_inputs,
+            projection_name,
+            safetensors_header_cache,
+        )?;
         tensor_sources.extend(projection_collection.tensor_sources);
         projection_quantization_modes.push(projection_collection.quantization_mode);
         if let Some(rotation) = projection_collection.jangtq2_rotation {

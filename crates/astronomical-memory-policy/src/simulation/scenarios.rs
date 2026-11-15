@@ -7,11 +7,11 @@
 //! | Incident | Scenario |
 //! |---|---|
 //! | A first large prompt after a small one overflowed and discarded every kept expert (issue #2217) | `should_serve_a_first_large_prompt_after_a_small_one_without_overflow` |
-//! | A first large prompt planned around working memory nobody had measured overflowed (the 122B, 2026-11-14) | `should_stream_everything_until_a_step_is_measured_when_the_probe_did_not_run` |
-//! | A follow-up prompt arrived while a reply's experts filled the cache | `should_give_weights_back_once_between_two_identical_requests` |
-//! | Working memory misjudged by half | `should_redo_one_layer_step_once_when_working_memory_was_misjudged_by_half`, `should_not_overflow_again_once_the_true_working_memory_is_known` |
+//! | A first large prompt planned around MLX working buffers nobody had measured overflowed (the 122B, 2026-11-14) | `should_stream_everything_until_a_step_is_measured_when_the_probe_did_not_run` |
+//! | A follow-up prompt arrived while a reply's experts filled the `astro_expert_cache` | `should_give_weights_back_once_between_two_identical_requests` |
+//! | MLX working buffers misjudged by half | `should_redo_one_layer_step_once_when_mlx_working_buffers_were_misjudged_by_half`, `should_not_overflow_again_once_the_true_mlx_working_buffers_are_known` |
 //! | The limit lowered in the middle of a request (issue #1108) | `should_only_trim_when_the_limit_is_lowered_in_the_middle_of_a_request` |
-//! | A cancelled request left the cache full | `should_start_the_next_request_cleanly_after_a_cancelled_one` |
+//! | A cancelled request left the `astro_expert_cache` full | `should_start_the_next_request_cleanly_after_a_cancelled_one` |
 //! | The same request twice gave back and re-read the same layers (October) | `should_give_weights_back_once_between_two_identical_requests` |
 //! | A model that fits completely still read from the drive | `should_keep_every_weight_and_read_nothing_once_the_model_fits` |
 //! | A limit below the streaming floor on a small Mac refused the model (issue #1902) | `should_report_a_shortfall_and_refuse_nothing_below_the_streaming_floor` |
@@ -42,23 +42,23 @@ fn model_like_the_35b() -> SimulatedModel {
         context_bytes_per_token: 20 * KIBIBYTE,
         reading_stream_slot_count: 2,
         writing_reply_stream_slot_bytes: 16 * MEBIBYTE,
-        true_reading_working_memory_bytes_per_span_token: 256 * KIBIBYTE,
-        true_writing_working_memory_bytes: 64 * MEBIBYTE,
+        true_reading_mlx_working_buffer_bytes_per_span_token: 256 * KIBIBYTE,
+        true_writing_mlx_working_buffer_bytes: 64 * MEBIBYTE,
     }
 }
 
 /// The same model with layers that need 2 GiB per span, so a measurement
 /// misjudged by half is too large for the safety margin to absorb.
-fn model_with_heavy_working_memory() -> SimulatedModel {
+fn model_with_heavy_mlx_working_buffers() -> SimulatedModel {
     SimulatedModel {
-        true_reading_working_memory_bytes_per_span_token: 512 * KIBIBYTE,
+        true_reading_mlx_working_buffer_bytes_per_span_token: 512 * KIBIBYTE,
         ..model_like_the_35b()
     }
 }
 
 fn probed_engine(model: SimulatedModel, limit_bytes: u64) -> SimulatedEngine {
     let mut engine = SimulatedEngine::load(model, limit_bytes);
-    engine.probe_working_memory(SPAN_TOKEN_COUNT, 100);
+    engine.probe_mlx_working_buffers(SPAN_TOKEN_COUNT, 100);
     engine
 }
 
@@ -109,7 +109,7 @@ fn should_stream_everything_until_a_step_is_measured_when_the_probe_did_not_run(
         engine.journal().storage_read_bytes >= LAYER_WEIGHT_BYTES,
         "the first layer, which nobody had measured, is read from storage"
     );
-    assert!(engine.accounts().working_memory_is_measured);
+    assert!(engine.accounts().mlx_working_buffers_are_measured);
     assert!(
         engine.accounts().kept_weight_capacity_bytes > 0,
         "one measured step opens the capacity"
@@ -147,16 +147,16 @@ fn should_serve_a_first_large_prompt_after_a_small_one_without_overflow() {
     assert_healthy(engine.journal(), LIMIT_BYTES);
 }
 
-/// The forced misjudgment: the probe reports half the true working memory,
-/// and the first step of a long prompt streams with the cache full.
+/// The forced misjudgment: the probe reports half the true MLX working buffers,
+/// and the first step of a long prompt streams with the `astro_expert_cache` full.
 #[test]
-fn should_redo_one_layer_step_once_when_working_memory_was_misjudged_by_half() {
+fn should_redo_one_layer_step_once_when_mlx_working_buffers_were_misjudged_by_half() {
     let mut engine = SimulatedEngine::load_keeping(
-        model_with_heavy_working_memory(),
+        model_with_heavy_mlx_working_buffers(),
         LIMIT_BYTES,
         KeptLayerOrder::HighestLayersFirst,
     );
-    engine.probe_working_memory(SPAN_TOKEN_COUNT, 50);
+    engine.probe_mlx_working_buffers(SPAN_TOKEN_COUNT, 50);
     engine.serve(
         SMALL_PROMPT_TOKEN_COUNT,
         REPLY_TOKEN_COUNT,
@@ -184,13 +184,13 @@ fn should_redo_one_layer_step_once_when_working_memory_was_misjudged_by_half() {
 
 /// Once the redone step has been measured, the same prompt again fits.
 #[test]
-fn should_not_overflow_again_once_the_true_working_memory_is_known() {
+fn should_not_overflow_again_once_the_true_mlx_working_buffers_are_known() {
     let mut engine = SimulatedEngine::load_keeping(
-        model_with_heavy_working_memory(),
+        model_with_heavy_mlx_working_buffers(),
         LIMIT_BYTES,
         KeptLayerOrder::HighestLayersFirst,
     );
-    engine.probe_working_memory(SPAN_TOKEN_COUNT, 50);
+    engine.probe_mlx_working_buffers(SPAN_TOKEN_COUNT, 50);
     engine.serve(
         SMALL_PROMPT_TOKEN_COUNT,
         REPLY_TOKEN_COUNT,
@@ -239,7 +239,7 @@ fn should_start_the_next_request_cleanly_after_a_cancelled_one() {
     engine.start_request(LARGE_PROMPT_TOKEN_COUNT);
     engine.read_prompt(LARGE_PROMPT_TOKEN_COUNT, SPAN_TOKEN_COUNT);
     engine.write_reply(10);
-    // Cancelled: the request ends with the cache as full as writing allows.
+    // Cancelled: the request ends with the `astro_expert_cache` as full as writing allows.
     engine.finish_request();
     engine.serve(
         LARGE_PROMPT_TOKEN_COUNT,
@@ -373,7 +373,7 @@ fn should_give_back_a_layer_at_a_time_as_a_long_reply_grows_the_context() {
     );
     assert_eq!(
         journal.largest_single_eviction_bytes, LAYER_WEIGHT_BYTES,
-        "each give-back is one layer, never the cache"
+        "each give-back is one layer, never the whole `astro_expert_cache`"
     );
     assert_healthy(journal, LIMIT_BYTES);
 }

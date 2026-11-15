@@ -1,7 +1,7 @@
 //! How many of a dense model's decoder layers stay resident (issues #1985
 //! and #2221).
 //!
-//! At load the streaming engine measures the working memory one streamed
+//! At load the streaming engine measures the MLX working buffers one streamed
 //! layer's forward needs. The memory governor then says how many weight
 //! bytes may be kept, and the kept layers follow it: any event that lowers
 //! the capacity gives trailing layers back at once, and layers are read
@@ -16,7 +16,7 @@ use astronomical_memory_policy::ledger::KeptWeightCapacity;
 
 use super::Qwen3_5Model;
 use super::dense_layer_counts::leading_layer_count_within;
-use super::expert_layer_working_memory_probe::ProbedPromptLayerWorkingMemory;
+use super::expert_layer_mlx_working_buffer_probe::ProbedPromptLayerMlxWorkingBuffers;
 use super::layer_probe_shape::LayerProbeShape;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::DecoderLayerResidency;
@@ -24,11 +24,11 @@ use crate::qwen3_5_core::model_math::weights::DecoderLayerResidency;
 /// What probing a dense model's streamed layer found.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DenseLayerProbe {
-    /// The working memory one streamed layer's forward needs; `None` when
+    /// The MLX working buffers one streamed layer's forward needs; `None` when
     /// the limit could not hold the probe.
-    pub working_memory_bytes: Option<u64>,
+    pub mlx_working_buffer_bytes: Option<u64>,
     /// What one streamed forward adds beyond the resident tensors: the
-    /// layer slots and the working memory.
+    /// layer slots and the MLX working buffers.
     pub streamed_forward_reserve_bytes: u64,
 }
 
@@ -46,7 +46,7 @@ impl Qwen3_5Model {
     }
 
     /// Materializes the target weights, then measures a dense model's
-    /// working memory at `probe_shape`. The layers are kept once the memory
+    /// MLX working buffers at `probe_shape`. The layers are kept once the memory
     /// governor opens and says how many fit.
     pub(crate) fn materialize_target_weights_and_probe_dense_layers(
         &self,
@@ -56,13 +56,13 @@ impl Qwen3_5Model {
         self.probe_dense_layers(probe_shape, None).map(drop)
     }
 
-    /// Measures a dense model's working memory. `pinned_kept_layer_count`
+    /// Measures a dense model's MLX working buffers. `pinned_kept_layer_count`
     /// keeps exactly that many layers, for parity and speed measurements;
     /// otherwise the kept layers follow the memory governor. Returns `None`
     /// for a sparse model.
     ///
     /// A probe the limit cannot hold does not fail the load (#1902): the
-    /// working memory stays unmeasured, so no layer is kept and the model
+    /// MLX working buffers stay unmeasured, so no layer is kept and the model
     /// streams them all, and MLX and macOS decide the rest.
     #[doc(hidden)]
     pub fn probe_dense_layers(
@@ -73,10 +73,11 @@ impl Qwen3_5Model {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
             return Ok(None);
         };
-        match self.measure_dense_layer_working_memory(probe_shape) {
-            Ok(working_memory_bytes) => {
-                dense_layer_streamer.record_measured_working_memory_bytes(working_memory_bytes);
-                self.remember_dense_probe_for_the_governor(probe_shape, working_memory_bytes);
+        match self.measure_dense_layer_mlx_working_buffers(probe_shape) {
+            Ok(mlx_working_buffer_bytes) => {
+                dense_layer_streamer
+                    .record_measured_mlx_working_buffer_bytes(mlx_working_buffer_bytes);
+                self.remember_dense_probe_for_the_governor(probe_shape, mlx_working_buffer_bytes);
             }
             Err(probe_error)
                 if probe_error
@@ -85,10 +86,10 @@ impl Qwen3_5Model {
             {
                 tracing::warn!(
                     error = %probe_error,
-                    "the dense working-memory probe exceeded the limit; every layer will stream"
+                    "the dense MLX working-buffer probe exceeded the limit; every layer will stream"
                 );
                 self.runtime
-                    .synchronize_gpu_stream_and_clear_allocator_cache()?;
+                    .synchronize_gpu_stream_and_clear_mlx_buffer_cache()?;
             }
             Err(probe_error) => return Err(probe_error),
         }
@@ -101,34 +102,35 @@ impl Qwen3_5Model {
             )?,
             None => self.keep_dense_layers_the_governor_has_room_for()?,
         }
-        let working_memory_bytes = dense_layer_streamer.measured_working_memory_bytes();
+        let mlx_working_buffer_bytes = dense_layer_streamer.measured_mlx_working_buffer_bytes();
         Ok(Some(DenseLayerProbe {
-            working_memory_bytes,
+            mlx_working_buffer_bytes,
             streamed_forward_reserve_bytes: dense_layer_streamer
                 .streaming_slot_bytes()
-                .saturating_add(working_memory_bytes.unwrap_or(0)),
+                .saturating_add(mlx_working_buffer_bytes.unwrap_or(0)),
         }))
     }
 
     /// Keeps the measurement for the governor, which opens after loading.
     ///
     /// A dense model's reply step runs the same streamed layers through the
-    /// same slots, and one token needs less working memory than a prompt
+    /// same slots, and one token needs fewer MLX working buffers than a prompt
     /// span. Recording the prompt figure for the reply phase too keeps the
     /// kept layers the same in both phases, so none is given back when the
     /// reply begins and read again for the next prompt.
     fn remember_dense_probe_for_the_governor(
         &self,
         probe_shape: LayerProbeShape,
-        working_memory_bytes: u64,
+        mlx_working_buffer_bytes: u64,
     ) {
-        self.probed_prompt_layer_working_memory
-            .set(Some(ProbedPromptLayerWorkingMemory {
+        self.probed_prompt_layer_mlx_working_buffers.set(Some(
+            ProbedPromptLayerMlxWorkingBuffers {
                 span_token_count: u32::try_from(probe_shape.prefill_chunk_token_count)
                     .unwrap_or(u32::MAX),
-                working_memory_bytes,
-                reply_token_working_memory_bytes: working_memory_bytes,
-            }));
+                mlx_working_buffer_bytes,
+                reply_token_mlx_working_buffer_bytes: mlx_working_buffer_bytes,
+            },
+        ));
     }
 
     /// Gives trailing kept layers back until what is kept fits `capacity`.

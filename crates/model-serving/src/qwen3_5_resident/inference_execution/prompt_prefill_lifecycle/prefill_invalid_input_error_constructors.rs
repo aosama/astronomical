@@ -14,17 +14,17 @@ pub(super) fn engine_lost_loaded_model_invalid_input() -> Qwen3_5ExecutionError 
     }
 }
 
-pub(super) fn visual_prompt_cache_checkpoints_have_no_block_contract_invalid_input()
+pub(super) fn visual_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input()
 -> Qwen3_5ExecutionError {
     Qwen3_5ExecutionError::InvalidInput {
-        description: "planned visual prompt-cache checkpoints have no block contract",
+        description: "planned visual astro-ssd-prompt-cache checkpoints have no block contract",
     }
 }
 
-pub(super) fn text_prompt_cache_checkpoints_have_no_block_contract_invalid_input()
+pub(super) fn text_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input()
 -> Qwen3_5ExecutionError {
     Qwen3_5ExecutionError::InvalidInput {
-        description: "planned text prompt-cache checkpoints have no block contract",
+        description: "planned text astro-ssd-prompt-cache checkpoints have no block contract",
     }
 }
 

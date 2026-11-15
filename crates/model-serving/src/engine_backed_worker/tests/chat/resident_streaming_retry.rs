@@ -30,7 +30,7 @@ enum RetryScenario {
 }
 
 struct RetryInferenceRequest {
-    persistent_cache_identity: String,
+    astro_ssd_prompt_cache_identity: String,
     streaming_retry_drop_count: Arc<AtomicUsize>,
     is_streaming_retry: bool,
 }
@@ -38,7 +38,7 @@ struct RetryInferenceRequest {
 impl Clone for RetryInferenceRequest {
     fn clone(&self) -> Self {
         Self {
-            persistent_cache_identity: self.persistent_cache_identity.clone(),
+            astro_ssd_prompt_cache_identity: self.astro_ssd_prompt_cache_identity.clone(),
             streaming_retry_drop_count: Arc::clone(&self.streaming_retry_drop_count),
             is_streaming_retry: true,
         }
@@ -85,7 +85,7 @@ impl ModelGenerationProcessor for RetryProcessor {
     > {
         Ok(PreparedModelGeneration::new(
             RetryInferenceRequest {
-                persistent_cache_identity: generation_command.model.clone(),
+                astro_ssd_prompt_cache_identity: generation_command.model.clone(),
                 streaming_retry_drop_count: Arc::clone(&self.streaming_retry_drop_count),
                 is_streaming_retry: false,
             },
@@ -127,7 +127,7 @@ struct RetryEngine {
     scenario: RetryScenario,
     role: RetryEngineRole,
     decode_count: usize,
-    request_cache_identities: Arc<Mutex<Vec<(RetryEngineRole, String)>>>,
+    request_astro_ssd_prompt_cache_identities: Arc<Mutex<Vec<(RetryEngineRole, String)>>>,
     continue_after_visible_output: Arc<Notify>,
 }
 
@@ -142,12 +142,12 @@ impl InferenceEngine for RetryEngine {
         &mut self,
         inference_request: Self::Request,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        self.request_cache_identities
+        self.request_astro_ssd_prompt_cache_identities
             .lock()
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
             .push((
                 self.role,
-                inference_request.persistent_cache_identity.clone(),
+                inference_request.astro_ssd_prompt_cache_identity.clone(),
             ));
 
         if matches!(
@@ -228,7 +228,7 @@ impl InferenceEngine for RetryEngine {
 struct RetryModelFactory {
     scenario: RetryScenario,
     streaming_retry_count: Arc<AtomicUsize>,
-    request_cache_identities: Arc<Mutex<Vec<(RetryEngineRole, String)>>>,
+    request_astro_ssd_prompt_cache_identities: Arc<Mutex<Vec<(RetryEngineRole, String)>>>,
     streaming_retry_drop_count: Arc<AtomicUsize>,
     continue_after_visible_output: Arc<Notify>,
 }
@@ -247,7 +247,9 @@ impl ModelFactory<RetryProcessor, RetryEngine> for RetryModelFactory {
                 scenario: self.scenario,
                 role: RetryEngineRole::Resident,
                 decode_count: 0,
-                request_cache_identities: Arc::clone(&self.request_cache_identities),
+                request_astro_ssd_prompt_cache_identities: Arc::clone(
+                    &self.request_astro_ssd_prompt_cache_identities,
+                ),
                 continue_after_visible_output: Arc::clone(&self.continue_after_visible_output),
             },
             EnginePlacement::CompleteResidencyFits,
@@ -268,7 +270,9 @@ impl ModelFactory<RetryProcessor, RetryEngine> for RetryModelFactory {
                 scenario: self.scenario,
                 role: RetryEngineRole::Streaming,
                 decode_count: 0,
-                request_cache_identities: Arc::clone(&self.request_cache_identities),
+                request_astro_ssd_prompt_cache_identities: Arc::clone(
+                    &self.request_astro_ssd_prompt_cache_identities,
+                ),
                 continue_after_visible_output: Arc::clone(&self.continue_after_visible_output),
             },
         ))
@@ -280,7 +284,7 @@ impl ModelFactory<RetryProcessor, RetryEngine> for RetryModelFactory {
 }
 
 #[tokio::test]
-async fn should_retry_a_resident_start_fork_once_with_the_same_cache_identity() {
+async fn should_retry_a_resident_start_fork_once_with_the_same_astro_ssd_prompt_cache_identity() {
     let (mut daemon_reader, mut daemon_writer, worker_task, retry_count, identities, _, _) =
         launch_retry_worker(RetryScenario::ResidentStartFork).await;
     load_retry_model(&mut daemon_reader, &mut daemon_writer).await;
@@ -294,7 +298,7 @@ async fn should_retry_a_resident_start_fork_once_with_the_same_cache_identity() 
         next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             request_id,
-            cached_token_count: 1,
+            astro_ssd_prompt_cache_restored_token_count: 1,
             ..
         } if request_id == RequestId::new(901)
     ));
@@ -398,14 +402,16 @@ async fn launch_retry_worker(
     Arc<Notify>,
 ) {
     let streaming_retry_count = Arc::new(AtomicUsize::new(0));
-    let request_cache_identities = Arc::new(Mutex::new(Vec::new()));
+    let request_astro_ssd_prompt_cache_identities = Arc::new(Mutex::new(Vec::new()));
     let streaming_retry_drop_count = Arc::new(AtomicUsize::new(0));
     let continue_after_visible_output = Arc::new(Notify::new());
     let engine_worker = EngineBackedWorker::idle_with_model_factory(
         RetryModelFactory {
             scenario,
             streaming_retry_count: Arc::clone(&streaming_retry_count),
-            request_cache_identities: Arc::clone(&request_cache_identities),
+            request_astro_ssd_prompt_cache_identities: Arc::clone(
+                &request_astro_ssd_prompt_cache_identities,
+            ),
             streaming_retry_drop_count: Arc::clone(&streaming_retry_drop_count),
             continue_after_visible_output: Arc::clone(&continue_after_visible_output),
         },
@@ -424,7 +430,7 @@ async fn launch_retry_worker(
         ProtocolWriter::new(daemon_writer_transport),
         worker_task,
         streaming_retry_count,
-        request_cache_identities,
+        request_astro_ssd_prompt_cache_identities,
         streaming_retry_drop_count,
         continue_after_visible_output,
     )

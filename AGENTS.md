@@ -36,7 +36,7 @@
 
 - A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable. Exceptions can be made if the user specifies it explicitly.
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
-- SSD Cache must be disabled during performance throughput tests and measurements.
+- The astro SSD prompt cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.
 - MOST IMPORTANTLY performance tests must start at the lowermost part of the call stack and move tests upwards through the call stack.
 
@@ -53,6 +53,12 @@
 ## One Gigabyte Everywhere
 
 - A gigabyte in Astronomical is 1,073,741,824 bytes (2^30), labelled "GB", the one Apple uses when it describes a Mac's memory. Every screen, message, log summary, test printout and reply to the user divides bytes by 1,073,741,824, never by 1,000,000,000, so a figure always matches what the menu bar and Observatory show.
+
+## The Memory Areas Have Formal Names
+
+- You MUST read `<repo-root>/docs/glossary.md` before you read, write, review or discuss anything about memory, MLX, caching or streaming. It defines every memory area and every cache by one formal name, such as `astro_expert_cache`, `astro_ssd_prompt_cache`, `astro_decoder_state_cache`, `mlx_buffer_cache`, `mlx_working_buffers` and `macos_file_cache`.
+- Never write the bare word "cache": every mention says which cache it means, by its formal name. Use those names in code, comments, tests, logs, documentation, GitHub content and replies. Screens keep their plain words; the glossary lists which is which.
+- When you find a cache or memory area under another name, or a bare "cache", rename it to the formal name as part of your work.
 
 ## Hints About This Repo
 

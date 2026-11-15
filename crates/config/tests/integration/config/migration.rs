@@ -71,7 +71,7 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
         0o600
     );
     assert_eq!(migrated_json["runtime"]["maximum_mlx_memory_gb"], 16);
-    assert_eq!(migrated_json["prompt_cache"]["enabled"], false);
+    assert_eq!(migrated_json["ssd_prompt_cache"]["enabled"], false);
     assert!(migrated_json.get("max_output_tokens").is_none());
     assert_eq!(model_config.maximum_output_tokens(), 4_096);
     assert_eq!(
@@ -81,13 +81,13 @@ fn should_migrate_representable_legacy_configuration_to_v1() {
         1_024
     );
     assert_eq!(
-        model_config.chunking().prompt_cache_block_tokens(),
+        model_config.chunking().ssd_prompt_cache_block_tokens(),
         Some(512)
     );
     assert_eq!(
         model_config
             .chunking()
-            .prompt_cache_common_prefix_stride_blocks(),
+            .ssd_prompt_cache_common_prefix_stride_blocks(),
         8
     );
 }
@@ -246,7 +246,7 @@ fn should_migrate_full_realistic_legacy_configuration_using_retired_section_spel
         );
     }
     assert_eq!(migrated_json["runtime"]["maximum_mlx_memory_gb"], 24);
-    assert_eq!(migrated_json["prompt_cache"]["enabled"], true);
+    assert_eq!(migrated_json["ssd_prompt_cache"]["enabled"], true);
     let model_config = astronomical_config
         .resolved_model_config("target", 65_536)
         .expect("migrated model policy should resolve");

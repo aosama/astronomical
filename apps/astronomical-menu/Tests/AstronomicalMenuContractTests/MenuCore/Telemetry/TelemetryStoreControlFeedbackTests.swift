@@ -348,8 +348,8 @@ private func contractTelemetryStore(
 
 private let acknowledgedWorkerPolicy = WorkerRuntimeFeatureConfiguration(
   configurationGeneration: String(repeating: "a", count: 64),
-  persistentPromptCacheEnabled: true,
-  promptCacheMaximumSizeBytes: 50_000_000_000,
+  astroSsdPromptCacheEnabled: true,
+  astroSsdPromptCacheMaximumSizeBytes: 50_000_000_000,
   loadedModel: nil
 )
 

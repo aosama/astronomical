@@ -3,18 +3,18 @@
 //! A configuration activation label is insufficient for persistent state: MLX
 //! promotes each operation from live activation, normalization, affine-scale,
 //! and affine-bias dtypes. This module replays only that type flow, without
-//! evaluating arrays, so cache serialization and memory admission describe the
+//! evaluating arrays, so astro decoder state cache serialization and memory admission describe the
 //! tensors the production graph actually creates.
 //!
 //! The promotion replay itself lives in
-//! `qwen3_5_core::decoder::decoder_cache_dtype_flow`; this module reduces the
+//! `qwen3_5_core::decoder::astro_decoder_state_cache_dtype_flow`; this module reduces the
 //! bound weight types both engines share to that replay's dtype contracts.
 //! Each sparse layer's expert plan comes from the slice the caller holds: the
 //! resident engine's prebuilt plans, or the streaming engine's pager plans.
 
 use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
-use crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes;
-use crate::qwen3_5_core::decoder::decoder_cache_dtype_flow::{
+use crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes;
+use crate::qwen3_5_core::decoder::astro_decoder_state_cache_dtype_flow::{
     AffineDtypeContract, DenseMlpDtypeFlow, FullAttentionDtypeFlow, LinearAttentionDtypeFlow,
     MixtureOfExpertsDtypeFlow, dense_mlp_output_dtype, embedding_output_dtype,
     full_attention_dtypes, linear_attention_dtypes, mixture_of_experts_output_dtype,
@@ -38,12 +38,13 @@ pub(crate) fn embedded_hidden_state_dtype(
 /// evaluating model tensors. The resulting contract therefore follows each
 /// artifact's actual affine scale and bias dtypes instead of its configured
 /// activation dtype alone.
-pub(crate) fn derive_decoder_layer_cache_dtypes(
+pub(crate) fn derive_astro_decoder_state_cache_layer_dtypes(
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<Vec<Qwen3_5DecoderLayerCacheDtypes>, Qwen3_5ExecutionError> {
+) -> Result<Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes>, Qwen3_5ExecutionError> {
     let mut hidden_state_dtype = embedded_hidden_state_dtype(weights)?;
-    let mut decoder_layer_cache_dtypes = Vec::with_capacity(weights.decoder_layer_weights.len());
+    let mut astro_decoder_state_cache_layer_dtypes =
+        Vec::with_capacity(weights.decoder_layer_weights.len());
 
     for (decoder_layer_index, decoder_layer_weights) in
         weights.decoder_layer_weights.iter().enumerate()
@@ -52,15 +53,15 @@ pub(crate) fn derive_decoder_layer_cache_dtypes(
             hidden_state_dtype,
             decoder_layer_weights.input_normalization_weight.dtype(),
         )?;
-        let (decoder_layer_cache_dtype, attention_output_dtype) = attention_dtypes(
+        let (astro_decoder_state_cache_layer_dtype, attention_output_dtype) = attention_dtypes(
             normalized_input_dtype,
             &decoder_layer_weights.attention_weights,
         )?;
-        decoder_layer_cache_dtypes.push(decoder_layer_cache_dtype);
+        astro_decoder_state_cache_layer_dtypes.push(astro_decoder_state_cache_layer_dtype);
 
         // Residual promotion becomes the input dtype for the following MLP and
         // ultimately for the next decoder layer. A single FP32 affine companion
-        // can therefore influence cache state beyond the operation that owns it.
+        // can therefore influence astro decoder state cache state beyond the operation that owns it.
         let attention_residual_dtype =
             promote_floating_dtypes(hidden_state_dtype, attention_output_dtype)?;
         let normalized_attention_dtype = promote_floating_dtypes(
@@ -78,14 +79,20 @@ pub(crate) fn derive_decoder_layer_cache_dtypes(
             promote_floating_dtypes(attention_residual_dtype, feed_forward_output_dtype)?;
     }
 
-    Ok(decoder_layer_cache_dtypes)
+    Ok(astro_decoder_state_cache_layer_dtypes)
 }
 
-/// The cache dtypes one attention layer stores and the dtype it outputs.
+/// The astro decoder state cache dtypes one attention layer stores and the dtype it outputs.
 fn attention_dtypes(
     normalized_input_dtype: mlx_bridge::MlxDtype,
     attention_weights: &Qwen3_5AttentionWeights,
-) -> Result<(Qwen3_5DecoderLayerCacheDtypes, mlx_bridge::MlxDtype), Qwen3_5ExecutionError> {
+) -> Result<
+    (
+        Qwen3_5AstroDecoderStateCacheLayerDtypes,
+        mlx_bridge::MlxDtype,
+    ),
+    Qwen3_5ExecutionError,
+> {
     Ok(match attention_weights {
         Qwen3_5AttentionWeights::Linear(linear_attention_weights) => {
             linear_attention_dtypes(&LinearAttentionDtypeFlow {
@@ -138,7 +145,7 @@ fn feed_forward_output_dtype(
         Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
             let expert_layer_plan =
                 expert_layer_plan.ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "sparse decoder-cache dtype derivation has no layer plan",
+                    description: "sparse astro-decoder-state-cache dtype derivation has no layer plan",
                 })?;
             mixture_of_experts_output_dtype(
                 &MixtureOfExpertsDtypeFlow {

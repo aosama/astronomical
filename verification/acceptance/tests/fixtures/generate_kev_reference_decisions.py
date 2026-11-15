@@ -6,7 +6,7 @@ Qwen3.5 support), `safetensors` and `huggingface_hub` installed:
     python generate_kev_reference_decisions.py kev-0.8b > kev_reference_decisions_0_8b.json
 
 It downloads the original `jaredpalmer/kev-*` adapter and the Qwen3.5 base it
-names, both at pinned revisions, into the Hugging Face cache, and answers each
+names, both at pinned revisions, into the Hugging Face hub cache, and answers each
 case in float32 on the CPU with the backbone loaded by transformers. The base
 is stored in bfloat16 and each decoder layer is widened to float32 only while
 it runs; its float32-stored tensors are restored and never narrowed, so this

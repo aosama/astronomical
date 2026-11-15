@@ -1,24 +1,26 @@
-pub(crate) mod cache_layout;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod decoder_cache_dtype_flow;
+pub(crate) mod astro_decoder_state_cache_dtype_flow;
 #[cfg(all(test, feature = "direct-mlx"))]
-mod decoder_cache_dtype_flow_tests;
+mod astro_decoder_state_cache_dtype_flow_tests;
+pub(crate) mod astro_decoder_state_cache_layout;
 #[cfg(feature = "direct-mlx")]
-mod persistent_prompt_cache_boundary_checkpoint;
+mod astro_ssd_prompt_cache_boundary_checkpoint;
 #[cfg(feature = "direct-mlx")]
 mod persistent_state_bridge;
 #[cfg(feature = "direct-mlx")]
 mod persistent_state_kv_restore;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod request_state;
-pub use cache_layout::{Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout};
-#[cfg(feature = "direct-mlx")]
-pub use persistent_prompt_cache_boundary_checkpoint::{
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+pub use astro_decoder_state_cache_layout::{
+    Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
 };
 #[cfg(feature = "direct-mlx")]
-pub use persistent_state_bridge::PersistentPromptCacheStateBridgeError;
+pub use astro_ssd_prompt_cache_boundary_checkpoint::{
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+};
+#[cfg(feature = "direct-mlx")]
+pub use persistent_state_bridge::AstroSsdPromptCacheStateBridgeError;
 #[cfg(feature = "direct-mlx")]
 pub use request_state::{
     RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,

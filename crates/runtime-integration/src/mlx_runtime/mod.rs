@@ -6,7 +6,7 @@
 //! - `initialization` — the one-time construction path: error handler,
 //!   Metallib path, memory policy, bindings context.
 //! - `memory_policy` — the live memory-limit surface: updates with rollback,
-//!   snapshots, peak reset, allocator-cache reclamation, stream
+//!   snapshots, peak reset, MLX buffer-cache reclamation, stream
 //!   synchronization.
 //! - `error_classification` — turns captured MLX-C error descriptions into
 //!   Astronomical's typed errors, including the recoverable

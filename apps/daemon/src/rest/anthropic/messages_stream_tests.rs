@@ -12,7 +12,7 @@ fn completed_event(reason: ChatGenerationCompletionReason) -> ChatGenerationStre
         prompt_token_count: 120,
         generated_token_count: 9,
         reasoning_token_count: 3,
-        cached_token_count: 100,
+        astro_ssd_prompt_cache_restored_token_count: 100,
         reason,
     }
 }
@@ -84,7 +84,7 @@ fn should_open_one_block_per_kind_and_close_it_before_the_next() {
 }
 
 #[test]
-fn should_report_cached_input_separately_in_the_final_usage() {
+fn should_report_input_restored_from_the_astro_ssd_prompt_cache_separately_in_the_final_usage() {
     let (stream_events, _) = encoded_stream(vec![completed_event(
         ChatGenerationCompletionReason::MaximumOutputTokens,
     )]);
@@ -232,7 +232,7 @@ fn should_ignore_prefill_progress_between_content_events() {
             forward_prefill_chunk_elapsed_millis: None,
             completed_prefill_chunk_tokens: None,
             mlx_active_memory_bytes: None,
-            mlx_allocator_cache_memory_bytes: None,
+            mlx_buffer_cache_bytes: None,
             mlx_peak_memory_bytes: None,
         },
         ChatGenerationStreamEvent::TextFragment("Done.".to_owned()),

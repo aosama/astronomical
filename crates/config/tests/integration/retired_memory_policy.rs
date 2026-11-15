@@ -71,8 +71,8 @@ fn should_reject_every_retired_consumer_configuration_field() {
             r#"{"spectre_attention_enabled":true}"#,
         ),
         (
-            "nested prompt_cache",
-            r#"{"prompt_cache":{"enabled":true,"max_size_gb":50}}"#,
+            "nested astro_ssd_prompt_cache",
+            r#"{"ssd_prompt_cache":{"enabled":true,"max_size_gb":50}}"#,
         ),
         (
             "daemon worker_executable_path",

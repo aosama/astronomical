@@ -38,7 +38,7 @@ impl Qwen3_5EngineRequest {
     /// Called when a path the block contract cannot preserve takes over:
     /// a forced thinking transition replaces the conditioned successor, and
     /// feedback injection's prefill bypasses the tap-capturing forward that
-    /// grows the draft's context cache. The queue (including its uncommitted
+    /// grows the draft's context key-value state. The queue (including its uncommitted
     /// tail) and the draft states drop; the classic path owns everything
     /// from here.
     pub(in crate::qwen3_5_resident) fn suspend_speculative_session(

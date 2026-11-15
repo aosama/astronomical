@@ -256,7 +256,7 @@ fn finalized_memory_telemetry() -> MlxMemoryTelemetry {
 
 pub(super) fn assert_finalized_with_cleanup(event: WorkerEvent, request_number: u64) {
     assert!(
-        matches!(event, WorkerEvent::ImageGenerationFinalized { request_id, mlx_memory_snapshot: Some(snapshot), .. } if request_id == RequestId::new(request_number) && snapshot.source == MlxMemorySnapshotSource::Finalized && snapshot.allocator_cache_memory_bytes == 0)
+        matches!(event, WorkerEvent::ImageGenerationFinalized { request_id, mlx_memory_snapshot: Some(snapshot), .. } if request_id == RequestId::new(request_number) && snapshot.source == MlxMemorySnapshotSource::Finalized && snapshot.mlx_buffer_cache_bytes == 0)
     );
 }
 

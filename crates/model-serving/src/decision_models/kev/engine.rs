@@ -30,7 +30,7 @@ pub struct KevDecisionEngine {
     model_id: String,
     model_directory: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     resident_weight_bytes: u64,
     loaded_state: Option<LoadedKevState>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
@@ -49,14 +49,14 @@ impl KevDecisionEngine {
         model_id: impl Into<String>,
         model_directory: &Path,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
     ) -> Result<Self, DecisionFailure> {
         KevSettings::read(model_directory)?;
         Ok(Self {
             model_id: model_id.into(),
             model_directory: model_directory.to_path_buf(),
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             resident_weight_bytes: weight_file_bytes(model_directory),
             loaded_state: None,
             post_cleanup_memory_telemetry: None,
@@ -93,7 +93,7 @@ impl DecisionEngine for KevDecisionEngine {
         }
         let memory_limits = MlxMemoryLimits::new(
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|_| {
             DecisionFailure::fatal_execution("decision runtime memory limits are invalid")
@@ -133,9 +133,9 @@ impl DecisionEngine for KevDecisionEngine {
         let loaded_state = self.loaded_state()?;
         let decision_outcome = answer_every_question(loaded_state, state, questions);
         // Whatever happened, the request's decoder state is dropped by now;
-        // clearing the allocator cache returns its memory before the next one.
+        // clearing the MLX buffer cache returns its memory before the next one.
         let runtime = loaded_state.backbone.model.runtime();
-        let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_allocator_cache();
+        let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_mlx_buffer_cache();
         self.post_cleanup_memory_telemetry =
             runtime.memory_snapshot().ok().map(|memory_snapshot| {
                 forward_pass_memory_telemetry(

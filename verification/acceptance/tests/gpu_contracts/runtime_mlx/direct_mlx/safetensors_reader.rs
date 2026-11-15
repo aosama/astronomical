@@ -14,7 +14,7 @@ use astronomical_runtime_integration::{
 use mlx_bridge::MlxDtype;
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
-const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
+const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 256 * 1024 * 1024;
 const CONCURRENT_READ_TENSOR_BYTE_COUNT: usize = 40 * 1024 * 1024;
 
 #[test]
@@ -28,11 +28,9 @@ fn should_async_evaluate_safetensors_after_dropping_the_load_result_and_removing
         File::open(&weights_path).expect("the test should retain a read-only weights handle");
     fs::remove_file(&weights_path).expect("the test should remove the mutable path identity");
 
-    let memory_limits = MlxMemoryLimits::new(
-        ACTIVE_MEMORY_LIMIT_BYTES,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-    )
-    .expect("the test memory limits should be valid");
+    let memory_limits =
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
+            .expect("the test memory limits should be valid");
     let runtime =
         MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize");
     let weights = runtime
@@ -79,11 +77,9 @@ fn should_async_evaluate_multiple_tensors_from_independent_bounded_source_interv
     fs::write(&weights_path, source_bytes)
         .expect("the test should write separated tensor payloads");
 
-    let memory_limits = MlxMemoryLimits::new(
-        ACTIVE_MEMORY_LIMIT_BYTES,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-    )
-    .expect("the test memory limits should be valid");
+    let memory_limits =
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
+            .expect("the test memory limits should be valid");
     let runtime =
         MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize");
     let expert_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());
@@ -216,11 +212,9 @@ fn should_fail_evaluation_instead_of_returning_stale_bytes_when_a_source_read_fa
 }
 
 fn scattered_tensor_runtime() -> MlxRuntime {
-    let memory_limits = MlxMemoryLimits::new(
-        ACTIVE_MEMORY_LIMIT_BYTES,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-    )
-    .expect("the test memory limits should be valid");
+    let memory_limits =
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
+            .expect("the test memory limits should be valid");
     MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize")
 }
 
@@ -277,11 +271,9 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
     .expect("the test should write four substantial safetensors payloads");
     write_partition_boundary_markers(&weights_path, source_payload_offset);
 
-    let memory_limits = MlxMemoryLimits::new(
-        ACTIVE_MEMORY_LIMIT_BYTES,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-    )
-    .expect("the test memory limits should be valid");
+    let memory_limits =
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
+            .expect("the test memory limits should be valid");
     let runtime =
         MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize");
     let positional_file_read_metrics = Arc::new(PositionalFileReadMetrics::default());

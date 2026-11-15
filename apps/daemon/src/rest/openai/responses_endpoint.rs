@@ -380,7 +380,7 @@ async fn create_non_streaming_response(
             prompt_token_count,
             generated_token_count,
             reasoning_token_count,
-            cached_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             reason,
         } = stream_event
         {
@@ -390,7 +390,7 @@ async fn create_non_streaming_response(
             return match response_collector.into_response(
                 prompt_token_count,
                 generated_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_restored_token_count,
                 reasoning_token_count,
                 reason,
             ) {

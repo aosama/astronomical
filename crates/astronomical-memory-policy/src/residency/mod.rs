@@ -1,5 +1,5 @@
 //! Family-neutral expert residency policy. While a prompt is read every
-//! layer may be kept whole and the cache's capacity is the only refusal; a
+//! layer may be kept whole and the `astro_expert_cache` capacity is the only refusal; a
 //! plan is made once, when the reply begins, and says for each layer where
 //! it should end up: kept whole, hot, or absent.
 

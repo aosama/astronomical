@@ -371,7 +371,7 @@ where
             model_factory.update_mlx_memory_limits(
                 factory_ceiling_bytes,
                 mlx_memory_limit_adjustment
-                    .allocator_cache_memory_limit_bytes()
+                    .mlx_buffer_cache_limit_bytes()
                     .min(factory_ceiling_bytes),
             );
         }

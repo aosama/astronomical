@@ -6,7 +6,7 @@
 //! target (the OptiQ 4-bit Ornith-1.5-35B-A3B from the e2e registry) beside
 //! the real DFlash draft (resolved as the draft's library sibling directory,
 //! because a draft artifact is intentionally invisible to executable model
-//! discovery), bootstraps the draft's context key-value cache from the
+//! discovery), bootstraps the draft's context key-value state (its astro decoder state cache) from the
 //! target's hidden-state taps, then measures decode two ways on the same
 //! continued context: one token per forward (baseline) and draft-and-verify,
 //! both under the scenario's verification temperature. The committed
@@ -51,10 +51,10 @@ use crate::common::{
 
 /// Full-sized real models on the graphics processor: the resident target
 /// (~20 GB of OptiQ 4-bit weights) plus the BF16 (bfloat16) draft (~0.8 GB)
-/// and both key-value caches. The active limit stays under the machine's
+/// and both astro decoder state caches (the key-value state of each). The active limit stays under the machine's
 /// wired ceiling with headroom for activation workspaces.
 const PROOF_ACTIVE_MEMORY_LIMIT_BYTES: usize = 34 * 1024 * 1024 * 1024;
-const PROOF_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
+const PROOF_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
 
 /// The warmup contract for throughput journeys: untimed decode tokens.
 const WARMUP_OUTPUT_TOKENS: usize = 50;
@@ -145,10 +145,10 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
         journey_started_at,
     );
 
-    // Speculative first: only it requires the draft and target caches to
+    // Speculative first: only it requires the draft and target astro decoder state caches to
     // stay in lockstep, and every phase before it preserved that sync.
     // Baseline runs last because one-token forwards advance only the
-    // target's cache — the draft would be left behind and could not be
+    // target's astro decoder state cache — the draft would be left behind and could not be
     // cheaply re-synced without contaminating the baseline timing.
     println!(
         "[dflash-proof {:>4}s] measuring speculative: {measured_output_tokens} tokens at k={}",
@@ -260,7 +260,7 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             PROOF_ACTIVE_MEMORY_LIMIT_BYTES,
-            PROOF_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            PROOF_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the proof journey memory limits should be valid"),
     )
@@ -314,8 +314,8 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     );
 
     let target_decoder_state =
-        RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-            &target_model.decoder_cache_layout(),
+        RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+            &target_model.astro_decoder_state_cache_layout(),
             256,
         )
         .expect("the target decoder-state stack should allocate");
@@ -430,7 +430,7 @@ fn resolve_draft_library_directory(target_directory: &std::path::Path) -> PathBu
 }
 
 /// Runs the tap-capturing prefill in chunks and grows the draft's context
-/// key-value cache from the target's hidden states. Returns the target's
+/// key-value state (its astro decoder state cache) from the target's hidden states. Returns the target's
 /// greedy preference at the terminal position: the first bonus token.
 fn prefill_and_bootstrap_draft_context(journey: &mut ProofJourney) -> u32 {
     let prefill_started_at = Instant::now();
@@ -494,7 +494,7 @@ fn prefill_and_bootstrap_draft_context(journey: &mut ProofJourney) -> u32 {
     assert_eq!(
         journey.draft_key_value_states.offset_tokens(),
         prompt_token_count as i32,
-        "the draft context cache must cover the whole prompt"
+        "the draft context astro decoder state cache must cover the whole prompt"
     );
     println!(
         "[dflash-proof] prefill complete in {:.1}s",

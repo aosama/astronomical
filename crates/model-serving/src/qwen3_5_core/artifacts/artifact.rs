@@ -147,7 +147,7 @@ impl Qwen3_5ArtifactValidator {
 
 /// The validated core configuration triple every artifact carries: the parsed
 /// text configuration, the optional vision configuration, and the
-/// revision hash derived from the exact config bytes (so prompt-cache blocks
+/// revision hash derived from the exact config bytes (so astro SSD prompt cache blocks
 /// invalidate when the config changes).
 struct ParsedArtifactConfig {
     config: Qwen3_5Config,
@@ -241,7 +241,7 @@ fn validated_safetensors_sources(
 }
 
 /// Derives a 12-character hex revision string from the SHA-256 hash of config.json bytes.
-/// This ensures prompt cache blocks are invalidated when the model config changes.
+/// This ensures astro SSD prompt cache blocks are invalidated when the model config changes.
 pub(super) fn derive_revision_from_config_bytes(config_bytes: &[u8]) -> String {
     let mut sha256_hasher = Sha256::new();
     sha256_hasher.update(config_bytes);

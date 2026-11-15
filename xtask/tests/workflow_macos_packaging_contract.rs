@@ -21,10 +21,12 @@ const NATIVE_BOOTSTRAP_STEP_NAME: &str = "Provision verified native dependencies
 const STABLE_BUNDLE_PATH: &str = "target/astronomical-macos-stable.noindex/Astronomical.app";
 const PINNED_XCODE_ACTION: &str = "./.github/actions/assert-pinned-xcode";
 const PINNED_XCODE_VARIABLE: &str = "ASTRONOMICAL_PINNED_XCODE_VERSION";
-const NATIVE_BUILD_RESTORE_STEP_NAME: &str = "Restore native-build-cache";
-const NATIVE_BUILD_KEY_STEP_NAME: &str = "Compute the native build cache key";
+const NATIVE_BUILD_RESTORE_STEP_NAME: &str =
+    "Restore the native build from the github_actions_cache";
+const NATIVE_BUILD_KEY_STEP_NAME: &str = "Compute the native build github_actions_cache key";
 const SCCACHE_ROUTING_STEP_NAME: &str = "Route Rust compilation through sccache";
-const RELEASE_SCCACHE_RESTORE_STEP_NAME: &str = "Restore release-sccache-cache";
+const RELEASE_SCCACHE_RESTORE_STEP_NAME: &str =
+    "Restore release sccache from the github_actions_cache";
 const CI_NATIVE_BUILD_JOB_ID: &str = "rust-core";
 
 /// Fragments that would mean the lane signs with a real identity, reaches
@@ -46,7 +48,7 @@ fn step_index_of(job_steps: &[&Value], step_name: &str) -> usize {
         .unwrap_or_else(|| panic!("the packaging job has no step named {step_name}"))
 }
 
-fn cache_input<'a>(step: &'a Value, step_name: &str, input_name: &str) -> &'a str {
+fn github_actions_cache_input<'a>(step: &'a Value, step_name: &str, input_name: &str) -> &'a str {
     required_text(
         required_field(step, "with", step_name),
         input_name,
@@ -231,12 +233,12 @@ fn should_restore_the_native_build_ci_saves_under_the_identical_key() {
 
     for input_name in ["key", "path"] {
         assert_eq!(
-            cache_input(
+            github_actions_cache_input(
                 packaging_restore_step,
                 NATIVE_BUILD_RESTORE_STEP_NAME,
                 input_name
             ),
-            cache_input(ci_restore_step, "native-build-cache", input_name),
+            github_actions_cache_input(ci_restore_step, "native-build-cache", input_name),
             "the packaging lane's native-build {input_name} drifted from ci.yml"
         );
     }
@@ -294,7 +296,7 @@ fn should_route_rust_compilation_through_sccache_before_packaging() {
 fn should_keep_release_objects_out_of_the_debug_sccache_family() {
     let workflow = macos_packaging_workflow_contract();
     let job_steps = steps_of(required_job(&workflow, PACKAGING_JOB_ID), PACKAGING_JOB_ID);
-    let release_key = cache_input(
+    let release_key = github_actions_cache_input(
         find_step_by_name(&job_steps, RELEASE_SCCACHE_RESTORE_STEP_NAME),
         RELEASE_SCCACHE_RESTORE_STEP_NAME,
         "key",

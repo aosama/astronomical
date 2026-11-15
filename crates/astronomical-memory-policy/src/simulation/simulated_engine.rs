@@ -89,13 +89,17 @@ impl SimulatedEngine {
     /// The probe a real engine runs at load: one layer step of each kind,
     /// measured. `reported_percent` below 100 misjudges the measurement on
     /// purpose, the way a test hook would.
-    pub(crate) fn probe_working_memory(&mut self, span_token_count: u32, reported_percent: u64) {
+    pub(crate) fn probe_mlx_working_buffers(
+        &mut self,
+        span_token_count: u32,
+        reported_percent: u64,
+    ) {
         for phase in [
             LedgerPhase::ReadingPrompt { span_token_count },
             LedgerPhase::WritingReply,
         ] {
             let reported_bytes =
-                self.model.true_working_memory_bytes(phase) * reported_percent / 100;
+                self.model.true_mlx_working_buffer_bytes(phase) * reported_percent / 100;
             let capacity = self.governor.record_probe(phase, reported_bytes);
             self.trim_kept_layers_to(capacity);
         }
@@ -281,7 +285,7 @@ impl SimulatedEngine {
     }
 
     fn step_fits(&self, phase: LedgerPhase, in_flight_bytes: u64) -> bool {
-        self.active_bytes(in_flight_bytes) + self.model.true_working_memory_bytes(phase)
+        self.active_bytes(in_flight_bytes) + self.model.true_mlx_working_buffer_bytes(phase)
             <= self.allowed_active_bytes()
     }
 
@@ -300,7 +304,7 @@ impl SimulatedEngine {
             active_bytes_after_step: held_bytes,
             peak_bytes_during_step: held_bytes
                 + in_flight_bytes
-                + self.model.true_working_memory_bytes(phase),
+                + self.model.true_mlx_working_buffer_bytes(phase),
         }
     }
 

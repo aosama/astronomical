@@ -68,7 +68,7 @@ fn should_reject_a_history_written_for_a_different_layer_count() {
 
     assert!(
         read_expert_usage(&usage_file_path, 3).is_none(),
-        "a shape-mismatched history must not seed the cache"
+        "a shape-mismatched history must not seed the astro_expert_cache"
     );
 }
 

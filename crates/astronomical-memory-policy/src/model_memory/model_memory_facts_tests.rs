@@ -75,7 +75,7 @@ fn should_show_the_ledger_accounts_as_one_snapshot_that_adds_up_to_the_limit() {
     assert_eq!(budget_snapshot.mlx_active_memory_ceiling_bytes, 10_000);
     assert_eq!(budget_snapshot.model_core_payload_bytes, 3_000);
     assert_eq!(budget_snapshot.context_window_reserve_bytes, 2_000);
-    // Working memory 1,000 and the margin of a fiftieth, 200.
+    // MLX working buffers 1,000 and the margin of a fiftieth, 200.
     assert_eq!(budget_snapshot.activation_headroom_bytes, 1_200);
     assert_eq!(budget_snapshot.complete_layer_stream_slot_bytes, 500);
     assert_eq!(budget_snapshot.retained_expert_budget_bytes, 3_300);

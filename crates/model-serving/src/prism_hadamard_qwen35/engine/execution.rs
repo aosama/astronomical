@@ -13,12 +13,12 @@ mod sampling;
 use astronomical_ipc_protocol::RequestId;
 use mlx_bridge::MlxArray;
 
-use crate::PersistentPromptCacheBlockKey;
-use crate::PersistentPromptCacheDiskStore;
-use crate::PersistentPromptCacheDiskStoreConfig;
+use crate::AstroSsdPromptCacheBlockKey;
+use crate::AstroSsdPromptCacheDiskStore;
+use crate::AstroSsdPromptCacheDiskStoreConfig;
 use crate::Qwen3_5InferenceRequest;
 use crate::Qwen3_5ThinkingBudgetState;
-use crate::persistent_cache::PersistentPromptCacheCounters;
+use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheCounters;
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
@@ -29,12 +29,12 @@ use crate::{PerformanceAttribution, PerformanceAttributionLog, PerformanceOperat
 pub struct PrismHadamardQwen35PendingStartup {
     pub validated_pack: ValidatedFoldedPack,
     pub effective_mlx_memory_ceiling_bytes: usize,
-    pub allocator_cache_memory_limit_bytes: usize,
+    pub mlx_buffer_cache_limit_bytes: usize,
     pub maximum_context_tokens: u32,
     pub prompt_processing_chunk_tokens: u32,
-    pub prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
-    pub configured_prompt_cache_block_token_count: Option<usize>,
-    pub prompt_cache_common_prefix_stride_blocks: u32,
+    pub astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    pub configured_astro_ssd_prompt_cache_block_token_count: Option<usize>,
+    pub ssd_prompt_cache_common_prefix_stride_blocks: u32,
     /// Lets `load` explain that this engine has no Neural Engine path.
     pub neural_engine_mlp_prefill_requested: bool,
     pub performance_attribution: PerformanceAttribution,
@@ -49,14 +49,13 @@ pub struct PrismHadamardQwen35InferenceExecution {
     pub(super) model: Option<PrismHadamardTextModel>,
     pub(super) active: Option<PrismHadamardQwen35ActiveGeneration>,
     pub(super) ceiling_bytes: u64,
-    pub(super) allocator_cache_bytes: u64,
+    pub(super) mlx_buffer_cache_bytes: u64,
     pub(super) minimum_ceiling_bytes: u64,
     pub(super) maximum_context_tokens: u32,
     prompt_processing_chunk_tokens: u32,
-    pub(super) persistent_prompt_cache: Option<std::sync::Arc<PersistentPromptCacheDiskStore>>,
-    pub(super) persistent_prompt_cache_disk_store_config:
-        Option<PersistentPromptCacheDiskStoreConfig>,
-    pub(super) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
+    pub(super) astro_ssd_prompt_cache: Option<std::sync::Arc<AstroSsdPromptCacheDiskStore>>,
+    pub(super) astro_ssd_prompt_cache_disk_store_config: Option<AstroSsdPromptCacheDiskStoreConfig>,
+    pub(super) astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters,
     pub(super) performance_attribution_log: PerformanceAttributionLog,
     pub(super) attribution_model_id: Option<String>,
     pub(super) attribution_model_revision: Option<String>,
@@ -73,9 +72,9 @@ pub(super) struct PrismHadamardQwen35ActiveGeneration {
     /// Absolute count of prompt tokens the forward pass has already covered,
     /// including any restored prefix.
     pub(super) processed_prompt_token_count: u32,
-    /// The prompt-prefix token count the persistent cache restored; reported
+    /// The prompt-prefix token count the astro SSD prompt cache restored; reported
     /// as reused prompt work on every prefill progress event.
-    pub(super) cached_token_count: u32,
+    pub(super) astro_ssd_prompt_cache_restored_token_count: u32,
     pub(super) generation_state: StraightGenerationState,
     /// The next sampled token as a lazy `[1, 1]` device array whose graph
     /// is already submitted, or `None` once generation finished. Its value
@@ -90,7 +89,7 @@ pub(super) struct PrismHadamardQwen35ActiveGeneration {
         Option<crate::structured_generation::StructuredTokenConstraint>,
     /// The last block this generation durably published; the parent of the
     /// next capture's key chain.
-    pub(super) last_published_block_key: Option<PersistentPromptCacheBlockKey>,
+    pub(super) last_published_block_key: Option<AstroSsdPromptCacheBlockKey>,
     pub(super) performance_attribution: PerformanceAttribution,
 }
 
@@ -119,26 +118,27 @@ impl PrismHadamardQwen35ActiveGeneration {
 impl PrismHadamardQwen35InferenceExecution {
     pub(crate) fn pending(pending_startup: PrismHadamardQwen35PendingStartup) -> Self {
         let ceiling_bytes = pending_startup.effective_mlx_memory_ceiling_bytes as u64;
-        let allocator_cache_bytes = pending_startup.allocator_cache_memory_limit_bytes as u64;
+        let mlx_buffer_cache_bytes = pending_startup.mlx_buffer_cache_limit_bytes as u64;
         let maximum_context_tokens = pending_startup.maximum_context_tokens;
         let prompt_processing_chunk_tokens = pending_startup.prompt_processing_chunk_tokens.max(1);
         let PrismHadamardQwen35PendingStartup {
-            prompt_cache_disk_store_config,
+            astro_ssd_prompt_cache_disk_store_config,
             ..
         } = &pending_startup;
-        let prompt_cache_disk_store_config = prompt_cache_disk_store_config.clone();
+        let astro_ssd_prompt_cache_disk_store_config =
+            astro_ssd_prompt_cache_disk_store_config.clone();
         Self {
             pending_startup: Some(pending_startup),
             model: None,
             active: None,
             ceiling_bytes,
-            allocator_cache_bytes,
+            mlx_buffer_cache_bytes,
             minimum_ceiling_bytes: 1,
             maximum_context_tokens,
             prompt_processing_chunk_tokens,
-            persistent_prompt_cache: None,
-            persistent_prompt_cache_disk_store_config: prompt_cache_disk_store_config,
-            persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
+            astro_ssd_prompt_cache: None,
+            astro_ssd_prompt_cache_disk_store_config,
+            astro_ssd_prompt_cache_counters: AstroSsdPromptCacheCounters::default(),
             performance_attribution_log: PerformanceAttributionLog::disabled(),
             attribution_model_id: None,
             attribution_model_revision: None,

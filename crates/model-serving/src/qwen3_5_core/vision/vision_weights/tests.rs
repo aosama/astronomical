@@ -159,15 +159,15 @@ pub(crate) fn write_released_tensor_sidecar(shard_path: &std::path::Path, elemen
 }
 
 /// MLX memory the process holds after returning reclaimable buffers, so a
-/// release that only moved bytes into the allocator cache does not count.
+/// release that only moved bytes into the MLX buffer cache does not count.
 fn held_memory_bytes(runtime: &MlxRuntime) -> usize {
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
-        .expect("the allocator cache should clear");
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("the MLX buffer cache should clear");
     let memory_snapshot = runtime
         .memory_snapshot()
         .expect("the MLX memory snapshot should be readable");
-    memory_snapshot.active_memory_bytes() + memory_snapshot.allocator_cache_memory_bytes()
+    memory_snapshot.active_memory_bytes() + memory_snapshot.mlx_buffer_cache_bytes()
 }
 
 fn evaluate_released_tensor(runtime: &MlxRuntime, vision_weights: &Qwen3_5VisionWeights) {
@@ -220,7 +220,7 @@ fn should_release_evaluated_vision_bytes_and_read_them_again_after_rebinding() {
 
     assert!(
         held_bytes_after_release + RELEASED_TENSOR_PAYLOAD_BYTES <= held_bytes_while_resident,
-        "releasing must return the tower bytes, not park them in the allocator cache: \
+        "releasing must return the tower bytes, not park them in the MLX buffer cache: \
          {held_bytes_while_resident} before, {held_bytes_after_release} after"
     );
     assert_eq!(

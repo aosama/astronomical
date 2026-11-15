@@ -6,8 +6,8 @@ use astronomical_native_identity::{NativeBuildProfile, digest_bytes};
 use super::command::run;
 use super::hash_manifest::{manifest_differences, tree_hash_manifest};
 use super::header_locations::{
-    built_entry_directory, built_identity, native_build_store_directory,
-    native_build_store_schema_version, native_dependency_cache_directory,
+    astro_native_build_cache_dependencies_directory, built_entry_directory, built_identity,
+    native_build_store_directory, native_build_store_schema_version,
 };
 use super::options::{ProvisionMode, parse_provision_options};
 use super::patch_pipeline::{
@@ -55,7 +55,7 @@ fn should_default_to_provisioning_the_core_profile() {
 fn should_parse_every_flag_the_shell_entry_point_accepted() {
     let provision_options = parse_provision_options(&arguments(&[
         "--cache-dir",
-        "/cache",
+        "/native-archives",
         "--native-build-store-dir",
         "/store",
         "--manifest",
@@ -70,7 +70,12 @@ fn should_parse_every_flag_the_shell_entry_point_accepted() {
     ]))
     .expect("every flag is valid");
 
-    assert_eq!(provision_options.cache_directory.as_deref(), Some("/cache"));
+    assert_eq!(
+        provision_options
+            .astro_native_build_cache_dependencies_directory
+            .as_deref(),
+        Some("/native-archives")
+    );
     assert_eq!(
         provision_options.native_build_store_directory.as_deref(),
         Some("/store")
@@ -215,7 +220,7 @@ fn should_report_modified_built_only_and_extracted_only_paths() {
 }
 
 /// Byte-for-byte parity with the shell's `find | sort | shasum` manifest, so
-/// an extraction the shell published still verifies as cached.
+/// an extraction the shell published still verifies as already extracted.
 #[cfg(target_os = "macos")]
 #[test]
 fn should_hash_a_tree_exactly_like_find_sort_and_shasum() {
@@ -268,7 +273,8 @@ fn write_fixture_file(file_path: &Path, file_text: &str) {
 }
 
 /// Fixture archives, patches, manifest, and patch list in a sandbox, so the
-/// provisioning journeys never touch the real pins, cache, or network.
+/// provisioning journeys never touch the real pins, the
+/// `astro_native_build_cache`, or the network.
 #[cfg(target_os = "macos")]
 struct ProvisionSandbox {
     sandbox_directory: tempfile::TempDir,
@@ -322,10 +328,11 @@ impl ProvisionSandbox {
             &self.path(&format!("archive-sources/{top_level_name}/{header_path}")),
             "original\n",
         );
-        std::fs::create_dir_all(self.path("cache")).expect("fixture cache");
+        std::fs::create_dir_all(self.path("native-archives"))
+            .expect("fixture astro native build cache dependencies folder");
         let tar_status = Command::new("tar")
             .arg("-czf")
-            .arg(self.path(&format!("cache/{archive_file_name}")))
+            .arg(self.path(&format!("native-archives/{archive_file_name}")))
             .arg("-C")
             .arg(self.path("archive-sources"))
             .arg(top_level_name)
@@ -333,7 +340,7 @@ impl ProvisionSandbox {
             .expect("tar should run");
         assert!(tar_status.success());
         digest_bytes(
-            &std::fs::read(self.path(&format!("cache/{archive_file_name}")))
+            &std::fs::read(self.path(&format!("native-archives/{archive_file_name}")))
                 .expect("fixture archive"),
         )
     }
@@ -351,7 +358,7 @@ impl ProvisionSandbox {
     fn provision_arguments(&self, extra_flags: &[&str]) -> Vec<String> {
         let mut provision_arguments = Vec::new();
         for (flag, sandbox_path) in [
-            ("--cache-dir", "cache"),
+            ("--cache-dir", "native-archives"),
             ("--native-build-store-dir", "store"),
             ("--manifest", "manifest"),
             ("--patch-list", "patch-list"),
@@ -366,7 +373,8 @@ impl ProvisionSandbox {
     fn extraction_directory(&self) -> PathBuf {
         let source_identity =
             super::header_locations::source_identity(&repository_root()).expect("source identity");
-        self.path("cache/bindgen-headers").join(source_identity)
+        self.path("native-archives/bindgen-headers")
+            .join(source_identity)
     }
 }
 
@@ -394,7 +402,7 @@ fn should_provision_patched_headers_then_reuse_and_self_heal_them() {
     assert!(marker_text.contains("mlx_archive=mlx-fixture.tar.gz"));
 
     run(&repository_root(), &sandbox.provision_arguments(&[]))
-        .expect("the cached run should succeed");
+        .expect("the repeat run on a verified extraction should succeed");
     std::fs::write(&patched_header, "damaged\n").expect("damage the extraction");
     run(&repository_root(), &sandbox.provision_arguments(&[]))
         .expect("a damaged extraction should self-heal");
@@ -410,8 +418,11 @@ fn should_provision_patched_headers_then_reuse_and_self_heal_them() {
 #[test]
 fn should_refuse_a_tampered_or_missing_archive_without_downloading() {
     let sandbox = ProvisionSandbox::install();
-    std::fs::write(sandbox.path("cache/mlx-fixture.tar.gz"), "tampered")
-        .expect("tamper with the archive");
+    std::fs::write(
+        sandbox.path("native-archives/mlx-fixture.tar.gz"),
+        "tampered",
+    )
+    .expect("tamper with the archive");
 
     let tampered_error = run(&repository_root(), &sandbox.provision_arguments(&[]))
         .expect_err("a tampered archive must be refused");
@@ -424,7 +435,8 @@ fn should_refuse_a_tampered_or_missing_archive_without_downloading() {
         "{tampered_error}"
     );
 
-    std::fs::remove_file(sandbox.path("cache/mlx-fixture.tar.gz")).expect("remove the archive");
+    std::fs::remove_file(sandbox.path("native-archives/mlx-fixture.tar.gz"))
+        .expect("remove the archive");
     let missing_error = run(&repository_root(), &sandbox.provision_arguments(&[]))
         .expect_err("a missing archive must be refused");
     assert!(
@@ -495,15 +507,16 @@ fn should_verify_headers_against_a_completed_build_and_catch_a_one_byte_differen
 }
 
 #[test]
-fn should_refuse_relative_cache_and_store_directories() {
-    let relative_cache_error = native_dependency_cache_directory(Some("relative/cache"))
-        .expect_err("a relative cache must be refused");
+fn should_refuse_relative_archive_and_store_directories() {
+    let relative_archive_error =
+        astro_native_build_cache_dependencies_directory(Some("relative/archives"))
+            .expect_err("a relative astro native build cache dependencies folder must be refused");
     let relative_store_error = native_build_store_directory(Some("relative/store"))
         .expect_err("a relative store must be refused");
 
     assert!(
-        relative_cache_error.contains("absolute"),
-        "{relative_cache_error}"
+        relative_archive_error.contains("absolute"),
+        "{relative_archive_error}"
     );
     assert!(
         relative_store_error.contains("absolute"),

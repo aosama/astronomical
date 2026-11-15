@@ -13,9 +13,9 @@
 //! (`prompt_reads_complete_expert_layer`). Otherwise nothing is held and
 //! each span reads the experts it routes to, as a chunk does.
 //!
-//! A layer the cache keeps only part of is held like any other: the whole
+//! A layer the astro expert cache keeps only part of is held like any other: the whole
 //! page is read once and its hot table is left alone unless the residency
-//! plan lets the cache adopt the complete layer in its place.
+//! plan lets the astro expert cache adopt the complete layer in its place.
 
 use mlx_bridge::MlxArray;
 
@@ -77,7 +77,7 @@ impl Qwen3_5Model {
     }
 
     /// Before a layer's spans: takes the layer's complete page in hand when
-    /// the prompt reads it whole and the cache does not keep it.
+    /// the prompt reads it whole and the astro expert cache does not keep it.
     ///
     /// A read that fails is not fatal here. Nothing is held, and each span
     /// then reads its own experts and reports the failure if it persists.
@@ -89,8 +89,8 @@ impl Qwen3_5Model {
     ) {
         self.release_held_prompt_expert_layer();
         self.discard_read_ahead_before(layer_index);
-        let (Some(expert_pager), Some(retained_experts)) =
-            (self.expert_pager.as_ref(), self.retained_experts.as_ref())
+        let (Some(expert_pager), Some(astro_expert_cache)) =
+            (self.expert_pager.as_ref(), self.astro_expert_cache.as_ref())
         else {
             return;
         };
@@ -111,7 +111,7 @@ impl Qwen3_5Model {
             return;
         };
         let expert_capacity = manifest.expert_ids.len();
-        retained_experts
+        astro_expert_cache
             .borrow_mut()
             .record_disk_load(expert_capacity, manifest.source_manifests.len());
         if should_commit_multi_token_union_as_complete_layer(
@@ -120,8 +120,12 @@ impl Qwen3_5Model {
             self.expert_layer_state(layer_index),
             expert_capacity,
             expert_capacity,
-        ) && self.adopt_held_layer_into_cache(retained_experts, layer_index, &manifest, &weights)
-        {
+        ) && self.adopt_held_layer_into_astro_expert_cache(
+            astro_expert_cache,
+            layer_index,
+            &manifest,
+            &weights,
+        ) {
             performance_attribution.record_counter(
                 PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
                 manifest.payload_byte_count,
@@ -134,18 +138,18 @@ impl Qwen3_5Model {
         });
     }
 
-    /// Offers the page to the cache, which shares its arrays when the layer
+    /// Offers the page to the astro expert cache, which shares its arrays when the layer
     /// fits. A runtime failure leaves the layer streamed for this prompt.
-    fn adopt_held_layer_into_cache(
+    fn adopt_held_layer_into_astro_expert_cache(
         &self,
-        retained_experts: &std::cell::RefCell<
-            crate::qwen3_5_streaming::expert_streaming::WarmExpertSlotTableCache,
+        astro_expert_cache: &std::cell::RefCell<
+            crate::qwen3_5_streaming::expert_streaming::AstroExpertCache,
         >,
         layer_index: usize,
         manifest: &QuantizedExpertPageManifest,
         weights: &Qwen3_5PagedExpertWeights,
     ) -> bool {
-        match retained_experts.borrow_mut().try_adopt_complete_layer(
+        match astro_expert_cache.borrow_mut().try_adopt_complete_layer(
             &self.runtime,
             layer_index,
             &manifest.expert_ids,
@@ -156,7 +160,7 @@ impl Qwen3_5Model {
                 tracing::warn!(
                     layer_index,
                     error = %adoption_error,
-                    "the expert cache could not adopt a prompt layer's page; the layer streams for this prompt"
+                    "the astro expert cache could not adopt a prompt layer's page; the layer streams for this prompt"
                 );
                 false
             }
@@ -312,7 +316,7 @@ impl Qwen3_5Model {
         previous_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        if self.retained_experts.is_none() {
+        if self.astro_expert_cache.is_none() {
             return Ok(());
         }
         self.wait_for_previous_layer(previous_layer_output, performance_attribution)?;

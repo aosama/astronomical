@@ -34,7 +34,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
 
 /// These are the exact values the identity was hashed from — one capture, no
 /// second pass. Values are flattened to one line each so a CI log stays
-/// greppable: a native-cache flap is then attributable by reading seven lines
+/// greppable: a flap of the `astro_native_build_cache` key is then attributable by reading seven lines
 /// instead of diffing runner images.
 fn explain_probe_values(identity: &str, probe_values: &[ProbeValue]) {
     eprintln!("[native-fingerprint] identity={identity}");
@@ -49,10 +49,10 @@ fn explain_probe_values(identity: &str, probe_values: &[ProbeValue]) {
 }
 
 fn print_identity(options: &FingerprintOptions, identity: &str) -> Result<(), String> {
-    if options.cache_environment {
+    if options.should_print_github_environment {
         print!(
             "{}",
-            cache_environment_text(&options.repository_root, identity)?
+            github_environment_text(&options.repository_root, identity)?
         );
     } else {
         println!("{identity}");
@@ -61,20 +61,23 @@ fn print_identity(options: &FingerprintOptions, identity: &str) -> Result<(), St
 }
 
 /// `--cache-environment` prints `KEY=value` lines for `$GITHUB_ENV`, so a
-/// workflow gets the native build cache key and the store entry to cache
-/// without re-deriving the store layout in shell. The entry is in the default
+/// workflow gets the `astro_native_build_cache` key and the store entry to save
+/// in the `github_actions_cache` without re-deriving the store layout in shell. The entry is in the default
 /// store under HOME, which is the store `app package` reads its metallib from.
-fn cache_environment_text(repository_root: &Path, native_identity: &str) -> Result<String, String> {
+fn github_environment_text(
+    repository_root: &Path,
+    native_identity: &str,
+) -> Result<String, String> {
     let Some(home_directory) = std::env::var_os("HOME") else {
         return Err("HOME is required to locate the native build store".to_owned());
     };
     let schema_version = native_store_schema_version(repository_root)?;
     let entry_directory =
         native_store_entry_directory(Path::new(&home_directory), schema_version, native_identity);
-    Ok(cache_environment_lines(native_identity, &entry_directory))
+    Ok(github_environment_lines(native_identity, &entry_directory))
 }
 
-fn cache_environment_lines(native_identity: &str, entry_directory: &Path) -> String {
+fn github_environment_lines(native_identity: &str, entry_directory: &Path) -> String {
     format!(
         "NATIVE_BUILD_IDENTITY={native_identity}\nNATIVE_BUILD_ENTRY_DIRECTORY={}\n",
         entry_directory.display()
@@ -87,7 +90,7 @@ struct FingerprintOptions {
     profile: NativeBuildProfile,
     scope: IdentityScope,
     explain: bool,
-    cache_environment: bool,
+    should_print_github_environment: bool,
     target_triple: Option<String>,
 }
 
@@ -166,7 +169,7 @@ fn parse_arguments(
         profile,
         scope,
         explain: fingerprint_switches.explain,
-        cache_environment: fingerprint_switches.cache_environment,
+        should_print_github_environment: fingerprint_switches.should_print_github_environment,
         target_triple,
     }))
 }
@@ -177,7 +180,7 @@ fn parse_arguments(
 struct FingerprintSwitches {
     source_only: bool,
     explain: bool,
-    cache_environment: bool,
+    should_print_github_environment: bool,
 }
 
 impl FingerprintSwitches {
@@ -186,16 +189,16 @@ impl FingerprintSwitches {
         match argument {
             "--source-only" => self.source_only = true,
             "--explain" => self.explain = true,
-            "--cache-environment" => self.cache_environment = true,
+            "--cache-environment" => self.should_print_github_environment = true,
             _ => return false,
         }
         true
     }
 
     /// A source-only identity leaves the toolchain out, so it never names a
-    /// store entry and cannot be a cache key.
+    /// store entry and cannot be a key of the `astro_native_build_cache`.
     fn identity_scope(&self) -> Result<IdentityScope, String> {
-        match (self.source_only, self.cache_environment) {
+        match (self.source_only, self.should_print_github_environment) {
             (true, true) => {
                 Err("--cache-environment needs the full identity, not --source-only".to_owned())
             }

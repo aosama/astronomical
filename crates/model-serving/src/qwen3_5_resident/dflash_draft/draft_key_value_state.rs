@@ -6,7 +6,7 @@
 //! windowed layers keep the full context resident (bounded in practice by
 //! memory governance) and simply do not attend beyond their window. This is
 //! the deliberate storage choice for this integration — memory-bound but
-//! simple, and the draft's cache is small next to the target's. The
+//! simple, and the draft's astro decoder state cache is small next to the target's. The
 //! ring-buffer state already in the tree is the measured follow-up for
 //! long-context sessions: it would replace these states windowed-layer by
 //! windowed-layer without changing any caller, once its logical truncate
@@ -15,7 +15,7 @@
 //! Rollback of rejected speculation is `truncate_to_offset`, the same
 //! transactional primitive the target's decode path uses.
 
-use crate::decoder_cache::FullAttentionKeyValueState;
+use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// Capacity growth granularity for draft key-value slabs, in tokens. The

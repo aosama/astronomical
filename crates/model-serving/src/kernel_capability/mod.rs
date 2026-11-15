@@ -143,7 +143,7 @@ pub fn validate_probe_outputs(
 /// Verdicts are computed once at construction — at first model load, when the
 /// worker already holds its runtime — and reused by every subsequent request
 /// and model swap. Verdicts are never persisted to disk: an operating-system
-/// update can change what compiles and runs, so a disk cache is a staleness
+/// update can change what compiles and runs, so a verdict stored on disk is a staleness
 /// hazard for a probe cost measured in milliseconds.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkerKernelCapabilities {

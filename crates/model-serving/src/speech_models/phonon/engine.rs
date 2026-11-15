@@ -35,7 +35,7 @@ struct LoadedPhonon {
     load_result: SpeechEngineLoadResult,
     memory_account: SpeechMemoryAccount,
     /// The flow model's state after reading each voice used so far. Reading
-    /// a voice runs the backbone over about 125 positions; a cached state is
+    /// a voice runs the backbone over about 125 positions; a memoized state is
     /// branched per request instead, which copies only array handles.
     voice_histories_by_name: HashMap<String, AttentionHistory>,
 }
@@ -51,14 +51,14 @@ impl PhononSpeechEngine {
         model_id: impl Into<String>,
         model_directory: PathBuf,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
     ) -> Self {
         Self {
             settings: SpeechEngineSettings {
                 model_id: model_id.into(),
                 model_directory,
                 effective_mlx_memory_ceiling_bytes,
-                allocator_cache_memory_limit_bytes,
+                mlx_buffer_cache_limit_bytes,
             },
             loaded: None,
             request_slot: SpeechRequestSlot::empty(),

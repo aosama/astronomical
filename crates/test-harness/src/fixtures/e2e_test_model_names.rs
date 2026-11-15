@@ -116,7 +116,7 @@ pub fn dense_vision_model_id() -> &'static str {
 /// The dense model placed on the streaming engine when its text weights do
 /// not fit under the MLX limit (issue #1985): the public text-only Ornith 1.5
 /// 9B MLX 6-bit build from the ornith-ai Hugging Face organization, discovered
-/// from the Hugging Face cache rather than the download catalog.
+/// from the Hugging Face hub cache rather than the download catalog.
 pub fn streamed_dense_model_id() -> &'static str {
     model_id_for_role(STREAMED_DENSE_ROLE)
 }

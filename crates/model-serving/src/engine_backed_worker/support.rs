@@ -4,8 +4,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ExpertMemoryMode, ProtocolError, RequestId, WorkerModelConfiguration,
-    WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
+    ChatGenerationCommand, ExpertMemoryMode, ProtocolError, RequestId,
+    WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerModelConfiguration, WorkerPromptWorkReuse,
 };
 use thiserror::Error;
 
@@ -173,7 +173,7 @@ pub trait ModelFactory<
     fn update_mlx_memory_limits(
         &mut self,
         _effective_mlx_memory_ceiling_bytes: u64,
-        _allocator_cache_memory_limit_bytes: u64,
+        _mlx_buffer_cache_limit_bytes: u64,
     ) {
     }
 
@@ -182,12 +182,12 @@ pub trait ModelFactory<
     /// to plan that load at the floor instead; the default ignores it.
     fn update_floor_raise_limit(&mut self, _floor_raise_limit_bytes: u64) {}
 
-    /// Returns the global prompt-cache root directory, if the factory manages one.
+    /// Returns the global astro SSD prompt cache root directory, if the factory manages one.
     ///
-    /// `None` means the factory does not own a cache (e.g. the `()` unit factory).
-    /// The daemon uses this to compute the target path for cache-clear
+    /// `None` means the factory does not own an `astro_ssd_prompt_cache` (e.g. the `()` unit factory).
+    /// The daemon uses this to compute the target path for `astro_ssd_prompt_cache` clear
     /// operations when no model is currently loaded.
-    fn global_prompt_cache_root_directory(&self) -> Option<&Path> {
+    fn global_astro_ssd_prompt_cache_root_directory(&self) -> Option<&Path> {
         None
     }
 
@@ -297,8 +297,8 @@ pub enum WorkerRuntimeError {
     Ipc(#[from] ProtocolError),
     #[error("model swap failed: {model_load_failure_reason}")]
     ModelSwapFailed { model_load_failure_reason: String },
-    #[error("persistent prompt-cache clear failed: {reason}")]
-    PersistentPromptCacheClearFailed { reason: String },
+    #[error("persistent astro SSD prompt cache clear failed: {reason}")]
+    AstroSsdPromptCacheClearFailed { reason: String },
 }
 
 /// Total context (prompt plus maximum output) of one request: the quantity a
@@ -321,7 +321,7 @@ pub(crate) struct ActiveEngineGeneration<RequestOutput, RetryRequest> {
     pub(crate) next_sequence_number: u16,
     pub(crate) next_tool_call_index: u16,
     pub(crate) prompt_token_count: u32,
-    pub(crate) cached_token_count: u32,
+    pub(crate) astro_ssd_prompt_cache_restored_token_count: u32,
     pub(crate) required_prompt_processing_token_count: u32,
     pub(crate) prompt_work_reuse: WorkerPromptWorkReuse,
     pub(crate) prefill_processed_tokens: u32,
@@ -331,8 +331,8 @@ pub(crate) struct ActiveEngineGeneration<RequestOutput, RetryRequest> {
     pub(crate) engine_has_finalized_generation: bool,
     pub(crate) has_emitted_tool_call: bool,
     pub(crate) last_reported_expert_memory_mode: Option<ExpertMemoryMode>,
-    pub(crate) persistent_prompt_cache_diagnostics:
-        Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    pub(crate) astro_ssd_prompt_cache_diagnostics:
+        Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
 }
 
 impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryRequest> {
@@ -343,7 +343,7 @@ impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryReq
     pub(crate) fn new(
         generation_command: &ChatGenerationCommand,
         prompt_token_count: u32,
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         required_prompt_processing_token_count: u32,
         request_output: RequestOutput,
         streaming_retry_request: Option<RetryRequest>,
@@ -359,7 +359,7 @@ impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryReq
             next_sequence_number: 0,
             next_tool_call_index: 0,
             prompt_token_count,
-            cached_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             required_prompt_processing_token_count,
             prompt_work_reuse: WorkerPromptWorkReuse::default(),
             prefill_processed_tokens: 0,
@@ -369,7 +369,7 @@ impl<RequestOutput, RetryRequest> ActiveEngineGeneration<RequestOutput, RetryReq
             engine_has_finalized_generation: false,
             has_emitted_tool_call: false,
             last_reported_expert_memory_mode: None,
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
         }
     }
 

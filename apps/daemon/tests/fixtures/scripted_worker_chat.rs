@@ -1,9 +1,9 @@
 use astronomical_ipc_protocol::{
-    ChatGenerationCompletionReason, ChatGenerationOutput, ProtocolWriter, RequestId, WorkerEvent,
-    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
-    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPersistentPromptCacheStartupCleanupCategory,
-    WorkerPersistentPromptCacheStartupCleanupEvidence,
+    ChatGenerationCompletionReason, ChatGenerationOutput, ProtocolWriter, RequestId,
+    WorkerAstroSsdPromptCacheExpectedBlockHashPrefix, WorkerAstroSsdPromptCacheLookupOutcome,
+    WorkerAstroSsdPromptCacheMissReason, WorkerAstroSsdPromptCacheRequestDiagnostics,
+    WorkerAstroSsdPromptCacheStartupCleanupCategory,
+    WorkerAstroSsdPromptCacheStartupCleanupEvidence, WorkerEvent,
 };
 
 /// One generation's expert-streaming stats for the session-accumulation
@@ -108,8 +108,8 @@ where
             prompt_token_count: 2,
             generated_token_count: 4,
             reasoning_token_count: 0,
-            cached_token_count: 0,
-            persistent_prompt_cache_diagnostics: Some(accepted_cache_diagnostics()),
+            astro_ssd_prompt_cache_restored_token_count: 0,
+            astro_ssd_prompt_cache_diagnostics: Some(accepted_astro_ssd_prompt_cache_diagnostics()),
             reason: ChatGenerationCompletionReason::ToolCalls,
         })
         .await
@@ -149,8 +149,8 @@ where
             prompt_token_count: 100,
             generated_token_count: 10,
             reasoning_token_count: 0,
-            cached_token_count: 0,
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_restored_token_count: 0,
+            astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })
         .await
@@ -185,8 +185,8 @@ where
             prompt_token_count: 2,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            cached_token_count: 0,
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_restored_token_count: 0,
+            astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })
         .await
@@ -205,8 +205,8 @@ where
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_restored_token_count: 0,
+            astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })
         .await
@@ -239,16 +239,16 @@ where
             prompt_token_count: 1,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            cached_token_count: 0,
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_restored_token_count: 0,
+            astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })
         .await
 }
 
-fn accepted_cache_diagnostics() -> WorkerPersistentPromptCacheRequestDiagnostics {
-    WorkerPersistentPromptCacheRequestDiagnostics {
-        lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Miss,
+fn accepted_astro_ssd_prompt_cache_diagnostics() -> WorkerAstroSsdPromptCacheRequestDiagnostics {
+    WorkerAstroSsdPromptCacheRequestDiagnostics {
+        lookup_outcome: WorkerAstroSsdPromptCacheLookupOutcome::Miss,
         block_token_count: 2_048,
         complete_prompt_block_count: 3,
         maximum_restorable_block_count: 3,
@@ -256,27 +256,27 @@ fn accepted_cache_diagnostics() -> WorkerPersistentPromptCacheRequestDiagnostics
         restored_block_count: 0,
         partial_tail_block_token_count: None,
         first_missing_sequence_state_block_index: Some(0),
-        miss_reason: Some(WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing),
+        miss_reason: Some(WorkerAstroSsdPromptCacheMissReason::RootSequenceStateBlockMissing),
         expected_block_hash_prefix: Some(
-            WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash([7_u8; 32]),
+            WorkerAstroSsdPromptCacheExpectedBlockHashPrefix::from_block_hash([7_u8; 32]),
         ),
-        startup_cleanup_evidence: Some(WorkerPersistentPromptCacheStartupCleanupEvidence {
-            interrupted_transaction_recovery: WorkerPersistentPromptCacheStartupCleanupCategory {
+        startup_cleanup_evidence: Some(WorkerAstroSsdPromptCacheStartupCleanupEvidence {
+            interrupted_transaction_recovery: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                 artifact_count: 1,
                 block_count: 0,
                 byte_count: 128,
             },
-            obsolete_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+            obsolete_format: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                 artifact_count: 2,
                 block_count: 0,
                 byte_count: 256,
             },
-            corrupt_current_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+            corrupt_current_format: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                 artifact_count: 0,
                 block_count: 1,
                 byte_count: 512,
             },
-            quota_eviction: WorkerPersistentPromptCacheStartupCleanupCategory {
+            quota_eviction: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                 artifact_count: 0,
                 block_count: 0,
                 byte_count: 0,

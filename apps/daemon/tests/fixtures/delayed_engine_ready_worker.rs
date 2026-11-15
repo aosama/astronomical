@@ -52,8 +52,8 @@ async fn main() {
                         prompt_token_count: 1,
                         generated_token_count: 0,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
-                        persistent_prompt_cache_diagnostics: None,
+                        astro_ssd_prompt_cache_restored_token_count: 0,
+                        astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
                     .await;
@@ -65,8 +65,8 @@ async fn main() {
                         prompt_token_count: 1,
                         generated_token_count: 0,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
-                        persistent_prompt_cache_diagnostics: None,
+                        astro_ssd_prompt_cache_restored_token_count: 0,
+                        astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::Cancelled,
                     })
                     .await;
@@ -91,9 +91,9 @@ async fn main() {
                     })
                     .await;
             }
-            WorkerCommand::ClearPromptCache { model_id } => {
+            WorkerCommand::ClearAstroSsdPromptCache { model_id } => {
                 let _send_outcome = event_writer
-                    .send_event(&WorkerEvent::PromptCacheCleared {
+                    .send_event(&WorkerEvent::AstroSsdPromptCacheCleared {
                         model_id,
                         blocks_removed: 0,
                         bytes_freed: 0,

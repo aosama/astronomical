@@ -11,7 +11,7 @@
 //! ceiling and a rejected retry, and it only reproduces with a real resident
 //! model serving real traffic.
 
-use super::automatic_engine_selection_rest::prompt_chunk_working_memory_allowance_bytes;
+use super::automatic_engine_selection_rest::prompt_chunk_mlx_working_buffer_allowance_bytes;
 use std::{fs, path::Path};
 
 use astronomical_model_serving::{
@@ -63,11 +63,11 @@ async fn run_queued_demotion_journey() {
     let model_directory = configured_installed_model_directory_by_id(model_id);
     let artifact_payload_bytes = artifact_payload_bytes(&model_directory);
     let residency_geometry = measure_sparse_artifact_residency_geometry(&model_directory);
-    // The limit has to hold one prompt chunk's working memory on top of the
+    // The limit has to hold one prompt chunk's MLX working buffers on top of the
     // startup residency terms; see the engine-selection journey (issue
     // #1297 / #1508).
     let prefill_activation_workspace_bytes =
-        prompt_chunk_working_memory_allowance_bytes(&residency_geometry.model_geometry);
+        prompt_chunk_mlx_working_buffer_allowance_bytes(&residency_geometry.model_geometry);
     let resident_memory_ceiling_bytes = residency_geometry
         .complete_residency_with_headroom_bytes
         .saturating_add(BEHAVIOR_PROMPT_CONTEXT_BYTES)
@@ -246,7 +246,7 @@ fn write_acceptance_config(
             "model_directories": [acceptance_model_scan_root(model_directory)],
             "maximum_mlx_memory_gb": mlx_memory_ceiling_bytes.div_ceil(BYTES_PER_MARKETED_GIGABYTE),
         },
-        "prompt_cache": {"enabled": false},
+        "ssd_prompt_cache": {"enabled": false},
         "diagnostics": {"performance_attribution_enabled": true},
         "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": FIXED_PREFILL_CHUNK_SIZE_TOKENS

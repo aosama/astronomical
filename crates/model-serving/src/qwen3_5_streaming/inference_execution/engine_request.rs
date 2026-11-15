@@ -13,7 +13,7 @@ pub(crate) struct StreamingRequestExtension {
     /// a retry never mixes discarded evidence.
     pub(in crate::qwen3_5_streaming) has_opened_prefill_demand_window: bool,
     /// Context tokens admitted at request start; prefill memory recovery
-    /// re-seeds the persistent prompt cache against this same total.
+    /// re-seeds the `astro_ssd_prompt_cache` against this same total.
     pub(in crate::qwen3_5_streaming) reserved_context_tokens: usize,
     /// The prompt being read one layer at a time, between its first layer
     /// and its last.

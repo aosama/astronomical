@@ -6,12 +6,12 @@
 //! contract:
 //!
 //! 1. Cut the spans from the cursor: the configured size, clamped at
-//!    semantic control-span and durable prompt-cache boundaries. A stretch
-//!    may publish several cache blocks, each from the state its span left.
+//!    semantic control-span and durable astro SSD prompt cache boundaries. A stretch
+//!    may publish several astro SSD prompt cache blocks, each from the state its span left.
 //! 2. Read the stretch one layer at a time, reporting every measured step
 //!    to the memory governor.
-//! 3. Publish required prompt-cache state before advancing the in-memory cursor.
-//! 4. Synchronize the tape and reclaim allocator cache only above threshold.
+//! 3. Publish required astro SSD prompt cache state before advancing the in-memory cursor.
+//! 4. Synchronize the tape and reclaim MLX buffer cache only above threshold.
 //! 5. Emit progress only after all required state transitions succeeded.
 //!
 //! A capacity failure never retries smaller spans. The retired ladder halved
@@ -20,18 +20,18 @@
 //! visible progress. Instead, a memory failure is redone with room leased
 //! from the memory governor (`prefill_memory_recovery`): an expert model
 //! runs its failed span again, and a prompt that cannot be put back to a
-//! span is read again from the persistent prompt cache. Either is terminal
+//! span is read again from the `astro_ssd_prompt_cache`. Either is terminal
 //! only once the governor's attempts are spent.
 
-use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
-use crate::qwen3_5_core::prompt_cache_capture::{
-    capture_persistent_prompt_cache_blocks, capture_persistent_prompt_cache_partial_tail_block,
+use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::{
+    capture_astro_ssd_prompt_cache_blocks, capture_astro_ssd_prompt_cache_partial_tail_block,
 };
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::{
-    ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot,
+    MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot,
 };
 
 use crate::{
@@ -103,7 +103,7 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// After a forward read its tokens: publishes the prompt-cache state,
+    /// After a forward read its tokens: publishes the astro SSD prompt cache state,
     /// moves the cursor, measures the forward and reports the tokens read.
     pub(super) fn complete_prefill_attempt(
         &mut self,
@@ -125,7 +125,7 @@ impl Qwen3_5EngineState {
             prefill_end,
             prompt_prefill_chunk_outcome.boundary_checkpoints,
         )?;
-        self.reclaim_allocator_cache_after_prefill_chunk(
+        self.reclaim_mlx_buffer_cache_after_prefill_chunk(
             request_id,
             active_request,
             prefill_start,
@@ -178,7 +178,7 @@ impl Qwen3_5EngineState {
         active_request: &super::engine_request::Qwen3_5EngineRequest,
         prefill_end_exclusive: usize,
     ) -> Option<PrefillAttempt> {
-        let crate::persistent_cache::ResolvedPrefillChunkSpan { prefill_start, .. } =
+        let crate::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan { prefill_start, .. } =
             self.resolve_next_prefill_chunk_span(active_request, prefill_end_exclusive)?;
         let layer_major_span_plan =
             self.layer_major_span_plan_for(active_request, prefill_start, prefill_end_exclusive)?;
@@ -192,22 +192,22 @@ impl Qwen3_5EngineState {
 
     /// Resolves the next prompt-prefill chunk span through the shared pure
     /// resolver: the configured chunk end from the sizer, clamped at the
-    /// durable prompt-cache boundary when one applies.
+    /// durable astro SSD prompt cache boundary when one applies.
     fn resolve_next_prefill_chunk_span(
         &self,
         active_request: &super::engine_request::Qwen3_5EngineRequest,
         prefill_end_exclusive: usize,
-    ) -> Option<crate::persistent_cache::ResolvedPrefillChunkSpan> {
-        let persistent_prompt_cache_block_token_count = self
-            .persistent_prompt_cache
+    ) -> Option<crate::astro_ssd_prompt_cache::ResolvedPrefillChunkSpan> {
+        let astro_ssd_prompt_cache_block_token_count = self
+            .astro_ssd_prompt_cache
             .as_ref()
-            .map(|persistent_prompt_cache| {
-                persistent_prompt_cache
+            .map(|astro_ssd_prompt_cache| {
+                astro_ssd_prompt_cache
                     .model_contract_ref()
                     .block_token_count()
             })
             .unwrap_or(0);
-        crate::persistent_cache::resolve_prompt_prefill_chunk_span(
+        crate::astro_ssd_prompt_cache::resolve_prompt_prefill_chunk_span(
             active_request.prefill_cursor,
             prefill_end_exclusive,
             self.prompt_processing_chunk_sizer
@@ -215,9 +215,9 @@ impl Qwen3_5EngineState {
                     active_request.prefill_cursor,
                     prefill_end_exclusive,
                 ),
-            self.persistent_prompt_cache.is_some(),
-            active_request.can_use_persistent_prompt_cache,
-            persistent_prompt_cache_block_token_count,
+            self.astro_ssd_prompt_cache.is_some(),
+            active_request.can_use_astro_ssd_prompt_cache,
+            astro_ssd_prompt_cache_block_token_count,
         )
     }
 
@@ -273,7 +273,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))
     }
 
-    /// Publishes durable prompt-cache blocks and the partial tail, then
+    /// Publishes durable astro SSD prompt cache blocks and the partial tail, then
     /// advances the request position and cursor. Publication precedes both
     /// moves so a storage failure leaves restartable state. Mirrors the
     /// inlined block.
@@ -282,7 +282,7 @@ impl Qwen3_5EngineState {
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
-        boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+        boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     ) -> Result<(), InferenceEngineError> {
         let prefill_token_count = prefill_end - prefill_start;
         let model = self
@@ -292,11 +292,11 @@ impl Qwen3_5EngineState {
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
         // than continuing with an in-memory chain that restart cannot reproduce.
-        if let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() {
-            if active_request.can_use_persistent_prompt_cache && !boundary_checkpoints.is_empty() {
-                capture_persistent_prompt_cache_blocks(
+        if let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.as_ref() {
+            if active_request.can_use_astro_ssd_prompt_cache && !boundary_checkpoints.is_empty() {
+                capture_astro_ssd_prompt_cache_blocks(
                     self,
-                    persistent_prompt_cache,
+                    astro_ssd_prompt_cache,
                     model,
                     active_request,
                     prefill_start,
@@ -304,9 +304,9 @@ impl Qwen3_5EngineState {
                     boundary_checkpoints,
                 )?;
             }
-            capture_persistent_prompt_cache_partial_tail_block(
+            capture_astro_ssd_prompt_cache_partial_tail_block(
                 self,
-                persistent_prompt_cache,
+                astro_ssd_prompt_cache,
                 model,
                 active_request,
                 prefill_end,
@@ -320,10 +320,10 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
-    /// Retires the chunk tape and reclaims the allocator cache above the
+    /// Retires the chunk tape and reclaims the MLX buffer cache above the
     /// IOGPU-visible threshold, logging both memory snapshots. Mirrors the
     /// inlined block.
-    fn reclaim_allocator_cache_after_prefill_chunk(
+    fn reclaim_mlx_buffer_cache_after_prefill_chunk(
         &mut self,
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
@@ -334,7 +334,7 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        // Retire the chunk tape. Reclaim the allocator cache only when it is
+        // Retire the chunk tape. Reclaim the MLX buffer cache only when it is
         // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunk_cleanup =
             model.memory_snapshot_with_forward_peak().ok();
@@ -342,12 +342,12 @@ impl Qwen3_5EngineState {
         active_request
             .performance_attribution
             .measure_operation(
-                PerformanceOperation::MlxAllocatorCacheCleanup,
+                PerformanceOperation::MlxBufferCacheCleanup,
                 |_performance_attribution| {
                     model
                         .runtime()
-                        .synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(
-                            ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
+                        .synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(
+                            MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES,
                         )
                 },
             )
@@ -363,23 +363,23 @@ impl Qwen3_5EngineState {
                 memory_snapshot_before_end_of_prefill_chunk_cleanup
                     .as_ref()
                     .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
-            allocator_cache_memory_bytes_before_cleanup =
+            mlx_buffer_cache_bytes_before_cleanup =
                 memory_snapshot_before_end_of_prefill_chunk_cleanup
                     .as_ref()
-                    .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+                    .map(|memory_snapshot| memory_snapshot.mlx_buffer_cache_bytes()),
             active_memory_bytes_after_cleanup = memory_snapshot_after_end_of_prefill_chunk_cleanup
                 .as_ref()
                 .map(|memory_snapshot| memory_snapshot.active_memory_bytes()),
-            allocator_cache_memory_bytes_after_cleanup =
+            mlx_buffer_cache_bytes_after_cleanup =
                 memory_snapshot_after_end_of_prefill_chunk_cleanup
                     .as_ref()
-                    .map(|memory_snapshot| memory_snapshot.allocator_cache_memory_bytes()),
+                    .map(|memory_snapshot| memory_snapshot.mlx_buffer_cache_bytes()),
             runtime_active_memory_limit_bytes =
                 model.runtime().memory_limits().active_memory_limit_bytes(),
             cleanup_elapsed_millis = end_of_prefill_chunk_cleanup_started_at
                 .elapsed()
                 .as_millis(),
-            "cleared MLX allocator-cache storage after prompt-processing chunk"
+            "cleared MLX buffer cache storage after prompt-processing chunk"
         );
         Ok(())
     }
@@ -458,8 +458,8 @@ impl Qwen3_5EngineState {
             expert_residency_telemetry: expert_residency,
             expert_memory_mode: Some(model.observed_expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
-            persistent_prompt_cache_diagnostics: active_request
-                .persistent_prompt_cache_diagnostics
+            astro_ssd_prompt_cache_diagnostics: active_request
+                .astro_ssd_prompt_cache_diagnostics
                 .clone(),
             neural_engine_chunk: None,
             prompt_layer_progress: None,
@@ -487,15 +487,13 @@ pub(super) fn prefill_mlx_memory_telemetry_from_snapshot(
         active_memory_bytes,
         0,
     );
-    let allocator_cache_memory_bytes =
-        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(|_| {
-            fatal_engine_error("MLX allocator-cache memory bytes exceed the u64 range")
-        })?;
+    let mlx_buffer_cache_bytes = u64::try_from(mlx_memory_snapshot.mlx_buffer_cache_bytes())
+        .map_err(|_| fatal_engine_error("MLX buffer cache memory bytes exceed the u64 range"))?;
     let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
         .map_err(|_| fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
     Ok(crate::memory::telemetry::MlxMemoryTelemetry::new(
         active_memory_bytes,
-        allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes,
         peak_memory_bytes,
         active_memory_breakdown,
     )

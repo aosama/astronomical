@@ -91,8 +91,8 @@ pub(crate) fn standard_worker_chunking_configuration()
         full_attention_key_value_growth_tokens: 256,
         prefill_graph_submission_layer_interval: 0,
         experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-        prompt_cache_block_tokens: None,
-        prompt_cache_common_prefix_stride_blocks: 4,
+        ssd_prompt_cache_block_tokens: None,
+        ssd_prompt_cache_common_prefix_stride_blocks: 4,
         experimental_decode_stage_attribution_enabled: false,
         experimental_prefill_stage_attribution_enabled: false,
         experimental_in_memory_prefix_adoption_enabled: false,
@@ -158,7 +158,7 @@ const MODEL_ARTIFACT_MLX_MEMORY_LIMIT_SAMPLE_TIMEOUT: Duration = Duration::from_
 pub(crate) const DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) const DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
@@ -180,7 +180,7 @@ pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLi
         machine_mlx_memory_ceiling_bytes,
     );
     eprintln!(
-        "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} allocator_cache_memory_limit_bytes={}",
+        "[model-artifact-memory] machine_mlx_memory_ceiling_bytes={} configured_mlx_memory_ceiling_bytes={:?} effective_mlx_memory_ceiling_bytes={} active_memory_limit_bytes={} mlx_buffer_cache_limit_bytes={}",
         machine_mlx_memory_ceiling_bytes,
         configured_mlx_memory_ceiling_bytes,
         effective_mlx_memory_ceiling_bytes,
@@ -199,7 +199,7 @@ pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLi
 /// MLX memory limits are process-global (one Metal device, one policy), and the serving
 /// invariant is one policy per process — the daemon restarts the worker instead of
 /// reconfiguring. Journeys that legitimately need a distinct policy (for example a cold
-/// allocator cache) adopt the shared policy first and then transition through the production
+/// MLX buffer cache) adopt the shared policy first and then transition through the production
 /// live-transition seam (`update_memory_limits`), restoring it on both success and panic so
 /// later journeys in the same test process keep composing.
 #[cfg(feature = "direct-mlx")]
@@ -237,9 +237,9 @@ impl Drop for MlxMemoryPolicyGuard {
         // A journey that panicked mid-generation must still hand the shared process policy back
         // intact, or every later journey in the same binary fails on a policy it never chose.
         let _restore_result = self.runtime.update_memory_limits(self.shared_memory_limits);
-        let _cache_release_result = self
+        let _mlx_buffer_cache_release_result = self
             .runtime
-            .synchronize_gpu_stream_and_reclaim_allocator_cache_above_threshold(0);
+            .synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(0);
     }
 }
 
@@ -410,10 +410,10 @@ pub(crate) fn configured_model_directory_by_id(model_id: &str) -> Option<PathBuf
 
 #[cfg(feature = "direct-mlx")]
 #[allow(dead_code)]
-pub(crate) fn configured_model_artifact_prompt_cache_maximum_size_bytes() -> u64 {
+pub(crate) fn configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes() -> u64 {
     AstronomicalConfig::load_from_development_location()
         .expect("~/.astronomical-dev/config.json should load for model-artifact acceptance")
-        .prompt_cache()
-        .expect("~/.astronomical-dev/config.json should define prompt_cache.max_size_gb")
-        .global_prompt_cache_maximum_size_bytes()
+        .astro_ssd_prompt_cache()
+        .expect("~/.astronomical-dev/config.json should define astro_ssd_prompt_cache.max_size_gb")
+        .global_astro_ssd_prompt_cache_maximum_size_bytes()
 }

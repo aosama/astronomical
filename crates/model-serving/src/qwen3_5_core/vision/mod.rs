@@ -17,12 +17,12 @@ mod vision_tensor_source;
 pub(crate) mod vision_tensor_spec;
 #[cfg(feature = "direct-mlx")]
 mod vision_weights;
+mod visual_astro_ssd_prompt_cache_identity;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod visual_embedding_injection;
 pub(crate) mod visual_embeddings;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod visual_embeddings_runtime;
-mod visual_prompt_cache_identity;
 
 #[cfg(any(test, feature = "direct-mlx"))]
 pub use image_processor::Qwen3_5ImageGrid;
@@ -42,15 +42,16 @@ pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model;
 pub use vision_weights::Qwen3_5VisionWeights;
 #[cfg(feature = "direct-mlx")]
 pub use vision_weights::VisionTensorLocation;
+pub use visual_astro_ssd_prompt_cache_identity::{
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlan,
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError,
+    plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
+};
 #[cfg(feature = "direct-mlx")]
 pub use visual_embedding_injection::qwen3_5_inject_visual_embeddings;
 pub use visual_embeddings::{
     Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
     plan_qwen3_5_visual_embedding_suffix,
-};
-pub use visual_prompt_cache_identity::{
-    Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
-    plan_qwen3_5_visual_prompt_cache_block_inputs,
 };
 
 #[cfg(feature = "direct-mlx")]

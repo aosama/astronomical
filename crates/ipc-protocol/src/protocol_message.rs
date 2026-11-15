@@ -8,9 +8,8 @@ use crate::{
     ChatGenerationOutput, DecisionsCommand, EmbeddingsCommand, EmbeddingsFailureReason,
     GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, SpeechCommand, SpeechResultMetadata, SpokenAudioSegment,
-    WorkerModelCapabilities, WorkerModelConfiguration,
-    WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
-    WorkerStartupConfiguration,
+    WorkerAstroSsdPromptCacheRequestDiagnostics, WorkerModelCapabilities, WorkerModelConfiguration,
+    WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
 
 /// Maximum serialized payload accepted inside one length-delimited worker frame.
@@ -95,7 +94,7 @@ pub struct WorkerDenseLayerResidency {
 
 /// One decoder layer's retained sparse-expert identities at a snapshot instant.
 ///
-/// The identities come from the warm slot-table cache, so a layer with no
+/// The identities come from the warm slot tables of the `astro_expert_cache`, so a layer with no
 /// warm table simply does not appear in the snapshot; absence means "every
 /// routed expert of this layer still streams from storage".
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -117,7 +116,7 @@ pub struct WorkerExpertLayerTopology {
 /// Counters accumulate from the worker's per-request performance-attribution
 /// reports across every generation of the current engine load, so the values
 /// describe the whole serving session rather than one request. The topology
-/// is the warm-cache truth at the instant of the snapshot.
+/// is the `astro_expert_cache` truth at the instant of the snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerExpertStreamingStats {
     pub model_id: Option<String>,
@@ -150,7 +149,7 @@ pub struct WorkerExpertStreamingStats {
     /// or `None` when the platform cannot sample process I/O. Wider than
     /// expert paging: process-attributed, so other worker reads count too.
     pub expert_source_physical_disk_read_bytes: Option<u64>,
-    /// Storage bytes a no-cache server would have read for the routes that
+    /// Storage bytes a server without the `astro_expert_cache` would have read for the routes that
     /// seated complete layers served from RAM instead (issue #1715).
     pub avoided_complete_layer_source_bytes: u64,
     /// Expert payload bytes prefill had to stream from storage.
@@ -200,7 +199,7 @@ pub enum MlxMemorySnapshotSource {
 pub struct WorkerMlxMemorySnapshot {
     pub source: MlxMemorySnapshotSource,
     pub active_memory_bytes: u64,
-    pub allocator_cache_memory_bytes: u64,
+    pub mlx_buffer_cache_bytes: u64,
     pub peak_memory_bytes: u64,
     pub expert_payload_bytes: u64,
     pub model_core_payload_bytes: u64,
@@ -234,7 +233,7 @@ pub struct WorkerMemoryLedgerSnapshot {
     pub limit_bytes: u64,
     pub core_weight_bytes: u64,
     pub context_bytes: u64,
-    pub working_memory_bytes: u64,
+    pub mlx_working_buffer_bytes: u64,
     pub stream_slot_bytes: u64,
     pub lease_bytes: u64,
     pub margin_bytes: u64,
@@ -242,7 +241,7 @@ pub struct WorkerMemoryLedgerSnapshot {
     pub kept_weight_capacity_bytes: u64,
     pub unassigned_bytes: u64,
     pub shortfall_bytes: u64,
-    pub working_memory_is_measured: bool,
+    pub mlx_working_buffers_are_measured: bool,
     pub held_context_bytes: u64,
     pub held_kept_weight_bytes: u64,
     pub held_stream_slot_bytes: u64,
@@ -262,10 +261,10 @@ pub struct WorkerMemoryLedgerSnapshot {
     /// around it, and the same for one reply step.
     pub largest_reading_step_peak_beyond_held_bytes: u64,
     pub largest_writing_step_peak_beyond_held_bytes: u64,
-    /// The working memory of one layer step measured at load; `None` when
+    /// The MLX working buffers of one layer step measured at load; `None` when
     /// nothing was probed.
     #[serde(default)]
-    pub probed_working_memory_bytes: Option<u64>,
+    pub probed_mlx_working_buffer_bytes: Option<u64>,
     /// The emptiest the kept weights were against the capacity while a
     /// prompt was read, in thousandths.
     pub lowest_kept_share_while_reading_permille: Option<u32>,
@@ -331,13 +330,13 @@ pub enum WorkerCommand {
         /// Configuration generation that owns the accepted memory policy.
         configuration_generation: String,
     },
-    /// Requests the worker delete the persistent prompt-cache footprint on SSD.
+    /// Requests the worker delete the persistent astro SSD prompt cache footprint on SSD.
     ///
-    /// When `model_id` is `None`, the entire global cache root is wiped. When
+    /// When `model_id` is `None`, the entire global astro SSD prompt cache root is wiped. When
     /// `model_id` is `Some`, only the `<global_root>/<model_id>/` tree is
-    /// removed. The daemon sends this from `DELETE /v1/cache` and waits
-    /// for `PromptCacheCleared` before responding to the HTTP caller.
-    ClearPromptCache {
+    /// removed. The daemon sends this from `DELETE /v1/ssd-prompt-cache` and waits
+    /// for `AstroSsdPromptCacheCleared` before responding to the HTTP caller.
+    ClearAstroSsdPromptCache {
         /// Optional scoped model identity. `None` clears everything.
         model_id: Option<String>,
     },
@@ -451,7 +450,7 @@ pub enum WorkerEvent {
     /// generation finalizes.
     ///
     /// Emitted by the worker whenever a streaming engine completes a
-    /// generation, so the daemon can expose expert-cache benefits through
+    /// generation, so the daemon can expose astro expert cache benefits through
     /// `GET /v1/experts/stats` without touching worker-owned state itself.
     ExpertStreamingStats { stats: WorkerExpertStreamingStats },
     /// Reports image-generation phase and denoising-step progress.
@@ -480,7 +479,7 @@ pub enum WorkerEvent {
     ImageGenerationFinalized {
         request_id: RequestId,
         elapsed_millis: u64,
-        /// Present when the image engine observed MLX after releasing request arrays and cache.
+        /// Present when the image engine observed MLX after releasing request arrays and the MLX buffer cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Delivers one completed embedding vector per input, in request order.
@@ -499,7 +498,7 @@ pub enum WorkerEvent {
     EmbeddingsFinalized {
         request_id: RequestId,
         elapsed_millis: u64,
-        /// Present when the embedding engine observed MLX after releasing request arrays and cache.
+        /// Present when the embedding engine observed MLX after releasing request arrays and the MLX buffer cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Delivers one outcome per question, in request order.
@@ -519,7 +518,7 @@ pub enum WorkerEvent {
     DecisionsFinalized {
         request_id: RequestId,
         elapsed_millis: u64,
-        /// Present when the decision engine observed MLX after releasing request arrays and cache.
+        /// Present when the decision engine observed MLX after releasing request arrays and the MLX buffer cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Delivers one spoken segment's audio while its request continues.
@@ -628,8 +627,8 @@ pub enum WorkerEvent {
         prompt_token_count: u32,
         generated_token_count: u16,
         reasoning_token_count: u16,
-        cached_token_count: u32,
-        persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+        astro_ssd_prompt_cache_restored_token_count: u32,
+        astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
         reason: ChatGenerationCompletionReason,
     },
     /// Reports a request-scoped failure that leaves the process responsive.
@@ -654,38 +653,38 @@ pub enum WorkerEvent {
         /// Actionable model-load failure reason safe to return to the local API caller.
         model_load_failure_reason: String,
     },
-    /// Reports cumulative persistent prompt-cache observability counters and disk footprint.
+    /// Reports cumulative persistent astro SSD prompt cache observability counters and disk footprint.
     ///
     /// Emitted by the worker after the model finishes loading and after each
-    /// generation completes, so the daemon can expose cache health through
-    /// `GET /v1/cache/stats` without reading the cache directory itself.
-    PersistentPromptCacheStats {
-        persistent_prompt_cache_hits: u64,
-        persistent_prompt_cache_misses: u64,
-        persistent_prompt_cache_tokens_saved: u64,
-        persistent_prompt_cache_partial_tail_hits: u64,
-        persistent_prompt_cache_block_token_count: u64,
-        persistent_prompt_cache_sequence_state_block_count: u64,
-        persistent_prompt_cache_boundary_state_snapshot_count: u64,
-        persistent_prompt_cache_visual_embedding_count: u64,
-        persistent_prompt_cache_total_size_bytes: u64,
-        persistent_prompt_cache_visual_embedding_total_size_bytes: u64,
-        persistent_prompt_cache_maximum_size_bytes: u64,
-        persistent_prompt_cache_visual_embedding_hits: u64,
-        persistent_prompt_cache_visual_embedding_misses: u64,
-        persistent_prompt_cache_visual_embedding_rows_loaded: u64,
+    /// generation completes, so the daemon can expose astro SSD prompt cache health through
+    /// `GET /v1/ssd-prompt-cache/stats` without reading the astro SSD prompt cache directory itself.
+    AstroSsdPromptCacheStats {
+        astro_ssd_prompt_cache_hits: u64,
+        astro_ssd_prompt_cache_misses: u64,
+        astro_ssd_prompt_cache_tokens_saved: u64,
+        astro_ssd_prompt_cache_partial_tail_hits: u64,
+        astro_ssd_prompt_cache_block_token_count: u64,
+        astro_ssd_prompt_cache_sequence_state_block_count: u64,
+        astro_ssd_prompt_cache_boundary_state_snapshot_count: u64,
+        astro_ssd_prompt_cache_visual_embedding_count: u64,
+        astro_ssd_prompt_cache_total_size_bytes: u64,
+        astro_ssd_prompt_cache_visual_embedding_total_size_bytes: u64,
+        astro_ssd_prompt_cache_maximum_size_bytes: u64,
+        astro_ssd_prompt_cache_visual_embedding_hits: u64,
+        astro_ssd_prompt_cache_visual_embedding_misses: u64,
+        astro_ssd_prompt_cache_visual_embedding_rows_loaded: u64,
     },
-    /// Confirms a persistent prompt-cache deletion completed.
+    /// Confirms a persistent astro SSD prompt cache deletion completed.
     ///
-    /// Emitted by the worker after processing `ClearPromptCache`. The daemon
+    /// Emitted by the worker after processing `ClearAstroSsdPromptCache`. The daemon
     /// waits for this event before responding to the HTTP caller with the
     /// deletion outcome.
-    PromptCacheCleared {
+    AstroSsdPromptCacheCleared {
         /// The model identity scoped by the request. `None` means global clear.
         model_id: Option<String>,
-        /// Number of prompt-cache block directories removed.
+        /// Number of astro SSD prompt cache block directories removed.
         blocks_removed: u64,
-        /// Total bytes removed across all cache file types.
+        /// Total bytes removed across all astro SSD prompt cache file types.
         bytes_freed: u64,
     },
 }
