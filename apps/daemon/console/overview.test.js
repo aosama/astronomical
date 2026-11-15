@@ -391,6 +391,12 @@ test("should_show_what_is_left_free_for_macos_and_say_why", () => {
     assert.ok(Math.abs(totalWidthPercent - 100) < 0.01, "the parts must still fill the bar: " + totalWidthPercent);
 });
 
+test("should_count_room_kept_for_the_mlx_buffer_cache_as_room_to_work", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({ mlx_buffer_cache_bytes: 0.5 * GIBIBYTE, kept_weight_capacity_bytes: 8.18 * GIBIBYTE }));
+
+    assert.equal(limitPresentation.parts[2].text, "2.5 GB");
+});
+
 test("should_say_that_room_to_work_is_held_until_a_step_is_measured", () => {
     const limitPresentation = limitPresentationFor(ledgerForTest({
         mlx_working_buffers_are_measured: false, mlx_working_buffer_bytes: 10.68 * GIBIBYTE, kept_weight_capacity_bytes: 0, held_kept_weight_bytes: 0, observed_step_count: 0

@@ -1,12 +1,18 @@
 //! How fast MLX runs one fixed piece of GPU work at different memory fills.
 //!
-//! A large sparse model replies several times slower in the last half
+//! A large sparse model replied several times slower in the last half
 //! gigabyte below the memory limit's maximum, with a healthy
 //! `mlx_buffer_cache`, the same storage reads and normal system memory
 //! pressure. This probe takes Astronomical's engine out of the question: it
-//! fills MLX with plain tables up to a target, then times the same small
-//! gather-and-multiply work at every fill. If the work slows at the same fill
-//! where replies do, the cause is below Astronomical, in MLX or Metal.
+//! fills MLX with plain tables up to a target, then times the same step at
+//! every fill. A step gathers a few rows and multiplies in each of 48
+//! layers, then writes freshly created pages into small tables, as a reply
+//! token reads experts and the engine writes newly read ones into a table.
+//!
+//! What it found on a 48 GB Mac: the limit MLX is given makes no
+//! difference, and the step slows once the memory macOS has wired across
+//! the whole system passes the kernel's wire limit. The sweep test prints
+//! that total beside each fill.
 //!
 //! MLX fixes its memory limit once per process, so every fill is its own
 //! test and is run on its own (`cargo measure-memory-fill-speed`).
@@ -176,33 +182,12 @@ fn create_layer_weight(runtime: &MlxRuntime) -> MlxArray {
 }
 
 fn measure_fixed_work_speed(memory_fill: MemoryFill) {
-    let memory_limit_bytes = (memory_fill.memory_limit_gigabytes * BYTES_PER_GIGABYTE) as usize;
-    let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(memory_limit_bytes, memory_limit_bytes)
-            .expect("the probe's memory limits should be valid"),
-    )
-    .expect("the pinned MLX runtime should initialize");
-    // The serving worker claims the whole recommended working set as wired
-    // memory at startup; the probe does the same so the fills compare.
-    let recommended_working_set_bytes = maximum_recommended_gpu_working_set_size_bytes()
-        .expect("Metal should report its recommended working set");
-    mlx_bridge::set_wired_limit(recommended_working_set_bytes)
-        .expect("MLX should accept the recommended working set as its wired limit");
-
+    let runtime = initialize_runtime_as_the_worker_does(memory_fill);
     let tables = fill_with_tables(&runtime, memory_fill);
+    let layer_weight = create_layer_weight(&runtime);
     let mut written_tables = create_written_tables(&runtime);
     let host_page = vec![0.5_f32; (PAGE_ROW_COUNT * HIDDEN_SIZE) as usize];
     seed_mlx_buffer_cache(&runtime);
-    let layer_weight = runtime
-        .full(
-            &[HIDDEN_SIZE, HIDDEN_SIZE],
-            1.0 / HIDDEN_SIZE as f32,
-            MlxDtype::Float32,
-        )
-        .expect("the layer weight should be created");
-    runtime
-        .evaluate_arrays(&[&layer_weight])
-        .expect("the layer weight should be evaluated");
 
     for warmup_step_index in 0..WARMUP_STEP_COUNT {
         run_one_step(&runtime, &tables, &layer_weight, warmup_step_index);
@@ -237,13 +222,13 @@ fn measure_fixed_work_speed(memory_fill: MemoryFill) {
         .memory_snapshot()
         .expect("the memory snapshot should be readable");
     eprintln!(
-        "[memory-fill-speed] status=success fill={} steps_per_second={:.1} milliseconds_per_step={:.2} held_gb={:.2} mlx_buffer_cache_gb={:.2} recommended_working_set_gb={:.2}",
+        "[memory-fill-speed] status=success fill={} steps_per_second={:.1} milliseconds_per_step={:.2} held_gb={:.2} mlx_buffer_cache_gb={:.2} system_wired_gb={:.2}",
         memory_fill.label,
         MEASURED_STEP_COUNT as f64 / elapsed_seconds,
         elapsed_seconds * 1_000.0 / MEASURED_STEP_COUNT as f64,
         memory_snapshot.active_memory_bytes() as f64 / BYTES_PER_GIGABYTE,
         memory_snapshot.mlx_buffer_cache_bytes() as f64 / BYTES_PER_GIGABYTE,
-        recommended_working_set_bytes as f64 / BYTES_PER_GIGABYTE,
+        system_wired_gigabytes(),
     );
 }
 
@@ -306,8 +291,8 @@ fn fill_with_tables(runtime: &MlxRuntime, memory_fill: MemoryFill) -> Vec<MlxArr
         runtime
             .evaluate_arrays(&[&last_table])
             .expect("the last table should be evaluated");
-        // Gathers only ever read the first tables' row range, so the last
-        // table is held but placed where no step indexes past its rows.
+        // Never read again and never dropped: it exists only to be held
+        // for the rest of the process.
         std::mem::forget(last_table);
     }
     tables

@@ -56,6 +56,14 @@ fn should_publish_the_accounts_the_held_memory_and_the_comparison_unchanged() {
     assert_eq!(snapshot.core_weight_bytes, 3 * GIBIBYTE);
     assert_eq!(snapshot.mlx_working_buffer_bytes, GIBIBYTE);
     assert_eq!(
+        snapshot.mlx_buffer_cache_bytes,
+        ledger_reading.accounts.mlx_buffer_cache_bytes
+    );
+    assert_eq!(
+        snapshot.system_wired_reserve_bytes,
+        ledger_reading.accounts.system_wired_reserve_bytes
+    );
+    assert_eq!(
         snapshot.kept_weight_capacity_bytes,
         ledger_reading.accounts.kept_weight_capacity_bytes
     );

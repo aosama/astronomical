@@ -146,23 +146,23 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
         return with_unmeasured_mlx_working_buffers(accounts, fixed_bytes, stream_slot_bytes);
     };
     accounts.mlx_working_buffer_bytes = mlx_working_buffer_bytes;
-    let needed_before_mlx_buffer_cache_bytes = fixed_bytes.saturating_add(mlx_working_buffer_bytes);
+    let needed_before_optional_room_bytes = fixed_bytes.saturating_add(mlx_working_buffer_bytes);
     // The reserve comes first: room that is not kept wired is no use to the
     // buffer cache either.
     accounts.system_wired_reserve_bytes = fitting_optional_room_bytes(
         account_inputs.system_wired_reserve_bytes,
         accounts.limit_bytes,
-        needed_before_mlx_buffer_cache_bytes.saturating_add(stream_slot_bytes),
+        needed_before_optional_room_bytes.saturating_add(stream_slot_bytes),
     );
-    let needed_before_mlx_buffer_cache_bytes =
-        needed_before_mlx_buffer_cache_bytes.saturating_add(accounts.system_wired_reserve_bytes);
+    let needed_with_reserve_bytes =
+        needed_before_optional_room_bytes.saturating_add(accounts.system_wired_reserve_bytes);
     accounts.mlx_buffer_cache_bytes = fitting_optional_room_bytes(
         mlx_buffer_cache_bytes_for(account_inputs.phase, mlx_working_buffer_bytes),
         accounts.limit_bytes,
-        needed_before_mlx_buffer_cache_bytes.saturating_add(stream_slot_bytes),
+        needed_with_reserve_bytes.saturating_add(stream_slot_bytes),
     );
     let needed_without_slots_bytes =
-        needed_before_mlx_buffer_cache_bytes.saturating_add(accounts.mlx_buffer_cache_bytes);
+        needed_with_reserve_bytes.saturating_add(accounts.mlx_buffer_cache_bytes);
     let room_without_slots_bytes = accounts
         .limit_bytes
         .saturating_sub(needed_without_slots_bytes);
