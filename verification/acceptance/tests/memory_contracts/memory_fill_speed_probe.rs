@@ -1,0 +1,226 @@
+//! How fast MLX runs one fixed piece of GPU work at different memory fills.
+//!
+//! A large sparse model replies several times slower in the last half
+//! gigabyte below the memory limit's maximum, with a healthy
+//! `mlx_buffer_cache`, the same storage reads and normal system memory
+//! pressure. This probe takes Astronomical's engine out of the question: it
+//! fills MLX with plain tables up to a target, then times the same small
+//! gather-and-multiply work at every fill. If the work slows at the same fill
+//! where replies do, the cause is below Astronomical, in MLX or Metal.
+//!
+//! MLX fixes its memory limit once per process, so every fill is its own
+//! test and is run on its own (`cargo measure-memory-fill-speed`).
+
+use std::time::Instant;
+
+use astronomical_runtime_integration::{
+    MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
+};
+use mlx_bridge::{MlxArray, MlxDtype};
+
+const BYTES_PER_GIGABYTE: f64 = 1_073_741_824.0;
+/// One table is 32,768 rows of 4,096 single-precision values: half a
+/// gigabyte, about the size of one layer's expert table.
+const TABLE_ROW_COUNT: i32 = 32_768;
+const HIDDEN_SIZE: i32 = 4_096;
+const TABLE_BYTES: usize = 512 * 1024 * 1024;
+/// The work mirrors one reply token: a gather of a few rows and a small
+/// multiply in each of this many layers, evaluated once.
+const LAYERS_PER_STEP: usize = 48;
+const ROWS_GATHERED_PER_LAYER: i32 = 8;
+const WARMUP_STEP_COUNT: usize = 20;
+const MEASURED_STEP_COUNT: usize = 150;
+
+/// One fill to measure: the limit MLX is given and how much it then holds.
+#[derive(Clone, Copy)]
+struct MemoryFill {
+    label: &'static str,
+    memory_limit_gigabytes: f64,
+    held_gigabytes: f64,
+}
+
+#[test]
+#[ignore = "fills most of the GPU's memory with MLX arrays and times fixed work"]
+fn should_time_fixed_work_at_a_35_gb_limit_holding_33_5_gb() {
+    measure_fixed_work_speed(MemoryFill {
+        label: "limit_35_held_33.5",
+        memory_limit_gigabytes: 35.0,
+        held_gigabytes: 33.5,
+    });
+}
+
+#[test]
+#[ignore = "fills most of the GPU's memory with MLX arrays and times fixed work"]
+fn should_time_fixed_work_at_a_36_gb_limit_holding_34_7_gb() {
+    measure_fixed_work_speed(MemoryFill {
+        label: "limit_36_held_34.7",
+        memory_limit_gigabytes: 36.0,
+        held_gigabytes: 34.7,
+    });
+}
+
+#[test]
+#[ignore = "fills most of the GPU's memory with MLX arrays and times fixed work"]
+fn should_time_fixed_work_at_a_36_5_gb_limit_holding_35_3_gb() {
+    measure_fixed_work_speed(MemoryFill {
+        label: "limit_36.5_held_35.3",
+        memory_limit_gigabytes: 36.5,
+        held_gigabytes: 35.3,
+    });
+}
+
+/// The same limit as the slow case with the fill of the fast one: it tells
+/// whether the limit or the amount held is what slows the work.
+#[test]
+#[ignore = "fills most of the GPU's memory with MLX arrays and times fixed work"]
+fn should_time_fixed_work_at_a_36_5_gb_limit_holding_34_7_gb() {
+    measure_fixed_work_speed(MemoryFill {
+        label: "limit_36.5_held_34.7",
+        memory_limit_gigabytes: 36.5,
+        held_gigabytes: 34.7,
+    });
+}
+
+fn measure_fixed_work_speed(memory_fill: MemoryFill) {
+    let memory_limit_bytes = (memory_fill.memory_limit_gigabytes * BYTES_PER_GIGABYTE) as usize;
+    let runtime = MlxRuntime::initialize(
+        MlxMemoryLimits::new(memory_limit_bytes, memory_limit_bytes)
+            .expect("the probe's memory limits should be valid"),
+    )
+    .expect("the pinned MLX runtime should initialize");
+    // The serving worker claims the whole recommended working set as wired
+    // memory at startup; the probe does the same so the fills compare.
+    let recommended_working_set_bytes = maximum_recommended_gpu_working_set_size_bytes()
+        .expect("Metal should report its recommended working set");
+    mlx_bridge::set_wired_limit(recommended_working_set_bytes)
+        .expect("MLX should accept the recommended working set as its wired limit");
+
+    let tables = fill_with_tables(&runtime, memory_fill);
+    let layer_weight = runtime
+        .full(
+            &[HIDDEN_SIZE, HIDDEN_SIZE],
+            1.0 / HIDDEN_SIZE as f32,
+            MlxDtype::Float32,
+        )
+        .expect("the layer weight should be created");
+    runtime
+        .evaluate_arrays(&[&layer_weight])
+        .expect("the layer weight should be evaluated");
+
+    for warmup_step_index in 0..WARMUP_STEP_COUNT {
+        run_one_step(&runtime, &tables, &layer_weight, warmup_step_index);
+    }
+    let measurement_started_at = Instant::now();
+    let mut last_progress_report_at = Instant::now();
+    for measured_step_index in 0..MEASURED_STEP_COUNT {
+        run_one_step(
+            &runtime,
+            &tables,
+            &layer_weight,
+            WARMUP_STEP_COUNT + measured_step_index,
+        );
+        if last_progress_report_at.elapsed().as_secs() >= 5 {
+            report_progress(
+                memory_fill.label,
+                measured_step_index + 1,
+                measurement_started_at,
+            );
+            last_progress_report_at = Instant::now();
+        }
+    }
+    let elapsed_seconds = measurement_started_at.elapsed().as_secs_f64();
+    let memory_snapshot = runtime
+        .memory_snapshot()
+        .expect("the memory snapshot should be readable");
+    eprintln!(
+        "[memory-fill-speed] status=success fill={} steps_per_second={:.1} milliseconds_per_step={:.2} held_gb={:.2} mlx_buffer_cache_gb={:.2} recommended_working_set_gb={:.2}",
+        memory_fill.label,
+        MEASURED_STEP_COUNT as f64 / elapsed_seconds,
+        elapsed_seconds * 1_000.0 / MEASURED_STEP_COUNT as f64,
+        memory_snapshot.active_memory_bytes() as f64 / BYTES_PER_GIGABYTE,
+        memory_snapshot.mlx_buffer_cache_bytes() as f64 / BYTES_PER_GIGABYTE,
+        recommended_working_set_bytes as f64 / BYTES_PER_GIGABYTE,
+    );
+}
+
+fn report_progress(fill_label: &str, completed_step_count: usize, started_at: Instant) {
+    let elapsed_seconds = started_at.elapsed().as_secs_f64();
+    let remaining_step_count = MEASURED_STEP_COUNT - completed_step_count;
+    eprintln!(
+        "[memory-fill-speed] status=progress fill={fill_label} steps={completed_step_count}/{MEASURED_STEP_COUNT} percentage={:.0} ETA_seconds={:.0}",
+        completed_step_count as f64 * 100.0 / MEASURED_STEP_COUNT as f64,
+        elapsed_seconds / completed_step_count as f64 * remaining_step_count as f64,
+    );
+}
+
+/// Creates and evaluates half-gigabyte tables until MLX holds the target.
+fn fill_with_tables(runtime: &MlxRuntime, memory_fill: MemoryFill) -> Vec<MlxArray> {
+    let held_target_bytes = (memory_fill.held_gigabytes * BYTES_PER_GIGABYTE) as usize;
+    let table_count = held_target_bytes / TABLE_BYTES;
+    let fill_started_at = Instant::now();
+    let mut tables = Vec::with_capacity(table_count);
+    for table_index in 0..table_count {
+        let table = runtime
+            .full(
+                &[TABLE_ROW_COUNT, HIDDEN_SIZE],
+                1.0 / (table_index + 1) as f32,
+                MlxDtype::Float32,
+            )
+            .expect("a table should be created");
+        runtime
+            .evaluate_arrays(&[&table])
+            .expect("a table should be evaluated");
+        tables.push(table);
+        if (table_index + 1) % 16 == 0 {
+            eprintln!(
+                "[memory-fill-speed] status=progress fill={} tables={}/{table_count} percentage={:.0} elapsed_seconds={:.0}",
+                memory_fill.label,
+                table_index + 1,
+                (table_index + 1) as f64 * 100.0 / table_count as f64,
+                fill_started_at.elapsed().as_secs_f64(),
+            );
+        }
+    }
+    tables
+}
+
+/// One step: in every layer, gather a few rows from one table, add them to
+/// the running state and multiply by the layer weight; evaluate once.
+fn run_one_step(
+    runtime: &MlxRuntime,
+    tables: &[MlxArray],
+    layer_weight: &MlxArray,
+    step_index: usize,
+) {
+    let mut state = runtime
+        .full(&[1, HIDDEN_SIZE], 1.0, MlxDtype::Float32)
+        .expect("the state should be created");
+    for layer_index in 0..LAYERS_PER_STEP {
+        // Every step reads different rows of different tables, as a reply
+        // routes each token to different experts.
+        let table = &tables[(layer_index * 7 + step_index) % tables.len()];
+        let first_row = ((step_index * 131 + layer_index * 17) as i32) % (TABLE_ROW_COUNT - 64);
+        let mut gathered_row_indices = Vec::with_capacity(ROWS_GATHERED_PER_LAYER as usize);
+        for gathered_row_offset in 0..ROWS_GATHERED_PER_LAYER {
+            gathered_row_indices.push(first_row + gathered_row_offset * 8);
+        }
+        let row_indices = runtime
+            .array_from_i32(&gathered_row_indices, &[ROWS_GATHERED_PER_LAYER])
+            .expect("the row indices should be created");
+        let gathered_rows = runtime
+            .take_axis(table, &row_indices, 0)
+            .expect("the rows should be gathered");
+        let gathered_sum = runtime
+            .sum_axis(&gathered_rows, 0, true)
+            .expect("the gathered rows should be summed");
+        let mixed_state = runtime
+            .add(&state, &gathered_sum)
+            .expect("the state should take the gathered rows");
+        state = runtime
+            .matmul(&mixed_state, layer_weight)
+            .expect("the state should be multiplied by the layer weight");
+    }
+    runtime
+        .evaluate_arrays(&[&state])
+        .expect("the step should be evaluated");
+}
