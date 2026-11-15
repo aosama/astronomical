@@ -81,14 +81,19 @@ impl ObservedTransferProgress {
         Ok(())
     }
 
+    /// Records what has arrived for one file, for the user interface only;
+    /// durable progress is recorded separately from the contiguous prefix on
+    /// disk. Pieces of one file report concurrently, so a report can arrive
+    /// after a larger one: the larger count stands rather than going back.
     pub(super) fn record_received_bytes(
         &self,
         relative_path: &str,
-        bytes_on_disk: u64,
+        received_bytes: u64,
         updated_at_unix_millis: u64,
     ) -> Result<(), DownloadJobError> {
         let mut live_job = self.lock_live_job();
-        live_job.record_file_progress(relative_path, bytes_on_disk, updated_at_unix_millis)?;
+        let reportable_bytes = received_bytes.max(reported_file_bytes(&live_job, relative_path));
+        live_job.record_file_progress(relative_path, reportable_bytes, updated_at_unix_millis)?;
         self.snapshot.publish(live_job.clone());
         Ok(())
     }
@@ -98,6 +103,16 @@ impl ObservedTransferProgress {
             .lock()
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
     }
+}
+
+/// The bytes the live job already shows for one file, or zero for a file it
+/// does not list.
+fn reported_file_bytes(live_job: &DownloadJob, relative_path: &str) -> u64 {
+    live_job
+        .files()
+        .iter()
+        .find(|download_file| download_file.relative_path() == relative_path)
+        .map_or(0, DownloadJobFile::bytes_on_disk)
 }
 
 /// Orders pending files so the largest remaining file starts first, and interleaves their
