@@ -211,7 +211,8 @@ pub struct WorkerMlxMemorySnapshot {
     #[serde(default)]
     pub memory_ceiling_utilization: Option<WorkerMemoryCeilingUtilizationSnapshot>,
     /// The memory ledger's view of the same instant (issue #2221). `None`
-    /// from engines the ledger does not watch yet.
+    /// before a model's first measured step and from engines without a
+    /// memory governor.
     #[serde(default)]
     pub memory_ledger: Option<WorkerMemoryLedgerSnapshot>,
 }
@@ -225,10 +226,9 @@ pub struct WorkerPromptLayerProgress {
     pub layer_count: u32,
 }
 
-/// The memory ledger's reading of one completed step.
-///
-/// While the ledger only watches, this is evidence, not policy: it shows
-/// what the ledger would have allowed beside what the engine did.
+/// The memory ledger's reading of one completed step: the accounts the
+/// engine's memory governor divides the limit into, what the engine held,
+/// and how far the two were from what MLX reported.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerMemoryLedgerSnapshot {
     pub limit_bytes: u64,

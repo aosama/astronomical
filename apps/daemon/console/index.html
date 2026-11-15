@@ -83,6 +83,34 @@
                                 <li><span class="overview-memory-swatch" data-memory-part="runtime-work"></span>Runtime <span id="overview-memory-runtime-work">0.0 GB</span></li>
                                 <li><span class="overview-memory-swatch" data-memory-part="free"></span>Free <span id="overview-memory-free">0.0 GB</span></li>
                             </ul>
+                            <div id="overview-memory-limit" class="overview-memory-limit" hidden>
+                                <h4 id="overview-memory-limit-title">How your limit is divided</h4>
+                                <div class="overview-memory-bar" aria-hidden="true">
+                                    <div id="overview-memory-limit-seg-fixed" class="overview-memory-seg" data-limit-part="fixed"></div>
+                                    <div id="overview-memory-limit-seg-conversation" class="overview-memory-seg" data-limit-part="conversation"></div>
+                                    <div id="overview-memory-limit-seg-working" class="overview-memory-seg" data-limit-part="working"></div>
+                                    <div id="overview-memory-limit-seg-reading" class="overview-memory-seg" data-limit-part="reading"></div>
+                                    <div id="overview-memory-limit-seg-margin" class="overview-memory-seg" data-limit-part="margin"></div>
+                                    <div id="overview-memory-limit-seg-rest" class="overview-memory-seg" data-limit-part="rest"></div>
+                                    <div id="overview-memory-limit-seg-spare" class="overview-memory-seg" data-limit-part="spare"></div>
+                                </div>
+                                <dl class="overview-memory-limit-list" aria-labelledby="overview-memory-limit-title">
+                                    <div class="overview-memory-limit-row"><dt><span class="overview-memory-swatch" data-limit-part="fixed"></span>Always in memory</dt><dd id="overview-memory-limit-fixed">0.0 GB</dd></div>
+                                    <div class="overview-memory-limit-row"><dt><span class="overview-memory-swatch" data-limit-part="conversation"></span>This conversation</dt><dd id="overview-memory-limit-conversation">0.0 GB</dd></div>
+                                    <div class="overview-memory-limit-row"><dt><span class="overview-memory-swatch" data-limit-part="working"></span>Room to work</dt><dd id="overview-memory-limit-working">0.0 GB</dd></div>
+                                    <div class="overview-memory-limit-row"><dt><span class="overview-memory-swatch" data-limit-part="reading"></span>Being read from the SSD</dt><dd id="overview-memory-limit-reading">0.0 GB</dd></div>
+                                    <div class="overview-memory-limit-row"><dt><span class="overview-memory-swatch" data-limit-part="margin"></span>Safety margin</dt><dd id="overview-memory-limit-margin">0.0 GB</dd></div>
+                                    <div class="overview-memory-limit-row"><dt><span class="overview-memory-swatch" data-limit-part="rest"></span>Room for the rest of the model</dt><dd id="overview-memory-limit-rest">0.0 GB</dd></div>
+                                    <div class="overview-memory-limit-row"><dt><span class="overview-memory-swatch" data-limit-part="spare"></span>Not needed</dt><dd id="overview-memory-limit-spare">0.0 GB</dd></div>
+                                </dl>
+                                <p id="overview-memory-limit-note" class="overview-memory-limit-note"></p>
+                                <details class="overview-memory-limit-help">
+                                    <summary>What these mean</summary>
+                                    <p><strong>Always in memory</strong> is the part of the model every step uses. <strong>This conversation</strong> is what the model remembers of the prompt and the reply so far; it grows as the conversation gets longer. <strong>Room to work</strong> is what one step needs for a moment. Astronomical measures it when the model loads and again after every step.</p>
+                                    <p><strong>Being read from the SSD</strong> is model data on its way in. <strong>Safety margin</strong> is 2% of your limit, kept free. <strong>Room for the rest of the model</strong> is everything left over: Astronomical keeps as much of the model there as fits and reads the remainder from the SSD when it is needed, so a higher limit means less reading. <strong>Not needed</strong> appears when the whole model fits with room to spare.</p>
+                                    <p>After every step Astronomical compares its own count with what the graphics system reports. The last line shows the largest difference it has seen.</p>
+                                </details>
+                            </div>
                         </section>
                         <section id="overview-model" class="panel overview-model" aria-labelledby="overview-model-title">
                             <h3 id="overview-model-title">Loaded model</h3>

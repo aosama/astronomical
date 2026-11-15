@@ -46,6 +46,27 @@
 .overview-memory-key li { display: flex; align-items: center; gap: 6px; }
 .overview-memory-key li span:last-child { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .overview-memory-swatch { width: 10px; height: 10px; border-radius: 3px; }
+/* How the limit is divided: the ledger's accounts. Its colours follow the bar
+   above where a part means the same thing, and violet marks the one part that
+   is only held for a moment. */
+.overview-memory-limit { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.overview-memory-limit[hidden] { display: none; }
+.overview-memory-limit h4 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-strong); }
+.overview-memory-seg[data-limit-part="fixed"], .overview-memory-swatch[data-limit-part="fixed"] { background: var(--ink-dim); }
+.overview-memory-seg[data-limit-part="conversation"], .overview-memory-swatch[data-limit-part="conversation"] { background: var(--memory-context); }
+.overview-memory-seg[data-limit-part="working"], .overview-memory-swatch[data-limit-part="working"] { background: var(--accent); }
+.overview-memory-seg[data-limit-part="reading"], .overview-memory-swatch[data-limit-part="reading"] { background: var(--accent-soft); }
+.overview-memory-seg[data-limit-part="margin"], .overview-memory-swatch[data-limit-part="margin"] { background: var(--ink-faint); }
+.overview-memory-seg[data-limit-part="rest"], .overview-memory-swatch[data-limit-part="rest"] { background: var(--resident); }
+.overview-memory-swatch[data-limit-part="spare"] { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.overview-memory-limit-list { display: grid; gap: 4px; margin: 0; font-size: var(--text-md); }
+.overview-memory-limit-row { display: flex; justify-content: space-between; gap: 12px; }
+.overview-memory-limit-row dt { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
+.overview-memory-limit-row dd { margin: 0; color: var(--ink-dim); font-variant-numeric: tabular-nums; text-align: right; }
+.overview-memory-limit-note { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+.overview-memory-limit-help { color: var(--text-dim); font-size: var(--text-sm); }
+.overview-memory-limit-help summary { cursor: pointer; color: var(--accent-text); }
+.overview-memory-limit-help p { margin: 6px 0 0; }
 .overview-memory-pressure { padding: 2px 9px; border-radius: 6px; background: var(--panel-2); color: var(--text-dim); font-size: var(--text-sm); }
 .overview-memory-pressure[data-pressure-state="normal"] { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
 .overview-memory-pressure[data-pressure-state="warning"] { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }

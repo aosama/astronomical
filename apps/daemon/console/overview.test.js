@@ -324,3 +324,105 @@ test("should_show_dashes_before_any_request_and_off_only_when_the_setting_is_off
     assert.deepEqual(onButUnused, { usage: "0.0 GB of 50.0 GB", hint: "No prompts looked up yet" },
         "a zero maximum from the worker with no model loaded is not Off");
 });
+
+const GIBIBYTE = 1073741824;
+
+function ledgerForTest(overrides = {}) {
+    return {
+        limit_bytes: 16 * GIBIBYTE,
+        core_weight_bytes: 3 * GIBIBYTE,
+        context_bytes: 1 * GIBIBYTE,
+        working_memory_bytes: 2 * GIBIBYTE,
+        lease_bytes: 0,
+        stream_slot_bytes: 1 * GIBIBYTE,
+        margin_bytes: 0.32 * GIBIBYTE,
+        kept_weight_capacity_bytes: 8.68 * GIBIBYTE,
+        unassigned_bytes: 0,
+        shortfall_bytes: 0,
+        working_memory_is_measured: true,
+        held_kept_weight_bytes: 8.5 * GIBIBYTE,
+        observed_step_count: 40,
+        largest_unaccounted_bytes: 64 * 1048576,
+        ...overrides
+    };
+}
+
+function limitPresentationFor(memoryLedger, isWorking = true) {
+    return evaluate(createConsoleContext(), "overviewMemoryLimitPresentation(snapshotForTest, isWorkingForTest)", {
+        snapshotForTest: { memory_ledger: memoryLedger },
+        isWorkingForTest: isWorking
+    });
+}
+
+test("should_say_the_figures_are_from_the_last_step_when_nothing_is_running", () => {
+    assert.equal(limitPresentationFor(ledgerForTest(), true).title, "How your limit is divided");
+    assert.equal(limitPresentationFor(ledgerForTest(), false).title, "How your limit was divided at the last step");
+    assert.equal(limitPresentationFor(ledgerForTest(), undefined).title, "How your limit is divided");
+});
+
+test("should_divide_the_limit_into_parts_that_add_up_to_it", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest());
+
+    assert.equal(limitPresentation.isAvailable, true);
+    assert.deepEqual(limitPresentation.parts.map((part) => part.key),
+        ["fixed", "conversation", "working", "reading", "margin", "rest", "spare"]);
+    const totalWidthPercent = limitPresentation.parts.reduce((total, part) => total + part.widthPercent, 0);
+    assert.ok(Math.abs(totalWidthPercent - 100) < 0.01, "the parts must fill the bar: " + totalWidthPercent);
+    assert.equal(limitPresentation.parts[0].text, "3.0 GB");
+    assert.equal(limitPresentation.parts[5].text, "8.7 GB · 8.5 GB in use");
+    assert.equal(limitPresentation.note, "Checked against the graphics system after every step. Largest difference seen: 64 MB.");
+});
+
+test("should_count_room_lent_for_a_retry_as_room_to_work", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({ lease_bytes: 1 * GIBIBYTE, kept_weight_capacity_bytes: 7.68 * GIBIBYTE }));
+
+    assert.equal(limitPresentation.parts[2].text, "3.0 GB");
+});
+
+test("should_say_that_room_to_work_is_held_until_a_step_is_measured", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({
+        working_memory_is_measured: false, working_memory_bytes: 10.68 * GIBIBYTE, kept_weight_capacity_bytes: 0, held_kept_weight_bytes: 0, observed_step_count: 0
+    }));
+
+    assert.equal(limitPresentation.parts[2].text, "10.7 GB · held until a step is measured");
+    assert.equal(limitPresentation.parts[5].text, "0.0 GB · 0.0 GB in use");
+    assert.equal(limitPresentation.note, "Nothing has run yet, so nothing has been checked.");
+});
+
+test("should_say_plainly_when_the_limit_is_too_small_to_keep_anything", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({ shortfall_bytes: 300 * 1048576, kept_weight_capacity_bytes: 0 }));
+
+    assert.equal(limitPresentation.note,
+        "Your limit is 300 MB too small to keep any of the rest of the model, so all of it is read from the SSD.");
+});
+
+test("should_report_a_difference_under_a_megabyte_and_over_a_gigabyte_in_fitting_units", () => {
+    assert.equal(limitPresentationFor(ledgerForTest({ largest_unaccounted_bytes: 1000 })).note,
+        "Checked against the graphics system after every step. Largest difference seen: less than 1 MB.");
+    assert.equal(limitPresentationFor(ledgerForTest({ largest_unaccounted_bytes: 2 * GIBIBYTE })).note,
+        "Checked against the graphics system after every step. Largest difference seen: 2.0 GB.");
+});
+
+test("should_show_no_division_without_a_ledger_or_with_a_zero_limit", () => {
+    for (const mlxMemorySnapshot of [null, {}, { memory_ledger: null }, { memory_ledger: ledgerForTest({ limit_bytes: 0 }) }]) {
+        const limitPresentation = evaluate(createConsoleContext(), "overviewMemoryLimitPresentation(snapshotForTest, true)", {
+            snapshotForTest: mlxMemorySnapshot
+        });
+        assert.equal(limitPresentation.isAvailable, false);
+        assert.deepEqual(limitPresentation.parts, []);
+    }
+});
+
+test("should_hide_the_division_when_no_model_reports_a_ledger_and_show_it_when_one_does", () => {
+    const scriptContext = createConsoleContext();
+    const elementsById = attachRecordingElements(scriptContext);
+    vm.runInContext("renderOverviewMemoryLimit(undefined, false)", scriptContext);
+    assert.equal(elementsById["overview-memory-limit"].hidden, true);
+
+    scriptContext.snapshotForTest = { memory_ledger: ledgerForTest() };
+    vm.runInContext("renderOverviewMemoryLimit(snapshotForTest, false)", scriptContext);
+    assert.equal(elementsById["overview-memory-limit"].hidden, false);
+    assert.equal(elementsById["overview-memory-limit-title"].textContent, "How your limit was divided at the last step");
+    assert.equal(elementsById["overview-memory-limit-seg-fixed"].style.width, "18.8%");
+    assert.equal(elementsById["overview-memory-limit-fixed"].textContent, "3.0 GB");
+});
