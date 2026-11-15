@@ -108,6 +108,14 @@ impl LibraryDownloadCoordinator {
         Ok(was_listed)
     }
 
+    /// Whether a download task is running now. A job reads `paused` for a
+    /// moment after its file list is recorded and before its transfer
+    /// begins, so a caller that must tell a running download from a paused
+    /// one asks this as well as reading the job.
+    pub async fn has_running_download(&self) -> bool {
+        self.has_active_task().await
+    }
+
     /// The list as it stands now.
     #[must_use]
     pub fn queue_snapshot(&self) -> DownloadQueue {

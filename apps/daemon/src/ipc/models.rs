@@ -305,6 +305,19 @@ pub(crate) fn download_start_action(
     }
 }
 
+/// The state to decide on: a saved `paused` while a download task runs is the
+/// moment before its transfer begins, so it counts as downloading.
+pub(crate) fn running_state_of(
+    saved_state: DownloadJobState,
+    is_task_running: bool,
+) -> DownloadJobState {
+    if is_task_running && saved_state == DownloadJobState::Paused {
+        DownloadJobState::Downloading
+    } else {
+        saved_state
+    }
+}
+
 /// The two facts the start decision needs from a job.
 fn download_job_identity(download_job: &DownloadJob) -> (&str, DownloadJobState) {
     (download_job.huggingface_id(), download_job.state())
@@ -352,7 +365,16 @@ async fn decide_download_start(
             ));
         }
     };
-    let existing_identity = existing_job.as_ref().map(download_job_identity);
+    // A job reads `paused` for a moment after its file list is recorded and
+    // before its transfer begins; while its task runs it is not paused.
+    let is_task_running = download_coordinator.has_running_download().await;
+    let existing_identity = existing_job.as_ref().map(|download_job| {
+        let (existing_huggingface_id, existing_state) = download_job_identity(download_job);
+        (
+            existing_huggingface_id,
+            running_state_of(existing_state, is_task_running),
+        )
+    });
     Ok(download_start_action(existing_identity, huggingface_id))
 }
 
