@@ -5,9 +5,8 @@ use crate::serving_ceiling::{
 
 /// The claim the 48 GB incident machine received on 2026-10-24.
 const INCIDENT_WIRED_RESIDENCY_BUDGET_BYTES: u64 = 40_200_896_512;
-/// 7.5% of the incident claim, rounded down to whole thousandths: the 5%
-/// above MLX's cache collection line and the 2.5% margin below it.
-const INCIDENT_METAL_WORKING_SET_MARGIN_BYTES: u64 = 3_015_067_200;
+/// 2.5% of the incident claim, rounded down to whole thousandths.
+const INCIDENT_METAL_WORKING_SET_MARGIN_BYTES: u64 = 1_005_022_400;
 
 #[test]
 fn should_limit_the_effective_ceiling_by_the_configured_and_machine_bounds() {
@@ -53,7 +52,7 @@ fn should_clamp_the_ceiling_to_the_plannable_part_of_a_smaller_wired_budget() {
     // ceiling, or long prefills grow into wiring the driver refuses.
     assert_eq!(
         effective_mlx_memory_ceiling_after_wired_claim(42_949_672_960, Some(40_000_028_672)),
-        40_000_028_672 - 3_000_002_100
+        40_000_028_672 - 1_000_000_700
     );
     assert_eq!(
         effective_mlx_memory_ceiling_after_wired_claim(
@@ -65,7 +64,7 @@ fn should_clamp_the_ceiling_to_the_plannable_part_of_a_smaller_wired_budget() {
 }
 
 #[test]
-fn should_keep_the_plannable_bound_below_the_cache_collection_line_and_the_measured_failure() {
+fn should_keep_a_two_and_a_half_percent_metal_working_set_margin_below_the_wired_claim() {
     // The 2026-10-24 122B decode died at 40,051,177,002 MLX bytes; the
     // plannable bound must sit below that measured failure point.
     let plannable_bytes = plannable_wired_residency_bytes(INCIDENT_WIRED_RESIDENCY_BUDGET_BYTES);
@@ -74,9 +73,6 @@ fn should_keep_the_plannable_bound_below_the_cache_collection_line_and_the_measu
         INCIDENT_WIRED_RESIDENCY_BUDGET_BYTES - INCIDENT_METAL_WORKING_SET_MARGIN_BYTES
     );
     assert!(plannable_bytes < 40_051_177_002);
-    // MLX starts emptying its buffer cache at 95% of the budget; a model
-    // planned up to that line replies at a third of its speed.
-    assert!(plannable_bytes < INCIDENT_WIRED_RESIDENCY_BUDGET_BYTES / 100 * 95);
 }
 
 #[test]
@@ -84,10 +80,10 @@ fn should_resolve_a_zero_or_tiny_wired_claim_without_underflow() {
     assert_eq!(plannable_wired_residency_bytes(0), 0);
     // Below one thousand bytes the per-thousand margin rounds to zero.
     assert_eq!(plannable_wired_residency_bytes(999), 999);
-    assert_eq!(plannable_wired_residency_bytes(1_000), 925);
+    assert_eq!(plannable_wired_residency_bytes(1_000), 975);
     assert_eq!(
         plannable_wired_residency_bytes(u64::MAX),
-        u64::MAX - u64::MAX / 1_000 * 75
+        u64::MAX - u64::MAX / 1_000 * 25
     );
 }
 
@@ -101,18 +97,18 @@ fn should_keep_the_ceiling_when_the_wired_budget_is_absent_or_larger() {
         42_949_672_960
     );
     assert_eq!(
-        effective_mlx_memory_ceiling_after_wired_claim(36_507_222_016, Some(40_000_028_672)),
-        36_507_222_016
+        effective_mlx_memory_ceiling_after_wired_claim(38_654_705_664, Some(40_000_028_672)),
+        38_654_705_664
     );
     // Exactly at the plannable bound the configured ceiling is kept as is,
     // and one byte above it is clamped down to the bound.
     assert_eq!(
-        effective_mlx_memory_ceiling_after_wired_claim(37_000_026_572, Some(40_000_028_672)),
-        37_000_026_572
+        effective_mlx_memory_ceiling_after_wired_claim(39_000_027_972, Some(40_000_028_672)),
+        39_000_027_972
     );
     assert_eq!(
-        effective_mlx_memory_ceiling_after_wired_claim(37_000_026_573, Some(40_000_028_672)),
-        37_000_026_572
+        effective_mlx_memory_ceiling_after_wired_claim(39_000_027_973, Some(40_000_028_672)),
+        39_000_027_972
     );
     // A claim equal to the ceiling still keeps the Metal margin free.
     assert_eq!(

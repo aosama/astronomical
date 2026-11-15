@@ -3,10 +3,10 @@ import XCTest
 @testable import AstronomicalMenuCore
 
 final class MlxMemoryCeilingAdoptionTests: XCTestCase {
-  /// The wired claim the worker logged for this machine, and the 34.63 GB
+  /// The wired claim the worker logged for this machine, and the 36.50 GB
   /// ceiling a 37 GB request installs against it.
   private let incidentWiredResidencyBudgetBytes: UInt64 = 40_200_896_512
-  private let incidentPlannableWiredResidencyBytes: UInt64 = 37_185_829_312
+  private let incidentPlannableWiredResidencyBytes: UInt64 = 39_195_874_112
   private let requestedThirtySevenGigabyteCeilingBytes: UInt64 = 37 * mlxMemoryBytesPerGigabyte
   private let bootTwentyOneGigabyteCeilingBytes: UInt64 = 21 * mlxMemoryBytesPerGigabyte
 
@@ -102,7 +102,7 @@ final class MlxMemoryCeilingAdoptionTests: XCTestCase {
         requestedCeilingBytes: 10_000,
         wiredResidencyBudgetBytes: 1_000
       ),
-      925
+      975
     )
   }
 

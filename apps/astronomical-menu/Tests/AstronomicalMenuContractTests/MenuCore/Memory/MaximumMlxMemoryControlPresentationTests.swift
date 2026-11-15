@@ -4,11 +4,11 @@ import XCTest
 
 final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
   // A 48 GB Mac: a 40 GiB machine ceiling and the 40,200,896,512-byte wired
-  // claim measured in issue #1297, which the engine plans 7.5% below
-  // (37,185,829,312 bytes, 34.63 GB).
+  // claim measured in issue #1297, which the engine plans 2.5% below
+  // (39,195,874,112 bytes, 36.50 GB).
   private let machineCeilingBytes: UInt64 = 42_949_672_960
   private let wiredResidencyBudgetBytes: UInt64 = 40_200_896_512
-  private let plannableWiredResidencyBytes: UInt64 = 37_185_829_312
+  private let plannableWiredResidencyBytes: UInt64 = 39_195_874_112
 
   private func statusDocument(
     liveCeilingBytes: UInt64,
@@ -30,15 +30,15 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
 
   func test_should_show_only_the_reachable_limit_when_the_request_is_served() {
     let servedStatusDocument = statusDocument(
-      liveCeilingBytes: 32 * mlxMemoryBytesPerGigabyte,
+      liveCeilingBytes: 34 * mlxMemoryBytesPerGigabyte,
       wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
-      configuredMaximumGigabytes: 32
+      configuredMaximumGigabytes: 34
     )
 
     let controlPresentation = MaximumMlxMemoryControlPresentation(
-      statusDocument: servedStatusDocument, editableMaximumWholeGigabytes: 32)
+      statusDocument: servedStatusDocument, editableMaximumWholeGigabytes: 34)
 
-    XCTAssertEqual(controlPresentation.reachableMaximumCaption, "of 34 GB")
+    XCTAssertEqual(controlPresentation.reachableMaximumCaption, "of 36 GB")
     XCTAssertFalse(controlPresentation.shouldOfferApply)
     XCTAssertTrue(controlPresentation.shouldOfferMacMaximum)
     XCTAssertNil(controlPresentation.cappedCeilingCaption)
@@ -46,9 +46,9 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
 
   func test_should_offer_apply_only_after_the_stepper_moves() {
     let servedStatusDocument = statusDocument(
-      liveCeilingBytes: 32 * mlxMemoryBytesPerGigabyte,
+      liveCeilingBytes: 34 * mlxMemoryBytesPerGigabyte,
       wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
-      configuredMaximumGigabytes: 32
+      configuredMaximumGigabytes: 34
     )
 
     let editedPresentation = MaximumMlxMemoryControlPresentation(
@@ -67,7 +67,7 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     )
 
     let controlPresentation = MaximumMlxMemoryControlPresentation(
-      statusDocument: macMaximumStatusDocument, editableMaximumWholeGigabytes: 34)
+      statusDocument: macMaximumStatusDocument, editableMaximumWholeGigabytes: 36)
 
     XCTAssertFalse(controlPresentation.shouldOfferMacMaximum)
     XCTAssertFalse(controlPresentation.shouldOfferApply)
@@ -82,7 +82,7 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     )
     let reachableWholeGigabytes = reachableMaximumMlxMemoryWholeGigabytes(for: wiredStatusDocument)
 
-    XCTAssertEqual(reachableWholeGigabytes, 34)
+    XCTAssertEqual(reachableWholeGigabytes, 36)
     XCTAssertEqual(
       mlxMemoryCeilingTheEngineWillInstall(
         requestedCeilingBytes: reachableWholeGigabytes * mlxMemoryBytesPerGigabyte,
@@ -109,11 +109,11 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
       configuredMaximumGigabytes: nil
     )
 
-    XCTAssertEqual(reachableMaximumMlxMemoryWholeGigabytes(for: fullClaimStatusDocument), 37)
+    XCTAssertEqual(reachableMaximumMlxMemoryWholeGigabytes(for: fullClaimStatusDocument), 39)
   }
 
   func test_should_report_a_cap_when_an_explicit_request_exceeds_the_live_ceiling() {
-    // Only the configuration file can ask for 40 GB here; the stepper stops at 34.
+    // Only the configuration file can ask for 40 GB here; the stepper stops at 36.
     let cappedStatusDocument = statusDocument(
       liveCeilingBytes: plannableWiredResidencyBytes,
       wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
@@ -125,9 +125,9 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
       editableMaximumWholeGigabytes: appliedMaximumMlxMemoryWholeGigabytes(for: cappedStatusDocument)
     )
 
-    XCTAssertEqual(controlPresentation.cappedCeilingCaption, "Capped at 34.63 GB on this Mac")
-    XCTAssertEqual(appliedMaximumMlxMemoryWholeGigabytes(for: cappedStatusDocument), 34)
-    // The stepper already rests on 34, so Apply must still be offered or the
+    XCTAssertEqual(controlPresentation.cappedCeilingCaption, "Capped at 36.50 GB on this Mac")
+    XCTAssertEqual(appliedMaximumMlxMemoryWholeGigabytes(for: cappedStatusDocument), 36)
+    // The stepper already rests on 36, so Apply must still be offered or the
     // cap notice has no one-click way out.
     XCTAssertTrue(controlPresentation.shouldOfferApply)
   }
@@ -136,12 +136,12 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     let queuedStatusDocument = statusDocument(
       liveCeilingBytes: 30 * mlxMemoryBytesPerGigabyte,
       wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
-      configuredMaximumGigabytes: 32,
-      pendingCeilingBytes: 32 * mlxMemoryBytesPerGigabyte
+      configuredMaximumGigabytes: 34,
+      pendingCeilingBytes: 34 * mlxMemoryBytesPerGigabyte
     )
 
     let controlPresentation = MaximumMlxMemoryControlPresentation(
-      statusDocument: queuedStatusDocument, editableMaximumWholeGigabytes: 32)
+      statusDocument: queuedStatusDocument, editableMaximumWholeGigabytes: 34)
 
     XCTAssertNil(controlPresentation.cappedCeilingCaption)
   }
@@ -154,20 +154,20 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     )
 
     let controlPresentation = MaximumMlxMemoryControlPresentation(
-      statusDocument: overflowingStatusDocument, editableMaximumWholeGigabytes: 34)
+      statusDocument: overflowingStatusDocument, editableMaximumWholeGigabytes: 36)
 
-    XCTAssertEqual(controlPresentation.cappedCeilingCaption, "Capped at 34.63 GB on this Mac")
+    XCTAssertEqual(controlPresentation.cappedCeilingCaption, "Capped at 36.50 GB on this Mac")
   }
 
   func test_should_not_report_a_cap_before_the_engine_publishes_a_ceiling() {
     let unmeasuredStatusDocument = statusDocument(
       liveCeilingBytes: 0,
       wiredResidencyBudgetBytes: nil,
-      configuredMaximumGigabytes: 32
+      configuredMaximumGigabytes: 34
     )
 
     let controlPresentation = MaximumMlxMemoryControlPresentation(
-      statusDocument: unmeasuredStatusDocument, editableMaximumWholeGigabytes: 32)
+      statusDocument: unmeasuredStatusDocument, editableMaximumWholeGigabytes: 34)
 
     XCTAssertNil(controlPresentation.cappedCeilingCaption)
   }
