@@ -1,18 +1,52 @@
 ---
-name: mac-app-store
-description: Build, test, validate, upload and submit the Mac App Store version of Astronomical, and look after its App Store Connect record. Use when asked about the store build, the sandbox, App Store Connect, App Review, a rejection, screenshots or listing text, or when a release has to go to the store. Read all of it before building or touching the record. Not for the direct download, which is the release-stable skill.
+name: macos-appstore-release
+description: Build, test, validate, upload and submit the Mac App Store version of Astronomical, and look after its App Store Connect record. Use when asked about the store build, the sandbox, App Store Connect, App Review, a rejection, screenshots or listing text, or when a release has to go to the store. Read all of it before building or touching the record. Only when the user asks for a store release in their own words. Not for the direct download and Sparkle update, which is the sparkle-release skill.
 ---
 
 # Astronomical in the Mac App Store
 
 The store version is the same product built as a sandboxed channel, listed as **Astronomical: Local AI**. The direct download stays the primary way to get the app; the store is a second door for people who trust it more.
 
-This skill holds what was learned getting the first version into review, so that nobody has to find it out again. `release-stable` section 8 lists the steps of a store release in order; this file is the detail behind each of them. The issue map is aosama/astronomical#381.
+This skill holds what was learned getting the first version into review, so that nobody has to find it out again. "Steps of a store release" below lists them in order; the rest of this file is the detail behind each of them. The issue map is aosama/astronomical#381.
 
 Two files sit beside this one:
 
 - [listing.md](listing.md): the listing text as it stands on the record.
 - [review-notes.md](review-notes.md): the notes App Review reads, and what must change in them when the app changes.
+
+## Steps of a store release
+
+Start only when the user asks for a store release in their own words; a Sparkle release never implies one. Build from the tag of a version the `sparkle-release` skill has already published, so both channels carry one version number. A store release never changes the direct release.
+
+The sections below this one hold the detail behind each step: the decisions already made for the app record, how to run and try the sandboxed build on screen, what Apple's validation has said before, and how to work on the App Store Connect pages.
+
+Three steps need the user's word each time, and nothing else in this procedure does: uploading a build, submitting for review, and releasing to the public. Ask in the chat; approval for a Sparkle release, even approval given in advance, does not cover them.
+
+Store credentials, besides the Developer ID map in the `sparkle-release` skill:
+
+- **Distribution identity:** the Keychain identity whose quoted name starts with `Apple Distribution:`.
+- **Installer identity:** the one whose quoted name starts with `3rd Party Mac Developer Installer:`.
+- **App Store Connect API key:** the key's private half lives in `~/.appstoreconnect/private_keys/AuthKey_<KEY ID>.p8`. The Key ID is in that file name; the Issuer ID is on the Users and Access, Integrations page of App Store Connect. Never copy the private key anywhere else or print it.
+
+Steps:
+
+1. Build the store bundle from the clean release tag: `cargo xtask app package --channel app-store --signing-identity "$DISTRIBUTION_IDENTITY"`. The bundle check refuses a bundle with an unsandboxed executable, a terminal command, a missing privacy manifest, missing entitlements, or a missing export declaration.
+2. Prove it runs sandboxed. Stop the installed Stable app first (check it is idle; the two share a port), copy the bundle into the Applications folder under another name, and run `cargo xtask app smoke-test --app-bundle "/Applications/<that name>.app"`. From a build folder a sandboxed agent cannot reach its engine, so the smoke test must run on the Applications copy. Then try each promise of the listing on screen, following the table under "What to try on screen before any submission" below; the smoke test does not open a file dialog. Move the copy to the Trash and reopen Stable afterwards.
+3. Package it: `cargo xtask release app-store-pkg --app-bundle PATH --installer-identity "$INSTALLER_IDENTITY"`.
+4. Ask Apple to validate it: `cargo xtask release app-store-upload --package PATH --api-key KEY_ID --api-issuer ISSUER_ID`. Validation sends nothing permanent. Fix every error it reports before going on. One warning is expected until provisioning profiles exist: 90889, which only concerns TestFlight.
+5. **Ask the user, then upload:** the same command with `--upload`. An uploaded build cannot be withdrawn, and a build number can be used once per version. Processing takes roughly ten to thirty minutes before the build can be selected.
+6. On the app record in App Store Connect, create the new version with the release's version number, write "What's New" from the release notes in plain words, and select the uploaded build. Screenshots carry over from the previous version; replace them only when the app looks different.
+7. **Ask the user, then submit for review.** Keep release set to manual.
+8. When Apple answers: on approval, install the approved build from the store on a Mac account that has never run the store version and reach a first reply before asking the user whether to release; on rejection, record Apple's reasons on the release issue and open one issue per reason.
+
+Rules for the app record that must not change by accident:
+
+- **Availability excludes the European Union.** The account holder has declared to Apple that they do not distribute there. When availability is edited, all 27 member states stay unticked, automatic availability in future countries stays off, and "distribution in France" is answered "No".
+- **Listing text and screenshots** promise only what works in the sandboxed build. Before adding a promise, do it on screen in the store build.
+- **The privacy answer is "Data Not Collected".** It must change in the same release as any feature that sends data anywhere.
+- **Entitlements are part of the review.** A new entitlement needs a sentence in the review notes saying why.
+
+To replace a build that is already waiting for review, remove the version from review on the app record first, then repeat steps 1 to 7 with the new build.
 
 ## What needs the account holder, every time
 
