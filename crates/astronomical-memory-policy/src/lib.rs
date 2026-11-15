@@ -20,6 +20,9 @@
 //! - `admission` — may this operation begin (`AllocationAdmissionDecision`,
 //!   `CompleteResidencyDecision`, context workspaces, retained-prefix
 //!   retention, rotating admission).
+//! - `expert_cache` — the expert cache as arithmetic: one capacity across
+//!   all layers, one eviction order, and a record of every hit, read and
+//!   eviction; real replies are replayed through it on every commit.
 //! - `expert_paging` — pure expert-paging support arithmetic: the
 //!   safetensors header parsing (`safetensors_header`, over `safetensors`
 //!   and `strict_json`) and the expert weight memory-cache statistics. The
@@ -55,6 +58,7 @@
 
 pub mod admission;
 pub mod ceiling;
+pub mod expert_cache;
 pub mod expert_paging;
 pub mod forward_admission;
 pub mod geometry_floor;
