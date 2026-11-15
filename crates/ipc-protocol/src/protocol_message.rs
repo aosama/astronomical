@@ -279,6 +279,10 @@ pub struct WorkerMemoryCeilingUtilizationSnapshot {
     pub reserved_context_growth_bytes: u64,
     pub reserved_activation_and_workspace_bytes: u64,
     pub unseated_expert_entitlement_bytes: u64,
+    /// Room under the limit that nothing needs. Absent from engines that
+    /// do not report it.
+    #[serde(default)]
+    pub unneeded_headroom_bytes: u64,
     pub unexplained_headroom_bytes: u64,
     pub owner_overrun_bytes: u64,
 }

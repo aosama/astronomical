@@ -62,7 +62,7 @@ enum MlxMemoryLegendItem: Equatable {
     case .available:
       return "Calculated capacity below this Mac's MLX ceiling. It is not free RAM; macOS memory pressure and temporary work can reduce what is safely usable."
     case .unusedBudget:
-      return "Unused budget the ceiling already granted for expert weights that are not in RAM. Distinct from Experts, which are weights already resident."
+      return "Room under your limit that is not in use: space granted for expert weights that are not in RAM yet, or space left over because the whole model fits. Distinct from Experts, which are weights already resident."
     case .reservedContextGrowth:
       return "Held so conversation state can grow. Spending it on expert weights invites eviction mid-request."
     case .reservedActivations:

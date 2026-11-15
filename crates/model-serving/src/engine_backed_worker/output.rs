@@ -641,6 +641,7 @@ pub(crate) fn worker_memory_snapshot(
                 reserved_activation_and_workspace_bytes: utilization
                     .reserved_activation_and_workspace_bytes,
                 unseated_expert_entitlement_bytes: utilization.unseated_expert_entitlement_bytes,
+                unneeded_headroom_bytes: utilization.unneeded_headroom_bytes,
                 unexplained_headroom_bytes: utilization.unexplained_headroom_bytes,
                 owner_overrun_bytes: utilization.owner_overrun_bytes,
             },

@@ -14,6 +14,10 @@ struct MlxMemoryCeilingUtilization: Codable, Equatable {
   let unseatedExpertEntitlementBytes: UInt64
   let unexplainedHeadroomBytes: UInt64
   let ownerOverrunBytes: UInt64
+  /// Room under the limit that nothing needs, such as what is left when the
+  /// whole model fits with space to spare. Absent from engines that do not
+  /// report it.
+  var unneededHeadroomBytes: UInt64?
 
   enum CodingKeys: String, CodingKey {
     case unusedHeadroomBytes = "unused_headroom_bytes"
@@ -23,6 +27,7 @@ struct MlxMemoryCeilingUtilization: Codable, Equatable {
     case unseatedExpertEntitlementBytes = "unseated_expert_entitlement_bytes"
     case unexplainedHeadroomBytes = "unexplained_headroom_bytes"
     case ownerOverrunBytes = "owner_overrun_bytes"
+    case unneededHeadroomBytes = "unneeded_headroom_bytes"
   }
 }
 
@@ -62,8 +67,13 @@ struct MlxHeadroomSplit: Equatable {
     guard let utilization else {
       return .undifferentiated(availableByteCount: availableByteCount)
     }
+    // Room nothing needs joins the "Unused" row: to a person both are
+    // memory under the limit that is not in use and not promised to work
+    // in progress. It once went to "Held for activations", where a 9B model
+    // under a 36 GB limit showed 31 GB held that nothing was holding.
     let weights = [
-      utilization.unseatedExpertEntitlementBytes,
+      utilization.unseatedExpertEntitlementBytes
+        + (utilization.unneededHeadroomBytes ?? 0),
       utilization.reservedContextGrowthBytes,
       utilization.reservedActivationAndWorkspaceBytes,
       utilization.reservedModelCoreSlackBytes,
