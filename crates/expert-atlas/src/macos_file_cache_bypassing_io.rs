@@ -7,6 +7,7 @@
 //! the macOS file cache to the models the machine is serving.
 
 use std::fs::{File, OpenOptions};
+#[cfg(target_os = "macos")]
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::FileExt;
 use std::path::Path;
