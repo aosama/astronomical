@@ -333,7 +333,7 @@ impl DownloadJourney {
 
     async fn start_download_and_await_failure(&self) -> FailedJobWaiter {
         self.coordinator
-            .start(REPOSITORY_ID)
+            .enqueue(REPOSITORY_ID)
             .await
             .expect("a fresh coordinator should accept the download");
         let failed_job = tokio::time::timeout(Duration::from_secs(2), async {
@@ -357,7 +357,7 @@ impl DownloadJourney {
 
     async fn start_download_and_await_transfer_attempt(&self) {
         self.coordinator
-            .start(REPOSITORY_ID)
+            .enqueue(REPOSITORY_ID)
             .await
             .expect("a fresh coordinator should accept the download");
         tokio::time::timeout(Duration::from_secs(2), async {

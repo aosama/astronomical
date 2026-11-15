@@ -173,7 +173,12 @@ pub enum DaemonResponse {
     /// Terminal frame for an admitted [`DaemonRequest::DownloadStart`].
     DownloadStarted { huggingface_id: String },
     /// Answer to [`DaemonRequest::DownloadStatus`].
-    DownloadStatus { job: Option<DaemonDownloadJob> },
+    DownloadStatus {
+        job: Option<DaemonDownloadJob>,
+        /// Models waiting to download after `job`, oldest request first.
+        #[serde(default)]
+        waiting_huggingface_ids: Vec<String>,
+    },
     /// Terminal frame for an admitted [`DaemonRequest::DefaultModelSet`].
     DefaultModelSet { default_model_id: String },
     /// Terminal refusal when the daemon declines a model-management request.

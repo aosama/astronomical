@@ -32,9 +32,9 @@ pub use download::transfer::{DownloadFileDigest, DownloadPayloadTransfer};
 pub use download::transfer::{DownloadPayloadTransferError, DownloadPayloadTransferOutcome};
 pub use download::{
     DiskCapacityQuery, DownloadDiskCapacityCheck, DownloadDiskPreflight,
-    DownloadDiskPreflightError, DownloadExecutablePreflight, DownloadExecutablePreflightError,
-    DownloadManifestPreflight, DownloadManifestPreflightError, DownloadPathSelection,
-    DownloadProgressSnapshot, DownloadPublication, DownloadPublicationError,
+    DownloadDiskPreflightError, DownloadEnqueueOutcome, DownloadExecutablePreflight,
+    DownloadExecutablePreflightError, DownloadManifestPreflight, DownloadManifestPreflightError,
+    DownloadPathSelection, DownloadProgressSnapshot, DownloadPublication, DownloadPublicationError,
     DownloadPublicationRefresh, Fs4DiskCapacityQuery, LibraryDownloadCoordinator,
     LibraryDownloadCoordinatorError,
 };

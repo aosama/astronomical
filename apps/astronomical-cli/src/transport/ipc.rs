@@ -162,11 +162,21 @@ impl DaemonProbe {
 
     /// The active download job, if one runs.
     pub async fn download_status(&self) -> Result<Option<DaemonDownloadJob>, DaemonProbeError> {
+        Ok(self.download_status_and_queue().await?.0)
+    }
+
+    /// The active download job, if one runs, and the models waiting after it.
+    pub async fn download_status_and_queue(
+        &self,
+    ) -> Result<(Option<DaemonDownloadJob>, Vec<String>), DaemonProbeError> {
         match self
             .request_on_fresh_connection(&DaemonRequest::DownloadStatus)
             .await?
         {
-            DaemonResponse::DownloadStatus { job } => Ok(job),
+            DaemonResponse::DownloadStatus {
+                job,
+                waiting_huggingface_ids,
+            } => Ok((job, waiting_huggingface_ids)),
             DaemonResponse::RequestRejected { reason } => {
                 Err(DaemonProbeError::DaemonRejected { reason })
             }

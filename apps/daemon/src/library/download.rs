@@ -8,6 +8,7 @@ pub(crate) mod manifest_preflight;
 pub(crate) mod path_selection;
 pub(crate) mod progress_snapshot;
 pub(crate) mod publication;
+pub(crate) mod queue;
 
 #[cfg(test)]
 mod disk_preflight_tests;
@@ -20,6 +21,7 @@ pub(crate) mod job;
 pub(crate) mod transfer;
 
 pub use coordinator::installed_model_removal::InstalledModelRemovalError;
+pub use coordinator::queue_controls::DownloadEnqueueOutcome;
 pub use coordinator::{LibraryDownloadCoordinator, LibraryDownloadCoordinatorError};
 pub use disk_preflight::{
     DiskCapacityQuery, DownloadDiskCapacityCheck, DownloadDiskPreflight,

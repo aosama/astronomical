@@ -23,6 +23,7 @@ pub fn build_application_with_full_control_and_library_download(
     download_catalog: Arc<DownloadCatalog>,
     library_download_coordinator: Arc<LibraryDownloadCoordinator>,
 ) -> Router {
+    library_download_coordinator.start_queue_driver();
     let initial_models = reloadable_config
         .read()
         .ok()
@@ -72,6 +73,7 @@ pub fn build_application_with_library_download_and_trash(
     library_download_coordinator: Arc<LibraryDownloadCoordinator>,
     model_folder_trash: Arc<dyn ModelFolderTrash>,
 ) -> Router {
+    library_download_coordinator.start_queue_driver();
     let discovered_models = astronomical_config::discover_models(&[library_download_coordinator
         .models_directory()
         .to_path_buf()])

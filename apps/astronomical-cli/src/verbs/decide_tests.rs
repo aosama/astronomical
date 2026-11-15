@@ -56,8 +56,13 @@ fn should_surface_a_failed_frame_with_the_models_reason() {
 fn should_treat_an_unrelated_frame_as_a_daemon_that_stopped_responding() {
     let mut stdout = Vec::new();
 
-    let write_outcome =
-        write_decisions_outcome(DaemonResponse::DownloadStatus { job: None }, &mut stdout);
+    let write_outcome = write_decisions_outcome(
+        DaemonResponse::DownloadStatus {
+            job: None,
+            waiting_huggingface_ids: Vec::new(),
+        },
+        &mut stdout,
+    );
 
     assert!(matches!(
         write_outcome,

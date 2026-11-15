@@ -10,8 +10,8 @@ use bytes::Bytes;
 use futures_util::{StreamExt, stream};
 
 use super::{
-    MODEL_CONFIG, MODEL_INDEX, MODEL_WEIGHTS, REPOSITORY_ID, REVISION, TOKENIZER_CONFIG,
-    git_blob_sha1_hex, payload_for_request,
+    MODEL_CONFIG, MODEL_INDEX, MODEL_WEIGHTS, REVISION, TOKENIZER_CONFIG, git_blob_sha1_hex,
+    payload_for_request,
 };
 
 /// Where the empty file sits in the `with_empty_file` repository.
@@ -19,6 +19,10 @@ pub(super) const EMPTY_FILE_PATH: &str = "tools/__init__.py";
 
 pub(super) struct ScriptedHub {
     metadata_responses: Mutex<VecDeque<HubHttpResponse>>,
+    /// Set for a hub that serves the fixture repository: metadata requests
+    /// are then answered by their address, for any repository and any number
+    /// of downloads, as the real Hub does. `true` adds the empty file.
+    serves_repository_with_empty_file: Option<bool>,
     payload_delay: Duration,
     corrupt_model_config: bool,
     publishes_payload_in_two_chunks: bool,
@@ -65,6 +69,7 @@ impl ScriptedHub {
                     .expect("gated response should be valid")]
                 .into(),
             ),
+            serves_repository_with_empty_file: None,
             payload_delay: Duration::ZERO,
             corrupt_model_config: false,
             publishes_payload_in_two_chunks: false,
@@ -82,30 +87,8 @@ impl ScriptedHub {
         includes_empty_file: bool,
     ) -> Self {
         Self {
-            metadata_responses: Mutex::new(
-                [
-                    HubHttpResponse::try_new(
-                        200,
-                        [],
-                        [serde_json::to_vec(&serde_json::json!({
-                            "id": REPOSITORY_ID,
-                            "sha": REVISION,
-                            "private": false,
-                            "gated": false
-                        }))
-                        .expect("metadata fixture should serialize")],
-                    )
-                    .expect("metadata response should be valid"),
-                    HubHttpResponse::try_new(
-                        200,
-                        [],
-                        [serde_json::to_vec(&repository_tree(includes_empty_file))
-                            .expect("tree fixture should serialize")],
-                    )
-                    .expect("tree response should be valid"),
-                ]
-                .into(),
-            ),
+            metadata_responses: Mutex::new(VecDeque::new()),
+            serves_repository_with_empty_file: Some(includes_empty_file),
             payload_delay,
             corrupt_model_config,
             publishes_payload_in_two_chunks: false,
@@ -150,13 +133,58 @@ impl HubTransport for ScriptedHub {
             if request_url.ends_with(&format!("/raw/{REVISION}/model.safetensors.index.json")) {
                 return Ok(ok_bytes(MODEL_INDEX));
             }
-            self.metadata_responses
-                .lock()
-                .map_err(|_| HubTransportError::new("metadata lock was poisoned"))?
-                .pop_front()
-                .ok_or_else(|| HubTransportError::new("unexpected metadata request"))
+            self.metadata_response(request_url)
         })
     }
+}
+
+impl ScriptedHub {
+    /// The next scripted metadata answer, or, once the script runs out on a
+    /// hub that serves the fixture repository, the answer for the address.
+    fn metadata_response(&self, request_url: &str) -> Result<HubHttpResponse, HubTransportError> {
+        let scripted_response = self
+            .metadata_responses
+            .lock()
+            .map_err(|_| HubTransportError::new("metadata lock was poisoned"))?
+            .pop_front();
+        match (scripted_response, self.serves_repository_with_empty_file) {
+            (Some(scripted_response), _) => Ok(scripted_response),
+            (None, Some(includes_empty_file)) => Ok(repository_metadata_response(
+                request_url,
+                includes_empty_file,
+            )),
+            (None, None) => Err(HubTransportError::new("unexpected metadata request")),
+        }
+    }
+}
+
+/// The Hub's answer to a model-info or tree request for any repository,
+/// read from the request address (`/api/models/OWNER/NAME[/tree/...]`).
+fn repository_metadata_response(request_url: &str, includes_empty_file: bool) -> HubHttpResponse {
+    let metadata_document = if request_url.contains("/tree/") {
+        repository_tree(includes_empty_file)
+    } else {
+        let repository_id = request_url
+            .split("/api/models/")
+            .nth(1)
+            .unwrap_or_default()
+            .split(['/', '?'])
+            .take(2)
+            .collect::<Vec<_>>()
+            .join("/");
+        serde_json::json!({
+            "id": repository_id,
+            "sha": REVISION,
+            "private": false,
+            "gated": false
+        })
+    };
+    HubHttpResponse::try_new(
+        200,
+        [],
+        [serde_json::to_vec(&metadata_document).expect("metadata fixture should serialize")],
+    )
+    .expect("metadata response should be valid")
 }
 
 fn ok_bytes(body: &'static [u8]) -> HubHttpResponse {

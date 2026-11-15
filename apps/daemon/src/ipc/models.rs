@@ -258,8 +258,9 @@ pub(crate) enum DownloadStartAction {
     /// The same model's job is already running: there is nothing to start,
     /// and the caller should simply keep watching it.
     AlreadyRunning,
-    /// A different model's job holds the Library: it is running, or paused
-    /// (`is_paused`), which never finishes on its own.
+    /// A different model's job holds the Library. A running one lets this
+    /// model join the download list; a paused one (`is_paused`) never
+    /// finishes on its own, so the request is refused.
     BusyWith {
         other_huggingface_id: String,
         is_paused: bool,
@@ -369,40 +370,40 @@ async fn execute_download_start(
                 format!("the paused download could not be resumed: {resume_error}"),
             )),
         },
-        DownloadStartAction::Start => match download_coordinator.start(huggingface_id).await {
+        // Both go through the download list, so a model asked for here never
+        // jumps ahead of the ones already waiting.
+        DownloadStartAction::Start
+        | DownloadStartAction::BusyWith {
+            is_paused: false, ..
+        } => match download_coordinator.enqueue(huggingface_id).await {
             Ok(_) => Ok(()),
             Err(start_error) => Err(start_failure(
                 &start_error,
                 format!("the download could not be started: {start_error}"),
             )),
         },
+        // A paused download holds the whole list until someone resumes it,
+        // which this command cannot do, so waiting behind it would never end.
         DownloadStartAction::BusyWith {
             other_huggingface_id,
-            is_paused,
-        } => Err(StartFailure::Refused(busy_refusal_reason(
+            is_paused: true,
+        } => Err(StartFailure::Refused(paused_refusal_reason(
             &other_huggingface_id,
-            is_paused,
             huggingface_id,
         ))),
     }
 }
 
-/// The CLI cannot cancel a download, so the refusal points at Observatory's Models page; a
-/// paused download never finishes on its own, so it is not told to wait.
-fn busy_refusal_reason(
-    other_huggingface_id: &str,
-    is_paused: bool,
+/// The CLI cannot resume or cancel a download, so the refusal points at the
+/// Models page; a paused download holds the whole list, so waiting behind it
+/// would never end.
+pub(crate) fn paused_refusal_reason(
+    paused_huggingface_id: &str,
     requested_huggingface_id: &str,
 ) -> String {
-    if is_paused {
-        format!(
-            "a download of {other_huggingface_id} is paused; resume or cancel it on Observatory's Models page before downloading {requested_huggingface_id}"
-        )
-    } else {
-        format!(
-            "a download of {other_huggingface_id} is already active; wait for it to finish, or cancel it on Observatory's Models page, before downloading {requested_huggingface_id}"
-        )
-    }
+    format!(
+        "a download of {paused_huggingface_id} is paused; resume or cancel it on Observatory's Models page before downloading {requested_huggingface_id}"
+    )
 }
 
 fn start_failure(error: &LibraryDownloadCoordinatorError, reason: String) -> StartFailure {
@@ -447,8 +448,19 @@ pub(super) async fn handle_download_status(
             |_| DaemonPerformanceMeasurement::success(),
         )
         .await;
+    let waiting_huggingface_ids = generation_context
+        .library_download_coordinator
+        .as_ref()
+        .map(|download_coordinator| {
+            download_coordinator
+                .queue_snapshot()
+                .waiting_huggingface_ids()
+                .to_vec()
+        })
+        .unwrap_or_default();
     let download_response = DaemonResponse::DownloadStatus {
         job: download_job.as_ref().map(download_job_to_wire),
+        waiting_huggingface_ids,
     };
     send_terminal_streaming_response(streaming_response_writer, &download_response).await
 }
