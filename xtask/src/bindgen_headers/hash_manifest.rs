@@ -1,7 +1,7 @@
 //! Per-file SHA-256 manifests of a header tree, byte-identical to what
 //! `find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256`
 //! printed in the shell pipeline. Matching that format exactly means an
-//! extraction published by the shell port still verifies as cached here,
+//! extraction published by the shell port still verifies as already extracted here,
 //! so switching implementations never forces a re-extraction.
 
 use std::path::Path;

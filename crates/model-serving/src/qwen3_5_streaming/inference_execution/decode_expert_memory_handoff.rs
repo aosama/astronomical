@@ -226,7 +226,7 @@ fn budget_affordable_slot_count(
     usize::try_from(affordable_slots).unwrap_or(usize::MAX)
 }
 
-/// What the cache may still take in: the capacity the memory governor set
+/// What the astro expert cache may still take in: the capacity the memory governor set
 /// for the reply phase, less what the astro expert cache already keeps.
 ///
 /// Every sizing decision in this file reads the room through this one

@@ -1,4 +1,4 @@
-//! Restores the longest complete persistent astro-ssd-prompt-cache prefix into live Qwen state.
+//! Restores the longest complete persistent astro SSD prompt cache prefix into live Qwen state.
 //!
 //! Lookup is allocation-free. After a complete chain is identified, all sequence
 //! blocks and the newest required boundary are loaded, reconstructed, synchronized,
@@ -25,7 +25,7 @@ use crate::{
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 
-/// The cache-specific portion of a newly admitted request's starting state.
+/// The `astro_ssd_prompt_cache`-specific portion of a newly admitted request's starting state.
 ///
 /// `restored_token_count` drives the prefill cursor, while the u32 field is
 /// reported in the public generation usage contract. Keeping the final block
@@ -378,7 +378,7 @@ impl Qwen3_5EngineState {
                 }
                 // The retained state lost to the disk store or diverged from
                 // this prompt's chain: drop it. Its arrays return to the
-                // MLX buffer cache here rather than serving a conversation
+                // `mlx_buffer_cache` here rather than serving a conversation
                 // they no longer match.
                 super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::ChainMismatch => {
                     InMemoryPrefixAdoptionResolution::NotAdopted(Some(

@@ -324,7 +324,7 @@ pub(super) fn unpack_checkpoint_kernel_outputs(
 }
 
 /// Slices each checkpoint axis entry out of the packed boundary tensor and
-/// reshapes it back to the recurrent-state layout the prompt cache stores.
+/// reshapes it back to the recurrent-state layout the `astro_ssd_prompt_cache` stores.
 fn sliced_recurrent_boundary_states(
     runtime: &MlxRuntime,
     packed_recurrent_boundary_states: &MlxArray,
@@ -396,7 +396,7 @@ fn validate_boundary_checkpoint_positions(
 /// one-token public MLX ops — the documented fallback for a GPU whose
 /// capability probe demoted the fused checkpoint kernel. Boundary states are
 /// captured at exactly the same completed-token positions the fused kernel
-/// writes, so the persistent prompt cache boundary contract is preserved.
+/// writes, so the persistent `astro_ssd_prompt_cache` boundary contract is preserved.
 #[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints_ops_fallback(
     runtime: &MlxRuntime,

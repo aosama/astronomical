@@ -1,6 +1,6 @@
 //! Coordinates the live MLX ceiling with the streaming pager's retained-page budget.
 //!
-//! Keeping both limits in one transition prevents the retained cache from exceeding
+//! Keeping both limits in one transition prevents the retained `astro_expert_cache` from exceeding
 //! the user's current memory grant.
 
 use astronomical_runtime_integration::MlxMemoryLimits;

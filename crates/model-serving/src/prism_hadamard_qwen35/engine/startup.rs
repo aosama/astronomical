@@ -114,7 +114,7 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
     };
     let astro_ssd_prompt_cache_disk_store_config =
         astro_ssd_prompt_cache_disk_store_config_for(&serving_settings, &model_id, &model_revision);
-    // The durable cache block size and checkpoint stride are astro-ssd-prompt-cache
+    // The durable astro SSD prompt cache block size and checkpoint stride are astro SSD prompt cache
     // configuration, not the prefill chunk size: they are contract identity
     // (the storage fingerprint embeds the block count) and must satisfy the
     // layout's persistence alignment, which an arbitrary chunk size does not.
@@ -173,8 +173,8 @@ fn resolved_serving_window(
     Ok((context_window, max_output_tokens))
 }
 
-/// Derives the durable astro-ssd-prompt-cache disk-store configuration when persistent
-/// caching is enabled and a cache configuration was supplied. The per-model
+/// Derives the durable astro SSD prompt cache disk-store configuration when
+/// the `astro_ssd_prompt_cache` is enabled and its configuration was supplied. The per-model
 /// scoping (model id and revision bound into the directory layout) happens
 /// here so the store a pack opens can never collide with another model's
 /// blocks.
@@ -212,10 +212,10 @@ fn neural_engine_mlp_prefill_requested(
     }
 }
 
-/// Reads the durable-cache layout knobs from the chunking settings: the
+/// Reads the durable astro SSD prompt cache layout knobs from the chunking settings: the
 /// configured block token count (none unless the operator set it) and the
 /// common-prefix stride in blocks, floored at one so checkpointing always has
-/// a stride. These are astro-ssd-prompt-cache contract identity, not prefill chunking.
+/// a stride. These are astro SSD prompt cache contract identity, not prefill chunking.
 fn resolved_astro_ssd_prompt_cache_layout(
     serving_settings: &PrismHadamardQwen35ServingSettings,
 ) -> (Option<usize>, u32) {

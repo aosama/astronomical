@@ -139,9 +139,9 @@ pub(crate) fn initialize_qwen3_5_model(
     let think_end_token_id = generation_processor.think_end_token_id();
     let model_id = validated_artifact.model_id().to_owned();
     let model_revision = validated_artifact.revision().to_owned();
-    // Derive the model-specific path only when the user enabled persistent
-    // caching. This keeps disabled operation from touching model/revision cache
-    // identity, opening directories, scanning files, or reserving publication
+    // Derive the model-specific path only when the user enabled the
+    // `astro_ssd_prompt_cache`. This keeps disabled operation from touching model/revision
+    // astro SSD prompt cache identity, opening directories, scanning files, or reserving publication
     // workspace later in model loading.
     let astro_ssd_prompt_cache_disk_store_config = astro_ssd_prompt_cache_enabled.then(|| {
         let per_model_astro_ssd_prompt_cache_config =
@@ -519,7 +519,7 @@ fn construct_streaming_engine(
                 );
             }
         };
-    Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
+    Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_astro_expert_cache_policy(
         validated_artifact,
         active_memory_limit_bytes,
         mlx_buffer_cache_limit_bytes,

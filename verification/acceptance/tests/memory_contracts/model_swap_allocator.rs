@@ -74,7 +74,7 @@ async fn run_model_swap_allocator_contract() {
         .memory_snapshot()
         .expect("the post-drop MLX allocator snapshot should be readable");
     eprintln!(
-        "[memory-contract] status=progress phase=first_model_dropped active_bytes={} cache_bytes={} peak_bytes={}",
+        "[memory-contract] status=progress phase=first_model_dropped active_bytes={} mlx_buffer_cache_bytes={} peak_bytes={}",
         post_drop_snapshot.active_memory_bytes(),
         post_drop_snapshot.mlx_buffer_cache_bytes(),
         post_drop_snapshot.peak_memory_bytes(),
@@ -135,7 +135,7 @@ async fn run_model_swap_allocator_contract() {
     assert!(
         replacement_model_loading_mlx_buffer_cache_bytes
             < replacement_model_loading_active_memory_bytes,
-        "replacement model loading may retain tiny graph bookkeeping, but not model-scale cache bytes"
+        "replacement model loading may retain tiny graph bookkeeping, but not model-scale MLX buffer cache bytes"
     );
     assert!(
         replacement_model_loading_active_memory_bytes > 0,
@@ -416,7 +416,7 @@ fn assert_replacement_cleanup_order(replacement_model_loading_report: &Value) {
 }
 
 /// Two generation-time cleanups are mandatory (after prompt prefill and at
-/// request finalization). A third is legitimate: astro-ssd-prompt-cache capture
+/// request finalization). A third is legitimate: `astro_ssd_prompt_cache` capture
 /// publication wipes the MLX buffer cache when active memory sits within the
 /// publication comfort headroom of the ceiling
 /// (qwen3_5_core/astro_ssd_prompt_cache_capture/block_capture.rs) — exactly this journey's

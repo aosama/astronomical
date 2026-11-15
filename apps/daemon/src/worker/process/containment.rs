@@ -432,7 +432,7 @@ fn react_to_cancellation_event(
         }
         telemetry_event @ (WorkerEvent::AstroSsdPromptCacheStats { .. }
         | WorkerEvent::ExpertStreamingStats { .. }) => {
-            // Cache write-out and the per-generation expert-streaming report
+            // Astro SSD prompt cache write-out and the per-generation expert-streaming report
             // can land after the client drops the stream. Record them and
             // keep the healthy worker; the serving path's dispatcher stays
             // the one place that publishes them.

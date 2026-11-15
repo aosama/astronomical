@@ -469,7 +469,7 @@ async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_fina
         worker_handle
             .clear_astro_ssd_prompt_cache(None)
             .await
-            .expect("cache clear should queue"),
+            .expect("astro SSD prompt cache clear should queue"),
         AstroSsdPromptCacheClearOutcome::Queued,
     );
     assert!(matches!(

@@ -53,7 +53,7 @@ impl Qwen3_5Model {
                 missing_page,
             );
         }
-        let Some((retained_page, _)) = self.routed_subset_of_cached_page(
+        let Some((retained_page, _)) = self.routed_subset_of_astro_expert_cache_page(
             layer_index,
             &route_split.retained_expert_ids,
             expert_capacity,

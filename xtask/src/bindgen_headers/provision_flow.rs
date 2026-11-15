@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use super::archive_extraction::{ExtractionRequest, create_directory, extract_and_patch_archive};
 use super::hash_manifest::tree_hash_manifest;
 use super::header_locations::{
-    COMPLETION_MARKER_FILE_NAME, EXTRACTION_TREE_MLX, EXTRACTION_TREE_MLX_C,
-    HEADERS_CACHE_SUBDIRECTORY, extraction_directory, source_identity,
+    BINDGEN_HEADERS_SUBDIRECTORY, COMPLETION_MARKER_FILE_NAME, EXTRACTION_TREE_MLX,
+    EXTRACTION_TREE_MLX_C, extraction_directory, source_identity,
 };
 use super::options::ProvisionOptions;
 use super::patch_pipeline::PatchStep;
@@ -20,10 +20,10 @@ use crate::step_log::{log_line, start_step};
 pub(crate) fn provision_headers(
     repository_root: &Path,
     provision_options: &ProvisionOptions,
-    cache_directory: &Path,
+    native_archive_directory: &Path,
     patch_steps: &[PatchStep],
 ) -> Result<(), String> {
-    let headers_root_directory = cache_directory.join(HEADERS_CACHE_SUBDIRECTORY);
+    let headers_root_directory = native_archive_directory.join(BINDGEN_HEADERS_SUBDIRECTORY);
     create_private_directory(&headers_root_directory)?;
     let read_manifest_step = start_step("read-pinned-manifest");
     let manifest_text = pinned_manifest_text(repository_root, provision_options)?;
@@ -31,7 +31,7 @@ pub(crate) fn provision_headers(
     read_manifest_step.finish("success");
     let identity_step = start_step("resolve-source-identity");
     let source_identity = source_identity(repository_root)?;
-    let extraction_directory = extraction_directory(cache_directory, &source_identity);
+    let extraction_directory = extraction_directory(native_archive_directory, &source_identity);
     identity_step.finish("success");
     log_line(&format!(
         "extraction_directory={}",
@@ -55,7 +55,7 @@ pub(crate) fn provision_headers(
     verify_step.finish("success");
     let publication = HeaderPublication {
         repository_root,
-        cache_directory,
+        native_archive_directory,
         source_identity,
         pinned_archives,
     };
@@ -105,7 +105,7 @@ fn extraction_is_intact(extraction_directory: &Path) -> Result<bool, String> {
 
 struct HeaderPublication<'publication> {
     repository_root: &'publication Path,
-    cache_directory: &'publication Path,
+    native_archive_directory: &'publication Path,
     source_identity: String,
     pinned_archives: PinnedHeaderArchives,
 }
@@ -185,7 +185,7 @@ impl HeaderPublication<'_> {
         };
         ExtractionRequest {
             repository_root: self.repository_root,
-            cache_directory: self.cache_directory,
+            astro_native_build_cache_dependencies_directory: self.native_archive_directory,
             staging_directory,
             pinned_archive,
             dependency_description,
@@ -220,7 +220,8 @@ fn unique_staging_directory(headers_root_directory: &Path) -> PathBuf {
     headers_root_directory.join(format!(".staging.{}.{nanoseconds}", std::process::id()))
 }
 
-/// The headers cache holds only this user's extraction; 0700 keeps other
+/// The bindgen headers folder inside the `astro_native_build_cache` holds
+/// only this user's extraction; 0700 keeps other
 /// local accounts from swapping headers under bindgen.
 fn create_private_directory(directory_path: &Path) -> Result<(), String> {
     create_directory(directory_path)?;

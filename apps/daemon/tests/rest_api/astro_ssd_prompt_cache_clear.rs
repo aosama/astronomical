@@ -29,7 +29,7 @@ const ROMEO_AND_JULIET: &str = include_str!(
 async fn should_clear_the_entire_astro_ssd_prompt_cache_while_the_worker_is_idle() {
     run_bounded_test(async {
         let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
-        eprintln!("[cache-clear-rest] deleting the global cache while idle");
+        eprintln!("[astro-ssd-prompt-cache-clear-rest] deleting the global astro SSD prompt cache while idle");
 
         let clear_response =
             delete_astro_ssd_prompt_cache(&test_context.application, "/v1/ssd-prompt-cache").await;
@@ -69,7 +69,9 @@ async fn should_clear_one_model_astro_ssd_prompt_cache_by_its_model_id() {
 async fn should_queue_only_the_newest_astro_ssd_prompt_cache_clear_until_generation_finishes() {
     run_bounded_test(async {
         let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
-        eprintln!("[cache-clear-rest] starting the Romeo and Juliet generation journey");
+        eprintln!(
+            "[astro-ssd-prompt-cache-clear-rest] starting the Romeo and Juliet generation journey"
+        );
         let mut generation_events = test_context
             .worker_handle
             .start_chat_generation(delayed_generation_command(41))
@@ -131,7 +133,7 @@ async fn should_wait_for_a_queued_generation_before_applying_the_astro_ssd_promp
         let astro_ssd_prompt_cache_stats_during_queued_generation = get_astro_ssd_prompt_cache_stats(&test_context.application).await;
         assert!(
             !astro_ssd_prompt_cache_stats_during_queued_generation["pending_astro_ssd_prompt_cache_clear"].is_null(),
-            "cache clear must remain pending while the queued generation runs"
+            "astro SSD prompt cache clear must remain pending while the queued generation runs"
         );
         receive_generation_completion(&mut queued_generation_events).await;
         wait_for_pending_clear_to_finish(&test_context.application).await;
@@ -222,7 +224,7 @@ impl AstroSsdPromptCacheClearTestContext {
         self.worker_handle
             .shutdown()
             .await
-            .expect("cache-clear fixture should shut down");
+            .expect("astro SSD prompt cache clear fixture should shut down");
     }
 }
 
@@ -371,10 +373,10 @@ async fn delete_astro_ssd_prompt_cache(
                 .method(Method::DELETE)
                 .uri(request_uri)
                 .body(Body::empty())
-                .expect("cache-clear request should be valid"),
+                .expect("astro SSD prompt cache clear request should be valid"),
         )
         .await
-        .expect("application should return a cache-clear response")
+        .expect("application should return an astro SSD prompt cache clear response")
 }
 
 async fn get_astro_ssd_prompt_cache_stats(application: &axum::Router) -> serde_json::Value {
@@ -384,10 +386,10 @@ async fn get_astro_ssd_prompt_cache_stats(application: &axum::Router) -> serde_j
             Request::builder()
                 .uri("/v1/ssd-prompt-cache/stats")
                 .body(Body::empty())
-                .expect("cache-stats request should be valid"),
+                .expect("astro SSD prompt cache stats request should be valid"),
         )
         .await
-        .expect("application should return cache stats");
+        .expect("application should return astro SSD prompt cache stats");
     response_json(stats_response).await
 }
 
@@ -455,5 +457,5 @@ async fn wait_for_zeroed_astro_ssd_prompt_cache_stats(application: &axum::Router
 async fn run_bounded_test(test_journey: impl std::future::Future<Output = ()>) {
     timeout(TEST_TIMEOUT, test_journey)
         .await
-        .expect("cache-clear REST journey should finish within ten seconds");
+        .expect("astro SSD prompt cache clear REST journey should finish within ten seconds");
 }

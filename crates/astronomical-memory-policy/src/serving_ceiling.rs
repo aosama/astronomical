@@ -87,7 +87,7 @@ const METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND: u64 = 25;
 /// minus a 2.5% Metal working-set margin.
 ///
 /// MLX `active_memory` does not count everything Metal charges against the
-/// wired budget: MLX buffer-cache buffers, driver command-buffer scratch, and
+/// wired budget: MLX buffer cache buffers, driver command-buffer scratch, and
 /// other GPU clients sharing the system-wide wired pool. A planner that packs
 /// MLX arrays to the raw claim therefore fails the command buffer with
 /// `kIOGPUCommandBufferCallbackErrorOutOfMemory`. Measured 2026-10-24 on a

@@ -93,7 +93,7 @@ pub(crate) fn next_prefill_prefetch_layer_index(
         .find(|&layer_index| is_prefetch_candidate(layer_index))
 }
 
-/// Whether a layer the cache keeps part of may have its complete page read.
+/// Whether a layer the astro expert cache keeps part of may have its complete page read.
 ///
 /// A chunk forward serves such a layer from its hot table and reads only
 /// what the table lacks, so a complete read there would be wasted. A prompt
@@ -121,7 +121,7 @@ impl PrefetchedCompleteLayer {
 impl Qwen3_5Model {
     /// Whether a forward that routes `route_token_count` tokens reads this
     /// layer's complete page from storage: the tokens reach every expert,
-    /// the page multiplies as read, the cache does not already keep the
+    /// the page multiplies as read, the astro expert cache does not already keep the
     /// whole layer, and the residency plan is not giving the layer back.
     pub(super) fn prompt_reads_complete_expert_layer(
         &self,
@@ -196,7 +196,7 @@ impl Qwen3_5Model {
             .map(|prefetched| (prefetched.weights, prefetched.manifest))
     }
 
-    /// A chunk forward's read ahead: the next layer the cache keeps nothing
+    /// A chunk forward's read ahead: the next layer the astro expert cache keeps nothing
     /// of, since the chunk serves a partly kept layer from its hot table.
     pub(super) fn read_next_chunk_layer_ahead(
         &self,

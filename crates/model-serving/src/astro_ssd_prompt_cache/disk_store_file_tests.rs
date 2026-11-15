@@ -11,8 +11,8 @@ fn should_parse_a_lowercase_hash_name_with_or_without_an_extension() {
         0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd,
         0xee, 0xff,
     ];
-    let block_directory = format!("/cache/blocks/{LOWERCASE_HASH_HEX}");
-    let state_file = format!("/cache/sequence/{LOWERCASE_HASH_HEX}.safetensors");
+    let block_directory = format!("/astro_ssd_prompt_cache/blocks/{LOWERCASE_HASH_HEX}");
+    let state_file = format!("/astro_ssd_prompt_cache/sequence/{LOWERCASE_HASH_HEX}.safetensors");
     assert_eq!(
         parse_astro_ssd_prompt_cache_file_hash_from_path(Path::new(&block_directory)),
         Some(expected_hash)

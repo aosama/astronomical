@@ -1,11 +1,11 @@
-//! Architecture-neutral rotating-cache admission geometry.
+//! Architecture-neutral rotating `astro_decoder_state_cache` admission geometry.
 //!
 //! A sliding layer commits at most `window_size` tokens. Multi-token prefill
 //! may temporarily own `window_size + prompt_chunk - 1` tokens so every new
 //! token still sees a full prior window. Memory admission must charge that
 //! transient, not only the steady-state ring.
 
-/// Errors from rotating-cache admission arithmetic.
+/// Errors from rotating `astro_decoder_state_cache` admission arithmetic.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RotatingAdmissionError {
     /// Window size was zero.

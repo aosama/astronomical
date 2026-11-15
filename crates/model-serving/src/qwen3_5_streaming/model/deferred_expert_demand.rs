@@ -17,7 +17,7 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 /// One seated layer's lazily retained route awaiting demand recording. When
 /// `resident_layer_payload_byte_count` is set, the route was served entirely
-/// from a seated complete layer and the honest no-cache read it avoided is
+/// from a seated complete layer and the honest read with no `astro_expert_cache` that it avoided is
 /// still owed to both byte ledgers once the distinct routed union is known.
 #[derive(Debug)]
 struct PendingLayerRoute {
@@ -174,7 +174,7 @@ impl Qwen3_5Model {
     }
 
     /// Records every queued route into the warm table's demand counts and
-    /// credits any owed no-cache avoided bytes.
+    /// credits any owed bytes avoided relative to a read with no `astro_expert_cache`.
     ///
     /// Call after the evaluation whose roots included the queued routes; the
     /// copies are then host reads of computed identifiers. Fail-open: a failed
@@ -221,7 +221,7 @@ impl Qwen3_5Model {
             }
         }
     }
-    /// Credits the no-cache read a wholly RAM-served resident route avoided,
+    /// Credits the read with no `astro_expert_cache` that a wholly RAM-served resident route avoided,
     /// using the distinct routed experts of the copied route. Multi-token
     /// routes repeat experts across tokens; each expert is one storage read,
     /// so duplicates count once (issue #1715).

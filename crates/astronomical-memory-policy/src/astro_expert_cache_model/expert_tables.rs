@@ -1,6 +1,6 @@
 //! The astro expert cache as the engine can actually hold it: one table per layer.
 //!
-//! `cache` treats memory as perfectly divisible. An engine cannot: a layer's
+//! `astro_expert_cache` treats memory as perfectly divisible. An engine cannot: a layer's
 //! experts live in one stacked tensor, so an empty slot frees nothing and
 //! memory moves between layers only by reallocating a table. This module is
 //! the same astro expert cache under that constraint, and every decision it takes is a

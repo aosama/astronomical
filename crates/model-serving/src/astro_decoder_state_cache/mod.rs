@@ -1,4 +1,4 @@
-//! Closed astro-decoder-state-cache layouts shared by model implementations and persistent storage.
+//! Closed astro decoder state cache layouts shared by model implementations and persistent storage.
 
 #[cfg(feature = "direct-mlx")]
 mod append_only_attention_state;

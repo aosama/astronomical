@@ -1,6 +1,6 @@
 //! Arithmetic for aligning prompt processing with durable astro SSD prompt cache boundaries.
 //!
-//! Cache-enabled prefill is clamped to one boundary per forward. That keeps the
+//! Prefill with the `astro_ssd_prompt_cache` enabled is clamped to one boundary per forward. That keeps the
 //! captured decoder state and token slice at the same exact point, and ensures a
 //! required synchronous publication succeeds before processing can advance. A
 //! dense model's layer-major prefill runs several such chunks as one forward
@@ -10,7 +10,7 @@
 #[cfg(all(test, feature = "direct-mlx"))]
 mod tests;
 
-/// Returns local completed-token counts for every persistent astro-ssd-prompt-cache
+/// Returns local completed-token counts for every persistent astro SSD prompt cache
 /// boundary crossed by one attempted prefill forward.
 #[must_use]
 pub fn astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens(
@@ -49,7 +49,7 @@ pub fn astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens(
     completed_prefill_chunk_tokens
 }
 
-/// Returns the cache-enabled prefill chunk end after both durable-boundary clamps.
+/// Returns the prefill chunk end, with the `astro_ssd_prompt_cache` enabled, after both durable-boundary clamps.
 ///
 /// Composes the two rules that must never be applied independently: at most one
 /// durable block publication per forward, and a terminal chunk that stops one
@@ -115,8 +115,8 @@ pub fn astro_ssd_prompt_cache_partial_tail_capture_end(
     }
 }
 
-/// Clamps an attempted cache-enabled prefill chunk so it can publish at most one
-/// mandatory persistent astro-ssd-prompt-cache boundary.
+/// Clamps an attempted prefill chunk, with the `astro_ssd_prompt_cache` enabled, so it can publish at most one
+/// mandatory persistent astro SSD prompt cache boundary.
 #[must_use]
 pub fn astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end(
     prefill_chunk_start: usize,
@@ -144,7 +144,7 @@ pub fn astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end(
 
 /// The next prompt-prefill chunk span, resolved identically by both Qwen3.5
 /// engines: `None` when no prompt work is pending, otherwise the configured
-/// chunk end clamped at the durable astro-ssd-prompt-cache boundary when one applies.
+/// chunk end clamped at the durable astro SSD prompt cache boundary when one applies.
 ///
 /// Extracted from the two engines' `advance_prompt_prefill_if_pending` twins,
 /// which had drifted toward repeating this composition; the boundary clamp was
@@ -187,7 +187,7 @@ pub fn resolve_prompt_prefill_chunk_span(
 }
 
 /// One resolved prompt-prefill chunk: its inclusive start, its (possibly
-/// cache-clamped) exclusive end, and the token count the engines log and
+/// clamped at an `astro_ssd_prompt_cache` boundary) exclusive end, and the token count the engines log and
 /// admit against.
 #[cfg(feature = "direct-mlx")]
 pub struct ResolvedPrefillChunkSpan {

@@ -241,7 +241,7 @@ fn should_fingerprint_a_shard_as_the_first_eight_digest_bytes_in_lowercase_hex()
         .expect("the shard modification time sets");
 
     // SHA-256 of "model.safetensors:7:1700000000", first eight bytes: the
-    // fingerprint names cache folders on disk, so its text must not drift.
+    // fingerprint names `astro_neural_engine_program_cache` folders on disk, so its text must not drift.
     assert_eq!(
         super::model_weights_fingerprint(model_folder.path()).as_deref(),
         Some("077b99e4651cfdbc")

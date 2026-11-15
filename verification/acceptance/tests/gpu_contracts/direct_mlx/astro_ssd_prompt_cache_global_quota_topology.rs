@@ -1,6 +1,6 @@
 //! Global-quota acceptance tests for foreign namespaces and adversarial topology.
 //!
-//! The active store must safely account and evict cache artifacts belonging to
+//! The active store must safely account and evict astro SSD prompt cache artifacts belonging to
 //! other models without interpreting matching hashes as shared ancestry.
 
 use std::{fs, path::Path, time::UNIX_EPOCH};
@@ -26,7 +26,7 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
         &measurement_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the measurement cache should open");
+    .expect("the measurement astro SSD prompt cache should open");
     let parent_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = parent_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -50,12 +50,12 @@ async fn should_scope_protected_ancestry_to_its_model_namespace_when_hashes_matc
         .and_then(|two_blocks| two_blocks.checked_add(1_024))
         .expect("the two-block quota should fit");
     let global_astro_ssd_prompt_cache_root =
-        tempfile::tempdir().expect("the test should create a global cache root");
+        tempfile::tempdir().expect("the test should create a global astro SSD prompt cache root");
     let active_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &global_astro_ssd_prompt_cache_root,
         two_block_quota_bytes,
     )
-    .expect("the active cache should open");
+    .expect("the active astro SSD prompt cache should open");
     active_astro_ssd_prompt_cache
         .publish_block(
             &runtime,
@@ -118,7 +118,7 @@ fn should_bound_global_quota_topology_walk_for_cyclic_foreign_manifests() {
     // Foreign files bypass active-model startup validation. The global scanner
     // therefore needs its own iterative cycle guard before applying quota.
     let global_astro_ssd_prompt_cache_root =
-        tempfile::tempdir().expect("the test should create a global cache root");
+        tempfile::tempdir().expect("the test should create a global astro SSD prompt cache root");
     let foreign_blocks_directory = global_astro_ssd_prompt_cache_root
         .path()
         .join("foreign-model")
@@ -160,7 +160,7 @@ fn should_not_join_foreign_block_subtrees_across_storage_contract_fingerprints()
     // The child names the parent's hash but declares incompatible tensor geometry.
     // Evicting the parent must not sweep that independently scoped child.
     let global_astro_ssd_prompt_cache_root =
-        tempfile::tempdir().expect("the test should create a global cache root");
+        tempfile::tempdir().expect("the test should create a global astro SSD prompt cache root");
     let foreign_blocks_directory = global_astro_ssd_prompt_cache_root
         .path()
         .join("foreign-model")
@@ -198,7 +198,7 @@ fn should_remove_stale_transactions_before_evicting_committed_blocks() {
     // Make durable content older than staging content to prove transaction class,
     // rather than timestamp alone, controls the first eviction decision.
     let global_astro_ssd_prompt_cache_root =
-        tempfile::tempdir().expect("the test should create a global cache root");
+        tempfile::tempdir().expect("the test should create a global astro SSD prompt cache root");
     let foreign_blocks_directory = global_astro_ssd_prompt_cache_root
         .path()
         .join("foreign-model")

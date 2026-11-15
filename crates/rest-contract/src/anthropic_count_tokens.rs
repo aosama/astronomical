@@ -91,7 +91,8 @@ impl AnthropicCountTokensRequest {
 }
 
 /// The token-counting response: the prompt tokens the conversation would
-/// prefill, astro-ssd-prompt-cache hits included, because a count runs no astro SSD prompt cache lookup.
+/// prefill, astro SSD prompt cache hits included, because a count runs no
+/// astro SSD prompt cache lookup.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub struct AnthropicTokenCount {
     pub input_tokens: u32,

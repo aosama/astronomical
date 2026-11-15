@@ -220,7 +220,7 @@ pub(super) fn astro_ssd_prompt_cache_disk_usage(
 
 /// Reads one safetensors file's JSON header metadata without touching the payload.
 ///
-/// The persistent astro-ssd-prompt-cache writer stamps `block_token_count` into every
+/// The persistent astro SSD prompt cache writer stamps `block_token_count` into every
 /// state file's metadata (the same bounded header the startup scan validates),
 /// so eight length bytes plus the JSON header are enough to classify a saved
 /// artifact as a complete block or a partial tail.
@@ -343,7 +343,7 @@ async fn measure_worker_summarization(
                 max_output_tokens: astro_ssd_prompt_cache_warmup_case.maximum_output_tokens,
                 // Greedy decoding keeps the cold and warm passes deterministic,
                 // which is what the generated-output equality assertion proves:
-                // cache restoration must preserve the exact cold-pass output.
+                // astro SSD prompt cache restoration must preserve the exact cold-pass output.
                 temperature_thousandths: Some(0),
                 top_p_thousandths: None,
                 repetition_penalty_thousandths: None,
@@ -443,7 +443,7 @@ async fn measure_worker_summarization(
     }
     let response_completed_at = Instant::now();
     let completed_token_counts = completed_token_counts
-        .expect("the terminal worker event should report prompt, completion, and cached tokens");
+        .expect("the terminal worker event should report prompt, completion, and astro SSD prompt cache tokens");
     StreamingMeasurement {
         request_started_at,
         first_output_at: first_output_at.unwrap_or(response_completed_at),

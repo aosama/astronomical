@@ -151,7 +151,7 @@ pub(super) fn handle_worker_event(
     Ok(())
 }
 
-/// Publishes astro-ssd-prompt-cache and expert-streaming snapshots that ride alongside
+/// Publishes astro SSD prompt cache and expert-streaming snapshots that ride alongside
 /// generation. They are observations, so they stay out of the generation match
 /// and do not change request ownership.
 pub(in crate::worker) fn dispatch_observability_worker_event(
@@ -640,13 +640,15 @@ pub(super) fn outside_model_swap_wait_violation(
     protocol_violation(description)
 }
 
-/// The protocol violation for an astro-ssd-prompt-cache clear acknowledgement outside
-/// cache-clear wait.
+/// The protocol violation for an astro SSD prompt cache clear acknowledgement outside
+/// an astro SSD prompt cache clear wait.
 pub(super) fn outside_astro_ssd_prompt_cache_clear_wait_violation(
     astro_ssd_prompt_cache_cleared_event: &WorkerEvent,
 ) -> WorkerControlError {
     let _ = astro_ssd_prompt_cache_cleared_event;
-    protocol_violation("astro-ssd-prompt-cache clear acknowledgement outside cache-clear wait")
+    protocol_violation(
+        "astro-ssd-prompt-cache clear acknowledgement outside astro-ssd-prompt-cache clear wait",
+    )
 }
 
 fn active_chat_request_mut(

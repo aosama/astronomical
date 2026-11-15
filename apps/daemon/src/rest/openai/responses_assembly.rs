@@ -107,7 +107,7 @@ impl OpenAiResponsesCollector {
         self,
         input_token_count: u32,
         output_token_count: u16,
-        cached_input_token_count: u32,
+        astro_ssd_prompt_cache_restored_input_token_count: u32,
         reasoning_token_count: u16,
         completion_reason: ChatGenerationCompletionReason,
     ) -> Result<OpenAiResponse, OpenAiResponsesAssemblyError> {
@@ -124,7 +124,7 @@ impl OpenAiResponsesCollector {
         let usage = OpenAiResponseUsage::new(
             input_token_count,
             u32::from(output_token_count),
-            cached_input_token_count,
+            astro_ssd_prompt_cache_restored_input_token_count,
             u32::from(reasoning_token_count),
         )
         .ok_or(OpenAiResponsesAssemblyError::TokenUsageOverflow {

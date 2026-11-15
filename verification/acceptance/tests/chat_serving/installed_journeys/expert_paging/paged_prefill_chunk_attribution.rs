@@ -108,7 +108,7 @@ async fn attribute_paged_prefill_chunks() {
         .expect("the request-open residency plan should publish");
     let opening_astro_expert_cache_statistics = qwen3_5_model.astro_expert_cache_statistics();
     eprintln!(
-        "[paged-prefill-attribution] request_open cache_ceiling_gb={:.3}",
+        "[paged-prefill-attribution] request_open astro_expert_cache_ceiling_gb={:.3}",
         opening_astro_expert_cache_statistics.maximum_resident_payload_byte_count as f64
             / 1_073_741_824.0
     );
@@ -211,7 +211,7 @@ async fn attribute_paged_prefill_chunks() {
         );
         let astro_expert_cache_statistics = qwen3_5_model.astro_expert_cache_statistics();
         eprintln!(
-            "[paged-prefill-attribution] chunk={chunk_index} cache_after: entries={} resident_gb={:.3} complete_layers={} evictions={} max_gb={:.3}",
+            "[paged-prefill-attribution] chunk={chunk_index} astro_expert_cache_after: entries={} resident_gb={:.3} complete_layers={} evictions={} max_gb={:.3}",
             astro_expert_cache_statistics.entry_count,
             astro_expert_cache_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
             astro_expert_cache_statistics.complete_layer_count,

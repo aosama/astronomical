@@ -327,16 +327,16 @@ async fn should_zero_fill_astro_ssd_prompt_cache_stats_when_no_worker_data_so_th
             Request::builder()
                 .uri("/v1/ssd-prompt-cache/stats")
                 .body(Body::empty())
-                .expect("the cache-stats request should be valid"),
+                .expect("the astro SSD prompt cache stats request should be valid"),
         )
         .await
-        .expect("the application should return a cache-stats response");
+        .expect("the application should return an astro SSD prompt cache stats response");
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
-        .expect("the cache-stats body should be readable");
-    let astro_ssd_prompt_cache_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the cache-stats body should contain JSON");
+        .expect("the astro SSD prompt cache stats body should be readable");
+    let astro_ssd_prompt_cache_document: serde_json::Value = serde_json::from_slice(&response_body)
+        .expect("the astro SSD prompt cache stats body should contain JSON");
 
     assert_eq!(
         astro_ssd_prompt_cache_document["astro_ssd_prompt_cache_hits"],

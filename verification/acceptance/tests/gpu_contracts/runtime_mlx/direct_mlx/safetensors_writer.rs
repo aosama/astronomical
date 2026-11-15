@@ -15,16 +15,18 @@ fn should_save_multiple_arrays_and_metadata_through_a_retained_file_descriptor()
         .expect("the test should create the second tensor");
     let temporary_directory =
         tempfile::tempdir().expect("the test should create a temporary directory");
-    let cache_file_path = temporary_directory.path().join("cache-block.safetensors");
-    let cache_file = OpenOptions::new()
+    let astro_ssd_prompt_cache_block_file_path = temporary_directory
+        .path()
+        .join("astro-ssd-prompt-cache-block.safetensors");
+    let astro_ssd_prompt_cache_block_file = OpenOptions::new()
         .create_new(true)
         .write(true)
-        .open(&cache_file_path)
-        .expect("the test should create a new cache file");
+        .open(&astro_ssd_prompt_cache_block_file_path)
+        .expect("the test should create a new astro SSD prompt cache block file");
 
     let write_outcome = runtime
         .save_safetensors(
-            cache_file,
+            astro_ssd_prompt_cache_block_file,
             &[
                 ("layer_0_recurrent", &first_tensor),
                 ("layer_1_keys", &second_tensor),
@@ -34,15 +36,16 @@ fn should_save_multiple_arrays_and_metadata_through_a_retained_file_descriptor()
         .expect("MLX should save tensors through the retained descriptor");
     assert_eq!(
         write_outcome.written_byte_count(),
-        fs::metadata(&cache_file_path)
+        fs::metadata(&astro_ssd_prompt_cache_block_file_path)
             .expect("the test should read the saved file metadata")
             .len()
     );
 
-    let saved_cache_file =
-        File::open(&cache_file_path).expect("the test should reopen the saved cache file");
+    let saved_astro_ssd_prompt_cache_block_file =
+        File::open(&astro_ssd_prompt_cache_block_file_path)
+            .expect("the test should reopen the saved astro SSD prompt cache block file");
     let saved_tensors = runtime
-        .load_safetensors(saved_cache_file, None)
+        .load_safetensors(saved_astro_ssd_prompt_cache_block_file, None)
         .expect("MLX should load the file written through its official writer");
     let restored_first_tensor = saved_tensors
         .tensor("layer_0_recurrent")

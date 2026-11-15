@@ -76,7 +76,7 @@ fn should_discover_klein_when_the_immutable_revision_is_not_the_catalog_pin() {
 }
 
 #[test]
-fn should_discover_klein_from_library_provenance_without_huggingface_cache_metadata() {
+fn should_discover_klein_from_library_provenance_without_huggingface_hub_cache_metadata() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let model_directory = temporary_directory
         .path()

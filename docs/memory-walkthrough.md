@@ -19,8 +19,8 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
 ## A request arrives
 
 4. The request is validated: token counts and context length. It is not checked against memory and is never refused for memory.
-5. `govern_request_start` sets aside the stored state the whole prompt will occupy and enters the reading phase. The capacity drops by the prompt's stored state, the reading MLX working buffers and the layer slots. The cache, or the dense layers, give back what that displaces, once.
-6. If part of the prompt is in the prompt cache on the SSD, it is restored. The blocks need room while they load, so the governor leases it for the restore and takes it back afterwards.
+5. `govern_request_start` sets aside the stored state the whole prompt will occupy and enters the reading phase. The capacity drops by the prompt's stored state, the reading MLX working buffers and the layer slots. The astro expert cache, or the dense layers, give back what that displaces, once.
+6. If part of the prompt is in the astro SSD prompt cache, it is restored. The blocks need room while they load, so the governor leases it for the restore and takes it back afterwards.
 
 ## Reading the prompt
 
@@ -29,10 +29,10 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
    - If the layer's experts are not all kept, its page is read from the SSD once and held for every span. The next layer's page is read ahead while this one computes, so at most two pages are in hand.
    - Every span runs through the layer. Each span remembers what it found when it began: its input, the layer's state, and the output it waits for.
    - The engine waits for the layer. Which experts the tokens chose is recorded. The step is measured: what MLX held before and after, and how high it peaked.
-   - The governor is told. It records the MLX working buffers, compares its accounts with what MLX reports, and answers with the capacity. The page that was read is kept by the cache if there is capacity for it, and dropped otherwise.
+   - The governor is told. It records the MLX working buffers, compares its accounts with what MLX reports, and answers with the capacity. The page that was read is kept by the astro expert cache if there is capacity for it, and dropped otherwise.
    - The engine reports "N of M layers done" to the status page.
-9. **If a span cannot fit**, MLX reports it at the next wait. The layer is put back to its oldest unconfirmed span. The governor leases as much room again as the step was given, or the shortfall MLX reported if that is more, and the cache gives back only what the lease displaces. The span runs again. After four attempts the request ends with MLX's error.
-10. After the last layer the prompt's tokens count as read, the astro-ssd-prompt-cache blocks are published under a lease for their workspace, and the request moves on.
+9. **If a span cannot fit**, MLX reports it at the next wait. The layer is put back to its oldest unconfirmed span. The governor leases as much room again as the step was given, or the shortfall MLX reported if that is more, and the astro expert cache gives back only what the lease displaces. The span runs again. After four attempts the request ends with MLX's error.
+10. After the last layer the prompt's tokens count as read, the astro SSD prompt cache blocks are published under a lease for their workspace, and the request moves on.
 
 ## Writing the reply
 
@@ -42,11 +42,11 @@ A measurement the limit cannot hold does not fail the load. The phase stays unme
 
 ## When the request ends
 
-14. `govern_request_end` returns any lease or unsettled retry and enters the idle phase. The streaming engine keeps no stored state between requests, so the capacity rises again. The cache keeps what it has. A dense model reads back the layers it gave up.
+14. `govern_request_end` returns any lease or unsettled retry and enters the idle phase. The streaming engine keeps no stored state between requests, so the capacity rises again. The astro expert cache keeps what it has. A dense model reads back the layers it gave up.
 
 ## When the limit changes
 
-15. The governor is told the new limit and answers with the capacity. A lower limit makes the cache or the dense layers give back at once. A higher one lets a dense model read layers back while idle and lets the cache keep more as it reads.
+15. The governor is told the new limit and answers with the capacity. A lower limit makes the astro expert cache or the dense layers give back at once. A higher one lets a dense model read layers back while idle and lets the astro expert cache keep more as it reads.
 
 ## What is measured and what is checked
 

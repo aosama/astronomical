@@ -35,7 +35,7 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the persistent prompt cache should open");
+    .expect("the astro SSD prompt cache should open");
     let astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
     let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
@@ -49,8 +49,9 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
         )
         .expect("the initial split files should save");
 
-    fs::remove_dir_all(&active_model_astro_ssd_prompt_cache_directory)
-        .expect("the test should remove the active model cache while it remains open");
+    fs::remove_dir_all(&active_model_astro_ssd_prompt_cache_directory).expect(
+        "the test should remove the active model astro SSD prompt cache while it remains open",
+    );
     let stale_lookup =
         astro_ssd_prompt_cache.load_kv_block(&runtime, &astro_ssd_prompt_cache_block_key, None);
     assert!(matches!(
@@ -73,7 +74,7 @@ async fn should_recreate_deleted_active_model_directories_before_replacement_wri
             &kv_block_tensors,
             &recurrent_snapshot_tensors,
         )
-        .expect("the replacement write should recreate deleted cache directories");
+        .expect("the replacement write should recreate deleted astro SSD prompt cache directories");
 
     assert!(
         active_model_astro_ssd_prompt_cache_directory
@@ -163,8 +164,8 @@ fn should_never_follow_an_active_model_safetensors_symlink() {
 
 #[test]
 fn should_reject_a_symlink_as_the_global_astro_ssd_prompt_cache_root() {
-    let configured_astro_ssd_prompt_cache_parent_directory =
-        tempfile::tempdir().expect("the test should create a configured cache parent");
+    let configured_astro_ssd_prompt_cache_parent_directory = tempfile::tempdir()
+        .expect("the test should create a configured astro SSD prompt cache parent");
     let external_directory =
         tempfile::tempdir().expect("the test should create an external directory");
     let external_marker_file_path = external_directory.path().join("must-remain.bin");
@@ -173,7 +174,7 @@ fn should_reject_a_symlink_as_the_global_astro_ssd_prompt_cache_root() {
     let symlinked_global_astro_ssd_prompt_cache_root_directory =
         configured_astro_ssd_prompt_cache_parent_directory
             .path()
-            .join("cache-root");
+            .join("astro-ssd-prompt-cache-root");
     symlink(
         external_directory.path(),
         &symlinked_global_astro_ssd_prompt_cache_root_directory,

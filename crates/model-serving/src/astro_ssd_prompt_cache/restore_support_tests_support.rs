@@ -27,7 +27,7 @@ pub(crate) fn test_model_contract() -> AstroSsdPromptCacheModelContract {
             256,
             &astro_decoder_state_cache_layer_dtypes,
         )
-        .expect("the frozen configuration should build a astro-decoder-state-cache layout"),
+        .expect("the frozen configuration should build an astro-decoder-state-cache layout"),
         ornith_config.maximum_position_count() as usize,
         TEST_MLX_MEMORY_CEILING_BYTES,
         TEST_SSD_QUOTA_BYTES,

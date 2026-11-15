@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use super::layout_error::AstroDecoderStateCacheLayoutError;
 
-/// Scalar type required by one persisted astro-decoder-state-cache tensor.
+/// Scalar type required by one persisted astro decoder state cache tensor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AstroDecoderStateCacheTensorDtype {
     Float16,
@@ -12,7 +12,7 @@ pub enum AstroDecoderStateCacheTensorDtype {
 }
 
 impl AstroDecoderStateCacheTensorDtype {
-    /// Returns the scalar payload width used by this astro-decoder-state-cache tensor.
+    /// Returns the scalar payload width used by this astro decoder state cache tensor.
     #[must_use]
     pub const fn scalar_byte_count(self) -> usize {
         match self {
@@ -47,7 +47,7 @@ impl AstroDecoderStateCacheTensorDtype {
     }
 }
 
-/// Static tensor contract for one named astro-decoder-state-cache state component.
+/// Static tensor contract for one named astro decoder state cache state component.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AstroDecoderStateCacheTensorLayout {
     tensor_role_name: String,
@@ -218,7 +218,7 @@ fn checked_tensor_payload_byte_count(
         )
 }
 
-/// One exhaustive astro-decoder-state-cache state family in a model layer.
+/// One exhaustive astro decoder state cache state family in a model layer.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AstroDecoderStateCacheLayerLayout {
     /// Append-only attention state, stored in token-sliceable blocks.
@@ -271,7 +271,7 @@ impl AstroDecoderStateCacheLayerLayout {
     }
 }
 
-/// Validated, architecture-neutral request astro-decoder-state-cache layout.
+/// Validated, architecture-neutral request astro decoder state cache layout.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AstroDecoderStateCacheLayout {
     layers: Vec<AstroDecoderStateCacheLayerLayout>,
@@ -280,7 +280,7 @@ pub struct AstroDecoderStateCacheLayout {
 }
 
 impl AstroDecoderStateCacheLayout {
-    /// Validates a model-owned astro-decoder-state-cache layout before it creates live state or opens SSD files.
+    /// Validates a model-owned astro decoder state cache layout before it creates live state or opens SSD files.
     pub fn new(
         layers: Vec<AstroDecoderStateCacheLayerLayout>,
     ) -> Result<Self, AstroDecoderStateCacheLayoutError> {

@@ -1,4 +1,4 @@
-//! In-memory prefix-adoption decision for one persistent astro-ssd-prompt-cache restore.
+//! In-memory prefix-adoption decision for one persistent astro SSD prompt cache restore.
 
 /// Outcome of comparing the retained live prefix against the disk store's
 /// longest restorable prefix: the pure half of the issue #1167 adoption gate.

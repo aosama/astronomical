@@ -21244,7 +21244,7 @@
     },
     {
       "file": "apps/daemon/tests/rest_api/application/canvas_cors.rs",
-      "function": "should_allow_the_thin_talk_canvas_origin_with_its_methods_and_cache_age",
+      "function": "should_allow_the_thin_talk_canvas_origin_with_its_methods_and_http_preflight_max_age",
       "line": 46,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -55111,7 +55111,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/artifacts/quantized_expert_layer_plan.rs",
-      "function": "build_quantized_expert_layer_plan_with_stored_names_and_header_cache",
+      "function": "build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache",
       "line": 108,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -70969,7 +70969,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
-      "function": "MlxInferenceEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy",
+      "function": "MlxInferenceEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_astro_expert_cache_policy",
       "line": 164,
       "cyclomatic": 7.0,
       "coverage": null,
@@ -79159,7 +79159,7 @@
     },
     {
       "file": "crates/native-build-orchestration/src/native_compile.rs",
-      "function": "NativeRuntimeBuildInputs::native_dependency_cache_directory",
+      "function": "NativeRuntimeBuildInputs::astro_native_build_cache_dependencies_directory",
       "line": 66,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -79213,7 +79213,7 @@
     },
     {
       "file": "crates/native-build-orchestration/src/native_compile.rs",
-      "function": "native_dependency_cache_directory",
+      "function": "astro_native_build_cache_dependencies_directory",
       "line": 302,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -86251,7 +86251,7 @@
     },
     {
       "file": "crates/rest-contract/src/openai_chat_completion_response.rs",
-      "function": "OpenAiTokenUsage::with_cached_tokens",
+      "function": "OpenAiTokenUsage::with_astro_ssd_prompt_cache_restored_tokens",
       "line": 346,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -97168,7 +97168,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/astro_ssd_prompt_cache_disk_store.rs",
-      "function": "should_classify_a_vanished_kv_block_load_as_a_treatable_cache_miss",
+      "function": "should_classify_a_vanished_kv_block_load_as_a_treatable_astro_ssd_prompt_cache_miss",
       "line": 203,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -98095,7 +98095,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/full_attention.rs",
-      "function": "should_apply_one_cached_grouped_query_attention_step_with_output_gating",
+      "function": "should_apply_one_astro_decoder_state_cache_grouped_query_attention_step_with_output_gating",
       "line": 10,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99013,7 +99013,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/vision_padding_fusion_probe.rs",
-      "function": "should_probe_vision_padding_cache_costs_at_scaled_vision_shapes",
+      "function": "should_probe_vision_padding_zero_cache_costs_at_scaled_vision_shapes",
       "line": 30,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99400,7 +99400,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/cold_page_plan.rs",
-      "function": "ResidencyChecker::atlas_page_is_cached",
+      "function": "ResidencyChecker::atlas_page_is_in_macos_file_cache",
       "line": 57,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99418,7 +99418,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/cold_page_plan.rs",
-      "function": "ResidencyChecker::stock_page_is_cached",
+      "function": "ResidencyChecker::stock_page_is_in_macos_file_cache",
       "line": 38,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -103081,7 +103081,7 @@
     },
     {
       "file": "verification/acceptance/tests/performance/paged_prefill/cold_prefill_measurements.rs",
-      "function": "should_measure_paged_prefill_cold_cache_at_fifty_thousand_words",
+      "function": "should_measure_paged_prefill_with_a_cold_macos_file_cache_at_fifty_thousand_words",
       "line": 111,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -104412,7 +104412,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/astro_ssd_prompt_cache/dense_cached_token_report.rs",
+      "file": "verification/acceptance/tests/astro_ssd_prompt_cache/dense_astro_ssd_prompt_cache_restored_token_report.rs",
       "function": "run_dense_cached_token_report_journey",
       "line": 25,
       "cyclomatic": 1.0,
@@ -104421,7 +104421,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/astro_ssd_prompt_cache/dense_cached_token_report.rs",
+      "file": "verification/acceptance/tests/astro_ssd_prompt_cache/dense_astro_ssd_prompt_cache_restored_token_report.rs",
       "function": "should_report_the_exact_dense_restored_prefix_in_warm_request_usage",
       "line": 19,
       "cyclomatic": 1.0,
@@ -105088,7 +105088,7 @@
     },
     {
       "file": "verification/acceptance/tests/astro_ssd_prompt_cache/rest_support.rs",
-      "function": "prepare_cacheable_romeo_and_juliet_prompt",
+      "function": "prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt",
       "line": 37,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -108579,8 +108579,8 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/app_bundle/icon_cache.rs",
-      "function": "cached_channel_icon",
+      "file": "xtask/src/app_bundle/rendered_icon_memo.rs",
+      "function": "rendered_channel_icon",
       "line": 16,
       "cyclomatic": 7.0,
       "coverage": null,
@@ -108588,8 +108588,8 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/app_bundle/icon_cache.rs",
-      "function": "cached_icon_file_name",
+      "file": "xtask/src/app_bundle/rendered_icon_memo.rs",
+      "function": "rendered_icon_file_name",
       "line": 49,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -109795,7 +109795,7 @@
     },
     {
       "file": "xtask/src/bindgen_headers/header_locations.rs",
-      "function": "native_dependency_cache_directory",
+      "function": "astro_native_build_cache_dependencies_directory",
       "line": 26,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -110281,7 +110281,7 @@
     },
     {
       "file": "xtask/src/bootstrap_native_dependencies.rs",
-      "function": "resolve_cache_directory",
+      "function": "resolve_astro_native_build_cache_dependencies_directory",
       "line": 158,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -110316,7 +110316,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
+      "file": "xtask/src/github_actions_cache_prune.rs",
       "function": "deletion_plan",
       "line": 91,
       "cyclomatic": 8.0,
@@ -110325,7 +110325,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
+      "file": "xtask/src/github_actions_cache_prune.rs",
       "function": "family_of_key",
       "line": 51,
       "cyclomatic": 3.0,
@@ -110334,7 +110334,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
+      "file": "xtask/src/github_actions_cache_prune.rs",
       "function": "gh_output",
       "line": 254,
       "cyclomatic": 3.0,
@@ -110343,7 +110343,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
+      "file": "xtask/src/github_actions_cache_prune.rs",
       "function": "keep_count_for_family",
       "line": 61,
       "cyclomatic": 2.0,
@@ -110352,7 +110352,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
+      "file": "xtask/src/github_actions_cache_prune.rs",
       "function": "max_entry_bytes_for_family",
       "line": 69,
       "cyclomatic": 2.0,
@@ -110361,7 +110361,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
+      "file": "xtask/src/github_actions_cache_prune.rs",
       "function": "other_ref_keep_count_for_family",
       "line": 77,
       "cyclomatic": 2.0,
@@ -110370,8 +110370,8 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
-      "function": "parse_cache_list_tsv",
+      "file": "xtask/src/github_actions_cache_prune.rs",
+      "function": "parse_github_actions_cache_list_tsv",
       "line": 141,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -110379,7 +110379,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune.rs",
+      "file": "xtask/src/github_actions_cache_prune.rs",
       "function": "run",
       "line": 161,
       "cyclomatic": 17.0,
@@ -110388,7 +110388,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/src/cache_prune_tests.rs",
+      "file": "xtask/src/github_actions_cache_prune_tests.rs",
       "function": "cache_entry",
       "line": 5,
       "cyclomatic": 1.0,
@@ -110542,7 +110542,7 @@
     },
     {
       "file": "xtask/src/classify_scope.rs",
-      "function": "is_cache_input_path",
+      "function": "is_github_actions_cache_input_path",
       "line": 137,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -116220,7 +116220,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_cache_owner_contract.rs",
+      "file": "xtask/tests/workflow_github_actions_cache_owner_contract.rs",
       "function": "assert_cache_restore_step",
       "line": 19,
       "cyclomatic": 3.0,
@@ -116229,7 +116229,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_cache_owner_contract.rs",
+      "file": "xtask/tests/workflow_github_actions_cache_owner_contract.rs",
       "function": "assert_cache_save_step_matches_restore",
       "line": 85,
       "cyclomatic": 1.0,
@@ -116238,7 +116238,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_cache_owner_contract.rs",
+      "file": "xtask/tests/workflow_github_actions_cache_owner_contract.rs",
       "function": "assert_composite_cache_owner",
       "line": 148,
       "cyclomatic": 1.0,
@@ -116247,7 +116247,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_cache_owner_contract.rs",
+      "file": "xtask/tests/workflow_github_actions_cache_owner_contract.rs",
       "function": "pinned_tool_version",
       "line": 534,
       "cyclomatic": 3.0,
@@ -116256,7 +116256,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_cache_owner_contract.rs",
+      "file": "xtask/tests/workflow_github_actions_cache_owner_contract.rs",
       "function": "sccache_key_lines_missing_tool_pins",
       "line": 469,
       "cyclomatic": 4.0,
@@ -116409,7 +116409,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_verification_tools_cache_contract.rs",
+      "file": "xtask/tests/workflow_verification_tools_github_actions_cache_contract.rs",
       "function": "cache_step_configuration",
       "line": 30,
       "cyclomatic": 1.0,
@@ -116418,7 +116418,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_verification_tools_cache_contract.rs",
+      "file": "xtask/tests/workflow_verification_tools_github_actions_cache_contract.rs",
       "function": "installing_job_caches",
       "line": 64,
       "cyclomatic": 2.0,
@@ -116427,7 +116427,7 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/workflow_verification_tools_cache_contract.rs",
+      "file": "xtask/tests/workflow_verification_tools_github_actions_cache_contract.rs",
       "function": "verification_tools_cache_of",
       "line": 39,
       "cyclomatic": 1.0,

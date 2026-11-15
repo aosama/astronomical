@@ -396,12 +396,14 @@ where
     }
 
     /// Emits a `WorkerEvent::AstroSsdPromptCacheStats` event when the engine
-    /// has a persistent prompt cache. Silently skips when the engine returns
-    /// `None` (no cache open) or when collection fails.
+    /// has an open `astro_ssd_prompt_cache`. Silently skips when the engine returns
+    /// `None` (no `astro_ssd_prompt_cache` open) or when collection fails.
     /// The last events of a model load. The Neural Engine status comes after the
     /// runtime configuration because the daemon clears it when it completes a swap,
     /// which happens on that configuration.
-    pub(crate) async fn emit_cache_stats_then_neural_engine_status<WriteTransport>(
+    pub(crate) async fn emit_astro_ssd_prompt_cache_stats_then_neural_engine_status<
+        WriteTransport,
+    >(
         &mut self,
         event_writer: &mut ProtocolWriter<WriteTransport>,
         neural_engine_prefill_event: Option<&WorkerEvent>,
@@ -429,10 +431,10 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        // Disabled persistent caching is an ownership cut at worker startup,
+        // A disabled `astro_ssd_prompt_cache` is an ownership cut at worker startup,
         // not merely an engine that happens to report no entries. Avoid even
-        // crossing the engine command channel for cache statistics so disabled
-        // requests perform no cache-specific collection or event work.
+        // crossing the engine command channel for `astro_ssd_prompt_cache` statistics so disabled
+        // requests perform no `astro_ssd_prompt_cache` collection or event work.
         if self
             .worker_runtime_feature_configuration
             .as_ref()

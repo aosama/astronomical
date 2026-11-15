@@ -4,7 +4,7 @@
 //! decode provides today: a multi-token forward whose outputs are logits at
 //! the positions the caller needs (to verify drafted tokens against the
 //! target distribution) plus hidden states captured at the DFlash draft's
-//! conditioning taps (to grow the draft's context key-value cache). This
+//! conditioning taps (to grow the draft's context key-value state). This
 //! entry reuses the exact per-layer forward, normalization, and
 //! language-model head of the ordinary graph; the differences are the tap
 //! captures and the caller-selected head scope.

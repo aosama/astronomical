@@ -1,4 +1,4 @@
-//! Durable identity and topology record for one committed astro-ssd-prompt-cache block.
+//! Durable identity and topology record for one committed astro SSD prompt cache block.
 //!
 //! The directory name proves only the block's content hash. This manifest also
 //! binds that hash to its ordinal position, parent, model storage geometry, and

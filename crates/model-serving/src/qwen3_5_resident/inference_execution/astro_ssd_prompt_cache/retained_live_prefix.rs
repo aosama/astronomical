@@ -37,7 +37,7 @@ pub(in crate::qwen3_5_resident) struct RetainedLiveDecoderPrefix {
     /// them to the boundary, and the stale tail is overwritten by the next
     /// prefill's in-place slab writes.
     pub(in crate::qwen3_5_resident) decoder_state: RequestDecoderStateStack,
-    /// The complete astro-ssd-prompt-cache block keys the generation's capture chain
+    /// The complete astro SSD prompt cache block keys the generation's capture chain
     /// covers, in chain order. Adoption matches the next prompt's chain
     /// against these hashes.
     pub(in crate::qwen3_5_resident) complete_block_keys: Vec<AstroSsdPromptCacheBlockKey>,

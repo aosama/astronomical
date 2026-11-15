@@ -128,7 +128,7 @@ impl std::ops::DerefMut for Qwen3_5StreamingModel {
 }
 
 impl Qwen3_5StreamingModel {
-    /// Returns the retained pager cache's expert-memory snapshot.
+    /// Returns the retained `astro_expert_cache`'s expert-memory snapshot.
     #[must_use]
     pub fn astro_expert_cache_statistics(&self) -> AstroExpertCacheStatistics {
         if self.expert_pager.is_none() {

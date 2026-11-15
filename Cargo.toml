@@ -163,7 +163,7 @@ too_many_lines = "deny"
 # loop: a one-line edit to the serving crate rebuilds its direct-MLX test
 # binary in about 2 s incrementally against about 6.4 s from scratch
 # (measured on an Apple Silicon laptop), at roughly 0.4 GB of incremental
-# cache per compiled variant. The setting was off for a while because
+# Cargo incremental-compilation state per compiled variant. The setting was off for a while because
 # sccache refuses incremental compilation; CI, which relies on sccache, now
 # pins CARGO_INCREMENTAL=0 in its own environment (the variable overrides
 # the profile), and a local machine that still wraps rustc with sccache

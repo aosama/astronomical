@@ -72,9 +72,9 @@ impl Qwen3_5Model {
         )
     }
 
-    /// The decode-cache-policy-aware loader: binds the shared language
+    /// The decode-`astro_expert_cache`-policy-aware loader: binds the shared language
     /// artifact, builds the streaming expert runtime (pager, warm slot table,
-    /// sorted-reduction kernel), derives the decoder cache layout, collects
+    /// sorted-reduction kernel), derives the `astro_decoder_state_cache` layout, collects
     /// the capability-verdict kernels and invariant scales, and assembles the
     /// memory facts with the fused-kernel verdict.
     pub(crate) fn load_with_performance_attribution_and_decode_astro_expert_cache_policy(
@@ -199,7 +199,7 @@ fn compiled_model_graphs()
     ))
 }
 
-/// Derives the decoder cache layout under attribution. It waits for bound
+/// Derives the `astro_decoder_state_cache` layout under attribution. It waits for bound
 /// weights and sparse plans, whose source dtypes decide MLX result-type
 /// promotion, and evaluates no tensor.
 fn measured_astro_decoder_state_cache_layout(
@@ -563,9 +563,9 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
     }
 }
 
-/// Derives the decoder cache layout at the tensor-binding boundary.
+/// Derives the `astro_decoder_state_cache` layout at the tensor-binding boundary.
 ///
-/// Cache geometry cannot be finalized before weights and sparse plans are
+/// The `astro_decoder_state_cache` geometry cannot be finalized before weights and sparse plans are
 /// bound: their source dtypes determine MLX result-type promotion, so the
 /// persistence contract is derived here without evaluating tensors.
 fn astro_decoder_state_cache_layout_at_tensor_binding(

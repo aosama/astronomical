@@ -186,7 +186,8 @@ fn should_not_probe_a_tail_when_the_newest_snapshot_sits_below_the_chain_tip() {
 }
 
 #[test]
-fn should_not_probe_a_tail_when_the_uncached_suffix_still_holds_complete_blocks() {
+fn should_not_probe_a_tail_when_the_suffix_beyond_the_astro_ssd_prompt_cache_still_holds_complete_blocks()
+ {
     let prompt_tokens = prompt_tokens_with_complete_blocks_and_trailing_tokens(2, 0);
     let block_keys = astro_ssd_prompt_cache_block_keys_for_prompt(&prompt_tokens, 1);
     let first_block_hash = block_keys[0].block_hash();

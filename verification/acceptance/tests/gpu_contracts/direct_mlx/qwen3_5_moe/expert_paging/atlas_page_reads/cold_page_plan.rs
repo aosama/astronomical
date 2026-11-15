@@ -35,7 +35,7 @@ impl ResidencyChecker {
             .or_insert_with(|| open_bypassing_macos_file_cache(path))
     }
 
-    pub(super) fn stock_page_is_cached(
+    pub(super) fn stock_page_is_in_macos_file_cache(
         &mut self,
         page_manifest: &QuantizedExpertPageManifest,
     ) -> bool {
@@ -54,7 +54,7 @@ impl ResidencyChecker {
         false
     }
 
-    pub(super) fn atlas_page_is_cached(
+    pub(super) fn atlas_page_is_in_macos_file_cache(
         &mut self,
         atlas: &AtlasTestFile,
         atlas_layer_position: usize,
@@ -71,7 +71,7 @@ impl ResidencyChecker {
     }
 }
 
-/// For every model layer, the experts whose stock bytes are entirely uncached.
+/// For every model layer, the experts whose stock bytes are entirely absent from the macOS file cache.
 pub(super) fn cold_stock_expert_ids_by_layer(
     layer_plans: &[QuantizedExpertLayerPlan],
     expert_count: usize,
@@ -86,7 +86,7 @@ pub(super) fn cold_stock_expert_ids_by_layer(
             let single_expert_manifest =
                 build_quantized_expert_page_manifest_from_plan(layer_plan, &[expert_id])
                     .expect("a one-expert manifest builds");
-            if !residency_checker.stock_page_is_cached(&single_expert_manifest) {
+            if !residency_checker.stock_page_is_in_macos_file_cache(&single_expert_manifest) {
                 cold_expert_ids.push(expert_id);
             }
         }

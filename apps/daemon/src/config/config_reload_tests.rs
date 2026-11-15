@@ -414,7 +414,7 @@ fn should_classify_astro_ssd_prompt_cache_capacity_change_as_worker_restart() {
 
     assert!(
         matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. } if reloaded_fields.contains(&"ssd_prompt_cache".to_owned())),
-        "a astro-ssd-prompt-cache capacity change must restart the worker, got {decision:?}"
+        "an astro-ssd-prompt-cache capacity change must restart the worker, got {decision:?}"
     );
 }
 

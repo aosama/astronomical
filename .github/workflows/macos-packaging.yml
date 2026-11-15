@@ -16,19 +16,19 @@ name: macOS packaging
 # nobody waits on it. It runs weekly against main and on demand, and never
 # on pull requests or pushes, where it only made people wait.
 #
-# Caching. The lane used to rebuild everything: about 4-7 minutes of native
+# Reuse of earlier work. The lane used to rebuild everything: about 4-7 minutes of native
 # MLX compilation and 5-7 minutes of thin-LTO Rust per run. Both are now
-# served from caches that cannot hand the release stale bytes:
+# served from the `github_actions_cache` and sccache, which cannot hand the release stale bytes:
 # - The native MLX build comes from the same content-addressed native build
-#   store entry ci.yml saves on main. `app package` prewarms the `core`
+#   store entry (the `astro_native_build_cache`) ci.yml saves on main. `app package` prewarms the `core`
 #   profile outside Cargo, exactly as ci.yml does, so the identity, and so
-#   the cache key, is the same; a miss builds it and saves it back.
+#   the `github_actions_cache` key, is the same; a miss builds it and saves it back.
 # - Rust compilation goes through sccache, which keys every object on its
 #   full inputs, so the disposable release target directory still starts
 #   empty and only content-identical objects are reused. Release objects
 #   (optimised, with LTO bitcode) share nothing with ci.yml's debug sccache,
 #   so this lane keeps its own family. The final thin-LTO links of the three
-#   executables are never cacheable and always run.
+#   executables can never be stored in sccache and always run.
 #
 # Never signs with an identity, notarizes, or publishes: Stable signs ad hoc
 # when no --signing-identity is given, which is exactly what CI can verify
@@ -77,7 +77,7 @@ jobs:
           cache-dependency-path: apps/thin-talk/web/package-lock.json
       # ci.yml saves this on main; restore-only here so the two lanes never
       # race to write the same key.
-      - name: Restore cargo-downloads-cache
+      - name: Restore cargo downloads from the github_actions_cache
         uses: ./.github/actions/astronomical-cache
         with:
           operation: restore
@@ -90,11 +90,11 @@ jobs:
             astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
       - name: Provision the xtask binary
         uses: ./.github/actions/provision-xtask
-      - name: Compute the native build cache key
+      - name: Compute the native build github_actions_cache key
         # Prints NATIVE_BUILD_IDENTITY and NATIVE_BUILD_ENTRY_DIRECTORY; the
-        # probe values go to the log so a cache miss can be attributed.
+        # probe values go to the log so a `github_actions_cache` miss can be attributed.
         run: xtask native-fingerprint --explain --target aarch64-apple-darwin --profile core --cache-environment >> "$GITHUB_ENV"
-      - name: Restore native-archives-cache
+      - name: Restore native archives from the github_actions_cache
         id: native-archives-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -102,7 +102,7 @@ jobs:
           owner: native-archives
           path: ~/Library/Caches/Astronomical/native-dependencies
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
-      - name: Restore native-build-cache
+      - name: Restore the native build from the github_actions_cache
         id: native-build-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -113,7 +113,7 @@ jobs:
           # be rejected by the store, so a prefix fallback could only waste a
           # download.
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
-      - name: Restore release-sccache-cache
+      - name: Restore release sccache from the github_actions_cache
         uses: ./.github/actions/astronomical-cache
         with:
           operation: restore
@@ -130,7 +130,7 @@ jobs:
             astronomical-v2-release-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
       # ci.yml's rust-core saves this on main; restore-only here, as with the
       # native archives, so a release-edge 504 cannot fail the weekly run.
-      - name: Restore verification-tools-cache
+      - name: Restore verification tools from the github_actions_cache
         uses: ./.github/actions/astronomical-cache
         with:
           operation: restore
@@ -142,7 +142,7 @@ jobs:
       - name: Route Rust compilation through sccache
         # Written after sccache is installed: provision-xtask may compile
         # before it exists. sccache refuses incremental compilation, and the
-        # cap bounds the saved cache at ci.yml's budget; a full release build
+        # cap bounds the saved sccache at ci.yml's budget; a full release build
         # filled 149 MiB, so the cap leaves room for several generations.
         run: |
           {
@@ -166,7 +166,7 @@ jobs:
       - name: Report sccache effectiveness
         if: ${{ !cancelled() }}
         run: sccache --show-stats
-      - name: Save native-archives-cache
+      - name: Save native archives to the github_actions_cache
         if: ${{ !cancelled() && steps.native-archives-cache.outputs.cache-hit != 'true' }}
         uses: ./.github/actions/astronomical-cache
         with:
@@ -174,7 +174,7 @@ jobs:
           owner: native-archives
           path: ~/Library/Caches/Astronomical/native-dependencies
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
-      - name: Save native-build-cache
+      - name: Save the native build to the github_actions_cache
         # A miss means this run built the entry; saving it serves ci.yml too.
         if: ${{ !cancelled() && steps.native-build-cache.outputs.cache-hit != 'true' }}
         uses: ./.github/actions/astronomical-cache
@@ -183,10 +183,10 @@ jobs:
           owner: native-build
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
-      - name: Save release-sccache-cache
+      - name: Save release sccache to the github_actions_cache
         # Default branch only, as ci.yml's sccache: an entry saved by a
         # dispatch from another branch would never be superseded and would
-        # only spend the cache budget. Each weekly run saves a fresh
+        # only spend the `github_actions_cache` budget. Each weekly run saves a fresh
         # generation for the next one.
         if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
         uses: ./.github/actions/astronomical-cache

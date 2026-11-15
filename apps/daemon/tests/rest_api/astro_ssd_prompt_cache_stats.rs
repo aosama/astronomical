@@ -6,7 +6,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-const MODEL_ID: &str = "astronomical/cache-stats-test-model";
+const MODEL_ID: &str = "astronomical/astro-ssd-prompt-cache-stats-test-model";
 const TEST_CONFIGURED_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 = 123_456_789;
 
 const POPULATED_ASTRO_SSD_PROMPT_CACHE_STATS_EVENT: WorkerEvent =
@@ -51,16 +51,16 @@ async fn should_return_populated_astro_ssd_prompt_cache_stats_for_a_ready_worker
             Request::builder()
                 .uri("/v1/ssd-prompt-cache/stats")
                 .body(Body::empty())
-                .expect("the cache-stats request should be valid"),
+                .expect("the astro SSD prompt cache stats request should be valid"),
         )
         .await
-        .expect("the application should return a cache-stats response");
+        .expect("the application should return an astro SSD prompt cache stats response");
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
-        .expect("the cache-stats body should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the cache-stats body should contain JSON");
+        .expect("the astro SSD prompt cache stats body should be readable");
+    let status_document: serde_json::Value = serde_json::from_slice(&response_body)
+        .expect("the astro SSD prompt cache stats body should contain JSON");
     assert_eq!(status_document["astro_ssd_prompt_cache_hits"], 12);
     assert_eq!(status_document["astro_ssd_prompt_cache_misses"], 3);
     assert_eq!(
@@ -124,16 +124,16 @@ async fn should_return_zeroed_astro_ssd_prompt_cache_stats_when_worker_is_unavai
             Request::builder()
                 .uri("/v1/ssd-prompt-cache/stats")
                 .body(Body::empty())
-                .expect("the cache-stats request should be valid"),
+                .expect("the astro SSD prompt cache stats request should be valid"),
         )
         .await
-        .expect("the application should return a cache-stats response");
+        .expect("the application should return an astro SSD prompt cache stats response");
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
-        .expect("the cache-stats body should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the cache-stats body should contain JSON");
+        .expect("the astro SSD prompt cache stats body should be readable");
+    let status_document: serde_json::Value = serde_json::from_slice(&response_body)
+        .expect("the astro SSD prompt cache stats body should contain JSON");
     assert_eq!(status_document["astro_ssd_prompt_cache_hits"], 0);
     assert_eq!(status_document["astro_ssd_prompt_cache_misses"], 0);
     assert_eq!(status_document["astro_ssd_prompt_cache_tokens_saved"], 0);
@@ -217,15 +217,15 @@ async fn should_compute_hit_rate_as_hits_over_total_queries() {
             Request::builder()
                 .uri("/v1/ssd-prompt-cache/stats")
                 .body(Body::empty())
-                .expect("the cache-stats request should be valid"),
+                .expect("the astro SSD prompt cache stats request should be valid"),
         )
         .await
-        .expect("the application should return a cache-stats response");
+        .expect("the application should return an astro SSD prompt cache stats response");
     let response_body = to_bytes(response.into_body(), 8 * 1024)
         .await
-        .expect("the cache-stats body should be readable");
-    let status_document: serde_json::Value =
-        serde_json::from_slice(&response_body).expect("the cache-stats body should contain JSON");
+        .expect("the astro SSD prompt cache stats body should be readable");
+    let status_document: serde_json::Value = serde_json::from_slice(&response_body)
+        .expect("the astro SSD prompt cache stats body should contain JSON");
     // 2 hits / 3 total = 0.6667 rounded to 4 decimals
     assert_eq!(status_document["astro_ssd_prompt_cache_hit_rate"], 0.6667);
 }

@@ -187,7 +187,7 @@
           "type": "integer",
           "minimum": 1,
           "default": 4096,
-          "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Persistent-cache publication may still clamp each forward to the next durable block boundary.",
+          "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Astro SSD prompt cache publication may still clamp each forward to the next durable block boundary.",
           "x-astronomical-unit": "tokens",
           "x-astronomical-explanation": "The same piece size, used when a model is too large for memory and part of it is read from the SSD. It is set separately because reading from the SSD changes which size is fastest.",
           "x-astronomical-apply-mode": "model-reload"
@@ -251,13 +251,13 @@
           "title": "Neural Engine prefill",
           "type": "boolean",
           "default": false,
-          "description": "Dense models only: runs part of each full prefill chunk on the Apple Neural Engine next to the GPU, through whole MLP programs and the linear-attention output gates. Measured 1.13x to 1.2x prefill speed on a 9B model with the prompt cache on and no change to decode. Each chunk uses the programs only when they fit under the MLX memory ceiling beside what MLX is projected to reach; their cost is measured for each model on this Mac. A model's first load takes a minute or two longer and keeps about 10 GB of compiled programs on disk; later loads take seconds. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone. A model's first long prompts compare the engines on real chunks, and a model that does not gain at least 2 percent is turned off until the next macOS update. Falls back to the GPU when unavailable; /v1/status reports which happened.",
+          "description": "Dense models only: runs part of each full prefill chunk on the Apple Neural Engine next to the GPU, through whole MLP programs and the linear-attention output gates. Measured 1.13x to 1.2x prefill speed on a 9B model with the astro SSD prompt cache on and no change to decode. Each chunk uses the programs only when they fit under the MLX memory ceiling beside what MLX is projected to reach; their cost is measured for each model on this Mac. A model's first load takes a minute or two longer and keeps about 10 GB of compiled programs on disk; later loads take seconds. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone. A model's first long prompts compare the engines on real chunks, and a model that does not gain at least 2 percent is turned off until the next macOS update. Falls back to the GPU when unavailable; /v1/status reports which happened.",
           "x-astronomical-explanation": "Uses the Mac's Neural Engine alongside the graphics processor to read long prompts faster, measured at 1.13 to 1.2 times the speed on a mid-sized model. Writing speed does not change. It only helps dense models, the first load takes a minute or two longer, it keeps about 10 GB on disk, and replies can differ very slightly. A model that does not gain is switched back automatically.",
           "x-astronomical-apply-mode": "model-reload"
         },
         "ssd_prompt_cache_block_tokens": {
           "title": "Cache block length",
-          "description": "Exact persistent-cache block length, or null for model-derived sizing.",
+          "description": "Exact astro SSD prompt cache block length, or null for model-derived sizing.",
           "default": null,
           "anyOf": [
             {
@@ -295,7 +295,7 @@
           "type": "integer",
           "minimum": 1,
           "default": 4,
-          "description": "Cache-block interval between retained common-prefix restart checkpoints.",
+          "description": "Astro SSD prompt cache block interval between retained common-prefix restart checkpoints.",
           "x-astronomical-unit": "blocks",
           "x-astronomical-explanation": "How often a restart point is kept inside a saved prompt. More frequent points let a new prompt that shares only its beginning reuse more of the saved work, and use a little more disk.",
           "x-astronomical-apply-mode": "model-reload"

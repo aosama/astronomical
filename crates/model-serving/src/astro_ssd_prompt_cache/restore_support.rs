@@ -1,4 +1,4 @@
-//! Shared restore-side support for the persistent prompt cache: the IPC
+//! Shared restore-side support for the `astro_ssd_prompt_cache`: the IPC
 //! diagnostics mapping, restore block-key derivation, prefix enumeration, and
 //! the load-and-reconstruct pipeline that the streaming and resident engines
 //! previously carried as two large near-identical functions.
@@ -398,7 +398,7 @@ pub(crate) fn load_restored_kv_blocks(
     })
 }
 
-/// Reconstructs the full-attention KV cache from the loaded blocks with one
+/// Reconstructs the full-attention KV state of the `astro_decoder_state_cache` from the loaded blocks with one
 /// concatenation per layer, then releases the source blocks: the snapshot
 /// phase must never hold the block set and the destination at once.
 pub(crate) fn restore_concatenated_full_attention_state(

@@ -63,11 +63,11 @@ fn assert_throughput_measurements_exist(reports: &InteractionReports) {
     }
 }
 
-/// The append request's cache-reuse contract: it consumed cached tokens,
+/// The append request's astro SSD prompt cache reuse contract: it consumed tokens restored from it,
 /// reported its first-output and first-decode timings, prepared without eager
 /// expert reads on both the record and the attribution, streamed a multi-chunk
-/// cached suffix, and preserved useful expert topology.
-fn assert_append_request_reused_the_cached_suffix(reports: &InteractionReports) {
+/// suffix after the restored prefix, and preserved useful expert topology.
+fn assert_append_request_reused_the_astro_ssd_prompt_cache_prefix(reports: &InteractionReports) {
     let append_performance = &reports.performance_records[1];
     assert!(
         append_performance["astro_ssd_prompt_cache_token_count"]
@@ -104,7 +104,7 @@ fn assert_append_request_reused_the_cached_suffix(reports: &InteractionReports) 
     let append_prefill_chunk_count = attribution_counter(append_attribution, "prefill_chunk_count");
     assert!(
         append_prefill_chunk_count >= 2,
-        "the cached suffix must span at least two prompt-processing chunks so a streamed tail can reread: chunks={append_prefill_chunk_count}"
+        "the suffix after the astro SSD prompt cache prefix must span at least two prompt-processing chunks so a streamed tail can reread: chunks={append_prefill_chunk_count}"
     );
     assert_prefill_stream_counts_stay_seated_or_fully_streamed(
         &reports.attribution_reports[0],
@@ -203,7 +203,7 @@ fn assert_decode_retained_routed_experts(
     );
 }
 
-/// Verifies memory bounds, cache reuse, truthful topology, and attribution.
+/// Verifies memory bounds, astro SSD prompt cache reuse, truthful topology, and attribution.
 pub(super) fn assert_reported_interaction(
     reports: &InteractionReports,
     cold_outcome: &ObservedRequestOutcome,
@@ -221,7 +221,7 @@ pub(super) fn assert_reported_interaction(
     assert_eq!(reports.performance_records.len(), 2);
     assert_eq!(reports.attribution_reports.len(), 2);
     assert_throughput_measurements_exist(reports);
-    assert_append_request_reused_the_cached_suffix(reports);
+    assert_append_request_reused_the_astro_ssd_prompt_cache_prefix(reports);
     assert_requests_published_visible_output(cold_outcome, append_outcome);
     assert_performance_records_retain_request_peak_memory(reports, cold_outcome, append_outcome);
     assert_decode_retained_routed_experts(reports, append_outcome);
@@ -347,7 +347,7 @@ pub(super) fn print_comparison_summary(
         ),
     ] {
         eprintln!(
-            "{LOG_MARKER} request={request_label} status=summary prompt_tokens={} cached_tokens={} generated_tokens={} prefill_tokens_per_second={:.2} generation_tokens_per_second={:.2} total_millis={} preparation_millis={} first_decode_millis={} first_output_millis={} logical_expert_read_bytes={} prefill_reread_bytes={} preserved_expert_bytes={} promoted_complete_bytes={} promoted_partial_bytes={} retired_expert_bytes={} peak_gb={:.3}",
+            "{LOG_MARKER} request={request_label} status=summary prompt_tokens={} astro_ssd_prompt_cache_restored_tokens={} generated_tokens={} prefill_tokens_per_second={:.2} generation_tokens_per_second={:.2} total_millis={} preparation_millis={} first_decode_millis={} first_output_millis={} logical_expert_read_bytes={} prefill_reread_bytes={} preserved_expert_bytes={} promoted_complete_bytes={} promoted_partial_bytes={} retired_expert_bytes={} peak_gb={:.3}",
             performance_record["prompt_token_count"]
                 .as_u64()
                 .unwrap_or(0),
@@ -427,7 +427,7 @@ pub(super) fn assert_admitted_complete_layers_are_reused_across_prefill_chunks(
     let prefill_chunk_count = attribution_counter(append_attribution, "prefill_chunk_count");
     assert!(
         prefill_chunk_count >= 2,
-        "reuse across chunks is only observable on a multi-chunk cached suffix: chunks={prefill_chunk_count}"
+        "reuse across chunks is only observable on a multi-chunk suffix after an astro SSD prompt cache prefix: chunks={prefill_chunk_count}"
     );
     let avoided_complete_layer_bytes = attribution_counter(
         append_attribution,

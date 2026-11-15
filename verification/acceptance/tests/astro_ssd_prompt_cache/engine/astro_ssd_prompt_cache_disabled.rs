@@ -11,7 +11,7 @@ use super::engine_astro_ssd_prompt_cache::{
 
 #[tokio::test]
 #[ignore = "loads and generates with the complete Ornith artifact"]
-async fn should_generate_without_astro_ssd_prompt_cache_storage_contract_work_when_cache_is_disabled()
+async fn should_generate_without_astro_ssd_prompt_cache_storage_contract_work_when_astro_ssd_prompt_cache_is_disabled()
  {
     require_astro_ssd_prompt_cache_acceptance_completion(
         run_astro_ssd_prompt_cache_disabled_cold_prefill_acceptance(),
@@ -27,11 +27,11 @@ async fn run_astro_ssd_prompt_cache_disabled_cold_prefill_acceptance() {
         .expect("the Ornith artifact should validate before engine loading");
     let mlx_memory_limits =
         crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
-    let mut cache_disabled_chunking_configuration =
+    let mut astro_ssd_prompt_cache_disabled_chunking_configuration =
         crate::common::standard_worker_chunking_configuration();
-    // This value deliberately violates the model's persistent-state alignment. Disabled cache
-    // execution must never resolve or validate a storage contract that cannot be used.
-    cache_disabled_chunking_configuration.ssd_prompt_cache_block_tokens = Some(1);
+    // This value deliberately violates the model's persistent-state alignment. Execution with the
+    // astro SSD prompt cache disabled must never resolve or validate a storage contract that cannot be used.
+    astro_ssd_prompt_cache_disabled_chunking_configuration.ssd_prompt_cache_block_tokens = Some(1);
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
@@ -43,7 +43,7 @@ async fn run_astro_ssd_prompt_cache_disabled_cold_prefill_acceptance() {
         .expect("the test resident prefill chunk size should be valid"),
         248_069,
         model_directory.to_path_buf(),
-        cache_disabled_chunking_configuration,
+        astro_ssd_prompt_cache_disabled_chunking_configuration,
     )
     .expect("the bounded Ornith engine settings should be valid");
     qwen3_5_engine
@@ -91,10 +91,10 @@ async fn run_astro_ssd_prompt_cache_disabled_cold_prefill_acceptance() {
 
     assert!(
         !generated_token_ids.is_empty(),
-        "cache-disabled execution should generate at least one model token"
+        "execution with the astro SSD prompt cache disabled should generate at least one model token"
     );
     assert!(
         observed_generation_finalization || generated_token_ids.len() == 10,
-        "cache-disabled execution should terminate through the engine contract or its output budget"
+        "execution with the astro SSD prompt cache disabled should terminate through the engine contract or its output budget"
     );
 }

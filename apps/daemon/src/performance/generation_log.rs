@@ -31,7 +31,7 @@ pub struct GenerationPerformanceRecord {
     pub request_id: u64,
     /// The model that produced this generation.
     pub model_id: String,
-    /// Total prompt tokens (including cached tokens).
+    /// Total prompt tokens (including tokens restored from the astro SSD prompt cache).
     pub prompt_token_count: u32,
     /// Prompt tokens restored from the persistent astro SSD prompt cache.
     pub astro_ssd_prompt_cache_token_count: u32,
@@ -55,7 +55,7 @@ pub struct GenerationPerformanceRecord {
     pub final_resident_expert_count: Option<u32>,
     pub final_resident_expert_payload_bytes: Option<u64>,
     /// Prefill throughput: `(prompt_token_count - astro_ssd_prompt_cache_token_count) / (prefill_elapsed_millis / 1000)`.
-    /// `None` when the entire prompt was cached (0 ms prefill).
+    /// `None` when the entire prompt was restored from the astro SSD prompt cache (0 ms prefill).
     pub prefill_tok_per_second: Option<f64>,
     /// Decode throughput: `generated_token_count / (generation_elapsed_millis / 1000)`.
     /// `None` when generation took 0 ms.
@@ -68,7 +68,7 @@ pub struct GenerationPerformanceRecord {
     ///
     /// The worker computes this evidence while it owns MLX and astro SSD prompt cache state;
     /// the daemon transports it unchanged into the completion record so log
-    /// readers can distinguish a true cache miss from publication memory pressure.
+    /// readers can distinguish a true astro SSD prompt cache miss from publication memory pressure.
     pub astro_ssd_prompt_cache_diagnostics: Option<WorkerAstroSsdPromptCacheRequestDiagnostics>,
 }
 
@@ -97,7 +97,7 @@ pub struct ImageGenerationPerformanceRecord {
 impl GenerationPerformanceRecord {
     /// Computes the throughput fields from raw counters and elapsed times.
     ///
-    /// - `prefill_tok_per_second` is `None` when `prefill_elapsed_millis == 0` (fully cached).
+    /// - `prefill_tok_per_second` is `None` when `prefill_elapsed_millis == 0` (fully restored from the astro SSD prompt cache).
     /// - `generation_tok_per_second` is `None` when `generation_elapsed_millis == 0`.
     pub fn compute_throughput(
         prompt_token_count: u32,
@@ -106,11 +106,12 @@ impl GenerationPerformanceRecord {
         prefill_elapsed_millis: u64,
         generation_elapsed_millis: u64,
     ) -> (Option<f64>, Option<f64>) {
-        let uncached_prompt_tokens =
+        let prompt_tokens_not_restored =
             prompt_token_count.saturating_sub(astro_ssd_prompt_cache_token_count);
-        let prefill_tok_per_second = if prefill_elapsed_millis > 0 && uncached_prompt_tokens > 0 {
+        let prefill_tok_per_second = if prefill_elapsed_millis > 0 && prompt_tokens_not_restored > 0
+        {
             let prefill_seconds = prefill_elapsed_millis as f64 / 1000.0;
-            Some(uncached_prompt_tokens as f64 / prefill_seconds)
+            Some(prompt_tokens_not_restored as f64 / prefill_seconds)
         } else {
             None
         };

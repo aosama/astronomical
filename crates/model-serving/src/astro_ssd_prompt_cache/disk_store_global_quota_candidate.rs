@@ -1,6 +1,6 @@
-//! Typed eviction units produced by the global cache scan.
+//! Typed eviction units produced by the global astro SSD prompt cache scan.
 //!
-//! Committed astro-ssd-prompt-cache blocks are never represented as independent files.
+//! Committed astro SSD prompt cache blocks are never represented as independent files.
 //! They are grouped into ancestry-closed subtrees so eviction cannot leave a
 //! descendant whose required sequence-state parent has disappeared.
 

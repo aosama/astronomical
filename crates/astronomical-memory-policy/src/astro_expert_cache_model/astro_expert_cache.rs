@@ -1,6 +1,6 @@
 //! The astro expert cache: one capacity across all layers, one eviction order.
 //!
-//! The cache this replaces divided memory by layer before a reply began: as
+//! The per-layer tables this replaces divided memory by layer before a reply began: as
 //! many whole layers as fit, and a tiny table for each layer left over. A
 //! recorded reply showed what that costs. A 48-layer model held 11,568
 //! experts and the reply used 10,033, yet three starved layers read about 13
@@ -210,7 +210,7 @@ impl DivisibleAstroExpertCache {
         }
     }
 
-    /// Changes how many bytes the cache may hold and gives up, in eviction
+    /// Changes how many bytes the `astro_expert_cache` may hold and gives up, in eviction
     /// order, whatever no longer fits.
     pub fn set_capacity(&mut self, capacity_bytes: u64) -> Vec<ExpertKey> {
         self.capacity_bytes = capacity_bytes;

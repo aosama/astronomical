@@ -1,4 +1,4 @@
-//! Integration filesystem-only tests for persistent astro-ssd-prompt-cache disk-store
+//! Integration filesystem-only tests for persistent astro SSD prompt cache disk-store
 //! startup scan: invalid-file deletion and quota enforcement.
 //!
 //! These tests exercise `AstroSsdPromptCacheDiskStore::open()` and quota
@@ -104,20 +104,21 @@ fn recursive_non_directory_byte_count(directory: &Path) -> u64 {
     let mut pending_directories = vec![directory.to_path_buf()];
     let mut total_non_directory_bytes = 0_u64;
     while let Some(pending_directory) = pending_directories.pop() {
-        for directory_entry in
-            fs::read_dir(&pending_directory).expect("the test should read a cache directory")
+        for directory_entry in fs::read_dir(&pending_directory)
+            .expect("the test should read an astro SSD prompt cache directory")
         {
-            let directory_entry = directory_entry.expect("the test should read a cache entry");
+            let directory_entry =
+                directory_entry.expect("the test should read an astro SSD prompt cache entry");
             let directory_entry_file_type = directory_entry
                 .file_type()
-                .expect("the test should read the cache entry type");
+                .expect("the test should read the astro SSD prompt cache entry type");
             if directory_entry_file_type.is_dir() {
                 pending_directories.push(directory_entry.path());
             } else {
                 total_non_directory_bytes = total_non_directory_bytes.saturating_add(
                     directory_entry
                         .metadata()
-                        .expect("the test should read cache entry metadata")
+                        .expect("the test should read astro SSD prompt cache entry metadata")
                         .len(),
                 );
             }
@@ -166,7 +167,7 @@ fn should_enforce_one_global_astro_ssd_prompt_cache_quota_across_model_directori
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the active model prompt cache should enforce the global root quota");
+    .expect("the active model astro SSD prompt cache should enforce the global root quota");
 
     let actual_global_astro_ssd_prompt_cache_size_bytes =
         recursive_non_directory_byte_count(global_astro_ssd_prompt_cache_root_directory.path());
@@ -227,7 +228,7 @@ fn should_evict_the_oldest_written_cross_model_file_first() {
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the active model prompt cache should evict the oldest-written file");
+    .expect("the active model astro SSD prompt cache should evict the oldest-written file");
 
     assert!(!older_cross_model_astro_ssd_prompt_cache_file_path.exists());
     assert!(newer_cross_model_astro_ssd_prompt_cache_file_path.exists());
@@ -279,7 +280,7 @@ fn should_evict_a_cross_model_block_parent_with_its_descendants_under_global_quo
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the active model prompt cache should evict the oldest block subtree");
+    .expect("the active model astro SSD prompt cache should evict the oldest block subtree");
 
     assert!(
         !parent_block_directory.exists(),
@@ -326,7 +327,7 @@ fn should_delete_stale_cross_model_block_staging_directory_below_global_quota() 
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the global cache should remove stale block staging directories");
+    .expect("the global astro SSD prompt cache should remove stale block staging directories");
 
     assert!(
         !stale_staging_directory.exists(),
@@ -423,18 +424,18 @@ fn should_delete_cross_model_stale_writer_temp_below_global_quota() {
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the global cache should remove stale writer temp files");
+    .expect("the global astro SSD prompt cache should remove stale writer temp files");
 
     assert!(!stale_writer_temp_file_path.exists());
 }
 
 /// REGRESSION: a valid-hash-named but invalid-content `.safetensors` file
 /// under a one-byte quota must be deleted during `open()` so that
-/// cache-owned bytes cannot silently escape accounting.
+/// astro SSD prompt cache bytes cannot silently escape accounting.
 #[test]
 fn should_delete_invalid_content_safetensors_file_under_one_byte_quota() {
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let kv_blocks_directory = astro_ssd_prompt_cache_directory.path().join("kv_blocks");
     fs::create_dir_all(&kv_blocks_directory)
         .expect("the test should create the KV blocks directory");
@@ -452,27 +453,27 @@ fn should_delete_invalid_content_safetensors_file_under_one_byte_quota() {
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the persistent prompt cache should open and delete invalid files");
+    .expect("the astro SSD prompt cache should open and delete invalid files");
 
     assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 0);
     assert_eq!(
         astro_ssd_prompt_cache.total_size_bytes(),
         0,
-        "cache-owned bytes must be zero after deleting the only invalid file"
+        "astro SSD prompt cache bytes must be zero after deleting the only invalid file"
     );
     assert!(
         !invalid_kv_block_file_path.exists(),
-        "invalid cache-owned .safetensors file must be deleted so it does not consume disk capacity beyond the quota"
+        "invalid astro SSD prompt cache .safetensors file must be deleted so it does not consume disk capacity beyond the quota"
     );
 }
 
-/// When `open()` encounters a cache-owned `.safetensors` file that cannot be
+/// When `open()` encounters an astro SSD prompt cache `.safetensors` file that cannot be
 /// deleted (permission denied on the parent directory), it must return
 /// `RemoveAstroSsdPromptCacheFile` rather than silently leaving the file untracked.
 #[test]
 fn should_return_remove_astro_ssd_prompt_cache_file_error_when_deletion_fails() {
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let kv_blocks_directory = astro_ssd_prompt_cache_directory.path().join("kv_blocks");
     fs::create_dir_all(&kv_blocks_directory)
         .expect("the test should create the KV blocks directory");

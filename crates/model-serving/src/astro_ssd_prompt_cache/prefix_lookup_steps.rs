@@ -1,4 +1,4 @@
-//! The decomposition units of one persistent astro-ssd-prompt-cache prefix lookup:
+//! The decomposition units of one persistent astro SSD prompt cache prefix lookup:
 //! block counting, the short-prompt path, chain matching, the boundary scan,
 //! miss-reason naming, and the restored-prefix assembly. Each unit is
 //! file-private-grade (`pub(super)`) and receives the shared
@@ -269,7 +269,7 @@ where
     }
     // Multi-turn prompts grow by a partial final block. When the previous
     // turn published that suffix as a tail, restore it on top of the
-    // complete-block chain so only the uncached suffix is prefilled.
+    // complete-block chain so only the suffix not restored from the `astro_ssd_prompt_cache` is prefilled.
     let restored_partial_tail_block_key = if lookup_inputs.probe_partial_tail_blocks {
         partial_tail_probe::probe_restorable_partial_tail_block(
             astro_ssd_prompt_cache_model_contract,

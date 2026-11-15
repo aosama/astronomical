@@ -123,7 +123,7 @@ impl Qwen3_5EngineState {
     /// stored state as it will be after the forward.
     ///
     /// `temporary_workspace_bytes` is room the forward needs only while it
-    /// runs and whose size is known exactly, such as astro-ssd-prompt-cache blocks
+    /// runs and whose size is known exactly, such as astro SSD prompt cache blocks
     /// being captured. It counts against the forward's peak, not against
     /// what stays afterwards.
     pub(in crate::qwen3_5_resident) fn admit_forward(

@@ -615,7 +615,7 @@ fn replace_model_policy_catalog(
     let _send_outcome = update_sender.send(Ok(()));
 }
 
-/// Delegates a astro-ssd-prompt-cache clear to its handler with the loop's shared
+/// Delegates an astro SSD prompt cache clear to its handler with the loop's shared
 /// mutation surface. Mirrors the inlined `ClearAstroSsdPromptCache` arm.
 async fn clear_astro_ssd_prompt_cache(
     runtime: &mut WorkerLoopRuntime,

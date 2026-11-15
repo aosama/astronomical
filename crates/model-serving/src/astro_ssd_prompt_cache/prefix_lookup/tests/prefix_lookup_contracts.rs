@@ -248,19 +248,19 @@ fn should_not_match_blocks_when_the_root_block_differs() {
 fn should_restore_blocks_before_changed_visual_content() {
     let prompt_tokens = prompt_tokens_with_complete_blocks_and_trailing_tokens(2, 100);
     let empty_causal_input = AstroSsdPromptCacheBlockCausalInput::empty();
-    let cached_visual_input = AstroSsdPromptCacheBlockCausalInput::from_canonical_bytes(&[1]);
+    let stored_visual_input = AstroSsdPromptCacheBlockCausalInput::from_canonical_bytes(&[1]);
     let requested_visual_input = AstroSsdPromptCacheBlockCausalInput::from_canonical_bytes(&[2]);
-    let cached_root_block_key = AstroSsdPromptCacheBlockKey::for_root_block_with_causal_input(
+    let stored_root_block_key = AstroSsdPromptCacheBlockKey::for_root_block_with_causal_input(
         astro_ssd_prompt_cache_model_contract_ref(),
         &prompt_tokens[..astro_ssd_prompt_cache_block_token_count()],
         &empty_causal_input,
     )
     .expect("the root block should hash");
-    let cached_child_block_key = cached_root_block_key
+    let stored_child_block_key = stored_root_block_key
         .for_child_block_with_causal_input(
             &prompt_tokens[astro_ssd_prompt_cache_block_token_count()
                 ..astro_ssd_prompt_cache_block_token_count() * 2],
-            &cached_visual_input,
+            &stored_visual_input,
         )
         .expect("the visual child block should hash");
 
@@ -269,10 +269,10 @@ fn should_restore_blocks_before_changed_visual_content() {
         &prompt_tokens,
         &[empty_causal_input, requested_visual_input],
         |block_hash| {
-            *block_hash == cached_root_block_key.block_hash()
-                || *block_hash == cached_child_block_key.block_hash()
+            *block_hash == stored_root_block_key.block_hash()
+                || *block_hash == stored_child_block_key.block_hash()
         },
-        |block_hash| *block_hash == cached_root_block_key.block_hash(),
+        |block_hash| *block_hash == stored_root_block_key.block_hash(),
     );
 
     assert_eq!(

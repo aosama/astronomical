@@ -9,10 +9,10 @@
 //!    kept layers, each after a 500-in, 50-out warmup.
 //!
 //! The streamed_dense model loads under the machine's own limit with the
-//! kept count pinned, prefills layer by layer, and decodes greedily. A cold
-//! macOS file cache keeps the weight files out of the macOS file cache throughout,
+//! kept count pinned, prefills layer by layer, and decodes greedily. Cold
+//! reads keep the weight files out of the `macos_file_cache` throughout,
 //! so reads cost what they cost on a Mac whose RAM is no larger than the
-//! model; no prompt cache is involved. Run it on an optimized build.
+//! model; no `astro_ssd_prompt_cache` is involved. Run it on an optimized build.
 
 use std::time::{Duration, Instant};
 

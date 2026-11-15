@@ -25,7 +25,7 @@
 //!   eviction; real replies are replayed through it on every commit.
 //! - `expert_paging` — pure expert-paging support arithmetic: the
 //!   safetensors header parsing (`safetensors_header`, over `safetensors`
-//!   and `strict_json`) and the expert weight memory-cache statistics. The
+//!   and `strict_json`) and the expert weight `astro_expert_cache` statistics. The
 //!   quantized expert manifests stay in `astronomical-model-serving` — they
 //!   embed model-family configuration types.
 //! - `phase` — the one lifecycle phase type (`MemoryPhase`).

@@ -5,7 +5,7 @@
 //! enough for one file ships a bare `model.safetensors` and no index, so the
 //! engine refuses the very checkpoints that are cheapest to measure. It
 //! also refuses a model file that is a symbolic link, which is how the
-//! Hugging Face cache stores every file of a downloaded release. Rather
+//! Hugging Face hub cache stores every file of a downloaded release. Rather
 //! than write into a source directory this crate does not own, the pipeline
 //! builds a sibling directory of hard links to the source's files plus the
 //! index the source lacks, and removes it when the sweep ends. Hard links

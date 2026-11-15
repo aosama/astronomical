@@ -82,7 +82,7 @@ async fn should_attribute_decode_token_time_to_route_copies_and_storage_reads() 
 }
 
 #[tokio::test]
-#[ignore = "serves a 10,000-token Shakespeare request with the model's files kept out of the file cache and attributes each decode token's time"]
+#[ignore = "serves a 10,000-token Shakespeare request with the model's files kept out of the macOS file cache and attributes each decode token's time"]
 #[serial]
 async fn should_attribute_decode_token_time_with_a_cold_file_cache() {
     timeout(
@@ -162,7 +162,7 @@ async fn attribute_decode_token_time(macos_file_cache_condition: MacosFileCacheC
     }
     let macos_file_cache_sweep_count = cold_macos_file_cache.map_or(0, ColdMacosFileCache::finish);
     eprintln!(
-        "[decode-attribution] file_cache={macos_file_cache_condition:?} macos_file_cache_sweeps={macos_file_cache_sweep_count}"
+        "[decode-attribution] macos_file_cache={macos_file_cache_condition:?} macos_file_cache_sweeps={macos_file_cache_sweep_count}"
     );
     let report_documents = read_attribution_report_documents(&attribution_log_path);
     let measured_report =
@@ -301,7 +301,7 @@ fn print_follow_up_operation_breakdown(follow_up_report: &Value) {
         );
     }
     // Physical disk bytes against requested file bytes says whether the
-    // decode's expert reads came from the SSD or from the OS page cache,
+    // decode's expert reads came from the SSD or from the macOS file cache,
     // which a machine with RAM beyond the MLX limit fills with the model.
     eprintln!(
         "[decode-attribution] follow_up process_physical_disk_read_bytes_per_token={:.0}",

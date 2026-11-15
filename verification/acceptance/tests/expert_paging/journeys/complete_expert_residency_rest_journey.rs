@@ -1,7 +1,7 @@
 //! User journey proving that a fitting model stays completely resident.
 //!
 //! At a 35 GB decimal-SI MLX ceiling, the resident sparse MoE e2e fixture has enough room
-//! for model core, every expert, and required request headroom. Cache is enabled.
+//! for model core, every expert, and required request headroom. The `astro_ssd_prompt_cache` is enabled.
 //! The journey sends a 15,000-token Romeo and Juliet request and proves:
 //!
 //! - generation completes through the production REST/server/worker stack;
@@ -254,7 +254,7 @@ fn generation_expert_source_read_bytes(isolated_worker_home: &Path) -> u64 {
     );
     // `positional_file_read_byte_count` is logical executed pread payload. Zero is
     // strong enough for this journey: with every expert resident there should be
-    // no expert source operation for the operating system to cache or service.
+    // no expert source operation for the `macos_file_cache` to hold or service.
     generation_reports[0]["counters"]
         .as_array()
         .into_iter()

@@ -237,7 +237,7 @@ impl Drop for MlxMemoryPolicyGuard {
         // A journey that panicked mid-generation must still hand the shared process policy back
         // intact, or every later journey in the same binary fails on a policy it never chose.
         let _restore_result = self.runtime.update_memory_limits(self.shared_memory_limits);
-        let _cache_release_result = self
+        let _mlx_buffer_cache_release_result = self
             .runtime
             .synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(0);
     }

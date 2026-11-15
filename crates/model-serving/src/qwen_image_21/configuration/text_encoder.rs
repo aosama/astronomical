@@ -251,7 +251,7 @@ fn require_text_config_geometry_facts(
 
 /// Reviews the text tower's protocol facts: bias, dropout, streaming token
 /// identifiers, dtype, activation, initialization scale, model family, and
-/// the cache flag.
+/// the `use_cache` flag.
 fn require_text_config_protocol_facts(
     text: &TextConfigDocument,
 ) -> Result<(), QwenImage21ConfigError> {

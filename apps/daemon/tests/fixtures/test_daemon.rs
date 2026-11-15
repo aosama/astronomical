@@ -32,7 +32,7 @@ const TEST_WORKER_EXECUTABLE_PATH_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH";
 const DISCOVERED_IMAGE_MODEL_ID_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_TEST_DAEMON_DISCOVERED_IMAGE_MODEL_ID";
-/// Decimal SI bound (50 GB) for the fixture astro-ssd-prompt-cache config; the scripted
+/// Decimal SI bound (50 GB) for the fixture astro SSD prompt cache config; the scripted
 /// worker never stores blocks, so only the wiring must be coherent.
 const FIXTURE_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 = 50_000_000_000;
 

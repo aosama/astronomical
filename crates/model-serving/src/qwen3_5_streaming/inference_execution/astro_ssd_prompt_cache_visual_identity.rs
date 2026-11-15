@@ -1,4 +1,4 @@
-//! Request preparation for position-aware Qwen visual astro-ssd-prompt-cache identity.
+//! Request preparation for position-aware Qwen visual astro SSD prompt cache identity.
 //!
 //! This owner validates image row geometry once, builds the ordinary target
 //! block plan once, and lets lookup and capture consume the same immutable identities.
@@ -17,7 +17,7 @@ pub(super) struct Qwen3_5AstroSsdPromptCacheVisualIdentity {
     pub(super) block_causal_inputs: Vec<AstroSsdPromptCacheBlockCausalInput>,
 }
 
-/// Borrowed request context keeps prompt scanning and cache-policy decisions in their existing owners.
+/// Borrowed request context keeps prompt scanning and `astro_ssd_prompt_cache` policy decisions in their existing owners.
 pub(super) struct Qwen3_5AstroSsdPromptCacheVisualIdentityInput<'a> {
     pub(super) prompt_token_ids: &'a [u32],
     pub(super) prompt_image_pad_token_count: usize,
@@ -75,7 +75,7 @@ impl Qwen3_5AstroSsdPromptCacheVisualIdentity {
                 .astro_ssd_prompt_cache
                 .ok_or_else(|| {
                     super::fatal_engine_error(
-                        "persistent prompt cache disappeared during visual identity planning",
+                        "the astro SSD prompt cache disappeared during visual identity planning",
                     )
                 })?
                 .model_contract

@@ -160,7 +160,7 @@ fn should_record_an_earlier_route_under_the_prompt_weight_it_was_built_with() {
     assert_eq!(
         persisted_usage.prefill_demand_counts_by_layer,
         vec![dense_counts(&[(2, 1), (3, 4)])],
-        "each route keeps its own weight, whatever the cache's weight is now"
+        "each route keeps its own weight, whatever the astro_expert_cache's weight is now"
     );
 }
 

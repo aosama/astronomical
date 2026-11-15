@@ -15,7 +15,7 @@ pub(crate) mod speculative_decode_lifecycle;
 mod test_controls;
 mod visual_embeddings_runtime;
 // Downward bindings so the phase folders keep their pre-move one-level
-// `super::<module>` paths into the persistent astro-ssd-prompt-cache machinery.
+// `super::<module>` paths into the persistent astro SSD prompt cache machinery.
 use astro_ssd_prompt_cache::astro_ssd_prompt_cache_startup_logging;
 use astro_ssd_prompt_cache::astro_ssd_prompt_cache_visual_identity;
 use astro_ssd_prompt_cache::decoder_state_reuse;

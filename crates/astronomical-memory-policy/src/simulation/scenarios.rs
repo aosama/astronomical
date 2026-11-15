@@ -8,10 +8,10 @@
 //! |---|---|
 //! | A first large prompt after a small one overflowed and discarded every kept expert (issue #2217) | `should_serve_a_first_large_prompt_after_a_small_one_without_overflow` |
 //! | A first large prompt planned around MLX working buffers nobody had measured overflowed (the 122B, 2026-11-14) | `should_stream_everything_until_a_step_is_measured_when_the_probe_did_not_run` |
-//! | A follow-up prompt arrived while a reply's experts filled the cache | `should_give_weights_back_once_between_two_identical_requests` |
+//! | A follow-up prompt arrived while a reply's experts filled the `astro_expert_cache` | `should_give_weights_back_once_between_two_identical_requests` |
 //! | MLX working buffers misjudged by half | `should_redo_one_layer_step_once_when_mlx_working_buffers_were_misjudged_by_half`, `should_not_overflow_again_once_the_true_mlx_working_buffers_are_known` |
 //! | The limit lowered in the middle of a request (issue #1108) | `should_only_trim_when_the_limit_is_lowered_in_the_middle_of_a_request` |
-//! | A cancelled request left the cache full | `should_start_the_next_request_cleanly_after_a_cancelled_one` |
+//! | A cancelled request left the `astro_expert_cache` full | `should_start_the_next_request_cleanly_after_a_cancelled_one` |
 //! | The same request twice gave back and re-read the same layers (October) | `should_give_weights_back_once_between_two_identical_requests` |
 //! | A model that fits completely still read from the drive | `should_keep_every_weight_and_read_nothing_once_the_model_fits` |
 //! | A limit below the streaming floor on a small Mac refused the model (issue #1902) | `should_report_a_shortfall_and_refuse_nothing_below_the_streaming_floor` |
@@ -148,7 +148,7 @@ fn should_serve_a_first_large_prompt_after_a_small_one_without_overflow() {
 }
 
 /// The forced misjudgment: the probe reports half the true MLX working buffers,
-/// and the first step of a long prompt streams with the cache full.
+/// and the first step of a long prompt streams with the `astro_expert_cache` full.
 #[test]
 fn should_redo_one_layer_step_once_when_mlx_working_buffers_were_misjudged_by_half() {
     let mut engine = SimulatedEngine::load_keeping(
@@ -239,7 +239,7 @@ fn should_start_the_next_request_cleanly_after_a_cancelled_one() {
     engine.start_request(LARGE_PROMPT_TOKEN_COUNT);
     engine.read_prompt(LARGE_PROMPT_TOKEN_COUNT, SPAN_TOKEN_COUNT);
     engine.write_reply(10);
-    // Cancelled: the request ends with the cache as full as writing allows.
+    // Cancelled: the request ends with the `astro_expert_cache` as full as writing allows.
     engine.finish_request();
     engine.serve(
         LARGE_PROMPT_TOKEN_COUNT,
@@ -373,7 +373,7 @@ fn should_give_back_a_layer_at_a_time_as_a_long_reply_grows_the_context() {
     );
     assert_eq!(
         journal.largest_single_eviction_bytes, LAYER_WEIGHT_BYTES,
-        "each give-back is one layer, never the cache"
+        "each give-back is one layer, never the whole `astro_expert_cache`"
     );
     assert_healthy(journal, LIMIT_BYTES);
 }

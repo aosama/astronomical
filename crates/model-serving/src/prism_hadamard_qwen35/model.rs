@@ -102,7 +102,7 @@ impl PrismHadamardTextModel {
             MlxCompiledGatedDeltaRateActivation::new().map_err(PrismHadamardModelError::Forward)?;
         let compiled_dual_head_norm = MlxCompiledDualHeadNorm::new(rms_norm_epsilon)
             .map_err(PrismHadamardModelError::Forward)?;
-        // The capability probes are cached per worker process, so this
+        // The capability probes are memoized per worker process, so this
         // mirrors the core loader's cost and its fused-vs-ops decision exactly.
         let kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
             &runtime,

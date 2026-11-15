@@ -4,7 +4,7 @@
 //! reconcile with the per-request attribution evidence the worker writes
 //! (issue #1715): the requested bytes equal the streamed source plans, the
 //! physical disk figure never exceeds what was requested, and the avoided
-//! bytes never exceed what a no-cache server would have read.
+//! bytes never exceed what a server without an `astro_expert_cache` would have read.
 //!
 //! Runs the large sparse mixture-of-experts model under a constrained ceiling
 //! so expert paging actually streams from storage, with the Shakespeare
@@ -95,7 +95,7 @@ async fn run_expert_stats_storage_bytes_journey() {
 
     assert_requested_bytes_match_source_summaries(&stats_document, isolated_worker_home.path());
     assert_physical_bytes_never_exceed_requested(&stats_document);
-    assert_avoided_bytes_never_exceed_no_cache_baseline(&stats_document);
+    assert_avoided_bytes_never_exceed_no_astro_expert_cache_baseline(&stats_document);
     eprintln!(
         "[expert-stats-storage-bytes] requested_gb={:.2} physical_gb={:.2} avoided_gb={:.2} summaries_gb={:.2}",
         requested_bytes(&stats_document) as f64 / 1_073_741_824.0,
@@ -241,7 +241,7 @@ fn assert_requested_bytes_match_source_summaries(stats_document: &Value, attribu
     );
 }
 
-/// The operating system file cache can only remove physical reads, never add
+/// The `macos_file_cache` can only remove physical reads, never add
 /// them, so the physical figure cannot honestly exceed the requested figure.
 fn assert_physical_bytes_never_exceed_requested(stats_document: &Value) {
     let physical_disk_read_bytes =
@@ -255,11 +255,11 @@ fn assert_physical_bytes_never_exceed_requested(stats_document: &Value) {
     );
 }
 
-/// Pure: the storage bytes a no-cache server would have read for this
+/// Pure: the storage bytes a server without an `astro_expert_cache` would have read for this
 /// session. Decode layer-tokens each read at most their routed assignments'
 /// payload; prefill forwards read at most every prompt token's top-k per
 /// sparse layer. Avoided bytes above this baseline are fabrication.
-fn no_cache_session_baseline_bytes(stats_document: &Value) -> u64 {
+fn no_astro_expert_cache_session_baseline_bytes(stats_document: &Value) -> u64 {
     let library_bytes = stats_document["library"]["complete_expert_payload_byte_count"]
         .as_u64()
         .unwrap_or(0);
@@ -287,11 +287,12 @@ fn no_cache_session_baseline_bytes(stats_document: &Value) -> u64 {
         .saturating_mul(decode_baseline_assignments.saturating_add(prefill_baseline_assignments))
 }
 
-fn assert_avoided_bytes_never_exceed_no_cache_baseline(stats_document: &Value) {
-    let no_cache_baseline_bytes = no_cache_session_baseline_bytes(stats_document);
+fn assert_avoided_bytes_never_exceed_no_astro_expert_cache_baseline(stats_document: &Value) {
+    let no_astro_expert_cache_baseline_bytes =
+        no_astro_expert_cache_session_baseline_bytes(stats_document);
     assert!(
-        avoided_bytes(stats_document) <= no_cache_baseline_bytes,
-        "avoided bytes {} must never exceed the no-cache baseline {no_cache_baseline_bytes}",
+        avoided_bytes(stats_document) <= no_astro_expert_cache_baseline_bytes,
+        "avoided bytes {} must never exceed the no-astro-expert-cache baseline {no_astro_expert_cache_baseline_bytes}",
         avoided_bytes(stats_document),
     );
 }

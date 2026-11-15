@@ -165,7 +165,7 @@ pub const DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: u32 = 256;
 pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 /// The previously shipped resident-chunk default. Load-time persistence rewrites
 /// this exact value to the current default so config.json files written with the
-/// 4,096-token chunk — whose measured win turned out to be a page-cache warmth
+/// 4,096-token chunk — whose measured win turned out to be a macOS file cache warmth
 /// artifact, with 2,048 reproducibly faster at 10k words — adopt the reverted
 /// default without a manual edit; any other persisted value is deliberate user
 /// intent and is preserved.
@@ -178,8 +178,8 @@ pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// three rounds, resident chunk held at 2,048) measured 4,096 faster in 12 of
 /// 12 pairings: 21% at a 24 GiB ceiling (about 40% fewer bytes read from the
 /// SSD) and 13% at 37 GiB, with identical peak memory and 41k-token prompts
-/// still admitted. The resident chunk's 4,096 win was a page-cache artifact;
-/// this one holds with the cache both cold and warm.
+/// still admitted. The resident chunk's 4,096 win was a macOS file cache artifact;
+/// this one holds with the macOS file cache both cold and warm.
 pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// The previously shipped SSD-paged chunk default. Load-time persistence moves
 /// this exact value to the current default, as it does for the resident
@@ -393,7 +393,7 @@ impl ChunkingConfig {
     /// byte-moving KV-block reads eliminated (six restore spans to three,
     /// the remainder being the lookup and the small boundary snapshot), with
     /// unchanged rates at the journey's astro SSD prompt cache depth and the production win
-    /// growing with cache depth and cold stores.
+    /// growing with astro SSD prompt cache depth and cold stores.
     #[must_use]
     pub const fn experimental_in_memory_prefix_adoption_enabled(&self) -> bool {
         self.experimental_in_memory_prefix_adoption_enabled

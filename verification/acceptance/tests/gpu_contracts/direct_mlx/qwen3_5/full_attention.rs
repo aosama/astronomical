@@ -7,7 +7,8 @@ use crate::common::{
 use mlx_bridge::MlxCompiledElementwiseGraphs;
 
 #[tokio::test]
-async fn should_apply_one_cached_grouped_query_attention_step_with_output_gating() {
+async fn should_apply_one_astro_decoder_state_cache_grouped_query_attention_step_with_output_gating()
+ {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(

@@ -171,7 +171,7 @@ fn should_keep_the_configured_chunk_when_no_astro_ssd_prompt_cache_is_available(
 #[test]
 fn should_keep_the_configured_chunk_when_the_request_cannot_use_the_astro_ssd_prompt_cache() {
     // Availability alone must not clamp: the request's own permission bit
-    // decides, so a cache-configured engine serving a cache-ineligible request
+    // decides, so an engine configured with the `astro_ssd_prompt_cache` serving a request that may not use it
     // keeps the configured chunk.
     let span = resolve_prompt_prefill_chunk_span(0, 2_048, 1_792, true, false, 512)
         .expect("prompt work is pending");

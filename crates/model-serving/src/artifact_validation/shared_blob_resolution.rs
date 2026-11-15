@@ -24,7 +24,7 @@ const TREE_LFS_SHA256_KEY: &str = "lfs_sha256";
 /// Snapshot tree key holding a Xet-backed blob's content hash.
 const TREE_XET_HASH_KEY: &str = "xet_hash";
 
-/// A snapshot tree record for a small cache never approaches this bound; the
+/// A snapshot tree record for a small Hugging Face hub cache entry never approaches this bound; the
 /// limit exists so a corrupt or hostile tree file cannot be read into memory
 /// without limit.
 const MAXIMUM_TREE_METADATA_BYTES: u64 = 8 * 1024 * 1024;
@@ -35,7 +35,7 @@ const SHA256_DIGEST_HEX_CHARACTERS: usize = 64;
 const CONTENT_ADDRESS_DIRECTORY_HEX_CHARACTERS: usize = 2;
 
 /// Resolves `canonical_resolved_target_path` as a verified shared Hugging Face
-/// cache blob when the snapshot symlink for `required_file_name` legitimately
+/// hub cache blob when the snapshot symlink for `required_file_name` legitimately
 /// reaches the hub-level blob store.
 ///
 /// Returns `Ok(None)` when the target is not inside a hub-level shared blob
@@ -112,7 +112,7 @@ pub(crate) fn resolve_verified_shared_hub_blob_path(
     Ok(Some(canonical_resolved_target_path.to_path_buf()))
 }
 
-/// One file record from a Hugging Face cache entry's snapshot tree metadata.
+/// One file record from a Hugging Face hub cache entry's snapshot tree metadata.
 struct SnapshotTreeRecord {
     /// Digest the shared store names this object after, preferring the Xet hash
     /// because Xet-backed astro SSD prompt caches store the object under that name.
@@ -123,7 +123,7 @@ struct SnapshotTreeRecord {
     recorded_size_bytes: u64,
 }
 
-/// Reads the snapshot tree record that anchors trust for one cache file.
+/// Reads the snapshot tree record that anchors trust for one Hugging Face hub cache file.
 ///
 /// The tree metadata is written by the Hugging Face client next to the blobs and
 /// is not part of the snapshot itself, so a snapshot whose tree record is
@@ -201,7 +201,7 @@ fn snapshot_tree_metadata_path(
                 ),
             )
         })?;
-    let model_astro_ssd_prompt_cache_directory = snapshot_directory
+    let huggingface_hub_cache_model_directory = snapshot_directory
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| {
@@ -209,11 +209,11 @@ fn snapshot_tree_metadata_path(
                 required_file_name,
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    "snapshot directory has no cache entry parent",
+                    "snapshot directory has no Hugging Face hub cache entry parent",
                 ),
             )
         })?;
-    Ok(model_astro_ssd_prompt_cache_directory
+    Ok(huggingface_hub_cache_model_directory
         .join(TREES_DIRECTORY_NAME)
         .join(format!("{revision_name}.json")))
 }

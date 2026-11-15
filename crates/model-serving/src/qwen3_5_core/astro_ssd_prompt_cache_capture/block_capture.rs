@@ -1,4 +1,4 @@
-//! Qwen3.5 request-side extraction and required synchronous cache publication,
+//! Qwen3.5 request-side extraction and required synchronous `astro_ssd_prompt_cache` publication,
 //! shared by the resident and streaming engines.
 //!
 //! The request cursor advances only after the matching block is durably published
@@ -38,7 +38,7 @@ pub(super) fn required_prompt_state_persistence_failure<RequestExtension>(
     );
     InferenceEngineError::InvalidRequest {
         reason: format!(
-            "persistent prompt cache failed during {failure_stage}; the request was stopped"
+            "astro SSD prompt cache failed during {failure_stage}; the request was stopped"
         ),
     }
 }

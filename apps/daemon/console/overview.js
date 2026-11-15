@@ -22,7 +22,7 @@ const OVERVIEW_IMAGE_PHASES = new Set(["preparing", "encoding_prompt", "denoisin
 // The model advertised by /v1/models under the loaded id, kept between polls
 // because limits come from the model list and the rest from /v1/status.
 let overviewLoadedModelListing = null;
-// The SSD prompt cache tile joins two polls: whether the cache is on and how
+// The SSD prompt cache tile joins two polls: whether the astro SSD prompt cache is on and how
 // big it may grow come from /v1/status (the worker reports a zero maximum
 // while no model is loaded), and use and hit rate from /v1/ssd-prompt-cache/stats.
 let overviewAstroSsdPromptCacheSetting = null;
@@ -351,7 +351,7 @@ function renderOverviewModel(statusDocument, expertPlacement) {
 }
 
 // The two reuse figures measure different things, so each says which: prompt
-// tokens the loaded model kept in memory, and prompts found in the SSD cache.
+// tokens the loaded model kept in memory, and prompts found in the astro SSD prompt cache.
 function overviewSessionPresentation(servingSession) {
     const completedRequestCount = servingSession?.completed_request_count || 0;
     const averageTokensPerSecond = servingSession?.average_generation_tok_per_second || 0;
@@ -401,8 +401,8 @@ function overviewAstroSsdPromptCachePresentation(astroSsdPromptCacheSetting, ast
 
 function renderOverviewAstroSsdPromptCacheTile() {
     const astroSsdPromptCachePresentation = overviewAstroSsdPromptCachePresentation(overviewAstroSsdPromptCacheSetting, overviewAstroSsdPromptCacheStats);
-    document.getElementById("overview-session-ssd-cache").textContent = astroSsdPromptCachePresentation.usage;
-    document.getElementById("overview-session-ssd-cache-hint").textContent = astroSsdPromptCachePresentation.hint;
+    document.getElementById("overview-session-astro-ssd-prompt-cache").textContent = astroSsdPromptCachePresentation.usage;
+    document.getElementById("overview-session-astro-ssd-prompt-cache-hint").textContent = astroSsdPromptCachePresentation.hint;
 }
 
 function renderOverviewAstroSsdPromptCache(astroSsdPromptCacheStatsDocument) {

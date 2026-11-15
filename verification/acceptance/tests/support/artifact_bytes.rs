@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// Scans one model directory recursively and returns its regular-file payload.
 ///
-/// Hugging Face cache layouts store snapshot files as symlinks into `blobs/`,
+/// The `huggingface_hub_cache` layout stores snapshot files as symlinks into `blobs/`,
 /// and `DirEntry::metadata` performs an `lstat` that never traverses them, so
 /// the scan resolves every entry path with following semantics and keeps a
 /// canonical-directory set as the cycle guard for symlinked subdirectories.
@@ -49,7 +49,7 @@ pub(crate) fn artifact_directory_regular_file_bytes(model_directory: &Path) -> u
 }
 
 /// Resolves the isolated-home model-directory scan root from the discovered
-/// artifact directory. Discovery over a `models--<org>--<repo>` cache entry
+/// artifact directory. Discovery over a `models--<org>--<repo>` `huggingface_hub_cache` entry
 /// registers the leaf model id; discovery over the `snapshots/<sha>` directory
 /// itself would register the commit hash instead, so every request would fail
 /// with model_not_found even though the worker loads fine.
@@ -57,17 +57,16 @@ pub(crate) fn artifact_directory_regular_file_bytes(model_directory: &Path) -> u
 /// subset, so unused-in-this-binary is expected rather than a defect.
 #[allow(dead_code)]
 pub(crate) fn acceptance_model_scan_root(model_directory: &Path) -> PathBuf {
-    let cache_entry_directory =
-        model_directory
-            .parent()
-            .and_then(Path::parent)
-            .filter(|cache_entry| {
-                cache_entry
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with("models--"))
-            });
-    cache_entry_directory
+    let huggingface_hub_cache_entry_directory = model_directory
+        .parent()
+        .and_then(Path::parent)
+        .filter(|huggingface_hub_cache_entry| {
+            huggingface_hub_cache_entry
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("models--"))
+        });
+    huggingface_hub_cache_entry_directory
         .map(Path::to_path_buf)
         .unwrap_or_else(|| model_directory.to_path_buf())
 }

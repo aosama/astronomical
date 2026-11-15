@@ -4,7 +4,7 @@
 //! A sparse model routes every token to a handful of experts in every layer.
 //! When the model does not fit in memory, the experts that are not held have
 //! to be read from storage, so the whole game is to hold the experts the
-//! conversation actually uses. That is an ordinary caching problem, and this
+//! conversation actually uses. That is an ordinary eviction-policy problem, and this
 //! module treats it as one: a single astro expert cache across all layers, one capacity,
 //! one eviction order, and a record of every decision so a slow reply can be
 //! explained from data instead of guessed at.
@@ -17,7 +17,7 @@
 //!
 //! - `routed_reply` — which experts each layer chose for each token of a
 //!   real reply, and the compact file such a recording is kept in.
-//! - `cache` — the cache with memory perfectly divisible, as a bound to
+//! - `astro_expert_cache` — the astro expert cache with memory perfectly divisible, as a bound to
 //!   compare against.
 //! - `expert_tables` — the astro expert cache as an engine can hold it, one table per
 //!   layer, with every decision stated as a change to a table.

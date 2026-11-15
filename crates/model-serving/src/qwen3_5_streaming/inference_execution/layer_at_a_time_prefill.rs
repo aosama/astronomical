@@ -4,7 +4,7 @@
 //! without images, on a dense or an expert model. One layer runs over every
 //! span of the prompt before the next layer is read (issues #1985 and
 //! #2221). The
-//! whole prompt is one forward as far as the prompt cache and the request's
+//! whole prompt is one forward as far as the `astro_ssd_prompt_cache` and the request's
 //! cursor are concerned, so no token is finished until the last layer has
 //! run. Advancing one layer per step lets the engine report how many layers
 //! are done after each one, and lets a request be cancelled between layers

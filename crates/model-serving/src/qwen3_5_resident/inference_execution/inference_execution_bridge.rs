@@ -11,7 +11,7 @@ use crate::{
 use super::engine_state::Qwen3_5EngineState;
 use super::engine_state::Qwen3_5InferenceExecution;
 
-/// Wraps one astro-ssd-prompt-cache clear failure as a fatal engine error.
+/// Wraps one astro SSD prompt cache clear failure as a fatal engine error.
 fn astro_ssd_prompt_cache_clear_failure(
     clear_error: impl std::fmt::Display,
 ) -> InferenceEngineError {

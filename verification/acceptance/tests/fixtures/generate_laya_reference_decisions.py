@@ -6,7 +6,7 @@ installed:
     python generate_laya_reference_decisions.py > laya_reference_decisions.json
 
 It downloads the original `convaiinnovations/laya` checkpoints at the pinned
-revision below into the Hugging Face cache (the English one at the repository's
+revision below into the Hugging Face hub cache (the English one at the repository's
 root, the multilingual one in `multilingual/`) and records that revision in the
 fixture, so the fixture always says exactly which weights it describes. Each case
 is answered by the reference implementation in float32 on the CPU, and the

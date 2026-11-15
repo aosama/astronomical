@@ -1,4 +1,4 @@
-//! The streaming engine's half of the shared astro-ssd-prompt-cache capture.
+//! The streaming engine's half of the shared astro SSD prompt cache capture.
 
 use super::engine_request::{Qwen3_5EngineRequest, StreamingRequestExtension};
 use super::{Qwen3_5EngineState, Qwen3_5Model};

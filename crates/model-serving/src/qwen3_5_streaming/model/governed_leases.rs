@@ -3,7 +3,7 @@
 //!
 //! A lease is room taken out of the kept-weight capacity for as long as
 //! something temporary needs it: snapshots waiting to be written to the
-//! prompt cache, blocks read back from it. Granting one lowers the
+//! `astro_ssd_prompt_cache`, blocks read back from it. Granting one lowers the
 //! capacity, the kept weights give back what that displaces, and giving the
 //! lease back raises the capacity again.
 
@@ -12,8 +12,8 @@ use astronomical_memory_policy::ledger::{LeasePurpose, MemoryGovernor};
 use super::Qwen3_5Model;
 
 impl Qwen3_5Model {
-    /// Publishing astro-ssd-prompt-cache blocks needs `workspace_bytes` more than is
-    /// free. Leases them until the next forward completes, has the cache
+    /// Publishing astro SSD prompt cache blocks needs `workspace_bytes` more than is
+    /// free. Leases them until the next forward completes, has the astro expert cache
     /// give back that much, and returns the allocator's freed buffers to
     /// the system so the retry finds the room.
     pub(crate) fn govern_publication_workspace(
@@ -64,7 +64,7 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Blocks read back from the prompt cache need `workspace_bytes` while
+    /// Blocks read back from the `astro_ssd_prompt_cache` need `workspace_bytes` while
     /// they are loaded, beside the stored state they become. Leases that
     /// room until the restore is over and returns the kept weight bytes
     /// given back for it.

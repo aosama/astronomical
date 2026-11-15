@@ -115,7 +115,7 @@ impl Qwen3_5Model {
                     layer_index,
                     streamed_expert_count = sorted_unique_expert_ids.len(),
                     streamed_payload_bytes = page_manifest.payload_byte_count,
-                    "streamed experts without a retained cache"
+                    "streamed experts without a retained astro_expert_cache"
                 );
                 Ok::<(), ExpertPagingError>(())
             },

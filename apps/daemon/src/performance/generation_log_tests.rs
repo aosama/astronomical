@@ -15,15 +15,15 @@ fn should_create_generation_performance_record_with_computed_throughput() {
         /* astro_ssd_prompt_cache_token_count */ 50_000, /* generated_token_count */ 500,
         /* prefill_elapsed_millis */ 1_000, /* generation_elapsed_millis */ 5_000,
     );
-    // 50,000 uncached tokens / 1.0 seconds = 50,000 tok/s
+    // 50,000 tokens not restored from the astro SSD prompt cache / 1.0 seconds = 50,000 tok/s
     assert_eq!(prefill_tps, Some(50_000.0));
     // 500 tokens / 5.0 seconds = 100 tok/s
     assert_eq!(generation_tps, Some(100.0));
 }
 
 #[test]
-fn should_return_none_for_prefill_tok_per_second_when_fully_cached() {
-    // When all tokens are cached (0 ms prefill elapsed), prefill TPS is None.
+fn should_return_none_for_prefill_tok_per_second_when_fully_restored_from_astro_ssd_prompt_cache() {
+    // When all tokens are restored from the astro SSD prompt cache (0 ms prefill elapsed), prefill TPS is None.
     let (prefill_tps, generation_tps) = GenerationPerformanceRecord::compute_throughput(
         /* prompt_token_count */ 10_000, /* astro_ssd_prompt_cache_token_count */ 10_000,
         /* generated_token_count */ 200, /* prefill_elapsed_millis */ 0,
@@ -31,7 +31,7 @@ fn should_return_none_for_prefill_tok_per_second_when_fully_cached() {
     );
     assert!(
         prefill_tps.is_none(),
-        "fully cached prompt should have None prefill TPS"
+        "a prompt fully restored from the astro SSD prompt cache should have None prefill TPS"
     );
     assert_eq!(generation_tps, Some(100.0)); // 200 tokens / 2.0 seconds
 }
@@ -51,8 +51,8 @@ fn should_return_none_for_generation_tok_per_second_when_zero_elapsed() {
 }
 
 #[test]
-fn should_return_none_for_prefill_tps_when_uncached_tokens_is_zero() {
-    // If prompt_token_count == astro_ssd_prompt_cache_token_count, uncached = 0, so TPS is None
+fn should_return_none_for_prefill_tps_when_tokens_not_restored_is_zero() {
+    // If prompt_token_count == astro_ssd_prompt_cache_token_count, tokens not restored = 0, so TPS is None
     // even if prefill_elapsed_millis > 0 (which shouldn't happen in practice, but
     // the math should be robust).
     let (prefill_tps, _) = GenerationPerformanceRecord::compute_throughput(
@@ -62,7 +62,7 @@ fn should_return_none_for_prefill_tps_when_uncached_tokens_is_zero() {
     );
     assert!(
         prefill_tps.is_none(),
-        "zero uncached tokens should produce None prefill TPS"
+        "zero tokens left to prefill should produce None prefill TPS"
     );
 }
 

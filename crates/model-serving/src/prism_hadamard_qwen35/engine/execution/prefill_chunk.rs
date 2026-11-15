@@ -25,7 +25,7 @@ use super::successor_stays_pending;
 
 /// Anchors a prefill chunk at the processed-prompt cursor and returns how
 /// many prompt tokens it consumes, stopping the chunk at the first
-/// persistent astro-ssd-prompt-cache block boundary it would cross.
+/// persistent astro SSD prompt cache block boundary it would cross.
 ///
 /// A durable boundary snapshot is only valid at a forward edge, so at most
 /// one durable publication per forward keeps the boundary snapshot honest.
@@ -141,7 +141,7 @@ pub(super) fn queue_prefill_first_token(
     Ok(())
 }
 
-/// Publishes the astro-ssd-prompt-cache block the chunk just completed, if any.
+/// Publishes the astro SSD prompt cache block the chunk just completed, if any.
 ///
 /// The capture's own attribution is swapped in for the call and swapped back
 /// afterwards so the chunk's runtime attribution never records capture work.

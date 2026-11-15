@@ -109,7 +109,7 @@ impl Qwen3_5ModelBase {
         &self.config
     }
 
-    /// Returns the validated astro-decoder-state-cache layout bound to this model artifact.
+    /// Returns the validated astro decoder state cache layout bound to this model artifact.
     #[must_use]
     pub const fn astro_decoder_state_cache_layout(&self) -> &AstroDecoderStateCacheLayout {
         &self.astro_decoder_state_cache_layout

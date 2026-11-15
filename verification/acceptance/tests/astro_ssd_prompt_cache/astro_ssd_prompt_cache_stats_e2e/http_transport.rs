@@ -38,13 +38,14 @@ pub(super) async fn get_astro_ssd_prompt_cache_stats_json(
         get_endpoint(server_address, "/v1/ssd-prompt-cache/stats").await;
     assert!(
         astro_ssd_prompt_cache_stats_response.starts_with("HTTP/1.1 200 OK"),
-        "the cache stats endpoint should return 200 OK, got: {astro_ssd_prompt_cache_stats_response}"
+        "the astro SSD prompt cache stats endpoint should return 200 OK, got: {astro_ssd_prompt_cache_stats_response}"
     );
     let response_body = astro_ssd_prompt_cache_stats_response
         .split("\r\n\r\n")
         .nth(1)
-        .expect("the cache stats response should have a body");
-    serde_json::from_str(response_body).expect("the cache stats response body should be valid JSON")
+        .expect("the astro SSD prompt cache stats response should have a body");
+    serde_json::from_str(response_body)
+        .expect("the astro SSD prompt cache stats response body should be valid JSON")
 }
 
 async fn send_http_request(server_address: SocketAddr, request_text: String) -> String {

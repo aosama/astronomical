@@ -132,5 +132,5 @@ pub(super) fn available_probationary_slot_count(
 }
 
 #[cfg(test)]
-#[path = "decode_cache_policy_tests.rs"]
+#[path = "decode_astro_expert_cache_policy_tests.rs"]
 mod decode_astro_expert_cache_policy_tests;

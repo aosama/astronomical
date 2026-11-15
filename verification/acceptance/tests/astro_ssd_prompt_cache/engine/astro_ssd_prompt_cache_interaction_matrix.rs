@@ -1,4 +1,4 @@
-//! Storage-transition cells of the pinned astro-ssd-prompt-cache interaction matrix.
+//! Storage-transition cells of the pinned astro SSD prompt cache interaction matrix.
 //!
 //! Each ignored serial test names its storage transition: `LiveReuse`,
 //! `WorkerRestart`, or `DeletedWhileLive`. Select exactly one full test name
@@ -88,8 +88,8 @@ async fn run_selected_acceptance_cell(storage_transition: StorageTransition) {
 async fn run_acceptance_cell(storage_transition: StorageTransition) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
-    let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the acceptance should create an isolated cache directory");
+    let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+        .expect("the acceptance should create an isolated astro SSD prompt cache directory");
     let (mut qwen3_5_engine, _, _, astro_ssd_prompt_cache_block_token_count) =
         load_astro_ssd_prompt_cache_acceptance_engine(
             &model_directory,
@@ -110,7 +110,7 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
     .await;
     assert_eq!(
         cold_astro_ssd_prompt_cache_token_count, 0,
-        "the empty-cache request must miss"
+        "the request against an empty astro SSD prompt cache must miss"
     );
     wait_for_astro_ssd_prompt_cache_blocks(&qwen3_5_engine, 2).await;
 
@@ -127,7 +127,7 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
         }
         StorageTransition::DeletedWhileLive => {
             fs::remove_dir_all(astro_ssd_prompt_cache_directory.path())
-                .expect("the acceptance should delete the cache while the engine remains live");
+                .expect("the acceptance should delete the astro SSD prompt cache while the engine remains live");
             let (
                 replacement_cold_astro_ssd_prompt_cache_token_count,
                 replacement_cold_generated_token_ids,
@@ -139,11 +139,11 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
             .await;
             assert_eq!(
                 replacement_cold_astro_ssd_prompt_cache_token_count, 0,
-                "the first request after cache deletion must fall back to cold prefill"
+                "the first request after astro SSD prompt cache deletion must fall back to cold prefill"
             );
             assert_eq!(
                 replacement_cold_generated_token_ids, cold_generated_token_ids,
-                "cache deletion recovery must preserve deterministic output"
+                "astro SSD prompt cache deletion recovery must preserve deterministic output"
             );
             wait_for_astro_ssd_prompt_cache_blocks(&qwen3_5_engine, 2).await;
         }
@@ -158,7 +158,7 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
     assert!(
         warm_astro_ssd_prompt_cache_token_count
             >= (astro_ssd_prompt_cache_block_token_count * 2) as u32,
-        "the pre-existing cache restored {warm_astro_ssd_prompt_cache_token_count} tokens but must restore both complete prompt blocks"
+        "the pre-existing astro SSD prompt cache restored {warm_astro_ssd_prompt_cache_token_count} tokens but must restore both complete prompt blocks"
     );
     assert_eq!(
         warm_generated_token_ids, cold_generated_token_ids,
@@ -172,9 +172,9 @@ fn romeo_and_juliet_prompt_token_ids(
 ) -> Vec<u32> {
     let prompt_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
-        .expect("the selected cache-interaction artifact should validate");
+        .expect("the selected astro SSD prompt cache interaction artifact should validate");
     let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&prompt_artifact)
-        .expect("the selected cache-interaction tokenizer should load");
+        .expect("the selected astro SSD prompt cache interaction tokenizer should load");
     representative_long_generation_prompt_token_ids_capped_at(
         &prompt_tokenizer,
         prompt_artifact.model_id(),

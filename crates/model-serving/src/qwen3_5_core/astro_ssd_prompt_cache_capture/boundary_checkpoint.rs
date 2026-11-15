@@ -1,4 +1,4 @@
-//! Records the recurrent state at a prefill chunk that ends on a astro-ssd-prompt-cache
+//! Records the recurrent state at a prefill chunk that ends on an astro SSD prompt cache
 //! block boundary, for block capture to publish after the chunk.
 
 use super::block_capture::required_prompt_state_persistence_failure;

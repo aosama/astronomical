@@ -103,7 +103,7 @@ pub enum WorkerControlError {
         /// by containment, which logs it in full.
         failure_description: String,
     },
-    /// The worker did not acknowledge a astro-ssd-prompt-cache clear in time.
+    /// The worker did not acknowledge an astro SSD prompt cache clear in time.
     #[error(
         "worker astro-ssd-prompt-cache clear acknowledgement did not arrive within the {astro_ssd_prompt_cache_clear_timeout_millis}-millisecond timeout"
     )]

@@ -147,7 +147,7 @@ fn validate_image_generation_progress(
 /// Records a completed image as the request's terminal outcome.
 ///
 /// The encoded bytes stay private until finalization proves request arrays
-/// and MLX buffer cache were released, so a cleanup failure cannot let a
+/// and the MLX buffer cache were released, so a cleanup failure cannot let a
 /// partial success escape.
 fn apply_image_generation_completed(
     active_worker_request: &mut Option<ActiveWorkerRequest>,
@@ -157,8 +157,8 @@ fn apply_image_generation_completed(
 ) -> Result<(), WorkerControlError> {
     let active_image = matching_active_image(active_worker_request, request_id)?;
     validate_image_completed_result(active_image, &generated_image, &result_metadata)?;
-    // Encoded bytes remain private until finalization proves request arrays and allocator
-    // cache were released; this prevents partial success from escaping on cleanup failure.
+    // Encoded bytes remain private until finalization proves request arrays and the MLX
+    // buffer cache were released; this prevents partial success from escaping on cleanup failure.
     active_image.terminal_outcome = Some(Ok(ImageGenerationOutput {
         generated_image,
         result_metadata,

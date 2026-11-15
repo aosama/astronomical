@@ -1,4 +1,4 @@
-//! Transient workspace arithmetic for one persistent astro-ssd-prompt-cache restore.
+//! Transient workspace arithmetic for one persistent astro SSD prompt cache restore.
 
 /// Upper bound of restore's transient workspace in bytes. The concatenated
 /// key-value blocks and the recurrent snapshot never coexist — the snapshot

@@ -47,7 +47,7 @@ pub(super) fn romeo_and_juliet_long_context_prompt() -> String {
 }
 
 /// A short Romeo and Juliet excerpt that absorbs the model load and first-use
-/// JIT kernel compilation without caching the full measurement prompt, so the
+/// JIT kernel compilation without saving the full measurement prompt into the astro SSD prompt cache, so the
 /// measured completion's prefill runs against a cold astro SSD prompt cache.
 pub(super) fn prefill_attribution_warmup_prompt() -> String {
     let excerpt: String = ROMEO_AND_JULIET_SOURCE.chars().take(400).collect();

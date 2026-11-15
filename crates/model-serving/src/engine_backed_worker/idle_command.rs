@@ -145,11 +145,11 @@ where
         Ok(())
     }
 
-    /// Clears the persistent astro-ssd-prompt-cache footprint for a scoped or global model identity.
+    /// Clears the persistent astro SSD prompt cache footprint for a scoped or global model identity.
     ///
     /// A loaded engine gets first ownership so its in-memory index is reset on
-    /// the MLX owner thread. Engines without an open cache use the factory's
-    /// startup root, which also supports disabled-cache and idle-worker clears.
+    /// the MLX owner thread. Engines without an open `astro_ssd_prompt_cache` use the factory's
+    /// startup root, which also supports clears while the `astro_ssd_prompt_cache` is disabled and idle-worker clears.
     async fn clear_astro_ssd_prompt_cache<WriteTransport>(
         &mut self,
         model_id: Option<String>,

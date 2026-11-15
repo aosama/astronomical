@@ -22,7 +22,7 @@ pub(super) struct PrefillChunkPlan {
     /// astro SSD prompt cache boundary checkpoint should be captured after the forward.
     pub(super) all_completed_prefill_chunk_tokens: Vec<usize>,
 
-    /// Block token count from the persistent astro-ssd-prompt-cache contract, if
+    /// Block token count from the persistent astro SSD prompt cache contract, if
     /// applicable.
     pub(super) astro_ssd_prompt_cache_block_token_count: Option<usize>,
 
@@ -91,12 +91,12 @@ impl Qwen3_5EngineState {
         })
     }
 
-    /// The astro-ssd-prompt-cache boundaries this forward captures, relative to its
+    /// The astro SSD prompt cache boundaries this forward captures, relative to its
     /// start, and the block size they fall on.
     ///
-    /// Cache-disabled and request-ineligible paths plan none: they do not
+    /// Paths with the `astro_ssd_prompt_cache` disabled and request-ineligible paths plan none: they do not
     /// derive a synthetic block length or reserve checkpoint and publication
-    /// memory. Cache-enabled execution uses the one contract the open store
+    /// memory. Execution with the `astro_ssd_prompt_cache` enabled uses the one contract the open store
     /// owns.
     fn planned_astro_ssd_prompt_cache_boundaries(
         &self,
@@ -112,7 +112,7 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| {
                 super::fatal_engine_error(
-                    "eligible astro-ssd-prompt-cache capture has no persistent cache owner",
+                    "eligible astro-ssd-prompt-cache capture has no astro-ssd-prompt-cache owner",
                 )
             })?
             .model_contract_ref()

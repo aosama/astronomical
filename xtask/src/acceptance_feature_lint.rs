@@ -11,8 +11,8 @@
 //!
 //! Clippy is used rather than `cargo check` so the pass shares the dependency
 //! artifacts the hook's workspace clippy pass has just produced; a plain
-//! check keeps its own and would recheck every dependency. Measured on a warm
-//! cache: half a second with nothing to recheck, three seconds after an edit
+//! check keeps its own and would recheck every dependency. Measured with the
+//! `target/` build outputs warm: half a second with nothing to recheck, three seconds after an edit
 //! to a crate the tests depend on.
 
 use std::path::Path;

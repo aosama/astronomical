@@ -21,7 +21,7 @@
 //!   not drain the graphics-processor stream; it samples what has completed,
 //!   keeping telemetry cheap enough for per-request attribution.
 //! - **Documented limits** — these count *logical* reads issued by the
-//!   vtable; macOS may satisfy them from the file cache, so they are not
+//!   vtable; macOS may satisfy them from the macOS file cache, so they are not
 //!   proof of equal physical SSD (Solid-State Drive) traffic.
 
 use std::sync::atomic::{AtomicU64, Ordering};

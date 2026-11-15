@@ -1,4 +1,4 @@
-//! Structured bounded logging for astro-ssd-prompt-cache cleanup completed during model load.
+//! Structured bounded logging for astro SSD prompt cache cleanup completed during model load.
 
 use crate::AstroSsdPromptCacheDiskStore;
 

@@ -19,7 +19,7 @@ use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCo
 #[derive(Debug)]
 pub struct Qwen3_5ResidentModel {
     pub(crate) base: Qwen3_5ModelBase,
-    /// Shared artifact-derived metadata used for loading and cache dtype flow.
+    /// Shared artifact-derived metadata used for loading and `astro_decoder_state_cache` dtype flow.
     pub(crate) expert_layer_plans: Vec<QuantizedExpertLayerPlan>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
@@ -153,14 +153,14 @@ impl Qwen3_5ResidentModel {
         astronomical_ipc_protocol::ExpertMemoryMode::Resident
     }
 
-    /// Creates an empty per-request decoder state whose per-layer cache
-    /// dtypes match this model's loaded weights, exactly as production
+    /// Creates an empty per-request decoder state whose per-layer
+    /// `astro_decoder_state_cache` dtypes match this model's loaded weights, exactly as production
     /// generation does.
     ///
     /// Direct-MLX probes drive raw forwards without the engine's request
     /// plumbing; this constructor keeps their decoder state identical to
     /// production. The public config-only constructor instead assumes
-    /// BFloat16 caches, which can diverge from a loaded artifact's dtypes
+    /// BFloat16 in the `astro_decoder_state_cache`, which can diverge from a loaded artifact's dtypes
     /// and would quietly measure a different graph than the one serving.
     #[cfg(feature = "direct-mlx")]
     pub fn empty_request_decoder_state_matching_loaded_weights(
@@ -236,7 +236,7 @@ impl Qwen3_5ResidentModel {
     /// Direct-MLX probes need the same weight residency the daemon serves
     /// with: `load` alone binds shared metadata without evaluating the
     /// payload, so the first forward would fail with a missing resident
-    /// expert tensor. The MLX buffer-cache drain between the two stages
+    /// expert tensor. The `mlx_buffer_cache` drain between the two stages
     /// mirrors production so transient load buffers cannot outlive the
     /// materialization the same way they must not in serving.
     #[cfg(feature = "direct-mlx")]

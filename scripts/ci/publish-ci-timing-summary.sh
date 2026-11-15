@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Renders the recorded step segments and cache reports into one run-summary
+# Renders the recorded step segments and `github_actions_cache` reports into one run-summary
 # table so every CI run attributes its elapsed time to individual steps
 # without opening the hosted action logs.
 

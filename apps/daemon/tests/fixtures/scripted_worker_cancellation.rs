@@ -1,7 +1,7 @@
 //! Telemetry the scripted worker can emit between a `Cancel` command and
 //! its acknowledgement. The daemon classifies every event in that window
 //! through its cancellation drain, so these helpers exist to prove benign
-//! telemetry (persistent astro-ssd-prompt-cache write-out, the per-generation
+//! telemetry (persistent astro SSD prompt cache write-out, the per-generation
 //! expert-streaming report, MLX memory samples) gets recorded rather than
 //! treated as a protocol violation that replaces the worker.
 
@@ -14,7 +14,7 @@ use astronomical_ipc_protocol::{
 };
 
 /// Fixture that publishes expert-streaming stats during the cancellation
-/// drain. It shares a dispatch arm with the astro-ssd-prompt-cache fixture, so the
+/// drain. It shares a dispatch arm with the astro SSD prompt cache fixture, so the
 /// ids stay together where that arm lives.
 pub(super) const EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID: &str =
     "astronomical/expert-streaming-stats-during-cancellation-fixture";
@@ -51,7 +51,7 @@ pub(super) async fn emit_cancellation_telemetry(
     Ok(())
 }
 
-/// The cache publication a real worker flushes when a generation ends,
+/// The astro SSD prompt cache publication a real worker flushes when a generation ends,
 /// landing after the client already dropped the stream.
 async fn send_astro_ssd_prompt_cache_stats(
     event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,

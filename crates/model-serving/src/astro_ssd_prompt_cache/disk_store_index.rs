@@ -1,4 +1,4 @@
-//! Process-local index of astro-ssd-prompt-cache files already validated against disk.
+//! Process-local index of astro SSD prompt cache files already validated against disk.
 //!
 //! This index accelerates lookup and exposes counters, but it is never durable
 //! authority. Publication updates it only after commit; startup rebuilds it from

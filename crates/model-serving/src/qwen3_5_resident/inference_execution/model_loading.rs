@@ -196,7 +196,7 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// Moves the successfully loaded model and its cache ownership into the
+    /// Moves the successfully loaded model and its `astro_ssd_prompt_cache` ownership into the
     /// engine state, applies the diagnostic prefill activation floor when one
     /// is configured, records the successful loading attribution, and
     /// reports the engine load result.
@@ -351,7 +351,7 @@ fn resolve_model_chunking_configuration(
 /// Pure: builds the in-memory vision tensor geometry contract used to
 /// validate both direct visual embeddings and optional disk entries. It
 /// creates no storage owner; scanning and all other disk work remain inside
-/// the cache-enabled branch.
+/// the branch where the `astro_ssd_prompt_cache` is enabled.
 fn resolve_visual_embedding_model_contract(
     qwen3_5_vision_config: Option<&Qwen3_5VisionConfig>,
     resolved_model_id: &str,
@@ -368,8 +368,8 @@ fn resolve_visual_embedding_model_contract(
     })
 }
 
-/// Resolves the persistent astro-ssd-prompt-cache model-state storage contract from
-/// the model's decoder cache layout, position budget, active memory limit,
+/// Resolves the persistent astro SSD prompt cache model-state storage contract from
+/// the model's `astro_decoder_state_cache` layout, position budget, active memory limit,
 /// and the request's chunking overrides.
 fn resolve_astro_ssd_prompt_cache_model_contract(
     astro_ssd_prompt_cache_disk_store_config: &AstroSsdPromptCacheDiskStoreConfig,
@@ -399,8 +399,8 @@ fn resolve_astro_ssd_prompt_cache_model_contract(
     })
 }
 
-/// Opens the persistent prompt cache when a disk store is configured; a
-/// disabled cache yields no contract and no store, so it cannot fail model
+/// Opens the `astro_ssd_prompt_cache` when a disk store is configured; a
+/// disabled `astro_ssd_prompt_cache` yields no contract and no store, so it cannot fail model
 /// loading because of storage alignment, quota, stale files, or filesystem
 /// availability (contract derivation is intentionally inside the same branch
 /// as store ownership).
@@ -443,9 +443,9 @@ fn open_resident_astro_ssd_prompt_cache(
     ))
 }
 
-/// Opens the persistent astro-ssd-prompt-cache disk store under attribution, scans the
-/// required visual prompt-state entries, logs the startup cleanup and cache
-/// inventory, and hands back the shared store.
+/// Opens the persistent astro SSD prompt cache disk store under attribution, scans the
+/// required visual prompt-state entries, logs the startup cleanup and
+/// `astro_ssd_prompt_cache` inventory, and hands back the shared store.
 fn open_and_scan_astro_ssd_prompt_cache_store(
     astro_ssd_prompt_cache_disk_store_config: AstroSsdPromptCacheDiskStoreConfig,
     model_contract: AstroSsdPromptCacheModelContract,
@@ -485,7 +485,7 @@ fn open_and_scan_astro_ssd_prompt_cache_store(
         boundary_state_snapshot_count = astro_ssd_prompt_cache.boundary_state_snapshot_count(),
         total_size_bytes = astro_ssd_prompt_cache.total_size_bytes(),
         maximum_size_bytes = global_astro_ssd_prompt_cache_maximum_size_bytes,
-        "opened Qwen3.5 persistent prompt cache"
+        "opened Qwen3.5 astro-ssd-prompt-cache"
     );
     Ok(Arc::new(astro_ssd_prompt_cache))
 }

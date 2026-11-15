@@ -13,88 +13,96 @@ use crate::common::{
 };
 use mlx_bridge::MlxArray;
 
-const CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT: Duration = Duration::from_secs(30);
+const ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[tokio::test]
 async fn should_preserve_weighted_expert_output_across_compact_retained_and_missing_routes() {
     timeout(
-        CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT,
+        ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT,
         verify_compact_astro_expert_cache_plus_streamed_page_route_parity(),
     )
     .await
-    .expect("the cached-plus-streamed direct MLX contract must finish within 30 seconds");
+    .expect(
+        "the astro-expert-cache-plus-streamed direct MLX contract must finish within 30 seconds",
+    );
 }
 
 #[tokio::test]
 async fn should_reject_a_astro_expert_cache_plus_streamed_route_with_an_empty_assignment_side() {
-    timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
-        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let runtime = direct_mlx_runtime();
-        let retained_page_manifest = page_manifest(&[1, 3], &[u32::MAX, 0, u32::MAX, 1]);
-        let selected_indices = runtime
-            .array_from_u32(&[3, 1], &[1, 1, 2])
-            .expect("selected expert indices should be valid");
-        let selected_scores = runtime
-            .array_from_f32(&[0.4, 0.6], &[1, 1, 2])
-            .expect("selected expert scores should be valid");
-        let route_partition = retained_page_manifest.partition_route_assignments(&[3, 1]);
+    timeout(
+        ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT,
+        async {
+            let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+            let runtime = direct_mlx_runtime();
+            let retained_page_manifest = page_manifest(&[1, 3], &[u32::MAX, 0, u32::MAX, 1]);
+            let selected_indices = runtime
+                .array_from_u32(&[3, 1], &[1, 1, 2])
+                .expect("selected expert indices should be valid");
+            let selected_scores = runtime
+                .array_from_f32(&[0.4, 0.6], &[1, 1, 2])
+                .expect("selected expert scores should be valid");
+            let route_partition = retained_page_manifest.partition_route_assignments(&[3, 1]);
 
-        let route_error = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
-            &runtime,
-            &selected_indices,
-            &selected_scores,
-            &route_partition,
-            &retained_page_manifest,
-            &retained_page_manifest,
-        )
-        .err()
-        .expect("an empty missing side should be rejected before MLX indexing");
+            let route_error = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
+                &runtime,
+                &selected_indices,
+                &selected_scores,
+                &route_partition,
+                &retained_page_manifest,
+                &retained_page_manifest,
+            )
+            .err()
+            .expect("an empty missing side should be rejected before MLX indexing");
 
-        assert!(
-            route_error.to_string().contains("non-empty route sides"),
-            "the typed boundary should explain the invalid empty side: {route_error}"
-        );
-    })
+            assert!(
+                route_error.to_string().contains("non-empty route sides"),
+                "the typed boundary should explain the invalid empty side: {route_error}"
+            );
+        },
+    )
     .await
     .expect("the empty-side contract must finish within 30 seconds");
 }
 
 #[tokio::test]
 async fn should_reject_an_expert_absent_from_its_declared_astro_expert_cache_plus_streamed_page() {
-    timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
-        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let runtime = direct_mlx_runtime();
-        let retained_page_manifest = page_manifest(&[1], &[u32::MAX, 0, u32::MAX, u32::MAX]);
-        let missing_page_manifest = page_manifest(&[0], &[0, u32::MAX, u32::MAX, u32::MAX]);
-        let selected_indices = runtime
-            .array_from_u32(&[1, 3], &[1, 1, 2])
-            .expect("selected expert indices should be valid");
-        let selected_scores = runtime
-            .array_from_f32(&[0.4, 0.6], &[1, 1, 2])
-            .expect("selected expert scores should be valid");
-        let malformed_partition = ExpertPageRoutePartition {
-            retained_assignment_positions: vec![0],
-            retained_expert_ids: vec![1],
-            missing_assignment_positions: vec![1],
-            missing_expert_ids: vec![3],
-        };
+    timeout(
+        ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT,
+        async {
+            let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+            let runtime = direct_mlx_runtime();
+            let retained_page_manifest = page_manifest(&[1], &[u32::MAX, 0, u32::MAX, u32::MAX]);
+            let missing_page_manifest = page_manifest(&[0], &[0, u32::MAX, u32::MAX, u32::MAX]);
+            let selected_indices = runtime
+                .array_from_u32(&[1, 3], &[1, 1, 2])
+                .expect("selected expert indices should be valid");
+            let selected_scores = runtime
+                .array_from_f32(&[0.4, 0.6], &[1, 1, 2])
+                .expect("selected expert scores should be valid");
+            let malformed_partition = ExpertPageRoutePartition {
+                retained_assignment_positions: vec![0],
+                retained_expert_ids: vec![1],
+                missing_assignment_positions: vec![1],
+                missing_expert_ids: vec![3],
+            };
 
-        let route_error = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
-            &runtime,
-            &selected_indices,
-            &selected_scores,
-            &malformed_partition,
-            &retained_page_manifest,
-            &missing_page_manifest,
-        )
-        .err()
-        .expect("an expert absent from its declared page should be rejected");
+            let route_error = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
+                &runtime,
+                &selected_indices,
+                &selected_scores,
+                &malformed_partition,
+                &retained_page_manifest,
+                &missing_page_manifest,
+            )
+            .err()
+            .expect("an expert absent from its declared page should be rejected");
 
-        assert!(
-            route_error.to_string().contains("routed expert is absent"),
-            "the typed boundary should explain the absent expert: {route_error}"
-        );
-    })
+            assert!(
+                route_error.to_string().contains("routed expert is absent"),
+                "the typed boundary should explain the absent expert: {route_error}"
+            );
+        },
+    )
     .await
     .expect("the absent-expert contract must finish within 30 seconds");
 }
@@ -115,7 +123,9 @@ async fn verify_compact_astro_expert_cache_plus_streamed_page_route_parity() {
         .array_from_f32(&[0.1, 0.2, 0.3, 0.4], &[1, 1, 4])
         .expect("the selected expert scores should be valid");
 
-    eprintln!("[cached-plus-streamed-page-route] status=progress phase=build_compact_route_arrays");
+    eprintln!(
+        "[astro-expert-cache-plus-streamed-page-route] status=progress phase=build_compact_route_arrays"
+    );
     let astro_expert_cache_plus_streamed_page_route = Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
         &runtime,
         &selected_indices,
@@ -125,7 +135,7 @@ async fn verify_compact_astro_expert_cache_plus_streamed_page_route_parity() {
         &missing_page_manifest,
     )
     .expect(
-        "the retained and missing assignments should build one compact cached-plus-streamed route",
+        "the retained and missing assignments should build one compact astro-expert-cache-plus-streamed route",
     );
 
     assert_eq!(
@@ -225,12 +235,12 @@ async fn verify_compact_astro_expert_cache_plus_streamed_page_route_parity() {
     let actual_astro_expert_cache_plus_streamed_output =
         astro_expert_cache_plus_streamed_weighted_output
             .to_vec_f32()
-            .expect("the cached-plus-streamed weighted output should evaluate");
+            .expect("the astro-expert-cache-plus-streamed weighted output should evaluate");
     let expected_combined_output = combined_weighted_output
         .to_vec_f32()
         .expect("the combined weighted output should evaluate");
     eprintln!(
-        "[cached-plus-streamed-page-route] status=success astro_expert_cache_plus_streamed_output={actual_astro_expert_cache_plus_streamed_output:?} combined_output={expected_combined_output:?}"
+        "[astro-expert-cache-plus-streamed-page-route] status=success astro_expert_cache_plus_streamed_output={actual_astro_expert_cache_plus_streamed_output:?} combined_output={expected_combined_output:?}"
     );
     assert_f32_close(
         &actual_astro_expert_cache_plus_streamed_output,
@@ -244,9 +254,9 @@ fn direct_mlx_runtime() -> MlxRuntime {
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
             DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
-        .expect("the cached-plus-streamed route memory limits should be valid"),
+        .expect("the astro-expert-cache-plus-streamed route memory limits should be valid"),
     )
-    .expect("the direct MLX runtime should initialize for a cached-plus-streamed route contract")
+    .expect("the direct MLX runtime should initialize for an astro expert cache plus streamed route contract")
 }
 
 fn page_manifest(
@@ -302,158 +312,167 @@ fn assert_f32_close(actual_values: &[f32], expected_values: &[f32]) {
 #[tokio::test]
 #[expect(clippy::too_many_lines)]
 async fn should_restore_single_page_assignment_order_across_partial_routes() {
-    timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
-        let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let runtime = direct_mlx_runtime();
+    timeout(
+        ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT,
+        async {
+            let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+            let runtime = direct_mlx_runtime();
 
-        let expert_count = 5_usize;
-        let feature_dimension = 8_i32;
-        let top_k = 4_i32;
-        let retained_page_manifest = page_manifest(&[1, 3], &[u32::MAX, 0, u32::MAX, 1, u32::MAX]);
-        let missing_page_manifest = page_manifest(&[0, 4], &[0, u32::MAX, u32::MAX, u32::MAX, 1]);
-        let selected_expert_ids = [3_usize, 0, 1, 4];
-        let route_partition =
-            retained_page_manifest.partition_route_assignments(&selected_expert_ids);
-        let selected_indices = runtime
-            .array_from_u32(&[3, 0, 1, 4], &[1, 1, top_k])
-            .expect("the selected expert indices should be valid");
-        let selected_scores = runtime
-            .array_from_f32(&[0.1, 0.2, 0.3, 0.4], &[1, 1, top_k])
-            .expect("the selected expert scores should be valid");
+            let expert_count = 5_usize;
+            let feature_dimension = 8_i32;
+            let top_k = 4_i32;
+            let retained_page_manifest =
+                page_manifest(&[1, 3], &[u32::MAX, 0, u32::MAX, 1, u32::MAX]);
+            let missing_page_manifest =
+                page_manifest(&[0, 4], &[0, u32::MAX, u32::MAX, u32::MAX, 1]);
+            let selected_expert_ids = [3_usize, 0, 1, 4];
+            let route_partition =
+                retained_page_manifest.partition_route_assignments(&selected_expert_ids);
+            let selected_indices = runtime
+                .array_from_u32(&[3, 0, 1, 4], &[1, 1, top_k])
+                .expect("the selected expert indices should be valid");
+            let selected_scores = runtime
+                .array_from_f32(&[0.1, 0.2, 0.3, 0.4], &[1, 1, top_k])
+                .expect("the selected expert scores should be valid");
 
-        let astro_expert_cache_plus_streamed_page_route =
-            Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
+            let astro_expert_cache_plus_streamed_page_route =
+                Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute::build(
+                    &runtime,
+                    &selected_indices,
+                    &selected_scores,
+                    &route_partition,
+                    &retained_page_manifest,
+                    &missing_page_manifest,
+                )
+                .expect("the partial route should build");
+
+            // Each page stores its experts in compact slot order, so the test
+            // builds one output tensor per page from the global expert rows its
+            // manifest names. Gathering with page slot indices against a global-ID
+            // tensor would silently read the wrong experts.
+            let global_expert_row = |expert_id: usize| {
+                (0..feature_dimension as usize)
+                    .map(|feature_index| {
+                        ((expert_id * feature_dimension as usize + feature_index) % 17) as f32
+                            * 0.25
+                            - 1.5
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let page_outputs = |page_expert_ids: &[usize]| {
+                let mut page_values = Vec::new();
+                for page_expert_id in page_expert_ids {
+                    page_values.extend(global_expert_row(*page_expert_id));
+                }
+                runtime
+                    .array_from_f32(
+                        &page_values,
+                        &[page_expert_ids.len() as i32, feature_dimension],
+                    )
+                    .expect("the page outputs should be valid")
+            };
+            let retained_page_outputs = page_outputs(&[1, 3]);
+            let missing_page_outputs = page_outputs(&[0, 4]);
+
+            // Production rows are [batch, token, assignment, feature]; decode is
+            // one batch of one token, so each side reshapes its compact gather to
+            // that shape before combining.
+            let page_rows = |page_outputs: &MlxArray, page_slot_indices: &MlxArray| {
+                let assignment_count = page_slot_indices.shape()[0];
+                let selected_rows = runtime
+                    .take_axis(page_outputs, page_slot_indices, 0)
+                    .expect("compact page slots should gather expert outputs");
+                runtime
+                    .reshape(
+                        &selected_rows,
+                        &[1, 1, assignment_count as i32, feature_dimension],
+                    )
+                    .expect("compact rows should take the production assignment shape")
+            };
+            let retained_rows = page_rows(
+                &retained_page_outputs,
+                &astro_expert_cache_plus_streamed_page_route.retained_page_slot_indices,
+            );
+            let missing_rows = page_rows(
+                &missing_page_outputs,
+                &astro_expert_cache_plus_streamed_page_route.missing_page_slot_indices,
+            );
+
+            let mut concatenated_position_by_assignment = vec![0_usize; top_k as usize];
+            for (retained_row, assignment_position) in route_partition
+                .retained_assignment_positions
+                .iter()
+                .enumerate()
+            {
+                concatenated_position_by_assignment[*assignment_position] = retained_row;
+            }
+            for (missing_row, assignment_position) in route_partition
+                .missing_assignment_positions
+                .iter()
+                .enumerate()
+            {
+                concatenated_position_by_assignment[*assignment_position] =
+                    route_partition.retained_assignment_positions.len() + missing_row;
+            }
+            let combined_rows = qwen3_5_moe_combine_partial_route_outputs_for_tests(
                 &runtime,
-                &selected_indices,
-                &selected_scores,
-                &route_partition,
-                &retained_page_manifest,
-                &missing_page_manifest,
+                &retained_rows,
+                &missing_rows,
+                &concatenated_position_by_assignment,
             )
-            .expect("the partial route should build");
+            .expect("the partial route rows should restore single-page order");
 
-        // Each page stores its experts in compact slot order, so the test
-        // builds one output tensor per page from the global expert rows its
-        // manifest names. Gathering with page slot indices against a global-ID
-        // tensor would silently read the wrong experts.
-        let global_expert_row = |expert_id: usize| {
-            (0..feature_dimension as usize)
-                .map(|feature_index| {
-                    ((expert_id * feature_dimension as usize + feature_index) % 17) as f32 * 0.25
-                        - 1.5
-                })
-                .collect::<Vec<_>>()
-        };
-        let page_outputs = |page_expert_ids: &[usize]| {
-            let mut page_values = Vec::new();
-            for page_expert_id in page_expert_ids {
-                page_values.extend(global_expert_row(*page_expert_id));
-            }
-            runtime
-                .array_from_f32(
-                    &page_values,
-                    &[page_expert_ids.len() as i32, feature_dimension],
-                )
-                .expect("the page outputs should be valid")
-        };
-        let retained_page_outputs = page_outputs(&[1, 3]);
-        let missing_page_outputs = page_outputs(&[0, 4]);
+            // Mixed result: one weighted reduction over the restored order.
+            let mixed_output = qwen3_5_moe_unsorted_expert_weighted_sum(
+                &runtime,
+                &combined_rows,
+                &selected_scores,
+            )
+            .expect("the mixed route should reduce once with the original scores");
 
-        // Production rows are [batch, token, assignment, feature]; decode is
-        // one batch of one token, so each side reshapes its compact gather to
-        // that shape before combining.
-        let page_rows = |page_outputs: &MlxArray, page_slot_indices: &MlxArray| {
-            let assignment_count = page_slot_indices.shape()[0];
-            let selected_rows = runtime
-                .take_axis(page_outputs, page_slot_indices, 0)
-                .expect("compact page slots should gather expert outputs");
-            runtime
-                .reshape(
-                    &selected_rows,
-                    &[1, 1, assignment_count as i32, feature_dimension],
-                )
-                .expect("compact rows should take the production assignment shape")
-        };
-        let retained_rows = page_rows(
-            &retained_page_outputs,
-            &astro_expert_cache_plus_streamed_page_route.retained_page_slot_indices,
-        );
-        let missing_rows = page_rows(
-            &missing_page_outputs,
-            &astro_expert_cache_plus_streamed_page_route.missing_page_slot_indices,
-        );
+            // Baseline: one gather over every assignment in original order, then
+            // the same weighted reduction.
+            let flattened_indices = runtime
+                .reshape(&selected_indices, &[top_k])
+                .expect("selected indices should flatten");
+            let global_outputs = {
+                let mut global_values = Vec::new();
+                for expert_id in 0..expert_count {
+                    global_values.extend(global_expert_row(expert_id));
+                }
+                runtime
+                    .array_from_f32(&global_values, &[expert_count as i32, feature_dimension])
+                    .expect("the global expert outputs should be valid")
+            };
+            let expected_rows = runtime
+                .take_axis(&global_outputs, &flattened_indices, 0)
+                .expect("the single-page route should gather every assignment");
+            let expected_assignment_rows = runtime
+                .reshape(&expected_rows, &[1, 1, top_k, feature_dimension])
+                .expect("the single-page rows should take the production assignment shape");
+            let expected_output = qwen3_5_moe_unsorted_expert_weighted_sum(
+                &runtime,
+                &expected_assignment_rows,
+                &selected_scores,
+            )
+            .expect("the single-page route should reduce once with the original scores");
 
-        let mut concatenated_position_by_assignment = vec![0_usize; top_k as usize];
-        for (retained_row, assignment_position) in route_partition
-            .retained_assignment_positions
-            .iter()
-            .enumerate()
-        {
-            concatenated_position_by_assignment[*assignment_position] = retained_row;
-        }
-        for (missing_row, assignment_position) in route_partition
-            .missing_assignment_positions
-            .iter()
-            .enumerate()
-        {
-            concatenated_position_by_assignment[*assignment_position] =
-                route_partition.retained_assignment_positions.len() + missing_row;
-        }
-        let combined_rows = qwen3_5_moe_combine_partial_route_outputs_for_tests(
-            &runtime,
-            &retained_rows,
-            &missing_rows,
-            &concatenated_position_by_assignment,
-        )
-        .expect("the partial route rows should restore single-page order");
-
-        // Mixed result: one weighted reduction over the restored order.
-        let mixed_output =
-            qwen3_5_moe_unsorted_expert_weighted_sum(&runtime, &combined_rows, &selected_scores)
-                .expect("the mixed route should reduce once with the original scores");
-
-        // Baseline: one gather over every assignment in original order, then
-        // the same weighted reduction.
-        let flattened_indices = runtime
-            .reshape(&selected_indices, &[top_k])
-            .expect("selected indices should flatten");
-        let global_outputs = {
-            let mut global_values = Vec::new();
-            for expert_id in 0..expert_count {
-                global_values.extend(global_expert_row(expert_id));
-            }
-            runtime
-                .array_from_f32(&global_values, &[expert_count as i32, feature_dimension])
-                .expect("the global expert outputs should be valid")
-        };
-        let expected_rows = runtime
-            .take_axis(&global_outputs, &flattened_indices, 0)
-            .expect("the single-page route should gather every assignment");
-        let expected_assignment_rows = runtime
-            .reshape(&expected_rows, &[1, 1, top_k, feature_dimension])
-            .expect("the single-page rows should take the production assignment shape");
-        let expected_output = qwen3_5_moe_unsorted_expert_weighted_sum(
-            &runtime,
-            &expected_assignment_rows,
-            &selected_scores,
-        )
-        .expect("the single-page route should reduce once with the original scores");
-
-        assert_eq!(
-            combined_rows.shape(),
-            expected_assignment_rows.shape(),
-            "the mixed route must restore the single-page assignment shape"
-        );
-        assert_eq!(
-            mixed_output
-                .to_vec_f32()
-                .expect("mixed output should evaluate"),
-            expected_output
-                .to_vec_f32()
-                .expect("single-page output should evaluate"),
-            "the mixed route must reproduce the single-page output bit-identically"
-        );
-    })
+            assert_eq!(
+                combined_rows.shape(),
+                expected_assignment_rows.shape(),
+                "the mixed route must restore the single-page assignment shape"
+            );
+            assert_eq!(
+                mixed_output
+                    .to_vec_f32()
+                    .expect("mixed output should evaluate"),
+                expected_output
+                    .to_vec_f32()
+                    .expect("single-page output should evaluate"),
+                "the mixed route must reproduce the single-page output bit-identically"
+            );
+        },
+    )
     .await
     .expect("the partial-route order contract must finish within 30 seconds");
 }

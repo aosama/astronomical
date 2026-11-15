@@ -14,7 +14,7 @@
 //!   together tokenize to ~10,500 tokens.
 //! - Acquire 500 output tokens (±10% is acceptable). Each measured
 //!   completion is capped at 500 output tokens.
-//! - The SSD (persistent prompt) cache is disabled in the worker's resolved
+//! - The astro SSD prompt cache is disabled in the worker's resolved
 //!   configuration, so every completion prefills the full prompt from scratch.
 //! - Both resident and streaming prefill chunk sizes are fixed at 2,048 tokens,
 //!   and the configured MLX memory ceiling is capped at 36 GB.
@@ -23,7 +23,7 @@
 //! is discarded so first-use JIT kernel compilation never inflates the measured
 //! prefill, then the single measured completion over the full prompt reports the
 //! server-attributed rates persisted to the durable historical record. The
-//! journey verifies the measured input/output token counts and zero cache reuse.
+//! journey verifies the measured input/output token counts and zero astro SSD prompt cache reuse.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU memory,
 //! so it is `#[ignore]`d and not wired into CI. Serving measurements must go
@@ -35,8 +35,8 @@
 //! historical records (narrow the `--filter` per journey):
 //! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput --ignored`
 //! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_report_streaming_sparse_moe_decode_route_materialization_evidence --ignored`
-//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_streaming_sparse_moe_decode_cache_policies_with_attribution --ignored`
-//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_clean_streaming_sparse_moe_decode_cache_policy_throughput --ignored`
+//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_streaming_sparse_moe_decode_astro_expert_cache_policies_with_attribution --ignored`
+//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_clean_streaming_sparse_moe_decode_astro_expert_cache_policy_throughput --ignored`
 //! Each paired command alternates policy order across three trials.
 
 use crate::performance_throughput::decode_astro_expert_cache_experiment::{
@@ -87,8 +87,8 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 
 /// Measures the resident sparse-MoE model's serving prompt-processing and
 /// decode throughput: after a short ~500-token warmup, a >=10,000-token Romeo
-/// and Juliet input drives 500 output tokens of generation with the SSD
-/// (persistent prompt) cache disabled, and the measured completion's
+/// and Juliet input drives 500 output tokens of generation with the
+/// astro SSD prompt cache disabled, and the measured completion's
 /// server-attributed rates are persisted to the durable historical record.
 #[test]
 #[ignore = "loads the resident 35B sparse-MoE model and measures serving prompt-processing and decode throughput over IPC"]
@@ -188,7 +188,7 @@ fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
             .is_some_and(|decode_advance| decode_advance.occurrence_count > 0),
         "the streaming run should record complete decode-advance spans"
     );
-    // Route evidence comes in two shapes. When the decode cache does NOT
+    // Route evidence comes in two shapes. When the astro expert cache does NOT
     // retain routes, decode host-materializes the selected experts per layer
     // (`decode_expert_route_host_materialization`). When retention is active
     // (the Baseline policy), the retained route table supplies the route and
@@ -210,7 +210,7 @@ fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
     );
     // The host-route chain (materialization -> contiguous array construction
     // -> array evaluation -> host copy) fires as one unit, and only when the
-    // decode cache does NOT retain routes. Under retention the whole chain
+    // astro expert cache does NOT retain routes. Under retention the whole chain
     // is legitimately absent, so its integrity is asserted only when the
     // chain's first op engaged.
     let host_route_chain_engaged = diagnostic_evidence
@@ -255,9 +255,9 @@ fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
 /// still exercises decode admission, probation, promotion, and eviction while
 /// prefill stays identical across arms.
 #[test]
-#[ignore = "loads the streaming 35B sparse-MoE model for single-chunk paired decode-cache attribution"]
+#[ignore = "loads the streaming 35B sparse-MoE model for single-chunk paired decode astro expert cache attribution"]
 #[serial]
-fn should_compare_streaming_sparse_moe_decode_cache_policies_with_attribution() {
+fn should_compare_streaming_sparse_moe_decode_astro_expert_cache_policies_with_attribution() {
     let journey = streaming_single_chunk_journey(true, 0);
     let paired_trials = run_paired_decode_astro_expert_cache_trials(
         support::large_sparse_moe_streaming_model_id(),
@@ -278,7 +278,7 @@ fn should_compare_streaming_sparse_moe_decode_cache_policies_with_attribution() 
 #[test]
 #[ignore = "loads the streaming 35B sparse-MoE model for single-chunk paired clean throughput"]
 #[serial]
-fn should_compare_clean_streaming_sparse_moe_decode_cache_policy_throughput() {
+fn should_compare_clean_streaming_sparse_moe_decode_astro_expert_cache_policy_throughput() {
     assert!(
         !throughput_support::diagnostics_enabled(),
         "clean paired throughput must run without the diagnostics environment switch"
@@ -320,7 +320,7 @@ fn sparse_moe_text_journey(attribution_enabled: bool) -> ThroughputJourney {
 /// The budget-fitting streaming lane: one folded single-chunk prompt (the
 /// warmup Romeo and Juliet opening) driving ~200 decode tokens in a fresh
 /// worker per run, so the whole journey fits the 115-second cap while decode
-/// caching is still exercised. Two sequential completions in one streaming
+/// the decode astro expert cache is still exercised. Two sequential completions in one streaming
 /// worker cannot both fit under the configured 36,000,000,000-byte journey cap
 /// once the first request leaves its
 /// warm expert tables resident, so this lane skips the in-worker warmup.
@@ -377,7 +377,7 @@ fn should_serve_two_sequential_single_chunk_streaming_completions_in_one_worker(
     );
     let diagnostic_evidence = measured_throughput
         .decode_astro_expert_cache_diagnostic_evidence
-        .expect("the attributed journey should retain decode-cache evidence");
+        .expect("the attributed journey should retain decode astro expert cache evidence");
     assert!(
         diagnostic_evidence
             .decode_token_forward_latency_p95_nanoseconds
@@ -556,7 +556,7 @@ fn should_reuse_seated_layers_on_a_repeat_multi_chunk_streaming_turn() {
         );
         assert_eq!(
             turn_measurement.cached_tokens, 0,
-            "the prompt cache is off in this journey"
+            "the astro SSD prompt cache is off in this journey"
         );
     }
     let first_positional_read_bytes = two_turn_evidence
@@ -576,10 +576,10 @@ fn should_reuse_seated_layers_on_a_repeat_multi_chunk_streaming_turn() {
     );
 }
 
-/// The repeat turn of a persistent-cache-enabled worker must restore the
+/// The repeat turn of a worker with the astro SSD prompt cache enabled must restore the
 /// published prompt prefix instead of re-prefilling it: cached_tokens > 0.
 #[test]
-#[ignore = "loads the streaming 35B sparse-MoE model twice with the persistent prompt cache enabled"]
+#[ignore = "loads the streaming 35B sparse-MoE model twice with the astro SSD prompt cache enabled"]
 #[serial]
 fn should_restore_the_prompt_prefix_on_a_repeat_multi_chunk_streaming_turn() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -594,7 +594,7 @@ fn should_restore_the_prompt_prefix_on_a_repeat_multi_chunk_streaming_turn() {
     );
     assert!(
         two_turn_evidence.second.cached_tokens > 0,
-        "the repeat turn must restore a published prefix, got zero cached tokens \
+        "the repeat turn must restore a published prefix, got zero tokens restored from the astro SSD prompt cache \
          for a {}-token repeated prompt",
         two_turn_evidence.second.total_input_tokens
     );

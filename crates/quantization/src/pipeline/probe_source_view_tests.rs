@@ -96,7 +96,7 @@ fn should_fail_for_a_source_without_any_shard() {
 
 #[test]
 fn should_build_a_view_of_plain_files_for_a_source_stored_as_symbolic_links() {
-    // The Hugging Face cache layout: every file of a snapshot is a link
+    // The Hugging Face hub cache layout: every file of a snapshot is a link
     // into a blob store, index included.
     let blobs = tempfile::tempdir().expect("a temporary directory should be creatable");
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");

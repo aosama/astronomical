@@ -1,4 +1,4 @@
-//! The resident engine's half of the shared astro-ssd-prompt-cache capture.
+//! The resident engine's half of the shared astro SSD prompt cache capture.
 
 use crate::InferenceEngineError;
 use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::Qwen3_5AstroSsdPromptCacheCapture;

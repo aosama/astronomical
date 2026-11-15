@@ -22,7 +22,7 @@ pub(crate) struct Qwen3_5BoundaryCheckpointPrefillOutcome {
 ///
 /// Unlike intermediate checkpointed prefill, the terminal chunk needs the vocabulary
 /// head to produce first-token logits. This single-forward outcome carries both the
-/// cache checkpoints and the logits needed for first-token seeding.
+/// `astro_ssd_prompt_cache` checkpoints and the logits needed for first-token seeding.
 pub(crate) struct Qwen3_5TerminalCheckpointPrefillOutcome {
     pub(crate) target_forward_output: Qwen3_5TargetForwardOutput,
     pub(crate) boundary_checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,

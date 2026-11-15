@@ -345,7 +345,7 @@ static int32_t astronomical_load_model(AstronomicalCoreMlProgram *projection, NS
                                        int32_t compute_units_code, int32_t checks_placement,
                                        NSError **error_out) {
   // An already compiled program belongs to whoever kept it, so it is loaded where it
-  // is and `compiled_model_url` stays nil: release must not remove a cached copy.
+  // is and `compiled_model_url` stays nil: release must not remove a copy held in the `astro_neural_engine_program_cache`.
   NSURL *compiled_url = model_url;
   if (![model_url.pathExtension isEqualToString:@"mlmodelc"]) {
     projection->compiled_model_url = astronomical_compile_model(model_url, error_out);

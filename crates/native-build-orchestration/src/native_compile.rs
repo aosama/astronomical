@@ -25,7 +25,7 @@
 //! # Verified dependency provisioning
 //!
 //! `cargo xtask bootstrap-native-dependencies` provisions the pinned archive
-//! filenames under one dependency cache directory. CMake resolves every
+//! filenames under one `astro_native_build_cache` dependency directory. CMake resolves every
 //! archive from that directory and re-verifies its SHA-256 before extraction
 //! (see `native/CMakeLists.txt`); per-archive environment overrides are absent.
 
@@ -45,7 +45,8 @@ use crate::native_store::{NativeBuildArtifacts, NativeBuildProfile};
 /// Consulted so the CMake compile can share sccache with Cargo without any
 /// other wrapper silently changing compiler semantics.
 pub const RUSTC_WRAPPER_VARIABLE: &str = "RUSTC_WRAPPER";
-pub const NATIVE_DEPENDENCY_CACHE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
+pub const ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE: &str =
+    "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
 pub const NATIVE_BUILD_STORE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_STORE_DIR";
 pub const NATIVE_BUILD_STATUS_FILE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE";
 const SCCACHE_EXECUTABLE_NAME: &str = "sccache";
@@ -53,18 +54,20 @@ const SCCACHE_EXECUTABLE_NAME: &str = "sccache";
 /// Native inputs resolved from the environment once per run so the CMake
 /// configuration and Cargo's path tracking observe the same values.
 pub struct NativeRuntimeBuildInputs {
-    native_dependency_cache_directory: Option<PathBuf>,
+    astro_native_build_cache_dependencies_directory: Option<PathBuf>,
 }
 
 impl NativeRuntimeBuildInputs {
     pub fn from_environment() -> Self {
         Self {
-            native_dependency_cache_directory: native_dependency_cache_directory(),
+            astro_native_build_cache_dependencies_directory:
+                astro_native_build_cache_dependencies_directory(),
         }
     }
 
-    pub fn native_dependency_cache_directory(&self) -> Option<&Path> {
-        self.native_dependency_cache_directory.as_deref()
+    pub fn astro_native_build_cache_dependencies_directory(&self) -> Option<&Path> {
+        self.astro_native_build_cache_dependencies_directory
+            .as_deref()
     }
 }
 
@@ -102,7 +105,7 @@ pub fn resolve_native_build_identity(
 /// Selects the machine-wide store root.
 ///
 /// An explicit `ASTRONOMICAL_NATIVE_BUILD_STORE_DIR` wins; the default lives
-/// under the user's cache directory so multiple checkouts and worktrees share
+/// under the `astro_native_build_cache` folder so multiple checkouts and worktrees share
 /// one warm store instead of rebuilding MLX per checkout.
 pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
     let store_directory = env::var_os(NATIVE_BUILD_STORE_VARIABLE)
@@ -181,17 +184,17 @@ pub fn build_pinned_native_runtime(
             "-DASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE={}",
             cmake_boolean(native_build_profile.should_build_memory_contract_probe())
         ));
-    if let Some(native_dependency_cache_directory) =
-        native_build_inputs.native_dependency_cache_directory()
+    if let Some(astro_native_build_cache_dependencies_directory) =
+        native_build_inputs.astro_native_build_cache_dependencies_directory()
     {
         configure_command.arg(format!(
-            "-D{NATIVE_DEPENDENCY_CACHE_VARIABLE}={}",
-            native_dependency_cache_directory.display()
+            "-D{ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE}={}",
+            astro_native_build_cache_dependencies_directory.display()
         ));
     } else {
         configure_command
             .arg("-U")
-            .arg(NATIVE_DEPENDENCY_CACHE_VARIABLE);
+            .arg(ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE);
     }
     run_command(
         &mut configure_command,
@@ -297,10 +300,10 @@ pub fn detect_host_target_triple() -> Result<String, Box<dyn Error>> {
     Err("rustc --version --verbose did not report a host triple".into())
 }
 
-/// Default location of the provisioned dependency cache shared by every
-/// checkout on the machine.
-fn native_dependency_cache_directory() -> Option<PathBuf> {
-    env::var_os(NATIVE_DEPENDENCY_CACHE_VARIABLE)
+/// Default location of the provisioned dependencies in the
+/// `astro_native_build_cache`, shared by every checkout on the machine.
+fn astro_native_build_cache_dependencies_directory() -> Option<PathBuf> {
+    env::var_os(ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE)
         .map(PathBuf::from)
         .or_else(|| {
             env::var_os("HOME")
@@ -372,7 +375,8 @@ pub fn native_parallel_job_count() -> String {
 /// Forwards sccache as the CMake compiler launcher when Cargo itself is
 /// wrapped by it.
 ///
-/// Only sccache qualifies: it is compile-cache-transparent (same bytes).
+/// Only sccache is accepted: it never changes the compiled bytes, only
+/// whether they come from its store.
 /// Any other `RUSTC_WRAPPER` is ignored rather than forwarded, because an
 /// arbitrary wrapper could rewrite compilations in ways the fingerprinted
 /// toolchain never promised.

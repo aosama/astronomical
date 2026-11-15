@@ -1,4 +1,4 @@
-//! Capacity enforcement for the retained expert astro expert cache: the
+//! Capacity enforcement for the retained experts of the astro expert cache: the
 //! whole-table eviction order and the admission check the insert path uses.
 
 use mlx_bridge::MlxArray;
@@ -86,7 +86,7 @@ impl AstroExpertCache {
             occupied_slot_count,
             victim_payload_bytes,
             victim_is_complete,
-            "warm cache evicted least-used table"
+            "warm astro_expert_cache evicted least-used table"
         );
         self.remove_layer(layer_index)
     }

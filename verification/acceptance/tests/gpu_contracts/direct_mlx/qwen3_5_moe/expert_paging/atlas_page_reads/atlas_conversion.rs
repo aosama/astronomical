@@ -6,7 +6,7 @@
 //! every expert of `gate_proj.scales`, and so on, so one routed expert is nine
 //! slices spread across gigabytes of a shard. The atlas writes those nine
 //! slices back to back. Records start on 16 KiB boundaries so a record read is
-//! direct (uncached). Bytes are copied unchanged; nothing is decoded.
+//! direct (bypassing the `macos_file_cache`). Bytes are copied unchanged; nothing is decoded.
 
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};

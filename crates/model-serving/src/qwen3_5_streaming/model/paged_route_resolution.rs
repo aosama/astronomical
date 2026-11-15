@@ -9,7 +9,7 @@
 //! there, and those counts join the token's single evaluation. When every
 //! count is zero the token is finished without one extra wait; when any is
 //! not, the token's outputs are wrong and the caller runs it again the exact
-//! way. Optimistic serving is what lets memory be shared across layers: a cache
+//! way. Optimistic serving is what lets memory be shared across layers: an `astro_expert_cache`
 //! that takes a few idle experts out of nearly every layer would otherwise
 //! make nearly every layer pay the wait.
 

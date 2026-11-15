@@ -18,7 +18,7 @@ use crate::{
 
 /// How one forward should execute one mixture-of-experts layer.
 pub(crate) enum ExpertPageDisposition {
-    /// A complete cached layer covers every possible route.
+    /// A complete layer held in the `astro_expert_cache` covers every possible route.
     FullHit,
     /// This layer is not seated. Prefill streams the complete layer.
     Miss,
@@ -123,8 +123,8 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Returns the cached complete packed page.
-    pub(super) fn cached_packed_page(
+    /// Returns the complete packed page held in the `astro_expert_cache`.
+    pub(super) fn astro_expert_cache_packed_page(
         &self,
         layer_index: usize,
         complete_expert_ids: &[usize],
@@ -149,7 +149,7 @@ impl Qwen3_5Model {
     /// would no longer scale with the chunk's routed union. The subset page holds exactly the routed union and its
     /// manifest maps those global ids to slots 0.., so the caller gathers
     /// with `routed_expert_ids` exactly as it does for a streamed union.
-    pub(super) fn routed_subset_of_cached_page(
+    pub(super) fn routed_subset_of_astro_expert_cache_page(
         &self,
         layer_index: usize,
         routed_expert_ids: &[usize],
@@ -159,7 +159,7 @@ impl Qwen3_5Model {
         Qwen3_5ExecutionError,
     > {
         let Some((complete_page, complete_manifest)) =
-            self.cached_packed_page(layer_index, routed_expert_ids, expert_capacity)
+            self.astro_expert_cache_packed_page(layer_index, routed_expert_ids, expert_capacity)
         else {
             return Ok(None);
         };
@@ -584,14 +584,17 @@ impl Qwen3_5Model {
         astro_expert_cache
             .borrow_mut()
             .record_routed_reads(layer_index, routed_expert_ids);
-        let Some(subset_page) =
-            self.routed_subset_of_cached_page(layer_index, routed_expert_ids, expert_capacity)?
+        let Some(subset_page) = self.routed_subset_of_astro_expert_cache_page(
+            layer_index,
+            routed_expert_ids,
+            expert_capacity,
+        )?
         else {
             return Ok(None);
         };
         // Partial-table hits already reported this attribution counter. The
         // subset page holds exactly the routed union, so its payload is the
-        // no-cache baseline; recording it through the shared recorder keeps
+        // baseline of a read with no `astro_expert_cache`; recording it through the shared recorder keeps
         // the attribution counter and the session counter equal, where the
         // session side previously missed these covered routes entirely
         // (issue #1715).

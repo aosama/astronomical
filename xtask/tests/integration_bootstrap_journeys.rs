@@ -17,7 +17,7 @@ const FIXTURE_ARCHIVE_NAMES: [&str; 5] = [
 
 struct BootstrapSandbox {
     root_directory: PathBuf,
-    cache_directory: PathBuf,
+    native_archive_directory: PathBuf,
     fixture_repository_root: PathBuf,
     shim_directory: PathBuf,
 }
@@ -26,7 +26,7 @@ impl BootstrapSandbox {
     fn install() -> Self {
         // Tests run in parallel threads inside one process, so the process
         // id alone cannot name the sandbox root: a sibling test's cleanup
-        // would wipe this test's cache mid-run.
+        // would wipe this test's native archive directory mid-run.
         static SANDBOX_SEQUENCE: std::sync::atomic::AtomicU64 =
             std::sync::atomic::AtomicU64::new(0);
         let sandbox_sequence = SANDBOX_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -34,12 +34,12 @@ impl BootstrapSandbox {
             "astronomical-bootstrap-{}-{sandbox_sequence}",
             std::process::id()
         ));
-        let cache_directory = root_directory.join("cache");
+        let native_archive_directory = root_directory.join("native-archives");
         let shim_directory = root_directory.join("shim-bin");
         let fixture_repository_root = root_directory.join("repository");
         for directory in [
             &root_directory,
-            &cache_directory,
+            &native_archive_directory,
             &shim_directory,
             &fixture_repository_root.join("third-party"),
         ] {
@@ -54,7 +54,7 @@ impl BootstrapSandbox {
         .unwrap();
         Self {
             root_directory,
-            cache_directory,
+            native_archive_directory,
             fixture_repository_root,
             shim_directory,
         }
@@ -64,7 +64,7 @@ impl BootstrapSandbox {
         format!("fixture-archive-payload-{archive_index}")
     }
 
-    /// Writes one fixture archive into the cache, optionally with tampered
+    /// Writes one fixture archive into the native archive directory, optionally with tampered
     /// content; returns its pinned SHA-256.
     fn seed_archive(&self, archive_index: usize, tamper: bool) -> String {
         let mut archive_bytes = Self::archive_bytes(archive_index);
@@ -72,13 +72,13 @@ impl BootstrapSandbox {
             archive_bytes.push_str("-tampered");
         }
         let archive_path = self
-            .cache_directory
+            .native_archive_directory
             .join(FIXTURE_ARCHIVE_NAMES[archive_index]);
         std::fs::write(archive_path, archive_bytes).unwrap();
         digest_bytes(Self::archive_bytes(archive_index).as_bytes())
     }
 
-    fn seed_full_warm_cache(&self) -> [String; 5] {
+    fn seed_all_fixture_archives(&self) -> [String; 5] {
         let mut pinned_digests = Vec::new();
         for archive_index in 0..FIXTURE_ARCHIVE_NAMES.len() {
             pinned_digests.push(self.seed_archive(archive_index, false));
@@ -87,8 +87,8 @@ impl BootstrapSandbox {
     }
 
     /// The pinned digests for the five fixture archives, without touching
-    /// the cache: journeys that exercise the download path need an empty
-    /// cache while the manifest still names the pinned digests.
+    /// the native archive directory: journeys that exercise the download path
+    /// need it empty while the manifest still names the pinned digests.
     fn pinned_digests() -> [String; 5] {
         core::array::from_fn(|archive_index| {
             digest_bytes(Self::archive_bytes(archive_index).as_bytes())
@@ -147,7 +147,7 @@ impl BootstrapSandbox {
             self.fixture_repository_root.display().to_string(),
             "bootstrap-native-dependencies".to_owned(),
             "--cache-dir".to_owned(),
-            self.cache_directory.display().to_string(),
+            self.native_archive_directory.display().to_string(),
         ];
         xtask_arguments.extend(extra_arguments.iter().map(|argument| argument.to_string()));
         Command::new(env!("CARGO_BIN_EXE_xtask"))
@@ -175,9 +175,9 @@ fn command_text(output: &std::process::Output) -> String {
 }
 
 #[test]
-fn verify_only_provisions_from_a_warm_cache() {
+fn verify_only_provisions_from_already_downloaded_archives() {
     let sandbox = BootstrapSandbox::install();
-    sandbox.seed_full_warm_cache();
+    sandbox.seed_all_fixture_archives();
     // The cmake shim is the only command on PATH: verify-only must reach
     // neither curl nor df.
     sandbox.write_cmake_shim(&BootstrapSandbox::pinned_digests());
@@ -191,11 +191,11 @@ fn verify_only_provisions_from_a_warm_cache() {
     assert_eq!(stdout_text.matches("status=verified-cached").count(), 5);
     assert!(stdout_text.contains("status=ready"));
     for (archive_index, archive_name) in FIXTURE_ARCHIVE_NAMES.into_iter().enumerate() {
-        let archive_path = sandbox.cache_directory.join(archive_name);
+        let archive_path = sandbox.native_archive_directory.join(archive_name);
         assert_eq!(
             std::fs::read(&archive_path).unwrap(),
             BootstrapSandbox::archive_bytes(archive_index).into_bytes(),
-            "a verified cache entry must be left untouched: {}",
+            "a verified archive must be left untouched: {}",
             archive_path.display()
         );
     }
@@ -204,7 +204,7 @@ fn verify_only_provisions_from_a_warm_cache() {
 #[test]
 fn verify_only_refuses_a_tampered_archive() {
     let sandbox = BootstrapSandbox::install();
-    let pinned_digests = sandbox.seed_full_warm_cache();
+    let pinned_digests = sandbox.seed_all_fixture_archives();
     sandbox.seed_archive(2, true);
     sandbox.write_cmake_shim(&pinned_digests);
     let output = sandbox.run_xtask(&["--verify"]);
@@ -227,7 +227,7 @@ fn verify_only_refuses_a_missing_archive() {
     let output = sandbox.run_xtask(&["--verify"]);
     assert!(
         !output.status.success(),
-        "an empty cache must fail the verify run: {}",
+        "an empty native archive directory must fail the verify run: {}",
         command_text(&output)
     );
     let stderr_text = String::from_utf8_lossy(&output.stderr);
@@ -254,7 +254,7 @@ fn download_verifies_and_installs_archives_atomically() {
         5
     );
     for archive_name in FIXTURE_ARCHIVE_NAMES {
-        let archive_path = sandbox.cache_directory.join(archive_name);
+        let archive_path = sandbox.native_archive_directory.join(archive_name);
         let archive_bytes = std::fs::read(&archive_path).unwrap();
         assert_eq!(archive_bytes, b"downloaded-archive-payload");
         #[cfg(unix)]
@@ -267,7 +267,7 @@ fn download_verifies_and_installs_archives_atomically() {
             assert_eq!(archive_mode & 0o777, 0o600, "installed {archive_name} mode");
         }
     }
-    let leftover_staging_files: Vec<PathBuf> = std::fs::read_dir(&sandbox.cache_directory)
+    let leftover_staging_files: Vec<PathBuf> = std::fs::read_dir(&sandbox.native_archive_directory)
         .unwrap()
         .flatten()
         .map(|entry| entry.path())
@@ -284,7 +284,7 @@ fn download_verifies_and_installs_archives_atomically() {
 }
 
 #[test]
-fn download_refuses_an_insufficient_free_space_cache() {
+fn download_refuses_an_insufficient_free_space_native_archive_directory() {
     let sandbox = BootstrapSandbox::install();
     // The free-space gate fires before the manifest read, so df alone is
     // enough to reach the refusal.
@@ -322,7 +322,7 @@ fn download_refuses_an_archive_that_fails_its_pinned_digest() {
         stderr_text.contains("SHA-256 verification failed"),
         "the refusal should name the digest failure: {stderr_text}"
     );
-    let published_files: Vec<PathBuf> = std::fs::read_dir(&sandbox.cache_directory)
+    let published_files: Vec<PathBuf> = std::fs::read_dir(&sandbox.native_archive_directory)
         .unwrap()
         .flatten()
         .map(|entry| entry.path())

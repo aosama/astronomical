@@ -1,4 +1,4 @@
-//! The folded-ternary astro-decoder-state-cache layout contract for persistent prompt
+//! The folded-ternary astro decoder state cache layout contract for persistent prompt
 //! storage.
 //!
 //! Dtypes come from the pack's own declared execution contract rather than a
@@ -26,7 +26,7 @@ pub(crate) const PRISM_ATTENTION_VALUES_TENSOR_ROLE: &str = "attention.values";
 /// The KV slab growth granularity the straight forward pass allocates with.
 pub(crate) const PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: usize = 256;
 
-/// Builds the validated persistent astro-decoder-state-cache layout for one folded pack.
+/// Builds the validated persistent astro decoder state cache layout for one folded pack.
 ///
 /// Layer ordering follows `layer_types` so persisted tensor names
 /// (`layer_<decoder_layer_index>_<role>`) use decoder-layer indices, while the

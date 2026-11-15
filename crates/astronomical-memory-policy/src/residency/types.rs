@@ -31,7 +31,7 @@ pub struct CurrentExpertLayerResidency {
 
 /// Where one sparse decoder layer should end up while a reply is written.
 ///
-/// What to do about a layer follows from this and from what the cache holds
+/// What to do about a layer follows from this and from what the `astro_expert_cache` holds
 /// now: a layer that should be kept and is not yet whole is read in; one
 /// that should be hot keeps the experts tokens route to; one that should be
 /// absent keeps nothing new.

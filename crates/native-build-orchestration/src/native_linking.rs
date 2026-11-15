@@ -159,7 +159,7 @@ fn sha256_file_hex(file_path: &Path) -> Result<String, Box<dyn Error>> {
 /// to its own directory, and a cargo-built worker lives under
 /// `<target>/<profile>/`, so `OUT_DIR` (`<target>/<profile>/build/<pkg>-<hash>`)
 /// up two directories is the profile directory that owns the executable. The
-/// user cache directory that stores the compile-time fallback is routinely
+/// `~/Library/Caches` folder that stores the compile-time fallback is routinely
 /// purged by third-party cleanup tools (issue #521); the cargo target directory
 /// is workspace-local and survives those purges, so the packaged-app resolution
 /// chain keeps working for unpackaged cargo runs without an environment

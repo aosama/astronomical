@@ -2,7 +2,7 @@
 //! its MLX memory: decision models and speech models.
 //!
 //! Each request is forward passes whose state is dropped when it ends: no
-//! experts, no cache kept between requests. That is the embedding engine's
+//! experts, no `astro_expert_cache` kept between requests. That is the embedding engine's
 //! memory shape exactly, so the ceiling is split by the same owners: the
 //! resident weights, the forward workspace the process has actually been
 //! seen to need, and free headroom.

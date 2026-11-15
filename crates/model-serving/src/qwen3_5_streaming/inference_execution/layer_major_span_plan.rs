@@ -81,7 +81,7 @@ pub(crate) fn layer_major_span_plan(
 }
 
 /// Turns absolute span ends into spans relative to the cursor, with the
-/// astro-ssd-prompt-cache boundaries each one captures.
+/// astro SSD prompt cache boundaries each one captures.
 fn spans_with_boundaries(
     prefill_cursor: usize,
     span_ends: &[usize],

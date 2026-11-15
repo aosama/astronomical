@@ -21,10 +21,10 @@ env:
   # Xcode_<v>.0.app) because the deployed alias layout has drifted from the
   # readme's primary column (live in the 0.2.70-era rollout); the identity
   # probes hash toolchain outputs, not paths, so either alias yields the same
-  # identity and the mixed fleet converges on one cache key. Bump procedure:
+  # identity and the mixed fleet converges on one `github_actions_cache` key. Bump procedure:
   # pick a version from the current image readme's Xcode table, update this
-  # one value, and expect exactly one deliberate native and SwiftPM cache
-  # rebuild; the assert action fails the job loudly — printing the image's
+  # one value, and expect exactly one deliberate rebuild of the native build and SwiftPM
+  # entries in the `github_actions_cache`; the assert action fails the job loudly — printing the image's
   # installed Xcode inventory — once the image no longer ships the pinned
   # version, forcing that bump to be intentional instead of a surprise
   # five-minute native rebuild. Linux jobs inherit the variable and simply
@@ -43,11 +43,11 @@ jobs:
   detect-changes:
     name: Classify changed files
     runs-on: ubuntu-24.04
-    # A cache miss compiles xtask first, and a hosted image without the pinned
+    # A `github_actions_cache` miss compiles xtask first, and a hosted image without the pinned
     # toolchain makes rustup download it before that compile; the cap covers both
     # plus the policy contracts, with margin for a cold registry.
     timeout-minutes: 5
-    # A stalled cache download must fall through to that compile rather than use
+    # A stalled `github_actions_cache` download must fall through to that compile rather than use
     # up this cap: the default retry window is longer than the cap itself.
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
@@ -92,7 +92,7 @@ jobs:
 
   # The merge gate keys on the "CI verdict" fan-in job below, not on this
   # job's name: this job may split or rename without branch-protection
-  # coordination. Keep the concurrency group's cache owner set in
+  # coordination. Keep the concurrency group's `github_actions_cache` owner set in
   # scripts/ci/tests/test-ci-native-cache-coordination.sh in sync.
   rust-core:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
@@ -103,7 +103,7 @@ jobs:
     # verdict, so renaming this job no longer touches branch protection.
     name: macOS build
     runs-on: xcode-27
-    # Job permissions replace the workflow-level set: pruning surplus caches
+    # Job permissions replace the workflow-level set: pruning surplus `github_actions_cache` entries
     # needs actions:write while everything else stays read-only.
     permissions:
       contents: read
@@ -118,7 +118,7 @@ jobs:
     # fingerprint policy, third-party bump, schema bump) pays a full CMake MLX
     # build (~360s at the hosted runners' three native jobs) before cargo even
     # starts. Cold native (~360s) + cold compile (~300s) + tests and overhead
-    # (~180s) ≈ 840s. Cache pruning keeps entries under the eviction threshold,
+    # (~180s) ≈ 840s. Pruning the `github_actions_cache` keeps entries under the eviction threshold,
     # so cold runs are rare; the cap is a safety net, not the fix.
     timeout-minutes: 15
     env:
@@ -155,7 +155,7 @@ jobs:
       # The Swift toolchain identity is resolved in swift-node instead: this
       # job no longer compiles Swift, and GitHub Actions does not share
       # GITHUB_ENV across jobs.
-      - name: Restore cargo-downloads-cache
+      - name: Restore cargo downloads from the github_actions_cache
         id: cargo-downloads-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -167,11 +167,11 @@ jobs:
           key: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
-      # Runs after the registry restore so a cache miss's xtask compile reuses the
-      # cached dependency downloads instead of hitting crates.io cold.
+      # Runs after the registry restore so a `github_actions_cache` miss's xtask compile reuses the
+      # dependency downloads restored from the `github_actions_cache` instead of hitting crates.io cold.
       - name: Provision the xtask binary
         uses: ./.github/actions/provision-xtask
-      - name: Compute the native build identity cache key
+      - name: Compute the native build identity github_actions_cache key
         id: native-build-identity
         shell: bash
         run: |
@@ -182,7 +182,7 @@ jobs:
           printf '[native-build-identity] status=start\n'
           native_identity_file="$RUNNER_TEMP/astronomical-native-identity"
           # --explain logs each toolchain probe value and its source to stderr,
-          # so a native-cache identity flap is attributable from the run log
+          # so an `astro_native_build_cache` identity flap is attributable from the run log
           # instead of by diffing runner images.
           xtask native-fingerprint --explain --target aarch64-apple-darwin --profile core > "$native_identity_file"
           native_build_identity="$(tr -d '[:space:]' < "$native_identity_file")"
@@ -207,17 +207,17 @@ jobs:
             printf 'ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE=%s\n' "$native_build_status_file"
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
-            # Cap the disk cache so one generation cannot outgrow the 10 GB
-            # repository cache budget or the one-minute cache segment timeout;
+            # Cap the sccache disk store so one generation cannot outgrow the 10 GB
+            # `github_actions_cache` budget or the one-minute `github_actions_cache` segment timeout;
             # sccache enforces the cap on writes and every default-branch build
             # writes new artifacts, so this is the proactive enforcement point:
-            # the cache cannot grow past the cap while compiling. The cap must
+            # the sccache store cannot grow past the cap while compiling. The cap must
             # exist before the first server start because sccache reads it once
             # at startup. sccache parses the value as a binary multiple, so
             # 600M budgets 0.629 decimal GB of tracked entries: enough headroom
             # below the decimal 0.68 GB entry ceiling enforced by
             # cargo xtask save-sccache and cargo xtask prune-caches
-            # that the trimmed directory plus cache-archive overhead stays
+            # that the trimmed directory plus `github_actions_cache` archive overhead stays
             # within budget. 600M instead of 400M because the run-forensics of
             # 2026-10-31 showed the 400M budget evicting workspace test-lib
             # objects (25 Rust misses with 96% hit rate on an unchanged tree).
@@ -232,7 +232,7 @@ jobs:
           printf '[native-build-identity] status=complete identity=%s elapsed_seconds=%s\n' \
             "$native_build_identity" "$(( $(date +%s) - started_at_seconds ))"
 
-      - name: Restore native-archives-cache
+      - name: Restore native archives from the github_actions_cache
         id: native-archives-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -240,7 +240,7 @@ jobs:
           owner: native-archives
           path: ~/Library/Caches/Astronomical/native-dependencies
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
-      - name: Restore native-build-cache
+      - name: Restore the native build from the github_actions_cache
         id: native-build-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -256,7 +256,7 @@ jobs:
           # the rest: each PR reads its own scope first, then the default
           # branch's, so a main-run save serves every later pull request.
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
-      - name: Restore sccache-cache
+      - name: Restore sccache from the github_actions_cache
         id: sccache-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -266,11 +266,11 @@ jobs:
           # Key on Cargo.lock (not github.sha) so the same dependency graph
           # restores across commits instead of missing on every new SHA. The
           # native build identity is deliberately absent: the native build
-          # product cache owns that identity, and embedding it here would
-          # discard the whole compiler cache on every pin or patch change even
+          # product entry in the `astro_native_build_cache` owns that identity, and embedding it here would
+          # discard the whole sccache store on every pin or patch change even
           # though sccache itself is content-addressed and never serves a
           # stale object. The tool-pin manifest joins the toolchain hash
-          # because sccache releases change its internal cache version (0.19
+          # because sccache releases change its internal storage version (0.19
           # moved Rust entries from 6 to 7): without it a bump would keep
           # restoring the old, now-useless entry on its unchanged primary key,
           # skip the save, and compile cold on every run until Cargo.lock
@@ -285,7 +285,7 @@ jobs:
       # the whole build. Keyed on the tool-pin manifest alone, with no
       # restore-keys: a prefix match could only restore another pin's
       # binaries, which the installer rejects by version and downloads anyway.
-      - name: Restore verification-tools-cache
+      - name: Restore verification tools from the github_actions_cache
         id: verification-tools-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -459,7 +459,7 @@ jobs:
       # Test execution moved to the per-tier jobs below; the repository
       # contract scripts run in the config-contracts lane (issue #1553), and
       # the tier pyramid is a local tool (cargo xtask tier-pyramid).
-      - name: Save cargo-downloads-cache
+      - name: Save cargo downloads to the github_actions_cache
         id: cargo-downloads-cache-save
         if: ${{ !cancelled() && steps.cargo-downloads-cache.outputs.cache-hit != 'true' }}
         uses: ./.github/actions/astronomical-cache
@@ -472,7 +472,7 @@ jobs:
           key: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
       # Saved only after a successful install, so a run that lost a download
       # can never publish a half-filled prefix under the primary key.
-      - name: Save verification-tools-cache
+      - name: Save verification tools to the github_actions_cache
         id: verification-tools-cache-save
         if: ${{ !cancelled() && steps.verification-tools-cache.outputs.cache-hit != 'true' && steps.verification-tools-install.outcome == 'success' }}
         uses: ./.github/actions/astronomical-cache
@@ -481,7 +481,7 @@ jobs:
           owner: verification-tools
           path: ~/Library/Caches/Astronomical/verification-tools
           key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
-      - name: Save native-archives-cache
+      - name: Save native archives to the github_actions_cache
         id: native-archives-cache-save
         if: ${{ !cancelled() && steps.native-archives-cache.outputs.cache-hit != 'true' }}
         uses: ./.github/actions/astronomical-cache
@@ -490,7 +490,7 @@ jobs:
           owner: native-archives
           path: ~/Library/Caches/Astronomical/native-dependencies
           key: astronomical-v2-native-archives-${{ runner.os }}-${{ hashFiles('third-party/native-dependency-manifest.cmake', 'third-party/pins/**') }}
-      - name: Save native-build-cache
+      - name: Save the native build to the github_actions_cache
         id: native-build-cache-save
         if: ${{ !cancelled() && (steps.native-build-result.outputs.was_built == 'true' || steps.native-build-prewarm.outputs.was_built == 'true') }}
         uses: ./.github/actions/astronomical-cache
@@ -499,7 +499,7 @@ jobs:
           owner: native-build
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
-      - name: Enforce sccache cache budget
+      - name: Enforce sccache size budget
         id: sccache-budget
         # A restore that hits the primary key marks cache-hit=true and skips
         # the save, so an entry written before the sccache cap existed is
@@ -513,12 +513,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: xtask save-sccache "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}"
         timeout-minutes: 2
-      - name: Save sccache-cache
+      - name: Save sccache to the github_actions_cache
         id: sccache-cache-save
         # Pull-request saves are merge-ref-scoped duplicates of the
         # default-branch entry: pull requests restore from the default branch
         # anyway, so skipping the pull-request save halves the sccache share of
-        # the 10 GB repository cache budget at the cost of recompiling a pull
+        # the 10 GB `github_actions_cache` budget at the cost of recompiling a pull
         # request's own new artifacts on each run. The budget step above
         # suppresses a save whenever the stored primary-key entry is already
         # within budget, and forces one only to replace an oversize entry or
@@ -530,9 +530,9 @@ jobs:
           owner: sccache
           path: ~/Library/Caches/Astronomical/sccache
           key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
-      - name: Prune surplus CI caches
-        # Multiple sccache generations exceed the 10 GB repository cache limit,
-        # which makes GitHub evict the small native-build cache and forces the
+      - name: Prune surplus github_actions_cache entries
+        # Multiple sccache generations exceed the 10 GB `github_actions_cache` limit,
+        # which makes GitHub evict the small native build entry and forces the
         # next run into a silent multi-minute CMake rebuild. The prune policy
         # also deletes sccache entries above a size ceiling even when newest.
         # Tolerated failures keep read-only fork-PR tokens from failing the job.
@@ -553,7 +553,7 @@ jobs:
           path: target/cargo-timings/
           if-no-files-found: ignore
           retention-days: 7
-      - name: Print compiler cache statistics
+      - name: Print sccache statistics
         if: always()
         run: sccache --show-stats
       - name: Publish step timing summary
@@ -565,9 +565,9 @@ jobs:
   # listed in branch protection: it may split or rename freely. It runs only when
   # something it reads changed (SWIFT_NODE_INPUT_PATH_PREFIXES in
   # xtask/src/classify_scope.rs), because it compiles no Rust, and on every full
-  # default-branch run, because only that run saves its caches. The Swift
+  # default-branch run, because only that run saves its `github_actions_cache` entries. The Swift
   # toolchain identity is resolved here (not inherited) because GitHub
-  # Actions does not share GITHUB_ENV across jobs and the SwiftPM cache key
+  # Actions does not share GITHUB_ENV across jobs and the SwiftPM `github_actions_cache` key
   # must match the toolchain that would build.
   swift-node:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.swift_node_required == 'true') }}
@@ -603,7 +603,7 @@ jobs:
       # The earlier fix stamped every input with the HEAD commit time, which
       # only matched on a re-run of the same commit: any new commit restamped
       # all inputs and the lane recompiled the menu and ThinTalk packages
-      # despite an exact-key cache hit. Stamping each file with the time of
+      # despite an exact-key `github_actions_cache` hit. Stamping each file with the time of
       # the last commit that changed it presents the same mtime for an
       # unchanged file on every commit (restore is a true no-op), while a
       # genuinely edited file gets a new commit time and rebuilds correctly.
@@ -653,7 +653,7 @@ jobs:
       # The segment sits after the platform so the prune family (the key
       # prefix before `-macOS`) is unchanged and the old entries age out
       # through the normal keep-newest policy.
-      - name: Restore swiftpm-cache
+      - name: Restore SwiftPM build from the github_actions_cache
         id: swiftpm-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -665,22 +665,22 @@ jobs:
             astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-
       # Restored .build directories are deliberately left untouched. The build
       # database records output mtimes as well as input mtimes, and an output
-      # whose mtime moved is treated as stale: touching every cached file
-      # re-ran the resource and Sparkle.framework copy tasks, and the copied
+      # whose mtime moved is treated as stale: touching every file restored from the
+      # `github_actions_cache` re-ran the resource and Sparkle.framework copy tasks, and the copied
       # framework recompiled the Sparkle controller, the menu app, and the
-      # whole contract-test target (29 compilations on a warm cache, 0 when
+      # whole contract-test target (29 compilations on a warm restore, 0 when
       # untouched). Per-file commit mtimes already keep sources older than
-      # the cached outputs, which is the ordering the touch used to force.
+      # the restored outputs, which is the ordering the touch used to force.
       # Thin Talk has its own package build directory and its own `swift test`
       # run. It is a path dependency of astronomical-menu, so the menu build
       # already compiles it, but into apps/astronomical-menu/.build — a
       # separate directory from the one `swift test --package-path
-      # apps/thin-talk` writes, so the menu cache cannot serve it. Without
-      # this cache the thin-talk lane recompiles cold every run (~40s of the
+      # apps/thin-talk` writes, so the menu entry of the `github_actions_cache` cannot serve it. Without
+      # this entry the thin-talk lane recompiles cold every run (~40s of the
       # ~48s it takes, for tests that execute in well under a second). The
       # key hashes thin-talk's own sources so a thin-talk change invalidates
-      # only this cache, not the menu cache. The family segment is
-      # deliberately `swiftpm-thin-talk`, not `swiftpm`: the cache prune
+      # only this entry, not the menu entry. The family segment is
+      # deliberately `swiftpm-thin-talk`, not `swiftpm`: the `github_actions_cache` prune
       # derives each entry's family from the key prefix before `-macOS` and
       # keeps only the newest entry per family, so sharing the `swiftpm`
       # family made the prune delete the menu and thin-talk entries in
@@ -688,7 +688,7 @@ jobs:
       # package the previous run had evicted (proven across the three main
       # runs of 2026-10-31). Distinct families give each package its own
       # keep-one slot.
-      - name: Restore thin-talk swiftpm-cache
+      - name: Restore thin-talk SwiftPM build from the github_actions_cache
         id: thin-talk-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -708,8 +708,8 @@ jobs:
           # the Active LTS major so security releases arrive without a bump;
           # Node 20 reached end of life on 2026-04-30.
           node-version-file: .node-version
-          # Caches npm's download store (not node_modules) keyed on the
-          # lockfile, so `npm ci` below installs offline from the cache
+          # Saves npm's download store (not node_modules) to the `github_actions_cache` keyed on the
+          # lockfile, so `npm ci` below installs offline from that store
           # instead of depending on registry latency: a cold install
           # exceeded a 4-minute budget twice on unchanged web assets.
           cache: npm
@@ -721,7 +721,7 @@ jobs:
           scripts/ci/ci-step-timing.sh begin thin-talk-web-assets
           (cd apps/thin-talk/web && npm ci && npm run build)
         # The budget stays generous for the lockfile-change runs that miss
-        # the npm cache and fall back to a network-bound install.
+        # the npm download store and fall back to a network-bound install.
         timeout-minutes: 10
       # The web client tests run in the same job that just built the bundle:
       # they boot the real index.html shell per journey test, which is exactly
@@ -735,13 +735,13 @@ jobs:
           (cd apps/thin-talk/web && npm test 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk-web.log")
         timeout-minutes: 6
       # The first Swift command of the job is silent for 19 to 37 seconds
-      # before it prints "Building", on every run, whatever the cache held;
+      # before it prints "Building", on every run, whatever the `github_actions_cache` held;
       # the same command needs under a second on a developer Mac even with
-      # cold SwiftPM and compiler caches. Loading the package graph here, as
+      # cold SwiftPM build outputs and no sccache. Loading the package graph here, as
       # a step of its own, gives that time a name in the timing summary: if
       # it lands on this step it is manifest loading and dependency resolution
       # on a fresh runner, and if it stays on the contracts step it is build
-      # planning. Either answer says which cache to add; neither costs a build.
+      # planning. Either answer says which `github_actions_cache` entry to add; neither costs a build.
       - name: Resolve the menu Swift package
         run: |
           trap 'scripts/ci/ci-step-timing.sh end menu-package-resolve' EXIT
@@ -808,7 +808,7 @@ jobs:
           path: ${{ runner.temp }}/test-logs/
           if-no-files-found: warn
           retention-days: 30
-      - name: Save swiftpm-cache
+      - name: Save SwiftPM build to the github_actions_cache
         id: swiftpm-cache-save
         if: ${{ !cancelled() && steps.swiftpm-cache.outputs.cache-hit != 'true' }}
         uses: ./.github/actions/astronomical-cache
@@ -817,7 +817,7 @@ jobs:
           owner: swiftpm
           path: apps/astronomical-menu/.build
           key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/Tests/**/*.swift') }}
-      - name: Save thin-talk swiftpm-cache
+      - name: Save thin-talk SwiftPM build to the github_actions_cache
         id: thin-talk-cache-save
         if: ${{ !cancelled() && steps.thin-talk-cache.outputs.cache-hit != 'true' }}
         uses: ./.github/actions/astronomical-cache
@@ -869,7 +869,7 @@ jobs:
   # steps parse configuration and inventory — they do not exercise the
   # product — so an ubuntu runner runs them in parallel with the macOS
   # lanes instead of extending the macOS critical path. Like detect-changes,
-  # this job restores no caches: the macOS-owned cache entries are keyed to
+  # this job restores nothing from the `github_actions_cache`: the macOS-owned entries are keyed to
   # runner.os, so an ubuntu restore would always miss and the cold xtask
   # compile costs less than the wasted download would.
   config-contracts:
@@ -886,15 +886,15 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Run workflow and cache contracts
+      - name: Run workflow contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin ci-cache-contracts
           cargo test --locked -p xtask --test workflow_structural_contract
           cargo test --locked -p xtask --test workflow_verdict_contract
           cargo test --locked -p xtask --test workflow_lane_split_contract
-          cargo test --locked -p xtask --test workflow_cache_owner_contract
-          cargo test --locked -p xtask --test workflow_verification_tools_cache_contract
+          cargo test --locked -p xtask --test workflow_github_actions_cache_owner_contract
+          cargo test --locked -p xtask --test workflow_verification_tools_github_actions_cache_contract
           cargo test --locked -p xtask --test workflow_xcode_pin_contract
           cargo test --locked -p xtask --test workflow_macos_packaging_contract
           cargo test --locked -p xtask --test workflow_verified_work_contract
@@ -949,7 +949,7 @@ jobs:
       # Same owner and key scheme as the macOS build job. This lane saves on
       # the default branch only when a notices input changes, so its entry
       # can age out and a pull request then downloads cold once.
-      - name: Restore verification-tools-cache
+      - name: Restore verification tools from the github_actions_cache
         id: verification-tools-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -961,7 +961,7 @@ jobs:
         id: verification-tools-install
         run: cargo run --locked --quiet -p xtask -- install-verification-tools --prefix ~/.cache/astronomical/verification-tools
         timeout-minutes: 6
-      - name: Save verification-tools-cache
+      - name: Save verification tools to the github_actions_cache
         id: verification-tools-cache-save
         if: ${{ !cancelled() && steps.verification-tools-cache.outputs.cache-hit != 'true' && steps.verification-tools-install.outcome == 'success' }}
         uses: ./.github/actions/astronomical-cache
@@ -1123,7 +1123,7 @@ jobs:
   # lane leaves off), so it runs in parallel with the build job, which it
   # would only slow down, and finishes well inside that job's minutes. The
   # xtask unit tests and the standalone builds below join it for the same reason.
-  # It restores none of the build job's caches: the shared registry archive
+  # It restores none of the build job's `github_actions_cache` entries: the shared registry archive
   # (~95 MB, ~4 s to restore) holds the whole workspace's downloads, and the
   # shared sccache archive (~186 MB) is almost entirely objects this crate
   # never compiles. Its own small sccache directory, under its own prune
@@ -1139,7 +1139,7 @@ jobs:
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
-      - name: Configure step timing attribution and the compiler cache
+      - name: Configure step timing attribution and sccache
         run: |
           printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           {
@@ -1172,13 +1172,13 @@ jobs:
       # the lanes use for nextest: `cargo xtask install-verification-tools`
       # would first compile xtask cold, which costs more than this whole lane
       # compiles. The version must equal the third-party/tool-pins pin (the
-      # cache-owner contract enforces it) so both jobs share one cache format.
+      # `github_actions_cache` owner contract enforces it) so both jobs share one sccache storage format.
       - name: Provision pinned sccache
         uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: sccache@0.19.0
           fallback: none
-      - name: Restore neural-engine-sccache-cache
+      - name: Restore Neural Engine sccache from the github_actions_cache
         id: neural-engine-sccache-cache
         uses: ./.github/actions/astronomical-cache
         with:
@@ -1186,10 +1186,10 @@ jobs:
           owner: neural-engine-sccache
           path: ~/Library/Caches/Astronomical/neural-engine-sccache
           # The family token `neural-engine-sccache` sits before `-macOS`, so
-          # cargo xtask prune-caches keeps it apart from the build job's
+          # cargo xtask prune-caches (it prunes the `github_actions_cache`) keeps it apart from the build job's
           # sccache family, and the build job's `astronomical-v2-sccache-`
           # fallbacks can never restore it. Keyed like that family: tool pins
-          # rotate the sccache cache format, Cargo.lock the dependency graph.
+          # rotate the sccache storage format, Cargo.lock the dependency graph.
           key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-standalone-builds-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-standalone-builds-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
@@ -1243,7 +1243,7 @@ jobs:
       # Default-branch-only, like the build job's sccache save: pull requests
       # restore the default-branch entry, and a saved pull-request entry would
       # only duplicate it inside the 10 GB repository budget.
-      - name: Save neural-engine-sccache-cache
+      - name: Save Neural Engine sccache to the github_actions_cache
         id: neural-engine-sccache-cache-save
         if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch && steps.neural-engine-sccache-cache.outputs.cache-hit != 'true' }}
         uses: ./.github/actions/astronomical-cache
@@ -1252,7 +1252,7 @@ jobs:
           owner: neural-engine-sccache
           path: ~/Library/Caches/Astronomical/neural-engine-sccache
           key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-standalone-builds-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
-      - name: Print compiler cache statistics
+      - name: Print sccache statistics
         if: always()
         run: sccache --show-stats
       - name: Publish step timing summary
@@ -1273,7 +1273,7 @@ jobs:
   # Skip legitimacy: the macOS lanes legitimately skip when the
   # classifier marked macOS verification not required (site-only changes, a
   # version-only bump proven from the file contents, or a default-branch push
-  # whose exact tree already passed them with no cache to publish), the Swift and
+  # whose exact tree already passed them with no `github_actions_cache` entry to publish), the Swift and
   # Node lane also when nothing it reads changed, and the
   # notices-freshness lane when no notices input changed; the
   # verdict accepts a skip only under that classifier decision, so a lane
@@ -1390,8 +1390,8 @@ jobs:
         with:
           name: default-branch-macos-run
           path: ${{ runner.temp }}/verified-work
-          # Sets how stale the default branch's caches may get: GitHub evicts a
-          # cache left unused for seven days, and pull requests can only restore
+          # Sets how stale the default branch's `github_actions_cache` entries may get: GitHub evicts an
+          # entry left unused for seven days, and pull requests can only restore
           # what this branch saved, so once this expires the next merge runs in
           # full and publishes whatever has gone missing.
           retention-days: 5

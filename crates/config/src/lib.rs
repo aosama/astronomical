@@ -107,7 +107,7 @@ pub const MAXIMUM_IDLE_MODEL_UNLOAD_SECONDS: u64 = 604_800;
 /// User-facing gigabyte settings use the convention Apple uses to market the
 /// machine: 1 GB = 1,073,741,824 bytes (2³⁰).
 const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_073_741_824;
-/// The default astro-ssd-prompt-cache capacity in bytes, derived from the same
+/// The default astro SSD prompt cache capacity in bytes, derived from the same
 /// marketed-gigabyte conversion the configuration resolution uses.
 pub const DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 =
     DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_GB * BYTES_PER_CONFIGURED_GIGABYTE;
@@ -274,7 +274,7 @@ impl AstronomicalConfig {
         parse_loopback_bind_address(&raw_bind_address)
     }
 
-    /// Resolves the always-enabled SSD-backed prompt cache policy.
+    /// Resolves the always-enabled `astro_ssd_prompt_cache` policy.
     pub fn astro_ssd_prompt_cache(
         &self,
     ) -> Result<AstroSsdPromptCacheConfig, AstronomicalConfigError> {
@@ -294,7 +294,7 @@ impl AstronomicalConfig {
         ))
     }
 
-    /// Returns whether the SSD-backed prompt cache is enabled.
+    /// Returns whether the `astro_ssd_prompt_cache` is enabled.
     #[must_use]
     pub fn astro_ssd_prompt_cache_enabled(&self) -> bool {
         self.user_config_file
@@ -304,7 +304,7 @@ impl AstronomicalConfig {
             .unwrap_or(true)
     }
 
-    /// Returns the authored cache preference without replacing absence with policy.
+    /// Returns the authored `astro_ssd_prompt_cache` preference without replacing absence with policy.
     #[must_use]
     pub fn configured_astro_ssd_prompt_cache_enabled(&self) -> Option<bool> {
         self.user_config_file
@@ -313,7 +313,7 @@ impl AstronomicalConfig {
             .and_then(|astro_ssd_prompt_cache| astro_ssd_prompt_cache.enabled)
     }
 
-    /// Returns the authored decimal-SI cache capacity without applying its default.
+    /// Returns the authored decimal-SI `astro_ssd_prompt_cache` capacity without applying its default.
     pub fn configured_astro_ssd_prompt_cache_maximum_size_bytes(
         &self,
     ) -> Result<Option<u64>, AstronomicalConfigError> {

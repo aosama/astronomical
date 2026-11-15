@@ -6,7 +6,7 @@ Qwen3.5 support), `safetensors`, `numpy` and `huggingface_hub` installed:
     python generate_clef_reference_decisions.py > clef_reference_decisions_flash_8bit.json
 
 It downloads `mlx-community/clef-flash-8bit` at a pinned revision into the
-Hugging Face cache, the build Astronomical serves, and answers each case in
+Hugging Face hub cache, the build Astronomical serves, and answers each case in
 float32 on the CPU:
 
 * the backbone is transformers' own Qwen3.5 text model, given the build's

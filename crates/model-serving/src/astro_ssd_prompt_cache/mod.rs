@@ -11,7 +11,7 @@ pub(crate) mod block_format_error;
 mod block_key;
 #[cfg(feature = "direct-mlx")]
 mod block_manifest;
-// Only the direct-MLX engines capture astro-ssd-prompt-cache blocks; the pure planning
+// Only the direct-MLX engines capture astro SSD prompt cache blocks; the pure planning
 // units still compile under test so their unit tests run in every build.
 #[cfg(any(test, feature = "direct-mlx"))]
 pub(crate) mod capture_planning;

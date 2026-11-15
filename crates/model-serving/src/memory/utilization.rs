@@ -73,7 +73,7 @@ pub struct MemoryCeilingUtilization {
 impl MemoryCeilingUtilization {
     /// Splits one ceiling measurement into named owners plus a residual.
     ///
-    /// The expert payload comes from the breakdown itself, not from cache
+    /// The expert payload comes from the breakdown itself, not from `astro_expert_cache`
     /// bookkeeping: the measured attribution is the truthful physically
     /// resident figure, and using one source for both the unattributed-active
     /// subtraction and the entitlement keeps the identity exact.
@@ -270,7 +270,7 @@ mod tests {
     }
 
     // The resident 25 GB decode-retention cell of issue #1236, byte for byte.
-    // After the repeated cached request, the retained live prefix (issue
+    // After the repeated request, the retained live prefix (issue
     // #1167) keeps ~153.5 MB of KV active, while the finalized plan protects
     // only ~27.6 MB of one-decode-step transient work. The budget partitions
     // the ceiling exactly, so a partitioned identity can only break through a

@@ -36,7 +36,7 @@ where
 }
 
 /// Emits paired timing boundaries for one model-swap phase only when the
-/// factory has performance attribution enabled, mirroring the astro-ssd-prompt-cache
+/// factory has performance attribution enabled, mirroring the astro SSD prompt cache
 /// clear attribution log. The two phases are the worker-level envelope around
 /// the engine's own finer-grained attribution segments: factory creation
 /// (model-family classification, artifact validation, tokenizer
@@ -243,7 +243,7 @@ where
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
         announce_floor_raise(floor_raise_event, event_writer).await?;
-        self.emit_cache_stats_then_neural_engine_status(
+        self.emit_astro_ssd_prompt_cache_stats_then_neural_engine_status(
             event_writer,
             neural_engine_prefill_event.as_ref(),
         )

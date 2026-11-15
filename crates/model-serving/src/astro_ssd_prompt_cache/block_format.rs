@@ -2,7 +2,7 @@
 //!
 //! This module reads only the length-prefixed JSON header, validates the declared
 //! tensor layout against the active architecture-neutral model contract, and returns the
-//! metadata the astro-ssd-prompt-cache owner needs to decide whether to load the file.
+//! metadata the astro SSD prompt cache owner needs to decide whether to load the file.
 //! It never reads the multi-megabyte tensor payload region.
 
 use std::collections::HashMap;
@@ -18,12 +18,12 @@ use super::persistent_safetensors_header::{
     PersistentSafetensorsHeaderError, read_persistent_safetensors_header,
 };
 
-/// Current persistent astro-ssd-prompt-cache state version. Bump when the on-disk layout
+/// Current persistent astro SSD prompt cache state version. Bump when the on-disk layout
 /// or execution math changes in a way that invalidates serialized model state.
 ///
 /// Version 4: full-attention key/value blocks and GatedDeltaNet recurrent
 /// snapshots live in separate safetensors files so the fixed recurrent state is
-/// not duplicated in every cache block.
+/// not duplicated in every astro SSD prompt cache block.
 /// Version 5: invalidates state produced before stable gated-delta softplus and
 /// shape-safe variable-length compiled decay execution.
 /// Version 8: invalidates state produced before the complete-layer rollback
@@ -36,7 +36,7 @@ use super::persistent_safetensors_header::{
 /// enters the prompt instead of binding every visual attachment at the root.
 pub(crate) const ASTRO_SSD_PROMPT_CACHE_FORMAT_VERSION: &str = "12";
 
-/// Parsed and validated metadata for one Qwen3.5-MoE persistent astro-ssd-prompt-cache block on disk.
+/// Parsed and validated metadata for one Qwen3.5-MoE persistent astro SSD prompt cache block on disk.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AstroSsdPromptCacheBlockHeader {
     format_version: String,
@@ -205,7 +205,7 @@ fn validate_metadata(
             expected_format_version: ASTRO_SSD_PROMPT_CACHE_FORMAT_VERSION.to_owned(),
         });
     }
-    // Partial blocks (prefix-cache tails) store fewer tokens than a full block
+    // Partial blocks (astro SSD prompt cache prefix tails) store fewer tokens than a full block
     // while remaining valid restorable state, so the header only has to prove
     // the count fits the contract's block geometry. Tensor layouts are validated
     // against this same header count, keeping each file self-consistent.

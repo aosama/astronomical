@@ -33,7 +33,7 @@ fn should_clear_replacement_mlx_buffer_cache_and_persist_a_bounded_failed_load_r
 
     engine
         .load()
-        .expect_err("the empty artifact should fail after replacement cache cleanup");
+        .expect_err("the empty artifact should fail after replacement mlx_buffer_cache cleanup");
 
     let report_line = fs::read_to_string(attribution_log_path)
         .expect("failed loading should persist attribution");

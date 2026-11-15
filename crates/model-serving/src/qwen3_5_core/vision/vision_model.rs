@@ -107,7 +107,7 @@ impl Qwen3_5VisionModel {
     /// Releases the tower's evaluated weights once an image request no longer
     /// needs them, so text requests carry none of the tower's memory.
     ///
-    /// Visual embeddings are evaluated and cached before this runs, and the
+    /// Visual embeddings are evaluated and saved to the `astro_ssd_prompt_cache` before this runs, and the
     /// next image request reads the weights from the SSD again. Returns
     /// whether anything was released.
     pub(crate) fn release_used_weights(

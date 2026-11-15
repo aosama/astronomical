@@ -1,4 +1,4 @@
-//! Persistent astro-ssd-prompt-cache capture shared by the resident and streaming
+//! Persistent astro SSD prompt cache capture shared by the resident and streaming
 //! Qwen3.5 engines. Each engine implements [`Qwen3_5AstroSsdPromptCacheCapture`]
 //! for the one step that differs between them.
 

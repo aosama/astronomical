@@ -237,7 +237,7 @@ fn should_run_in_full_when_github_cannot_answer() {
     assert!(scenario.classify("push").contains(MACOS_REQUIRED));
 }
 
-/// Its record's expiry is what refreshes the caches after a quiet spell.
+/// Its record's expiry is what refreshes the `github_actions_cache` after a quiet spell.
 #[test]
 fn should_run_in_full_when_no_recent_default_branch_run_is_on_record() {
     let scenario = scenario_changing(CODE_PATH);
@@ -259,9 +259,9 @@ fn should_run_in_full_when_the_recorded_commit_is_not_in_this_history() {
 }
 
 /// A version bump changes `Cargo.lock` and skips the macOS lanes, so the merge after
-/// it is the one that must publish the new caches, though it changes only code.
+/// it is the one that must publish the new entries of the `github_actions_cache`, though it changes only code.
 #[test]
-fn should_run_in_full_after_a_skipped_push_left_a_cache_unpublished() {
+fn should_run_in_full_after_a_skipped_push_left_a_github_actions_cache_entry_unpublished() {
     let mut scenario = scenario_changing("Cargo.lock");
     let last_macos_run = scenario.base_sha.clone();
     scenario.commit_on_top(CODE_PATH);
@@ -277,7 +277,7 @@ fn should_run_in_full_after_a_skipped_push_left_a_cache_unpublished() {
 }
 
 #[test]
-fn should_skip_again_once_the_default_branch_has_published_that_cache() {
+fn should_skip_again_once_the_default_branch_has_published_that_github_actions_cache_entry() {
     let mut scenario = scenario_changing("Cargo.lock");
     let publishing_run = scenario.head_sha.clone();
     scenario.commit_on_top(CODE_PATH);
@@ -291,7 +291,7 @@ fn should_skip_again_once_the_default_branch_has_published_that_cache() {
 }
 
 #[test]
-fn should_run_in_full_without_asking_when_a_cache_input_changed() {
+fn should_run_in_full_without_asking_when_a_github_actions_cache_input_changed() {
     let scenario = scenario_changing("Cargo.lock");
     scenario.install_gh(&scenario.all_proofs(), 0);
 
@@ -300,7 +300,7 @@ fn should_run_in_full_without_asking_when_a_cache_input_changed() {
     assert!(outputs.contains(MACOS_REQUIRED), "{outputs}");
     assert!(
         !scenario.was_gh_called(),
-        "no record can excuse a cache to publish"
+        "no record can excuse a github_actions_cache entry to publish"
     );
 }
 

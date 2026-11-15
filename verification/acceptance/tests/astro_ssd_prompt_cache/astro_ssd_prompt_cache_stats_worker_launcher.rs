@@ -18,17 +18,18 @@ pub(super) fn create_astro_ssd_prompt_cache_stats_worker_configuration() -> (
         configured_astro_ssd_prompt_cache_maximum_size_gb();
     let production_worker_executable_path =
         astronomical_test_harness::workspace_binary("astronomical-inference-worker");
-    let isolated_worker_home =
-        tempfile::tempdir().expect("the cache-stats worker home should be created");
+    let isolated_worker_home = tempfile::tempdir()
+        .expect("the astro SSD prompt cache stats worker home should be created");
     let isolated_configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
-    fs::create_dir(&isolated_configuration_directory)
-        .expect("the cache-stats worker configuration directory should be created");
+    fs::create_dir(&isolated_configuration_directory).expect(
+        "the astro SSD prompt cache stats worker configuration directory should be created",
+    );
     let astro_ssd_prompt_cache_directory_path = isolated_configuration_directory.join("cache");
     fs::create_dir(&astro_ssd_prompt_cache_directory_path)
-        .expect("the cache-stats astro-ssd-prompt-cache directory should be created");
+        .expect("the astro SSD prompt cache stats directory should be created");
     let performance_log_directory = isolated_worker_home.path().join("logs");
     fs::create_dir(&performance_log_directory)
-        .expect("the cache-stats performance log directory should be created");
+        .expect("the astro SSD prompt cache stats performance log directory should be created");
     let worker_configuration_document = serde_json::json!({
         "model_directories": [configured_model_directory],
         "prompt_cache_max_size_gb": configured_astro_ssd_prompt_cache_maximum_size_gb,
@@ -36,16 +37,16 @@ pub(super) fn create_astro_ssd_prompt_cache_stats_worker_configuration() -> (
     fs::write(
         isolated_configuration_directory.join("config.json"),
         serde_json::to_vec_pretty(&worker_configuration_document)
-            .expect("the cache-stats worker configuration should serialize"),
+            .expect("the astro SSD prompt cache stats worker configuration should serialize"),
     )
-    .expect("the cache-stats worker configuration should be written");
+    .expect("the astro SSD prompt cache stats worker configuration should be written");
 
     let worker_runtime_config = ResolvedRuntimeConfigResolver::for_development_home_directory(
         isolated_worker_home.path().to_path_buf(),
         production_worker_executable_path.clone(),
     )
     .load()
-    .expect("the cache-stats worker configuration should resolve");
+    .expect("the astro SSD prompt cache stats worker configuration should resolve");
     let model_policy_catalog = worker_runtime_config.model_policy_catalog.clone();
 
     (
@@ -61,10 +62,11 @@ pub(super) fn create_astro_ssd_prompt_cache_stats_worker_configuration() -> (
 fn configured_astro_ssd_prompt_cache_maximum_size_gb() -> u64 {
     let home_directory = std::env::var_os("HOME")
         .map(PathBuf::from)
-        .expect("HOME should be set for the cache-stats E2E test");
+        .expect("HOME should be set for the astro SSD prompt cache stats E2E test");
     let config_file_path = home_directory.join(".astronomical-dev/config.json");
-    let config_file_bytes = fs::read(&config_file_path)
-        .expect("Development config should be readable for the cache-stats E2E test");
+    let config_file_bytes = fs::read(&config_file_path).expect(
+        "Development config should be readable for the astro SSD prompt cache stats E2E test",
+    );
     let config_document: serde_json::Value = serde_json::from_slice(&config_file_bytes)
         .expect("Development config should be valid JSON");
     config_document

@@ -52,7 +52,7 @@ async fn should_report_astro_ssd_prompt_cache_lookup_counters_when_generation_st
     assert_eq!(
         next_event(&mut daemon_reader).await,
         astro_ssd_prompt_cache_stats_after_lookup,
-        "the daemon must see the classified cache lookup before a long prefill completes"
+        "the daemon must see the classified astro SSD prompt cache lookup before a long prefill completes"
     );
     close_worker_transport(daemon_writer, worker_task).await;
 }
@@ -87,11 +87,11 @@ async fn should_delegate_a_loaded_model_astro_ssd_prompt_cache_clear_to_the_engi
                 model_id: Some("example/scripted-chat".to_owned()),
             })
             .await
-            .expect("worker should receive the cache-clear command");
+            .expect("worker should receive the astro SSD prompt cache clear command");
         assert_eq!(next_event(&mut daemon_reader).await, expected_clear_event);
 
         close_worker_transport(daemon_writer, worker_task).await;
     })
     .await
-    .expect("loaded-engine cache-clear journey should finish within two seconds");
+    .expect("loaded-engine astro SSD prompt cache clear journey should finish within two seconds");
 }

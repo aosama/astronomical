@@ -3,7 +3,7 @@ use tokio::time::timeout;
 use super::rest_support::{
     MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT,
     astro_ssd_prompt_cache_pressure_model_id, get_json_endpoint,
-    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
+    prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt, read_performance_records, required_u64,
     send_streaming_chat_request, user_message, write_astro_ssd_prompt_cache_pressure_worker_config,
 };
 use crate::openai_rest;
@@ -13,18 +13,18 @@ use crate::support::serving_rest;
 
 // Issue #657 guard: report the block-aligned dense restore without double-counting
 // or dropping its contribution from the public usage surface.
-const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
+const ASTRO_SSD_PROMPT_CACHE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and pins the dense-only cached-token report"]
+#[ignore = "launches the production REST server and pins the dense-only report of tokens restored from the astro SSD prompt cache"]
 async fn should_report_the_exact_dense_restored_prefix_in_warm_request_usage() {
-    timeout(E2E_TIMEOUT, run_dense_cached_token_report_journey())
+    timeout(E2E_TIMEOUT, run_dense_astro_ssd_prompt_cache_restored_token_report_journey())
         .await
-        .expect("the dense cached-token report journey must finish within 115 seconds");
+        .expect("the dense astro SSD prompt cache restored-token report journey must finish within 115 seconds");
 }
 
-async fn run_dense_cached_token_report_journey() {
-    let acceptance_log_prefix = "[dense-cached-token-report]";
+async fn run_dense_astro_ssd_prompt_cache_restored_token_report_journey() {
+    let acceptance_log_prefix = "[dense-astro-ssd-prompt-cache-restored-token-report]";
     let model_directory = crate::support::configured_installed_model_directory_by_id(
         astro_ssd_prompt_cache_pressure_model_id(),
     );
@@ -37,8 +37,10 @@ async fn run_dense_cached_token_report_journey() {
         &model_directory,
         None,
     );
-    let prepared_romeo_and_juliet_prompt =
-        prepare_cacheable_romeo_and_juliet_prompt(&model_directory, CACHEABLE_PROMPT_TOKEN_COUNT);
+    let prepared_romeo_and_juliet_prompt = prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt(
+        &model_directory,
+        ASTRO_SSD_PROMPT_CACHE_PROMPT_TOKEN_COUNT,
+    );
     let model_artifact_rest_server =
         serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
             astro_ssd_prompt_cache_pressure_model_id(),
@@ -80,7 +82,7 @@ async fn run_dense_cached_token_report_journey() {
         .saturating_mul(block_token_count);
     assert!(
         expected_restored_token_count > 0,
-        "the cold prompt must complete at least one cache block: block_token_count={block_token_count} prompt_tokens={}",
+        "the cold prompt must complete at least one astro SSD prompt cache block: block_token_count={block_token_count} prompt_tokens={}",
         cold_response.prompt_token_count,
     );
 
@@ -126,7 +128,7 @@ async fn run_dense_cached_token_report_journey() {
 
     openai_rest::stop_serving_rest_server(model_artifact_rest_server).await;
     eprintln!(
-        "{acceptance_log_prefix} status=success prompt_tokens={} cached_tokens={warm_astro_ssd_prompt_cache_token_count}",
+        "{acceptance_log_prefix} status=success prompt_tokens={} astro_ssd_prompt_cache_restored_tokens={warm_astro_ssd_prompt_cache_token_count}",
         warm_response.prompt_token_count,
     );
 }

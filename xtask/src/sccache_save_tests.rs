@@ -61,14 +61,14 @@ fn should_save_only_new_or_replacement_generations() {
     assert!(SccacheSaveDecision::ReplaceOversizeEntry.should_save());
     assert!(!SccacheSaveDecision::FreshEntryWithinBudget.should_save());
     assert!(!SccacheSaveDecision::DirectoryOverBudget.should_save());
-    assert!(!SccacheSaveDecision::CacheListUnavailable.should_save());
+    assert!(!SccacheSaveDecision::GithubActionsCacheListUnavailable.should_save());
     for decision in [
         SccacheSaveDecision::NewGeneration,
         SccacheSaveDecision::ReplaceOversizeEntry,
         SccacheSaveDecision::FreshEntryWithinBudget,
         SccacheSaveDecision::DirectoryOverBudget,
         SccacheSaveDecision::ReplaceBlocked,
-        SccacheSaveDecision::CacheListUnavailable,
+        SccacheSaveDecision::GithubActionsCacheListUnavailable,
     ] {
         assert!(!decision.as_decision_text().is_empty());
     }

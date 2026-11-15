@@ -1,15 +1,15 @@
-//! Compact Machine Learning framework for Apple silicon arrays for one cached-plus-streamed expert route.
+//! Compact Machine Learning framework for Apple silicon arrays for one `astro_expert_cache`-plus-streamed expert route.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
 use mlx_bridge::MlxArray;
 
-const BUILD_CACHED_PLUS_STREAMED_PAGE_ROUTE_OPERATION: &str =
-    "build Qwen3.5-MoE cached-plus-streamed expert page route";
+const BUILD_ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_OPERATION: &str =
+    "build Qwen3.5-MoE astro-expert-cache-plus-streamed expert page route";
 const REMAP_EXPERT_PAGE_SLOTS_OPERATION: &str = "remap Qwen3.5-MoE expert page slots";
 
-/// Assignment arrays for one cached-plus-streamed expert route: retained-page plus missing-page projections.
+/// Assignment arrays for one `astro_expert_cache`-plus-streamed expert route: retained-page plus missing-page projections.
 pub struct Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute {
     pub retained_page_slot_indices: MlxArray,
     pub retained_scores: MlxArray,
@@ -149,7 +149,7 @@ fn validate_astro_expert_cache_plus_streamed_page_route(
         .any(|is_covered| !is_covered)
     {
         return Err(astro_expert_cache_plus_streamed_page_route_error(
-            "the cached-plus-streamed route does not cover every selected assignment",
+            "the astro-expert-cache-plus-streamed route does not cover every selected assignment",
         ));
     }
 
@@ -185,7 +185,7 @@ fn assignment_position_array(
 
 fn astro_expert_cache_plus_streamed_page_route_error(description: &str) -> MlxRuntimeError {
     MlxRuntimeError::RuntimeOperation {
-        operation: BUILD_CACHED_PLUS_STREAMED_PAGE_ROUTE_OPERATION,
+        operation: BUILD_ASTRO_EXPERT_CACHE_PLUS_STREAMED_PAGE_ROUTE_OPERATION,
         description: description.to_owned(),
     }
 }

@@ -1,12 +1,12 @@
 //! File reads that reach the SSD rather than the macOS file cache, the check
-//! that proves a range was not cached, and the scatter read the atlas uses.
+//! that proves a range was not in it, and the scatter read the atlas uses.
 //!
 //! Measured on Apple Silicon with this probe's own reads: `F_NOCACHE` gives a
-//! direct (uncached) read only when the file offset, the length and the
+//! direct read (one that bypasses the `macos_file_cache`) only when the file offset, the length and the
 //! destination are all 16 KiB aligned (the virtual-memory page size), and a
 //! repeated aligned read stays cold; an unaligned read is silently served
-//! through the macOS file cache and leaves the range cached. Stock safetensors tensors
-//! start at unaligned offsets, so a stock-layout read always warms the cache.
+//! through the macOS file cache and leaves the range in it. Stock safetensors tensors
+//! start at unaligned offsets, so a stock-layout read always warms the macOS file cache.
 
 use std::fs::{File, OpenOptions};
 use std::os::fd::AsRawFd;

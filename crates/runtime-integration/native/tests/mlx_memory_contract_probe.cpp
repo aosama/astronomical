@@ -2,7 +2,7 @@
 //
 // Purpose: the Astronomical memory policy in
 // crates/runtime-integration/src/mlx_runtime/memory_policy.rs makes claims
-// about patched-MLX allocator behavior (MLX buffer-cache limits, peak reset, lazy
+// about patched-MLX allocator behavior (MLX buffer cache limits, peak reset, lazy
 // evaluation boundaries, allocation-pressure reclamation, and the
 // active-memory ceiling's rejection semantics with its one-percent transient
 // allowance). Those claims are enforced by native C++ code inside MLX, so
@@ -139,7 +139,7 @@ void require_lazy_evaluation_boundary(const Stream& gpu_stream) {
       "lazy graph construction allocated the final evaluated payload before evaluation");
   require_condition(
       after_graph.mlx_buffer_cache_bytes == before_graph.mlx_buffer_cache_bytes,
-      "lazy graph construction changed MLX buffer-cache bytes before evaluation");
+      "lazy graph construction changed MLX buffer cache bytes before evaluation");
 
   lazy_sum.eval();
   synchronize(gpu_stream);
@@ -153,7 +153,7 @@ void require_lazy_evaluation_boundary(const Stream& gpu_stream) {
   print_counters("lazy_evaluation_boundary", after_evaluation);
 }
 
-void require_peak_reset_and_cache_release(const Stream& gpu_stream) {
+void require_peak_reset_and_mlx_buffer_cache_release(const Stream& gpu_stream) {
   clear_mlx_buffer_cache();
   reset_peak_memory();
   const auto baseline_counters = read_memory_counters();
@@ -175,30 +175,30 @@ void require_peak_reset_and_cache_release(const Stream& gpu_stream) {
       "dropping evaluated array owners did not restore baseline active bytes");
   require_condition(
       after_owner_drop.mlx_buffer_cache_bytes > 0,
-      "dropping evaluated array owners did not retain reclaimable MLX buffer-cache bytes");
+      "dropping evaluated array owners did not retain reclaimable MLX buffer cache bytes");
   clear_mlx_buffer_cache();
-  const auto after_cache_clear = read_memory_counters();
+  const auto after_mlx_buffer_cache_clear = read_memory_counters();
   require_condition(
-      after_cache_clear.active_bytes == baseline_counters.active_bytes,
+      after_mlx_buffer_cache_clear.active_bytes == baseline_counters.active_bytes,
       "clearing the MLX buffer cache changed baseline active bytes after owner drop");
-  require_condition(after_cache_clear.mlx_buffer_cache_bytes == 0, "clearing the MLX buffer cache retained bytes");
-  print_counters("peak_reset_and_mlx_buffer_cache_release", after_cache_clear);
+  require_condition(after_mlx_buffer_cache_clear.mlx_buffer_cache_bytes == 0, "clearing the MLX buffer cache retained bytes");
+  print_counters("peak_reset_and_mlx_buffer_cache_release", after_mlx_buffer_cache_clear);
 }
 
-void require_cache_reuse(const Stream& gpu_stream) {
+void require_mlx_buffer_cache_reuse(const Stream& gpu_stream) {
   clear_mlx_buffer_cache();
   {
     auto first_graph = evaluated_graph(gpu_stream);
     (void)first_graph;
   }
   const auto before_reuse = read_memory_counters();
-  require_condition(before_reuse.mlx_buffer_cache_bytes > 0, "MLX buffer cache reuse phase has no cached allocation");
+  require_condition(before_reuse.mlx_buffer_cache_bytes > 0, "MLX buffer cache reuse phase has no allocation retained in it");
   {
     auto replacement_graph = evaluated_graph(gpu_stream);
     const auto during_reuse = read_memory_counters();
     require_condition(
         during_reuse.mlx_buffer_cache_bytes < before_reuse.mlx_buffer_cache_bytes,
-        "same-shaped evaluated allocation did not consume MLX buffer-cache bytes");
+        "same-shaped evaluated allocation did not consume MLX buffer cache bytes");
   }
   const auto after_reuse = read_memory_counters();
   require_condition(
@@ -208,7 +208,7 @@ void require_cache_reuse(const Stream& gpu_stream) {
   print_counters("mlx_buffer_cache_reuse", after_reuse);
 }
 
-void require_zero_cache_limit(const Stream& gpu_stream) {
+void require_zero_mlx_buffer_cache_limit(const Stream& gpu_stream) {
   clear_mlx_buffer_cache();
   const auto previous_mlx_buffer_cache_limit_bytes = set_mlx_buffer_cache_limit(0);
   {
@@ -218,12 +218,12 @@ void require_zero_cache_limit(const Stream& gpu_stream) {
   const auto after_owner_drop = read_memory_counters();
   require_condition(
       after_owner_drop.mlx_buffer_cache_bytes == 0,
-      "zero MLX buffer-cache limit retained bytes after evaluated array owners were dropped");
+      "zero MLX buffer cache limit retained bytes after evaluated array owners were dropped");
   set_mlx_buffer_cache_limit(previous_mlx_buffer_cache_limit_bytes);
   print_counters("zero_mlx_buffer_cache_limit", after_owner_drop);
 }
 
-void require_allocation_triggered_cache_reclamation(const Stream& gpu_stream) {
+void require_allocation_triggered_mlx_buffer_cache_reclamation(const Stream& gpu_stream) {
   clear_mlx_buffer_cache();
   const auto previous_mlx_buffer_cache_limit_bytes = set_mlx_buffer_cache_limit(kMlxBufferCacheLimitBytes);
   {
@@ -238,7 +238,7 @@ void require_allocation_triggered_cache_reclamation(const Stream& gpu_stream) {
   const auto after_lowering = read_memory_counters();
   require_condition(
       after_lowering.mlx_buffer_cache_bytes == before_lowering.mlx_buffer_cache_bytes,
-      "lowering the MLX buffer-cache limit reclaimed bytes without a later allocation");
+      "lowering the MLX buffer cache limit reclaimed bytes without a later allocation");
   {
     auto incompatible_graph = zeros(
         Shape{static_cast<ShapeElem>(kGraphDimension * 2), static_cast<ShapeElem>(kGraphDimension)},
@@ -250,10 +250,10 @@ void require_allocation_triggered_cache_reclamation(const Stream& gpu_stream) {
   const auto after_allocation = read_memory_counters();
   require_condition(
       after_allocation.mlx_buffer_cache_bytes < after_lowering.mlx_buffer_cache_bytes,
-      "a later incompatible allocation did not reclaim MLX buffer-cache excess");
+      "a later incompatible allocation did not reclaim MLX buffer cache excess");
   set_mlx_buffer_cache_limit(previous_mlx_buffer_cache_limit_bytes);
   clear_mlx_buffer_cache();
-  print_counters("allocation_triggered_cache_reclamation", after_allocation);
+  print_counters("allocation_triggered_mlx_buffer_cache_reclamation", after_allocation);
 }
 
 void require_active_memory_limit_rejection(
@@ -383,16 +383,16 @@ void require_strict_active_memory_limit(const Stream& gpu_stream) {
 
     set_memory_limit(kMlxBufferCacheLimitBytes);
     {
-      auto cached_graph = evaluated_graph(gpu_stream);
-      (void)cached_graph;
+      auto retained_evaluated_graph = evaluated_graph(gpu_stream);
+      (void)retained_evaluated_graph;
     }
-    const auto cached_allocation_counters = read_memory_counters();
+    const auto retained_allocation_counters = read_memory_counters();
     require_condition(
-        cached_allocation_counters.mlx_buffer_cache_bytes > 0,
-        "MLX buffer-cache enforcement setup did not retain a reclaimable allocation");
+        retained_allocation_counters.mlx_buffer_cache_bytes > 0,
+        "MLX buffer cache enforcement setup did not retain a reclaimable allocation");
     set_memory_limit(kActiveMemoryEnforcementLimitBytes);
     require_active_memory_limit_rejection(
-        "cached_buffer_reuse", kOversizedAllocationBytes, [] {
+        "mlx_buffer_cache_buffer_reuse", kOversizedAllocationBytes, [] {
       (void)metal::allocator().malloc(kOversizedAllocationBytes);
     });
 
@@ -454,7 +454,7 @@ void require_async_evaluation_cleanup_boundary(const Stream& gpu_stream) {
     const auto after_synchronized_cleanup = read_memory_counters();
     require_condition(
         after_synchronized_cleanup.mlx_buffer_cache_bytes == 0,
-        "synchronized async cleanup retained reclaimable MLX buffer-cache bytes");
+        "synchronized async cleanup retained reclaimable MLX buffer cache bytes");
     require_condition(
         after_synchronized_cleanup.active_bytes > baseline_counters.active_bytes,
         "synchronized async cleanup released the live asynchronous result");
@@ -467,7 +467,7 @@ void require_async_evaluation_cleanup_boundary(const Stream& gpu_stream) {
       "dropping the asynchronous result did not restore baseline active bytes");
   require_condition(
       after_owner_drop.mlx_buffer_cache_bytes == 0,
-      "final asynchronous owner cleanup retained MLX buffer-cache bytes");
+      "final asynchronous owner cleanup retained MLX buffer cache bytes");
   print_counters("async_evaluation_owners_dropped", after_owner_drop);
 }
 
@@ -508,14 +508,14 @@ void run_probe() {
   reset_peak_memory();
   print_counters("baseline", read_memory_counters());
   require_lazy_evaluation_boundary(gpu_stream);
-  require_peak_reset_and_cache_release(gpu_stream);
-  require_cache_reuse(gpu_stream);
-  require_zero_cache_limit(gpu_stream);
-  require_allocation_triggered_cache_reclamation(gpu_stream);
+  require_peak_reset_and_mlx_buffer_cache_release(gpu_stream);
+  require_mlx_buffer_cache_reuse(gpu_stream);
+  require_zero_mlx_buffer_cache_limit(gpu_stream);
+  require_allocation_triggered_mlx_buffer_cache_reclamation(gpu_stream);
   require_async_evaluation_cleanup_boundary(gpu_stream);
   // Reach the exact allocator boundary before the rejected-tape contract. MLX
   // may retain a tiny live bookkeeping allocation after that rejection even
-  // though every array owner and MLX buffer-cache entry has been released.
+  // though every array owner and MLX buffer cache entry has been released.
   require_strict_active_memory_limit(gpu_stream);
   require_evaluation_rejection_preserves_prior_tape_work(gpu_stream);
   synchronize(gpu_stream);

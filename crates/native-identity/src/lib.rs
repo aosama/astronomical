@@ -1,5 +1,5 @@
 //! Native build identity: the fingerprint shared by the Cargo
-//! build scripts, the standalone native-build tool, and CI cache keys.
+//! build scripts, the standalone native-build tool, and CI `github_actions_cache` keys.
 //!
 //! Ownership rationale: this logic previously lived in a POSIX shell script
 //! that every consumer had to spawn as a subprocess; the Cargo build scripts

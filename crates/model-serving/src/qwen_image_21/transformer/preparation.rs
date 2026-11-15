@@ -213,7 +213,7 @@ fn build_rope_tables(
 }
 
 /// The prefix segments and additive masks every block attends through, plus the
-/// prefix length the KV cache and modulation row selection share.
+/// prefix length the `astro_image_prefix_key_value_cache` and modulation row selection share.
 struct AttentionStructure {
     segments: Vec<AttentionSegment>,
     segment_masks: Vec<MlxArray>,

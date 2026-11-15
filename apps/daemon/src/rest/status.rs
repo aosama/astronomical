@@ -195,7 +195,7 @@ fn neural_engine_session_facts(
     })
 }
 
-/// Attaches the astro-ssd-prompt-cache hit summary derived from the worker's stats
+/// Attaches the astro SSD prompt cache hit summary derived from the worker's stats
 /// event.
 fn attach_serving_and_astro_ssd_prompt_cache_facts(
     status_json: &mut serde_json::Value,

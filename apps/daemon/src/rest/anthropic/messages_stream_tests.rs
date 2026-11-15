@@ -84,7 +84,7 @@ fn should_open_one_block_per_kind_and_close_it_before_the_next() {
 }
 
 #[test]
-fn should_report_cached_input_separately_in_the_final_usage() {
+fn should_report_input_restored_from_the_astro_ssd_prompt_cache_separately_in_the_final_usage() {
     let (stream_events, _) = encoded_stream(vec![completed_event(
         ChatGenerationCompletionReason::MaximumOutputTokens,
     )]);

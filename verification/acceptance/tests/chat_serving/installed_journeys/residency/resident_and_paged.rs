@@ -88,7 +88,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
             Some(ExpertMemoryMode::Resident),
             "startup admission must seat complete experts when the ceiling covers weights plus headroom"
         );
-        let native_cache_statistics_before_request = qwen3_5_engine
+        let astro_expert_cache_statistics_before_request = qwen3_5_engine
             .astro_expert_cache_statistics_for_tests()
             .await
             .expect("the resident model should expose expert statistics");
@@ -101,7 +101,7 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
             "complete-residency-fit",
         )
         .await;
-        let native_cache_statistics_after_request = qwen3_5_engine
+        let astro_expert_cache_statistics_after_request = qwen3_5_engine
             .astro_expert_cache_statistics_for_tests()
             .await
             .expect("the resident model should retain expert statistics");
@@ -112,13 +112,13 @@ async fn should_keep_the_complete_sparse_model_resident_when_idle_memory_is_suff
             "after Romeo the model must remain fully resident"
         );
         assert_eq!(
-            native_cache_statistics_after_request.disk_page_load_count,
-            native_cache_statistics_before_request.disk_page_load_count,
+            astro_expert_cache_statistics_after_request.disk_page_load_count,
+            astro_expert_cache_statistics_before_request.disk_page_load_count,
             "resident inference must not stream expert pages from SSD"
         );
         assert_eq!(
-            native_cache_statistics_after_request.disk_batch_load_count,
-            native_cache_statistics_before_request.disk_batch_load_count,
+            astro_expert_cache_statistics_after_request.disk_batch_load_count,
+            astro_expert_cache_statistics_before_request.disk_batch_load_count,
             "resident inference must not batch-load expert pages from SSD"
         );
         eprintln!("[complete-residency-fit] status=success");

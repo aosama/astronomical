@@ -6,7 +6,7 @@
 
 use sha2::{Digest, Sha256};
 
-/// Canonical non-token causal input introduced by one astro-ssd-prompt-cache block.
+/// Canonical non-token causal input introduced by one astro SSD prompt cache block.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AstroSsdPromptCacheBlockCausalInput {
     canonical_digest: Option<[u8; 32]>,

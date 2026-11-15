@@ -4,7 +4,7 @@
 //! shard index and a cache of parsed safetensors headers, then validates its
 //! geometry. An Atlas keeps those tensors in layer record files instead, so
 //! this module hands the same builder an index that points the expert
-//! tensors at their layer files and a header cache already holding one
+//! tensors at their layer files and a safetensors header cache already holding one
 //! synthesized header per layer file. Every tensor then passes through the
 //! same shape, bit-width and mode validation as a stock checkpoint. The only
 //! Atlas-specific fact the plans carry afterwards is the record stride: in a
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use astronomical_expert_atlas::{AtlasExpertLayer, AtlasManifest};
 
-use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
+use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache;
 use crate::expert_paging::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertLayerPlan,
 };
@@ -119,14 +119,15 @@ fn build_atlas_expert_layer_plans(
     let mut layer_plans = Vec::with_capacity(decoder_layer_count);
     for decoder_layer_index in 0..decoder_layer_count {
         let layer_prefix = layer_prefix(decoder_layer_index);
-        let mut layer_plan = build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
-            model_dir,
-            &atlas_weight_map,
-            &atlas_stored_names,
-            &layer_prefix,
-            config,
-            &mut safetensors_header_cache,
-        )?;
+        let mut layer_plan =
+            build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache(
+                model_dir,
+                &atlas_weight_map,
+                &atlas_stored_names,
+                &layer_prefix,
+                config,
+                &mut safetensors_header_cache,
+            )?;
         apply_record_strides(&mut layer_plan, &record_stride_by_layer_file)?;
         layer_plans.push(layer_plan);
     }

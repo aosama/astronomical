@@ -19,8 +19,8 @@ use crate::qwen3_5_core::text::sampler;
 use crate::qwen3_5_streaming::model::request_refusal;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
-/// The cache-derived starting cursor of a generation session: what the
-/// persistent prompt cache restored, and where prefill therefore resumes.
+/// The starting cursor of a generation session, derived from the `astro_ssd_prompt_cache`: what the
+/// `astro_ssd_prompt_cache` restored, and where prefill therefore resumes.
 struct RestoredPromptPrefixSession {
     astro_ssd_prompt_cache_token_count: u32,
     prefill_cursor: usize,
@@ -163,7 +163,7 @@ impl Qwen3_5EngineState {
     }
 
     /// Assembles the admitted session: sampling state, prompt metadata, visual
-    /// identity and embeddings, cached-prefix restore, and the active-request
+    /// identity and embeddings, `astro_ssd_prompt_cache` prefix restore, and the active-request
     /// installation. Runs after admission; every failure here resumes expert
     /// retention in the caller.
     fn assemble_admitted_generation_session(
@@ -190,7 +190,7 @@ impl Qwen3_5EngineState {
         let has_processed_visual_images = inference_request.has_processed_visual_images();
         let astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some();
         // Persistent snapshots currently contain target decoder state only. Prefer target-only
-        // execution whenever the cache is available so optional prediction artifacts retain
+        // execution whenever the `astro_ssd_prompt_cache` is available so optional prediction artifacts retain
         // prompt reuse without restoring an incompatible shifted history.
         let can_use_astro_ssd_prompt_cache =
             astro_ssd_prompt_cache_is_available && !has_precomputed_visual_embeddings;
@@ -220,7 +220,7 @@ impl Qwen3_5EngineState {
                 self.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;
-        let restored_prompt_prefix_session = self.restore_cached_prompt_prefix_session(
+        let restored_prompt_prefix_session = self.restore_astro_ssd_prompt_cache_prefix_session(
             inference_request,
             &prompt_token_ids,
             &astro_ssd_prompt_cache_block_causal_inputs,
@@ -354,11 +354,11 @@ impl Qwen3_5EngineState {
         ))
     }
 
-    /// Restores the cached prompt prefix, when the persistent prompt cache can
+    /// Restores the prompt prefix held in the `astro_ssd_prompt_cache`, when it can
     /// serve this request, and derives the session's starting cursor from the
     /// outcome.
     #[allow(clippy::too_many_arguments)]
-    fn restore_cached_prompt_prefix_session(
+    fn restore_astro_ssd_prompt_cache_prefix_session(
         &mut self,
         inference_request: &Qwen3_5InferenceRequest,
         prompt_token_ids: &[u32],
@@ -369,7 +369,7 @@ impl Qwen3_5EngineState {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<RestoredPromptPrefixSession, InferenceEngineError> {
         if self.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
-            // Split the borrow: take the cache out temporarily so the engine
+            // Split the borrow: take the `astro_ssd_prompt_cache` out temporarily so the engine
             // state (including counters) can be mutated as &mut self while the
             // disk store is used as a plain borrowed reference.
             let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.take();
@@ -390,7 +390,7 @@ impl Qwen3_5EngineState {
                 };
             // Restores can fail closed for data correctness, but the disk-store owner must
             // remain installed for the next independent request. Returning while it is
-            // temporarily taken would silently turn later traffic into cache-disabled mode.
+            // temporarily taken would silently turn later traffic into a mode with the `astro_ssd_prompt_cache` disabled.
             self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             let restore_outcome = restore_result?;
             if let Some(restore_outcome) = restore_outcome {

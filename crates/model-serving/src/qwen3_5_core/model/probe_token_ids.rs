@@ -1,4 +1,4 @@
-//! The token sequence a MLX working-buffer probe runs at load.
+//! The token sequence an MLX working-buffer probe runs at load.
 //!
 //! A probe's cost has to resemble a real prompt's. An expert layer's cost
 //! depends on how many different experts the chunk routes to: a constant

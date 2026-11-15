@@ -1,5 +1,5 @@
 //! The typed vocabulary of the MLX boundary: memory limits, memory snapshots,
-//! error taxonomy, and the MLX buffer-cache reclaim policy constants.
+//! error taxonomy, and the MLX buffer cache reclaim policy constants.
 //!
 //! # Why this module is not behind the `mlx` feature
 //!
@@ -32,7 +32,7 @@ use thiserror::Error;
 /// These values change no kernel setting; both are process-local MLX
 /// guidance. The active-memory value is reused as the process residency-set
 /// limit because worker startup already resolved it against the machine
-/// ceiling. The MLX buffer-cache value independently controls reclaimable
+/// ceiling. The MLX buffer cache value independently controls reclaimable
 /// allocation reuse.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxMemoryLimits {
@@ -41,17 +41,17 @@ pub struct MlxMemoryLimits {
 }
 
 impl MlxMemoryLimits {
-    /// Validates explicit active memory and MLX buffer-cache byte limits.
+    /// Validates explicit active memory and MLX buffer cache byte limits.
     ///
     /// # Errors
     ///
     /// - The active limit must be positive: a zero limit would make every
     ///   allocation request fail the ceiling check.
-    /// - The MLX buffer-cache limit cannot exceed the active limit — the cache
-    ///   holds buffers reclaimed from the active set, so a cache allowed to
+    /// - The MLX buffer cache limit cannot exceed the active limit — the MLX buffer cache
+    ///   holds buffers reclaimed from the active set, so an MLX buffer cache allowed to
     ///   retain more than the process may ever hold is incoherent.
     ///
-    /// MLX treats a zero cache limit as "do not retain freed allocations",
+    /// MLX treats a zero MLX buffer cache limit as "do not retain freed allocations",
     /// which is why zero is accepted here.
     pub fn new(
         active_memory_limit_bytes: usize,
@@ -82,7 +82,7 @@ impl MlxMemoryLimits {
         self.active_memory_limit_bytes
     }
 
-    /// Returns the MLX buffer cache-reclamation threshold in bytes.
+    /// Returns the MLX buffer cache reclamation threshold in bytes.
     #[must_use]
     pub const fn mlx_buffer_cache_limit_bytes(self) -> usize {
         self.mlx_buffer_cache_limit_bytes
@@ -122,11 +122,11 @@ pub struct MlxMemorySnapshot {
     pub(crate) peak_memory_bytes: usize,
 }
 
-/// Reclaimable MLX buffer-cache bytes that justify an IOGPU-visible clear.
+/// Reclaimable MLX buffer cache bytes that justify an IOGPU-visible clear.
 ///
 /// Performance conclusion memorialized from direct-MLX streaming
 /// measurements: clearing after every prefill chunk can stall WindowServer
-/// (the clear is visible to the graphics subsystem), while leaving the cache
+/// (the clear is visible to the graphics subsystem), while leaving the MLX buffer cache
 /// unbounded reproduced a 20 GB throughput cliff. This threshold is a
 /// portable byte floor, not a machine-specific RAM fraction, so the policy
 /// behaves identically on every Mac.
@@ -136,7 +136,7 @@ pub const MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES: usize = 256_000_000;
 ///
 /// Boundary semantics: exactly at the threshold counts as reclaimable. The
 /// beside-source tests pin that boundary so a future refactor cannot quietly
-/// strand the cache at the policy edge.
+/// strand the MLX buffer cache at the policy edge.
 #[must_use]
 pub const fn mlx_buffer_cache_exceeds_reclaim_threshold(
     mlx_buffer_cache_bytes: usize,

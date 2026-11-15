@@ -39,7 +39,9 @@ fn should_not_classify_a_storage_quota_failure_as_retryable_memory_pressure() {
 #[test]
 fn should_not_classify_a_filesystem_failure_as_retryable_memory_pressure() {
     let publication_error = AstroSsdPromptCacheDiskStoreError::OpenTempFile {
-        temp_file_path: PathBuf::from("fictional-cache/staging/sequence.safetensors"),
+        temp_file_path: PathBuf::from(
+            "fictional-astro-ssd-prompt-cache/staging/sequence.safetensors",
+        ),
         source: io::Error::other("fictional filesystem failure"),
     };
 

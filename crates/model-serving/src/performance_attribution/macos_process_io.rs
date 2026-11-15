@@ -80,7 +80,7 @@ impl MacosProcessIoSnapshot {
 /// Process-attributed physical disk input/output during one measured interval.
 ///
 /// “Process-attributed” is deliberate: these values are not scoped to expert
-/// files. Tokenizer, astro-ssd-prompt-cache, logging, or unrelated worker reads during the
+/// files. Tokenizer, astro SSD prompt cache, logging, or unrelated worker reads during the
 /// same report interval may contribute. They are still the correct companion to
 /// logical `pread` bytes because they reveal whether macOS needed physical I/O.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

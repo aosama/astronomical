@@ -323,15 +323,14 @@ fn resolve_hugging_face_snapshot_blob_path(
     required_file_path: &Path,
     required_file_name: &str,
 ) -> Result<Option<PathBuf>, ArtifactValidationError> {
-    let Some(model_astro_ssd_prompt_cache_directory) =
-        huggingface_hub_cache_directory(model_directory)
+    let Some(huggingface_hub_model_directory) = huggingface_hub_cache_directory(model_directory)
     else {
         return Ok(None);
     };
 
     // Canonicalize both sides before comparison. Path text such as `../` or a
     // nested symlink cannot make an outside target appear to be inside `blobs/`.
-    let blob_directory = model_astro_ssd_prompt_cache_directory.join("blobs");
+    let blob_directory = huggingface_hub_model_directory.join("blobs");
     let blob_directory_metadata = fs::symlink_metadata(&blob_directory).map_err(|source| {
         ArtifactValidationError::InspectRequiredFile {
             file_name: required_file_name.to_owned(),
@@ -361,11 +360,11 @@ fn resolve_hugging_face_snapshot_blob_path(
         return Ok(Some(canonical_blob_path));
     }
 
-    // Newer Hugging Face caches keep large immutable objects once in the hub's
+    // Newer Hugging Face hub caches keep large immutable objects once in the hub's
     // shared blob store and link them from each entry's own blob names, so a
     // snapshot file can legitimately resolve past this entry's `blobs/`. Accept
     // that layout only for a blob the snapshot tree record authenticates.
-    if let Some(hub_root_directory) = model_astro_ssd_prompt_cache_directory.parent()
+    if let Some(hub_root_directory) = huggingface_hub_model_directory.parent()
         && let Some(verified_shared_blob_path) =
             shared_blob_resolution::resolve_verified_shared_hub_blob_path(
                 hub_root_directory,
@@ -387,12 +386,11 @@ fn resolve_hugging_face_snapshot_blob_path(
 }
 
 pub(crate) fn hugging_face_snapshot_model_id(model_directory: &Path) -> Option<String> {
-    let model_astro_ssd_prompt_cache_directory = huggingface_hub_cache_directory(model_directory)?;
-    let cache_directory_name = model_astro_ssd_prompt_cache_directory
-        .file_name()?
-        .to_str()?;
-    let hub_repository_id =
-        astronomical_config::decode_huggingface_hub_cache_directory_name(cache_directory_name)?;
+    let huggingface_hub_model_directory = huggingface_hub_cache_directory(model_directory)?;
+    let huggingface_hub_directory_name = huggingface_hub_model_directory.file_name()?.to_str()?;
+    let hub_repository_id = astronomical_config::decode_huggingface_hub_cache_directory_name(
+        huggingface_hub_directory_name,
+    )?;
     Some(
         hub_repository_id
             .split_once('/')
@@ -411,12 +409,12 @@ fn huggingface_hub_cache_directory(model_directory: &Path) -> Option<&Path> {
     {
         return None;
     }
-    let model_astro_ssd_prompt_cache_directory = snapshots_directory.parent()?;
-    let cache_directory_name = model_astro_ssd_prompt_cache_directory
-        .file_name()?
-        .to_str()?;
-    astronomical_config::decode_huggingface_hub_cache_directory_name(cache_directory_name)?;
-    Some(model_astro_ssd_prompt_cache_directory)
+    let huggingface_hub_model_directory = snapshots_directory.parent()?;
+    let huggingface_hub_directory_name = huggingface_hub_model_directory.file_name()?.to_str()?;
+    astronomical_config::decode_huggingface_hub_cache_directory_name(
+        huggingface_hub_directory_name,
+    )?;
+    Some(huggingface_hub_model_directory)
 }
 
 fn open_read_only_without_following_symlinks(file_path: &Path) -> io::Result<File> {

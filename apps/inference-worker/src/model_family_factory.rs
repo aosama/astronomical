@@ -47,7 +47,7 @@ pub struct ModelFamilyFactory {
     effective_mlx_memory_ceiling_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
     astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
-    /// `None` leaves programs uncached, which costs a slower load and nothing else.
+    /// `None` keeps programs out of the `astro_neural_engine_program_cache`, which costs a slower load and nothing else.
     neural_engine_program_directory: Option<PathBuf>,
     performance_attribution_enabled: bool,
     decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
@@ -372,7 +372,7 @@ impl
         self.effective_mlx_memory_ceiling_bytes =
             usize::try_from(effective_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
         // MLX limits are process-global, so every replacement runtime must reuse the exact
-        // policy acknowledged by the loaded engine rather than derive a fresh cache limit.
+        // policy acknowledged by the loaded engine rather than derive a fresh MLX buffer cache limit.
         self.mlx_buffer_cache_limit_bytes =
             usize::try_from(mlx_buffer_cache_limit_bytes).unwrap_or(usize::MAX);
     }

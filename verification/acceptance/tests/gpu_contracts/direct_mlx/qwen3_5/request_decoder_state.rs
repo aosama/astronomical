@@ -94,7 +94,7 @@ fn should_create_qwen_request_state_from_the_shared_astro_decoder_state_cache_la
         RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
             astro_ssd_prompt_cache_model_contract.astro_decoder_state_cache_layout(),
         )
-        .expect("the frozen Qwen astro-decoder-state-cache layout should create request state");
+        .expect("the frozen Qwen astro decoder state cache layout should create request state");
 
     assert_eq!(
         request_decoder_state.layer_count(),
@@ -205,7 +205,7 @@ fn should_project_first_use_composite_state_from_validated_tensor_layout() {
                 ),
             ]),
         ])
-        .expect("the synthetic composite astro-decoder-state-cache layout should validate");
+        .expect("the synthetic composite astro decoder state cache layout should validate");
     let request_decoder_state =
         RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
             &astro_decoder_state_cache_layout,
@@ -240,7 +240,7 @@ fn should_project_zero_fixed_state_growth_after_composite_state_is_materialized(
                 ),
             ]),
         ])
-        .expect("the synthetic composite astro-decoder-state-cache layout should validate");
+        .expect("the synthetic composite astro decoder state cache layout should validate");
     let request_decoder_state =
         RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
             &astro_decoder_state_cache_layout,

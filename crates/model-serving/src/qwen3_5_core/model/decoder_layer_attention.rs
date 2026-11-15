@@ -47,7 +47,7 @@ impl Qwen3_5ModelBase {
             f32::from_bits(self.config.rms_norm_epsilon_bits()),
         )?;
         let attention_forward_span_started_at = performance_attribution.begin_operation_span();
-        // Decoder-cache enum shape is part of model correctness. A linear
+        // The `astro_decoder_state_cache` enum shape is part of model correctness. A linear
         // attention layer must own convolution/recurrent state; a full-attention
         // layer must own append-only key/value state. Mismatch is never recoverable
         // by choosing the other branch.

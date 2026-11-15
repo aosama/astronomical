@@ -4,7 +4,7 @@
 //!
 //! 1. **Avoided storage bytes.** A resident layer's forward used to credit the
 //!    whole layer payload as "storage reads avoided". The honest counterfactual
-//!    is what a no-cache server would have read for *this route*: the payload of
+//!    is what a server with no `astro_expert_cache` would have read for *this route*: the payload of
 //!    the distinct routed experts (a decode token's routed set; a chunk's routed
 //!    union). A route touching every expert equals exactly one layer payload and
 //!    no route can exceed it.
@@ -52,7 +52,7 @@ impl Qwen3_5Model {
     /// Accounts one hit served from a routed subset of a seated layer: a
     /// decode token without the fused kernel is a covered hit, and the subset
     /// page holds exactly the routed union (this token's set or the chunk's
-    /// union), so its payload is the no-cache baseline for this forward.
+    /// union), so its payload is the baseline of a read with no `astro_expert_cache` for this forward.
     pub(super) fn account_resident_subset_hit(
         &self,
         token_count: i32,
@@ -73,7 +73,7 @@ impl Qwen3_5Model {
     /// avoided storage read.
     ///
     /// A decode token's top-k experts are distinct, so its assignment count is
-    /// its no-cache read and can be credited now. A chunk's routed union is
+    /// its read with no `astro_expert_cache` and can be credited now. A chunk's routed union is
     /// only known after a host copy this fast path exists to avoid, so the
     /// resident-route deferral records both the chunk's demand and its avoided
     /// bytes from the one post-evaluation copy. Queuing the chunk through both
@@ -110,7 +110,7 @@ impl Qwen3_5Model {
 
     /// Records one decode layer-token served wholly from a seated complete
     /// layer whose packed page multiplies without a transient decode: a fully
-    /// covered hit for the hit rate, plus the no-cache read it avoided (the
+    /// covered hit for the hit rate, plus the read with no `astro_expert_cache` that it avoided (the
     /// token's routed experts only, not the layer payload).
     pub(super) fn record_resident_layer_decode_hit(
         &self,
@@ -158,7 +158,7 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Records the no-cache read a resident route avoided, in both the opt-in
+    /// Records the read with no `astro_expert_cache` that a resident route avoided, in both the opt-in
     /// attribution counter and the always-on session counter, so the two can
     /// never disagree about the same forward. Callers that already hold the
     /// routed-union page's payload record that value directly instead.

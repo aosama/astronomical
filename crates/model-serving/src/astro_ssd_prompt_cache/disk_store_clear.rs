@@ -1,4 +1,4 @@
-//! Safe deletion of global or model-scoped persistent astro-ssd-prompt-cache trees.
+//! Safe deletion of global or model-scoped persistent astro SSD prompt cache trees.
 //!
 //! The worker is the sole owner of this operation. The daemon sends an IPC
 //! command and never reads or mutates astro SSD prompt cache files directly.
@@ -17,7 +17,7 @@ use super::disk_store_index::AstroSsdPromptCacheDiskStoreIndex;
 
 const BLOCKS_DIRECTORY_NAME: &str = "blocks";
 
-/// Measured SSD space and astro-ssd-prompt-cache blocks removed by one clear operation.
+/// Measured SSD space and astro SSD prompt cache blocks removed by one clear operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AstroSsdPromptCacheClearOutcome {
     pub model_id: Option<String>,

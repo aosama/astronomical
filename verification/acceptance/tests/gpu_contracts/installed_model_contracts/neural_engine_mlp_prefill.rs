@@ -493,7 +493,7 @@ async fn compare_prefill_with_kept_programs() {
     let astro_neural_engine_program_cache_directory =
         std::env::temp_dir().join(ASTRO_NEURAL_ENGINE_PROGRAM_CACHE_DIRECTORY_NAME);
     eprintln!(
-        "[{JOURNEY_NAME}] MEASURED cache_existed_at_start={}",
+        "[{JOURNEY_NAME}] MEASURED astro_neural_engine_program_cache_existed_at_start={}",
         astro_neural_engine_program_cache_directory.is_dir()
     );
     let load_started_at = Instant::now();
@@ -502,7 +502,7 @@ async fn compare_prefill_with_kept_programs() {
         Some(&astro_neural_engine_program_cache_directory),
     );
     eprintln!(
-        "[{JOURNEY_NAME}] MEASURED program_load_s={:.1} cache_gib={:.1} status={status:?}",
+        "[{JOURNEY_NAME}] MEASURED program_load_s={:.1} astro_neural_engine_program_cache_gib={:.1} status={status:?}",
         load_started_at.elapsed().as_secs_f64(),
         directory_size_gibibytes(&astro_neural_engine_program_cache_directory),
     );

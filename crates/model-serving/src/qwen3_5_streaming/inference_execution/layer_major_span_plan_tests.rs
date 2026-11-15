@@ -23,7 +23,7 @@ fn span(
 }
 
 #[test]
-fn should_run_the_cached_chunks_and_leave_the_tail_token_alone() {
+fn should_run_the_astro_ssd_prompt_cache_block_chunks_and_leave_the_tail_token_alone() {
     // The engine ran this 4,350-token prompt as 1,792 + 2,557 + 1 tokens.
     let span_plan = layer_major_span_plan(0, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS))
         .expect("two spans should make a layer-major plan");

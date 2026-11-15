@@ -1,4 +1,4 @@
-//! Both ways of prefilling a prompt with astro-ssd-prompt-cache checkpoints, for the
+//! Both ways of prefilling a prompt with astro SSD prompt cache checkpoints, for the
 //! test that holds them bit-identical (issue #1985).
 //!
 //! The engine publishes a block from the decoder state at each boundary. A
@@ -28,7 +28,7 @@ pub type PublishedBoundarySnapshot = (usize, BTreeMap<String, Vec<f32>>);
 impl Qwen3_5Model {
     /// Prefills `token_ids` layer by layer over the spans the engine plans
     /// for `chunk_token_count`-token chunks and `block_token_count`-token
-    /// cache blocks, returning every boundary it would publish.
+    /// `astro_ssd_prompt_cache` blocks, returning every boundary it would publish.
     #[doc(hidden)]
     pub fn prefill_layer_major_with_astro_ssd_prompt_cache_checkpoints(
         &self,

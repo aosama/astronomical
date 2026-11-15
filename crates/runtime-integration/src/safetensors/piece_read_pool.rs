@@ -3,11 +3,11 @@
 //! # Why a long-lived pool
 //!
 //! Starting scoped threads for every span cost more than it saved on pages
-//! the file cache still holds: on a 122B 2-bit model, an 8-expert page read
-//! from the cache went from 0.65 ms (serial) to 0.80 ms with freshly started
+//! the macOS file cache still holds: on a 122B 2-bit model, an 8-expert page read
+//! from the macOS file cache went from 0.65 ms (serial) to 0.80 ms with freshly started
 //! workers, while the same workers took the page read from the SSD from 4.18
 //! to 2.64 ms. Waking a parked thread is far cheaper than starting one: with
-//! this pool the same page takes 0.47 ms from the cache and 2.45 ms from the
+//! this pool the same page takes 0.47 ms from the macOS file cache and 2.45 ms from the
 //! SSD.
 //!
 //! # Why raw pointers are sound here

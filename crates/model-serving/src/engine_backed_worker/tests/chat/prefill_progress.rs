@@ -12,7 +12,7 @@ use astronomical_ipc_protocol::{
 use tokio::io::{duplex, split};
 #[tokio::test]
 #[expect(clippy::too_many_lines)]
-async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_cached_usage()
+async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_astro_ssd_prompt_cache_usage()
  {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(15),
@@ -127,7 +127,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             assert_eq!(elapsed_millis, 0);
             assert_eq!(completed_prefill_chunk_tokens, None);
         }
-        other_event => panic!("expected initial uncached prefill progress, got {other_event:?}"),
+        other_event => panic!(
+            "expected initial prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
+        ),
     }
 
     let first_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
@@ -176,7 +178,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 })
             );
         }
-        other_event => panic!("expected uncached prefill progress, got {other_event:?}"),
+        other_event => panic!(
+            "expected prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
+        ),
     }
     let second_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
     match second_completed_prefill_progress_event {
@@ -194,7 +198,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             assert_eq!(elapsed_millis, 1_000);
             assert_eq!(completed_prefill_chunk_tokens, Some(2_048));
         }
-        other_event => panic!("expected uncached prefill progress, got {other_event:?}"),
+        other_event => panic!(
+            "expected prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
+        ),
     }
     let _first_output_event = next_event(&mut daemon_reader).await;
     let _second_output_event = next_event(&mut daemon_reader).await;

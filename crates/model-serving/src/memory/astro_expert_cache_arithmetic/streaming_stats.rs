@@ -142,7 +142,7 @@ impl ExpertStreamingSessionCounters {
 ///
 /// The honest counterfactual is the payload of the *distinct* routed experts
 /// — the decode token's routed set, or the chunk's routed union — never the
-/// whole layer payload: a no-cache server streams exactly the routed union
+/// whole layer payload: a server without an `astro_expert_cache` streams exactly the routed union
 /// (`stream_operation_local_routed_experts`), so a route touching every
 /// expert of the layer equals exactly one layer payload and no route can
 /// exceed it (issue #1715).

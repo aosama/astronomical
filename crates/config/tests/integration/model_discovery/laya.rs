@@ -120,7 +120,7 @@ fn should_discover_each_bundled_checkpoint_as_its_own_model() {
 }
 
 #[test]
-fn should_discover_bundled_checkpoints_inside_a_hugging_face_cache_snapshot() {
+fn should_discover_bundled_checkpoints_inside_a_hugging_face_hub_cache_snapshot() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let snapshot_directory = temporary_directory
         .path()

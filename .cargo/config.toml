@@ -9,7 +9,7 @@ warnings = "deny"
 # defaults to the logical CPU count, so any literal value could only cap
 # parallelism (and would hardwire a machine-specific core count). The
 # nightly parallel rustc front-end was measured and rejected: wall time
-# within noise, higher CPU, and an sccache cache-key split.
+# within noise, higher CPU, and a split of the sccache keys.
 
 [alias]
 # Every alias is written as one string, never as a TOML array. Cargo merges
@@ -101,7 +101,7 @@ test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-a
 
 # Dense layer-major checkpoint parity (issue #1985): one Shakespeare prompt
 # prefilled layer by layer and chunk by chunk over the engine's span plan, at
-# 0 and 8 kept layers, must publish identical astro-ssd-prompt-cache boundary state at
+# 0 and 8 kept layers, must publish identical astro SSD prompt cache boundary state at
 # the same positions. About fifteen seconds.
 test-dense-checkpoint-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_publish_the_chunk_path_astro_ssd_prompt_cache_state_from_a_layer_major_prefill"
 
@@ -109,7 +109,7 @@ test-dense-checkpoint-parity = "run -p xtask -- test-run --package astronomical-
 # prompt prefilled one layer at a time and chunk by chunk on the
 # small_sparse_moe_streaming model under an 11 GiB limit, with every layer
 # streamed and with the planned layers kept, must publish identical
-# astro-ssd-prompt-cache boundary state, and one layer at a time must read every
+# astro SSD prompt cache boundary state, and one layer at a time must read every
 # expert exactly once. A span failed on purpose and run again must leave
 # the same state and read only its own layer again. A prompt with stand-in
 # image embeddings, one image split across two spans, must publish the same
@@ -285,7 +285,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 
 # Repository tooling as typed Rust; the subcommand catalog lives in the
 # xtask sources. `cargo xtask app dev` rebuilds the Development app
-# (incremental `app-dev` profile, cached icon and npm install, ad-hoc
+# (incremental `app-dev` profile, icon and npm install reused from the previous build, ad-hoc
 # signing) and swaps it in for the running one, opening it in front; `cargo
 # xtask app dev --background` opens it behind every other window instead,
 # without taking the keyboard, for rebuilding while working in another app;
@@ -337,7 +337,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # MLX runtime into the machine-wide store before Cargo compiles anything.
 # `cargo xtask native-fingerprint --profile core [--target TRIPLE] [--explain]`
 # prints that build's identity; `--cache-environment` prints it with its store
-# entry directory as `$GITHUB_ENV` lines for workflows that cache the entry.
+# entry directory as `$GITHUB_ENV` lines for workflows that save the entry to the `github_actions_cache`.
 # `cargo xtask check-test-channel-isolation` fails when a package test tree
 # reaches for Stable state, and `cargo xtask menu-contracts` runs the menu
 # app's Swift contract tests with the Git credential helper cleared.
@@ -399,7 +399,7 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # `cargo xtask install-verification-tools [--prefix DIR]` installs the pinned
 # cargo-about and sccache prebuilts, SHA-256 verified, into DIR (default
 # `$CARGO_HOME/bin`), and skips any binary already reporting its pinned
-# version. CI points DIR at a cached folder so warm runs download nothing.
+# version. CI points DIR at a folder restored from the `github_actions_cache` so warm runs download nothing.
 xtask = "run -p xtask --"
 
 # Compile the whole workspace across ALL targets without running anything;
@@ -443,14 +443,14 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # strategies; append --filter NAME to pick cases.
 measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
-# Routed-expert page reads from the SSD (not the file cache) through MLX: the
+# Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the
 # production stock-safetensors page load, the same page read again warm, and
 # three expert-major Atlas read shapes, with the Atlas bytes checked equal to
-# the stock bytes. It converts the 16 least-cached expert layers of the
+# the stock bytes. It converts the 16 expert layers least present in the macOS file cache of the
 # installed large sparse MoE model into a temporary Atlas (about 13 GB of
 # scratch space, checked before writing), skips any page `mincore` finds in
-# the file cache, and fails within its 120-second budget when too few
-# uncached pages remain. Append --configuration PATH whose `model_directory`
+# the macOS file cache, and fails within its 120-second budget when too few
+# pages outside the macOS file cache remain. Append --configuration PATH whose `model_directory`
 # names the model when the Development configuration does not discover it;
 # the streaming-latency probes in the same file honour that override too.
 measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts"
@@ -471,13 +471,13 @@ verify-atlas-model-pages = "run -p xtask -- test-run --package astronomical-acce
 measure-decode-residency-attribution = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_to_route_copies_and_storage_reads"
 # The same probe with the model's weight files kept out of the macOS file
 # cache for the whole run: what the reads cost on a Mac whose RAM is the
-# limit, rather than on a larger Mac that caches the model in memory.
+# limit, rather than on a larger Mac that keeps the model in the macOS file cache.
 measure-cold-decode-residency-attribution = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_with_a_cold_file_cache"
 
 # Cold SSD-streaming prefill as production serves it: the in-process engine
 # with request attribution off (attribution synchronizes after every prefill
 # stage and changes how reads overlap), a 500/50 warmup, then a 10,240-token
-# Shakespeare prefill with the model's files kept out of the file cache.
+# Shakespeare prefill with the model's files kept out of the macOS file cache.
 # It asks for 2 output tokens rather than the usual 500 on purpose: the
 # measured time must be prefill alone, and decode has its own probe above.
 # Prints request seconds and prompt tokens per second per request. Pass
@@ -549,7 +549,7 @@ test-neural-engine-journeys = "run -p xtask -- test-run --package astronomical-n
 # Shakespeare fixture. Holds about 20 GiB and takes about six minutes; run it with
 # no model loaded in either instance. Two more journeys share this form:
 # `should_serve_real_dense_prefill_from_kept_programs` measures the production
-# program cache, prefill only (run it twice: the first fills the cache, about three
+# astro Neural Engine program cache, prefill only (run it twice: the first fills that cache, about three
 # minutes, and the second takes about one), and
 # `should_compare_real_answers_across_neural_engine_arms` checks exact answers per
 # engine setup (about eight minutes).

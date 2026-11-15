@@ -404,7 +404,9 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let clear_outcome = astro_ssd_prompt_cache
             .clear_astro_ssd_prompt_cache(model_id.as_deref())
             .map_err(|clear_error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary prompt cache could not be cleared: {clear_error}"),
+                reason: format!(
+                    "folded-ternary astro SSD prompt cache could not be cleared: {clear_error}"
+                ),
             })?;
         Ok(Some(WorkerEvent::AstroSsdPromptCacheCleared {
             model_id: clear_outcome.model_id,

@@ -3,19 +3,19 @@ use astronomical_model_serving::AstroSsdPromptCachePublicationOutcome;
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 
 #[tokio::test]
 async fn should_publish_a_partial_tail_block_and_survive_a_rescan() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let model_contract = qwen3_5_moe::astro_ssd_prompt_cache_model_contract();
     let parent_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let tail_token_count = model_contract.block_token_count() / 2;
@@ -60,9 +60,9 @@ async fn should_publish_a_partial_tail_block_and_survive_a_rescan() {
 
     let rescanned_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should rescan its directory");
+    .expect("the astro SSD prompt cache should rescan its directory");
     assert_eq!(
         rescanned_astro_ssd_prompt_cache.sequence_state_block_count(),
         2
@@ -75,12 +75,12 @@ async fn should_supersede_only_strictly_shorter_tail_siblings() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let model_contract = qwen3_5_moe::astro_ssd_prompt_cache_model_contract();
     let parent_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let full_block_key = parent_block_key
@@ -207,12 +207,12 @@ async fn should_keep_full_block_publication_free_of_tail_supersede() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let root_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let full_child_block_key = root_block_key
         .for_child_block(&block_tokens_for_seed(1))
@@ -258,12 +258,12 @@ async fn should_load_a_published_partial_tail_block_back_by_its_actual_token_cou
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let model_contract = qwen3_5_moe::astro_ssd_prompt_cache_model_contract();
     let parent_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let tail_token_count = model_contract.block_token_count() / 2;

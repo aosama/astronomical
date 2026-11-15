@@ -6,7 +6,7 @@
 //! bump recipe: one warmup
 //! completion absorbs the model load plus the first-use JIT kernel
 //! compilation (its prefill sits an order of magnitude low and must never
-//! enter the comparison), then seven cache-warm completions over the
+//! enter the comparison), then seven completions restored from the astro SSD prompt cache over the
 //! identical full Romeo and Juliet prompt feed the medians. All rates are
 //! server-attributed, never client wall clock: prefill and decode both come
 //! from the daemon's per-request counters, which `/v1/status` only
@@ -136,7 +136,7 @@ async fn run_throughput_journey() {
 /// restore evidence the prefix-adoption A/B compares: the restore-side span
 /// occurrences and total (prefix lookup, KV-block reads, state
 /// reconstruction, recurrent-snapshot read). Arm B (adoption off) shows the
-/// restore spans on every cache-hit completion; arm A (adoption on) shows
+/// restore spans on every completion that hits the astro SSD prompt cache; arm A (adoption on) shows
 /// zero restore-span occurrences — the live state was adopted instead.
 fn report_prefix_adoption_evidence(isolated_home: &std::path::Path) {
     let adoption_arm_enabled = TestRunContext::current()

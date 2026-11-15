@@ -18,7 +18,7 @@ pub(crate) enum ProvisionMode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ProvisionOptions {
-    pub(crate) cache_directory: Option<String>,
+    pub(crate) astro_native_build_cache_dependencies_directory: Option<String>,
     pub(crate) native_build_store_directory: Option<String>,
     /// Tooling and tests substitute fixture manifests and patch lists so
     /// no contract depends on the real pins.
@@ -31,7 +31,7 @@ pub(crate) struct ProvisionOptions {
 
 pub(crate) fn parse_provision_options(arguments: &[String]) -> Result<ProvisionOptions, String> {
     let mut provision_options = ProvisionOptions {
-        cache_directory: None,
+        astro_native_build_cache_dependencies_directory: None,
         native_build_store_directory: None,
         explicit_manifest_path: None,
         explicit_patch_list_path: None,
@@ -100,7 +100,10 @@ fn apply_valued_flag(
         ));
     }
     match flag {
-        "--cache-dir" => provision_options.cache_directory = Some(flag_value.to_owned()),
+        "--cache-dir" => {
+            provision_options.astro_native_build_cache_dependencies_directory =
+                Some(flag_value.to_owned())
+        }
         "--native-build-store-dir" => {
             provision_options.native_build_store_directory = Some(flag_value.to_owned())
         }

@@ -1,10 +1,10 @@
-//! Vision attention padding-zero cache contract: bit-exact against per-call zeros.
+//! Vision attention padding-zero memo contract: bit-exact against per-call zeros.
 //!
 //! The vision tower pads Q/K/V head dimensions from 72 to the fused SDPA width
 //! in every one of its 27 blocks, and the padded tensors differ only by the
 //! attention states — the appended zeros are identical every time (issue #915
-//! item 4i). The retained cache serves those zeros from one array instead of
-//! re-allocating them per pad call. This contract proves the cached padding is
+//! item 4i). The retained memo serves those zeros from one array instead of
+//! re-allocating them per pad call. This contract proves the memoized padding is
 //! bitwise identical to the former per-call zeros-plus-concatenate path and
 //! that a changed padding shape replaces the retained array correctly.
 //!
@@ -33,20 +33,20 @@ const RMS_PAD_TEST_TIMEOUT: Duration = Duration::from_secs(60);
 async fn should_pad_bitwise_identically_to_the_per_call_zeros_path() {
     timeout(
         RMS_PAD_TEST_TIMEOUT,
-        compare_cached_padding_with_per_call_zeros(),
+        compare_memoized_padding_with_per_call_zeros(),
     )
     .await
-    .expect("the padding cache contract test must finish within its timeout");
+    .expect("the padding memo contract test must finish within its timeout");
 }
 
-async fn compare_cached_padding_with_per_call_zeros() {
+async fn compare_memoized_padding_with_per_call_zeros() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
             DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
-        .expect("the padding cache test memory limits should be valid"),
+        .expect("the padding memo test memory limits should be valid"),
     )
     .expect("the direct MLX runtime should initialize");
     let vision_padding_zero_cache = Qwen3_5VisionPaddingZeroCache::new();
@@ -59,7 +59,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
                 0.004,
                 -0.37 + component_index as f32 * 0.11,
             );
-            let cached_padded = vision_padding_zero_cache
+            let memoized_padded = vision_padding_zero_cache
                 .pad_attention_head_dimension(
                     &runtime,
                     &attention_states,
@@ -67,7 +67,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
                     patch_count,
                     FUSED_HEAD_DIMENSION,
                 )
-                .expect("the cached padding should build");
+                .expect("the memoized padding should build");
             let per_call_padded = per_call_zeros_padding(
                 &runtime,
                 &attention_states,
@@ -77,7 +77,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
             );
             assert_bitwise_equal(
                 &runtime,
-                &cached_padded,
+                &memoized_padded,
                 &per_call_padded,
                 &format!("padded component {component_index} at {patch_count} patches"),
             );
@@ -86,7 +86,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
 
     // A different fused width must replace the retained zeros, not reuse them.
     let attention_states = patterned_head_array(&runtime, 64, 0.004, -0.37);
-    let cached_wider_padded = vision_padding_zero_cache
+    let memoized_wider_padded = vision_padding_zero_cache
         .pad_attention_head_dimension(
             &runtime,
             &attention_states,
@@ -94,7 +94,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
             64,
             WIDER_FUSED_HEAD_DIMENSION,
         )
-        .expect("the wider cached padding should build");
+        .expect("the wider memoized padding should build");
     let per_call_wider_padded = per_call_zeros_padding(
         &runtime,
         &attention_states,
@@ -104,7 +104,7 @@ async fn compare_cached_padding_with_per_call_zeros() {
     );
     assert_bitwise_equal(
         &runtime,
-        &cached_wider_padded,
+        &memoized_wider_padded,
         &per_call_wider_padded,
         "padded component at the wider fused width",
     );
@@ -214,32 +214,37 @@ fn patterned_head_array_with_dimension(
 
 /// bf16 payloads convert to f32 losslessly, so f32 vector equality is bitwise
 /// equality of the low-precision payload.
-fn assert_bitwise_equal(runtime: &MlxRuntime, cached: &MlxArray, per_call: &MlxArray, label: &str) {
+fn assert_bitwise_equal(
+    runtime: &MlxRuntime,
+    memoized: &MlxArray,
+    per_call: &MlxArray,
+    label: &str,
+) {
     assert_eq!(
-        cached.shape(),
+        memoized.shape(),
         per_call.shape(),
-        "the cached and per-call {label} shapes must match"
+        "the memoized and per-call {label} shapes must match"
     );
     assert_eq!(
-        cached.dtype(),
+        memoized.dtype(),
         per_call.dtype(),
-        "the cached and per-call {label} dtypes must match"
+        "the memoized and per-call {label} dtypes must match"
     );
-    let cached_values = runtime
-        .astype(cached, MlxDtype::Float32)
-        .expect("the cached output should cast to float32 for comparison")
+    let memoized_values = runtime
+        .astype(memoized, MlxDtype::Float32)
+        .expect("the memoized output should cast to float32 for comparison")
         .to_vec_f32()
-        .expect("the cached output should evaluate as float32");
+        .expect("the memoized output should evaluate as float32");
     let per_call_values = runtime
         .astype(per_call, MlxDtype::Float32)
         .expect("the per-call output should cast to float32 for comparison")
         .to_vec_f32()
         .expect("the per-call output should evaluate as float32");
-    let mismatch_index = cached_values.iter().zip(per_call_values.iter()).position(
-        |(cached_value, per_call_value)| cached_value.to_bits() != per_call_value.to_bits(),
+    let mismatch_index = memoized_values.iter().zip(per_call_values.iter()).position(
+        |(memoized_value, per_call_value)| memoized_value.to_bits() != per_call_value.to_bits(),
     );
     assert!(
         mismatch_index.is_none(),
-        "the cached and per-call {label} must be bitwise identical; first mismatch at index {mismatch_index:?}"
+        "the memoized and per-call {label} must be bitwise identical; first mismatch at index {mismatch_index:?}"
     );
 }

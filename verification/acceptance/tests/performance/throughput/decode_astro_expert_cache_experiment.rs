@@ -40,7 +40,7 @@ impl MeasuredShapeWindow {
         );
         assert_eq!(
             measured_throughput.cached_tokens, 0,
-            "the measured completion must not reuse the persistent prompt cache",
+            "the measured completion must not reuse the astro SSD prompt cache",
         );
     }
 }
@@ -82,7 +82,7 @@ pub(crate) fn run_paired_decode_astro_expert_cache_trials(
                 .checked_div(total_policy_run_count)
                 .unwrap_or(0);
             eprintln!(
-                "[decode-cache-experiment] progress_percent={current_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} pair_index={} policy={decode_astro_expert_cache_policy:?} status=starting",
+                "[decode-astro-expert-cache-experiment] progress_percent={current_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} pair_index={} policy={decode_astro_expert_cache_policy:?} status=starting",
                 pair_index + 1
             );
             let mut journey = journey_template.clone();
@@ -100,14 +100,14 @@ pub(crate) fn run_paired_decode_astro_expert_cache_trials(
             let estimated_remaining_seconds = average_policy_run_seconds
                 * total_policy_run_count.saturating_sub(completed_policy_run_count) as f64;
             eprintln!(
-                "[decode-cache-experiment] progress_percent={completed_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} eta_seconds={estimated_remaining_seconds:.0} pair_index={} policy={decode_astro_expert_cache_policy:?} status=completed",
+                "[decode-astro-expert-cache-experiment] progress_percent={completed_progress_percent} completed_policy_runs={completed_policy_run_count} total_policy_runs={total_policy_run_count} eta_seconds={estimated_remaining_seconds:.0} pair_index={} policy={decode_astro_expert_cache_policy:?} status=completed",
                 pair_index + 1
             );
             measured_shape_window.assert_measurement_fits(&measured_throughput);
             assert_eq!(
                 measured_throughput.decode_astro_expert_cache_policy,
                 decode_astro_expert_cache_policy,
-                "the worker measurement must retain the selected cache policy"
+                "the worker measurement must retain the selected decode astro expert cache policy"
             );
             assert!(
                 measured_throughput.measured_output_text.is_some(),
@@ -118,7 +118,7 @@ pub(crate) fn run_paired_decode_astro_expert_cache_trials(
                 let diagnostic_evidence = measured_throughput
                     .decode_astro_expert_cache_diagnostic_evidence
                     .as_ref()
-                    .expect("the attributed run must produce measured decode-cache evidence");
+                    .expect("the attributed run must produce measured decode astro expert cache evidence");
                 assert!(
                     diagnostic_evidence
                         .decode_token_forward_latency_p95_nanoseconds
@@ -166,7 +166,7 @@ pub(crate) fn run_paired_decode_astro_expert_cache_trials(
                     .as_ref()
                     .expect("the candidate attribution must be present")
                     .prefill_expert_source_payload_bytes,
-                "prefill source bytes must remain identical across cache policies"
+                "prefill source bytes must remain identical across decode astro expert cache policies"
             );
         }
         paired_trials.push(PairedDecodeAstroExpertCacheTrial {
@@ -403,7 +403,7 @@ pub(super) fn report_attributed_policy_comparison(
             .is_some_and(|confidence_interval| confidence_interval.lower_bound_percent >= -2.0)
     });
     eprintln!(
-        "[decode-cache-experiment] trials={} diagnostic=true decode_p95_improvement={} source_bytes_per_output_token_improvement={} decode_throughput_improvement={} prefill_throughput_improvement={} baseline_evidence={} candidate_evidence={} decision={}",
+        "[decode-astro-expert-cache-experiment] trials={} diagnostic=true decode_p95_improvement={} source_bytes_per_output_token_improvement={} decode_throughput_improvement={} prefill_throughput_improvement={} baseline_evidence={} candidate_evidence={} decision={}",
         paired_trials.len(),
         format_confidence_interval(decode_p95_confidence_interval),
         format_confidence_interval(source_bytes_confidence_interval),
@@ -600,7 +600,7 @@ pub(super) fn report_clean_policy_comparison(paired_trials: &[PairedDecodeAstroE
         false,
     );
     eprintln!(
-        "[decode-cache-experiment] trials={} diagnostic=false decode_throughput_improvement={} prefill_throughput_improvement={}",
+        "[decode-astro-expert-cache-experiment] trials={} diagnostic=false decode_throughput_improvement={} prefill_throughput_improvement={}",
         paired_trials.len(),
         format_confidence_interval(decode_throughput_confidence_interval),
         format_confidence_interval(prefill_throughput_confidence_interval)

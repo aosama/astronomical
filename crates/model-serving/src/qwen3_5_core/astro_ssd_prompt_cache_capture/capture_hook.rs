@@ -1,10 +1,10 @@
-//! What a Qwen3.5 engine supplies to the shared astro-ssd-prompt-cache capture.
+//! What a Qwen3.5 engine supplies to the shared astro SSD prompt cache capture.
 
 use crate::InferenceEngineError;
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 
-/// The engine-specific half of astro-ssd-prompt-cache capture.
+/// The engine-specific half of astro SSD prompt cache capture.
 ///
 /// Extraction and publication are identical in both engines; only the
 /// response to a publication blocked by the MLX active-memory limit
@@ -20,7 +20,7 @@ pub(crate) trait Qwen3_5AstroSsdPromptCacheCapture {
 
     /// Frees what this engine can before the one publication retry, given
     /// the bytes the MLX active-memory limit was short by, and records what
-    /// it freed in the request's astro-ssd-prompt-cache diagnostics.
+    /// it freed in the request's astro SSD prompt cache diagnostics.
     fn reclaim_before_publication_retry(
         &self,
         model: &Self::Model,

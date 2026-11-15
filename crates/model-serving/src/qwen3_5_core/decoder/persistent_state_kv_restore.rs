@@ -1,4 +1,4 @@
-//! Assembles restored full-attention KV from persistent astro-ssd-prompt-cache blocks in
+//! Assembles restored full-attention KV from persistent astro SSD prompt cache blocks in
 //! one concatenation per layer.
 //!
 //! Concatenating every restored block slice along the sequence axis exactly

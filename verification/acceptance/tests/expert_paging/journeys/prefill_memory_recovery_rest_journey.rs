@@ -17,7 +17,7 @@
 //! one, as a coding agent does, and asserts that memory in use is above
 //! half the limit while the long prompt is still being read. The prompt is
 //! read one layer at a time, so "still being read" is counted in layers
-//! finished. It runs with everyday settings (prompt cache on, performance
+//! finished. It runs with everyday settings (`astro_ssd_prompt_cache` on, performance
 //! attribution off), because that is where people meet this.
 
 use std::{fs, path::Path};
@@ -145,7 +145,7 @@ fn write_default_chunking_configuration(worker_home: &Path, model_directory: &Pa
     if let Some(configuration_object) = configuration_document.as_object_mut() {
         configuration_object.remove("chunking");
     }
-    // The largest model may live in a Hugging Face hub cache; scanning from
+    // The largest model may live in a `huggingface_hub_cache`; scanning from
     // the configured roots names it by repository, as serving does.
     configuration_document["runtime"]["model_directories"] =
         json!(crate::support::configured_model_directory_roots());
@@ -223,7 +223,7 @@ async fn read_a_long_prompt_after_a_short_one() {
     assert_memory_was_refilled_during_prefill(&prefill_memory_observations, &worker_home);
 }
 
-/// The settings a fresh install runs with: the prompt cache is on and
+/// The settings a fresh install runs with: the `astro_ssd_prompt_cache` is on and
 /// performance attribution is off. Only the model folders are named, and the
 /// log level is raised so the evidence folder records when the freeze lifts.
 fn write_everyday_configuration(worker_home: &Path) {

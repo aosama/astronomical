@@ -246,7 +246,7 @@ impl OpenAiChatCompletionCollector {
                     prompt_token_count,
                     generated_token_count,
                 })?
-                .with_cached_tokens(astro_ssd_prompt_cache_token_count);
+                .with_astro_ssd_prompt_cache_restored_tokens(astro_ssd_prompt_cache_token_count);
         Ok(OpenAiChatCompletionResponse::new(
             self.completion_id,
             self.created,

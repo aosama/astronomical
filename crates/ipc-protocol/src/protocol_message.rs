@@ -94,7 +94,7 @@ pub struct WorkerDenseLayerResidency {
 
 /// One decoder layer's retained sparse-expert identities at a snapshot instant.
 ///
-/// The identities come from the warm slot-table cache, so a layer with no
+/// The identities come from the warm slot tables of the `astro_expert_cache`, so a layer with no
 /// warm table simply does not appear in the snapshot; absence means "every
 /// routed expert of this layer still streams from storage".
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -116,7 +116,7 @@ pub struct WorkerExpertLayerTopology {
 /// Counters accumulate from the worker's per-request performance-attribution
 /// reports across every generation of the current engine load, so the values
 /// describe the whole serving session rather than one request. The topology
-/// is the warm-cache truth at the instant of the snapshot.
+/// is the `astro_expert_cache` truth at the instant of the snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct WorkerExpertStreamingStats {
     pub model_id: Option<String>,
@@ -149,7 +149,7 @@ pub struct WorkerExpertStreamingStats {
     /// or `None` when the platform cannot sample process I/O. Wider than
     /// expert paging: process-attributed, so other worker reads count too.
     pub expert_source_physical_disk_read_bytes: Option<u64>,
-    /// Storage bytes a no-cache server would have read for the routes that
+    /// Storage bytes a server without the `astro_expert_cache` would have read for the routes that
     /// seated complete layers served from RAM instead (issue #1715).
     pub avoided_complete_layer_source_bytes: u64,
     /// Expert payload bytes prefill had to stream from storage.
@@ -330,9 +330,9 @@ pub enum WorkerCommand {
         /// Configuration generation that owns the accepted memory policy.
         configuration_generation: String,
     },
-    /// Requests the worker delete the persistent astro-ssd-prompt-cache footprint on SSD.
+    /// Requests the worker delete the persistent astro SSD prompt cache footprint on SSD.
     ///
-    /// When `model_id` is `None`, the entire global cache root is wiped. When
+    /// When `model_id` is `None`, the entire global astro SSD prompt cache root is wiped. When
     /// `model_id` is `Some`, only the `<global_root>/<model_id>/` tree is
     /// removed. The daemon sends this from `DELETE /v1/ssd-prompt-cache` and waits
     /// for `AstroSsdPromptCacheCleared` before responding to the HTTP caller.
@@ -479,7 +479,7 @@ pub enum WorkerEvent {
     ImageGenerationFinalized {
         request_id: RequestId,
         elapsed_millis: u64,
-        /// Present when the image engine observed MLX after releasing request arrays and cache.
+        /// Present when the image engine observed MLX after releasing request arrays and the MLX buffer cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Delivers one completed embedding vector per input, in request order.
@@ -498,7 +498,7 @@ pub enum WorkerEvent {
     EmbeddingsFinalized {
         request_id: RequestId,
         elapsed_millis: u64,
-        /// Present when the embedding engine observed MLX after releasing request arrays and cache.
+        /// Present when the embedding engine observed MLX after releasing request arrays and the MLX buffer cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Delivers one outcome per question, in request order.
@@ -518,7 +518,7 @@ pub enum WorkerEvent {
     DecisionsFinalized {
         request_id: RequestId,
         elapsed_millis: u64,
-        /// Present when the decision engine observed MLX after releasing request arrays and cache.
+        /// Present when the decision engine observed MLX after releasing request arrays and the MLX buffer cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Delivers one spoken segment's audio while its request continues.
@@ -653,11 +653,11 @@ pub enum WorkerEvent {
         /// Actionable model-load failure reason safe to return to the local API caller.
         model_load_failure_reason: String,
     },
-    /// Reports cumulative persistent astro-ssd-prompt-cache observability counters and disk footprint.
+    /// Reports cumulative persistent astro SSD prompt cache observability counters and disk footprint.
     ///
     /// Emitted by the worker after the model finishes loading and after each
-    /// generation completes, so the daemon can expose cache health through
-    /// `GET /v1/ssd-prompt-cache/stats` without reading the cache directory itself.
+    /// generation completes, so the daemon can expose astro SSD prompt cache health through
+    /// `GET /v1/ssd-prompt-cache/stats` without reading the astro SSD prompt cache directory itself.
     AstroSsdPromptCacheStats {
         astro_ssd_prompt_cache_hits: u64,
         astro_ssd_prompt_cache_misses: u64,
@@ -674,7 +674,7 @@ pub enum WorkerEvent {
         astro_ssd_prompt_cache_visual_embedding_misses: u64,
         astro_ssd_prompt_cache_visual_embedding_rows_loaded: u64,
     },
-    /// Confirms a persistent astro-ssd-prompt-cache deletion completed.
+    /// Confirms a persistent astro SSD prompt cache deletion completed.
     ///
     /// Emitted by the worker after processing `ClearAstroSsdPromptCache`. The daemon
     /// waits for this event before responding to the HTTP caller with the
@@ -682,9 +682,9 @@ pub enum WorkerEvent {
     AstroSsdPromptCacheCleared {
         /// The model identity scoped by the request. `None` means global clear.
         model_id: Option<String>,
-        /// Number of astro-ssd-prompt-cache block directories removed.
+        /// Number of astro SSD prompt cache block directories removed.
         blocks_removed: u64,
-        /// Total bytes removed across all cache file types.
+        /// Total bytes removed across all astro SSD prompt cache file types.
         bytes_freed: u64,
     },
 }

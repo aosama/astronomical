@@ -1,5 +1,5 @@
 //! Per-module quantization sensitivity: the one measurement that drives
-//! weight bits, key-value cache bits, and (in OptiQ) adapter ranks.
+//! weight bits, astro decoder state cache bits, and (in OptiQ) adapter ranks.
 //!
 //! Two methods produce the same [`SensitivityTable`]:
 //!

@@ -229,7 +229,7 @@ impl ConvolutionState {
     }
 
     /// Read-only access to the current rolling buffer. Used by the SSD
-    /// astro-ssd-prompt-cache bridge to snapshot convolution state for persistence.
+    /// astro SSD prompt cache bridge to snapshot convolution state for persistence.
     #[must_use]
     pub fn state(&self) -> Option<&MlxArray> {
         self.state.as_ref()
@@ -256,7 +256,7 @@ impl ConvolutionState {
     }
 
     /// Replaces the convolution rolling buffer from a restored SSD
-    /// astro-ssd-prompt-cache snapshot. Called by the SSD bridge after it has loaded the
+    /// astro SSD prompt cache snapshot. Called by the SSD bridge after it has loaded the
     /// snapshot tensor.
     pub fn restore_from_snapshot(&mut self, restored_state: MlxArray) {
         self.state = Some(restored_state);

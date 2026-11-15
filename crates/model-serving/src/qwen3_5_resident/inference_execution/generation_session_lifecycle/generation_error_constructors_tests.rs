@@ -98,7 +98,7 @@ fn should_carry_the_exact_visual_embedding_and_restored_prefix_range_failure_tex
 #[test]
 fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
     let eligible_capture_error =
-        eligible_astro_ssd_prompt_cache_capture_has_no_persistent_cache_owner_error();
+        eligible_astro_ssd_prompt_cache_capture_has_no_astro_ssd_prompt_cache_owner_error();
     let boundary_workspace_error = boundary_checkpoint_workspace_bytes_overflowed_error();
     let publication_workspace_error =
         astro_ssd_prompt_cache_publication_workspace_bytes_overflowed_error();
@@ -108,7 +108,7 @@ fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
 
     assert!(matches!(
         eligible_capture_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "eligible astro-ssd-prompt-cache capture has no persistent cache owner"
+        crate::InferenceEngineError::Fatal { reason } if reason == "eligible astro-ssd-prompt-cache capture has no astro-ssd-prompt-cache owner"
     ));
     assert!(matches!(
         boundary_workspace_error,

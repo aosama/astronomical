@@ -5,7 +5,7 @@
 //! `openai/` holds the OpenAI-compatible family and `anthropic/` the
 //! Anthropic Messages family: endpoint wiring, request translation, response
 //! assembly, and SSE encoding. The flat modules are
-//! the daemon control surface (status, configuration reload, cache, memory
+//! the daemon control surface (status, configuration reload, astro SSD prompt cache, memory
 //! ceiling) and the request-diagnostics helper shared by both families.
 
 pub(crate) mod anthropic;

@@ -1,4 +1,4 @@
-//! Recursive global astro-ssd-prompt-cache quota discovery.
+//! Recursive global astro SSD prompt cache quota discovery.
 //!
 //! This module has no deletion authority. It takes one filesystem snapshot,
 //! counts every owned byte, reconstructs committed block ancestry, and returns

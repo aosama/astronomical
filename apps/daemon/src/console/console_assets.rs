@@ -234,8 +234,8 @@ fn embedded_text_response(body: &'static str, content_type: &'static str) -> Res
         header::CONTENT_TYPE,
         header::HeaderValue::from_static(content_type),
     );
-    // Embedded assets change with every released binary, so a cached copy always
-    // shows stale UI; forbid caching outright rather than managing revalidation.
+    // Embedded assets change with every released binary, so a browser-held copy always
+    // shows stale UI; forbid HTTP caching outright rather than managing revalidation.
     response.headers_mut().insert(
         header::CACHE_CONTROL,
         header::HeaderValue::from_static("no-store"),
@@ -308,7 +308,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn embedded_responses_forbid_caching() {
+    async fn embedded_responses_forbid_http_caching() {
         let response = console_stylesheet().await;
         let cache_control = response
             .headers()

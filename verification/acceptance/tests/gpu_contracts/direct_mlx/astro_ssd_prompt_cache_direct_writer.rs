@@ -14,7 +14,7 @@ use super::astro_ssd_prompt_cache_disk_store_support::{
 use crate::common::qwen3_5_moe;
 use mlx_bridge::MlxDtype;
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const DIRECT_MLX_ASTRO_SSD_PROMPT_CACHE_TEST_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
@@ -22,13 +22,13 @@ async fn should_publish_required_capture_directly_without_serialized_host_owners
     tokio::time::timeout(DIRECT_MLX_ASTRO_SSD_PROMPT_CACHE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = runtime_with_shared_limits();
-        let astro_ssd_prompt_cache_directory =
-            tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+            .expect("the test should create an astro SSD prompt cache directory");
         let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
             &astro_ssd_prompt_cache_directory,
-            LARGE_CACHE_LIMIT_BYTES,
+            LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
         )
-        .expect("the persistent prompt cache should open");
+        .expect("the astro SSD prompt cache should open");
         let sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
         let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
         let mut performance_attribution = PerformanceAttribution::enabled();
@@ -96,13 +96,13 @@ async fn should_publish_four_production_sized_boundaries_sequentially() {
     tokio::time::timeout(DIRECT_MLX_ASTRO_SSD_PROMPT_CACHE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = runtime_with_shared_limits();
-        let astro_ssd_prompt_cache_directory =
-            tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+            .expect("the test should create an astro SSD prompt cache directory");
         let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
             &astro_ssd_prompt_cache_directory,
-            LARGE_CACHE_LIMIT_BYTES,
+            LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
         )
-        .expect("the persistent prompt cache should open");
+        .expect("the astro SSD prompt cache should open");
         let sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
         let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
         let mut parent_block_key: Option<AstroSsdPromptCacheBlockKey> = None;
@@ -143,13 +143,13 @@ async fn should_retry_the_same_captured_arrays_after_releasing_artificial_active
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = runtime_with_shared_limits();
         let original_memory_limits = runtime.memory_limits();
-        let astro_ssd_prompt_cache_directory =
-            tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+            .expect("the test should create an astro SSD prompt cache directory");
         let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
             &astro_ssd_prompt_cache_directory,
-            LARGE_CACHE_LIMIT_BYTES,
+            LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
         )
-        .expect("the persistent prompt cache should open");
+        .expect("the astro SSD prompt cache should open");
         let block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
         let mut sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
         let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);

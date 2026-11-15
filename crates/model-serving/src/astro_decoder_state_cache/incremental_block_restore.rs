@@ -1,4 +1,4 @@
-//! SSD astro-ssd-prompt-cache block restoration for append-only KV states, one
+//! SSD astro SSD prompt cache block restoration for append-only KV states, one
 //! concatenation per tensor.
 //!
 //! Every restored block slice is concatenated along the token axis exactly

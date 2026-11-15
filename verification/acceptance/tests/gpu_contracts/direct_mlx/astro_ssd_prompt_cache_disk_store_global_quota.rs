@@ -12,7 +12,7 @@ async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under
         &measurement_astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the measurement prompt cache should open");
+    .expect("the measurement astro SSD prompt cache should open");
     let parent_astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_astro_ssd_prompt_cache_block_key = parent_astro_ssd_prompt_cache_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -29,7 +29,7 @@ async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under
             &kv_block_tensors,
             &recurrent_snapshot_tensors,
         )
-        .expect("the measurement prompt cache should save one block");
+        .expect("the measurement astro SSD prompt cache should save one block");
     let measured_single_block_size_bytes = measurement_astro_ssd_prompt_cache.total_size_bytes();
     drop(measurement_astro_ssd_prompt_cache);
     let two_block_quota_bytes = measured_single_block_size_bytes
@@ -37,12 +37,12 @@ async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under
         .and_then(|two_blocks| two_blocks.checked_add(1024))
         .expect("the test block size should fit the quota arithmetic");
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
         two_block_quota_bytes,
     )
-    .expect("the persistent prompt cache should open with a two-block quota");
+    .expect("the astro SSD prompt cache should open with a two-block quota");
 
     astro_ssd_prompt_cache
         .publish_block(
@@ -88,6 +88,6 @@ async fn should_protect_the_active_parent_chain_and_evict_unrelated_blocks_under
     );
     assert!(
         astro_ssd_prompt_cache.total_size_bytes() <= two_block_quota_bytes,
-        "committed cache bytes must satisfy the configured two-block quota"
+        "committed astro SSD prompt cache bytes must satisfy the configured two-block quota"
     );
 }

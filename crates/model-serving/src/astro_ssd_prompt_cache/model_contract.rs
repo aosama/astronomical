@@ -41,7 +41,7 @@ pub struct AstroSsdPromptCacheModelContract {
 
 impl AstroSsdPromptCacheModelContract {
     /// Resolves one deterministic exact-state storage policy for a loaded model and its budgets.
-    // Eight distinct configuration knobs (identity pair, cache layout, resource
+    // Eight distinct configuration knobs (identity pair, astro decoder state cache layout, resource
     // ceilings, block geometry) with five-plus call sites; a parameter struct
     // would relocate the same fields positionally at every caller without
     // removing a single name from this signature.
@@ -218,8 +218,8 @@ impl AstroSsdPromptCacheModelContract {
     }
 
     /// Exact on-disk size of a sequence-state file holding `block_token_count`
-    /// tokens. Full blocks reuse the size cached at construction; partial
-    /// prefix-cache tails are computed on demand from the same layout contract.
+    /// tokens. Full blocks reuse the size memoized at construction; partial
+    /// astro SSD prompt cache prefix tails are computed on demand from the same layout contract.
     pub fn sequence_state_file_bytes_for_block_token_count(
         &self,
         block_token_count: usize,

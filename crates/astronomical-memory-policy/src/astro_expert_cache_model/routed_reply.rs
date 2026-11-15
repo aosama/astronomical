@@ -1,7 +1,7 @@
 //! A recording of which experts every layer chose for every token of a reply.
 //!
 //! Routing depends only on the model and the text, not on memory, so one
-//! recording can be replayed against any cache size and any eviction order.
+//! recording can be replayed against any `astro_expert_cache` capacity and any eviction order.
 //! Recordings are kept in a compact binary file because a text form of the
 //! same reply is three times the size and nobody reads it by eye.
 

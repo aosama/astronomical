@@ -43,7 +43,7 @@ fn header_text(header_value: &header::HeaderValue) -> Option<String> {
 }
 
 #[tokio::test]
-async fn should_allow_the_thin_talk_canvas_origin_with_its_methods_and_cache_age() {
+async fn should_allow_the_thin_talk_canvas_origin_with_its_methods_and_http_preflight_max_age() {
     let response = preflight_from(CANVAS_SHELL_ORIGIN).await;
 
     assert_eq!(

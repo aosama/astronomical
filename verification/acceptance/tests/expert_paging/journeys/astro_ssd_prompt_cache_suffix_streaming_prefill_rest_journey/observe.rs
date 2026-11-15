@@ -1,4 +1,4 @@
-//! Live request observation for the cached-suffix streaming prefill journey.
+//! Live request observation for the astro SSD prompt cache suffix streaming prefill journey.
 //!
 //! Separated so the journey file stays under the source-size gate while the
 //! maintainer can still watch token frontier, memory, and stream completion.

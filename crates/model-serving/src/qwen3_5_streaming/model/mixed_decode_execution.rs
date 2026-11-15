@@ -96,7 +96,7 @@ impl Qwen3_5Model {
         Ok(sparse_output)
     }
 
-    /// Builds the mixed sparse expert output for one cached-plus-streamed
+    /// Builds the mixed sparse expert output for one `astro_expert_cache`-plus-streamed
     /// route (issue #373): gathers the retained side from the warm table and
     /// the missing side from the streamed page, restores the original
     /// assignment order, and runs one weighted reduction.
@@ -193,7 +193,7 @@ impl Qwen3_5Model {
     ///
     /// Issue #373: the retained page covers only some of the token's routed
     /// experts, so this streams exactly the missing experts, builds the compact
-    /// cached-plus-streamed route, and runs one mixed forward. The warm-insert
+    /// `astro_expert_cache`-plus-streamed route, and runs one mixed forward. The warm-insert
     /// offer for the streamed experts stays inside the streaming call, so a
     /// mixed forward still warms what it read.
     #[allow(clippy::too_many_arguments)]
@@ -217,9 +217,13 @@ impl Qwen3_5Model {
         // With the fused kernel the warm table is multiplied in place; without
         // it the retained rows are decoded, so only the routed subset is taken.
         let retained_page = if self.fused_jangtq2_gathered_projection_kernel.is_some() {
-            self.cached_packed_page(layer_index, retained_expert_ids, expert_capacity)
+            self.astro_expert_cache_packed_page(layer_index, retained_expert_ids, expert_capacity)
         } else {
-            self.routed_subset_of_cached_page(layer_index, retained_expert_ids, expert_capacity)?
+            self.routed_subset_of_astro_expert_cache_page(
+                layer_index,
+                retained_expert_ids,
+                expert_capacity,
+            )?
         };
         let (retained_expert_weights, retained_page_manifest) =
             retained_page.ok_or(Qwen3_5ExecutionError::InvalidInput {
@@ -246,7 +250,7 @@ impl Qwen3_5Model {
                 &missing_page_manifest,
             )
             .map_err(|_route_error| Qwen3_5ExecutionError::InvalidInput {
-                description: "the cached-plus-streamed route could not be built",
+                description: "the astro-expert-cache-plus-streamed route could not be built",
             })?;
         let concatenated_assignment_order =
             concatenated_assignment_order(&route_partition, route_order_expert_ids.len());

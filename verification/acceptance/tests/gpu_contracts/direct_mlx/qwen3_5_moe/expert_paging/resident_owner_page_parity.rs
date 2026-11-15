@@ -2,7 +2,7 @@
 //!
 //! Issue #503 asks whether one complete expert layer already retained as a
 //! packed page can become complete-resident-owner weights with exact parity
-//! against the current shard-read route. The retained cache stores a complete
+//! against the current shard-read route. The `astro_expert_cache` stores a complete
 //! layer's streamed page as-is (no padding, identity slot map), so the question
 //! reduces to one claim: the bounded source-interval read used by the pager
 //! returns the same bytes as the whole-shard read used by the resident loader.

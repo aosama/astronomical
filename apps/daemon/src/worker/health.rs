@@ -295,7 +295,7 @@ pub struct WorkerHealthSnapshot {
     pub expert_residency: Option<ExpertResidencySnapshot>,
     /// Feature settings explicitly acknowledged by the currently running worker.
     pub worker_runtime_feature_configuration: Option<WorkerRuntimeFeatureConfiguration>,
-    /// Latest persistent astro-ssd-prompt-cache observability stats from the worker.
+    /// Latest persistent astro SSD prompt cache observability stats from the worker.
     pub astro_ssd_prompt_cache_stats: Option<WorkerEvent>,
     /// Daemon-accumulated expert-streaming observatory state (issue #1693's
     /// user-facing surface): latest snapshot, session token totals, and the
@@ -317,7 +317,7 @@ pub struct WorkerHealthSnapshot {
     pub pending_mlx_memory_ceiling_bytes: Option<u64>,
     /// Candidate generation waiting for its queued memory update acknowledgement.
     pub pending_configuration_generation: Option<String>,
-    /// Newest cache-clear request queued behind the active generation.
+    /// Newest astro SSD prompt cache clear request queued behind the active generation.
     pub pending_astro_ssd_prompt_cache_clear: Option<PendingAstroSsdPromptCacheClear>,
     /// Bounded last live-memory control failure. Cleared by a later success.
     pub mlx_memory_limit_error: Option<String>,

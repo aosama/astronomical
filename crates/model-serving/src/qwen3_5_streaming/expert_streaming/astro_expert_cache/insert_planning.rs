@@ -1,7 +1,7 @@
 //! Slot-insert planning for the warm-table astro expert cache: the free functions the
 //! routed-expert insert sequences. They take the table (or the astro expert cache, for
 //! the immutable pre-borrow snapshot) and return plans, counts, and grown
-//! payloads; every cache-wide counter write stays with the caller that owns
+//! payloads; every `astro_expert_cache`-wide counter write stays with the caller that owns
 //! the mutable table borrow.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
@@ -18,7 +18,7 @@ use super::{AstroExpertCache, ExpertSlotTable};
 use crate::expert_paging::ExpertWeightPage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 
-/// Snapshots the eviction-planning inputs from the cache before the table
+/// Snapshots the eviction-planning inputs from the `astro_expert_cache` before the table
 /// borrow: the layer's prefetched-but-unconsumed experts and the incoming
 /// set's historically hot members.
 pub(super) fn snapshot_insert_planning_inputs(
@@ -71,7 +71,7 @@ pub(super) fn plan_new_expert_rows(
 /// Grows the table within the astro expert cache budget to cover the free-slot deficit.
 /// The returned free-slot list is the caller's own list when growth was
 /// refused, and a recomputed list when the table tensor grew; the grown
-/// payload carries back to the caller so the cache-wide accounting moves
+/// payload carries back to the caller so the `astro_expert_cache`-wide accounting moves
 /// with the tensor even if slot planning below gives up.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn grow_free_slots_within_budget(
@@ -182,7 +182,7 @@ pub(super) fn assemble_planned_slots(
 
 /// Writes each incoming expert into its planned slot, tracking evictions and
 /// per-slot decode policy. Returns the written count and the slot
-/// replacement count for the caller's cache-wide counters.
+/// replacement count for the caller's `astro_expert_cache`-wide counters.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn write_planned_experts(
     runtime: &MlxRuntime,
@@ -295,7 +295,7 @@ pub(super) fn grow_table_within_budget(
         }
     }
     // Until the copies evaluate, the retired tensor stays alive in active
-    // memory while the cache claims only its replacement, and the lazy graph
+    // memory while the `astro_expert_cache` claims only its replacement, and the lazy graph
     // would pin it for the grown table's lifetime. Growth is rare, so paying
     // one eager evaluation and a detach here keeps both the buffers and the
     // published decomposition exact (issue #955).

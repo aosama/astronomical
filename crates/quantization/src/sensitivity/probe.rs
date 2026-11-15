@@ -61,7 +61,7 @@ pub struct ModuleRestoreToken {
 ///   stored as float16 to halve memory; the math is float32 regardless.
 /// - After every module the adapter must drain the MLX buffer cache
 ///   (`synchronize_gpu_stream_and_clear_mlx_buffer_cache`): large fused expert
-///   tensors otherwise accumulate in MLX's page cache and macOS kills the
+///   tensors otherwise accumulate in the MLX buffer cache and macOS kills the
 ///   process within about ten modules.
 pub trait SensitivityProbeModel {
     /// Opaque logits for one forward pass; stays on device for GPU engines.

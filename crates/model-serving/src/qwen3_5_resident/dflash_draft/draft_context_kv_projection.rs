@@ -4,7 +4,7 @@
 //! hidden states) pass through that layer's own key and value projections,
 //! per-head key normalization, and rotary position embedding at the tokens'
 //! absolute positions, then land in the layer's key-value state. This is how
-//! the draft's cache is built from the target's belief state rather than
+//! the draft's key-value state is built from the target's belief state rather than
 //! from the draft's own tokens — the core of the conditioning contract.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};

@@ -24,14 +24,14 @@ async fn should_rollback_a_new_visual_embedding_when_global_eviction_fails() {
         &global_astro_ssd_prompt_cache_root_directory,
         ONE_MEBIBYTE_QUOTA_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let cross_model_directory = global_astro_ssd_prompt_cache_root_directory
         .path()
         .join("cross-model")
         .join("revision")
         .join("kv_blocks");
     fs::create_dir_all(&cross_model_directory)
-        .expect("the test should create a cross-model cache directory");
+        .expect("the test should create a cross-model astro SSD prompt cache directory");
     let undeletable_cross_model_file_path =
         cross_model_directory.join(format!("{}.safetensors", "a".repeat(64)));
     fs::write(
@@ -90,12 +90,12 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let root_astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_astro_ssd_prompt_cache_block_key = root_astro_ssd_prompt_cache_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -145,7 +145,7 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
 
     // Parent retention is the normal case. The directory sentinel makes this a filesystem-level
     // regression: an accidental eager parent cleanup would fail here instead of quietly turning
-    // a reusable branch point into a missing cache snapshot.
+    // a reusable branch point into a missing astro SSD prompt cache snapshot.
     assert!(
         save_result.is_ok(),
         "a fitting child must retain its parent: {save_result:?}"

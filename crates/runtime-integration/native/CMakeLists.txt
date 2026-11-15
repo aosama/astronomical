@@ -3,7 +3,7 @@
 # Architecture in one paragraph: this project does NOT fetch MLX from the
 # network. Five verified source archives (MLX, MLX-C, metal-cpp,
 # nlohmann/json, fmt) are provisioned ahead of time by
-# `cargo xtask bootstrap-native-dependencies` into a machine-wide cache,
+# `cargo xtask bootstrap-native-dependencies` into a machine-wide astro native build cache,
 # referenced here by absolute path, and re-verified by SHA-256 at configure
 # time (require_pinned_archive below) so a corrupted or swapped archive
 # fails loudly before any compile. MLX and MLX-C are then patched with the
@@ -49,7 +49,7 @@ function(require_pinned_archive variable_name dependency_description archive_fil
         message(FATAL_ERROR "${variable_name} must be an absolute path: ${archive_path}")
     endif()
     if(NOT EXISTS "${archive_path}")
-        message(FATAL_ERROR "Missing ${dependency_description} archive: ${archive_path}. Run cargo xtask bootstrap-native-dependencies to provision the verified cache.")
+        message(FATAL_ERROR "Missing ${dependency_description} archive: ${archive_path}. Run cargo xtask bootstrap-native-dependencies to provision the verified astro native build cache.")
     endif()
     file(SHA256 "${archive_path}" detected_archive_sha256)
     if(NOT detected_archive_sha256 STREQUAL expected_sha256)
@@ -73,7 +73,7 @@ set(MLX_BUILD_GGUF OFF CACHE BOOL "Disable unneeded GGUF support" FORCE)
 set(MLX_BUILD_METAL ON CACHE BOOL "Require the Metal backend" FORCE)
 set(MLX_BUILD_CPU ON CACHE BOOL "Retain bounded CPU fallback operations" FORCE)
 set(MLX_BUILD_SAFETENSORS ON CACHE BOOL "Require descriptor-backed safetensors loading" FORCE)
-set(MLX_METAL_JIT ON CACHE BOOL "Select and cache Metal kernels for the current Apple GPU" FORCE)
+set(MLX_METAL_JIT ON CACHE BOOL "Select Metal kernels for the current Apple GPU and keep them in the Metal kernel cache" FORCE)
 set(MLX_ENABLE_X64_MAC OFF CACHE BOOL "Reject unsupported Intel macOS builds" FORCE)
 set(MLX_USE_CCACHE OFF CACHE BOOL "Keep the native artifact graph machine-independent" FORCE)
 set(MLX_C_BUILD_EXAMPLES OFF CACHE BOOL "Disable upstream MLX C examples" FORCE)

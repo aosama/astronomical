@@ -21,8 +21,8 @@ use crate::qwen3_5_resident::model::request_errors;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 /// The prompt-side identity of a generation session: token list, image-pad
-/// accounting, cache-eligibility flags (after speculative admission), and the
-/// visual astro-ssd-prompt-cache identity they feed.
+/// accounting, `astro_ssd_prompt_cache` eligibility flags (after speculative admission), and the
+/// visual astro SSD prompt cache identity they feed.
 struct GenerationPromptIdentity {
     prompt_token_ids: Vec<u32>,
     image_pad_token_id: u32,
@@ -63,7 +63,7 @@ impl Qwen3_5EngineState {
         &mut self,
         mut inference_request: Qwen3_5InferenceRequest,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
-        // A prompt cache restore or the vision encoder uses the GPU before any forward.
+        // An `astro_ssd_prompt_cache` restore or the vision encoder uses the GPU before any forward.
         self.tell_neural_engine_preparation_the_gpu_is_in_use();
         let request_id = inference_request.request_id();
         let configured_maximum_output_tokens = inference_request.max_output_tokens();
@@ -117,8 +117,8 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(super::generation_error_constructors::engine_lost_loaded_model_error)?;
-        // The cache layout describes, per decoder layer, the shape of the
-        // key-value cache — the model's memory of tokens it has already seen.
+        // The `astro_decoder_state_cache` layout describes, per decoder layer, the shape of the
+        // key-value state — the model's memory of tokens it has already seen.
         // Recording attention once per token is what lets each new token be
         // processed without re-reading the whole conversation.
         let astro_decoder_state_cache_layout = model.astro_decoder_state_cache_layout().clone();
@@ -137,7 +137,7 @@ impl Qwen3_5EngineState {
         // by the final statement of this straight-line body.
         // This is deliberately NOT a transaction: on a mid-way failure the
         // active request stays empty, but engine-side effects already
-        // performed persist (astro-ssd-prompt-cache counters, an adopted
+        // performed persist (astro SSD prompt cache counters, an adopted
         // retained live prefix), and the moved-in performance attribution is
         // dropped rather than recorded as a rejection — unlike the two gates
         // above, which record every rejection they issue.
@@ -155,7 +155,7 @@ impl Qwen3_5EngineState {
             &inference_request,
             prompt_identity.prompt_image_pad_token_count,
         )?;
-        // The per-request key-value cache: one state owner per decoder
+        // The per-request `astro_decoder_state_cache`: one state owner per decoder
         // layer, allocated empty here and grown as tokens are processed.
         // Full-attention layers grow in the configured slab granularity so
         // resize cost stays amortized across the request's lifetime.
@@ -166,19 +166,20 @@ impl Qwen3_5EngineState {
             )
             .map_err(qwen3_5_runtime_error)?;
         // Restore the longest prompt prefix already present in the
-        // on-disk cache. On success `prefill_cursor` moves past the
+        // `astro_ssd_prompt_cache`. On success `prefill_cursor` moves past the
         // restored tokens so prefill computes only the new suffix, and
         // `next_position_tokens` keeps token positions continuous across
         // the restored boundary.
-        let restored_astro_ssd_prompt_cache_outcome = self.restore_cached_prompt_prefix_outcome(
-            &inference_request,
-            &prompt_identity.prompt_token_ids,
-            &prompt_identity.astro_ssd_prompt_cache_block_causal_inputs,
-            prompt_identity.can_use_astro_ssd_prompt_cache,
-            reserved_context_tokens,
-            &mut request_decoder_state,
-            &mut performance_attribution,
-        )?;
+        let restored_astro_ssd_prompt_cache_outcome = self
+            .restore_astro_ssd_prompt_cache_prefix_outcome(
+                &inference_request,
+                &prompt_identity.prompt_token_ids,
+                &prompt_identity.astro_ssd_prompt_cache_block_causal_inputs,
+                prompt_identity.can_use_astro_ssd_prompt_cache,
+                reserved_context_tokens,
+                &mut request_decoder_state,
+                &mut performance_attribution,
+            )?;
         let generation_position =
             super::generation_restore_position_derivation::derive_generation_session_position(
                 restored_astro_ssd_prompt_cache_outcome,
@@ -197,8 +198,8 @@ impl Qwen3_5EngineState {
             &mut performance_attribution,
         )?;
         // Every check passed: install the session. This object owns all
-        // mutable state for the generation that follows — the key-value
-        // cache stack, the prompt, the prefill cursor, the sampler, the
+        // mutable state for the generation that follows — the
+        // `astro_decoder_state_cache` stack, the prompt, the prefill cursor, the sampler, the
         // thinking-budget machine, and the counters. From here on,
         // `advance_generation` drives prefill and then decoding.
         self.install_active_generation_request(InstallActiveGenerationRequest {
@@ -277,9 +278,9 @@ impl Qwen3_5EngineState {
     }
 
     /// Resolves the prompt-side session identity: token list, image-pad
-    /// accounting, cache eligibility (speculative admission forgoes the
-    /// persistent prompt cache in both directions), and the visual
-    /// astro-ssd-prompt-cache identity text and image reuse share.
+    /// accounting, `astro_ssd_prompt_cache` eligibility (speculative admission forgoes the
+    /// `astro_ssd_prompt_cache` in both directions), and the visual
+    /// astro SSD prompt cache identity text and image reuse share.
     fn resolve_prompt_identity(
         &mut self,
         inference_request: &Qwen3_5InferenceRequest,
@@ -303,11 +304,11 @@ impl Qwen3_5EngineState {
             );
         let has_precomputed_visual_embeddings = inference_request.has_visual_embeddings();
         let has_processed_visual_images = inference_request.has_processed_visual_images();
-        // The persistent prompt cache stores key-value cache blocks on
+        // The `astro_ssd_prompt_cache` stores key-value blocks on
         // disk, keyed by prompt prefix; a repeated prefix restores instead
         // of recomputing. Persistent snapshots contain target decoder state
-        // only, so target-only execution is preferred whenever the cache is
-        // available.
+        // only, so target-only execution is preferred whenever the
+        // `astro_ssd_prompt_cache` is available.
         let astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some();
         let can_use_astro_ssd_prompt_cache =
             super::generation_session_decisions::can_use_astro_ssd_prompt_cache(
@@ -315,8 +316,8 @@ impl Qwen3_5EngineState {
                 has_precomputed_visual_embeddings,
             );
         // Speculative admission, decided once from request properties plus
-        // draft residency. An admitted session also forgoes the persistent
-        // prompt cache in both directions: restored prefixes would bypass
+        // draft residency. An admitted session also forgoes the
+        // `astro_ssd_prompt_cache` in both directions: restored prefixes would bypass
         // the tap-capturing prefill that conditions the draft, and captured
         // boundaries do not exist on the speculative forward path.
         let speculative_session_admitted = self
@@ -340,7 +341,7 @@ impl Qwen3_5EngineState {
             });
         let can_use_astro_ssd_prompt_cache =
             can_use_astro_ssd_prompt_cache && !speculative_session_admitted;
-        // Computes which prompt blocks are cache-eligible and how many
+        // Computes which prompt blocks are eligible for the `astro_ssd_prompt_cache` and how many
         // visual embedding rows each image contributes, so text and image
         // reuse decisions come from one consistent identity.
         let visual_astro_ssd_prompt_cache_identity =
@@ -430,11 +431,11 @@ impl Qwen3_5EngineState {
         ))
     }
 
-    /// Restores the longest prompt prefix already present in the on-disk
-    /// cache, returning the restore outcome for position derivation. The
+    /// Restores the longest prompt prefix already present in the
+    /// `astro_ssd_prompt_cache`, returning the restore outcome for position derivation. The
     /// disk-store owner is always reinstalled before any path escapes.
     #[allow(clippy::too_many_arguments)]
-    fn restore_cached_prompt_prefix_outcome(
+    fn restore_astro_ssd_prompt_cache_prefix_outcome(
         &mut self,
         inference_request: &Qwen3_5InferenceRequest,
         prompt_token_ids: &[u32],
@@ -448,7 +449,7 @@ impl Qwen3_5EngineState {
         InferenceEngineError,
     > {
         if self.astro_ssd_prompt_cache.is_some() && can_use_astro_ssd_prompt_cache {
-            // Split the borrow: take the cache out temporarily so the engine
+            // Split the borrow: take the `astro_ssd_prompt_cache` out temporarily so the engine
             // state (including counters) can be mutated as &mut self while the
             // disk store is used as a plain borrowed reference.
             let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.take();
@@ -469,7 +470,7 @@ impl Qwen3_5EngineState {
                 };
             // Restores can fail closed for data correctness, but the disk-store owner must
             // remain installed for the next independent request. Returning while it is
-            // temporarily taken would silently turn later traffic into cache-disabled mode.
+            // temporarily taken would silently turn later traffic into a mode with the `astro_ssd_prompt_cache` disabled.
             self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             return restore_result;
         }
@@ -547,7 +548,7 @@ impl Qwen3_5EngineState {
             } => temperature_thousandths,
         };
         // Observability: one log line plus two counters (prompt size, and
-        // how much of it came from the disk cache) so each request's
+        // how much of it came from the `astro_ssd_prompt_cache`) so each request's
         // behavior stays measurable after the fact.
         tracing::info!(
             request_id = inference_request.request_id().value(),
@@ -657,7 +658,7 @@ impl Qwen3_5EngineState {
 
     /// Builds the caller-visible generation-start contract: the restored
     /// cursor, the loaded model's expert memory mode, the first processing
-    /// phase, and the cache diagnostics.
+    /// phase, and the `astro_ssd_prompt_cache` diagnostics.
     fn build_generation_start_contract(
         &self,
         restored_prompt_prefix_token_count: u32,

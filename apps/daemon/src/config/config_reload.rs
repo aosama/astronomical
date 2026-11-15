@@ -51,13 +51,13 @@ pub struct ResolvedRuntimeConfig {
     pub idle_model_unload_seconds: u64,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
-    /// Whether the worker may read and write the persistent prompt cache.
+    /// Whether the worker may read and write the `astro_ssd_prompt_cache`.
     pub astro_ssd_prompt_cache_enabled: bool,
-    /// Authored cache toggle before the enabled-by-default policy is applied.
+    /// Authored `astro_ssd_prompt_cache` toggle before the enabled-by-default policy is applied.
     pub configured_astro_ssd_prompt_cache_enabled: Option<bool>,
-    /// Authored cache capacity before the 50 GB default is applied.
+    /// Authored `astro_ssd_prompt_cache` capacity before the 50 GB default is applied.
     pub configured_astro_ssd_prompt_cache_maximum_size_bytes: Option<u64>,
-    /// Resolved SSD-backed astro-ssd-prompt-cache policy (worker-startup field).
+    /// Resolved SSD-backed astro SSD prompt cache policy (worker-startup field).
     pub astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
     /// Resolved daemon bind address (REST API restart required to change).
     pub bind_address: String,

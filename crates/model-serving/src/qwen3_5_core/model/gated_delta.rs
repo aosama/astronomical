@@ -76,7 +76,7 @@ impl Qwen3_5ModelBase {
         // Each dispatch entry owns its capability routing: a retained kernel
         // takes the fused Metal route; a demoted kernel falls back to the
         // ops-based public MLX route inside the dispatch, and the checkpoint
-        // fallback preserves the astro-ssd-prompt-cache boundary snapshot positions.
+        // fallback preserves the astro SSD prompt cache boundary snapshot positions.
         let (recurrent_output, next_recurrent_state, boundary_recurrent_states) = self
             .run_recurrence_phase(
                 boundary_checkpoint_collector.as_deref(),

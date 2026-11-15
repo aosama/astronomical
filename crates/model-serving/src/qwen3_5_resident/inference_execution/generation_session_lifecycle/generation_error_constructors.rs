@@ -75,10 +75,10 @@ pub(in crate::qwen3_5_resident::inference_execution) fn completed_prefill_chunk_
     super::fatal_engine_error("completed_prefill_chunk_tokens exceeds the u32 range")
 }
 
-pub(in crate::qwen3_5_resident::inference_execution) fn eligible_astro_ssd_prompt_cache_capture_has_no_persistent_cache_owner_error()
+pub(in crate::qwen3_5_resident::inference_execution) fn eligible_astro_ssd_prompt_cache_capture_has_no_astro_ssd_prompt_cache_owner_error()
 -> InferenceEngineError {
     super::fatal_engine_error(
-        "eligible astro-ssd-prompt-cache capture has no persistent cache owner",
+        "eligible astro-ssd-prompt-cache capture has no astro-ssd-prompt-cache owner",
     )
 }
 

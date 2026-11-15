@@ -42,7 +42,7 @@ pub enum Qwen3_5ExecutionError {
     },
     #[error("invalid Qwen3.5 model input: {description}")]
     InvalidInput { description: &'static str },
-    #[error("invalid Qwen3.5 astro-decoder-state-cache layout: {description}")]
+    #[error("invalid Qwen3.5 astro decoder state cache layout: {description}")]
     InvalidAstroDecoderStateCacheLayout { description: String },
     #[error(
         "request decoder state has {actual_decoder_layer_count} decoder layers, expected {expected_decoder_layer_count}"
@@ -62,9 +62,9 @@ pub enum Qwen3_5ExecutionError {
     ExpertSourceFailure { description: String },
     #[error("validated expert layer plan construction failed: {description}")]
     ExpertLayerPlan { description: String },
-    #[error("persistent astro-ssd-prompt-cache disk-store error: {0}")]
+    #[error("persistent astro SSD prompt cache disk-store error: {0}")]
     AstroSsdPromptCache(#[from] crate::AstroSsdPromptCacheDiskStoreError),
-    #[error("persistent astro-ssd-prompt-cache state bridge error: {0}")]
+    #[error("persistent astro SSD prompt cache state bridge error: {0}")]
     AstroSsdPromptCacheStateBridge(
         #[from] crate::qwen3_5_core::decoder::AstroSsdPromptCacheStateBridgeError,
     ),

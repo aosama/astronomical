@@ -16,7 +16,7 @@ use super::engine_request::Qwen3_5EngineRequest;
 
 impl Qwen3_5EngineState {
     /// Closes the request with the memory governor: its stored state is
-    /// gone, and the cache may keep what the idle model has room for.
+    /// gone, and the astro expert cache may keep what the idle model has room for.
     fn govern_request_end_at_finalization(&self, request_id: u64) {
         if let Some(model) = self.model.as_ref() {
             // A request that ends while a prompt is being read one layer at
@@ -147,7 +147,7 @@ impl Qwen3_5EngineState {
         // the routed-expert distribution is model-and-domain knowledge, not
         // request state, so an identical or similar next ask serves from RAM
         // instead of re-reading its experts (issue #955). The next request's
-        // start gives the cache its capacity for that prompt, and the cache
+        // start gives the astro expert cache its capacity for that prompt, and the astro expert cache
         // gives back only what no longer fits.
         self.govern_request_end_at_finalization(request_id.value());
         self.keep_dense_layers_again_at_finalization(request_id.value());
@@ -209,7 +209,7 @@ impl Qwen3_5EngineState {
                     Ok(mlx_buffer_cache_bytes),
                     Ok(sampled_peak_memory_bytes),
                 ) => {
-                    // The MLX peak counter resets at MLX buffer-cache cleanups,
+                    // The MLX peak counter resets at `mlx_buffer_cache` cleanups,
                     // so this post-cleanup sample can read a lower window peak
                     // than the synchronized release sample taken moments
                     // earlier. The finalized claim is a request maximum, so it

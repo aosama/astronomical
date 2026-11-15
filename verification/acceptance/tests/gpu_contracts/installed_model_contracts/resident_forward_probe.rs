@@ -6,7 +6,7 @@
 //! localizes that cost by driving `Qwen3_5ResidentModel` directly:
 //! artifact validation, weight materialization, and raw prefill/decode
 //! forwards — no daemon, no worker IPC, no memory admission, no chunk
-//! planner, no persistent prompt cache, no streaming.
+//! planner, no `astro_ssd_prompt_cache`, no streaming.
 //!
 //! Verdict rule: if the crawl reproduces at this layer, the degradation
 //! lives at or below the raw model forward (weight residency and paging);

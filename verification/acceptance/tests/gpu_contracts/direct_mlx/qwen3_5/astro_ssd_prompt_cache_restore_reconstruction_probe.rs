@@ -1,4 +1,4 @@
-//! Prompt-cache restore reconstruction strategy probe.
+//! Astro SSD prompt cache restore reconstruction strategy probe.
 //!
 //! Production (persistent_state_kv_restore.rs) assembles the restored
 //! full-attention KV with one `concatenate` per layer, O(restored tokens).
@@ -30,7 +30,7 @@ const TOTAL_TOKEN_POINTS: &[i32] = &[8192, 16384, 32768];
 const PROBE_ROUNDS: usize = 11;
 
 #[tokio::test]
-#[ignore = "measures astro-ssd-prompt-cache restore reconstruction strategies on the GPU with interleaved medians"]
+#[ignore = "measures astro SSD prompt cache restore reconstruction strategies on the GPU with interleaved medians"]
 async fn should_probe_astro_ssd_prompt_cache_restore_reconstruction_costs() {
     timeout(Duration::from_secs(115), probe_restore_reconstruction())
         .await

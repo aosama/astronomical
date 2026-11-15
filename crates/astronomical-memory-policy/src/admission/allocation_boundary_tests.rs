@@ -40,7 +40,7 @@ fn should_reject_with_the_maximum_shortfall_when_the_projection_overflows() {
 
 #[test]
 fn should_admit_with_mlx_buffer_cache_when_the_total_lands_exactly_on_the_ceiling() {
-    // Reclaimable cache is excluded from active-limit enforcement, so a
+    // The reclaimable `mlx_buffer_cache` is excluded from active-limit enforcement, so a
     // total arriving exactly at the ceiling stays a plain Admit.
     let decision = AllocationAdmissionObservation::new(90, 10, 0, 100).decide();
 
@@ -64,6 +64,6 @@ fn should_clear_the_mlx_buffer_cache_when_the_total_projection_overflows() {
     assert_eq!(
         decision,
         AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit,
-        "an overflowing total still fits once the reclaimable cache is cleared"
+        "an overflowing total still fits once the reclaimable `mlx_buffer_cache` is cleared"
     );
 }

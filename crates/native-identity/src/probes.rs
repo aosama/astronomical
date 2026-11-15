@@ -1,6 +1,6 @@
 //! Full-mode toolchain probes: the hosted toolchain identity folded into
 //! the native build fingerprint. Digest semantics are carried over from the
-//! shell era byte-for-byte so cache keys stay meaningful: whole-output probes
+//! shell era byte-for-byte so `github_actions_cache` keys stay meaningful: whole-output probes
 //! hash raw stdout (trailing newline included), composite probes hash the
 //! re-composed `version=…`/`build=…` text, and overrides hash the override
 //! text plus one trailing newline.
@@ -116,7 +116,7 @@ pub fn manifest_lines_from_probe_values(probe_values: &[ProbeValue]) -> String {
     for probe_entry in probe_values {
         // The `compatibility` line label is hashed bytes carried over from
         // the shell era; rewording it would change every identity and
-        // invalidate every cached native build, so it stays despite the
+        // invalidate every native build held in the `astro_native_build_cache`, so it stays despite the
         // toolchain vocabulary everywhere else.
         manifest_lines.push_str(&format!(
             "compatibility\t{}\t{}\n",

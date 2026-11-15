@@ -77,7 +77,7 @@ impl Qwen3_5Model {
     }
 
     /// Before a layer's spans: takes the layer's complete page in hand when
-    /// the prompt reads it whole and the cache does not keep it.
+    /// the prompt reads it whole and the astro expert cache does not keep it.
     ///
     /// A read that fails is not fatal here. Nothing is held, and each span
     /// then reads its own experts and reports the failure if it persists.

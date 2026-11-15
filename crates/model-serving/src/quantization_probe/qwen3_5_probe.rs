@@ -391,7 +391,7 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
     }
 
     /// Drains the MLX buffer cache: large tensors otherwise accumulate in
-    /// MLX's page cache and the process is killed within about ten modules.
+    /// the `mlx_buffer_cache` and the process is killed within about ten modules.
     fn release_transient_memory(&mut self) -> Result<(), QuantizationError> {
         mlx_step(
             self.model

@@ -332,7 +332,7 @@ async fn dispatch_unstructured_chat(
             *should_acknowledge_cancellation = true;
             *should_emit_unexpected_cancellation_event = true;
         }
-        "astronomical/cache-stats-during-cancellation-fixture"
+        "astronomical/astro-ssd-prompt-cache-stats-during-cancellation-fixture"
         | EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID => {
             *active_request_id = Some(request_id);
             *should_acknowledge_cancellation = true;

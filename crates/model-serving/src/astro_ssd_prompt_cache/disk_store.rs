@@ -29,7 +29,7 @@ use std::collections::HashMap;
 const BLOCKS_DIRECTORY_NAME: &str = "blocks";
 const VISUAL_EMBEDDINGS_DIRECTORY_NAME: &str = "visual_embeddings";
 
-/// Valid enabled astro-ssd-prompt-cache filesystem state for one active model under one global quota.
+/// Valid enabled astro SSD prompt cache filesystem state for one active model under one global quota.
 #[derive(Clone, Debug)]
 pub struct AstroSsdPromptCacheDiskStoreConfig {
     active_model_astro_ssd_prompt_cache_directory: PathBuf,
@@ -69,7 +69,7 @@ impl AstroSsdPromptCacheDiskStoreConfig {
     }
 }
 
-/// Persistent, descriptor-backed astro SSD prompt cache for Qwen3.5-MoE astro-ssd-prompt-cache files.
+/// Persistent, descriptor-backed astro SSD prompt cache for Qwen3.5-MoE astro SSD prompt cache files.
 pub struct AstroSsdPromptCacheDiskStore {
     pub(super) active_model_astro_ssd_prompt_cache_directory: PathBuf,
     pub(super) blocks_directory: PathBuf,
@@ -85,7 +85,7 @@ pub struct AstroSsdPromptCacheDiskStore {
 }
 
 impl AstroSsdPromptCacheDiskStore {
-    /// Opens (or creates) the astro-ssd-prompt-cache directory and scans current-format files.
+    /// Opens (or creates) the astro SSD prompt cache directory and scans current-format files.
     pub fn open(
         disk_store_config: AstroSsdPromptCacheDiskStoreConfig,
         model_contract: AstroSsdPromptCacheModelContract,
@@ -324,7 +324,7 @@ impl AstroSsdPromptCacheDiskStore {
         positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Option<HashMap<String, MlxArray>>, AstroSsdPromptCacheDiskStoreError> {
         // Clone the path while holding the short index lock, then perform disk
-        // and MLX work unlocked so unrelated cache lookups are not serialized.
+        // and MLX work unlocked so unrelated astro SSD prompt cache lookups are not serialized.
         let block_file_path = {
             let tracked_files = self.lock_tracked_files();
             let tracked_file =

@@ -244,21 +244,21 @@ test("should_list_no_facts_and_show_the_empty_note_once_nothing_is_loaded", () =
     assert.equal(elementsById["overview-model-empty"].hidden, false);
 });
 
-test("should_name_which_cache_each_reuse_figure_measures", () => {
+test("should_name_which_cache_kind_each_reuse_figure_measures", () => {
     const scriptContext = createConsoleContext();
     const sessionPresentation = evaluate(scriptContext, "overviewSessionPresentation(sessionForTest)", {
         sessionForTest: { completed_request_count: 12, average_generation_tok_per_second: 67.4, total_prompt_token_count: 2490, total_reused_prompt_token_count: 2284 }
     });
-    const astroSsdPromptCachePresentation = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation(settingForTest, cacheForTest)", {
+    const astroSsdPromptCachePresentation = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation(settingForTest, astroSsdPromptCacheStatsForTest)", {
         settingForTest: { enabled: { effective: true }, capacity_bytes: { effective: 53687091200 } },
-        cacheForTest: { astro_ssd_prompt_cache_hit_rate: 0.34, astro_ssd_prompt_cache_hits: 34, astro_ssd_prompt_cache_misses: 66, astro_ssd_prompt_cache_total_size_bytes: 1288490188, astro_ssd_prompt_cache_maximum_size_bytes: 0 }
+        astroSsdPromptCacheStatsForTest: { astro_ssd_prompt_cache_hit_rate: 0.34, astro_ssd_prompt_cache_hits: 34, astro_ssd_prompt_cache_misses: 66, astro_ssd_prompt_cache_total_size_bytes: 1288490188, astro_ssd_prompt_cache_maximum_size_bytes: 0 }
     });
 
     assert.deepEqual(sessionPresentation, { requests: "12", speed: "67 tok/s", memoryReuse: "92%", memoryReuseHint: "2,284 of 2,490 prompt tokens" });
     assert.deepEqual(astroSsdPromptCachePresentation, { usage: "1.2 GB of 50.0 GB", hint: "34% of prompts found there" });
 });
 
-test("should_fall_back_to_the_configured_cache_setting_until_the_worker_acknowledges_it", () => {
+test("should_fall_back_to_the_configured_astro_ssd_prompt_cache_setting_until_the_worker_acknowledges_it", () => {
     const scriptContext = createConsoleContext();
     const beforeAcknowledgement = evaluate(scriptContext,
         "overviewAstroSsdPromptCachePresentation({ enabled: { effective: null, configured: false, default: true } }, null)");
@@ -268,7 +268,7 @@ test("should_fall_back_to_the_configured_cache_setting_until_the_worker_acknowle
 
     assert.equal(beforeAcknowledgement.usage, "Off");
     assert.equal(capacityFromDefault.usage, "0.0 GB of 50.0 GB");
-    assert.equal(beforeStatus.usage, "—", "cache stats alone cannot say whether the cache is on");
+    assert.equal(beforeStatus.usage, "—", "astro SSD prompt cache stats alone cannot say whether the astro SSD prompt cache is on");
 });
 
 test("should_switch_context_units_by_the_rounded_value", () => {

@@ -6,11 +6,11 @@
 //! contract:
 //!
 //! 1. Cut the spans from the cursor: the configured size, clamped at
-//!    semantic control-span and durable astro-ssd-prompt-cache boundaries. A stretch
-//!    may publish several cache blocks, each from the state its span left.
+//!    semantic control-span and durable astro SSD prompt cache boundaries. A stretch
+//!    may publish several astro SSD prompt cache blocks, each from the state its span left.
 //! 2. Read the stretch one layer at a time, reporting every measured step
 //!    to the memory governor.
-//! 3. Publish required astro-ssd-prompt-cache state before advancing the in-memory cursor.
+//! 3. Publish required astro SSD prompt cache state before advancing the in-memory cursor.
 //! 4. Synchronize the tape and reclaim MLX buffer cache only above threshold.
 //! 5. Emit progress only after all required state transitions succeeded.
 //!
@@ -20,7 +20,7 @@
 //! visible progress. Instead, a memory failure is redone with room leased
 //! from the memory governor (`prefill_memory_recovery`): an expert model
 //! runs its failed span again, and a prompt that cannot be put back to a
-//! span is read again from the persistent prompt cache. Either is terminal
+//! span is read again from the `astro_ssd_prompt_cache`. Either is terminal
 //! only once the governor's attempts are spent.
 
 use crate::qwen3_5_core::astro_ssd_prompt_cache_capture::{
@@ -103,7 +103,7 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// After a forward read its tokens: publishes the astro-ssd-prompt-cache state,
+    /// After a forward read its tokens: publishes the astro SSD prompt cache state,
     /// moves the cursor, measures the forward and reports the tokens read.
     pub(super) fn complete_prefill_attempt(
         &mut self,
@@ -192,7 +192,7 @@ impl Qwen3_5EngineState {
 
     /// Resolves the next prompt-prefill chunk span through the shared pure
     /// resolver: the configured chunk end from the sizer, clamped at the
-    /// durable astro-ssd-prompt-cache boundary when one applies.
+    /// durable astro SSD prompt cache boundary when one applies.
     fn resolve_next_prefill_chunk_span(
         &self,
         active_request: &super::engine_request::Qwen3_5EngineRequest,
@@ -273,7 +273,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))
     }
 
-    /// Publishes durable astro-ssd-prompt-cache blocks and the partial tail, then
+    /// Publishes durable astro SSD prompt cache blocks and the partial tail, then
     /// advances the request position and cursor. Publication precedes both
     /// moves so a storage failure leaves restartable state. Mirrors the
     /// inlined block.

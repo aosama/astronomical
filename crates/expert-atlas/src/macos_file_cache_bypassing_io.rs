@@ -1,6 +1,6 @@
 //! Reads and writes that bypass the macOS file cache.
 //!
-//! Measured on Apple Silicon: `F_NOCACHE` gives a direct (uncached) transfer
+//! Measured on Apple Silicon: `F_NOCACHE` gives a direct transfer that skips the macOS file cache
 //! only when the file offset, the length and the buffer are all 16 KiB
 //! aligned; otherwise it silently goes through the macOS file cache. A conversion reads
 //! and writes tens of gigabytes once, so keeping it out of the macOS file cache leaves

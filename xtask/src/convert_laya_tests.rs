@@ -97,7 +97,7 @@ fn write_synthetic_checkpoint(checkpoint_directory: &Path) {
     .expect("the tokenizer should be writable");
     std::fs::write(
         checkpoint_directory.join("tokenizer/tokenizer_config.json"),
-        json!({"cls_token": "[CLS]", "cache_dir": "/fictional-home/fictional-person/cache"})
+        json!({"cls_token": "[CLS]", "cache_dir": "/fictional-home/fictional-person/hub-folder"})
             .to_string(),
     )
     .expect("the tokenizer settings should be writable");

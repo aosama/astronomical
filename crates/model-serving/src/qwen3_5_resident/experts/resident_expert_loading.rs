@@ -103,8 +103,8 @@ struct ResidentLayerMaterialization {
 /// each layer's arrays synchronously before advancing to the next. Evaluating
 /// one layer at a time bounds how many lazy source graphs are alive at once,
 /// so the memory footprint stays close to the materialized layers rather than
-/// the whole safetensors source. Fused gate/up layers drain the allocator
-/// cache right after their synchronous evaluation detaches them from the
+/// the whole safetensors source. Fused gate/up layers drain the
+/// `mlx_buffer_cache` right after their synchronous evaluation detaches them from the
 /// source concatenation, returning reclaimable buffers before the next layer
 /// reserves its storage.
 fn materialize_resident_layers(

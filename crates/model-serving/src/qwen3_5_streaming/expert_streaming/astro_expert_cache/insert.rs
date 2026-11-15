@@ -167,7 +167,7 @@ impl AstroExpertCache {
             free_slots = grown_free_slots;
             if let Some(grown_resident_payload_bytes) = grown_resident_payload_bytes {
                 resident_payload_bytes = grown_resident_payload_bytes;
-                // The table tensor already grew, so the cache-wide accounting
+                // The table tensor already grew, so the `astro_expert_cache`-wide accounting
                 // must move with it even if slot planning below gives up:
                 // undercounting here would let later can_admit checks overfill
                 // the ceiling.
@@ -277,7 +277,7 @@ impl AstroExpertCache {
             *slot = Some(table);
         }
         // Warm-insert evidence counts only hot-expert warming (a nonzero
-        // warm capacity); complete-layer adoption is whole-layer caching.
+        // warm capacity); complete-layer adoption is whole-layer keeping.
         if warm_slot_count > 0 {
             self.warm_expert_insert_count = self
                 .warm_expert_insert_count

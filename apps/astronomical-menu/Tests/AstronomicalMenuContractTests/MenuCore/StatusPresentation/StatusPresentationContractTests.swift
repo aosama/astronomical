@@ -418,7 +418,7 @@ final class StatusPresentationContractTests: XCTestCase {
   }
 
   /// A request is already active, but the first prefill progress event has not
-  /// arrived yet. The menu extra and popover must name astro-ssd-prompt-cache restore
+  /// arrived yet. The menu extra and popover must name astro SSD prompt cache restore
   /// instead of looking idle.
   func test_should_name_prompt_processing_without_progress_as_astro_ssd_prompt_cache_restore() throws {
     let statusDocument = try JSONDecoder().decode(
@@ -437,7 +437,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "Calculating")
   }
 
-  func test_should_present_only_prompt_work_remaining_after_cache_restoration() throws {
+  func test_should_present_only_prompt_work_remaining_after_astro_ssd_prompt_cache_restoration() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(

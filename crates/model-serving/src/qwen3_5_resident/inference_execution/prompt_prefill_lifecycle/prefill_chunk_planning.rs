@@ -1,6 +1,6 @@
 //! Pre-forward decision logic for a single prompt-processing chunk.
 //!
-//! This module computes cache eligibility, checkpoint boundaries, workspace
+//! This module computes `astro_ssd_prompt_cache` eligibility, checkpoint boundaries, workspace
 //! projection without side effects.
 
 use crate::astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens;
@@ -16,8 +16,8 @@ pub(super) struct PrefillChunkPlan {
     /// Token count of this chunk (`prefill_end - prefill_start`).
     pub(super) prefill_token_count: usize,
 
-    /// Completed chunk-end offsets (relative to chunk start) where a prompt
-    /// cache boundary checkpoint should be captured after the forward.
+    /// Completed chunk-end offsets (relative to chunk start) where an
+    /// `astro_ssd_prompt_cache` boundary checkpoint should be captured after the forward.
     pub(super) all_completed_prefill_chunk_tokens: Vec<usize>,
 
     /// Like `all_completed_prefill_chunk_tokens` but with the final boundary
@@ -25,11 +25,11 @@ pub(super) struct PrefillChunkPlan {
     /// forward.
     pub(super) intermediate_completed_prefill_chunk_tokens: Vec<usize>,
 
-    /// Block token count from the persistent astro-ssd-prompt-cache contract, if
+    /// Block token count from the persistent astro SSD prompt cache contract, if
     /// applicable.
     pub(super) astro_ssd_prompt_cache_block_token_count: Option<usize>,
 
-    /// Workspace bytes needed for direct astro-ssd-prompt-cache publication.
+    /// Workspace bytes needed for direct astro SSD prompt cache publication.
     pub(super) direct_publication_workspace_bytes: usize,
 
     /// Combined temporary workspace reservation.
@@ -56,16 +56,16 @@ impl Qwen3_5EngineState {
         let capture_is_eligible =
             self.astro_ssd_prompt_cache.is_some() && active_request.can_use_astro_ssd_prompt_cache;
 
-        // Cache-disabled and request-ineligible paths stop here: they do not
+        // Paths with the `astro_ssd_prompt_cache` disabled and request-ineligible paths stop here: they do not
         // plan checkpoint boundaries, derive a synthetic block length, or
-        // reserve checkpoint/publication memory. Cache-enabled execution uses
+        // reserve checkpoint/publication memory. Execution with the `astro_ssd_prompt_cache` enabled uses
         // the one contract owned by the open store.
         let (all_completed_prefill_chunk_tokens, astro_ssd_prompt_cache_block_token_count) =
             if capture_is_eligible {
                 let astro_ssd_prompt_cache_block_token_count = self
                     .astro_ssd_prompt_cache
                     .as_ref()
-.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::eligible_astro_ssd_prompt_cache_capture_has_no_persistent_cache_owner_error)?
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::eligible_astro_ssd_prompt_cache_capture_has_no_astro_ssd_prompt_cache_owner_error)?
                     .model_contract_ref()
                     .block_token_count();
                 (

@@ -27,7 +27,7 @@ pub(super) fn seed_terminal_text_prefill_after_astro_ssd_prompt_cache_boundaries
     intermediate_completed_prefill_chunk_tokens: &[usize],
     astro_ssd_prompt_cache_block_token_count: usize,
 ) -> Result<Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
-    // A terminal text chunk can still contain cache-block boundaries. The terminal
+    // A terminal text chunk can still contain `astro_ssd_prompt_cache` block boundaries. The terminal
     // forward builds the vocabulary head while also collecting boundary checkpoints,
     // so the chunk is a single forward pass. This avoids the prefix+tail split that
     // would create an extra expert streaming pass for SSD-paged models.

@@ -1,15 +1,16 @@
-use crate::cache_prune::{
-    CacheEntry, DeletionReason, deletion_plan, family_of_key, parse_cache_list_tsv,
+use crate::github_actions_cache_prune::{
+    DeletionReason, GithubActionsCacheEntry, deletion_plan, family_of_key,
+    parse_github_actions_cache_list_tsv,
 };
 
-fn cache_entry(
+fn github_actions_cache_entry(
     id: u64,
     key: &str,
     ref_name: &str,
     created_at: &str,
     size_bytes: u64,
-) -> CacheEntry {
-    CacheEntry {
+) -> GithubActionsCacheEntry {
+    GithubActionsCacheEntry {
         id,
         key: key.to_owned(),
         ref_name: ref_name.to_owned(),
@@ -54,12 +55,12 @@ fn family_extraction_stops_at_the_runner_platform_segment() {
 
 #[test]
 fn thin_talk_swiftpm_key_lands_in_its_own_prune_family() {
-    // The menu and thin-talk SwiftPM caches share no bytes but once shared
-    // the `swiftpm` family, whose keep-one policy made the prune delete them
+    // The menu and thin-talk SwiftPM entries of the `github_actions_cache`
+    // share no bytes but once shared the `swiftpm` family, whose keep-one policy made the prune delete them
     // in alternation — every run rebuilt whichever package the previous run
     // had evicted (observed across the three main runs of 2026-10-31). The
     // thin-talk key therefore carries its own family segment, and this pin
-    // keeps that segment distinct from the menu cache's family.
+    // keeps that segment distinct from the menu entry's family.
     assert_eq!(
         family_of_key("astronomical-v2-swiftpm-thin-talk-macOS-ARM64-toolchain-package-sources"),
         "swiftpm-thin-talk"
@@ -71,7 +72,7 @@ fn thin_talk_swiftpm_key_lands_in_its_own_prune_family() {
     assert_ne!(
         family_of_key("astronomical-v2-swiftpm-thin-talk-macOS-ARM64-toolchain-package-sources"),
         family_of_key("astronomical-v2-swiftpm-macOS-ARM64-toolchain-package-sources"),
-        "menu and thin-talk caches must prune in separate families"
+        "menu and thin-talk SwiftPM entries of the github_actions_cache must prune in separate families"
     );
 }
 
@@ -81,14 +82,14 @@ fn plan_keeps_one_entry_per_swiftpm_family_not_one_entry_total() {
     // keep-one-per-family policy must keep BOTH because they are different
     // families, which is the whole point of the family segment split.
     let entries = vec![
-        cache_entry(
+        github_actions_cache_entry(
             1,
             "astronomical-v2-swiftpm-macOS-ARM64-toolchain-menu-hash",
             "refs/heads/main",
             "2026-10-31T15:00:00Z",
             100,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             2,
             "astronomical-v2-swiftpm-thin-talk-macOS-ARM64-toolchain-thin-talk-hash",
             "refs/heads/main",
@@ -106,35 +107,35 @@ fn plan_keeps_one_entry_per_swiftpm_family_not_one_entry_total() {
 #[test]
 fn plan_keeps_newest_per_ref_class_and_native_build_keeps_two() {
     let entries = vec![
-        cache_entry(
+        github_actions_cache_entry(
             1,
             "astronomical-v2-native-build-macOS-a",
             "refs/heads/main",
             "2026-10-01",
             100,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             2,
             "astronomical-v2-native-build-macOS-b",
             "refs/heads/main",
             "2026-10-02",
             100,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             3,
             "astronomical-v2-native-build-macOS-c",
             "refs/heads/main",
             "2026-10-03",
             100,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             4,
             "astronomical-v2-native-build-macOS-d",
             "refs/heads/feature",
             "2026-10-04",
             100,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             5,
             "astronomical-v2-native-build-macOS-e",
             "refs/heads/feature",
@@ -154,21 +155,21 @@ fn plan_keeps_newest_per_ref_class_and_native_build_keeps_two() {
 #[test]
 fn sccache_family_keeps_zero_non_default_ref_entries() {
     let entries = vec![
-        cache_entry(
+        github_actions_cache_entry(
             1,
             "astronomical-v2-sccache-macOS-a",
             "refs/heads/feature",
             "2026-10-05",
             100,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             2,
             "astronomical-v2-sccache-macOS-b",
             "refs/heads/main",
             "2026-10-01",
             100,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             3,
             "astronomical-v2-sccache-macOS-c",
             "refs/heads/main",
@@ -189,14 +190,14 @@ fn sccache_family_keeps_zero_non_default_ref_entries() {
 #[test]
 fn oversize_sccache_entries_are_deleted_even_when_newest() {
     let entries = vec![
-        cache_entry(
+        github_actions_cache_entry(
             1,
             "astronomical-v2-sccache-macOS-newest",
             "refs/heads/main",
             "2026-10-09",
             700_000_000,
         ),
-        cache_entry(
+        github_actions_cache_entry(
             2,
             "astronomical-v2-sccache-macOS-older",
             "refs/heads/main",
@@ -212,7 +213,7 @@ fn oversize_sccache_entries_are_deleted_even_when_newest() {
 
 #[test]
 fn non_sccache_families_have_no_size_ceiling() {
-    let entries = vec![cache_entry(
+    let entries = vec![github_actions_cache_entry(
         1,
         "astronomical-v2-native-build-macOS-huge",
         "refs/heads/feature",
@@ -230,10 +231,10 @@ fn non_sccache_families_have_no_size_ceiling() {
 fn tsv_parsing_round_trips_gh_output() {
     let tsv_text = "7\tastronomical-v2-sccache-macOS-a\trefs/heads/main\t2026-10-01T00:00:00Z\t123456\n\
                     9\tastronomical-v2-native-build-macOS-b\trefs/heads/feature\t2026-10-02T00:00:00Z\t42\n";
-    let entries = parse_cache_list_tsv(tsv_text);
+    let entries = parse_github_actions_cache_list_tsv(tsv_text);
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].id, 7);
     assert_eq!(entries[0].key, "astronomical-v2-sccache-macOS-a");
     assert_eq!(entries[1].size_bytes, 42);
-    assert!(parse_cache_list_tsv("not-enough-fields").is_empty());
+    assert!(parse_github_actions_cache_list_tsv("not-enough-fields").is_empty());
 }

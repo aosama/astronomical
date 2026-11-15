@@ -56,7 +56,7 @@ fn should_map_every_restored_field_into_its_session_position_slot() {
 fn should_keep_the_cursor_and_next_position_distinct_when_a_partial_tail_block_restores() {
     // A partial tail block restores more tokens than the complete-block
     // token count reports: the cursor advances by the restored tokens while
-    // positions continue from the persistent astro-ssd-prompt-cache token count.
+    // positions continue from the persistent astro SSD prompt cache token count.
     let session_position = derive_generation_session_position(Some(restore_outcome(64, 100)));
 
     assert_eq!(session_position.prefill_cursor, 100);

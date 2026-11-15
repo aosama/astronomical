@@ -36,9 +36,9 @@ pub enum StreamingEngineRequirement {
 
 /// A concrete action after evaluating one resident forward's memory equation.
 ///
-/// MLX buffer-cache reclamation is intentionally absent: MLX active-memory
-/// admission excludes MLX buffer-cache bytes, and no resident forward admission
-/// path reclaims that cache to make a projection fit.
+/// MLX buffer cache reclamation is intentionally absent: MLX active-memory
+/// admission excludes MLX buffer cache bytes, and no resident forward admission
+/// path reclaims the MLX buffer cache to make a projection fit.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResidentForwardAdmissionDecision {
     /// Stable ownership and expected peak fit.

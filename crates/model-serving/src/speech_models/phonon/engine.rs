@@ -35,7 +35,7 @@ struct LoadedPhonon {
     load_result: SpeechEngineLoadResult,
     memory_account: SpeechMemoryAccount,
     /// The flow model's state after reading each voice used so far. Reading
-    /// a voice runs the backbone over about 125 positions; a cached state is
+    /// a voice runs the backbone over about 125 positions; a memoized state is
     /// branched per request instead, which copies only array handles.
     voice_histories_by_name: HashMap<String, AttentionHistory>,
 }

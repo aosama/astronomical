@@ -2,7 +2,7 @@
 //!
 //! Validation is deliberately independent from dispatch. Both kernels must
 //! reject the same incompatible ranks, head geometry, and dtypes before MLX
-//! compiles or submits Metal work; otherwise cache-enabled checkpointing could
+//! compiles or submits Metal work; otherwise checkpointing with the `astro_ssd_prompt_cache` enabled could
 //! accept a graph that ordinary prompt processing rejects, or vice versa.
 
 use astronomical_runtime_integration::MlxRuntimeError;

@@ -1,4 +1,4 @@
-//! The cached xtask binary, as typed Rust: parses the `provision-xtask` action and
+//! The xtask binary saved in the `github_actions_cache`, as typed Rust: parses the `provision-xtask` action and
 //! `.github/workflows/ci.yml`, and pins what keeps a stale or missing binary out of CI.
 //! A stale binary is the failure that matters, because CI would stay green while running
 //! tooling older than the commit under test.
@@ -138,7 +138,10 @@ fn folders_missing_from_key(key_text: &str, folders: &BTreeSet<String>) -> Vec<S
     missing_folders
 }
 
-fn cache_step_with_operation<'a>(action_steps: &[&'a Value], operation: &str) -> &'a Value {
+fn github_actions_cache_step_with_operation<'a>(
+    action_steps: &[&'a Value],
+    operation: &str,
+) -> &'a Value {
     for action_step in action_steps {
         let Some(step_inputs) = action_step.get("with") else {
             continue;
@@ -147,14 +150,18 @@ fn cache_step_with_operation<'a>(action_steps: &[&'a Value], operation: &str) ->
             return action_step;
         }
     }
-    panic!("the action has no cache step with operation {operation}");
+    panic!("the action has no github_actions_cache step with operation {operation}");
 }
 
-fn cache_key_of(cache_step: &Value) -> &str {
+fn github_actions_cache_key_of(github_actions_cache_step: &Value) -> &str {
     required_text(
-        required_field(cache_step, "with", "the cache step"),
+        required_field(
+            github_actions_cache_step,
+            "with",
+            "the github_actions_cache step",
+        ),
         "key",
-        "the cache step inputs",
+        "the github_actions_cache step inputs",
     )
 }
 
@@ -192,7 +199,8 @@ fn step_uses(job_step: &Value, action_prefix: &str) -> bool {
 fn should_key_the_binary_on_every_folder_it_links() {
     let action = provision_xtask_action_contract();
     let steps = action_steps(&action);
-    let restore_key = cache_key_of(cache_step_with_operation(&steps, "restore"));
+    let restore_key =
+        github_actions_cache_key_of(github_actions_cache_step_with_operation(&steps, "restore"));
     let linked_folders = folders_linked_into_xtask();
     assert!(
         linked_folders.contains("crates/native-identity"),
@@ -251,8 +259,8 @@ fn should_restore_and_save_the_binary_under_one_key() {
     let action = provision_xtask_action_contract();
     let steps = action_steps(&action);
     assert_eq!(
-        cache_key_of(cache_step_with_operation(&steps, "restore")),
-        cache_key_of(cache_step_with_operation(&steps, "save")),
+        github_actions_cache_key_of(github_actions_cache_step_with_operation(&steps, "restore")),
+        github_actions_cache_key_of(github_actions_cache_step_with_operation(&steps, "save")),
         "a save under another key would never be restored"
     );
 }
@@ -264,7 +272,7 @@ fn should_save_the_binary_only_when_built_on_the_default_branch() {
     let action = provision_xtask_action_contract();
     let steps = action_steps(&action);
     let save_condition = required_text(
-        cache_step_with_operation(&steps, "save"),
+        github_actions_cache_step_with_operation(&steps, "save"),
         "if",
         "the save step",
     );

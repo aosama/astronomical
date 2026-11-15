@@ -104,7 +104,7 @@ pub enum ArtifactValidationError {
         file_name: String,
     },
 
-    /// A Hugging Face snapshot symlink resolves outside its cache entry's blobs directory.
+    /// A Hugging Face snapshot symlink resolves outside its hub cache entry's blobs directory.
     #[error(
         "Hugging Face snapshot file {file_name} resolves to {resolved_target_path:?}, outside expected blob directory {expected_blob_directory:?}"
     )]
@@ -113,7 +113,7 @@ pub enum ArtifactValidationError {
         file_name: String,
         /// Canonical target reached through the snapshot symlink.
         resolved_target_path: PathBuf,
-        /// Canonical blob directory permitted for this cache entry.
+        /// Canonical blob directory permitted for this Hugging Face hub cache entry.
         expected_blob_directory: PathBuf,
     },
 
@@ -131,7 +131,7 @@ pub enum ArtifactValidationError {
 
     /// A resolved Hugging Face shared cache blob is not the content address the snapshot records.
     #[error(
-        "Hugging Face snapshot file {file_name} resolves to a shared cache blob that is not the content-addressed object for digest {recorded_digest_text}"
+        "Hugging Face snapshot file {file_name} resolves to a shared Hugging Face hub cache blob that is not the content-addressed object for digest {recorded_digest_text}"
     )]
     HuggingFaceSharedBlobIdentityMismatch {
         /// Required file name from the artifact profile.

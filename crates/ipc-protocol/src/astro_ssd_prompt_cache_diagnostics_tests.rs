@@ -61,7 +61,7 @@ fn should_reject_unknown_startup_cleanup_evidence_fields() {
             "obsolete_format": {"artifact_count": 1, "block_count": 0, "byte_count": 128},
             "corrupt_current_format": {"artifact_count": 0, "block_count": 1, "byte_count": 256},
             "quota_eviction": {"artifact_count": 0, "block_count": 2, "byte_count": 512},
-            "unexpected_local_detail": "/fictional/private/cache"
+            "unexpected_local_detail": "/fictional/private/astro-ssd-prompt-cache"
         },
         "published_block_count": 0,
         "allocator_bytes_cleared_for_publication": 0,

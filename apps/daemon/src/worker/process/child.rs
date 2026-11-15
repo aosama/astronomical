@@ -346,7 +346,7 @@ impl WorkerProcess {
         .await
     }
 
-    /// Requests a global or model-scoped persistent astro-ssd-prompt-cache deletion.
+    /// Requests a global or model-scoped persistent astro SSD prompt cache deletion.
     pub async fn clear_astro_ssd_prompt_cache(
         &mut self,
         model_id: Option<String>,

@@ -39,12 +39,13 @@ fn resolve_header_directory() -> Result<PathBuf, String> {
     };
     let identity = astronomical_native_identity::native_build_identity(&identity_request)
         .map_err(|error| format!("native identity fingerprint failed: {error}"))?;
-    let cache_directory = std::env::var_os("ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            home_directory().join("Library/Caches/Astronomical/native-dependencies")
-        });
-    let header_directory = cache_directory
+    let astro_native_build_cache_directory =
+        std::env::var_os("ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                home_directory().join("Library/Caches/Astronomical/native-dependencies")
+            });
+    let header_directory = astro_native_build_cache_directory
         .join("bindgen-headers")
         .join(&identity)
         .join("mlx_c-src/mlx/c");
@@ -59,7 +60,7 @@ fn resolve_header_directory() -> Result<PathBuf, String> {
 fn home_directory() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
-        .expect("HOME selects the native dependency cache")
+        .expect("HOME selects the astro native build cache")
 }
 
 /// Parses every top-level public header in the extraction directory.

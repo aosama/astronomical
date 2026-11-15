@@ -133,7 +133,7 @@ Wait out a screen's own timers before calling it stuck. "Starting up" gives up b
 Notes on three of the rows:
 
 - **Model link.** With the direct app also installed, macOS hands every `astronomical://` link to the direct app, so name the test copy with `-a` as shown. Without `-a` the link starts the direct app.
-- **Neural Engine switch.** On a 9B model the 56 programs took about two and a half minutes to prepare in the sandbox. They cost about 10 GB in the app group container (`neural-engine-programs`) and the same again in Core ML's own cache inside the helper's container (`Data/Library/Caches/…/com.apple.e5rt.e5bundlecache`). Turn the switch off again and move both folders to the Trash afterwards.
+- **Neural Engine switch.** On a 9B model the 56 programs took about two and a half minutes to prepare in the sandbox. They cost about 10 GB in the app group container (`neural-engine-programs`) and the same again in the `coreml_model_cache` inside the helper's container (`Data/Library/Caches/…/com.apple.e5rt.e5bundlecache`). Turn the switch off again and move both folders to the Trash afterwards.
 - **Two installs.** See the next paragraph.
 
 The "Two installs" row is tried without the installed direct app: a small local server that answers `/health`, `/v1/status` and `/v1/models` on the engine's port, and reports the right channel with another state folder, plays the other install. Stop it and the app must recover without a relaunch.

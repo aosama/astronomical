@@ -1,7 +1,7 @@
-//! Pure-Rust persistent astro-ssd-prompt-cache lookup for the longest restorable prompt prefix.
+//! Pure-Rust persistent astro SSD prompt cache lookup for the longest restorable prompt prefix.
 //!
 //! This is the decision layer that the engine calls before any MLX allocation.
-//! It hashes the prompt's persistent astro-ssd-prompt-cache blocks in chain order, finds
+//! It hashes the prompt's persistent astro SSD prompt cache blocks in chain order, finds
 //! the longest contiguous key/value block prefix, then walks backward to find
 //! the newest recurrent snapshot that can safely seed continuation. It also
 //! enforces the safety invariant that at least one prompt token always remains
@@ -28,7 +28,7 @@ pub enum AstroSsdPromptCacheMissReason {
     BoundaryStateSnapshotMissing,
 }
 
-/// Evidence gathered while looking for the longest restorable persistent astro-ssd-prompt-cache prefix.
+/// Evidence gathered while looking for the longest restorable persistent astro SSD prompt cache prefix.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AstroSsdPromptCacheLookupDiagnostics {
     complete_prompt_block_count: usize,
@@ -58,7 +58,7 @@ impl AstroSsdPromptCacheLookupDiagnostics {
         }
     }
 
-    /// Returns the number of complete persistent astro-ssd-prompt-cache blocks in the prompt.
+    /// Returns the number of complete persistent astro SSD prompt cache blocks in the prompt.
     #[must_use]
     pub const fn complete_prompt_block_count(&self) -> usize {
         self.complete_prompt_block_count
@@ -164,7 +164,7 @@ impl AstroSsdPromptCacheLookupDiagnostics {
     }
 }
 
-/// The longest restorable persistent astro-ssd-prompt-cache prefix, determined without MLX.
+/// The longest restorable persistent astro SSD prompt cache prefix, determined without MLX.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AstroSsdPromptCachePrefixLookupResult {
     pub(super) restored_token_count: usize,
@@ -190,7 +190,7 @@ impl AstroSsdPromptCachePrefixLookupResult {
         &self.remaining_tokens
     }
 
-    /// Returns the persistent astro-ssd-prompt-cache block identity of the last matched block, if any.
+    /// Returns the persistent astro SSD prompt cache block identity of the last matched block, if any.
     ///
     /// The engine uses this to chain the next block it saves during prefill:
     /// `last_restored_astro_ssd_prompt_cache_block_key.for_child_block(next_block_tokens)`.
@@ -329,7 +329,7 @@ impl AstroSsdPromptCachePrefixLookup {
     /// Multi-turn prompts grow by a partial final block between turns. When the
     /// previous turn published that partial suffix as a tail block, this lookup
     /// restores it on top of the matched complete-block chain so the next turn
-    /// prefills only the uncached suffix. The result keeps the generation
+    /// prefills only the suffix not restored from the `astro_ssd_prompt_cache`. The result keeps the generation
     /// invariant of never consuming the final prompt token, and the tail is
     /// reported separately from the complete-block chain because tails are
     /// never chain parents.

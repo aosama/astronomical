@@ -158,7 +158,7 @@ where
         }
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
-        self.emit_cache_stats_then_neural_engine_status(
+        self.emit_astro_ssd_prompt_cache_stats_then_neural_engine_status(
             event_writer,
             engine_load_result.neural_engine_prefill_event().as_ref(),
         )

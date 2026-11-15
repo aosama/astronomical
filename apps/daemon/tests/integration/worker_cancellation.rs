@@ -134,7 +134,7 @@ async fn should_keep_worker_ready_when_cancellation_publishes_astro_ssd_prompt_c
     wait_for_health(&worker_executor, WorkerHealthStatus::Ready).await;
     let stream_receiver = worker_executor
         .start_chat_generation(command_for_model(
-            "astronomical/cache-stats-during-cancellation-fixture",
+            "astronomical/astro-ssd-prompt-cache-stats-during-cancellation-fixture",
         ))
         .await
         .expect("the fixture should start the cancellable request");
@@ -158,7 +158,7 @@ async fn should_keep_worker_ready_when_cancellation_publishes_astro_ssd_prompt_c
     let mut followup_stream = worker_executor
         .start_chat_generation(command_for_model("astronomical/test-worker"))
         .await
-        .expect("the same worker should accept a request after cache-stats cancellation");
+        .expect("the same worker should accept a request after astro SSD prompt cache stats cancellation");
     assert!(matches!(
         receive_event(&mut followup_stream).await,
         ChatGenerationStreamEvent::Completed { .. }

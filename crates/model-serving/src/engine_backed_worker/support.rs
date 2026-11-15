@@ -182,10 +182,10 @@ pub trait ModelFactory<
     /// to plan that load at the floor instead; the default ignores it.
     fn update_floor_raise_limit(&mut self, _floor_raise_limit_bytes: u64) {}
 
-    /// Returns the global astro-ssd-prompt-cache root directory, if the factory manages one.
+    /// Returns the global astro SSD prompt cache root directory, if the factory manages one.
     ///
-    /// `None` means the factory does not own a cache (e.g. the `()` unit factory).
-    /// The daemon uses this to compute the target path for cache-clear
+    /// `None` means the factory does not own an `astro_ssd_prompt_cache` (e.g. the `()` unit factory).
+    /// The daemon uses this to compute the target path for `astro_ssd_prompt_cache` clear
     /// operations when no model is currently loaded.
     fn global_astro_ssd_prompt_cache_root_directory(&self) -> Option<&Path> {
         None
@@ -297,7 +297,7 @@ pub enum WorkerRuntimeError {
     Ipc(#[from] ProtocolError),
     #[error("model swap failed: {model_load_failure_reason}")]
     ModelSwapFailed { model_load_failure_reason: String },
-    #[error("persistent astro-ssd-prompt-cache clear failed: {reason}")]
+    #[error("persistent astro SSD prompt cache clear failed: {reason}")]
     AstroSsdPromptCacheClearFailed { reason: String },
 }
 

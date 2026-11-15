@@ -1,4 +1,4 @@
-//! Filesystem primitives shared by astro-ssd-prompt-cache artifact owners.
+//! Filesystem primitives shared by astro SSD prompt cache artifact owners.
 //!
 //! Format-11 decoder state takes the direct writer path: MLX serializes tensors
 //! through one retained file descriptor without constructing a second complete
@@ -346,7 +346,7 @@ pub(crate) fn read_file_size_bytes(
         )
 }
 
-/// The hash a cache-written file or block directory is named after.
+/// The hash an astro SSD prompt cache file or block directory is named after.
 pub(super) fn parse_astro_ssd_prompt_cache_file_hash_from_path(
     entry_path: &Path,
 ) -> Option<[u8; 32]> {
@@ -360,7 +360,7 @@ pub(crate) fn open_without_following_symlinks(path: &Path) -> Result<File, std::
         .open(path)
 }
 
-/// Removes one cache-owned file, treating `NotFound` as already-absent (cleanup
+/// Removes one astro SSD prompt cache file, treating `NotFound` as already-absent (cleanup
 /// complete) and mapping every other failure to `RemoveAstroSsdPromptCacheFile`.
 ///
 /// `NotFound` is success only where absence proves cleanup is complete: stale

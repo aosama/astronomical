@@ -1,4 +1,4 @@
-//! Reproduces the interaction between cached append-only prefill, expert
+//! Reproduces the interaction between append-only prefill over an astro SSD prompt cache prefix, expert
 //! streaming, retained RAM topology, and the prefill-to-decode handoff.
 //!
 //! This permanent journey is intentionally verbose. It is the focused command a
@@ -32,7 +32,7 @@ use support::{
     write_interaction_config,
 };
 
-pub(super) const LOG_MARKER: &str = "[cached-suffix-streaming-prefill]";
+pub(super) const LOG_MARKER: &str = "[astro-ssd-prompt-cache-suffix-streaming-prefill]";
 // This acceptance cell is deliberately below complete-resident prefill need
 // for the configured artifact, while the launcher still clamps it to the host's
 // machine-derived ceiling. Production policy contains no corresponding constant.
@@ -63,10 +63,10 @@ const ROMEO_AND_JULIET_LONG_SOURCE: &str =
 /// exceeds it. This is an endurance / OOM-reproduction test, not a 120s gate.
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches one real worker and reproduces cached prefill/decode expert residency"]
+#[ignore = "launches one real worker and reproduces prefill/decode expert residency after an astro SSD prompt cache restore"]
 #[serial]
-async fn should_complete_cold_and_cached_append_requests_with_consistent_prefill_decode_residency()
-{
+async fn should_complete_cold_and_astro_ssd_prompt_cache_restored_append_requests_with_consistent_prefill_decode_residency()
+ {
     timeout(
         SSD_JOURNEY_TIMEOUT,
         run_interaction_journey(StreamingPrefillJourneyKind::HalfModelReread),
@@ -76,15 +76,17 @@ async fn should_complete_cold_and_cached_append_requests_with_consistent_prefill
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches one real worker and reproduces the high-RAM tool-prefixed cached-suffix stall"]
+#[ignore = "launches one real worker and reproduces the high-RAM tool-prefixed astro SSD prompt cache suffix stall"]
 #[serial]
-async fn should_keep_high_ram_tool_prefixed_cached_suffix_prefill_responsive() {
+async fn should_keep_high_ram_tool_prefixed_astro_ssd_prompt_cache_suffix_prefill_responsive() {
     timeout(
         SSD_JOURNEY_TIMEOUT,
         run_interaction_journey(StreamingPrefillJourneyKind::HighRamResponsiveSuffix),
     )
     .await
-    .expect("the high-RAM cached suffix SSD journey must finish within 120 seconds");
+    .expect(
+        "the high-RAM astro SSD prompt cache suffix SSD journey must finish within 120 seconds",
+    );
 }
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches one real worker against the large sparse MoE streaming e2e fixture under a tight ceiling that forces the prefill OOM-retry-reread stall"]
@@ -127,7 +129,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     fs::remove_dir_all(&isolated_worker_home_path).ok();
     fs::create_dir_all(&isolated_worker_home_path)
         .expect("the persistent worker home should be created");
-    // Canonicalize so the astro-ssd-prompt-cache validator sees no ../.. components.
+    // Canonicalize so the astro SSD prompt cache validator sees no ../.. components.
     let isolated_worker_home_path = isolated_worker_home_path
         .canonicalize()
         .unwrap_or(isolated_worker_home_path);
@@ -268,7 +270,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
             assert!(
                 append_prefill_tokens_per_second
                     >= MINIMUM_HIGH_RAM_APPEND_PREFILL_TOKENS_PER_SECOND,
-                "high-RAM tool-prefixed cached suffix must stay responsive: append_prefill_tokens_per_second={append_prefill_tokens_per_second:.2} minimum={MINIMUM_HIGH_RAM_APPEND_PREFILL_TOKENS_PER_SECOND:.2}"
+                "high-RAM tool-prefixed astro SSD prompt cache suffix must stay responsive: append_prefill_tokens_per_second={append_prefill_tokens_per_second:.2} minimum={MINIMUM_HIGH_RAM_APPEND_PREFILL_TOKENS_PER_SECOND:.2}"
             );
             assert_eq!(
                 append_outcome.live_evidence.final_status["status"], "ready",
@@ -285,7 +287,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
                     .live_evidence
                     .longest_unmoving_prefill_seconds
                     < 20.0,
-                "a seated cached suffix must keep publishing prefill progress: longest_unmoving_prefill_seconds={:.1}",
+                "a seated astro SSD prompt cache suffix must keep publishing prefill progress: longest_unmoving_prefill_seconds={:.1}",
                 append_outcome
                     .live_evidence
                     .longest_unmoving_prefill_seconds

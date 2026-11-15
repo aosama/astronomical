@@ -355,7 +355,7 @@ fn should_measure_positive_timings_for_a_generation_that_started() {
         "a generation started one second ago must measure at least half a second of decode time"
     );
     // Prefill elapsed is carried through unchanged, which pins the prefill
-    // throughput to the deterministic 100 uncached tokens over 250 ms.
+    // throughput to the deterministic 100 tokens not restored from the astro SSD prompt cache over 250 ms.
     assert_eq!(completion_timings.prefill_elapsed_millis, 250);
     assert_eq!(completion_timings.prefill_tok_per_second, Some(400.0));
     assert!(completion_timings.generation_tok_per_second.is_some());
@@ -379,7 +379,7 @@ fn should_not_report_generation_throughput_when_no_tokens_were_generated() {
 
 #[test]
 fn should_report_zero_generation_elapsed_and_no_throughput_when_generation_never_started() {
-    // A fully cached prompt (prompt == cached) exercises the other
+    // A prompt fully restored from the astro SSD prompt cache (prompt == restored) exercises the other
     // zero-throughput boundary at the same time.
     let (measurements, completed_request) =
         timed_out_chat_request(100, 100, 50, 0, Duration::from_millis(5), None);

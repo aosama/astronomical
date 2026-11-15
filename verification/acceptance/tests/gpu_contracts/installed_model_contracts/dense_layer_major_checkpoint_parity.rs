@@ -1,4 +1,4 @@
-//! A layer-major prefill must publish the astro-ssd-prompt-cache state the chunk path
+//! A layer-major prefill must publish the `astro_ssd_prompt_cache` state the chunk path
 //! publishes, bit for bit (issue #1985).
 //!
 //! The engine prefills a dense model that streams layers one layer at a time
@@ -31,7 +31,7 @@ const KEPT_LAYER_COUNTS: [usize; 2] = [0, 8];
 const CHECKPOINT_PARITY_BUDGET: Duration = Duration::from_secs(120);
 
 #[tokio::test]
-#[ignore = "loads the streamed_dense model and compares published astro-ssd-prompt-cache state"]
+#[ignore = "loads the streamed_dense model and compares published astro SSD prompt cache state"]
 #[serial]
 async fn should_publish_the_chunk_path_astro_ssd_prompt_cache_state_from_a_layer_major_prefill() {
     timeout(CHECKPOINT_PARITY_BUDGET, assert_checkpoint_parity())

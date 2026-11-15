@@ -19,8 +19,9 @@ const VISUAL_ACCEPTANCE_SAMPLING_SEED: u64 = 9_100;
 const VISUAL_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves checkpoint-aware visual prefill with astro-ssd-prompt-cache restore"]
-async fn should_preserve_visual_prefill_output_across_a_full_prefill_chunk_cache_restore() {
+#[ignore = "loads Ornith and proves checkpoint-aware visual prefill with astro SSD prompt cache restore"]
+async fn should_preserve_visual_prefill_output_across_a_full_prefill_chunk_astro_ssd_prompt_cache_restore()
+ {
     timeout(
         VISUAL_ACCEPTANCE_TIMEOUT,
         run_visual_astro_ssd_prompt_cache_acceptance(),
@@ -54,7 +55,7 @@ async fn should_restore_the_causal_prefix_of_a_visual_prompt() {
 async fn run_visual_astro_ssd_prompt_cache_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let astro_ssd_prompt_cache_directory = tempfile::tempdir()
-        .expect("the visual acceptance should create a astro-ssd-prompt-cache directory");
+        .expect("the visual acceptance should create an astro SSD prompt cache directory");
     let (mut qwen3_5_engine, tokenizer) =
         load_visual_acceptance_engine(astro_ssd_prompt_cache_directory.path()).await;
     let cold_request = representative_visual_request(&tokenizer, RequestId::new(9_100));
@@ -91,8 +92,8 @@ async fn run_visual_astro_ssd_prompt_cache_acceptance() {
 
 async fn run_appended_visual_astro_ssd_prompt_cache_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the appended-image acceptance should create a cache directory");
+    let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+        .expect("the appended-image acceptance should create an astro SSD prompt cache directory");
     let (mut qwen3_5_engine, tokenizer) =
         load_visual_acceptance_engine(astro_ssd_prompt_cache_directory.path()).await;
 
@@ -107,8 +108,8 @@ async fn run_appended_visual_astro_ssd_prompt_cache_acceptance() {
     qwen3_5_engine
         .clear_astro_ssd_prompt_cache(None)
         .await
-        .expect("the acceptance should clear its private prompt cache")
-        .expect("the loaded engine should own a prompt cache");
+        .expect("the acceptance should clear its private astro SSD prompt cache")
+        .expect("the loaded engine should own an astro SSD prompt cache");
 
     let causal_prefix_request = representative_visual_request(&tokenizer, RequestId::new(9_201));
     let causal_prefix_token_count = causal_prefix_request.input_token_ids().len();
@@ -154,7 +155,7 @@ async fn load_visual_acceptance_engine(
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the Ornith artifact should validate for visual cache acceptance");
+        .expect("the Ornith artifact should validate for visual astro SSD prompt cache acceptance");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
         .expect("the Ornith tokenizer should load");
     let mlx_memory_limits =
@@ -169,8 +170,8 @@ async fn load_visual_acceptance_engine(
         Some(AstroSsdPromptCacheDiskStoreConfig::new(
             astro_ssd_prompt_cache_directory.to_path_buf(),
             astro_ssd_prompt_cache_directory.to_path_buf(),
-            // The journey shares the configured global cache quota with every
-            // other astro-ssd-prompt-cache journey. A literal quota smaller than the
+            // The journey shares the configured global astro SSD prompt cache quota with every
+            // other astro SSD prompt cache journey. A literal quota smaller than the
             // full-context chain is not a tighter journey: at 2,048-token
             // blocks this model needs a 13,611,687,296-byte chain, so any
             // smaller literal fails contract resolution at engine load before
@@ -320,7 +321,7 @@ async fn wait_for_visual_astro_ssd_prompt_cache_block(qwen3_5_engine: &Qwen3_5Re
             "the visual acceptance did not publish its first astro-ssd-prompt-cache block"
         );
         eprintln!(
-            "[visual-astro-ssd-prompt-cache-acceptance] status=waiting-for-cache published_blocks={astro_ssd_prompt_cache_sequence_state_block_count}"
+            "[visual-astro-ssd-prompt-cache-acceptance] status=waiting-for-astro-ssd-prompt-cache published_blocks={astro_ssd_prompt_cache_sequence_state_block_count}"
         );
         sleep(Duration::from_millis(250)).await;
     }
@@ -332,14 +333,14 @@ async fn astro_ssd_prompt_cache_sequence_state_block_count(
     let astro_ssd_prompt_cache_stats = qwen3_5_engine
         .collect_astro_ssd_prompt_cache_stats()
         .await
-        .expect("the visual acceptance should collect cache stats")
-        .expect("the visual acceptance should have a prompt cache");
+        .expect("the visual acceptance should collect astro SSD prompt cache stats")
+        .expect("the visual acceptance should have an astro SSD prompt cache");
     let WorkerEvent::AstroSsdPromptCacheStats {
         astro_ssd_prompt_cache_sequence_state_block_count,
         ..
     } = astro_ssd_prompt_cache_stats
     else {
-        panic!("the visual acceptance received unexpected cache stats")
+        panic!("the visual acceptance received unexpected astro SSD prompt cache stats")
     };
     astro_ssd_prompt_cache_sequence_state_block_count
 }

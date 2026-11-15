@@ -1,9 +1,9 @@
-//! Vision attention padding-zero cache probe at scaled vision shapes.
+//! Vision attention padding-zero memo probe at scaled vision shapes.
 //!
 //! The vision tower pads Q/K/V head dimensions from 72 to the fused SDPA width
 //! in every one of its 27 blocks. The composed path allocates an identical
 //! zeros tensor per pad call — 81 zero-tensor allocations and writes per image
-//! forward; the retained cache allocates it once per request. This probe times
+//! forward; the retained memo allocates it once per request. This probe times
 //! one image forward's padding section both ways with interleaved medians so
 //! machine drift lands on both paths equally, and reports the ratio.
 
@@ -26,9 +26,9 @@ const PROBE_ITERATIONS: usize = 31;
 const PROBE_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
-#[ignore = "measures per-call-versus-cached vision padding graphics-processor timing with interleaved medians"]
-async fn should_probe_vision_padding_cache_costs_at_scaled_vision_shapes() {
-    timeout(PROBE_TIMEOUT, probe_vision_padding_cache())
+#[ignore = "measures per-call-versus-memoized vision padding graphics-processor timing with interleaved medians"]
+async fn should_probe_vision_padding_zero_cache_costs_at_scaled_vision_shapes() {
+    timeout(PROBE_TIMEOUT, probe_vision_padding_memo())
         .await
         .expect("the vision padding probe must finish within 115 seconds");
 }
@@ -37,18 +37,18 @@ async fn should_probe_vision_padding_cache_costs_at_scaled_vision_shapes() {
 /// through one named type instead of boxed closures.
 #[derive(Clone, Copy)]
 enum PaddingProbe {
-    /// Fresh zeros and a concatenate on every call, as the pre-cache path did.
+    /// Fresh zeros and a concatenate on every call, as the pre-memo path did.
     PerCallZeros,
-    /// The production cache type, whose first call retains the zeros and whose
+    /// The production padding-zero memo type, whose first call retains the zeros and whose
     /// later calls reuse them.
-    Cached,
+    Memoized,
 }
 
 impl PaddingProbe {
     fn name(&self) -> &'static str {
         match self {
             PaddingProbe::PerCallZeros => "per-call-zeros-padding",
-            PaddingProbe::Cached => "cached-padding",
+            PaddingProbe::Memoized => "memoized-padding",
         }
     }
 
@@ -63,11 +63,11 @@ impl PaddingProbe {
         for block_index in 0..VISION_BLOCK_COUNT {
             for _component_index in 0..PAD_COMPONENT_COUNT {
                 match self {
-                    PaddingProbe::PerCallZeros => outputs.push(uncached_padding(
+                    PaddingProbe::PerCallZeros => outputs.push(per_call_zeros_padding(
                         runtime,
                         &block_attention_states[block_index],
                     )),
-                    PaddingProbe::Cached => outputs.push(cached_padding(
+                    PaddingProbe::Memoized => outputs.push(memoized_padding(
                         runtime,
                         vision_padding_zero_cache,
                         &block_attention_states[block_index],
@@ -79,9 +79,9 @@ impl PaddingProbe {
     }
 }
 
-/// The measurement order: the per-call arm first, the cached arm second, so
+/// The measurement order: the per-call arm first, the memoized arm second, so
 /// the interleaved rounds alternate exactly as the recorded analysis did.
-const PROBE_ORDER: [PaddingProbe; 2] = [PaddingProbe::PerCallZeros, PaddingProbe::Cached];
+const PROBE_ORDER: [PaddingProbe; 2] = [PaddingProbe::PerCallZeros, PaddingProbe::Memoized];
 
 /// Ordering for probe sample times; NaN would mean a broken clock, not a
 /// measurement, so it refuses rather than ordering.
@@ -91,7 +91,7 @@ fn finite_time_ordering(left: &f64, right: &f64) -> std::cmp::Ordering {
 }
 
 /// Fresh per-call padding: zeros allocated and concatenated on every call.
-fn uncached_padding(runtime: &MlxRuntime, attention_states: &MlxArray) -> MlxArray {
+fn per_call_zeros_padding(runtime: &MlxRuntime, attention_states: &MlxArray) -> MlxArray {
     let padding_states = runtime
         .zeros(
             &[
@@ -108,8 +108,8 @@ fn uncached_padding(runtime: &MlxRuntime, attention_states: &MlxArray) -> MlxArr
         .expect("the per-call padding should concatenate")
 }
 
-/// Cached padding through the production cache type.
-fn cached_padding(
+/// Memoized padding through the production padding-zero memo type.
+fn memoized_padding(
     runtime: &MlxRuntime,
     vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
     attention_states: &MlxArray,
@@ -122,7 +122,7 @@ fn cached_padding(
             PATCH_COUNT,
             FUSED_HEAD_DIMENSION,
         )
-        .expect("the cached padding should build")
+        .expect("the memoized padding should build")
 }
 
 /// One distinct attention-state tensor per block, as the production tower
@@ -192,7 +192,7 @@ fn collect_probe_samples(
 }
 
 /// Reduces the samples to per-probe medians and prints them plus the
-/// cached/per-call ratio.
+/// memoized/per-call ratio.
 fn report_probe_medians(samples: &[Vec<f64>]) -> Vec<f64> {
     let mut medians = Vec::with_capacity(PROBE_ORDER.len());
     for (probe_index, probe) in PROBE_ORDER.iter().enumerate() {
@@ -207,21 +207,21 @@ fn report_probe_medians(samples: &[Vec<f64>]) -> Vec<f64> {
         );
     }
     eprintln!(
-        "[vision-padding-probe] cached/per-call ratio = {:.2} (< 1.0 means the retained cache is faster)",
+        "[vision-padding-probe] memoized/per-call ratio = {:.2} (< 1.0 means the retained memo is faster)",
         medians[1] / medians[0]
     );
     medians
 }
 
-/// The cached padding must stay bitwise identical to the per-call path.
-fn assert_cached_padding_bit_exact(
+/// The memoized padding must stay bitwise identical to the per-call path.
+fn assert_memoized_padding_bit_exact(
     runtime: &MlxRuntime,
     per_call_outputs: &[MlxArray],
-    cached_outputs: &[MlxArray],
+    memoized_outputs: &[MlxArray],
 ) {
-    for (component_index, (per_call_output, cached_output)) in per_call_outputs
+    for (component_index, (per_call_output, memoized_output)) in per_call_outputs
         .iter()
-        .zip(cached_outputs.iter())
+        .zip(memoized_outputs.iter())
         .enumerate()
     {
         let per_call_values = runtime
@@ -229,23 +229,23 @@ fn assert_cached_padding_bit_exact(
             .expect("the per-call output should cast")
             .to_vec_f32()
             .expect("the per-call output should evaluate");
-        let cached_values = runtime
-            .astype(cached_output, MlxDtype::Float32)
-            .expect("the cached output should cast")
+        let memoized_values = runtime
+            .astype(memoized_output, MlxDtype::Float32)
+            .expect("the memoized output should cast")
             .to_vec_f32()
-            .expect("the cached output should evaluate");
+            .expect("the memoized output should evaluate");
         let mut maximum_difference = 0.0_f32;
-        for (per_call_value, cached_value) in per_call_values.iter().zip(cached_values.iter()) {
-            maximum_difference = maximum_difference.max((per_call_value - cached_value).abs());
+        for (per_call_value, memoized_value) in per_call_values.iter().zip(memoized_values.iter()) {
+            maximum_difference = maximum_difference.max((per_call_value - memoized_value).abs());
         }
         assert!(
             maximum_difference == 0.0,
-            "the cached padding must be bit-exact with the per-call path at component {component_index}: {maximum_difference}"
+            "the memoized padding must be bit-exact with the per-call path at component {component_index}: {maximum_difference}"
         );
     }
 }
 
-async fn probe_vision_padding_cache() {
+async fn probe_vision_padding_memo() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(16 * 1024 * 1024 * 1024, 4 * 1024 * 1024 * 1024)
@@ -272,12 +272,12 @@ async fn probe_vision_padding_cache() {
         &block_attention_states,
         &vision_padding_zero_cache,
     );
-    let cached_outputs = PaddingProbe::Cached.run(
+    let memoized_outputs = PaddingProbe::Memoized.run(
         &runtime,
         &block_attention_states,
         &vision_padding_zero_cache,
     );
-    assert_cached_padding_bit_exact(&runtime, &per_call_outputs, &cached_outputs);
+    assert_memoized_padding_bit_exact(&runtime, &per_call_outputs, &memoized_outputs);
 }
 
 fn patterned_head_array(runtime: &MlxRuntime, base_step: f32, base_offset: f32) -> MlxArray {

@@ -72,7 +72,7 @@ pub(super) struct PrismHadamardQwen35ActiveGeneration {
     /// Absolute count of prompt tokens the forward pass has already covered,
     /// including any restored prefix.
     pub(super) processed_prompt_token_count: u32,
-    /// The prompt-prefix token count the persistent cache restored; reported
+    /// The prompt-prefix token count the astro SSD prompt cache restored; reported
     /// as reused prompt work on every prefill progress event.
     pub(super) astro_ssd_prompt_cache_token_count: u32,
     pub(super) generation_state: StraightGenerationState,

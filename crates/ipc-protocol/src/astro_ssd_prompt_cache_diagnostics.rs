@@ -1,4 +1,4 @@
-//! Bounded per-request evidence explaining persistent astro-ssd-prompt-cache behavior.
+//! Bounded per-request evidence explaining persistent astro SSD prompt cache behavior.
 //!
 //! These types cross the worker/daemon boundary and can enter local JSONL
 //! performance logs. They intentionally contain counters, enums, and a short hash
@@ -16,7 +16,7 @@ pub enum WorkerAstroSsdPromptCacheLookupOutcome {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkerAstroSsdPromptCacheMissReason {
-    /// The prompt does not contain one complete cache block.
+    /// The prompt does not contain one complete astro SSD prompt cache block.
     PromptTooShortForAstroSsdPromptCache,
     /// The content-addressed root sequence block was not durable.
     RootSequenceStateBlockMissing,
@@ -53,7 +53,7 @@ pub struct WorkerAstroSsdPromptCacheStartupCleanupCategory {
     pub byte_count: u64,
 }
 
-/// Bounded reason-separated evidence retained from astro-ssd-prompt-cache startup.
+/// Bounded reason-separated evidence retained from astro SSD prompt cache startup.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerAstroSsdPromptCacheStartupCleanupEvidence {
@@ -130,7 +130,7 @@ pub struct WorkerAstroSsdPromptCacheRequestDiagnostics {
     pub allocator_bytes_cleared_for_publication: u64,
     /// Pageable expert payload evicted to satisfy publication memory pressure.
     pub expert_bytes_reclaimed_for_publication: u64,
-    /// Expert payload reclaimed to admit cache reconstruction and remaining context.
+    /// Expert payload reclaimed to admit astro SSD prompt cache reconstruction and remaining context.
     pub expert_bytes_reclaimed_for_restore: u64,
     /// In-memory prefix adoption outcome; absent when the lever is off.
     #[serde(default, skip_serializing_if = "Option::is_none")]

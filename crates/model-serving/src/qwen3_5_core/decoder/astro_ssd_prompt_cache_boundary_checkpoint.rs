@@ -12,7 +12,7 @@ pub struct Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint {
     pub recurrent_snapshot_tensors: HashMap<String, MlxArray>,
 }
 
-/// Request-local collector for intermediate persistent astro-ssd-prompt-cache boundaries.
+/// Request-local collector for intermediate persistent astro SSD prompt cache boundaries.
 pub struct Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector {
     checkpoints: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     completed_prefill_chunk_tokens: Vec<i32>,

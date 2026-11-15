@@ -3,7 +3,7 @@ use crate::AstroDecoderStateCacheState;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
 use std::collections::HashMap;
-/// Bridges persistent astro-ssd-prompt-cache block tensors and the live in-memory
+/// Bridges persistent astro SSD prompt cache block tensors and the live in-memory
 /// request decoder state. The in-memory owners decide how restored tensors
 /// become live state; this module owns only SSD block extraction and assembly.
 impl RequestDecoderStateStack {
@@ -21,7 +21,7 @@ impl RequestDecoderStateStack {
             astro_ssd_prompt_cache_block_token_count,
         )?;
         // Sequence state slices may cover a complete block boundary or a partial
-        // prefix-cache tail; both produce tensors that participate in the hash
+        // `astro_ssd_prompt_cache` prefix tail; both produce tensors that participate in the hash
         // chain and concatenate with other blocks during a later restore.
         let mut kv_block_tensors = HashMap::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
@@ -266,7 +266,7 @@ fn validate_astro_ssd_prompt_cache_block_range(
             block_end_tokens,
         },
     )?;
-    // Partial blocks (prefix-cache tails) hold fewer tokens than a full block
+    // Partial blocks (`astro_ssd_prompt_cache` prefix tails) hold fewer tokens than a full block
     // while remaining valid restorable state, so only the contract bound and
     // non-emptiness are enforced here.
     if block_token_count == 0 || block_token_count > astro_ssd_prompt_cache_block_token_count {
@@ -348,7 +348,7 @@ pub(super) fn retain_layer_tensor(
         },
     )
 }
-/// Persistent astro-ssd-prompt-cache block extraction or restoration could not bridge
+/// Persistent astro SSD prompt cache block extraction or restoration could not bridge
 /// to the live in-memory request decoder state.
 #[derive(Debug, thiserror::Error)]
 pub enum AstroSsdPromptCacheStateBridgeError {
@@ -433,6 +433,6 @@ pub enum AstroSsdPromptCacheStateBridgeError {
         #[source]
         source: MlxRuntimeError,
     },
-    #[error("failed to materialize restored qwen3.5-moe persistent astro-ssd-prompt-cache state")]
+    #[error("failed to materialize restored qwen3.5-moe persistent astro SSD prompt cache state")]
     EvaluateRestoredAstroSsdPromptCacheState(#[source] MlxRuntimeError),
 }

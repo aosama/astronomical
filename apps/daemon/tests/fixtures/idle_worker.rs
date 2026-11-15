@@ -293,7 +293,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     } else {
                         model_id
                     };
-                emit_cleared_cache_stats(&mut event_writer).await?;
+                emit_astro_ssd_prompt_cache_stats_after_clear(&mut event_writer).await?;
                 event_writer
                     .send_event(&WorkerEvent::AstroSsdPromptCacheCleared {
                         model_id: acknowledged_model_id,
@@ -332,7 +332,7 @@ where
         .await
 }
 
-async fn emit_cleared_cache_stats<WriteTransport>(
+async fn emit_astro_ssd_prompt_cache_stats_after_clear<WriteTransport>(
     event_writer: &mut ProtocolWriter<WriteTransport>,
 ) -> Result<(), astronomical_ipc_protocol::ProtocolError>
 where

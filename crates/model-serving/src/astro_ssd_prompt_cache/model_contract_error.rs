@@ -28,9 +28,9 @@ pub enum AstroSsdPromptCacheModelContractError {
         maximum_chain_bytes: u64,
         global_ssd_quota_bytes: u64,
     },
-    #[error("astro-decoder-state-cache layout declares neither sequence nor boundary state")]
+    #[error("astro decoder state cache layout declares neither sequence nor boundary state")]
     NoPersistentState,
-    #[error("astro-decoder-state-cache storage geometry used a zero divisor")]
+    #[error("astro decoder state cache storage geometry used a zero divisor")]
     ZeroStorageGeometryDivisor,
     #[error("persistent model-state block token count overflowed")]
     BlockTokenCountOverflow,

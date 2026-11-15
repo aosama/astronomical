@@ -2,7 +2,7 @@
 //!
 //! A funded multi-token prefill route union can seed a table, and a later read
 //! can fill its remaining rows into a complete layer. Decode grows warm tables
-//! from routed experts. Cache-budget refusals leave streamed pages
+//! from routed experts. Refusals from the `astro_expert_cache` budget leave streamed pages
 //! operation-local rather than displacing sibling layers.
 
 use std::collections::{HashMap, HashSet};
@@ -148,7 +148,7 @@ pub struct AstroExpertCache {
     eviction_count: u64,
     disk_page_load_count: u64,
     disk_batch_load_count: u64,
-    /// Routed experts written into warm tables (hot-expert caching evidence).
+    /// Routed experts written into warm tables (evidence of hot experts held in the `astro_expert_cache`).
     warm_expert_insert_count: u64,
     /// Previous-token experts parked in leftover slots and not yet demanded.
     prefetched_unconsumed_experts: HashSet<(usize, usize)>,
@@ -286,7 +286,7 @@ impl AstroExpertCache {
     /// manifest, but only when every requested expert is seated — an
     /// all-or-nothing coverage contract. A single missing expert yields
     /// `None`, leaving mixed coverage to the caller (the decode dispatch in
-    /// `forward.rs` splits it through the cached-plus-streamed route).
+    /// `forward.rs` splits it through the `astro_expert_cache`-plus-streamed route).
     /// The gather path uses slot ids derived from `page_slot_by_global_expert_id`.
     #[must_use]
     pub fn full_coverage_page(

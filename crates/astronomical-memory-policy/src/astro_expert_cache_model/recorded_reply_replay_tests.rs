@@ -4,7 +4,7 @@
 //! reply tokens: a summary of a 10,000-token Shakespeare prompt, written by
 //! a 48-layer and a 40-layer sparse model. Each replay holds exactly as many
 //! experts as the engine held for that model at its memory limit, so the
-//! only thing that varies is how the cache spends that memory.
+//! only thing that varies is how the astro expert cache spends that memory.
 
 use super::{
     AstroExpertCacheLayerGeometry, AstroExpertCacheTableRules, AstroExpertCacheTables,

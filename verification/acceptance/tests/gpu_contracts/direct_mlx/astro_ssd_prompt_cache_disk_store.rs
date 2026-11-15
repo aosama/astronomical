@@ -10,7 +10,7 @@ use astronomical_runtime_integration::PositionalFileReadMetrics;
 use super::astro_ssd_prompt_cache_disk_store_support::*;
 use crate::common::qwen3_5_moe;
 
-const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+const LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const ASTRO_SSD_PROMPT_CACHE_TEST_TIMEOUT: Duration = Duration::from_secs(115);
 
 #[tokio::test]
@@ -18,12 +18,12 @@ async fn should_publish_a_block_directly_and_report_idempotent_republication() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
     let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
@@ -64,12 +64,12 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
     let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
@@ -82,7 +82,7 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
             &kv_block_tensors,
             &recurrent_snapshot_tensors,
         )
-        .expect("the persistent prompt cache should save split files");
+        .expect("the astro SSD prompt cache should save split files");
 
     assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 1);
     assert_eq!(astro_ssd_prompt_cache.boundary_state_snapshot_count(), 1);
@@ -149,7 +149,7 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
             &astro_ssd_prompt_cache_block_key,
             Some(Arc::clone(&positional_file_read_metrics)),
         )
-        .expect("the persistent prompt cache should load the saved KV block")
+        .expect("the astro SSD prompt cache should load the saved KV block")
         .expect("the saved KV block should be present");
     let loaded_recurrent_snapshot_tensors = astro_ssd_prompt_cache
         .load_recurrent_snapshot(
@@ -157,7 +157,7 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
             &astro_ssd_prompt_cache_block_key,
             Some(Arc::clone(&positional_file_read_metrics)),
         )
-        .expect("the persistent prompt cache should load the saved recurrent snapshot")
+        .expect("the astro SSD prompt cache should load the saved recurrent snapshot")
         .expect("the saved recurrent snapshot should be present");
 
     assert_eq!(loaded_kv_block_tensors.len(), 20);
@@ -196,21 +196,21 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
 }
 
 // A block can vanish between lookup and open after filesystem cleanup. The raw store load stays
-// fail-closed, while request planning must classify the missing block as a cache miss and continue
+// fail-closed, while request planning must classify the missing block as an astro SSD prompt cache miss and continue
 // with ordinary prompt processing.
 
 #[tokio::test]
-async fn should_classify_a_vanished_kv_block_load_as_a_treatable_cache_miss() {
+async fn should_classify_a_vanished_kv_block_load_as_a_treatable_astro_ssd_prompt_cache_miss() {
     tokio::time::timeout(ASTRO_SSD_PROMPT_CACHE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let runtime = runtime_with_shared_limits();
-        let astro_ssd_prompt_cache_directory =
-            tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+            .expect("the test should create an astro SSD prompt cache directory");
         let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
             &astro_ssd_prompt_cache_directory,
-            LARGE_CACHE_LIMIT_BYTES,
+            LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
         )
-        .expect("the persistent prompt cache should open an empty directory");
+        .expect("the astro SSD prompt cache should open an empty directory");
         let astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
         let kv_block_tensors = synthetic_kv_block_tensors(&runtime);
         let recurrent_snapshot_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
@@ -238,7 +238,7 @@ async fn should_classify_a_vanished_kv_block_load_as_a_treatable_cache_miss() {
 
         assert!(
             vanished_kv_block_error.is_treatable_as_astro_ssd_prompt_cache_miss(),
-            "a vanished KV block file must classify as a treatable cache miss"
+            "a vanished KV block file must classify as a treatable astro SSD prompt cache miss"
         );
         assert!(
             !astro_ssd_prompt_cache.has_kv_block(&astro_ssd_prompt_cache_block_key.block_hash()),
@@ -252,12 +252,12 @@ async fn should_classify_a_vanished_kv_block_load_as_a_treatable_cache_miss() {
 #[tokio::test]
 async fn should_report_zero_files_for_an_empty_astro_ssd_prompt_cache_directory() {
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
 
     assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 0);
     assert_eq!(astro_ssd_prompt_cache.boundary_state_snapshot_count(), 0);
@@ -269,12 +269,12 @@ async fn should_retain_root_recurrent_snapshot_after_child_snapshot_is_saved() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open an empty directory");
+    .expect("the astro SSD prompt cache should open an empty directory");
     let parent_astro_ssd_prompt_cache_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_astro_ssd_prompt_cache_block_key = parent_astro_ssd_prompt_cache_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -316,7 +316,7 @@ async fn should_retain_root_recurrent_snapshot_after_child_snapshot_is_saved() {
 #[tokio::test]
 async fn should_delete_invalid_current_format_file_during_scan() {
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let block_hash_hex = "0".repeat(64);
     let block_directory = astro_ssd_prompt_cache_directory
         .path()
@@ -330,21 +330,21 @@ async fn should_delete_invalid_current_format_file_during_scan() {
 
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should delete invalid current files");
+    .expect("the astro SSD prompt cache should delete invalid current files");
 
     assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 0);
     assert!(
         !block_directory.exists(),
-        "invalid cache-owned block directories must be deleted during scan"
+        "invalid astro SSD prompt cache block directories must be deleted during scan"
     );
 }
 
 #[tokio::test]
 async fn should_delete_incompatible_format_file_during_scan() {
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let block_hash_hex = "1".repeat(64);
     let block_directory = astro_ssd_prompt_cache_directory
         .path()
@@ -355,14 +355,14 @@ async fn should_delete_incompatible_format_file_during_scan() {
 
     let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store(
         &astro_ssd_prompt_cache_directory,
-        LARGE_CACHE_LIMIT_BYTES,
+        LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should remove incompatible format files");
+    .expect("the astro SSD prompt cache should remove incompatible format files");
 
     assert_eq!(astro_ssd_prompt_cache.sequence_state_block_count(), 0);
     assert!(
         !block_directory.exists(),
-        "cache-owned state from an incompatible format must not consume disk capacity"
+        "astro SSD prompt cache state from an incompatible format must not consume disk capacity"
     );
 }
 
@@ -403,10 +403,10 @@ async fn should_reject_split_save_when_the_combined_files_exceed_the_size_bound(
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let astro_ssd_prompt_cache =
         open_astro_ssd_prompt_cache_disk_store(&astro_ssd_prompt_cache_directory, 1)
-            .expect("the persistent prompt cache should open with a one-byte bound");
+            .expect("the astro SSD prompt cache should open with a one-byte bound");
 
     let save_result = astro_ssd_prompt_cache.publish_block(
         &runtime,

@@ -1,8 +1,8 @@
-//! Prompt-cache acceptance journeys over the resident sparse MoE role.
+//! Astro SSD prompt cache acceptance journeys over the resident sparse MoE role.
 //!
 //! Every journey in this binary runs the resident sparse MoE role
-//! (`resident_sparse_moe`) because it measures cache behaviour, not expert
-//! paging: the surfaces under test (cache disabled, cache-miss memory, restore
+//! (`resident_sparse_moe`) because it measures astro SSD prompt cache behaviour, not expert
+//! paging: the surfaces under test (astro SSD prompt cache disabled, astro SSD prompt cache miss memory, restore
 //! peak, parity, block reporting, partial tail reuse, startup cleanup
 //! attribution, and the vision journeys) are identical in resident mode. The
 //! whole binary takes about three minutes. The journeys are `#[ignore]`d
@@ -51,7 +51,8 @@ struct AstroSsdPromptCacheParityAcceptanceOutcome {
 #[tokio::test]
 #[serial_test::serial]
 #[ignore = "loads and generates with the complete Ornith artifact"]
-async fn should_restore_astro_ssd_prompt_cache_blocks_and_report_cached_tokens_on_the_second_run() {
+async fn should_restore_astro_ssd_prompt_cache_blocks_and_report_astro_ssd_prompt_cache_restored_tokens_on_the_second_run()
+ {
     require_astro_ssd_prompt_cache_acceptance_completion(
         run_astro_ssd_prompt_cache_restore_acceptance(),
     )
@@ -84,7 +85,7 @@ async fn run_astro_ssd_prompt_cache_restore_acceptance() {
 
 #[tokio::test]
 #[serial_test::serial]
-#[ignore = "loads Ornith and compares cold and restored astro-ssd-prompt-cache tokens"]
+#[ignore = "loads Ornith and compares cold and restored astro SSD prompt cache tokens"]
 async fn should_preserve_tokens_after_astro_ssd_prompt_cache_restore() {
     require_astro_ssd_prompt_cache_acceptance_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -117,8 +118,8 @@ async fn should_preserve_tokens_after_astro_ssd_prompt_cache_restore() {
 
 #[tokio::test]
 #[serial_test::serial]
-#[ignore = "runs one fixed 2048 or 4096 cache-safe prefill acceptance cell"]
-async fn should_restore_exact_cache_parity_for_one_selected_large_prefill_size() {
+#[ignore = "runs one fixed 2048 or 4096 astro SSD prompt cache safe prefill acceptance cell"]
+async fn should_restore_exact_astro_ssd_prompt_cache_parity_for_one_selected_large_prefill_size() {
     require_astro_ssd_prompt_cache_acceptance_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let configured_prefill_chunk_tokens =
@@ -179,7 +180,7 @@ async fn should_restore_exact_cache_parity_for_one_selected_large_prefill_size()
             // tokens (measured 2026-10-10), and the currently installed
             // revision measures 52 (measured 2026-10-31) — so a percentage
             // near the requested length would assert the pinned model's
-            // phrasing instead of cache behaviour. The exact-parity assert
+            // phrasing instead of astro SSD prompt cache behaviour. The exact-parity assert
             // below is the contract; this floor only rejects degeneration.
             "the representative acceptance produced only {} of approximately {} requested output tokens",
             acceptance_outcome.cold_generated_token_ids.len(),
@@ -201,9 +202,9 @@ async fn run_astro_ssd_prompt_cache_parity_acceptance(
     fixed_prefill_chunk_tokens: u32,
 ) -> AstroSsdPromptCacheParityAcceptanceOutcome {
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
 
-    // First run: cold prefill, should populate the persistent prompt cache.
+    // First run: cold prefill, should populate the astro SSD prompt cache.
     // The exact storage contract now depends on bound affine dtypes. Read block
     // geometry from the loaded engine rather than reconstructing a config-only
     // contract that could disagree with production serialization.
@@ -238,8 +239,8 @@ async fn run_astro_ssd_prompt_cache_parity_acceptance(
         minimum_expected_sequence_state_block_count,
     )
     .await;
-    // Second run: same prompt, same loaded engine, same astro-ssd-prompt-cache directory. The
-    // prompt is longer than one persistent astro-ssd-prompt-cache block, so the second start
+    // Second run: same prompt, same loaded engine, same astro SSD prompt cache directory. The
+    // prompt is longer than one persistent astro SSD prompt cache block, so the second start
     // must report a hit without paying another full model load in this proof.
     let second_request_id = RequestId::new(2_002);
     let second_generation_start = qwen3_5_engine
@@ -343,7 +344,7 @@ async fn astro_ssd_prompt_cache_eligible_prompt_token_count_for_block_multiplier
                 validated_artifact.config(),
             ),
         )
-        .expect("the validated artifact should provide a astro-decoder-state-cache layout"),
+        .expect("the validated artifact should provide an astro decoder state cache layout"),
         validated_artifact.config().maximum_position_count() as usize,
         mlx_memory_limits.active_memory_limit_bytes() as u64,
         crate::common::configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes(),
@@ -364,13 +365,13 @@ async fn astro_ssd_prompt_cache_eligible_prompt_token_count_for_block_multiplier
 }
 
 async fn astro_ssd_prompt_cache_block_token_count(qwen3_5_engine: &Qwen3_5ResidentEngine) -> usize {
-    // Stats are emitted from the engine-owned, load-derived cache contract and
+    // Stats are emitted from the engine-owned, load-derived astro SSD prompt cache contract and
     // therefore share the exact geometry used by lookup and publication.
     let astro_ssd_prompt_cache_stats = qwen3_5_engine
         .collect_astro_ssd_prompt_cache_stats()
         .await
         .expect("the engine should report persistent astro-ssd-prompt-cache stats")
-        .expect("the acceptance engine should have persistent prompt caching enabled");
+        .expect("the acceptance engine should have the astro SSD prompt cache enabled");
     let WorkerEvent::AstroSsdPromptCacheStats {
         astro_ssd_prompt_cache_block_token_count,
         ..
@@ -391,7 +392,7 @@ pub(super) async fn wait_for_astro_ssd_prompt_cache_blocks(
             .collect_astro_ssd_prompt_cache_stats()
             .await
             .expect("the engine should report persistent astro-ssd-prompt-cache stats")
-            .expect("the acceptance engine should have persistent prompt caching enabled");
+            .expect("the acceptance engine should have the astro SSD prompt cache enabled");
         let WorkerEvent::AstroSsdPromptCacheStats {
             astro_ssd_prompt_cache_block_token_count,
             astro_ssd_prompt_cache_sequence_state_block_count,
@@ -405,7 +406,7 @@ pub(super) async fn wait_for_astro_ssd_prompt_cache_blocks(
             >= u64::try_from(expected_sequence_state_block_count).unwrap_or(u64::MAX)
         {
             eprintln!(
-                "[astro-ssd-prompt-cache-acceptance] status=cache-ready sequence_blocks={astro_ssd_prompt_cache_sequence_state_block_count} boundary_snapshots={astro_ssd_prompt_cache_boundary_state_snapshot_count}"
+                "[astro-ssd-prompt-cache-acceptance] status=astro-ssd-prompt-cache-ready sequence_blocks={astro_ssd_prompt_cache_sequence_state_block_count} boundary_snapshots={astro_ssd_prompt_cache_boundary_state_snapshot_count}"
             );
             return;
         }
@@ -414,7 +415,7 @@ pub(super) async fn wait_for_astro_ssd_prompt_cache_blocks(
             "only {astro_ssd_prompt_cache_sequence_state_block_count} of {expected_sequence_state_block_count} expected astro-ssd-prompt-cache blocks were published"
         );
         eprintln!(
-            "[astro-ssd-prompt-cache-acceptance] status=waiting-for-cache block_tokens={astro_ssd_prompt_cache_block_token_count} published_blocks={astro_ssd_prompt_cache_sequence_state_block_count} expected_blocks={expected_sequence_state_block_count}"
+            "[astro-ssd-prompt-cache-acceptance] status=waiting-for-astro-ssd-prompt-cache block_tokens={astro_ssd_prompt_cache_block_token_count} published_blocks={astro_ssd_prompt_cache_sequence_state_block_count} expected_blocks={expected_sequence_state_block_count}"
         );
         sleep(Duration::from_millis(250)).await;
     }

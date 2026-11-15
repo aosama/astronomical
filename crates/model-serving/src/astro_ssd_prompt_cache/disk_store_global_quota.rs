@@ -1,4 +1,4 @@
-//! One global astro-ssd-prompt-cache byte ceiling across every model and revision.
+//! One global astro SSD prompt cache byte ceiling across every model and revision.
 //!
 //! The quota owner operates on scan-produced units. Abandoned transactions are
 //! always removed first; committed blocks are removed only as complete subtrees;

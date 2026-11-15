@@ -509,7 +509,7 @@ fn should_run_every_workflow_contract_on_the_config_lane() {
         required_job(&workflow, "config-contracts"),
         "config-contracts",
     );
-    let lane_step = find_step_by_name(&lane_steps, "Run workflow and cache contracts");
+    let lane_step = find_step_by_name(&lane_steps, "Run workflow contracts");
     let lane_text = run_text_of(lane_step, "config-contracts");
     assert_eq!(
         contract_targets_missing_from_lane(&contract_targets, lane_text),
@@ -585,7 +585,7 @@ fn should_run_every_xtask_test_target_in_ci() {
         required_job(&workflow, "config-contracts"),
         "config-contracts",
     );
-    let config_step = find_step_by_name(&config_steps, "Run workflow and cache contracts");
+    let config_step = find_step_by_name(&config_steps, "Run workflow contracts");
     let neural_engine_steps = steps_of(required_job(&workflow, "neural-engine"), "neural-engine");
     let xtask_tests_step =
         find_step_by_name(&neural_engine_steps, "Run the xtask unit and journey tests");

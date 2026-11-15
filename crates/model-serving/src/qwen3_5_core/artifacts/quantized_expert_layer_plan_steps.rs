@@ -114,7 +114,7 @@ fn resolve_projection_tensor_sources(
             .get(&tensor_name)
             .map_or(tensor_name.as_str(), String::as_str);
         let header = match safetensors_header_cache.entry(source_file.clone()) {
-            Entry::Occupied(cached_header_entry) => cached_header_entry.into_mut(),
+            Entry::Occupied(memoized_header_entry) => memoized_header_entry.into_mut(),
             Entry::Vacant(vacant_header_entry) => vacant_header_entry.insert(
                 crate::expert_paging::safetensors_header::parse_safetensors_header(&source_file)?,
             ),

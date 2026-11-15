@@ -280,7 +280,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
         // The forward arrays are owned inside embed_token_ids and dropped on
         // return, so this snapshot is the honest post-cleanup observation.
         // Synchronizing and clearing the MLX buffer cache first keeps the
-        // captured state free of reusable-cache bytes, exactly like the
+        // captured state free of `mlx_buffer_cache` bytes, exactly like the
         // image engine's cleanup observation.
         let _cleanup_result = loaded_state
             .runtime

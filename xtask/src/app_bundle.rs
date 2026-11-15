@@ -1,6 +1,6 @@
 //! `cargo xtask app` — builds the macOS app bundle from typed channel
 //! profiles. `app dev` is the Development edit loop: persistent incremental
-//! outputs, cached icon and npm install, ad-hoc signing, structural checks,
+//! outputs, a reused rendered icon and npm install, ad-hoc signing, structural checks,
 //! then a swap of the running app. `app instance` controls that instance
 //! headless. `app package` builds Stable and App Store bundles from a clean
 //! commit in a disposable target directory, and `app smoke-test` launches a
@@ -16,13 +16,13 @@ mod code_signing;
 mod command;
 mod daemon_identity_check;
 mod dev_pipeline;
-mod icon_cache;
 mod info_plist;
 mod instance_control;
 mod login_launch_check;
 mod native_metallib;
 mod package_pipeline;
 mod release_build_steps;
+mod rendered_icon_memo;
 mod running_instance;
 mod smoke_test;
 mod step_reporter;

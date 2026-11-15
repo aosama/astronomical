@@ -178,8 +178,8 @@ async fn should_include_cached_tokens_in_non_streaming_usage_when_nonzero() {
     let (status, _content_type, response_body) = post_non_streaming_chat(application).await;
 
     assert_eq!(status, StatusCode::OK);
-    let response_document: serde_json::Value =
-        serde_json::from_str(&response_body).expect("the cached-token body should be JSON");
+    let response_document: serde_json::Value = serde_json::from_str(&response_body)
+        .expect("the body with tokens restored from the astro SSD prompt cache should be JSON");
     assert_eq!(
         response_document["usage"]["prompt_tokens_details"]["cached_tokens"],
         2_048

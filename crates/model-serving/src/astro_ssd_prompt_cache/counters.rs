@@ -1,4 +1,4 @@
-//! Cumulative persistent astro-ssd-prompt-cache observability counters and stats snapshot.
+//! Cumulative persistent astro SSD prompt cache observability counters and stats snapshot.
 //!
 //! These counters track how often the astro SSD prompt cache restored a prompt
 //! prefix (hit) versus fell back to cold prefill (miss), how many prompt tokens
@@ -12,7 +12,7 @@ mod tests;
 #[cfg(feature = "direct-mlx")]
 use astronomical_ipc_protocol::WorkerEvent;
 
-/// Cumulative persistent astro-ssd-prompt-cache hit/miss/token-saved counters.
+/// Cumulative persistent astro SSD prompt cache hit/miss/token-saved counters.
 ///
 /// The engine increments these on each `restore_astro_ssd_prompt_cache_prefix`
 /// call. The worker reads them alongside the disk store's block counts to emit
@@ -33,7 +33,7 @@ pub struct AstroSsdPromptCacheCounters {
 
 impl AstroSsdPromptCacheCounters {
     #[cfg(any(test, feature = "direct-mlx"))]
-    /// Records one successful persistent astro-ssd-prompt-cache prefix restore.
+    /// Records one successful persistent astro SSD prompt cache prefix restore.
     ///
     /// `restored_token_count` is the number of prompt tokens the astro SSD prompt cache supplied,
     /// which is accumulated into `astro_ssd_prompt_cache_tokens_saved`.
@@ -45,7 +45,7 @@ impl AstroSsdPromptCacheCounters {
     }
 
     #[cfg(feature = "direct-mlx")]
-    /// Records one persistent astro-ssd-prompt-cache miss (cold prefill fallback).
+    /// Records one persistent astro SSD prompt cache miss (cold prefill fallback).
     /// Records one request that adopted the retained live state.
     pub fn record_in_memory_prefix_adoption_hit(&mut self) {
         self.astro_ssd_prompt_cache_in_memory_prefix_adoption_hits = self
@@ -58,7 +58,7 @@ impl AstroSsdPromptCacheCounters {
     }
 
     /// Records that one successful restore reused a partial tail block from a
-    /// previous turn, so the request only prefilled the uncached suffix.
+    /// previous turn, so the request only prefilled the suffix not restored from the `astro_ssd_prompt_cache`.
     pub fn record_partial_tail_hit(&mut self) {
         self.astro_ssd_prompt_cache_partial_tail_hits = self
             .astro_ssd_prompt_cache_partial_tail_hits
@@ -85,13 +85,13 @@ impl AstroSsdPromptCacheCounters {
             .saturating_add(1);
     }
 
-    /// Returns the cumulative number of successful persistent astro-ssd-prompt-cache restores.
+    /// Returns the cumulative number of successful persistent astro SSD prompt cache restores.
     #[must_use]
     pub const fn astro_ssd_prompt_cache_hits(&self) -> u64 {
         self.astro_ssd_prompt_cache_hits
     }
 
-    /// Returns the cumulative number of persistent astro-ssd-prompt-cache misses.
+    /// Returns the cumulative number of persistent astro SSD prompt cache misses.
     #[must_use]
     pub const fn astro_ssd_prompt_cache_misses(&self) -> u64 {
         self.astro_ssd_prompt_cache_misses
@@ -146,7 +146,7 @@ impl AstroSsdPromptCacheCounters {
 
 #[allow(clippy::too_many_arguments)]
 #[cfg(feature = "direct-mlx")]
-/// Builds the IPC event carrying persistent astro-ssd-prompt-cache observability data.
+/// Builds the IPC event carrying persistent astro SSD prompt cache observability data.
 ///
 /// Combines cumulative counters and active-model file counts with global-root
 /// byte totals in the `WorkerEvent::AstroSsdPromptCacheStats` variant emitted

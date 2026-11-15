@@ -1,4 +1,4 @@
-//! Exact on-disk size projection for model-bound astro-ssd-prompt-cache artifacts.
+//! Exact on-disk size projection for model-bound astro SSD prompt cache artifacts.
 //!
 //! Quota admission happens before publication, so estimates cannot be vague.
 //! These formulas reproduce the safetensors header and payload layout using the

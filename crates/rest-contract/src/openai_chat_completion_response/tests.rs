@@ -66,7 +66,7 @@ fn should_serialize_a_non_streaming_response_with_reasoning_and_text() {
 fn should_serialize_cached_tokens_in_usage_when_nonzero() {
     let token_usage = OpenAiTokenUsage::new(4096, 100)
         .expect("small token counts should produce non-overflowing usage")
-        .with_cached_tokens(2048);
+        .with_astro_ssd_prompt_cache_restored_tokens(2048);
 
     let serialized =
         serde_json::to_string(&token_usage).expect("the usage with cached tokens should serialize");

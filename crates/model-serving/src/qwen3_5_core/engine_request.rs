@@ -32,7 +32,7 @@ pub(crate) struct Qwen3_5EngineRequest<RequestExtension> {
     pub(crate) last_restored_astro_ssd_prompt_cache_block_key: Option<AstroSsdPromptCacheBlockKey>,
     pub(crate) can_use_astro_ssd_prompt_cache: bool,
     pub(crate) maximum_output_tokens: u16,
-    /// Qwen-owned visual identity aligned to ordinary target astro-ssd-prompt-cache blocks.
+    /// Qwen-owned visual identity aligned to ordinary target astro SSD prompt cache blocks.
     pub(crate) astro_ssd_prompt_cache_block_causal_inputs: Vec<AstroSsdPromptCacheBlockCausalInput>,
     pub(crate) next_position_tokens: u32,
     /// One-token-ahead successor submitted during the previous advancement.

@@ -35,7 +35,7 @@ fn frozen_ornith_storage_contract() -> (AstroSsdPromptCacheModelContract, Qwen3_
             &astro_decoder_state_cache_layer_dtypes,
         )
         .expect(
-            "the frozen Ornith 1.0 configuration should build a astro-decoder-state-cache layout",
+            "the frozen Ornith 1.0 configuration should build an astro-decoder-state-cache layout",
         ),
         ornith_config.maximum_position_count() as usize,
         TEST_MLX_MEMORY_CEILING_BYTES,
@@ -116,7 +116,7 @@ fn should_report_frozen_tensor_shapes_for_sequence_boundary_and_visual_state() {
 }
 
 #[test]
-fn should_preserve_frozen_dtype_composition_across_the_cache_layout() {
+fn should_preserve_frozen_dtype_composition_across_the_astro_decoder_state_cache_layout() {
     let (storage_contract, _ornith_config) = frozen_ornith_storage_contract();
     let astro_decoder_state_cache_layout = storage_contract.astro_decoder_state_cache_layout();
 
@@ -401,7 +401,7 @@ fn should_apply_configured_astro_ssd_prompt_cache_block_and_common_prefix_bounda
         Some(16),
         6,
     )
-    .expect("aligned configured cache boundaries should resolve");
+    .expect("aligned configured astro SSD prompt cache boundaries should resolve");
 
     assert_eq!(configured_contract.block_token_count(), 16);
     assert_eq!(

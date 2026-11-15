@@ -1,4 +1,4 @@
-//! Pure planning for the partial-tail astro-ssd-prompt-cache capture, shared by the
+//! Pure planning for the partial-tail astro SSD prompt cache capture, shared by the
 //! streaming and resident engines: which tail span a terminal prefill chunk
 //! can capture, which causal input the tail block binds, and the tail block's
 //! identity. Extraction and publication of the tail live in

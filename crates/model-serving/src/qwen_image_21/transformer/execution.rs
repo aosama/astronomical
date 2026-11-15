@@ -1,6 +1,6 @@
 //! The Qwen-Image-2.1 transformer owner: load once, forward with bounded staged evaluation.
 //!
-//! The forward mirrors the reference's non-cached path (`kv_cache = None`): the full joint
+//! The forward mirrors the reference's path without the `astro_image_prefix_key_value_cache` (`kv_cache = None`): the full joint
 //! sequence runs prefill semantics with the exact multi-segment block-causal attention. Each
 //! stage — preparation, every block, the output head — builds its graph and synchronizes before
 //! the next, so intermediate tensors release wired memory between stages.

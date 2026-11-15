@@ -1,5 +1,5 @@
 //! Live MLX memory policy: the two process-local limits, their once-per-process
-//! enforcement, snapshots, and the MLX buffer-cache reclamation cadence.
+//! enforcement, snapshots, and the MLX buffer cache reclamation cadence.
 //!
 //! # The two limits
 //!
@@ -10,7 +10,7 @@
 //!   evaluation; the Astronomical allocator patch turns it into a real,
 //!   reported ceiling (the source of
 //!   [`MlxRuntimeError::ActiveMemoryLimitExceeded`]);
-//! - the **MLX buffer-cache limit** (`mlx_set_cache_limit`) bounds how many
+//! - the **MLX buffer cache limit** (`mlx_set_cache_limit`) bounds how many
 //!   freed allocations MLX retains for reuse instead of returning them to the
 //!   operating system.
 //!
@@ -26,7 +26,7 @@
 //! # The residency-set decision
 //!
 //! Astronomical deliberately leaves MLX's per-buffer wired residency disabled
-//! in this policy. MLX allocation-pressure reclamation removes cached buffers
+//! in this policy. MLX allocation-pressure reclamation removes `mlx_buffer_cache` buffers
 //! from that residency set while Metal command buffers use unretained
 //! references; on affected macOS releases that removal can panic IOGPU with a
 //! prepare-count underflow. The worker's wired-residency claim (a single
@@ -132,7 +132,7 @@ impl MlxRuntime {
 
     /// Samples process-local MLX allocator bytes.
     ///
-    /// One native round-trip produces a consistent triple (active, cache,
+    /// One native round-trip produces a consistent triple (active, MLX buffer cache,
     /// peak) rather than three independent reads that could straddle a
     /// reclamation event.
     pub fn memory_snapshot(&self) -> Result<MlxMemorySnapshot, MlxRuntimeError> {
@@ -155,9 +155,9 @@ impl MlxRuntime {
 
     /// Releases reclaimable MLX buffer cache allocations.
     ///
-    /// The cache exists to make reallocation cheap; releasing it trades that
+    /// The MLX buffer cache exists to make reallocation cheap; releasing it trades that
     /// speed for memory. Call this only at points where the next allocations
-    /// are unpredictable (request finalization) or the cache has grown past
+    /// are unpredictable (request finalization) or the MLX buffer cache has grown past
     /// the reclaim threshold.
     pub fn clear_mlx_buffer_cache(&self) -> Result<(), MlxRuntimeError> {
         clear_mlx_buffer_cache().map_err(MlxRuntimeError::from)
@@ -261,13 +261,13 @@ pub(super) fn release_runtime_from(process_policy: &Mutex<ProcessMemoryPolicy>) 
 /// - `mlx_set_cache_limit` controls reclaimable allocator retention.
 ///
 /// Astronomical deliberately leaves MLX's per-buffer wired residency disabled.
-/// MLX allocation-pressure reclamation removes cached buffers from that residency
+/// MLX allocation-pressure reclamation removes `mlx_buffer_cache` buffers from that residency
 /// set while Metal command buffers use unretained references. On affected macOS
 /// releases, that removal can panic IOGPU with a prepare-count underflow.
 ///
 /// Neither control changes any kernel setting; both are process-local MLX
 /// guidance. Rollback preserves the previous process policy if the
-/// MLX buffer-cache control fails.
+/// MLX buffer cache control fails.
 fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeError> {
     let previous_memory_limit_bytes =
         set_memory_limit(memory_limits.active_memory_limit_bytes).map_err(MlxRuntimeError::from)?;

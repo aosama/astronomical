@@ -134,8 +134,11 @@ fn should_predict_the_same_values_from_a_kept_compiled_model() {
     ));
     let fixture = ProjectionFixture::with_fp16_weights(shape, fp16_weights);
     let package_directory = tempfile::tempdir().expect("a scratch directory for the model");
-    let cache_directory = tempfile::tempdir().expect("a scratch directory for the cache");
-    let kept_model_path = cache_directory.path().join("kept.mlmodelc");
+    let astro_neural_engine_program_cache_directory =
+        tempfile::tempdir().expect("a scratch directory for the astro Neural Engine program cache");
+    let kept_model_path = astro_neural_engine_program_cache_directory
+        .path()
+        .join("kept.mlmodelc");
     let mut projection = load_ml_program(
         shape,
         MlProgramWeights::Fp16(&fixture.fp16_weights),
@@ -155,7 +158,11 @@ fn should_predict_the_same_values_from_a_kept_compiled_model() {
     assert!(kept_model_path.is_dir(), "the compiled copy is kept");
     assert!(
         projection
-            .keep_compiled_model_files_at(&cache_directory.path().join("again.mlmodelc"))
+            .keep_compiled_model_files_at(
+                &astro_neural_engine_program_cache_directory
+                    .path()
+                    .join("again.mlmodelc")
+            )
             .is_err(),
         "there is nothing left to keep a second time"
     );
@@ -190,7 +197,7 @@ fn should_predict_the_same_values_from_a_program_compiled_to_its_final_path() {
     let fixture = ProjectionFixture::with_shape(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT);
     let package_directory = tempfile::tempdir().expect("a scratch directory for the package");
     let kept_directory = tempfile::tempdir().expect("a directory for the kept program");
-    // A parent that does not exist yet, as a cache folder is on its first use.
+    // A parent that does not exist yet, as an astro Neural Engine program cache folder is on its first use.
     let kept_model_path = kept_directory.path().join("nested").join("kept.mlmodelc");
 
     compile_ml_program_to(

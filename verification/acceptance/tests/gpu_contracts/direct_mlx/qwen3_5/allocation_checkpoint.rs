@@ -41,7 +41,7 @@ fn synthetic_composite_astro_decoder_state_cache_layout() -> AstroDecoderStateCa
             ),
         ),
     ])])
-    .expect("the synthetic composite astro-decoder-state-cache layout should validate")
+    .expect("the synthetic composite astro decoder state cache layout should validate")
 }
 
 fn synthetic_append_only_attention_astro_decoder_state_cache_layout() -> AstroDecoderStateCacheLayout
@@ -63,7 +63,7 @@ fn synthetic_append_only_attention_astro_decoder_state_cache_layout() -> AstroDe
             4,
         ),
     ])
-    .expect("the synthetic append-only astro-decoder-state-cache layout should validate")
+    .expect("the synthetic append-only astro decoder state cache layout should validate")
 }
 
 #[tokio::test]

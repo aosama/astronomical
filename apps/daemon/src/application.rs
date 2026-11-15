@@ -393,7 +393,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
 }
 
 /// The always-present routes: console/catalog/telemetry merges plus the
-/// health, readiness, status, cache-stats, model listing, and the three
+/// health, readiness, status, astro SSD prompt cache stats, model listing, and the three
 /// body-budgeted text endpoints (OpenAI chat completions and responses, and
 /// Anthropic messages).
 fn core_api_routes() -> Router<ApplicationState> {
@@ -476,7 +476,7 @@ fn openai_generation_routes(router: Router<ApplicationState>) -> Router<Applicat
 
 /// Adds each control-plane route only when the daemon was built with the
 /// capability it exercises: config reload needs the reloadable config and
-/// resolver, cache clear needs a worker, the live MLX memory ceiling needs
+/// resolver, an astro SSD prompt cache clear needs a worker, the live MLX memory ceiling needs
 /// both reload and worker control, and shutdown needs the shutdown
 /// controller.
 fn capability_conditional_routes(

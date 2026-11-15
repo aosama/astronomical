@@ -25,7 +25,7 @@ async fn should_persist_worker_astro_ssd_prompt_cache_diagnostics_for_a_complete
     let mut stream_receiver = worker_executor
         .start_chat_generation(astro_ssd_prompt_cache_diagnostics_command())
         .await
-        .expect("the cache diagnostics request should start");
+        .expect("the astro SSD prompt cache diagnostics request should start");
 
     loop {
         let stream_event = timeout(Duration::from_secs(1), stream_receiver.recv())

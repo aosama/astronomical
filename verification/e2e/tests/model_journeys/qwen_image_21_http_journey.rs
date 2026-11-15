@@ -151,7 +151,7 @@ fn qwen_image_model_root() -> PathBuf {
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.starts_with("models--")),
-        "the derived model root should be one Hugging Face cache entry, found {}",
+        "the derived model root should be one `huggingface_hub_cache` entry, found {}",
         model_root.display()
     );
     model_root

@@ -12,7 +12,7 @@ fn should_enable_the_standard_astro_ssd_prompt_cache_with_the_default_capacity()
     assert_eq!(
         astronomical_config
             .astro_ssd_prompt_cache()
-            .expect("prompt cache should resolve"),
+            .expect("astro SSD prompt cache should resolve"),
         AstroSsdPromptCacheConfig::new(
             temporary_home_directory.path().join(".astronomical/cache"),
             53_687_091_200,

@@ -2,7 +2,7 @@
 //! the engine asks about it (issue #2221).
 //!
 //! While a prompt is read there is no plan: every layer may be kept whole
-//! as it is read, and the cache's capacity, which the memory governor sets,
+//! as it is read, and the `astro_expert_cache` capacity, which the memory governor sets,
 //! is the only refusal. When the reply begins the capacity rises, and one
 //! plan says which layers to keep whole, which keep their hot experts, and
 //! which keep nothing. The plan never gives anything back; only the
@@ -164,7 +164,7 @@ impl Qwen3_5StreamingModel {
     }
 
     /// Where `layer_index` should end up. While no plan is active, which is
-    /// while a prompt is read, every layer may be kept whole and the cache's
+    /// while a prompt is read, every layer may be kept whole and the `astro_expert_cache`
     /// capacity is the only refusal.
     pub(super) fn expert_layer_state(&self, layer_index: usize) -> ExpertLayerState {
         self.active_expert_residency_plan

@@ -74,7 +74,7 @@ fn empty_ornith_decoder_state() -> RequestDecoderStateStack {
         KV_SLAB_TOKENS,
         &astro_decoder_state_cache_layer_dtypes,
     )
-    .expect("the frozen configuration builds a astro-decoder-state-cache layout");
+    .expect("the frozen configuration builds an astro-decoder-state-cache layout");
     RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
         &astro_decoder_state_cache_layout,
     )

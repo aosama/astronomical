@@ -2,7 +2,7 @@
 //! and one taken after each request has ended and returned its memory.
 //!
 //! A speech request is forward passes whose arrays are dropped when it ends
-//! (a Phonon voice's cached state is the only thing kept, and it is a few
+//! (a Phonon voice's memoized state is the only thing kept, and it is a few
 //! megabytes), so it shares the decision engines' memory shape and report.
 
 use astronomical_runtime_integration::MlxRuntime;
@@ -39,7 +39,7 @@ impl SpeechMemoryAccount {
     /// Returns a finished request's memory to the system, then records what
     /// the next request starts from.
     pub(crate) fn clean_up_after_request(&mut self, runtime: &MlxRuntime) {
-        // A failed clean-up leaves the memory cached, not lost; the next
+        // A failed clean-up leaves the memory in the `mlx_buffer_cache`, not lost; the next
         // request reuses it, so it is not worth failing the request over.
         let _cleanup_result = runtime.synchronize_gpu_stream_and_clear_mlx_buffer_cache();
         self.post_cleanup_memory_telemetry = self.observe(runtime);

@@ -1,7 +1,7 @@
 //! Shared launch and observation helpers for folded-ternary REST journeys.
 //!
 //! Each journey owns its own isolated Development home whose model roots
-//! point at the installed pack's Hugging Face cache directory, so discovery
+//! point at the installed pack's Hugging Face hub cache directory, so discovery
 //! decodes the real `models--prism-ml--Ternary-Bonsai-2-27B-mlx-2bit`
 //! identity instead of trusting a fabricated one.
 
@@ -29,7 +29,7 @@ fn pack_snapshot_directory() -> PathBuf {
     astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
-/// The Hugging Face cache directory holding the pack's `models--` tree: the
+/// The Hugging Face hub cache directory holding the pack's `models--` tree: the
 /// discovery root whose `models--org--repo/snapshots/<revision>` layout the
 /// scanner decodes into the real provider identity and revision.
 fn pack_hub_directory() -> PathBuf {

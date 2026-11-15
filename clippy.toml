@@ -17,8 +17,8 @@
 #
 # WHERE it is enforced (policy decision, 2026-10-31): the pre-commit hook
 # ONLY — no clippy runs in GitHub Actions at all, so the hook's single
-# default-world pass is the budget's sole proof. The hook run is warm-cache
-# incremental; feature-gated code is linted by the developer's own lane
+# default-world pass is the budget's sole proof. The hook run reuses Cargo's
+# incremental-compilation state; feature-gated code is linted by the developer's own lane
 # runs. Rustc-level warnings stay denied in every CI compile through the
 # [build] warnings policy; only clippy-only lints left CI.
 #

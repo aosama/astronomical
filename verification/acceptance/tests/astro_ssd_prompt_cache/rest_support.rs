@@ -34,7 +34,7 @@ pub(crate) struct StreamedAssistantResponse {
     pub(crate) streamed_output_character_count: usize,
 }
 
-pub(crate) fn prepare_cacheable_romeo_and_juliet_prompt(
+pub(crate) fn prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt(
     model_directory: &Path,
     maximum_prompt_token_count: usize,
 ) -> PreparedRomeoAndJulietPrompt {
@@ -52,9 +52,9 @@ fn prepare_romeo_and_juliet_prompt_with_instruction(
 ) -> PreparedRomeoAndJulietPrompt {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, u32::from(MAXIMUM_OUTPUT_TOKEN_COUNT))
-        .expect("the cache-pressure artifact should validate");
+        .expect("the astro SSD prompt cache pressure artifact should validate");
     let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
-        .expect("the cache-pressure tokenizer should load");
+        .expect("the astro SSD prompt cache pressure tokenizer should load");
     let model_sampler_configuration = tokenizer.model_sampler_config();
     let source_repeat_count = maximum_prompt_token_count
         .saturating_add(2_999)
@@ -100,11 +100,11 @@ fn prepare_romeo_and_juliet_prompt_with_instruction(
 
     assert!(
         selected_prompt_token_count >= maximum_prompt_token_count.saturating_sub(1),
-        "the REST cache-pressure prompt should reach its requested token boundary; requested_token_count={maximum_prompt_token_count} actual_token_count={selected_prompt_token_count}"
+        "the REST astro SSD prompt cache pressure prompt should reach its requested token boundary; requested_token_count={maximum_prompt_token_count} actual_token_count={selected_prompt_token_count}"
     );
     PreparedRomeoAndJulietPrompt {
         user_message: selected_user_message
-            .expect("the Romeo and Juliet source should contain a cacheable prompt prefix"),
+            .expect("the Romeo and Juliet source should contain a prompt prefix the astro SSD prompt cache can hold"),
         prompt_token_count: selected_prompt_token_count,
         temperature: f32::from(model_sampler_configuration.temperature_thousandths) / 1_000.0,
         top_p: f32::from(model_sampler_configuration.top_p_thousandths) / 1_000.0,
@@ -205,7 +205,9 @@ pub(crate) async fn get_json_endpoint(server_address: SocketAddr, endpoint_path:
 
 pub(crate) fn required_u64(json_document: &Value, field_name: &str) -> u64 {
     json_document[field_name].as_u64().unwrap_or_else(|| {
-        panic!("the cache stats response must contain {field_name}: {json_document}")
+        panic!(
+            "the astro SSD prompt cache stats response must contain {field_name}: {json_document}"
+        )
     })
 }
 
@@ -228,8 +230,9 @@ pub(crate) fn write_astro_ssd_prompt_cache_pressure_worker_config(
     maximum_mlx_memory_bytes: Option<u64>,
 ) {
     let configuration_directory = isolated_worker_home.join(".astronomical-dev");
-    fs::create_dir(&configuration_directory)
-        .expect("the cache-pressure REST configuration directory should be created");
+    fs::create_dir(&configuration_directory).expect(
+        "the astro SSD prompt cache pressure REST configuration directory should be created",
+    );
     let mut configuration_document = json!({
         "model_directories": [model_directory],
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
@@ -250,9 +253,9 @@ pub(crate) fn write_astro_ssd_prompt_cache_pressure_worker_config(
     fs::write(
         configuration_directory.join("config.json"),
         serde_json::to_vec_pretty(&configuration_document)
-            .expect("the cache-pressure REST configuration should serialize"),
+            .expect("the astro SSD prompt cache pressure REST configuration should serialize"),
     )
-    .expect("the cache-pressure REST configuration should write");
+    .expect("the astro SSD prompt cache pressure REST configuration should write");
 }
 
 fn prepared_chat_token_count(

@@ -4,7 +4,7 @@ use astronomical_native_identity::probes::ProbeValue;
 use astronomical_native_identity::{IdentityScope, NativeBuildProfile};
 
 use super::{
-    FingerprintOptions, cache_environment_lines, host_from_rustc_version, one_line_text,
+    FingerprintOptions, github_environment_lines, host_from_rustc_version, one_line_text,
     parse_arguments, probe_source_text, resolve_target_triple,
 };
 
@@ -253,19 +253,19 @@ fn should_report_the_source_of_each_captured_probe() {
 }
 
 #[test]
-fn should_parse_the_cache_environment_option() {
+fn should_parse_the_github_environment_option() {
     let options = fingerprint_options(&["--profile", "core", "--cache-environment"]);
-    assert!(options.cache_environment);
+    assert!(options.should_print_github_environment);
     assert_eq!(options.scope, IdentityScope::Full);
 }
 
 #[test]
-fn should_leave_the_cache_environment_off_by_default() {
-    assert!(!fingerprint_options(&["--profile", "core"]).cache_environment);
+fn should_leave_the_github_environment_off_by_default() {
+    assert!(!fingerprint_options(&["--profile", "core"]).should_print_github_environment);
 }
 
 #[test]
-fn should_refuse_a_cache_environment_for_a_source_only_identity() {
+fn should_refuse_a_github_environment_for_a_source_only_identity() {
     assert_eq!(
         argument_failure(&["--profile", "core", "--source-only", "--cache-environment"]),
         "--cache-environment needs the full identity, not --source-only"
@@ -273,9 +273,9 @@ fn should_refuse_a_cache_environment_for_a_source_only_identity() {
 }
 
 #[test]
-fn should_print_the_cache_key_and_store_entry_as_github_environment_lines() {
+fn should_print_the_native_build_identity_and_store_entry_as_github_environment_lines() {
     assert_eq!(
-        cache_environment_lines(
+        github_environment_lines(
             "feedface",
             Path::new(
                 "/home-fixture/Library/Caches/Astronomical/native-builds/v3/entries/feedface"

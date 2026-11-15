@@ -55,7 +55,7 @@ pub trait InferenceEngine {
         async move { Ok(None) }
     }
 
-    /// Collects persistent astro-ssd-prompt-cache observability stats for IPC emission.
+    /// Collects persistent astro SSD prompt cache observability stats for IPC emission.
     ///
     /// Returns `Ok(None)` when the engine has no astro SSD prompt cache. The
     /// worker emits `WorkerEvent::AstroSsdPromptCacheStats` only when `Some`.
@@ -67,7 +67,7 @@ pub trait InferenceEngine {
         async move { Ok(None) }
     }
 
-    /// Clears persistent astro-ssd-prompt-cache storage on the engine's owning context.
+    /// Clears persistent astro SSD prompt cache storage on the engine's owning context.
     ///
     /// `Ok(None)` means this engine has no open astro SSD prompt cache store, allowing the worker
     /// to fall back to its startup-configured global astro SSD prompt cache root.
@@ -162,14 +162,14 @@ pub trait MlxInferenceExecution: 'static {
         None
     }
 
-    /// Reports optional persistent astro-ssd-prompt-cache state.
+    /// Reports optional persistent astro SSD prompt cache state.
     fn collect_astro_ssd_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
         Ok(None)
     }
 
-    /// Clears persistent astro-ssd-prompt-cache storage owned by this execution context.
+    /// Clears persistent astro SSD prompt cache storage owned by this execution context.
     fn clear_astro_ssd_prompt_cache(
         &mut self,
         _model_id: Option<String>,

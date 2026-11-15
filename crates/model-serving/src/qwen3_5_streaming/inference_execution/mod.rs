@@ -129,7 +129,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5StreamingEngine, InferenceEngineError> {
-        Self::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
+        Self::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_astro_expert_cache_policy(
             validated_artifact,
             active_memory_limit_bytes,
             mlx_buffer_cache_limit_bytes,
@@ -145,9 +145,9 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         )
     }
 
-    /// Starts the owner thread with an internal decode-cache benchmark policy.
+    /// Starts the owner thread with an internal decode `astro_expert_cache` benchmark policy.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
+    pub fn new_with_effective_context_runtime_chunking_performance_attribution_and_decode_astro_expert_cache_policy(
         validated_artifact: ValidatedQwen3_5Artifact,
         active_memory_limit_bytes: usize,
         mlx_buffer_cache_limit_bytes: usize,
@@ -251,7 +251,7 @@ pub struct Qwen3_5InferenceExecution {
     prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
     chunking: WorkerChunkingConfiguration,
     validated_artifact: Option<ValidatedQwen3_5Artifact>,
-    /// Cached startup engine-selection facts; a raised ceiling consults them
+    /// Startup engine-selection facts, memoized from the first load; a raised ceiling consults them
     /// to decide whether a replacement worker must load the resident engine.
     startup_residency_facts: Option<StreamingStartupResidencyFacts>,
     vocabulary_size: u32,

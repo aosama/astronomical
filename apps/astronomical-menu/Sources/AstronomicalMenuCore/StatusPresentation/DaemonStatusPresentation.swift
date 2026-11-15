@@ -14,7 +14,7 @@ extension DaemonStatusDocument {
   }
 
   // Prompt-processing activity is published as soon as the request starts, but
-  // the first PrefillProgress event arrives only after astro-ssd-prompt-cache restore
+  // the first PrefillProgress event arrives only after astro SSD prompt cache restore
   // returns. Missing progress in that window is restore work, not idle and not
   // expert SSD streaming.
   private var isRestoringAstroSsdPromptCache: Bool {
@@ -194,7 +194,7 @@ extension DaemonStatusDocument {
 
   /// Whether the popover draws its progress bar. It does when there is a
   /// completion fraction, and while idle, where an empty bar keeps the section
-  /// readable. It does not during a model load, a astro-ssd-prompt-cache restore, a
+  /// readable. It does not during a model load, an astro SSD prompt cache restore, a
   /// generation against the default budget, or an image phase other than
   /// denoising: the Flight and Progress rows describe those instead.
   var showsProgressBar: Bool {

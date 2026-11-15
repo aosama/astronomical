@@ -41,7 +41,7 @@ const DEFAULT_HISTORY_RELATIVE_PATH: &str =
 /// shared history log carries this field so text, vision, and memory-cell
 /// measurements delineate themselves without separate files; lines written
 /// before this field existed are text-journey measurements. Historical rows
-/// without an explicit decode-cache policy were produced by the baseline path.
+/// without an explicit decode astro expert cache policy were produced by the baseline path.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThroughputJourneyKind {
@@ -114,9 +114,9 @@ pub struct MemoryCellRecord {
 /// journey, recorded against the host and the wall-clock time it was taken on.
 ///
 /// The first columns are ordered for human reading: the time, the model, the
-/// journey family, the decode-cache policy arm, then the prefill and decode
+/// journey family, the decode astro expert cache policy arm, then the prefill and decode
 /// tokens-per-second as whole numbers. The remaining fields carry the host,
-/// the git commit, and the input, output, and cached token counts plus prefill
+/// the git commit, and the input, output, and astro SSD prompt cache token counts plus prefill
 /// and decode latencies from the measured completion.
 #[derive(Clone, Debug, Serialize)]
 pub struct ThroughputRecord {

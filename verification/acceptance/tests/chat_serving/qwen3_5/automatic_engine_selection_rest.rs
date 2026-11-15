@@ -275,7 +275,8 @@ async fn should_select_streaming_engine_when_complete_residency_headroom_does_no
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the resident engine, forces one invisible streaming retry, and checks persisted-prefix reuse"]
 #[serial]
-async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_retry() {
+async fn should_restore_astro_ssd_prompt_cache_prefix_after_an_invisible_resident_to_streaming_retry()
+ {
     timeout(SSD_JOURNEY_TIMEOUT, async {
         let model_id = resident_sparse_moe_model_id();
         let model_directory = configured_installed_model_directory_by_id(model_id);
@@ -285,8 +286,8 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
             context_memory_reservation_bytes(&model_directory, ASTRO_SSD_PROMPT_CACHE_SEED_PROMPT_TOKEN_COUNT + 2);
         // The seed request has to be served in memory, so the limit holds
         // one prompt chunk's MLX working buffers too. Without it the seed request
-        // itself moves to the streaming engine and nothing is cached for
-        // the retry to restore.
+        // itself moves to the streaming engine and nothing is saved in the
+        // astro SSD prompt cache for the retry to restore.
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
             .saturating_add(astro_ssd_prompt_cache_seed_context_bytes)
@@ -295,7 +296,7 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
             ));
         assert!(
             resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
-            "the retry/cache acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
+            "the retry and astro SSD prompt cache acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
         );
         let initial_user_message = exact_model_prompt::build_exact_model_prompt_content(
             &model_directory,
@@ -310,7 +311,7 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
             ASTRO_SSD_PROMPT_CACHE_APPEND_PROMPT_TOKEN_COUNT,
         );
         let worker_home = tempfile::tempdir()
-            .expect("the retry/cache worker home should be created");
+            .expect("the retry and astro SSD prompt cache worker home should be created");
         write_acceptance_config(
             worker_home.path(),
             &model_directory,
@@ -330,7 +331,7 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
             server_address,
             model_id,
             json!([{"role": "user", "content": initial_user_message}]),
-            "cache-seed",
+            "astro-ssd-prompt-cache-seed",
         )
         .await;
         let streaming_retry_memory_ceiling_gb =
@@ -414,7 +415,7 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
         );
         assert!(
             restored_prefix_token_count > 0 && restored_prefix_token_count < prompt_token_count,
-            "the retry must restore a cached prefix and process only its uncached tail: prompt={prompt_token_count} restored={restored_prefix_token_count}"
+            "the retry must restore a prefix from the astro SSD prompt cache and process only the tail it did not restore: prompt={prompt_token_count} restored={restored_prefix_token_count}"
         );
         let retry_operation = retry_report["operations"]
             .as_array()
@@ -431,7 +432,7 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
         );
     })
     .await
-    .expect("the retry/cache SSD journey must finish within 120 seconds");
+    .expect("the retry and astro SSD prompt cache SSD journey must finish within 120 seconds");
 }
 
 pub(super) struct SparseArtifactResidencyGeometry {

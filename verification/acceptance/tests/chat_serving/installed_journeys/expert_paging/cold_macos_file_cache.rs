@@ -6,10 +6,10 @@
 //! with more RAM than the limit, the macOS file cache holds most of the model and
 //! "storage" reads come from memory (measured: 96% of decode expert bytes on
 //! a 48 GB Mac at a 16 GB limit). `msync(MS_INVALIDATE)` on a read-only
-//! shared mapping drops a file's clean cached pages (measured with `mincore`:
+//! shared mapping drops a file's clean pages from the macOS file cache (measured with `mincore`:
 //! a 0.86 GB layer file went from fully resident to none in 7 ms), so a
 //! background thread that sweeps every weight file keeps the macOS file cache empty.
-//! This is the pessimistic end of a small Mac, which still macOS file caches a little.
+//! This is the pessimistic end of a small Mac, which still keeps a little of the model in the macOS file cache.
 
 use std::fs::File;
 use std::os::fd::AsRawFd;
@@ -20,7 +20,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 /// Pause between sweeps: short enough that a re-read expert is rarely still
-/// cached when decode asks for it again, long enough that the sweeps do not
+/// back in the macOS file cache when decode asks for it again, long enough that the sweeps do not
 /// compete with the serving threads for a core.
 const SWEEP_PAUSE: Duration = Duration::from_millis(10);
 
@@ -71,7 +71,7 @@ impl MappedWeightFile {
         }
     }
 
-    fn invalidate_cached_pages(&self) {
+    fn invalidate_macos_file_cache_pages(&self) {
         // SAFETY: the address and length are exactly this live mapping.
         let status = unsafe {
             libc::msync(
@@ -118,7 +118,7 @@ impl ColdMacosFileCache {
             model_directory.display()
         );
         for weight_file in &weight_files {
-            weight_file.invalidate_cached_pages();
+            weight_file.invalidate_macos_file_cache_pages();
         }
         let should_stop = Arc::new(AtomicBool::new(false));
         let sweeping_thread = std::thread::spawn({
@@ -137,7 +137,7 @@ impl ColdMacosFileCache {
             .take()
             .expect("the sweeper runs until finished")
             .join()
-            .expect("the file cache sweeper should not panic")
+            .expect("the macOS file cache sweeper should not panic")
     }
 }
 
@@ -156,7 +156,7 @@ fn sweep_until_stopped(weight_files: &[MappedWeightFile], should_stop: &AtomicBo
     let mut sweep_count = 0_u64;
     while !should_stop.load(Ordering::Relaxed) {
         for weight_file in weight_files {
-            weight_file.invalidate_cached_pages();
+            weight_file.invalidate_macos_file_cache_pages();
         }
         sweep_count += 1;
         std::thread::sleep(SWEEP_PAUSE);

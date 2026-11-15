@@ -85,7 +85,7 @@ pub(crate) fn assert_measurement_shape(measured_throughput: &ThroughputMeasureme
     );
     assert_eq!(
         measured_throughput.cached_tokens, 0,
-        "the measured completion must not reuse the persistent prompt cache",
+        "the measured completion must not reuse the astro SSD prompt cache",
     );
 }
 
@@ -95,7 +95,7 @@ pub(crate) const READY_ATTEMPT_LIMIT: u8 = 70;
 const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
 
 /// The test case for one throughput journey: the journey family recorded in
-/// the durable history line, the internal decode-cache policy arm, the short
+/// the durable history line, the internal decode astro expert cache policy arm, the short
 /// warmup completion (its prompt, images, and output cap), the measured
 /// completion (its prompt, images, and output cap), the sampling temperature,
 /// the per-cell MLX ceiling override, whether the worker runs with performance

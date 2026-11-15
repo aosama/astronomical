@@ -1,4 +1,4 @@
-//! Pure planning units for request-side persistent astro-ssd-prompt-cache capture,
+//! Pure planning units for request-side persistent astro SSD prompt cache capture,
 //! shared by the streaming and resident engines.
 //!
 //! Boundary validation, causal-input selection, block-key construction
@@ -177,7 +177,7 @@ pub(crate) fn publication_workspace_decision(
     }
 }
 
-/// MLX buffer-cache bytes a publication workspace release actually cleared,
+/// `mlx_buffer_cache` bytes a publication workspace release actually cleared,
 /// measured between the snapshots taken before and after the cleanup. An
 /// unreadable before-snapshot counts as zero cleared bytes; an unreadable
 /// after-snapshot reads as zero bytes remaining, so the full before value

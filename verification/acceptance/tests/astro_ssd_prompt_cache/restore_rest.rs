@@ -4,7 +4,7 @@ use tokio::time::{Duration, Instant, sleep, timeout};
 use super::rest_support::{
     MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT,
     astro_ssd_prompt_cache_pressure_model_id, get_json_endpoint,
-    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
+    prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt, read_performance_records, required_u64,
     send_streaming_chat_request, user_message, write_astro_ssd_prompt_cache_pressure_worker_config,
 };
 use crate::openai_rest;
@@ -12,11 +12,11 @@ use crate::openai_rest::E2E_TIMEOUT;
 use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest;
 
-// This suite is the user-facing acceptance boundary for cache-pressure behavior: a client sends
+// This suite is the user-facing acceptance boundary for astro SSD prompt cache pressure behavior: a client sends
 // a long OpenAI Chat request, the real worker publishes reusable state, and the next identical
 // request restores it. Direct-MLX coverage below the worker is retained separately for allocator
 // arithmetic; this test protects the complete server-to-client journey.
-const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
+const ASTRO_SSD_PROMPT_CACHE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and publishes then restores a Romeo and Juliet astro SSD prompt cache"]
@@ -26,7 +26,7 @@ async fn should_publish_and_restore_the_romeo_and_juliet_astro_ssd_prompt_cache_
         run_astro_ssd_prompt_cache_memory_rest_journey(
             None,
             None,
-            CACHEABLE_PROMPT_TOKEN_COUNT,
+            ASTRO_SSD_PROMPT_CACHE_PROMPT_TOKEN_COUNT,
             None,
             MAXIMUM_OUTPUT_TOKEN_COUNT,
             THINKING_BUDGET_TOKEN_COUNT,
@@ -40,7 +40,7 @@ async fn should_publish_and_restore_the_romeo_and_juliet_astro_ssd_prompt_cache_
 async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     maximum_mlx_memory_bytes: Option<u64>,
     expected_expert_memory_mode: Option<&str>,
-    cacheable_prompt_token_count: usize,
+    astro_ssd_prompt_cache_prompt_token_count: usize,
     expected_warm_request_expert_memory_mode: Option<&str>,
     maximum_output_token_count: u16,
     thinking_budget_token_count: u16,
@@ -50,9 +50,9 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
         astro_ssd_prompt_cache_pressure_model_id(),
     );
     let configured_worker_home = tempfile::tempdir()
-        .expect("the cache-pressure REST journey should create an isolated home");
+        .expect("the astro SSD prompt cache pressure REST journey should create an isolated home");
     let performance_log_directory = tempfile::tempdir()
-        .expect("the cache-pressure REST journey should create a performance log directory");
+        .expect("the astro SSD prompt cache pressure REST journey should create a performance log directory");
     write_astro_ssd_prompt_cache_pressure_worker_config(
         configured_worker_home.path(),
         &model_directory,
@@ -61,8 +61,10 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     // Build a textual request instead of injecting token IDs: only the public REST tokenizer
     // may define the actual user journey. The local tokenizer is used solely to size a stable
     // Romeo-and-Juliet fixture near the astro SSD prompt cache boundary before it is sent as ordinary text.
-    let prepared_romeo_and_juliet_prompt =
-        prepare_cacheable_romeo_and_juliet_prompt(&model_directory, cacheable_prompt_token_count);
+    let prepared_romeo_and_juliet_prompt = prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt(
+        &model_directory,
+        astro_ssd_prompt_cache_prompt_token_count,
+    );
     let model_artifact_rest_server =
         serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
             astro_ssd_prompt_cache_pressure_model_id(),
@@ -186,16 +188,17 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
             2,
             "the cold and warm requests should each produce one performance record"
         );
-        let warm_cache_diagnostics = &performance_records[1]["astro_ssd_prompt_cache_diagnostics"];
+        let warm_astro_ssd_prompt_cache_diagnostics =
+            &performance_records[1]["astro_ssd_prompt_cache_diagnostics"];
         assert_eq!(
-            warm_cache_diagnostics["expert_bytes_reclaimed_for_publication"], 0,
-            "the long warm request must remain resident through ordinary initial admission so this acceptance isolates restore pressure: {warm_cache_diagnostics}"
+            warm_astro_ssd_prompt_cache_diagnostics["expert_bytes_reclaimed_for_publication"], 0,
+            "the long warm request must remain resident through ordinary initial admission so this acceptance isolates restore pressure: {warm_astro_ssd_prompt_cache_diagnostics}"
         );
         assert!(
-            warm_cache_diagnostics["expert_bytes_reclaimed_for_restore"]
+            warm_astro_ssd_prompt_cache_diagnostics["expert_bytes_reclaimed_for_restore"]
                 .as_u64()
                 .is_some_and(|reclaimed_expert_bytes| reclaimed_expert_bytes > 0),
-            "cache reconstruction must reclaim resident experts before loading the long prefix: {warm_cache_diagnostics}"
+            "astro SSD prompt cache reconstruction must reclaim resident experts before loading the long prefix: {warm_astro_ssd_prompt_cache_diagnostics}"
         );
     }
     let final_status_document = get_json_endpoint(server_address, "/v1/status").await;

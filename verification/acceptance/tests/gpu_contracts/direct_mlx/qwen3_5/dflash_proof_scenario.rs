@@ -20,7 +20,7 @@ pub(crate) struct ProofScenario {
     /// Prompt tokens fed to the tap-capturing prefill before decode is
     /// measured. Published Apple Silicon measurements show speculation
     /// peaking near one-to-four thousand tokens and eroding as key-value
-    /// cache traffic grows past the weight read.
+    /// astro decoder state cache traffic grows past the weight read.
     pub(crate) context_tokens: usize,
     /// Whether the prompt is tokenized through the worker's chat template
     /// (the exact serving tokenization) instead of raw continuation. The

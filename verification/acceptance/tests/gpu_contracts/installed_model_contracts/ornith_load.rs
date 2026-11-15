@@ -1,8 +1,8 @@
 //! End-to-end acceptance for the configured Ornith 1.5 6-bit artifact.
 //!
 //! This artifact's snapshot files resolve through the Hugging Face shared blob
-//! store rather than through its own cache entry's `blobs/` directory, so the
-//! journey is the regression guard for that cache layout: it fails if validation
+//! store rather than through its own `huggingface_hub_cache` entry's `blobs/` directory, so the
+//! journey is the regression guard for that `huggingface_hub_cache` layout: it fails if validation
 //! rejects a legitimate shared blob and passes only when the production engine
 //! both loads the artifact and generates tokens from it.
 

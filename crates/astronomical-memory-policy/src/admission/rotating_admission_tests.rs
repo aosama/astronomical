@@ -1,4 +1,4 @@
-//! Boundary and negative tests for rotating-cache admission geometry.
+//! Boundary and negative tests for rotating `astro_decoder_state_cache` admission geometry.
 
 use crate::admission::rotating::{
     RotatingAdmissionError, rotating_committed_token_count, rotating_prefill_transient_token_count,

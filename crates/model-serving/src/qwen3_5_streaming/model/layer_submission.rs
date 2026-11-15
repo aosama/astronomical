@@ -42,7 +42,7 @@ impl LayerGroupSubmission {
 }
 
 /// What one completed decoder layer leaves to evaluate: its output, and for
-/// a linear-attention layer the convolution state and any astro-ssd-prompt-cache
+/// a linear-attention layer the convolution state and any astro SSD prompt cache
 /// boundary snapshots, which the output does not reach.
 pub(crate) struct CompletedLayerRoots<'layer> {
     pub(crate) layer_output: &'layer MlxArray,

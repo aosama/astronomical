@@ -4,7 +4,7 @@
 //!
 //! A native store entry becomes *executable build input* — its archives are
 //! linked into the worker. Publication therefore rejects symlinks everywhere
-//! and hashes every reusable product, so a partial cache restore, an
+//! and hashes every reusable product, so a partial `github_actions_cache` restore, an
 //! interrupted write, or a tampered file cannot become build input:
 //! validation replays the manifest (SHA-256 + size per file) against the
 //! payload and any mismatch fails the entry as corrupt (the store then

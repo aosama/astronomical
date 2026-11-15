@@ -4,7 +4,7 @@ use tokio::time::timeout;
 use super::rest_support::{
     MAXIMUM_OUTPUT_TOKEN_COUNT, THINKING_BUDGET_TOKEN_COUNT, assistant_message,
     astro_ssd_prompt_cache_pressure_model_id, get_json_endpoint,
-    prepare_cacheable_romeo_and_juliet_prompt, read_performance_records, required_u64,
+    prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt, read_performance_records, required_u64,
     send_streaming_chat_request, user_message, write_astro_ssd_prompt_cache_pressure_worker_config,
 };
 use crate::openai_rest;
@@ -12,7 +12,7 @@ use crate::openai_rest::E2E_TIMEOUT;
 use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest;
 
-const CACHEABLE_PROMPT_TOKEN_COUNT: usize = 8_192;
+const ASTRO_SSD_PROMPT_CACHE_PROMPT_TOKEN_COUNT: usize = 8_192;
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "launches the production REST server and restores completed cold astro SSD prompt cache blocks on an appended Romeo chat"]
@@ -37,8 +37,10 @@ async fn run_append_only_rest_journey() {
         &model_directory,
         None,
     );
-    let prepared_prompt =
-        prepare_cacheable_romeo_and_juliet_prompt(&model_directory, CACHEABLE_PROMPT_TOKEN_COUNT);
+    let prepared_prompt = prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt(
+        &model_directory,
+        ASTRO_SSD_PROMPT_CACHE_PROMPT_TOKEN_COUNT,
+    );
     let model_artifact_rest_server =
         serving_rest::launch_serving_rest_server_for_model_with_memory_limit(
             astro_ssd_prompt_cache_pressure_model_id(),

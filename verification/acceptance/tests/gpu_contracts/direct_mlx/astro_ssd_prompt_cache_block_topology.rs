@@ -17,7 +17,7 @@ async fn should_reopen_a_chain_with_one_compacted_non_checkpoint_ancestor() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let root_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = root_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -31,7 +31,7 @@ async fn should_reopen_a_chain_with_one_compacted_non_checkpoint_ancestor() {
         &astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open");
+    .expect("the astro SSD prompt cache should open");
     save_three_block_chain(
         &astro_ssd_prompt_cache,
         &runtime,
@@ -75,7 +75,7 @@ async fn should_recapture_only_a_compacted_boundary_without_rewriting_sequence_s
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let root_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = root_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -89,7 +89,7 @@ async fn should_recapture_only_a_compacted_boundary_without_rewriting_sequence_s
         &astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open");
+    .expect("the astro SSD prompt cache should open");
     save_three_block_chain(
         &astro_ssd_prompt_cache,
         &runtime,
@@ -143,7 +143,7 @@ async fn should_complete_interrupted_parent_boundary_compaction_before_startup_e
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let root_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = root_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -157,7 +157,7 @@ async fn should_complete_interrupted_parent_boundary_compaction_before_startup_e
         &astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open");
+    .expect("the astro SSD prompt cache should open");
     save_three_block_chain(
         &astro_ssd_prompt_cache,
         &runtime,
@@ -211,7 +211,7 @@ async fn should_evict_unprotected_content_before_compacting_the_active_startup_c
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let root_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = root_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -225,7 +225,7 @@ async fn should_evict_unprotected_content_before_compacting_the_active_startup_c
         &astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open");
+    .expect("the astro SSD prompt cache should open");
     save_three_block_chain(
         &astro_ssd_prompt_cache,
         &runtime,
@@ -269,7 +269,7 @@ async fn should_remove_descendants_when_their_sequence_ancestor_is_missing_on_re
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let root_block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let child_block_key = root_block_key
         .for_child_block(&block_tokens_for_seed(10_000))
@@ -280,7 +280,7 @@ async fn should_remove_descendants_when_their_sequence_ancestor_is_missing_on_re
         &astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open");
+    .expect("the astro SSD prompt cache should open");
     astro_ssd_prompt_cache
         .publish_block(
             &runtime,
@@ -337,7 +337,7 @@ async fn should_not_acknowledge_an_existing_block_after_its_state_is_corrupted()
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let block_key = astro_ssd_prompt_cache_block_key_for_seed(0);
     let sequence_state_tensors = synthetic_kv_block_tensors(&runtime);
     let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
@@ -345,7 +345,7 @@ async fn should_not_acknowledge_an_existing_block_after_its_state_is_corrupted()
         &astro_ssd_prompt_cache_directory,
         LARGE_ASTRO_SSD_PROMPT_CACHE_LIMIT_BYTES,
     )
-    .expect("the persistent prompt cache should open");
+    .expect("the astro SSD prompt cache should open");
     astro_ssd_prompt_cache
         .publish_block(
             &runtime,

@@ -284,7 +284,7 @@ impl ModelFactory<RetryProcessor, RetryEngine> for RetryModelFactory {
 }
 
 #[tokio::test]
-async fn should_retry_a_resident_start_fork_once_with_the_same_cache_identity() {
+async fn should_retry_a_resident_start_fork_once_with_the_same_astro_ssd_prompt_cache_identity() {
     let (mut daemon_reader, mut daemon_writer, worker_task, retry_count, identities, _, _) =
         launch_retry_worker(RetryScenario::ResidentStartFork).await;
     load_retry_model(&mut daemon_reader, &mut daemon_writer).await;

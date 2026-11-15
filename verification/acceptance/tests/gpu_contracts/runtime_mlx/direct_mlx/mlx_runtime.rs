@@ -73,7 +73,7 @@ fn should_reject_a_zero_active_memory_limit() {
 }
 
 #[test]
-fn should_allow_a_zero_mlx_buffer_cache_limit_to_disable_allocator_caching() {
+fn should_allow_a_zero_mlx_buffer_cache_limit_to_disable_the_mlx_buffer_cache() {
     let memory_limits = MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, 0)
         .expect("MLX defines zero as disabling its MLX buffer cache");
 

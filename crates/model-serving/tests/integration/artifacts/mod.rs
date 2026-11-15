@@ -1,5 +1,5 @@
 // Persisted-artifact contracts: what the serving layer writes, reads, and validates
-// across the safetensors, persistent astro-ssd-prompt-cache, and visual-embedding surfaces.
+// across the safetensors, persistent astro SSD prompt cache, and visual-embedding surfaces.
 
 mod astro_ssd_prompt_cache_block_format;
 mod astro_ssd_prompt_cache_retained_prefix_lookup;

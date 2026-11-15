@@ -6,8 +6,8 @@
 //! client knowing. Fields that carry no instruction the local model can act
 //! on are accepted and dropped: `metadata`, `service_tier`, and
 //! `context_management`, whose edits ask the server to clear stale thinking
-//! or tool results from a cached context the local worker does not keep in
-//! that form. Claude Code sends `context_management` on every request.
+//! or tool results from a context held in Anthropic's own prompt cache that
+//! the local worker does not keep in that form. Claude Code sends `context_management` on every request.
 
 use std::collections::BTreeMap;
 

@@ -1,4 +1,4 @@
-//! Startup scan: discovers, validates, and cleans persistent astro-ssd-prompt-cache files
+//! Startup scan: discovers, validates, and cleans persistent astro SSD prompt cache files
 //! during `AstroSsdPromptCacheDiskStore::open()`.
 
 use std::collections::{HashMap, HashSet};
@@ -267,7 +267,7 @@ enum BlockDirectoryDiscardReason {
     InterruptedTransaction,
 }
 
-/// Removes one cache-owned block directory and records its reclaimed bytes in
+/// Removes one astro SSD prompt cache block directory and records its reclaimed bytes in
 /// the evidence bucket matching the discard reason. Every scan rejection path
 /// funnels through here so byte accounting and removal can never drift apart.
 fn discard_block_directory(

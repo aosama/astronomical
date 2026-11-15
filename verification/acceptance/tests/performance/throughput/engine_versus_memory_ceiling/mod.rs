@@ -7,7 +7,7 @@
 //! therefore ambiguous — it may be the ceiling squeezing memory or the engine
 //! swap itself. These cells separate the two causes with one identical
 //! workload, a ~5,000-token Romeo and Juliet summarization into 300 output
-//! tokens, persistent prompt cache disabled, 2,048-token prefill chunks:
+//! tokens, astro SSD prompt cache disabled, 2,048-token prefill chunks:
 //!
 //! - `automatic_engine_ceiling_sweep`: the production engine choice at 24, 22,
 //!   21, 20, and 19 GB. It shows what a user gets as the ceiling shrinks and

@@ -16,13 +16,14 @@ async fn should_reopen_every_sequence_only_block_in_the_complete_active_chain() 
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let model_contract = sequence_only_contract();
-    let cache_directory = tempfile::tempdir().expect("the test should create a cache directory");
-    let cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
-        &cache_directory,
+    let astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
+    let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
+        &astro_ssd_prompt_cache_directory,
         1_000_000,
         model_contract.clone(),
     )
-    .expect("the sequence-only cache should open");
+    .expect("the sequence-only astro SSD prompt cache should open");
     let sequence_state_tensors = synthetic_tensors_for_contract(
         &runtime,
         &model_contract
@@ -34,26 +35,29 @@ async fn should_reopen_every_sequence_only_block_in_the_complete_active_chain() 
         .maximum_context_token_count()
         .div_ceil(model_contract.block_token_count());
     publish_complete_chain(
-        &cache,
+        &astro_ssd_prompt_cache,
         &runtime,
         &model_contract,
         complete_block_count,
         &sequence_state_tensors,
         &HashMap::new(),
     );
-    drop(cache);
+    drop(astro_ssd_prompt_cache);
 
-    let reopened_cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
-        &cache_directory,
+    let reopened_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
+        &astro_ssd_prompt_cache_directory,
         1_000_000,
         model_contract,
     )
     .expect("the sequence-only chain should reopen");
     assert_eq!(
-        reopened_cache.sequence_state_block_count(),
+        reopened_astro_ssd_prompt_cache.sequence_state_block_count(),
         complete_block_count
     );
-    assert_eq!(reopened_cache.boundary_state_snapshot_count(), 0);
+    assert_eq!(
+        reopened_astro_ssd_prompt_cache.boundary_state_snapshot_count(),
+        0
+    );
 }
 
 #[tokio::test]
@@ -61,13 +65,14 @@ async fn should_reopen_every_boundary_only_block_without_invalid_compaction() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();
     let model_contract = boundary_only_contract();
-    let cache_directory = tempfile::tempdir().expect("the test should create a cache directory");
-    let cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
-        &cache_directory,
+    let astro_ssd_prompt_cache_directory =
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
+    let astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
+        &astro_ssd_prompt_cache_directory,
         10_000,
         model_contract.clone(),
     )
-    .expect("the boundary-only cache should open");
+    .expect("the boundary-only astro SSD prompt cache should open");
     let boundary_state_tensors = synthetic_tensors_for_contract(
         &runtime,
         &model_contract
@@ -79,30 +84,33 @@ async fn should_reopen_every_boundary_only_block_without_invalid_compaction() {
         .maximum_context_token_count()
         .div_ceil(model_contract.block_token_count());
     publish_complete_chain(
-        &cache,
+        &astro_ssd_prompt_cache,
         &runtime,
         &model_contract,
         complete_block_count,
         &HashMap::new(),
         &boundary_state_tensors,
     );
-    drop(cache);
+    drop(astro_ssd_prompt_cache);
 
-    let reopened_cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
-        &cache_directory,
+    let reopened_astro_ssd_prompt_cache = open_astro_ssd_prompt_cache_disk_store_with_contract(
+        &astro_ssd_prompt_cache_directory,
         10_000,
         model_contract,
     )
     .expect("the boundary-only chain should reopen");
-    assert_eq!(reopened_cache.sequence_state_block_count(), 0);
     assert_eq!(
-        reopened_cache.boundary_state_snapshot_count(),
+        reopened_astro_ssd_prompt_cache.sequence_state_block_count(),
+        0
+    );
+    assert_eq!(
+        reopened_astro_ssd_prompt_cache.boundary_state_snapshot_count(),
         complete_block_count
     );
 }
 
 fn publish_complete_chain(
-    cache: &astronomical_model_serving::AstroSsdPromptCacheDiskStore,
+    astro_ssd_prompt_cache: &astronomical_model_serving::AstroSsdPromptCacheDiskStore,
     runtime: &astronomical_runtime_integration::MlxRuntime,
     model_contract: &AstroSsdPromptCacheModelContract,
     complete_block_count: usize,
@@ -124,7 +132,7 @@ fn publish_complete_chain(
             None => AstroSsdPromptCacheBlockKey::for_root_block(model_contract, &block_tokens)
                 .expect("the root block identity should resolve"),
         };
-        cache
+        astro_ssd_prompt_cache
             .publish_block(
                 runtime,
                 &block_key,

@@ -50,19 +50,19 @@ pub(crate) struct AstroNeuralEngineProgramSetCache {
 }
 
 impl AstroNeuralEngineProgramSetCache {
-    /// Opens `model_astro_ssd_prompt_cache_directory/<family>-<set_detail>` and removes the same
+    /// Opens `astro_neural_engine_program_cache_directory/<family>-<set_detail>` and removes the same
     /// family's other sets. A set is several gigabytes, and one left behind by an
     /// older chunk size or program format would otherwise stay on disk for good.
     pub(crate) fn open(
-        model_astro_ssd_prompt_cache_directory: &Path,
+        astro_neural_engine_program_cache_directory: &Path,
         family: &str,
         set_detail: &str,
     ) -> Option<Self> {
         let set_directory_name = format!("{family}-{set_detail}");
-        let set_directory = model_astro_ssd_prompt_cache_directory.join(&set_directory_name);
+        let set_directory = astro_neural_engine_program_cache_directory.join(&set_directory_name);
         fs::create_dir_all(&set_directory).ok()?;
         remove_other_sets_of_family(
-            model_astro_ssd_prompt_cache_directory,
+            astro_neural_engine_program_cache_directory,
             family,
             &set_directory_name,
         );
@@ -128,7 +128,7 @@ impl AstroNeuralEngineProgramSetCache {
     }
 }
 
-/// Where a layer's program stays between loads, when there is a cache to keep it in.
+/// Where a layer's program stays between loads, when there is an `astro_neural_engine_program_cache` to keep it in.
 pub(crate) fn kept_program_path(
     astro_neural_engine_program_cache: Option<&AstroNeuralEngineProgramSetCache>,
     decoder_layer_index: usize,
@@ -137,11 +137,11 @@ pub(crate) fn kept_program_path(
 }
 
 fn remove_other_sets_of_family(
-    model_astro_ssd_prompt_cache_directory: &Path,
+    astro_neural_engine_program_cache_directory: &Path,
     family: &str,
     kept_set_name: &str,
 ) {
-    let Ok(directory_entries) = fs::read_dir(model_astro_ssd_prompt_cache_directory) else {
+    let Ok(directory_entries) = fs::read_dir(astro_neural_engine_program_cache_directory) else {
         return;
     };
     let family_prefix = format!("{family}-");
@@ -260,8 +260,8 @@ fn load_and_verify_kept_program(
 pub(crate) struct CoreMlProgramBuilder;
 
 impl CoreMlProgramBuilder {
-    /// The program at its kept path, compiled there first when it is missing. A cache
-    /// that cannot be used costs a slower load and nothing else.
+    /// The program at its kept path, compiled there first when it is missing. An
+    /// `astro_neural_engine_program_cache` that cannot be used costs a slower load and nothing else.
     fn build_kept(
         build_job: &ProgramBuildJob,
         kept_program_path: &Path,
@@ -344,7 +344,7 @@ impl CoreMlProgramBuilder {
             first_prediction_duration,
         );
         // The daemon stops a worker with SIGKILL on a swap or shutdown, so the
-        // bridge's release never runs there; left to it, every uncached load wrote a
+        // bridge's release never runs there; left to it, every load that bypassed the `astro_neural_engine_program_cache` wrote a
         // whole layer's weights per program into the temporary directory for good.
         program.discard_compiled_model_files();
         ProgramBuildOutcome::Built(program)

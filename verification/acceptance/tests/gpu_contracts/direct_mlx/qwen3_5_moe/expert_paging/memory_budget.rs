@@ -4,7 +4,8 @@ use astronomical_model_serving::{
 };
 
 #[test]
-fn should_recommend_cache_cleanup_when_active_allocation_fits_but_total_memory_does_not() {
+fn should_recommend_mlx_buffer_cache_cleanup_when_active_allocation_fits_but_total_memory_does_not()
+{
     assert_eq!(
         AllocationAdmissionObservation::new(9_000, 1_000, 500, 9_500).decide(),
         AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit,

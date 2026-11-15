@@ -6,7 +6,7 @@ use super::{
     GatedDeltaRecurrentStateCheckpoint,
 };
 
-/// One architecture-neutral in-memory astro-decoder-state-cache state family.
+/// One architecture-neutral in-memory astro decoder state cache state family.
 pub enum AstroDecoderStateCacheState {
     /// Append-only attention keys and values.
     AppendOnlyAttention {
@@ -19,7 +19,7 @@ pub enum AstroDecoderStateCacheState {
     },
 }
 
-/// Logical rollback point for one architecture-neutral astro-decoder-state-cache state entry.
+/// Logical rollback point for one architecture-neutral astro decoder state cache state entry.
 pub enum AstroDecoderStateCacheStateCheckpoint {
     AppendOnlyAttention {
         offset_tokens: i32,
@@ -30,7 +30,7 @@ pub enum AstroDecoderStateCacheStateCheckpoint {
     },
 }
 
-/// Physical owner checkpoint for retrying one astro-decoder-state-cache update.
+/// Physical owner checkpoint for retrying one astro decoder state cache update.
 pub enum AstroDecoderStateCacheStateAllocationCheckpoint {
     AppendOnlyAttention {
         attention: FullAttentionKeyValueStateAllocationCheckpoint,

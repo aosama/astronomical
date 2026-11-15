@@ -5,7 +5,7 @@ use astronomical_runtime_integration::MlxRuntimeError;
 use super::block_format_error::AstroSsdPromptCacheBlockError;
 use super::model_contract_error::AstroSsdPromptCacheModelContractError;
 
-/// One failure while opening, scanning, saving, or loading a persistent astro-ssd-prompt-cache block.
+/// One failure while opening, scanning, saving, or loading a persistent astro SSD prompt cache block.
 ///
 /// Required prompt-state initialization, restoration, and publication surface these failures at
 /// the model or request boundary. The error retains its lower-level cause for bounded diagnostics.
@@ -19,7 +19,7 @@ pub enum AstroSsdPromptCacheDiskStoreError {
         "persistent astro-ssd-prompt-cache block {block_hash:02x?} has conflicting stored topology"
     )]
     ExistingBlockTopologyMismatch { block_hash: [u8; 32] },
-    #[error("persistent astro-ssd-prompt-cache block {block_index} has invalid requested ancestry")]
+    #[error("persistent astro SSD prompt cache block {block_index} has invalid requested ancestry")]
     InvalidRequestedBlockAncestry { block_index: u32 },
     #[error(
         "failed to create persistent astro-ssd-prompt-cache directory at {astro_ssd_prompt_cache_directory:?}"
@@ -56,7 +56,7 @@ pub enum AstroSsdPromptCacheDiskStoreError {
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to write persistent astro-ssd-prompt-cache temp file at {temp_file_path:?}")]
+    #[error("failed to write persistent astro SSD prompt cache temp file at {temp_file_path:?}")]
     WriteTempFile {
         temp_file_path: PathBuf,
         #[source]
@@ -106,7 +106,7 @@ pub enum AstroSsdPromptCacheDiskStoreError {
         reported_size_bytes: u64,
         actual_size_bytes: u64,
     },
-    #[error("unsupported persistent astro-ssd-prompt-cache state file name {file_name}")]
+    #[error("unsupported persistent astro SSD prompt cache state file name {file_name}")]
     InvalidStateFileName { file_name: String },
     #[error("failed to open block file at {block_file_path:?}")]
     OpenBlockFile {
@@ -120,19 +120,19 @@ pub enum AstroSsdPromptCacheDiskStoreError {
         #[source]
         source: AstroSsdPromptCacheBlockError,
     },
-    #[error("failed to read astro-ssd-prompt-cache block manifest at {manifest_file_path:?}")]
+    #[error("failed to read astro SSD prompt cache block manifest at {manifest_file_path:?}")]
     ReadBlockManifest {
         manifest_file_path: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to parse astro-ssd-prompt-cache block manifest at {manifest_file_path:?}")]
+    #[error("failed to parse astro SSD prompt cache block manifest at {manifest_file_path:?}")]
     ParseBlockManifest {
         manifest_file_path: PathBuf,
         #[source]
         source: serde_json::Error,
     },
-    #[error("failed to serialize astro-ssd-prompt-cache block manifest")]
+    #[error("failed to serialize astro SSD prompt cache block manifest")]
     SerializeBlockManifest {
         #[source]
         source: serde_json::Error,
@@ -199,7 +199,7 @@ pub enum AstroSsdPromptCacheDiskStoreError {
         maximum_size_bytes: u64,
         remaining_size_bytes: u64,
     },
-    #[error("failed to compute persistent astro-ssd-prompt-cache state file geometry: {source}")]
+    #[error("failed to compute persistent astro SSD prompt cache state file geometry: {source}")]
     ModelContractGeometry {
         #[source]
         source: AstroSsdPromptCacheModelContractError,

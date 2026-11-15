@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-/// Resolved astro-ssd-prompt-cache settings for worker startup.
+/// Resolved astro SSD prompt cache settings for worker startup.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AstroSsdPromptCacheConfig {
     global_astro_ssd_prompt_cache_root_directory: PathBuf,
@@ -9,7 +9,7 @@ pub struct AstroSsdPromptCacheConfig {
 }
 
 impl AstroSsdPromptCacheConfig {
-    /// Builds the always-enabled astro-ssd-prompt-cache policy.
+    /// Builds the always-enabled astro SSD prompt cache policy.
     #[must_use]
     pub fn new(
         global_astro_ssd_prompt_cache_root_directory: PathBuf,
@@ -30,7 +30,7 @@ impl AstroSsdPromptCacheConfig {
         &self.active_model_astro_ssd_prompt_cache_directory
     }
 
-    /// Returns the one global astro-ssd-prompt-cache root maximum in bytes.
+    /// Returns the one global astro SSD prompt cache root maximum in bytes.
     #[must_use]
     pub const fn global_astro_ssd_prompt_cache_maximum_size_bytes(&self) -> u64 {
         self.global_astro_ssd_prompt_cache_maximum_size_bytes

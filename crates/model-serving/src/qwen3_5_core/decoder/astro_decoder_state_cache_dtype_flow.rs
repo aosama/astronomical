@@ -297,7 +297,7 @@ pub(crate) fn promote_floating_dtypes(
     }
 }
 
-/// Narrows one MLX dtype to the cache-serializable dtype set.
+/// Narrows one MLX dtype to the dtype set the `astro_decoder_state_cache` can serialize.
 pub(crate) fn astro_decoder_state_cache_tensor_dtype(
     mlx_dtype: MlxDtype,
 ) -> Result<AstroDecoderStateCacheTensorDtype, Qwen3_5ExecutionError> {

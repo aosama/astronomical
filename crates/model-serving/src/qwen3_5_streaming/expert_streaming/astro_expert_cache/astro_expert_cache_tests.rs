@@ -17,7 +17,7 @@ pub(super) const STREAMED_PER_EXPERT_PAYLOAD_BYTES: u64 = 48;
 pub(super) fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
-            .expect("the warm-cache test memory limits should be valid"),
+            .expect("the warm `astro_expert_cache` test memory limits should be valid"),
     )
     .expect("the direct MLX runtime should initialize")
 }
@@ -243,7 +243,7 @@ fn should_count_warm_inserts_only_for_hot_expert_warming() {
     astro_expert_cache.set_capacity(1024 * 1024 * 1024);
     let weights = streamed_weights(&runtime);
 
-    // A complete adoption (warm capacity 0) is whole-layer caching and
+    // A complete adoption (warm capacity 0) is whole-layer keeping and
     // must not count toward hot-expert warming evidence.
     astro_expert_cache
         .insert_streamed_experts(&runtime, 0, &[0, 1, 2, 3, 4, 5, 6, 7], &weights, &[], 0)
@@ -535,17 +535,17 @@ fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
 
     // The control: an identical session without history ranks the same
     // seating strictly lower, so seeded heat genuinely raises priority.
-    let mut cold_cache = AstroExpertCache::new(1);
-    cold_cache.set_capacity(1024 * 1024 * 1024);
-    cold_cache
+    let mut cold_astro_expert_cache = AstroExpertCache::new(1);
+    cold_astro_expert_cache.set_capacity(1024 * 1024 * 1024);
+    cold_astro_expert_cache
         .queue_pending_routed_expert_insert(0, &[4, 5], &weights, WARM_SLOT_COUNT)
         .expect("the cold warm insert should queue");
-    cold_cache
+    cold_astro_expert_cache
         .flush_pending_inserts(&runtime)
         .expect("the cold warm flush should succeed");
-    cold_cache.record_expert_demand(0, EXPERT_CAPACITY, &[4]);
+    cold_astro_expert_cache.record_expert_demand(0, EXPERT_CAPACITY, &[4]);
     assert_eq!(
-        cold_cache.topology_snapshot(EXPERT_CAPACITY)[0].covered_weighted_demand,
+        cold_astro_expert_cache.topology_snapshot(EXPERT_CAPACITY)[0].covered_weighted_demand,
         1
     );
 }

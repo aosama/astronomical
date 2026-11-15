@@ -87,7 +87,7 @@ async fn should_preserve_a_pending_astro_ssd_prompt_cache_clear_across_model_rep
         );
         previous_health_snapshot.pending_astro_ssd_prompt_cache_clear =
             Some(PendingAstroSsdPromptCacheClear {
-                model_id: Some("example/cached-model".to_owned()),
+                model_id: Some("example/model-with-astro-ssd-prompt-cache-content".to_owned()),
             });
 
         let replacement_health_snapshot = WorkerHealthSnapshot::ready_with_replacement_model(

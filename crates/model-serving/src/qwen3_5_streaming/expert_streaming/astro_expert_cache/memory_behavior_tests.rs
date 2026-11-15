@@ -25,8 +25,8 @@ use serial_test::serial;
 #[serial]
 fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
     let runtime = test_runtime();
-    let mut cache = AstroExpertCache::new(1);
-    cache.set_capacity(1024 * 1024 * 1024);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.set_capacity(1024 * 1024 * 1024);
     let routed_expert_set_by_token: [Vec<usize>; 8] = [
         vec![1, 2],
         vec![2, 3],
@@ -39,17 +39,17 @@ fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
     ];
     for (token_index, routed_expert_ids) in routed_expert_set_by_token.iter().enumerate() {
         let weights = streamed_weights_for_expert_count(&runtime, routed_expert_ids.len());
-        cache
+        astro_expert_cache
             .queue_pending_routed_expert_insert(0, routed_expert_ids, &weights, WARM_SLOT_COUNT)
             .expect("the warm insert should queue");
-        cache
+        astro_expert_cache
             .flush_pending_inserts(&runtime)
             .unwrap_or_else(|error| panic!("token {token_index} warm flush failed: {error}"));
-        let residencies = cache.topology_snapshot(EXPERT_CAPACITY);
+        let residencies = astro_expert_cache.topology_snapshot(EXPERT_CAPACITY);
         assert_eq!(residencies.len(), 1, "token {token_index}");
         assert_eq!(
             residencies[0].retained_expert_ids.len(),
-            cache.statistics().entry_count,
+            astro_expert_cache.statistics().entry_count,
             "token {token_index}"
         );
         let slot_map_expert_count = residencies[0].retained_expert_ids.len();
@@ -60,21 +60,22 @@ fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
             slot_map_expert_count,
             residencies[0].payload_bytes
         );
-        // The cache-wide resident accounting must track every table's real
+        // The `astro_expert_cache`-wide resident accounting must track every table's real
         // tensor bytes. A growth whose write-back is skipped on a later
         // early-return undercounts here and lets later admission overfill
         // the ceiling.
-        let cache_wide_resident_payload_bytes = cache.statistics().resident_payload_byte_count;
-        let sum_of_table_tensor_bytes = cache
+        let astro_expert_cache_wide_resident_payload_bytes =
+            astro_expert_cache.statistics().resident_payload_byte_count;
+        let sum_of_table_tensor_bytes = astro_expert_cache
             .tables_by_layer
             .iter()
             .flatten()
             .map(|table| table.full_padded_payload_bytes)
             .fold(0_u64, u64::saturating_add);
         assert_eq!(
-            cache_wide_resident_payload_bytes, sum_of_table_tensor_bytes,
-            "token {token_index} lost resident accounting: cache-wide {} vs tables {}",
-            cache_wide_resident_payload_bytes, sum_of_table_tensor_bytes
+            astro_expert_cache_wide_resident_payload_bytes, sum_of_table_tensor_bytes,
+            "token {token_index} lost resident accounting: astro_expert_cache-wide {} vs tables {}",
+            astro_expert_cache_wide_resident_payload_bytes, sum_of_table_tensor_bytes
         );
     }
 }
@@ -83,7 +84,7 @@ fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
 /// tensor or any fill source pinned in active memory. MLX retains an array's
 /// graph inputs for its lifetime, so the growth copies and fills evaluate and
 /// detach their results; the status-published memory decomposition closes
-/// only when every active expert byte is claimed by the cache.
+/// only when every active expert byte is claimed by the `astro_expert_cache`.
 #[test]
 #[serial]
 fn should_not_leave_retired_or_source_tensors_active_after_growth() {
@@ -91,8 +92,8 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
     // Wide rows make each projection array tens of kilobytes, so a real pin
     // (a retired table or a fill source) towers over the CPU allocator's
     // per-array size-class rounding this suite-mode assertion must tolerate.
-    let mut cache = AstroExpertCache::new(1);
-    cache.set_capacity(1024 * 1024 * 1024);
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.set_capacity(1024 * 1024 * 1024);
     // Other suite tests share the process-global runtime; sample this test's
     // own baseline after settling the allocator so only its allocations count.
     // The stream sync is mandatory: a committed Metal command buffer captures
@@ -110,14 +111,14 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
     .unwrap_or(0);
     {
         let weights = wide_streamed_native_weights(&runtime, 2);
-        cache
+        astro_expert_cache
             .queue_pending_routed_expert_insert(0, &[1, 2], &weights, WARM_SLOT_COUNT)
             .expect("the first warm insert should queue");
-        cache
+        astro_expert_cache
             .flush_pending_inserts(&runtime)
             .expect("the first warm flush should succeed");
         // This insert forces the table to grow 2 -> 4 slots.
-        cache
+        astro_expert_cache
             .queue_pending_routed_expert_insert(
                 0,
                 &[3, 4],
@@ -125,11 +126,11 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
                 WARM_SLOT_COUNT,
             )
             .expect("the growth warm insert should queue");
-        cache
+        astro_expert_cache
             .flush_pending_inserts(&runtime)
             .expect("the growth warm flush should succeed");
         // Drop the test-owned page reference so the only live expert arrays
-        // are the ones the cache claims.
+        // are the ones the `astro_expert_cache` claims.
     }
     // Drain the fill/growth command buffers so their captured source buffers
     // are released before the active-memory sample.
@@ -137,7 +138,7 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
         .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         .unwrap();
 
-    let claimed_table_payload_bytes = cache.statistics().resident_payload_byte_count;
+    let claimed_table_payload_bytes = astro_expert_cache.statistics().resident_payload_byte_count;
     let active_bytes_after_growth = u64::try_from(
         runtime
             .memory_snapshot()
@@ -204,23 +205,23 @@ fn wide_streamed_native_weights(
 
 #[test]
 fn should_forget_the_reads_made_while_the_model_loaded() {
-    let mut cache = AstroExpertCache::new(2);
-    cache.record_disk_load(512, 2);
-    cache.forget_disk_loads_made_while_loading();
-    let statistics = cache.statistics();
+    let mut astro_expert_cache = AstroExpertCache::new(2);
+    astro_expert_cache.record_disk_load(512, 2);
+    astro_expert_cache.forget_disk_loads_made_while_loading();
+    let statistics = astro_expert_cache.statistics();
     assert_eq!(statistics.disk_page_load_count, 0);
     assert_eq!(statistics.disk_batch_load_count, 0);
 
     // Reads made afterwards count from zero.
-    cache.record_disk_load(256, 1);
-    let statistics = cache.statistics();
+    astro_expert_cache.record_disk_load(256, 1);
+    let statistics = astro_expert_cache.statistics();
     assert_eq!(statistics.disk_page_load_count, 256);
     assert_eq!(statistics.disk_batch_load_count, 1);
 }
 
 #[test]
-fn should_leave_a_cache_that_read_nothing_at_zero_reads() {
-    let mut cache = AstroExpertCache::new(1);
-    cache.forget_disk_loads_made_while_loading();
-    assert_eq!(cache.statistics().disk_page_load_count, 0);
+fn should_leave_an_astro_expert_cache_that_read_nothing_at_zero_reads() {
+    let mut astro_expert_cache = AstroExpertCache::new(1);
+    astro_expert_cache.forget_disk_loads_made_while_loading();
+    assert_eq!(astro_expert_cache.statistics().disk_page_load_count, 0);
 }

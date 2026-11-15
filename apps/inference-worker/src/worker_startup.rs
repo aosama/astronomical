@@ -151,8 +151,8 @@ where
 
 /// The startup values derived once from the daemon's InitializeWorker command
 /// and reused by the diagnostics log, the model factory, and the worker
-/// acknowledgement: the astro-ssd-prompt-cache configuration, attribution settings, the
-/// persistent astro-ssd-prompt-cache decision, and the runtime feature configuration the
+/// acknowledgement: the astro SSD prompt cache configuration, attribution settings, the
+/// persistent astro SSD prompt cache decision, and the runtime feature configuration the
 /// worker later echoes back when it acknowledges a configuration generation.
 struct WorkerStartupDerivedConfiguration {
     astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,

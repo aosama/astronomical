@@ -16,27 +16,29 @@ use super::engine_astro_ssd_prompt_cache::{
 };
 use super::large_prefill_prompt;
 
-const CACHE_RESTORE_PEAK_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
-const CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS: u32 = 2_048;
-const CACHE_RESTORE_PEAK_BLOCK_TOKENS: u32 = 2_048;
-const CACHE_RESTORE_PEAK_COMPLETE_BLOCK_COUNT: usize = 4;
-const CACHE_RESTORE_PEAK_PARTIAL_TAIL_TOKENS: usize = CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize / 2;
-const CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT: u16 = 1;
+const ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
+const ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS: u32 = 2_048;
+const ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS: u32 = 2_048;
+const ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_COMPLETE_BLOCK_COUNT: usize = 4;
+const ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PARTIAL_TAIL_TOKENS: usize =
+    ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize / 2;
+const ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT: u16 = 1;
 const GREEDY_TEMPERATURE_THOUSANDTHS: u16 = 0;
 const FULL_TOP_P_THOUSANDTHS: u16 = 1_000;
 const ROMEO_AND_JULIET_REQUEST_ID_COLD: u64 = 81_001;
 const ROMEO_AND_JULIET_REQUEST_ID_RESTORED: u64 = 81_002;
 
 #[tokio::test]
-#[ignore = "loads Ornith and measures the real long-prefix astro-ssd-prompt-cache restore peak"]
+#[ignore = "loads Ornith and measures the real long-prefix astro SSD prompt cache restore peak"]
 async fn should_restore_a_long_ornith_prefix_with_one_block_of_workspace() {
     require_astro_ssd_prompt_cache_acceptance_completion(async {
         timeout(
-            CACHE_RESTORE_PEAK_ACCEPTANCE_TIMEOUT,
+            ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_ACCEPTANCE_TIMEOUT,
             // MlxRuntime holds a raw MLX device pointer and is therefore not
             // Send, so the in-phase memory ticker runs as a local task inside a
             // LocalSet rather than a spawned Send task.
-            tokio::task::LocalSet::new().run_until(run_cache_restore_peak_acceptance()),
+            tokio::task::LocalSet::new()
+                .run_until(run_astro_ssd_prompt_cache_restore_peak_acceptance()),
         )
         .await
         .expect("the real astro-ssd-prompt-cache peak acceptance should finish within 115 seconds");
@@ -45,10 +47,10 @@ async fn should_restore_a_long_ornith_prefix_with_one_block_of_workspace() {
 }
 
 #[expect(clippy::too_many_lines)]
-async fn run_cache_restore_peak_acceptance() {
+async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let journey_started_at = tokio::time::Instant::now();
-    // This journey measures the astro-ssd-prompt-cache restore peak, not SSD streaming:
+    // This journey measures the astro SSD prompt cache restore peak, not SSD streaming:
     // the resident sparse MoE role keeps the whole artifact wired so the peak
     // measurement is not confounded by expert paging.
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
@@ -67,25 +69,26 @@ async fn run_cache_restore_peak_acceptance() {
             // begin decode (see astro_ssd_prompt_cache::prefix_lookup). A prompt of whole
             // blocks only would therefore restore one block fewer than published,
             // and the journey would measure a different restore shape than intended.
-            CACHE_RESTORE_PEAK_COMPLETE_BLOCK_COUNT * CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize
-                + CACHE_RESTORE_PEAK_PARTIAL_TAIL_TOKENS,
+            ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_COMPLETE_BLOCK_COUNT
+                * ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize
+                + ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PARTIAL_TAIL_TOKENS,
         );
     let expected_complete_block_count =
-        prompt_token_ids.len() / CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize;
+        prompt_token_ids.len() / ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize;
     assert!(
         expected_complete_block_count >= 4,
-        "the source prompt should cover at least four complete cache blocks"
+        "the source prompt should cover at least four complete astro SSD prompt cache blocks"
     );
 
-    let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the acceptance should create a temporary cache root");
+    let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+        .expect("the acceptance should create a temporary astro SSD prompt cache root");
     let memory_limits = crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
     let mut worker_chunking_configuration = crate::common::standard_worker_chunking_configuration();
     worker_chunking_configuration.ssd_prompt_cache_block_tokens =
-        Some(CACHE_RESTORE_PEAK_BLOCK_TOKENS);
+        Some(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS);
     let prompt_processing_chunk_sizer =
         Qwen3_5ResidentPromptProcessingChunkSizer::for_fixed_prompt_processing_chunk_size_tokens(
-            CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS,
+            ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_PREFILL_CHUNK_TOKENS,
         )
         .expect("the selected prefill chunk size should be valid");
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
@@ -102,7 +105,7 @@ async fn run_cache_restore_peak_acceptance() {
         model_directory,
         worker_chunking_configuration,
     )
-    .expect("the engine should accept the temporary cache configuration");
+    .expect("the engine should accept the temporary astro SSD prompt cache configuration");
     qwen3_5_engine
         .load()
         .await
@@ -137,7 +140,7 @@ async fn run_cache_restore_peak_acceptance() {
         generate_token_ids_with_event_timing(
             &mut qwen3_5_engine,
             RequestId::new(ROMEO_AND_JULIET_REQUEST_ID_COLD),
-            usize::from(CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT),
+            usize::from(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT),
             "cold_prefill",
             journey_started_at,
             mlx_runtime.clone(),
@@ -148,26 +151,27 @@ async fn run_cache_restore_peak_acceptance() {
         journey_started_at.elapsed().as_secs()
     );
     wait_for_astro_ssd_prompt_cache_blocks(&qwen3_5_engine, expected_complete_block_count).await;
-    let cache_file_sizes = safetensors_file_sizes(astro_ssd_prompt_cache_directory.path())
-        .expect("the temporary cache should expose the published block sizes");
+    let astro_ssd_prompt_cache_file_sizes =
+        safetensors_file_sizes(astro_ssd_prompt_cache_directory.path())
+            .expect("the temporary astro SSD prompt cache should expose the published block sizes");
     assert!(
-        cache_file_sizes.len() >= expected_complete_block_count,
+        astro_ssd_prompt_cache_file_sizes.len() >= expected_complete_block_count,
         "the cold prefill should publish multiple sequence blocks and snapshots"
     );
-    let destination_byte_bound = cache_file_sizes.iter().sum::<u64>();
-    let largest_source_block_bytes = cache_file_sizes
+    let destination_byte_bound = astro_ssd_prompt_cache_file_sizes.iter().sum::<u64>();
+    let largest_source_block_bytes = astro_ssd_prompt_cache_file_sizes
         .iter()
         .copied()
         .max()
-        .expect("the cache should contain source blocks");
+        .expect("the astro SSD prompt cache should contain source blocks");
 
     let active_memory_bytes_before_restore = mlx_runtime
         .memory_snapshot()
-        .expect("the journey should sample active memory before the cache hit")
+        .expect("the journey should sample active memory before the astro SSD prompt cache hit")
         .active_memory_bytes() as u64;
     mlx_runtime
         .reset_peak_memory()
-        .expect("the journey should reset the process peak before cache restore");
+        .expect("the journey should reset the process peak before astro SSD prompt cache restore");
     let restored_generation_start = qwen3_5_engine
         .start_generation(greedy_romeo_and_juliet_request(
             ROMEO_AND_JULIET_REQUEST_ID_RESTORED,
@@ -177,11 +181,12 @@ async fn run_cache_restore_peak_acceptance() {
         .expect("the restored request should start");
     assert!(
         restored_generation_start.astro_ssd_prompt_cache_token_count()
-            >= (expected_complete_block_count * CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize) as u32,
-        "the warm request should restore every complete prefix block: cached_tokens={} expected_at_least={} blocks={expected_complete_block_count} block_tokens={}",
+            >= (expected_complete_block_count
+                * ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize) as u32,
+        "the warm request should restore every complete prefix block: astro_ssd_prompt_cache_restored_tokens={} expected_at_least={} blocks={expected_complete_block_count} block_tokens={}",
         restored_generation_start.astro_ssd_prompt_cache_token_count(),
-        expected_complete_block_count * CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize,
-        CACHE_RESTORE_PEAK_BLOCK_TOKENS
+        expected_complete_block_count * ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize,
+        ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS
     );
     let restore_memory_snapshot = mlx_runtime
         .memory_snapshot()
@@ -192,14 +197,14 @@ async fn run_cache_restore_peak_acceptance() {
         .saturating_mul(2)
         .saturating_add(largest_source_block_bytes.saturating_mul(3));
     eprintln!(
-        "[astro-ssd-prompt-cache-restore-peak] status=measured cached_tokens={} cache_files={} active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} peak_delta_bytes={restore_peak_delta_bytes} destination_byte_bound={destination_byte_bound} largest_source_block_bytes={largest_source_block_bytes} concat_restore_peak_bound_bytes={concat_restore_peak_bound_bytes}",
+        "[astro-ssd-prompt-cache-restore-peak] status=measured astro_ssd_prompt_cache_restored_tokens={} astro_ssd_prompt_cache_files={}active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} peak_delta_bytes={restore_peak_delta_bytes} destination_byte_bound={destination_byte_bound} largest_source_block_bytes={largest_source_block_bytes} concat_restore_peak_bound_bytes={concat_restore_peak_bound_bytes}",
         restored_generation_start.astro_ssd_prompt_cache_token_count(),
-        cache_file_sizes.len(),
+        astro_ssd_prompt_cache_file_sizes.len(),
         restore_memory_snapshot.peak_memory_bytes(),
     );
     assert!(
         restore_peak_delta_bytes <= concat_restore_peak_bound_bytes,
-        "the real cache-hit peak must fit the destination plus the complete source block set \
+        "the real astro SSD prompt cache hit peak must fit the destination plus the complete source block set \
          and MLX scratch: peak_delta={restore_peak_delta_bytes} \
          bound={concat_restore_peak_bound_bytes}"
     );
@@ -208,7 +213,7 @@ async fn run_cache_restore_peak_acceptance() {
         generate_token_ids_with_event_timing(
             &mut qwen3_5_engine,
             RequestId::new(ROMEO_AND_JULIET_REQUEST_ID_RESTORED),
-            usize::from(CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT),
+            usize::from(ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT),
             "restored_prefill",
             journey_started_at,
             mlx_runtime,
@@ -234,7 +239,7 @@ fn greedy_romeo_and_juliet_request(
     Qwen3_5InferenceRequest::new_sampling(
         RequestId::new(request_number),
         prompt_token_ids,
-        CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT,
+        ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT,
         GREEDY_TEMPERATURE_THOUSANDTHS,
         FULL_TOP_P_THOUSANDTHS,
         None,
@@ -244,7 +249,7 @@ fn greedy_romeo_and_juliet_request(
 
 /// Drives one generate-to-token phase while attributing wall time to every
 /// engine event, because a stalled journey must show whether the cost sits
-/// inside a single forward, between prefill chunks, or in cache publication.
+/// inside a single forward, between prefill chunks, or in astro SSD prompt cache publication.
 /// The ten-second memory ticker answers the paired question of whether the GPU
 /// is wired and computing while no event arrives.
 async fn generate_token_ids_with_event_timing(

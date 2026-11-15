@@ -1,4 +1,4 @@
-//! Folded-ternary persistent astro-ssd-prompt-cache open, restore, capture, and stats.
+//! Folded-ternary persistent astro SSD prompt cache open, restore, capture, and stats.
 //!
 //! The disk store, contract, and prefix lookup are family-neutral; this module
 //! only maps the straight generation state onto that contract. Full-attention
@@ -360,7 +360,7 @@ pub(super) fn capture_completed_astro_ssd_prompt_cache_block(
         )
         .map_err(|publish_error| InferenceEngineError::InvalidRequest {
             reason: format!(
-                "persistent prompt cache failed during required persistent prompt-state capture; the request was stopped: {publish_error}"
+                "astro SSD prompt cache failed during required persistent prompt-state capture; the request was stopped: {publish_error}"
             ),
         })?;
     if matches!(
@@ -461,7 +461,8 @@ fn slice_token_range(
     let tensor_shape = tensor.shape();
     if tensor_shape.len() != 4 {
         return Err(InferenceEngineError::Fatal {
-            reason: "folded-ternary cache tensors must have rank four".to_owned(),
+            reason: "folded-ternary astro decoder state cache tensors must have rank four"
+                .to_owned(),
         });
     }
     let start = i32::try_from(start_tokens).unwrap_or(i32::MAX);
@@ -474,7 +475,7 @@ fn slice_token_range(
             &[1, 1, 1, 1],
         )
         .map_err(|error| InferenceEngineError::Fatal {
-            reason: format!("folded-ternary cache slice failed: {error}"),
+            reason: format!("folded-ternary astro decoder state cache slice failed: {error}"),
         })
 }
 
@@ -596,7 +597,9 @@ fn restore_state_and_absorb_boundary_snapshot(
             .runtime
             .evaluate_arrays(&restored_arrays)
             .map_err(|error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary restored cache evaluation failed: {error}"),
+                reason: format!(
+                    "folded-ternary restored astro decoder state cache evaluation failed: {error}"
+                ),
             })?;
     }
     Ok(())
@@ -613,13 +616,13 @@ fn chain_block_key(
     }
     .map_err(|block_key_error| InferenceEngineError::InvalidRequest {
         reason: format!(
-            "persistent prompt cache failed during required persistent prompt-state capture; the request was stopped: {block_key_error}"
+            "astro SSD prompt cache failed during required persistent prompt-state capture; the request was stopped: {block_key_error}"
         ),
     })
 }
 
 impl PrismHadamardQwen35InferenceExecution {
-    /// The persistent astro-ssd-prompt-cache observability event, mirroring every other
+    /// The persistent astro SSD prompt cache observability event, mirroring every other
     /// family with an open store.
     pub(super) fn astro_ssd_prompt_cache_stats_event(&self) -> Option<WorkerEvent> {
         let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.as_ref()?;

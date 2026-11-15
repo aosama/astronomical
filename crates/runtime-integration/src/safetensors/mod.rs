@@ -14,7 +14,7 @@
 //! - **Bounded multi-range reads** — expert paging must load only the
 //!   router-selected expert rows out of a shard that is far larger than one
 //!   forward pass needs; the virtual-payload reader below is that mechanism.
-//! - **Streaming writes without duplication** — an astro-ssd-prompt-cache capture can be
+//! - **Streaming writes without duplication** — an astro SSD prompt cache capture can be
 //!   many gigabytes; serializing it into one Rust byte vector would
 //!   temporarily duplicate the complete capture, so the writers hand MLX a
 //!   descriptor and let it materialize one tensor at a time.
@@ -35,7 +35,7 @@
 //! - `bounded_range_read_concurrency` — the process-wide permit pool and
 //!   partitioning that bound physical read parallelism.
 //! - `piece_read_pool` — the long-lived threads that help read a span's
-//!   pieces, so a cached page does not pay for starting threads.
+//!   pieces, so a page held in the macOS file cache does not pay for starting threads.
 //! - `file_writer` — descriptor-backed saving
 //!   ([`MlxRuntime::save_safetensors`]).
 //! - `memory_writer` — bounded in-memory serialization

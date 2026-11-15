@@ -39,11 +39,11 @@ pub(crate) struct GovernedMemory {
     /// the retried forward is measured or the request ends.
     pub(super) pending_redo_attempt:
         std::cell::RefCell<Option<astronomical_memory_policy::ledger::RedoAttempt>>,
-    /// Room leased for publishing astro-ssd-prompt-cache blocks, until the next
+    /// Room leased for publishing astro SSD prompt cache blocks, until the next
     /// forward completes.
     pub(super) publication_workspace_lease:
         std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
-    /// Room leased for blocks read back from the prompt cache, until they
+    /// Room leased for blocks read back from the `astro_ssd_prompt_cache`, until they
     /// have joined the request's stored state.
     pub(super) restore_workspace_lease:
         std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
@@ -75,7 +75,7 @@ impl Qwen3_5Model {
     }
 
     /// Opens the governor once loading has measured what it can, and gives
-    /// the cache its first capacity.
+    /// the astro expert cache its first capacity.
     pub(crate) fn open_memory_governor(&self) {
         let limit_bytes = self.memory_facts().mlx_active_memory_ceiling_bytes();
         let Ok(mut memory_governor) = MemoryGovernor::new(limit_bytes, self.memory_ledger_shape())
@@ -129,7 +129,7 @@ impl Qwen3_5Model {
     }
 
     /// The one place the astro expert cache is told how much it may keep. The
-    /// cache gives back, in its own order, whatever no longer fits.
+    /// astro expert cache gives back, in its own order, whatever no longer fits.
     ///
     /// A dense model's kept layers are its kept weights: trailing layers
     /// are given back until what is kept fits.
@@ -397,7 +397,7 @@ impl Qwen3_5Model {
 
     /// A forward hit the limit. Leases room for another attempt, at least
     /// `known_shortfall_bytes` when the failure said how far over it went,
-    /// and has the cache give back just the experts that room displaces.
+    /// and has the astro expert cache give back just the experts that room displaces.
     /// `false` once the attempts are spent: the limit cannot hold the
     /// forward.
     pub(crate) fn govern_redo_after_memory_failure(

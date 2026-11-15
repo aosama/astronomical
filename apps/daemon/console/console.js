@@ -48,10 +48,10 @@ document.addEventListener("DOMContentLoaded", () => {
     wireExpertObservatory();
     wireConfigurationEditor();
     pollStatus();
-    pollCacheStats();
+    pollAstroSsdPromptCacheStats();
     pollModels();
     setInterval(pollStatus, POLL_INTERVAL_MILLIS);
-    setInterval(pollCacheStats, POLL_INTERVAL_MILLIS);
+    setInterval(pollAstroSsdPromptCacheStats, POLL_INTERVAL_MILLIS);
     setInterval(pollModels, POLL_INTERVAL_MILLIS);
     wireConfigRevealControl();
     wireMemoryLimitControl();
@@ -288,14 +288,14 @@ function selectAdvertisedModel(advertisedModels, preferredModelId) {
         || null;
 }
 
-async function pollCacheStats() {
+async function pollAstroSsdPromptCacheStats() {
     try {
         const response = await fetch(ASTRO_SSD_PROMPT_CACHE_STATS_URL);
         if (!response.ok) { return; }
         const data = await response.json();
         renderOverviewAstroSsdPromptCache(data);
     } catch (fetchError) {
-        // Cache panel stays at last-known values on transient fetch errors.
+        // The SSD prompt cache tile stays at last-known values on transient fetch errors.
     }
 }
 

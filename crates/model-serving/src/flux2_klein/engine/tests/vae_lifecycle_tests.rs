@@ -89,7 +89,7 @@ fn should_cancel_between_complete_decode_stages_cleanup_before_acknowledgement_a
     assert!(events_after_cancellation.contains(&"cleanup:synchronize".to_owned()));
     assert_eq!(
         events_after_cancellation.last().map(String::as_str),
-        Some("cleanup:clear-cache")
+        Some("cleanup:clear-mlx-buffer-cache")
     );
     assert!(
         events_after_cancellation
@@ -294,7 +294,7 @@ impl Flux2KleinEngineComponents for StagedVaeComponents {
             self.record("cleanup:drop-tile-graph");
             self.record("cleanup:drop-vae-arrays");
             self.record("cleanup:synchronize");
-            self.record("cleanup:clear-cache");
+            self.record("cleanup:clear-mlx-buffer-cache");
         }
         Ok(())
     }

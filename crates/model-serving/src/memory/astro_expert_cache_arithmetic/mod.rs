@@ -1,4 +1,4 @@
-//! Expert-cache owner in the serving crate: the page-materialization byte
+//! `astro_expert_cache` owner in the serving crate: the page-materialization byte
 //! arithmetic is compiled only with the direct-MLX feature (plus the unit
 //! artifact-contract tests) and stays beside the bindings.
 

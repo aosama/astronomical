@@ -1,4 +1,4 @@
-//! Persistent astro-ssd-prompt-cache storage and reuse for one resident Qwen3.5 engine.
+//! Persistent astro SSD prompt cache storage and reuse for one resident Qwen3.5 engine.
 //!
 //! The children own one concern: durable prompt-prefix reuse. The restore
 //! path (`decoder_state_reuse`) rebuilds decoder state from on-disk blocks,

@@ -1,8 +1,8 @@
-//! Qwen-owned mapping from visual prompt rows to causal cache-block identity.
+//! Qwen-owned mapping from visual prompt rows to causal `astro_ssd_prompt_cache` block identity.
 //!
 //! Decoder-state keys must bind image content where projected visual rows enter
 //! the token stream. Keeping this planner beside Qwen vision prevents the
-//! architecture-neutral persistent cache from learning image-pad semantics.
+//! architecture-neutral `astro_ssd_prompt_cache` from learning image-pad semantics.
 
 use thiserror::Error;
 
@@ -166,7 +166,7 @@ fn canonical_block_causal_input(
 /// Visual prompt geometry cannot produce safe per-block astro SSD prompt cache identity.
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError {
-    #[error("astro-ssd-prompt-cache block token count must be positive")]
+    #[error("astro SSD prompt cache block token count must be positive")]
     ZeroBlockTokenCount,
     #[error(
         "visual prompt has {image_digest_count} image digests but {image_row_count_entry_count} image row counts"

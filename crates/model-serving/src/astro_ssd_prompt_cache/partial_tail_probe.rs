@@ -68,7 +68,7 @@ pub(crate) fn probe_restorable_partial_tail_block(
     if !restored_complete_block_keys.is_empty() {
         // A tail is restorable only when the newest recurrent snapshot sits on
         // the chain tip: otherwise the restored state cannot reach the tail's
-        // parent. And when the uncached suffix still contains complete blocks,
+        // parent. And when the suffix not restored from the `astro_ssd_prompt_cache` still contains complete blocks,
         // the final partial segment chains from a block this lookup did not
         // reach, so no tail under the matched tip can exist.
         if tail_token_count >= astro_ssd_prompt_cache_block_token_count

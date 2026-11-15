@@ -1,5 +1,5 @@
 //! What a layer-major prefill keeps for each span across its layers, and the
-//! astro-ssd-prompt-cache checkpoints it hands back (issue #1985).
+//! astro SSD prompt cache checkpoints it hands back (issue #1985).
 //!
 //! A span's hidden states pass from one layer to the next; its collector
 //! gathers the boundaries strictly inside it; and a span that ends on a

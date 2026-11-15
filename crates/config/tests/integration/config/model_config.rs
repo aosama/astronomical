@@ -51,7 +51,7 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
     assert_eq!(
         astronomical_config
             .astro_ssd_prompt_cache()
-            .expect("prompt cache should resolve")
+            .expect("astro SSD prompt cache should resolve")
             .global_astro_ssd_prompt_cache_maximum_size_bytes(),
         21_474_836_480
     );

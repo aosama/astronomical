@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// One invalid model-owned astro-decoder-state-cache layout.
+/// One invalid model-owned astro decoder state cache layout.
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum AstroDecoderStateCacheLayoutError {
     #[error("model configuration {dimension_name} dimension does not fit usize")]
@@ -16,7 +16,7 @@ pub enum AstroDecoderStateCacheLayoutError {
         "astro-decoder-state-cache layer {layer_index} execution dtype family differs from model attention family"
     )]
     ExecutionDtypeLayerFamilyMismatch { layer_index: usize },
-    #[error("astro-decoder-state-cache layer {layer_index} has no composite components")]
+    #[error("astro decoder state cache layer {layer_index} has no composite components")]
     EmptyComposite { layer_index: usize },
     #[error(
         "astro-decoder-state-cache layer {layer_index} append-only attention has zero capacity growth"
@@ -63,7 +63,7 @@ pub enum AstroDecoderStateCacheLayoutError {
         layer_index: usize,
         tensor_role_name: String,
     },
-    #[error("astro-decoder-state-cache layer {layer_index} has an empty tensor role")]
+    #[error("astro decoder state cache layer {layer_index} has an empty tensor role")]
     EmptyTensorRole { layer_index: usize },
     #[error(
         "astro-decoder-state-cache layer {layer_index} tensor {tensor_role_name} has zero rank"
@@ -72,7 +72,7 @@ pub enum AstroDecoderStateCacheLayoutError {
         layer_index: usize,
         tensor_role_name: String,
     },
-    #[error("astro-decoder-state-cache layer {layer_index} repeats tensor role {tensor_role_name}")]
+    #[error("astro decoder state cache layer {layer_index} repeats tensor role {tensor_role_name}")]
     DuplicateTensorRole {
         layer_index: usize,
         tensor_role_name: String,
@@ -84,15 +84,15 @@ pub enum AstroDecoderStateCacheLayoutError {
         tensor_role_name: String,
         description: &'static str,
     },
-    #[error("astro-decoder-state-cache tensor {tensor_role_name} payload byte count overflowed")]
+    #[error("astro decoder state cache tensor {tensor_role_name} payload byte count overflowed")]
     TensorPayloadByteCountOverflow { tensor_role_name: String },
-    #[error("astro-decoder-state-cache boundary snapshot payload byte count overflowed")]
+    #[error("astro decoder state cache boundary snapshot payload byte count overflowed")]
     BoundarySnapshotPayloadByteCountOverflow,
-    #[error("astro-decoder-state-cache sequence-state payload byte count per token overflowed")]
+    #[error("astro decoder state cache sequence-state payload byte count per token overflowed")]
     SequenceStatePayloadByteCountPerTokenOverflow,
-    #[error("astro-decoder-state-cache sequence tensor payload byte count overflowed")]
+    #[error("astro decoder state cache sequence tensor payload byte count overflowed")]
     SequenceTensorPayloadByteCountOverflow,
-    #[error("astro-decoder-state-cache persistence alignment token count overflowed")]
+    #[error("astro decoder state cache persistence alignment token count overflowed")]
     PersistenceAlignmentTokenCountOverflow,
     #[error(
         "astro-decoder-state-cache layer {layer_index} append-only attention keys and values have different geometry"

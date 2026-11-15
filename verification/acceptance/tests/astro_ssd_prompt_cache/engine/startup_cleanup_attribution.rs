@@ -42,8 +42,8 @@ async fn run_startup_cleanup_attribution_journey() {
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let (short_prompt_token_ids, prompt_token_ids) =
         romeo_and_juliet_prompt_token_ids(&model_directory);
-    let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the acceptance should create an isolated cache directory");
+    let astro_ssd_prompt_cache_directory = tempfile::tempdir()
+        .expect("the acceptance should create an isolated astro SSD prompt cache directory");
     let obsolete_sequence_directory = astro_ssd_prompt_cache_directory.path().join("kv_blocks");
     fs::create_dir_all(&obsolete_sequence_directory)
         .expect("the acceptance should create obsolete format storage");

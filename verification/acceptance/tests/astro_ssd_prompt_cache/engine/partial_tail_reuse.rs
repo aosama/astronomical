@@ -39,7 +39,7 @@ async fn run_partial_tail_reuse_acceptance() {
     // model registry; the tail-reuse path is artifact-size independent.
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let astro_ssd_prompt_cache_directory =
-        tempfile::tempdir().expect("the test should create a astro-ssd-prompt-cache directory");
+        tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
     let (mut qwen3_5_engine, _model_id, _model_revision, block_token_count) =
         load_astro_ssd_prompt_cache_acceptance_engine(
             &model_directory,
@@ -76,7 +76,7 @@ async fn run_partial_tail_reuse_acceptance() {
     assert_eq!(
         turn_one_start.astro_ssd_prompt_cache_token_count(),
         0,
-        "the first turn on a fresh cache directory must prefill cold"
+        "the first turn on a fresh astro SSD prompt cache directory must prefill cold"
     );
     let (turn_one_generated_token_ids, _) =
         generate_token_ids(&mut qwen3_5_engine, turn_one_request_id, 1).await;
@@ -124,7 +124,7 @@ async fn run_partial_tail_reuse_acceptance() {
         .collect_astro_ssd_prompt_cache_stats()
         .await
         .expect("the engine should report persistent astro-ssd-prompt-cache stats")
-        .expect("the acceptance engine should have persistent prompt caching enabled");
+        .expect("the acceptance engine should have the astro SSD prompt cache enabled");
     let WorkerEvent::AstroSsdPromptCacheStats {
         astro_ssd_prompt_cache_partial_tail_hits,
         ..

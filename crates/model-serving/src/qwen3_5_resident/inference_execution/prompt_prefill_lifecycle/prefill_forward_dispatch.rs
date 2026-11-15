@@ -7,7 +7,7 @@
 //!    is not enough; text-only suffixes must use the text path so astro SSD prompt cache restore
 //!    and cold prefill seed the first generated token the same way.
 //! 2. **Plain text prefill** — the common path; may seed the first generated
-//!    token if this is the terminal chunk, or forward with optional astro-ssd-prompt-cache
+//!    token if this is the terminal chunk, or forward with optional astro SSD prompt cache
 //!    boundary checkpoints.
 
 use super::Qwen3_5EngineState;
@@ -77,10 +77,10 @@ impl Qwen3_5EngineState {
 
 /// The speculative counterpart of the non-speculative dispatch: every
 /// admitted text chunk runs through the tap-capturing verification forward
-/// so the draft's context key-value cache grows from the target's hidden
+/// so the draft's context key-value state grows from the target's hidden
 /// states chunk by chunk. The terminal chunk additionally seeds the first
 /// generated token exactly as the classic terminal path does. Boundary
-/// checkpoints are not produced: a speculative session forgoes astro-ssd-prompt-cache
+/// checkpoints are not produced: a speculative session forgoes astro SSD prompt cache
 /// capture in both directions by decision at admission.
 fn dispatch_speculative_forward(
     engine_state: &Qwen3_5EngineState,
@@ -161,7 +161,7 @@ fn dispatch_speculative_forward(
 /// What either prefill dispatch path produced for one chunk. Named for the
 /// payload, not either path: the speculative branch returns the same shape
 /// (its checkpoint list is always empty — admitted sessions forfeit
-/// astro-ssd-prompt-cache capture by decision at admission).
+/// astro SSD prompt cache capture by decision at admission).
 struct ChunkForwardOutcome {
     boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
@@ -175,8 +175,8 @@ fn dispatch_non_speculative_forward(
 ) -> Result<ChunkForwardOutcome, PrefillForwardError> {
     let boundary_checkpoints;
     // Request-owned visual embeddings stay attached after every image-pad in this
-    // prompt has already been consumed. Dispatching on that tensor made a cached
-    // suffix take text prefill with first-token seeding while the cold suffix of
+    // prompt has already been consumed. Dispatching on that tensor made a suffix restored from the `astro_ssd_prompt_cache`
+    // take text prefill with first-token seeding while the cold suffix of
     // the same text took visual prefill without seeding, so the first generated
     // token diverged after a lossless KV restore.
     let chunk_requires_visual_embeddings = chunk_requires_visual_embeddings(

@@ -129,7 +129,7 @@ fn should_remove_retired_speculative_prefill_trees_without_touching_other_astro_
     let retired_byte_count = directory_file_size_bytes(&retired_selection_directory)
         .saturating_add(directory_file_size_bytes(&retired_target_state_directory));
     let unrelated_astro_ssd_prompt_cache_file =
-        active_model_directory.join("unrelated-cache-metadata");
+        active_model_directory.join("unrelated-astro-ssd-prompt-cache-metadata");
     fs::write(&unrelated_astro_ssd_prompt_cache_file, b"preserve")
         .expect("the test should write unrelated data");
 
@@ -222,7 +222,7 @@ fn open_store(
         ),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract(),
     )
-    .expect("the prompt cache should open")
+    .expect("the astro SSD prompt cache should open")
 }
 
 fn directory_file_size_bytes(directory_path: &Path) -> u64 {

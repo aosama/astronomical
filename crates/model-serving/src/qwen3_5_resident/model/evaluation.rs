@@ -70,7 +70,7 @@ impl Qwen3_5ResidentModel {
     /// Evaluates terminal prefill roots: logits, decoder state, and checkpoint arrays.
     ///
     /// The terminal chunk needs vocabulary logits for first-token seeding while also
-    /// publishing astro-ssd-prompt-cache boundary checkpoints. Evaluating all roots in one pass
+    /// publishing astro SSD prompt cache boundary checkpoints. Evaluating all roots in one pass
     /// keeps the terminal chunk as a single forward instead of a prefix+tail split.
     pub(crate) fn evaluate_terminal_prefill_state_with_performance_attribution(
         &self,

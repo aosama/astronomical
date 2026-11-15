@@ -32,7 +32,7 @@ pub(super) async fn run_astro_ssd_prompt_cache_stats_e2e_with_timeout(
     astro_ssd_prompt_cache_stats_e2e_case: AstroSsdPromptCacheStatsE2eCase,
 ) {
     let test_name = astro_ssd_prompt_cache_stats_e2e_case.test_name;
-    let log_prefix = format!("[e2e-cache-stats:{test_name}]");
+    let log_prefix = format!("[e2e-astro-ssd-prompt-cache-stats:{test_name}]");
     let started_at = Instant::now();
     let timeout_deadline = sleep(astro_ssd_prompt_cache_stats_e2e_case.timeout);
     let mut progress_interval = interval(Duration::from_secs(PROGRESS_INTERVAL_SECONDS));
@@ -136,7 +136,7 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
     // ── Phase 1: first request — should be an astro SSD prompt cache miss ──
     let phase_one_started_at = Instant::now();
     eprintln!(
-        "{log_prefix} phase 1: sending first {}K-word request (expecting cache miss)",
+        "{log_prefix} phase 1: sending first {}K-word request (expecting astro SSD prompt cache miss)",
         astro_ssd_prompt_cache_stats_e2e_case.prompt_word_count / 1_000
     );
     let first_chat_response = live_progress::post_chat_completion_with_live_progress(
@@ -164,22 +164,22 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
     let astro_ssd_prompt_cache_stats_after_first_request =
         http_transport::get_astro_ssd_prompt_cache_stats_json(server_address).await;
     eprintln!(
-        "{log_prefix} phase 1: cache stats after first request = {}",
+        "{log_prefix} phase 1: astro SSD prompt cache stats after first request = {}",
         serde_json::to_string_pretty(&astro_ssd_prompt_cache_stats_after_first_request)
             .unwrap_or_else(|_| "<serialization failed>".to_owned())
     );
     let astro_ssd_prompt_cache_misses_after_first_request =
         astro_ssd_prompt_cache_stats_after_first_request["astro_ssd_prompt_cache_misses"]
             .as_u64()
-            .expect("the cache stats should report misses");
+            .expect("the astro SSD prompt cache stats should report misses");
     let astro_ssd_prompt_cache_hits_after_first_request =
         astro_ssd_prompt_cache_stats_after_first_request["astro_ssd_prompt_cache_hits"]
             .as_u64()
-            .expect("the cache stats should report hits");
+            .expect("the astro SSD prompt cache stats should report hits");
     let astro_ssd_prompt_cache_block_token_count = astro_ssd_prompt_cache_stats_after_first_request
         ["astro_ssd_prompt_cache_block_token_count"]
         .as_u64()
-        .expect("the cache stats should report the exact block token count");
+        .expect("the astro SSD prompt cache stats should report the exact block token count");
     eprintln!(
         "{log_prefix} phase 1 complete in {:.1}s: hits={} misses={}",
         phase_one_started_at.elapsed().as_secs_f64(),
@@ -188,11 +188,11 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
     );
     assert!(
         astro_ssd_prompt_cache_misses_after_first_request >= 1,
-        "the first request should have produced at least one cache miss"
+        "the first request should have produced at least one astro SSD prompt cache miss"
     );
     assert_eq!(
         astro_ssd_prompt_cache_hits_after_first_request, 0,
-        "the first request should not have produced any cache hits"
+        "the first request should not have produced any astro SSD prompt cache hits"
     );
     assert!(
         astro_ssd_prompt_cache_stats_after_first_request["astro_ssd_prompt_cache_sequence_state_block_count"]
@@ -212,7 +212,7 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
     // ── Phase 2: same prompt — should be an astro SSD prompt cache hit ──
     let phase_two_started_at = Instant::now();
     eprintln!(
-        "{log_prefix} phase 2: sending the same {}K-word request (expecting cache hit)",
+        "{log_prefix} phase 2: sending the same {}K-word request (expecting astro SSD prompt cache hit)",
         astro_ssd_prompt_cache_stats_e2e_case.prompt_word_count / 1_000
     );
     let second_chat_response = live_progress::post_chat_completion_with_live_progress(
@@ -240,26 +240,28 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
     let astro_ssd_prompt_cache_stats_after_second_request =
         http_transport::get_astro_ssd_prompt_cache_stats_json(server_address).await;
     eprintln!(
-        "{log_prefix} phase 2: cache stats after second request = {}",
+        "{log_prefix} phase 2: astro SSD prompt cache stats after second request = {}",
         serde_json::to_string_pretty(&astro_ssd_prompt_cache_stats_after_second_request)
             .unwrap_or_else(|_| "<serialization failed>".to_owned())
     );
     let astro_ssd_prompt_cache_hits_after_second_request =
         astro_ssd_prompt_cache_stats_after_second_request["astro_ssd_prompt_cache_hits"]
             .as_u64()
-            .expect("the cache stats should report hits after the second request");
+            .expect("the astro SSD prompt cache stats should report hits after the second request");
     let astro_ssd_prompt_cache_tokens_saved_after_second_request =
         astro_ssd_prompt_cache_stats_after_second_request["astro_ssd_prompt_cache_tokens_saved"]
             .as_u64()
-            .expect("the cache stats should report tokens saved after the second request");
+            .expect("the astro SSD prompt cache stats should report tokens saved after the second request");
     let astro_ssd_prompt_cache_sequence_state_block_count_after_second_request =
         astro_ssd_prompt_cache_stats_after_second_request["astro_ssd_prompt_cache_sequence_state_block_count"]
             .as_u64()
-            .expect("the cache stats should report sequence-state block count");
+            .expect("the astro SSD prompt cache stats should report sequence-state block count");
     let astro_ssd_prompt_cache_misses_after_second_request =
         astro_ssd_prompt_cache_stats_after_second_request["astro_ssd_prompt_cache_misses"]
             .as_u64()
-            .expect("the cache stats should report misses after the second request");
+            .expect(
+                "the astro SSD prompt cache stats should report misses after the second request",
+            );
     eprintln!(
         "{log_prefix} phase 2 complete in {:.1}s: hits={} misses={} tokens_saved={} sequence_state_blocks={}",
         phase_two_started_at.elapsed().as_secs_f64(),
@@ -275,7 +277,7 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
             "{log_prefix} DIAGNOSTIC: phase 2 reported 0 hits — gathering diagnostic evidence"
         );
         eprintln!(
-            "{log_prefix} DIAGNOSTIC: full cache stats JSON = {}",
+            "{log_prefix} DIAGNOSTIC: full astro SSD prompt cache stats JSON = {}",
             serde_json::to_string_pretty(&astro_ssd_prompt_cache_stats_after_second_request)
                 .unwrap_or_default()
         );
@@ -293,7 +295,7 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
                 .unwrap_or(0);
         if sequence_state_block_count == 0 {
             eprintln!(
-                "{log_prefix} DIAGNOSTIC: sequence_state_block_count is 0 — the cache save during phase 1 likely failed; check worker stderr for persistent astro-ssd-prompt-cache save warnings"
+                "{log_prefix} DIAGNOSTIC: sequence_state_block_count is 0 — the astro SSD prompt cache save during phase 1 likely failed; check worker stderr for persistent astro-ssd-prompt-cache save warnings"
             );
         } else if boundary_state_snapshot_count == 0 {
             eprintln!(
@@ -308,19 +310,19 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
 
     assert!(
         astro_ssd_prompt_cache_hits_after_second_request >= 1,
-        "the second request should have produced at least one cache hit; \
+        "the second request should have produced at least one astro SSD prompt cache hit; \
          see DIAGNOSTIC lines above for the reason"
     );
     assert!(
         astro_ssd_prompt_cache_tokens_saved_after_second_request
             >= astro_ssd_prompt_cache_block_token_count,
-        "the cache hit should have restored at least {} tokens; \
+        "the astro SSD prompt cache hit should have restored at least {} tokens; \
          tokens_saved={astro_ssd_prompt_cache_tokens_saved_after_second_request}",
         astro_ssd_prompt_cache_block_token_count
     );
     assert!(
         astro_ssd_prompt_cache_sequence_state_block_count_after_second_request >= 1,
-        "the cache should contain at least one sequence-state block after the first request saved it; \
+        "the astro SSD prompt cache should contain at least one sequence-state block after the first request saved it; \
          sequence_state_block_count={astro_ssd_prompt_cache_sequence_state_block_count_after_second_request}"
     );
 
@@ -335,5 +337,7 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
         .await
         .expect("the real worker should terminate and be reaped");
 
-    eprintln!("{log_prefix} cache miss then cache hit verified through /v1/cache/stats");
+    eprintln!(
+        "{log_prefix} astro SSD prompt cache miss then hit verified through /v1/ssd-prompt-cache/stats"
+    );
 }

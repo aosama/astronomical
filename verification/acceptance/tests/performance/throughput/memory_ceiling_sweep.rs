@@ -3,7 +3,7 @@
 //!
 //! Each ceiling cell runs ONE production-shaped journey under an explicitly
 //! configured MLX ceiling — the same >=10,000-token Romeo and Juliet input and
-//! 500-token output as the text lane, persistent prompt cache disabled —
+//! 500-token output as the text lane, astro SSD prompt cache disabled —
 //! with performance attribution ON, and appends one durable history record
 //! whose `memory_cell` carries the residency and byte-traffic evidence.
 //! Every cell uses a 2,048-token prefill chunk. The 38 GB and 40 GB requested

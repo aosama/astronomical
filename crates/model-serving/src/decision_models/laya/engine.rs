@@ -286,7 +286,7 @@ impl DecisionEngine for LayaDecisionEngine {
         let _cleanup_result = loaded_state
             .runtime
             .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
-        // Taken after the cleanup, so it holds no reusable-cache bytes and is
+        // Taken after the cleanup, so it holds no `mlx_buffer_cache` bytes and is
         // the state the next request starts from.
         let post_cleanup_memory_telemetry = match loaded_state.runtime.memory_snapshot() {
             Ok(memory_snapshot) => Some(forward_pass_memory_telemetry(

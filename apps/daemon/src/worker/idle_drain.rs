@@ -1,7 +1,7 @@
 //! Idle-time pending-work draining for the daemon worker loop.
 //!
 //! Before every select iteration the loop must apply an enacted MLX memory
-//! limit change and a pending astro-ssd-prompt-cache clear while no generation is
+//! limit change and a pending astro SSD prompt cache clear while no generation is
 //! active; this module owns that pre-loop work so the loop itself stays
 //! inside the source-size budget. Dependencies stay explicit parameters,
 //! matching the process-loop style noted in `worker.rs`.

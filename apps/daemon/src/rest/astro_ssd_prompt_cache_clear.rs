@@ -25,7 +25,7 @@ struct AstroSsdPromptCacheClearResponse {
     bytes_freed: u64,
 }
 
-/// Deletes global or model-scoped SSD astro-ssd-prompt-cache content through the worker.
+/// Deletes global or model-scoped astro SSD prompt cache content through the worker.
 pub(crate) async fn clear_cache(
     State(application_state): State<ApplicationState>,
     Query(astro_ssd_prompt_cache_clear_query): Query<AstroSsdPromptCacheClearQuery>,
@@ -72,7 +72,11 @@ pub(crate) async fn clear_cache(
             .into_response(),
         Err(worker_control_error) => {
             tracing::error!(error = %worker_control_error, "astro-ssd-prompt-cache clear failed");
-            (StatusCode::SERVICE_UNAVAILABLE, "worker cache clear failed").into_response()
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "worker astro SSD prompt cache clear failed",
+            )
+                .into_response()
         }
     }
 }

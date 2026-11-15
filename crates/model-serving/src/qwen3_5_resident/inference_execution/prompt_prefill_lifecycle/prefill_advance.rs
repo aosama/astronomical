@@ -3,9 +3,9 @@
 //! The order in this file is a correctness contract:
 //!
 //! 1. Choose a deterministic fixed chunk from resolved configuration.
-//! 2. Clamp it at semantic control-span and durable astro-ssd-prompt-cache boundaries.
+//! 2. Clamp it at semantic control-span and durable astro SSD prompt cache boundaries.
 //! 3. Ask the memory governor whether that chunk fits, then execute exactly it.
-//! 4. Publish required astro-ssd-prompt-cache state before advancing the in-memory cursor.
+//! 4. Publish required astro SSD prompt cache state before advancing the in-memory cursor.
 //! 5. Synchronize the chunk tape and reclaim MLX buffer cache only above threshold.
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
 //! 7. Emit progress only after all required state transitions succeeded.
@@ -133,7 +133,7 @@ impl Qwen3_5EngineState {
 
     /// Resolves the next prompt-prefill chunk span through the shared pure
     /// resolver: the configured chunk end from the sizer, clamped at the
-    /// durable astro-ssd-prompt-cache boundary when one applies. The resident engine
+    /// durable astro SSD prompt cache boundary when one applies. The resident engine
     /// executes exactly the requested (possibly clamped) end.
     fn resolve_next_prefill_chunk_span(
         &self,
@@ -348,7 +348,7 @@ impl Qwen3_5EngineState {
         )
     }
 
-    /// Publishes durable astro-ssd-prompt-cache blocks and the partial tail, then
+    /// Publishes durable astro SSD prompt cache blocks and the partial tail, then
     /// advances the request position and cursor. Publication precedes both
     /// moves so a storage failure leaves restartable state. Mirrors the
     /// inlined block.
@@ -460,7 +460,7 @@ impl Qwen3_5EngineState {
     }
 
     /// Tells the memory governor what the chunk needed. Every completed
-    /// chunk counts, the short ones at cache boundaries and prompt tails
+    /// chunk counts, the short ones at `astro_ssd_prompt_cache` boundaries and prompt tails
     /// included, since the governor keeps the largest figure per chunk size.
     fn report_completed_prompt_chunk(
         &mut self,

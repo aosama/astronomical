@@ -6,7 +6,7 @@
 //! - Start: the instant the journey submits its `ChatGenerationCommand`. On an
 //!   idle worker that request triggers `SwapModel`, so this instant is the
 //!   observable start of model loading (weight binding, tokenizer, any
-//!   per-family startup work) plus tokenization and astro-ssd-prompt-cache lookup.
+//!   per-family startup work) plus tokenization and astro SSD prompt cache lookup.
 //! - End: the arrival of the first `PrefillProgress` stream event carrying
 //!   `processed_tokens == 0, elapsed_millis == 0`. The worker emits that event
 //!   from `PromptProcessingPhaseStarted` — a confirmed prompt phase is about to
@@ -40,7 +40,7 @@ use tokio::time::{Instant, MissedTickBehavior, interval, sleep, timeout};
 
 /// The whole journey (worker launch, idle-ready wait, one load-plus-request
 /// pass) must finish within this budget; it stays under the repo's 120-second
-/// test ceiling like the sibling astro-ssd-prompt-cache warmup lane.
+/// test ceiling like the sibling astro SSD prompt cache warmup lane.
 const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 
 /// The worker's launch handshake gets its own bounded wait, mirroring the
@@ -101,7 +101,7 @@ fn should_configure_model_directory_and_fixed_chunk_for_load_measurement_worker(
         configuration_document
             .get("prompt_cache_max_size_gb")
             .is_none(),
-        "the load-measurement worker must not enable the SSD prompt cache",
+        "the load-measurement worker must not enable the astro SSD prompt cache",
     );
 }
 
@@ -173,7 +173,7 @@ async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
     );
     assert_eq!(
         measurement.astro_ssd_prompt_cache_token_count, 0,
-        "the isolated cold worker must not restore SSD-cached tokens",
+        "the isolated cold worker must not restore tokens from the astro SSD prompt cache",
     );
 
     let measurement_report = json!({

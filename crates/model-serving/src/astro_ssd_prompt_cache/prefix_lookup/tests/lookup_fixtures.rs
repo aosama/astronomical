@@ -31,7 +31,7 @@ pub fn astro_ssd_prompt_cache_model_contract() -> AstroSsdPromptCacheModelContra
             &astro_decoder_state_cache_layer_dtypes,
         )
         .expect(
-            "the frozen Ornith 1.0 configuration should build a astro-decoder-state-cache layout",
+            "the frozen Ornith 1.0 configuration should build an astro-decoder-state-cache layout",
         ),
         frozen_ornith_1_0_config.maximum_position_count() as usize,
         20_000_000_000,

@@ -15,13 +15,14 @@ use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 
 use super::large_prefill_prompt;
 
-const CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
+const ASTRO_SSD_PROMPT_CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 const MEMORY_ACCEPTANCE_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 
 #[tokio::test]
-#[ignore = "compares expert reclamation for an empty prompt cache with cache-disabled admission"]
-async fn should_not_reclaim_more_expert_payload_for_a_cache_miss_than_without_cache() {
-    require_cache_miss_memory_acceptance_completion(async {
+#[ignore = "compares expert reclamation for an empty astro SSD prompt cache with admission while the astro SSD prompt cache is disabled"]
+async fn should_not_reclaim_more_expert_payload_for_an_astro_ssd_prompt_cache_miss_than_without_the_astro_ssd_prompt_cache()
+ {
+    require_astro_ssd_prompt_cache_miss_memory_acceptance_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
         let validated_artifact = Qwen3_5ArtifactValidator::new()
@@ -49,15 +50,15 @@ async fn should_not_reclaim_more_expert_payload_for_a_cache_miss_than_without_ca
             .config()
             .context_memory_reservation_bytes(total_context_token_count)
             .expect("the model context growth should fit usize");
-        let cache_specific_workspace_bytes = cache_specific_workspace_bytes(
+        let astro_ssd_prompt_cache_specific_workspace_bytes = astro_ssd_prompt_cache_specific_workspace_bytes(
             &validated_artifact,
             mlx_memory_limits,
             context_growth_bytes,
         );
         let (
-            cacheless_reclaimed_expert_payload_bytes,
+            reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache,
             shared_test_memory_ceiling_bytes,
-            cacheless_expert_memory_mode_after_admission,
+            expert_memory_mode_after_admission_without_astro_ssd_prompt_cache,
         ) = measure_initial_request_expert_reclamation(
             &model_directory,
             None,
@@ -65,52 +66,52 @@ async fn should_not_reclaim_more_expert_payload_for_a_cache_miss_than_without_ca
             41_101,
             mlx_memory_limits,
             context_growth_bytes,
-            cache_specific_workspace_bytes,
+            astro_ssd_prompt_cache_specific_workspace_bytes,
             None,
         )
         .await;
         if shared_test_memory_ceiling_bytes.is_some() {
             assert_eq!(
-                cacheless_expert_memory_mode_after_admission,
+                expert_memory_mode_after_admission_without_astro_ssd_prompt_cache,
                 ExpertMemoryMode::Resident,
-                "the dynamically selected cacheless control ceiling should preserve residency"
+                "the dynamically selected control ceiling without the astro SSD prompt cache should preserve residency"
             );
         }
 
-        let empty_cache_directory =
-            tempfile::tempdir().expect("the cache-miss run should create an empty cache directory");
+        let empty_astro_ssd_prompt_cache_directory =
+            tempfile::tempdir().expect("the astro SSD prompt cache miss run should create an empty astro SSD prompt cache directory");
         let (
-            cache_miss_reclaimed_expert_payload_bytes,
-            cache_miss_memory_ceiling_bytes,
-            cache_miss_expert_memory_mode_after_admission,
+            astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes,
+            astro_ssd_prompt_cache_miss_memory_ceiling_bytes,
+            astro_ssd_prompt_cache_miss_expert_memory_mode_after_admission,
         ) = measure_initial_request_expert_reclamation(
             &model_directory,
-            Some(empty_cache_directory.path()),
+            Some(empty_astro_ssd_prompt_cache_directory.path()),
             &prompt_token_ids,
             41_102,
             mlx_memory_limits,
             context_growth_bytes,
-            cache_specific_workspace_bytes,
+            astro_ssd_prompt_cache_specific_workspace_bytes,
             shared_test_memory_ceiling_bytes,
         )
         .await;
         assert_eq!(
-            cache_miss_memory_ceiling_bytes, shared_test_memory_ceiling_bytes,
-            "the cache-enabled and cache-disabled admissions must use the same ceiling"
+            astro_ssd_prompt_cache_miss_memory_ceiling_bytes, shared_test_memory_ceiling_bytes,
+            "admissions with the astro SSD prompt cache enabled and disabled must use the same ceiling"
         );
         if shared_test_memory_ceiling_bytes.is_some() {
             assert_eq!(
-                cache_miss_expert_memory_mode_after_admission,
+                astro_ssd_prompt_cache_miss_expert_memory_mode_after_admission,
                 ExpertMemoryMode::Resident,
-                "a cache miss should not demote experts when the cacheless request fits"
+                "an astro SSD prompt cache miss should not demote experts when the request fits without the astro SSD prompt cache"
             );
         }
 
         assert!(
-            cache_miss_reclaimed_expert_payload_bytes <= cacheless_reclaimed_expert_payload_bytes,
-            "an empty persistent cache must not cause extra expert reclamation: \
-             cache_miss={cache_miss_reclaimed_expert_payload_bytes} \
-             cacheless={cacheless_reclaimed_expert_payload_bytes}"
+            astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes <= reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache,
+            "an empty astro SSD prompt cache must not cause extra expert reclamation: \
+             astro_ssd_prompt_cache_miss={astro_ssd_prompt_cache_miss_reclaimed_expert_payload_bytes} \
+             without_astro_ssd_prompt_cache={reclaimed_expert_payload_bytes_without_astro_ssd_prompt_cache}"
         );
     })
     .await;
@@ -124,7 +125,7 @@ async fn measure_initial_request_expert_reclamation(
     request_id: u64,
     mlx_memory_limits: MlxMemoryLimits,
     context_growth_bytes: usize,
-    cache_specific_workspace_bytes: usize,
+    astro_ssd_prompt_cache_specific_workspace_bytes: usize,
     requested_test_memory_ceiling_bytes: Option<usize>,
 ) -> (u64, Option<usize>, ExpertMemoryMode) {
     let mut qwen3_5_engine = load_memory_acceptance_engine(
@@ -163,13 +164,13 @@ async fn measure_initial_request_expert_reclamation(
         .active_memory_bytes();
     let target_memory_ceiling_bytes = requested_test_memory_ceiling_bytes.or_else(|| {
         if expert_memory_mode_before_admission != ExpertMemoryMode::Resident
-            || cache_specific_workspace_bytes == 0
+            || astro_ssd_prompt_cache_specific_workspace_bytes == 0
         {
             return None;
         }
         active_memory_bytes_before_admission
             .checked_add(context_growth_bytes)?
-            .checked_add(cache_specific_workspace_bytes / 2)
+            .checked_add(astro_ssd_prompt_cache_specific_workspace_bytes / 2)
             .filter(|candidate_ceiling_bytes| {
                 *candidate_ceiling_bytes > active_memory_bytes_before_admission
                     && *candidate_ceiling_bytes < mlx_memory_limits.active_memory_limit_bytes()
@@ -225,7 +226,7 @@ async fn measure_initial_request_expert_reclamation(
     if astro_ssd_prompt_cache_directory.is_some() {
         let astro_ssd_prompt_cache_diagnostics = generation_start
             .astro_ssd_prompt_cache_diagnostics()
-            .expect("the enabled empty prompt cache should report its miss");
+            .expect("the enabled empty astro SSD prompt cache should report its miss");
         assert_eq!(
             astro_ssd_prompt_cache_diagnostics.lookup_outcome,
             WorkerAstroSsdPromptCacheLookupOutcome::Miss
@@ -241,7 +242,7 @@ async fn measure_initial_request_expert_reclamation(
     let reclaimed_expert_payload_bytes =
         expert_payload_bytes_before_start.saturating_sub(expert_payload_bytes_after_start);
     eprintln!(
-        "[astro-ssd-prompt-cache-miss-memory] request_id={request_id} cache_enabled={} mode_before_limit={expert_memory_mode_before_admission:?} mode_before_request={expert_memory_mode_before_request:?} mode_after={expert_memory_mode_after_admission:?} active_before_bytes={active_memory_bytes_before_admission} context_growth_bytes={context_growth_bytes} cache_extra_workspace_bytes={cache_specific_workspace_bytes} minimum_safe_ceiling_bytes={minimum_safe_memory_ceiling_bytes:?} ceiling_bytes={applied_memory_ceiling_bytes:?} payload_before_bytes={expert_payload_bytes_before_start} payload_after_bytes={expert_payload_bytes_after_start} reclaimed_bytes={reclaimed_expert_payload_bytes}",
+        "[astro-ssd-prompt-cache-miss-memory] request_id={request_id} astro_ssd_prompt_cache_enabled={} mode_before_limit={expert_memory_mode_before_admission:?} mode_before_request={expert_memory_mode_before_request:?} mode_after={expert_memory_mode_after_admission:?} active_before_bytes={active_memory_bytes_before_admission} context_growth_bytes={context_growth_bytes} astro_ssd_prompt_cache_extra_workspace_bytes={astro_ssd_prompt_cache_specific_workspace_bytes} minimum_safe_ceiling_bytes={minimum_safe_memory_ceiling_bytes:?} ceiling_bytes={applied_memory_ceiling_bytes:?} payload_before_bytes={expert_payload_bytes_before_start} payload_after_bytes={expert_payload_bytes_after_start} reclaimed_bytes={reclaimed_expert_payload_bytes}",
         astro_ssd_prompt_cache_directory.is_some(),
     );
     drop(qwen3_5_engine);
@@ -309,10 +310,10 @@ async fn load_memory_acceptance_engine(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
         mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
-        astro_ssd_prompt_cache_directory.map(|cache_directory| {
+        astro_ssd_prompt_cache_directory.map(|astro_ssd_prompt_cache_directory| {
             AstroSsdPromptCacheDiskStoreConfig::new(
-                cache_directory.to_path_buf(),
-                cache_directory.to_path_buf(),
+                astro_ssd_prompt_cache_directory.to_path_buf(),
+                astro_ssd_prompt_cache_directory.to_path_buf(),
                 crate::common::configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes(
                 ),
             )
@@ -330,7 +331,7 @@ async fn load_memory_acceptance_engine(
     qwen3_5_engine
 }
 
-fn cache_specific_workspace_bytes(
+fn astro_ssd_prompt_cache_specific_workspace_bytes(
     validated_artifact: &astronomical_model_serving::ValidatedQwen3_5Artifact,
     mlx_memory_limits: MlxMemoryLimits,
     context_growth_bytes: usize,
@@ -346,7 +347,7 @@ fn cache_specific_workspace_bytes(
                 validated_artifact.config(),
             ),
         )
-        .expect("the validated artifact should provide a astro-decoder-state-cache layout"),
+        .expect("the validated artifact should provide an astro decoder state cache layout"),
         validated_artifact.config().maximum_position_count() as usize,
         mlx_memory_limits.active_memory_limit_bytes() as u64,
         crate::common::configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes(),
@@ -367,14 +368,14 @@ fn cache_specific_workspace_bytes(
     astro_ssd_prompt_cache_model_contract
         .direct_publication_workspace_bytes()
         .checked_add(restore_workspace_bytes.saturating_sub(context_growth_bytes))
-        .expect("cache-specific workspace should fit usize")
+        .expect("the astro SSD prompt cache specific workspace should fit usize")
 }
 
-async fn require_cache_miss_memory_acceptance_completion(
+async fn require_astro_ssd_prompt_cache_miss_memory_acceptance_completion(
     acceptance_journey: impl std::future::Future<Output = ()>,
 ) {
     let started_at = Instant::now();
-    let deadline = sleep(CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT);
+    let deadline = sleep(ASTRO_SSD_PROMPT_CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT);
     let mut progress_interval = interval(Duration::from_secs(10));
     progress_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     tokio::pin!(acceptance_journey);
@@ -382,7 +383,7 @@ async fn require_cache_miss_memory_acceptance_completion(
     progress_interval.tick().await;
     eprintln!(
         "[astro-ssd-prompt-cache-miss-memory] status=start timeout_seconds={}",
-        CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT.as_secs()
+        ASTRO_SSD_PROMPT_CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT.as_secs()
     );
 
     loop {
@@ -396,13 +397,13 @@ async fn require_cache_miss_memory_acceptance_completion(
             }
             () = &mut deadline => {
                 panic!(
-                    "the cache-miss memory acceptance exceeded {} seconds",
-                    CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT.as_secs()
+                    "the astro SSD prompt cache miss memory acceptance exceeded {} seconds",
+                    ASTRO_SSD_PROMPT_CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT.as_secs()
                 );
             }
             _ = progress_interval.tick() => {
                 let elapsed = started_at.elapsed();
-                let remaining = CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT.saturating_sub(elapsed);
+                let remaining = ASTRO_SSD_PROMPT_CACHE_MISS_MEMORY_ACCEPTANCE_TIMEOUT.saturating_sub(elapsed);
                 eprintln!(
                     "[astro-ssd-prompt-cache-miss-memory] status=running elapsed_seconds={:.0} ETA<={:.0}",
                     elapsed.as_secs_f64(), remaining.as_secs_f64()

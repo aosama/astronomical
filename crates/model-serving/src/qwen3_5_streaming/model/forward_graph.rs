@@ -90,7 +90,7 @@ impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
     /// Builds decoder-state prefill without the vocabulary head.
     ///
-    /// Intermediate chunks only need cache tensors; no `lm_head` runs until
+    /// Intermediate chunks only need `astro_decoder_state_cache` tensors; no `lm_head` runs until
     /// sampling. Building then dropping logits was host-side waste on every
     /// 2,048-token chunk.
     pub(super) fn build_prefill_decoder_state_graph(
@@ -473,7 +473,7 @@ pub(super) fn pre_final_normalization_hidden_state_at(
 }
 
 /// The arrays one completed layer leaves to evaluate: its output, plus the
-/// convolution state and astro-ssd-prompt-cache boundary snapshots it does not reach.
+/// convolution state and astro SSD prompt cache boundary snapshots it does not reach.
 fn completed_layer_roots<'layer>(
     layer_output: &'layer MlxArray,
     layer_index: usize,

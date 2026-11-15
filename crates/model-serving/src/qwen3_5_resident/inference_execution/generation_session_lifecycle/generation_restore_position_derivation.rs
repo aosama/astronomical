@@ -1,4 +1,4 @@
-//! Session position derivation from one persistent astro-ssd-prompt-cache restore outcome.
+//! Session position derivation from one persistent astro SSD prompt cache restore outcome.
 
 use crate::AstroSsdPromptCacheBlockKey;
 use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
@@ -23,7 +23,7 @@ pub(super) struct GenerationSessionPosition {
 /// all-zero origin, matching the previous default initialization exactly.
 /// In the `Some` arm the cursor and the next position come from different
 /// outcome fields on purpose: the cursor advances by restored tokens while
-/// positions continue from the persistent astro-ssd-prompt-cache token count, and the
+/// positions continue from the persistent astro SSD prompt cache token count, and the
 /// two diverge whenever a partial tail block is recovered.
 pub(super) fn derive_generation_session_position(
     restore_outcome: Option<AstroSsdPromptCacheRestoreOutcome>,

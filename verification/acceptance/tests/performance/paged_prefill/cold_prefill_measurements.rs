@@ -32,7 +32,7 @@ fn model_id() -> &'static str {
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
-const CACHE_SCALING_FIXTURE: &str =
+const FIFTY_THOUSAND_WORD_SCALING_FIXTURE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
 struct StreamingMeasurement {
@@ -67,8 +67,13 @@ fn should_keep_static_metrics_fixture_at_exactly_five_thousand_words() {
 }
 
 #[test]
-fn should_keep_cache_scaling_fixture_at_exactly_fifty_thousand_words() {
-    assert_eq!(CACHE_SCALING_FIXTURE.split_whitespace().count(), 50_000);
+fn should_keep_the_scaling_fixture_at_exactly_fifty_thousand_words() {
+    assert_eq!(
+        FIFTY_THOUSAND_WORD_SCALING_FIXTURE
+            .split_whitespace()
+            .count(),
+        50_000
+    );
 }
 
 #[test]
@@ -107,15 +112,17 @@ async fn should_measure_paged_prefill_summarization_throughput_and_peak_memory()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model and measures 50,000-word cold-cache paged prefill"]
+#[ignore = "loads the Ornith model and measures 50,000-word paged prefill with a cold macOS file cache"]
 #[serial]
-async fn should_measure_paged_prefill_cold_cache_at_fifty_thousand_words() {
+async fn should_measure_paged_prefill_with_a_cold_macos_file_cache_at_fifty_thousand_words() {
     timeout(
         BENCHMARK_TIMEOUT,
         run_cold_prefill_measurement(fifty_thousand_word_case()),
     )
     .await
-    .expect("the model-artifact cold-cache 50K measurement must finish within 60 seconds");
+    .expect(
+        "the model-artifact cold macOS file cache 50K measurement must finish within 60 seconds",
+    );
 }
 
 #[expect(clippy::too_many_lines)]
@@ -193,7 +200,7 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
     assert!(streaming_measurement.completion_token_count > 0);
     assert_eq!(
         streaming_measurement.astro_ssd_prompt_cache_token_count, 0,
-        "the performance test must measure model prefill rather than SSD cache restoration"
+        "the performance test must measure model prefill rather than astro SSD prompt cache restoration"
     );
 
     let prompt_processing_duration = streaming_measurement
@@ -431,7 +438,7 @@ async fn measure_worker_summarization(
         completion_token_count: completion_token_count
             .expect("the terminal worker event should report completion tokens"),
         astro_ssd_prompt_cache_token_count: astro_ssd_prompt_cache_token_count
-            .expect("the terminal worker event should report cached prompt tokens"),
+            .expect("the terminal worker event should report prompt tokens restored from the astro SSD prompt cache"),
         generated_text,
         maximum_prefill_mlx_active_memory_bytes,
         maximum_prefill_mlx_buffer_cache_bytes,
@@ -469,7 +476,7 @@ fn fifty_thousand_word_case() -> ColdPrefillMeasurementCase {
         // plus the one visible answer token, or the worker rejects the
         // request before prefill — defeating the measurement's purpose.
         maximum_output_tokens: 64,
-        source_document: CACHE_SCALING_FIXTURE,
+        source_document: FIFTY_THOUSAND_WORD_SCALING_FIXTURE,
         source_word_count: 50_000,
         should_require_three_paragraphs: false,
     }
