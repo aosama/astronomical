@@ -40,7 +40,7 @@ use crate::serving_acceptance::chat::openai_rest::{
     assert_successful_streaming_chat_response, post_chat_completion,
 };
 use crate::serving_acceptance::image_generation::flux2_klein_rest_support::{
-    launch_flux_rest_server, post_image, response_json,
+    launch_flux_rest_server_in, post_image, response_json,
 };
 use crate::support::http::streamed_model_text_from_chat_response;
 use crate::support::romeo_and_juliet;
@@ -103,7 +103,10 @@ async fn should_round_trip_one_installed_image_model() {
     );
     timeout(
         Duration::from_secs(ROUND_TRIP_TIMEOUT_SECONDS),
-        round_trip_image_model(&image_model),
+        round_trip_image_model(
+            &image_model,
+            &development_instance_paths().models_directory(),
+        ),
     )
     .await
     .unwrap_or_else(|_| {
@@ -181,12 +184,21 @@ async fn round_trip_chat_model(chat_model: &DiscoveredModel, development_models_
     drop(isolated_development_home);
 }
 
-async fn round_trip_image_model(image_model: &DiscoveredModel) {
+async fn round_trip_image_model(
+    image_model: &DiscoveredModel,
+    development_models_directory: &Path,
+) {
     let model_id = image_model.model_id.as_str();
     // Only the helper's name is FLUX-specific: it launches the production
     // worker and daemon over Development's models, which serve every
     // installed image family.
-    let rest_server = launch_flux_rest_server().await;
+    // Like the chat journey: the picker searches Development's Library
+    // folder, so the isolated server must list it too, or a Library-installed
+    // image model is chosen and then reported missing.
+    let rest_server = launch_flux_rest_server_in(
+        crate::support::isolated_development_home_serving_models_from(development_models_directory),
+    )
+    .await;
     let image_response = post_image(
         rest_server.server_address,
         json!({

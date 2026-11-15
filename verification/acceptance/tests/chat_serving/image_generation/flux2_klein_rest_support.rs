@@ -28,7 +28,15 @@ pub(crate) struct FluxRestServer {
 }
 
 pub(crate) async fn launch_flux_rest_server() -> FluxRestServer {
-    let isolated_development_home = crate::support::isolated_development_home_from_user_config();
+    launch_flux_rest_server_in(crate::support::isolated_development_home_from_user_config()).await
+}
+
+/// Launches the production worker and daemon in the given isolated home. A
+/// caller that serves a model from Development's Library folder passes a
+/// home that lists that folder, since an isolated home's own Library is empty.
+pub(crate) async fn launch_flux_rest_server_in(
+    isolated_development_home: tempfile::TempDir,
+) -> FluxRestServer {
     enable_isolated_acceptance_diagnostics(&isolated_development_home);
     let production_worker_executable_path =
         astronomical_test_harness::workspace_binary("astronomical-inference-worker");
