@@ -418,6 +418,8 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let (memory_served_routes_before, storage_read_routes_before) =
+            model.session_route_assignment_counts();
         let next_generated_token = {
             model.begin_decode_astro_expert_cache_forward();
             let decode_forward_started_at = active_request
@@ -455,6 +457,15 @@ impl Qwen3_5EngineState {
             memory_baseline.active_memory_bytes,
             &mut active_request.performance_attribution,
         )?;
+        let (memory_served_routes_after, storage_read_routes_after) =
+            model.session_route_assignment_counts();
+        active_request
+            .engine_extension
+            .reply_expert_route_record
+            .record_token(
+                memory_served_routes_after.saturating_sub(memory_served_routes_before),
+                storage_read_routes_after.saturating_sub(storage_read_routes_before),
+            );
         active_request
             .engine_extension
             .mlx_buffer_cache_reply_record

@@ -56,6 +56,7 @@ fn populated_stats_snapshot() -> WorkerExpertStreamingStats {
         mandatory_decode_source_bytes: 9_000_000_000,
         prompt_token_count: 5_000,
         generated_token_count: 600,
+        last_reply_memory_record: None,
     }
 }
 
@@ -238,4 +239,35 @@ fn should_report_zero_left_on_ssd_when_the_library_is_resident() {
 fn should_saturate_left_on_ssd_when_resident_bytes_exceed_the_library() {
     assert_eq!(expert_payload_left_on_ssd_bytes(10, 11), 0);
     assert_eq!(expert_payload_left_on_ssd_bytes(0, 5), 0);
+}
+
+#[test]
+fn should_publish_the_last_reply_memory_record_in_the_document() {
+    let mut replied_snapshot = populated_stats_snapshot();
+    replied_snapshot.last_reply_memory_record =
+        Some(astronomical_ipc_protocol::ReplyMemoryRecord {
+            storage_read_expert_counts_by_token: vec![12, 0, 3],
+            mlx_buffer_cache_sampled_token_count: 3,
+            mlx_buffer_cache_empty_token_count: 1,
+            ..astronomical_ipc_protocol::ReplyMemoryRecord::default()
+        });
+    let mut observatory = ExpertStreamingObservatory::empty();
+    observatory.record_stats(replied_snapshot, 1_000);
+    let document = expert_stats_document(&observatory);
+    assert_eq!(
+        document["last_reply"]["storage_read_expert_counts_by_token"],
+        serde_json::json!([12, 0, 3])
+    );
+    assert_eq!(
+        document["last_reply"]["mlx_buffer_cache_empty_token_count"],
+        serde_json::json!(1)
+    );
+}
+
+#[test]
+fn should_publish_a_null_last_reply_before_any_reply_finishes() {
+    let mut observatory = ExpertStreamingObservatory::empty();
+    observatory.record_stats(populated_stats_snapshot(), 1_000);
+    let document = expert_stats_document(&observatory);
+    assert_eq!(document["last_reply"], serde_json::json!(null));
 }

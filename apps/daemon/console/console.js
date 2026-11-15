@@ -12,6 +12,7 @@ const OBSERVATORY_PATH_MAP = {
     overview: "/overview",
     chat: "/chat",
     experts: "/experts",
+    memory: "/memory",
     "download-models": "/download-models",
     connect: "/connect",
     settings: "/settings",
@@ -46,6 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wireDownloadModelsCatalog();
     wireConnectMaterial();
     wireExpertObservatory();
+    wireMemoryPage();
     wireConfigurationEditor();
     pollStatus();
     pollAstroSsdPromptCacheStats();
@@ -121,6 +123,7 @@ async function pollStatus() {
         renderOverviewMemory(data);
         renderOverviewModel(data, readExpertPlacement(data));
         renderOverviewSession(data);
+        rememberMemoryPageStatus(data);
         renderMemoryLimitControl(data);
         renderConfigurationStatus(data);
         renderNeuralEnginePanel(data);

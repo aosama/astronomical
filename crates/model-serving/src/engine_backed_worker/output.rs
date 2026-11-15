@@ -605,6 +605,7 @@ pub(super) fn worker_expert_streaming_stats(
         mandatory_decode_source_bytes: expert_streaming_stats.mandatory_decode_source_bytes,
         prompt_token_count: expert_streaming_stats.prompt_token_count,
         generated_token_count: expert_streaming_stats.generated_token_count,
+        last_reply_memory_record: expert_streaming_stats.last_reply_memory_record.clone(),
     }
 }
 

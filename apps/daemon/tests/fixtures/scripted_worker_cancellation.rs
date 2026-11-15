@@ -136,6 +136,7 @@ fn expert_streaming_stats_snapshot() -> WorkerExpertStreamingStats {
         mandatory_decode_source_bytes: 0,
         prompt_token_count: 1,
         generated_token_count: 1,
+        last_reply_memory_record: None,
     }
 }
 

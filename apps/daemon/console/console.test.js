@@ -302,7 +302,7 @@ test("maps every observatory destination to a stable URL path", () => {
     assert.equal(pathMap["download-models"], "/download-models");
     assert.equal(pathMap.library, undefined, "the Library page was renamed Download Models");
     assert.equal(pathMap.connect, "/connect");
-    assert.equal(pathMap.memory, undefined);
+    assert.equal(pathMap.memory, "/memory");
     assert.equal(pathMap.cache, undefined);
     assert.equal(pathMap.model, undefined, "the Model page was folded into Overview");
     assert.equal(pathMap.settings, "/settings");
@@ -320,7 +320,7 @@ test("maps every observatory URL path back to its destination", () => {
     assert.equal(reverseMap["/download-models"], "download-models");
     assert.equal(reverseMap["/library"], undefined, "the retired path is resolved separately");
     assert.equal(reverseMap["/connect"], "connect");
-    assert.equal(reverseMap["/memory"], undefined);
+    assert.equal(reverseMap["/memory"], "memory");
     assert.equal(reverseMap["/cache"], undefined);
     assert.equal(reverseMap["/model"], undefined, "the retired path is resolved separately");
     assert.equal(reverseMap["/settings"], "settings");

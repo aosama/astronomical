@@ -588,6 +588,7 @@ impl Qwen3_5EngineState {
                 reserved_context_tokens,
                 layer_at_a_time_prefill: None,
                 mlx_buffer_cache_reply_record: Default::default(),
+                reply_expert_route_record: Default::default(),
             },
         });
         let restored_prompt_prefix_token_count =

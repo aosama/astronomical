@@ -356,6 +356,8 @@ pub struct ExpertStreamingStats {
     pub mandatory_decode_source_bytes: u64,
     pub prompt_token_count: u64,
     pub generated_token_count: u64,
+    /// How the reply that just finished used the caches, token by token.
+    pub last_reply_memory_record: Option<astronomical_ipc_protocol::ReplyMemoryRecord>,
 }
 
 impl Default for ExpertStreamingStats {
@@ -387,6 +389,7 @@ impl Default for ExpertStreamingStats {
             mandatory_decode_source_bytes: 0,
             prompt_token_count: 0,
             generated_token_count: 0,
+            last_reply_memory_record: None,
         }
     }
 }
@@ -433,6 +436,19 @@ impl GenerationFinalization {
         expert_streaming_stats: Option<Box<ExpertStreamingStats>>,
     ) -> Self {
         self.expert_streaming_stats = expert_streaming_stats;
+        self
+    }
+
+    /// Adds the finished reply's memory record to the session stats, when
+    /// this engine reports session stats at all.
+    #[must_use]
+    pub fn with_reply_memory_record(
+        mut self,
+        reply_memory_record: astronomical_ipc_protocol::ReplyMemoryRecord,
+    ) -> Self {
+        if let Some(expert_streaming_stats) = self.expert_streaming_stats.as_mut() {
+            expert_streaming_stats.last_reply_memory_record = Some(reply_memory_record);
+        }
         self
     }
 

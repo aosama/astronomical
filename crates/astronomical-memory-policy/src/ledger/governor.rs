@@ -102,6 +102,9 @@ pub struct LedgerReading {
     pub overflow_count: u64,
     /// Redo attempts made since the model loaded.
     pub redo_attempt_count: u64,
+    /// The last reading of the memory macOS has wired across the whole
+    /// system and the kernel's wire limit, in that order.
+    pub system_wired_reading: Option<(u64, u64)>,
 }
 
 /// What the governor says after one measured step.
@@ -428,6 +431,7 @@ impl MemoryGovernor {
                 .lowest_kept_share_while_reading_permille,
             overflow_count: self.overflow_count,
             redo_attempt_count: self.redo_attempt_count,
+            system_wired_reading: self.ledger.latest_system_wired_reading(),
         };
         self.latest_reading = Some(reading);
         StepVerdict {

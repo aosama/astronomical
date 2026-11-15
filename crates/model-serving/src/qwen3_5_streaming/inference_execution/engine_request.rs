@@ -22,6 +22,9 @@ pub(crate) struct StreamingRequestExtension {
     /// How full the `mlx_buffer_cache` was after each reply token.
     pub(in crate::qwen3_5_streaming) mlx_buffer_cache_reply_record:
         crate::memory::mlx_buffer_cache_reply_record::MlxBufferCacheReplyRecord,
+    /// Where each reply token found its routed experts.
+    pub(in crate::qwen3_5_streaming) reply_expert_route_record:
+        crate::memory::reply_expert_route_record::ReplyExpertRouteRecord,
 }
 
 impl Qwen3_5EngineRequest {}

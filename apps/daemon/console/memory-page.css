@@ -1,0 +1,39 @@
+/* The Memory page: one bar for the whole Mac, four facts, one cell per token. */
+
+.memory-page-model { margin: 0; color: var(--ink-dim); font-size: var(--text-md); }
+.memory-page-headline { margin: 0; font-size: var(--text-3xl); font-weight: 750; line-height: 1.15; letter-spacing: -0.025em; }
+.memory-page-heading-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.memory-page-copy-block { display: flex; align-items: center; gap: 12px; }
+.memory-page-copy-feedback { margin: 0; color: var(--ink-dim); font-size: var(--text-sm); }
+.memory-page-layout { display: grid; gap: 20px; }
+
+/* Room above the bar for the wire limit's label. */
+.memory-page-bar-wrap { position: relative; padding-top: 34px; }
+.memory-page-bar { display: flex; height: 44px; overflow: hidden; border-radius: 8px; background: var(--panel-2); }
+.memory-page-seg { height: 100%; transition: width 400ms ease; }
+.memory-page-seg[data-memory-page-part="other"], .memory-page-swatch[data-memory-page-part="other"] { background: var(--ink-faint); }
+.memory-page-seg[data-memory-page-part="fixed"], .memory-page-swatch[data-memory-page-part="fixed"] { background: var(--ink-dim); }
+.memory-page-seg[data-memory-page-part="experts"], .memory-page-swatch[data-memory-page-part="experts"] { background: var(--resident); }
+.memory-page-seg[data-memory-page-part="conversation"], .memory-page-swatch[data-memory-page-part="conversation"] { background: var(--memory-context); }
+.memory-page-seg[data-memory-page-part="working"], .memory-page-swatch[data-memory-page-part="working"] { background: var(--accent); }
+
+.memory-page-wire-limit { position: absolute; top: 6px; bottom: -6px; width: 2px; background: var(--danger); transition: left 400ms ease; }
+.memory-page-wire-limit-label { position: absolute; top: 0; right: 10px; white-space: nowrap; color: var(--danger); font-size: var(--text-sm); font-weight: 600; }
+
+.memory-page-key { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 18px 0 0; padding: 0; list-style: none; color: var(--ink-dim); font-size: var(--text-sm); }
+.memory-page-key li { display: flex; align-items: center; gap: 8px; }
+.memory-page-swatch { width: 12px; height: 12px; border-radius: 3px; }
+.memory-page-note { margin: 14px 0 0; color: var(--ink-dim); font-size: var(--text-sm); line-height: 1.5; max-width: 720px; }
+
+.memory-page-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 0; }
+.memory-page-fact { padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.memory-page-fact dt { color: var(--ink-dim); font-size: var(--text-sm); }
+.memory-page-fact dd { margin: 6px 0 0; font-size: var(--text-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.memory-page-token-strip { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 14px; }
+/* A token's column is every expert it routed to; the violet foot is the
+   share read from the SSD, drawn to scale. */
+.memory-page-token { display: flex; align-items: flex-end; width: 5px; height: 96px; border-radius: 2px; overflow: hidden; background: var(--resident); }
+.memory-page-token-ssd { display: block; width: 100%; background: var(--accent); }
+.memory-page-token-legend { display: flex; align-items: center; gap: 8px 18px; margin-top: 12px; color: var(--ink-dim); font-size: var(--text-sm); }
+.memory-page-token-legend span { display: flex; align-items: center; gap: 8px; }

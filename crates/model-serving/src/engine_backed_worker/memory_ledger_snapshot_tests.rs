@@ -111,3 +111,20 @@ fn should_publish_a_full_share_when_the_engine_keeps_all_the_ledger_allows() {
     );
     assert_eq!(snapshot.kept_over_capacity_bytes, 0);
 }
+
+#[test]
+fn should_publish_zero_system_wired_figures_before_any_reading() {
+    let ledger_reading = reading_after_one_prompt_step(16 * GIBIBYTE, 8 * GIBIBYTE, 0);
+    let snapshot = worker_memory_ledger_snapshot(ledger_reading);
+    assert_eq!(snapshot.system_wired_bytes, 0);
+    assert_eq!(snapshot.system_wire_limit_bytes, 0);
+}
+
+#[test]
+fn should_publish_the_latest_system_wired_reading_and_its_limit() {
+    let mut ledger_reading = reading_after_one_prompt_step(16 * GIBIBYTE, 8 * GIBIBYTE, 0);
+    ledger_reading.system_wired_reading = Some((30 * GIBIBYTE, 38 * GIBIBYTE));
+    let snapshot = worker_memory_ledger_snapshot(ledger_reading);
+    assert_eq!(snapshot.system_wired_bytes, 30 * GIBIBYTE);
+    assert_eq!(snapshot.system_wire_limit_bytes, 38 * GIBIBYTE);
+}

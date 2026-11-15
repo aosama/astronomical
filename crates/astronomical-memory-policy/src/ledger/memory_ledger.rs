@@ -37,6 +37,9 @@ pub struct MemoryLedger {
     mlx_working_buffers: MlxWorkingBufferMeasurements,
     leases: LeaseBook,
     system_wired_reserve_bytes: u64,
+    /// The last reading of the system's wired total and the kernel's wire
+    /// limit; `None` before any reading.
+    latest_system_wired_reading: Option<(u64, u64)>,
 }
 
 impl MemoryLedger {
@@ -54,6 +57,7 @@ impl MemoryLedger {
             mlx_working_buffers: MlxWorkingBufferMeasurements::default(),
             leases: LeaseBook::default(),
             system_wired_reserve_bytes: 0,
+            latest_system_wired_reading: None,
         })
     }
 
@@ -167,7 +171,15 @@ impl MemoryLedger {
             system_wire_limit_bytes,
         )
         .min(self.limit_bytes);
+        self.latest_system_wired_reading = Some((system_wired_bytes, system_wire_limit_bytes));
         self.accounts()
+    }
+
+    /// The last reading of the system's wired total and the kernel's wire
+    /// limit, in that order.
+    #[must_use]
+    pub const fn latest_system_wired_reading(&self) -> Option<(u64, u64)> {
+        self.latest_system_wired_reading
     }
 
     /// Sets memory aside for a need outside the normal pattern.

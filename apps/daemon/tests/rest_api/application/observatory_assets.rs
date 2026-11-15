@@ -82,6 +82,7 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
         "/chat",
         "/model",
         "/experts",
+        "/memory",
         "/download-models",
         "/library",
         "/connect",
@@ -119,8 +120,8 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
 }
 
 #[tokio::test]
-async fn should_not_serve_removed_memory_cache_and_optimizer_destinations() {
-    for removed_observatory_path in ["/memory", "/cache", "/optimizer"] {
+async fn should_not_serve_removed_cache_and_optimizer_destinations() {
+    for removed_observatory_path in ["/cache", "/optimizer"] {
         let application =
             astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
         let response = application
@@ -360,6 +361,17 @@ async fn should_serve_the_embedded_experts_and_overview_assets() {
             "expertMemoryModePhrase",
         ),
         ("/experts.css", "text/css", "experts-bar-ssd"),
+        (
+            "/memory-page.js",
+            "application/javascript",
+            "memoryPagePresentation",
+        ),
+        (
+            "/memory-page-image.js",
+            "application/javascript",
+            "copyMemoryPageImage",
+        ),
+        ("/memory-page.css", "text/css", "memory-page-wire-limit"),
         ("/overview.css", "text/css", "overview-now-state"),
     ] {
         let application =
