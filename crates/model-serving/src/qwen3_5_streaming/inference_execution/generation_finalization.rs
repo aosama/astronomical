@@ -138,6 +138,12 @@ impl Qwen3_5EngineState {
             &mut active_request.performance_attribution,
             PerformanceAttribution::disabled(),
         );
+        log_mlx_buffer_cache_over_the_reply(
+            request_id.value(),
+            active_request
+                .engine_extension
+                .mlx_buffer_cache_reply_record,
+        );
         // Drop pending tokens, decoder state, and all
         // request-local snapshot references before lifting the pressure ceiling.
         // Otherwise newly admitted pages could compete with memory that is only
@@ -369,3 +375,24 @@ impl Qwen3_5EngineState {
 }
 
 use crate::MlxMemoryTelemetry;
+
+/// Says how full the `mlx_buffer_cache` was after each token of the reply.
+/// Tokens after which it was empty allocated every buffer afresh, which is
+/// what made replies at the top of the memory range a third as fast.
+fn log_mlx_buffer_cache_over_the_reply(
+    request_id: u64,
+    mlx_buffer_cache_reply_record: crate::memory::mlx_buffer_cache_reply_record::MlxBufferCacheReplyRecord,
+) {
+    if mlx_buffer_cache_reply_record.sampled_token_count() == 0 {
+        return;
+    }
+    tracing::info!(
+        request_id,
+        sampled_token_count = mlx_buffer_cache_reply_record.sampled_token_count(),
+        empty_token_count = mlx_buffer_cache_reply_record.empty_token_count(),
+        smallest_mlx_buffer_cache_bytes = mlx_buffer_cache_reply_record.smallest_bytes(),
+        mean_mlx_buffer_cache_bytes = mlx_buffer_cache_reply_record.mean_bytes(),
+        largest_mlx_buffer_cache_bytes = mlx_buffer_cache_reply_record.largest_bytes(),
+        "the MLX buffer cache over the reply"
+    );
+}

@@ -35,7 +35,7 @@ When a step finishes, MLX does not hand its buffers back to the system. It keeps
 - MLX's own name for it is "cache memory": `get_cache_memory`, `set_cache_limit` and `clear_cache` in `mlx/memory.h`, backed by the class `BufferCache` in MLX's Metal allocator.
 - It is not counted in MLX's active memory, but it does occupy memory under the limit.
 - MLX starts releasing it once active memory plus the cache reaches its collection line, which stock MLX places at 95% of the working set Metal recommends for the Mac. Past that line no buffer is reused and every step allocates afresh; a large sparse model then replies at about a third of its speed.
-- The memory ledger has no account for it yet. It lives inside the ledger's 2% margin.
+- While a reply is written, the memory ledger keeps room for it in the account `mlx_buffer_cache_bytes`: one reply step's measured working buffers, taken from what would otherwise be kept experts, and never more than fits. Reading a prompt keeps no such room yet.
 
 ## `metal_kernel_cache`
 
@@ -53,8 +53,9 @@ For a sparse model being streamed, the memory limit a person sets is divided as:
 limit = core weights that always stay in memory
       + the conversation's stored state
       + mlx_working_buffers for one step
+      + room for the mlx_buffer_cache (while a reply is written)
       + slots for weights being read
-      + margin (where the mlx_buffer_cache lives today)
+      + margin
       + astro_expert_cache
 ```
 
@@ -88,5 +89,5 @@ Screens do not show these names; they use plain words, such as "Prompt cache" in
 | On screen | Formal name |
 |---|---|
 | "Room for the rest of the model" | The capacity of the `astro_expert_cache` (kept layers on a dense model) |
-| "Room to work" | `mlx_working_buffers`, plus any lease |
-| "Safety margin" | The margin, where the `mlx_buffer_cache` lives today |
+| "Room to work" | `mlx_working_buffers`, the room kept for the `mlx_buffer_cache` while a reply is written, and any lease |
+| "Safety margin" | The margin |

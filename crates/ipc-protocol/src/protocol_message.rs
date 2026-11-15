@@ -234,6 +234,8 @@ pub struct WorkerMemoryLedgerSnapshot {
     pub core_weight_bytes: u64,
     pub context_bytes: u64,
     pub mlx_working_buffer_bytes: u64,
+    /// Room kept free for the `mlx_buffer_cache` while a reply is written.
+    pub mlx_buffer_cache_bytes: u64,
     pub stream_slot_bytes: u64,
     pub lease_bytes: u64,
     pub margin_bytes: u64,

@@ -36,6 +36,9 @@ pub struct LedgerAccounts {
     pub core_weight_bytes: u64,
     pub context_bytes: u64,
     pub mlx_working_buffer_bytes: u64,
+    /// Room kept free for the `mlx_buffer_cache`, so MLX can hold one
+    /// step's buffers for the next step to reuse. See `mlx_buffer_cache_bytes_for`.
+    pub mlx_buffer_cache_bytes: u64,
     pub stream_slot_bytes: u64,
     pub lease_bytes: u64,
     pub margin_bytes: u64,
@@ -58,6 +61,7 @@ impl LedgerAccounts {
         self.core_weight_bytes
             .saturating_add(self.context_bytes)
             .saturating_add(self.mlx_working_buffer_bytes)
+            .saturating_add(self.mlx_buffer_cache_bytes)
             .saturating_add(self.stream_slot_bytes)
             .saturating_add(self.lease_bytes)
             .saturating_add(self.margin_bytes)
@@ -77,12 +81,13 @@ impl LedgerAccounts {
 
     /// Everything the accounts set aside apart from kept weights: the
     /// fixed weights, the stored state, one step's MLX working buffers, the
-    /// slots, leases and the margin.
+    /// room for the MLX buffer cache, the slots, leases and the margin.
     #[must_use]
     pub const fn set_aside_bytes(&self) -> u64 {
         self.core_weight_bytes
             .saturating_add(self.context_bytes)
             .saturating_add(self.mlx_working_buffer_bytes)
+            .saturating_add(self.mlx_buffer_cache_bytes)
             .saturating_add(self.stream_slot_bytes)
             .saturating_add(self.lease_bytes)
             .saturating_add(self.margin_bytes)
@@ -116,6 +121,7 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
         core_weight_bytes: model_shape.core_weight_bytes,
         context_bytes: account_inputs.context_bytes,
         mlx_working_buffer_bytes: 0,
+        mlx_buffer_cache_bytes: 0,
         stream_slot_bytes: 0,
         lease_bytes: account_inputs.lease_bytes,
         margin_bytes,
@@ -130,7 +136,14 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
         return with_unmeasured_mlx_working_buffers(accounts, fixed_bytes, stream_slot_bytes);
     };
     accounts.mlx_working_buffer_bytes = mlx_working_buffer_bytes;
-    let needed_without_slots_bytes = fixed_bytes.saturating_add(mlx_working_buffer_bytes);
+    let needed_before_mlx_buffer_cache_bytes = fixed_bytes.saturating_add(mlx_working_buffer_bytes);
+    accounts.mlx_buffer_cache_bytes = fitting_mlx_buffer_cache_bytes(
+        mlx_buffer_cache_bytes_for(account_inputs.phase, mlx_working_buffer_bytes),
+        accounts.limit_bytes,
+        needed_before_mlx_buffer_cache_bytes.saturating_add(stream_slot_bytes),
+    );
+    let needed_without_slots_bytes =
+        needed_before_mlx_buffer_cache_bytes.saturating_add(accounts.mlx_buffer_cache_bytes);
     let room_without_slots_bytes = accounts
         .limit_bytes
         .saturating_sub(needed_without_slots_bytes);
@@ -147,6 +160,47 @@ pub(super) const fn compose_accounts(account_inputs: AccountInputs) -> LedgerAcc
     accounts.kept_weight_capacity_bytes = accounts.limit_bytes.saturating_sub(needed_bytes);
     accounts.shortfall_bytes = needed_bytes.saturating_sub(accounts.limit_bytes);
     accounts
+}
+
+/// Room the `mlx_buffer_cache` needs beside the working buffers of `phase`.
+///
+/// When a reply step finishes, MLX keeps its buffers in the
+/// `mlx_buffer_cache` and hands them to the next layer, which asks for the
+/// same sizes. MLX releases cached buffers once memory in use plus the cache
+/// reaches its collection line, so a plan that fills the limit with kept
+/// experts leaves the cache empty and every token allocates its buffers
+/// afresh. Measured on a 48 GB Mac: a 122B model replied at 28 to 30 tokens
+/// per second with room for the cache and at 10 to 11 without it. One reply
+/// step's working buffers is what one layer hands to the next, so that is
+/// the room set aside.
+///
+/// Reading a prompt sets nothing aside yet: its working buffers are many
+/// times larger, and what they would cost the prompt's kept layers has not
+/// been measured.
+const fn mlx_buffer_cache_bytes_for(phase: LedgerPhase, mlx_working_buffer_bytes: u64) -> u64 {
+    match phase {
+        LedgerPhase::WritingReply => mlx_working_buffer_bytes,
+        LedgerPhase::Idle | LedgerPhase::ReadingPrompt { .. } => 0,
+    }
+}
+
+/// The room for the `mlx_buffer_cache` that still fits beside every need.
+///
+/// The room only makes replies faster; a model runs without it. It is
+/// therefore taken from what would otherwise be kept, never added to a
+/// shortfall: on a limit with nothing to spare it shrinks to zero, and
+/// whether a model can be served is decided exactly as before it existed.
+const fn fitting_mlx_buffer_cache_bytes(
+    wanted_mlx_buffer_cache_bytes: u64,
+    limit_bytes: u64,
+    needed_with_slots_bytes: u64,
+) -> u64 {
+    let room_bytes = limit_bytes.saturating_sub(needed_with_slots_bytes);
+    if wanted_mlx_buffer_cache_bytes < room_bytes {
+        wanted_mlx_buffer_cache_bytes
+    } else {
+        room_bytes
+    }
 }
 
 /// With no measurement, nothing is kept and everything streams: the whole

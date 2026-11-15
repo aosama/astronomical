@@ -216,7 +216,7 @@ function renderOverviewMemory(statusDocument) {
 const OVERVIEW_LIMIT_PARTS = [
     { key: "fixed", accountBytes: (memoryLedger) => memoryLedger.core_weight_bytes },
     { key: "conversation", accountBytes: (memoryLedger) => memoryLedger.context_bytes },
-    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.mlx_working_buffer_bytes || 0) + (memoryLedger.lease_bytes || 0) },
+    { key: "working", accountBytes: (memoryLedger) => (memoryLedger.mlx_working_buffer_bytes || 0) + (memoryLedger.mlx_buffer_cache_bytes || 0) + (memoryLedger.lease_bytes || 0) },
     { key: "reading", accountBytes: (memoryLedger) => memoryLedger.stream_slot_bytes },
     { key: "margin", accountBytes: (memoryLedger) => memoryLedger.margin_bytes },
     { key: "rest", accountBytes: (memoryLedger) => memoryLedger.kept_weight_capacity_bytes },

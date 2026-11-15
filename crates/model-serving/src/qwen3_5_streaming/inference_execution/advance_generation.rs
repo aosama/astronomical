@@ -455,6 +455,17 @@ impl Qwen3_5EngineState {
             memory_baseline.active_memory_bytes,
             &mut active_request.performance_attribution,
         )?;
+        active_request
+            .engine_extension
+            .mlx_buffer_cache_reply_record
+            .record_token(
+                u64::try_from(
+                    completed_forward_memory
+                        .mlx_memory_snapshot
+                        .mlx_buffer_cache_bytes(),
+                )
+                .unwrap_or(u64::MAX),
+            );
         Ok((next_generated_token, completed_forward_memory))
     }
 }

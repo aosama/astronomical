@@ -19,6 +19,9 @@ pub(crate) struct StreamingRequestExtension {
     /// and its last.
     pub(in crate::qwen3_5_streaming) layer_at_a_time_prefill:
         Option<super::layer_at_a_time_prefill::LayerAtATimePrefillInFlight>,
+    /// How full the `mlx_buffer_cache` was after each reply token.
+    pub(in crate::qwen3_5_streaming) mlx_buffer_cache_reply_record:
+        crate::memory::mlx_buffer_cache_reply_record::MlxBufferCacheReplyRecord,
 }
 
 impl Qwen3_5EngineRequest {}
