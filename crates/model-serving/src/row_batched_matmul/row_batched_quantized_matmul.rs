@@ -24,6 +24,14 @@ pub struct RowBatchedMatmulKernels {
     matmul: MlxMetalKernel,
 }
 
+/// The kernel handles are opaque MLX objects; a model that holds them only
+/// says that it does.
+impl std::fmt::Debug for RowBatchedMatmulKernels {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("RowBatchedMatmulKernels")
+    }
+}
+
 impl RowBatchedMatmulKernels {
     /// Declares both kernels. MLX compiles a custom kernel's Metal source only
     /// on its first evaluation, so this succeeds on chips without M5 matrix

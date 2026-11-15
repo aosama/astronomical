@@ -210,7 +210,7 @@ impl Qwen3_5ResidentModel {
     #[cfg(feature = "direct-mlx")]
     pub fn release_neural_engine_mlp_prefill(&mut self) {
         self.neural_engine_mlp_prefill = None;
-        self.base.output_gate_engine = None;
+        self.base.optional_accelerators.output_gate_engine = None;
     }
 
     /// Sends full chunks to the GPU alone while paused, so one loaded model can
@@ -225,7 +225,9 @@ impl Qwen3_5ResidentModel {
     /// As [`Self::set_neural_engine_mlp_prefill_paused`] for the output gate programs.
     #[cfg(feature = "direct-mlx")]
     pub fn set_neural_engine_output_gate_paused(&self, is_paused: bool) {
-        if let Some(output_gate_engine) = self.base.output_gate_engine.as_ref() {
+        if let Some(output_gate_engine) =
+            self.base.optional_accelerators.output_gate_engine.as_ref()
+        {
             output_gate_engine.set_paused(is_paused);
         }
     }

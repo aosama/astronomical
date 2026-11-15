@@ -40,6 +40,8 @@ const CODE_PROMPT: &str =
     "Write a short Python function that computes the Fibonacci sequence and explain it.";
 const CHAT_PROMPT: &str = "Explain how matrix multiplication uses a GPU in plain English, then give a small numerical example.";
 const OUTPUT_TOKENS: usize = 256;
+const SAMPLING_SEED: u64 = 1234;
+const SAMPLED_SEED_COUNT: u64 = 3;
 /// Qwen3.8's recommended sampling, as users run it and as the reference ran.
 const TOP_P_THOUSANDTHS: u16 = 950;
 const TOP_K: u16 = 20;
@@ -105,7 +107,20 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
     let mut failures = Vec::new();
     for (cell_index, cell) in CELLS.iter().enumerate() {
         let cell_started_at = Instant::now();
-        let (rounds, emitted) = run_cell(&pair, cell);
+        // A sampled cell's kept count swings with the text it happens to
+        // sample (about 0.16 either way over one 256-token run), so sampled
+        // cells pool three seeds; greedy text is fixed and runs once.
+        let seed_count = if cell.temperature_thousandths == 0 {
+            1
+        } else {
+            SAMPLED_SEED_COUNT
+        };
+        let (mut rounds, mut emitted) = (0, 0);
+        for seed_offset in 0..seed_count {
+            let (seed_rounds, seed_emitted) = run_cell(&pair, cell, SAMPLING_SEED + seed_offset);
+            rounds += seed_rounds;
+            emitted += seed_emitted;
+        }
         let kept_per_round = emitted as f64 / rounds as f64;
         let elapsed_seconds = journey_started_at.elapsed().as_secs_f64();
         let remaining_seconds =
@@ -160,6 +175,12 @@ pub(crate) fn load_pair() -> JourneyPair {
     target
         .materialize_complete_weights_matching_production()
         .expect("the 27B weights materialize");
+    // Verify passes over 6 to 32 rows use the row-batched kernel once this
+    // GPU's probe proves it, as a drafting engine will.
+    let row_batched_enabled = target
+        .enable_row_batched_projections(&mut attribution)
+        .expect("the capability probe runs");
+    eprintln!("[dflash2] row-batched projections enabled: {row_batched_enabled}");
     let config_document: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(drafter_directory.join("config.json"))
             .expect("the drafter config reads"),
@@ -219,7 +240,7 @@ pub(crate) fn prompt_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
 
 /// One cell's request: prefill, then draft-and-verify rounds until the
 /// output budget is spent. Returns (verify rounds, tokens emitted by them).
-fn run_cell(pair: &JourneyPair, cell: &Cell) -> (usize, usize) {
+fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> (usize, usize) {
     let tap_layer_ids = &pair.drafter_configuration.target_tap_layer_ids;
     let prompt = prompt_token_ids(pair, cell.prompt);
     let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
@@ -227,11 +248,11 @@ fn run_cell(pair: &JourneyPair, cell: &Cell) -> (usize, usize) {
         256,
     )
     .expect("the decoder state allocates");
-    let mut uniforms = UniformStream::seeded(1234);
+    let mut uniforms = UniformStream::seeded(sampling_seed);
     let mut random_state = pair
         .target
         .runtime()
-        .random_key(1234)
+        .random_key(sampling_seed)
         .expect("a key builds");
     let prefill = pair
         .target

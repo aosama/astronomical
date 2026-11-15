@@ -198,7 +198,7 @@ impl Qwen3_5ModelBase {
         decoder_layer_index: usize,
         gpu_work: &[&MlxArray],
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        if let Some(output_gate_engine) = self.output_gate_engine.as_ref()
+        if let Some(output_gate_engine) = self.optional_accelerators.output_gate_engine.as_ref()
             && output_gate_engine.handles(token_count)
         {
             match output_gate_engine.project_beside_gpu_work(

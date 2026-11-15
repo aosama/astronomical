@@ -386,13 +386,14 @@ impl OutputGateProgramPlan {
         for (decoder_layer_index, program) in built_programs {
             layer_programs[decoder_layer_index] = Some(program);
         }
-        model.base.output_gate_engine = Some(Box::new(NeuralEngineOutputGatePrefill {
-            layer_programs: RefCell::new(layer_programs),
-            chunk_token_count: self.chunk_token_count,
-            has_failed: Cell::new(false),
-            is_paused: Cell::new(false),
-            does_chunk_use_programs: Cell::new(true),
-        }));
+        model.base.optional_accelerators.output_gate_engine =
+            Some(Box::new(NeuralEngineOutputGatePrefill {
+                layer_programs: RefCell::new(layer_programs),
+                chunk_token_count: self.chunk_token_count,
+                has_failed: Cell::new(false),
+                is_paused: Cell::new(false),
+                does_chunk_use_programs: Cell::new(true),
+            }));
         layer_program_count
     }
 }

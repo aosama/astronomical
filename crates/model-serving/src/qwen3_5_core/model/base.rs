@@ -20,6 +20,21 @@ use crate::{AstroDecoderStateCacheLayout, ModelMemoryFacts};
 
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 
+/// Faster paths a model turns on only after proving them on this machine;
+/// a freshly loaded model has every one off and runs MLX's own kernels.
+#[derive(Debug, Default)]
+pub struct Qwen3_5OptionalAccelerators {
+    /// Opt-in engine for linear-attention output gates during prefill; `None`
+    /// keeps them on the GPU.
+    pub(crate) output_gate_engine: Option<
+        Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
+    >,
+    /// The row-batched 4-bit matmul for projections over a few rows; None
+    /// until `enable_row_batched_projections` proves it on this GPU.
+    pub(crate) row_batched_matmul_kernels:
+        Option<crate::row_batched_matmul::RowBatchedMatmulKernels>,
+}
+
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
 #[derive(Debug)]
 pub struct Qwen3_5ModelBase {
@@ -39,11 +54,8 @@ pub struct Qwen3_5ModelBase {
     pub(crate) gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
     /// Fused decode prework kernel; None when demoted or environment-disabled.
     pub(crate) gdn_decode_prework_kernel: Option<MlxMetalKernel>,
-    /// Opt-in engine for linear-attention output gates during prefill; `None`
-    /// keeps them on the GPU.
-    pub(crate) output_gate_engine: Option<
-        Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
-    >,
+    /// Faster paths a model turns on only after proving them; all off by default.
+    pub(crate) optional_accelerators: Qwen3_5OptionalAccelerators,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
@@ -259,15 +271,24 @@ impl Qwen3_5ModelBase {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => Ok(self.runtime.quantized_matmul_affine(
-                activations,
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                true,
-                *quantization_group_size,
-                *quantization_bits,
-            )?),
+            } => self
+                .row_batched_projection(
+                    activations,
+                    packed_weight,
+                    quantization_scales,
+                    quantization_biases,
+                )
+                .unwrap_or_else(|| {
+                    Ok(self.runtime.quantized_matmul_affine(
+                        activations,
+                        packed_weight,
+                        quantization_scales,
+                        quantization_biases,
+                        true,
+                        *quantization_group_size,
+                        *quantization_bits,
+                    )?)
+                }),
         }
     }
 }

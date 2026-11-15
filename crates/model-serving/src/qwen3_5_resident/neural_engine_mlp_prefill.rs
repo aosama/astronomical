@@ -200,7 +200,9 @@ impl Qwen3_5ResidentModel {
                 }
             }
         }
-        if let Some(output_gate_engine) = self.base.output_gate_engine.as_ref() {
+        if let Some(output_gate_engine) =
+            self.base.optional_accelerators.output_gate_engine.as_ref()
+        {
             output_gate_engine.run_every_program_once()?;
         }
         Ok(())
@@ -234,7 +236,9 @@ impl Qwen3_5ResidentModel {
                 "Neural Engine prefill changed engines for the coming chunk"
             );
         }
-        if let Some(output_gate_engine) = self.base.output_gate_engine.as_ref() {
+        if let Some(output_gate_engine) =
+            self.base.optional_accelerators.output_gate_engine.as_ref()
+        {
             output_gate_engine.set_chunk_uses_programs(prefill.does_chunk_use_programs.get());
         }
     }
