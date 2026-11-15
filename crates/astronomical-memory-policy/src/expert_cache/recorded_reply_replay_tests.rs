@@ -274,12 +274,7 @@ fn serve_reply_from_tables(
             read_count_during_warm_up = tables.record().read_count() - read_count_before;
         }
         tables.begin_token();
-        for layer_index in 0..routed_reply.layer_count() {
-            tables.serve(
-                layer_index,
-                routed_reply.layer_route(token_index, layer_index),
-            );
-        }
+        tables.serve_token(&token_routes(routed_reply, token_index));
     }
     let measured_read_count =
         tables.record().read_count() - read_count_before - read_count_during_warm_up;
@@ -350,13 +345,19 @@ fn should_never_take_more_memory_than_the_capacity() {
 
         for token_index in 0..routed_reply.token_count() {
             tables.begin_token();
-            for layer_index in 0..routed_reply.layer_count() {
-                tables.serve(
-                    layer_index,
-                    routed_reply.layer_route(token_index, layer_index),
-                );
-                assert!(tables.allocated_bytes() <= capacity_bytes);
-            }
+            tables.serve_token(&token_routes(&routed_reply, token_index));
+            assert!(tables.allocated_bytes() <= capacity_bytes);
         }
     }
+}
+
+fn token_routes(routed_reply: &RoutedReply, token_index: usize) -> Vec<(usize, Vec<u16>)> {
+    let mut layer_routes = Vec::with_capacity(routed_reply.layer_count());
+    for layer_index in 0..routed_reply.layer_count() {
+        layer_routes.push((
+            layer_index,
+            routed_reply.layer_route(token_index, layer_index).to_vec(),
+        ));
+    }
+    layer_routes
 }

@@ -202,21 +202,33 @@ impl ExpertTables {
     /// Serves one layer's route for the current token and returns what the
     /// engine must do to its tables for it, in order.
     pub fn serve(&mut self, layer_index: usize, routed_expert_ids: &[u16]) -> Vec<TableChange> {
-        let mut table_changes = Vec::new();
+        self.serve_token(&[(layer_index, routed_expert_ids.to_vec())])
+    }
+
+    /// Serves every layer's route of the current token at once.
+    ///
+    /// Every expert the token used is marked used before anything is given
+    /// up. Otherwise a miss in one layer could compact away an expert that a
+    /// later layer of the same token was served from, and the token would be
+    /// the one that both used it and lost it.
+    pub fn serve_token(&mut self, layer_routes: &[(usize, Vec<u16>)]) -> Vec<TableChange> {
         let mut missing_experts = Vec::new();
-        for &expert_id in routed_expert_ids {
-            let expert = ExpertKey {
-                layer_index,
-                expert_id,
-            };
-            let is_hit = self.is_held(expert);
-            self.record.record_lookup(expert, is_hit);
-            if is_hit {
-                self.mark_used(expert);
-            } else {
-                missing_experts.push(expert);
+        for (layer_index, routed_expert_ids) in layer_routes {
+            for &expert_id in routed_expert_ids {
+                let expert = ExpertKey {
+                    layer_index: *layer_index,
+                    expert_id,
+                };
+                let is_hit = self.is_held(expert);
+                self.record.record_lookup(expert, is_hit);
+                if is_hit {
+                    self.mark_used(expert);
+                } else {
+                    missing_experts.push(expert);
+                }
             }
         }
+        let mut table_changes = Vec::new();
         for expert in missing_experts {
             // A route may name the same expert twice; the first read holds it.
             if !self.is_held(expert) {

@@ -222,3 +222,31 @@ fn should_count_routes_served_from_memory_as_hits_and_keep_them_fresh() {
     assert_eq!(layer_summary.hit_count, 2);
     assert_eq!(layer_summary.held_never_used_expert_count, 6);
 }
+
+#[test]
+fn should_not_compact_away_an_expert_a_later_layer_of_the_same_token_uses() {
+    let mut tables = two_layer_tables(8, 2);
+    tables.adopt_table(1, 8, &[0, 1, 2, 3, 4, 5, 6, 7]);
+
+    tables.begin_token();
+    let table_changes = tables.serve_token(&[(0, vec![5]), (1, vec![6])]);
+
+    assert_eq!(
+        table_changes,
+        vec![
+            TableChange::Compact {
+                layer_index: 1,
+                slot_capacity: 2,
+                dropped_expert_ids: vec![0, 1, 2, 3, 4, 5, 7],
+            },
+            TableChange::Grow {
+                layer_index: 0,
+                slot_capacity: 2,
+            },
+            TableChange::Write {
+                expert: expert(0, 5)
+            },
+        ]
+    );
+    assert!(tables.is_held(expert(1, 6)));
+}
