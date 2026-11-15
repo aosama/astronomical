@@ -74,7 +74,7 @@ pub(super) struct PrismHadamardQwen35ActiveGeneration {
     pub(super) processed_prompt_token_count: u32,
     /// The prompt-prefix token count the astro SSD prompt cache restored; reported
     /// as reused prompt work on every prefill progress event.
-    pub(super) astro_ssd_prompt_cache_token_count: u32,
+    pub(super) astro_ssd_prompt_cache_restored_token_count: u32,
     pub(super) generation_state: StraightGenerationState,
     /// The next sampled token as a lazy `[1, 1]` device array whose graph
     /// is already submitted, or `None` once generation finished. Its value

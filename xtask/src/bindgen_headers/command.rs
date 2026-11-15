@@ -21,11 +21,12 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let provision_options = parse_provision_options(arguments)?;
     let run_started_at = Instant::now();
     let inputs_step = start_step("validate-inputs");
-    let native_archive_directory = astro_native_build_cache_dependencies_directory(
-        provision_options
-            .astro_native_build_cache_dependencies_directory
-            .as_deref(),
-    )?;
+    let astro_native_build_cache_dependencies_directory =
+        astro_native_build_cache_dependencies_directory(
+            provision_options
+                .astro_native_build_cache_dependencies_directory
+                .as_deref(),
+        )?;
     let store_directory =
         native_build_store_directory(provision_options.native_build_store_directory.as_deref())?;
     inputs_step.finish("success");
@@ -40,13 +41,13 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         ProvisionMode::VerifyHeaders => verify_headers_against_native_build(
             repository_root,
             &provision_options,
-            &native_archive_directory,
+            &astro_native_build_cache_dependencies_directory,
             &store_directory,
         ),
         ProvisionMode::Provision => provision_headers(
             repository_root,
             &provision_options,
-            &native_archive_directory,
+            &astro_native_build_cache_dependencies_directory,
             &patch_steps,
         ),
     };

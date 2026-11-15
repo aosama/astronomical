@@ -298,7 +298,7 @@ async fn should_retry_a_resident_start_fork_once_with_the_same_astro_ssd_prompt_
         next_retry_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             request_id,
-            astro_ssd_prompt_cache_token_count: 1,
+            astro_ssd_prompt_cache_restored_token_count: 1,
             ..
         } if request_id == RequestId::new(901)
     ));

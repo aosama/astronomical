@@ -31,7 +31,7 @@ struct CollectedToolUse {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct WorkerTokenCounts {
     pub(crate) prompt_token_count: u32,
-    pub(crate) astro_ssd_prompt_cache_token_count: u32,
+    pub(crate) astro_ssd_prompt_cache_restored_token_count: u32,
     pub(crate) generated_token_count: u16,
 }
 
@@ -39,7 +39,7 @@ impl WorkerTokenCounts {
     pub(crate) fn anthropic_usage(self) -> AnthropicUsage {
         AnthropicUsage::from_worker_counts(
             self.prompt_token_count,
-            self.astro_ssd_prompt_cache_token_count,
+            self.astro_ssd_prompt_cache_restored_token_count,
             u32::from(self.generated_token_count),
         )
     }

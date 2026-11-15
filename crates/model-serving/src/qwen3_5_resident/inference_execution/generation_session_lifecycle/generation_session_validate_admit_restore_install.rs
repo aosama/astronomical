@@ -562,8 +562,8 @@ impl Qwen3_5EngineState {
             u64::try_from(prompt_identity.prompt_token_ids.len()).unwrap_or(u64::MAX),
         );
         performance_attribution.record_counter(
-            PerformanceCounter::RestoredAstroSsdPromptCacheTokenCount,
-            u64::from(generation_position.astro_ssd_prompt_cache_token_count),
+            PerformanceCounter::AstroSsdPromptCacheRestoredTokenCount,
+            u64::from(generation_position.astro_ssd_prompt_cache_restored_token_count),
         );
         let target_eligible_prompt_work_token_count =
             u64::try_from(prompt_identity.prompt_token_ids.len()).unwrap_or(u64::MAX);

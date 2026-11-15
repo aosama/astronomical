@@ -79,14 +79,15 @@ impl AnthropicUsage {
     #[must_use]
     pub fn from_worker_counts(
         prompt_token_count: u32,
-        astro_ssd_prompt_cache_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         output_token_count: u32,
     ) -> Self {
         Self {
-            input_tokens: prompt_token_count.saturating_sub(astro_ssd_prompt_cache_token_count),
+            input_tokens: prompt_token_count
+                .saturating_sub(astro_ssd_prompt_cache_restored_token_count),
             output_tokens: output_token_count,
             cache_creation_input_tokens: 0,
-            cache_read_input_tokens: astro_ssd_prompt_cache_token_count,
+            cache_read_input_tokens: astro_ssd_prompt_cache_restored_token_count,
         }
     }
 }

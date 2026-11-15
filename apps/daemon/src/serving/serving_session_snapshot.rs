@@ -36,7 +36,7 @@ impl ServingSessionSnapshot {
     pub fn record_completed_request(
         &mut self,
         prompt_token_count: u32,
-        astro_ssd_prompt_cache_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         prefill_tok_per_second: Option<f64>,
         generation_tok_per_second: Option<f64>,
     ) {
@@ -47,7 +47,7 @@ impl ServingSessionSnapshot {
         self.total_reused_prompt_token_count =
             self.total_reused_prompt_token_count
                 .saturating_add(u64::from(
-                    astro_ssd_prompt_cache_token_count.min(prompt_token_count),
+                    astro_ssd_prompt_cache_restored_token_count.min(prompt_token_count),
                 ));
         if let Some(prefill_tok_per_second) = prefill_tok_per_second {
             self.average_prefill_tok_per_second = rolling_average(

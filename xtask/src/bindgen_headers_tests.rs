@@ -329,7 +329,7 @@ impl ProvisionSandbox {
             "original\n",
         );
         std::fs::create_dir_all(self.path("native-archives"))
-            .expect("fixture native archive directory");
+            .expect("fixture astro native build cache dependencies folder");
         let tar_status = Command::new("tar")
             .arg("-czf")
             .arg(self.path(&format!("native-archives/{archive_file_name}")))
@@ -510,7 +510,7 @@ fn should_verify_headers_against_a_completed_build_and_catch_a_one_byte_differen
 fn should_refuse_relative_archive_and_store_directories() {
     let relative_archive_error =
         astro_native_build_cache_dependencies_directory(Some("relative/archives"))
-            .expect_err("a relative native archive directory must be refused");
+            .expect_err("a relative astro native build cache dependencies folder must be refused");
     let relative_store_error = native_build_store_directory(Some("relative/store"))
         .expect_err("a relative store must be refused");
 

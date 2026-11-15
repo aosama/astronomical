@@ -177,7 +177,7 @@ fn completed_generation_event(
         prompt_token_count: 100,
         generated_token_count: 10,
         reasoning_token_count: 0,
-        astro_ssd_prompt_cache_token_count: 0,
+        astro_ssd_prompt_cache_restored_token_count: 0,
         reason: completion_reason,
     }
 }

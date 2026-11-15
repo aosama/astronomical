@@ -25,7 +25,7 @@ async fn should_return_a_non_streaming_chat_completion_json_response() {
             prompt_token_count: 3,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -70,7 +70,7 @@ async fn should_accept_a_chat_request_with_the_stream_field_omitted() {
             prompt_token_count: 3,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -101,7 +101,7 @@ async fn should_assemble_reasoning_and_text_in_a_non_streaming_response() {
             prompt_token_count: 3,
             generated_token_count: 2,
             reasoning_token_count: 1,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -134,7 +134,7 @@ async fn should_assemble_tool_calls_in_a_non_streaming_response() {
             prompt_token_count: 1,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::ToolCalls,
         },
     ]));
@@ -170,7 +170,7 @@ async fn should_include_cached_tokens_in_non_streaming_usage_when_nonzero() {
             prompt_token_count: 4_096,
             generated_token_count: 100,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 2_048,
+            astro_ssd_prompt_cache_restored_token_count: 2_048,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));

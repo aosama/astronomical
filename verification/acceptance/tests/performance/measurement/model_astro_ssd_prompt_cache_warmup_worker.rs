@@ -34,7 +34,7 @@ pub(super) struct StreamingMeasurement {
     pub(super) first_output_at: Instant,
     pub(super) response_completed_at: Instant,
     pub(super) completion_token_count: u64,
-    pub(super) astro_ssd_prompt_cache_token_count: u64,
+    pub(super) astro_ssd_prompt_cache_restored_token_count: u64,
     pub(super) generated_text: String,
     pub(super) prefill_progress_samples: Vec<PrefillProgressSample>,
     pub(super) prompt_token_count: u64,
@@ -74,7 +74,7 @@ impl PrefillProgressSample {
 
 struct CompletedTokenCounts {
     completion_token_count: u64,
-    astro_ssd_prompt_cache_token_count: u64,
+    astro_ssd_prompt_cache_restored_token_count: u64,
     prompt_token_count: u64,
 }
 
@@ -419,13 +419,13 @@ async fn measure_worker_summarization(
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
                 generated_token_count,
-                astro_ssd_prompt_cache_token_count,
+                astro_ssd_prompt_cache_restored_token_count,
                 ..
             } => {
                 completed_token_counts = Some(CompletedTokenCounts {
                     completion_token_count: u64::from(generated_token_count),
-                    astro_ssd_prompt_cache_token_count: u64::from(
-                        astro_ssd_prompt_cache_token_count,
+                    astro_ssd_prompt_cache_restored_token_count: u64::from(
+                        astro_ssd_prompt_cache_restored_token_count,
                     ),
                     prompt_token_count: u64::from(prompt_token_count),
                 });
@@ -449,8 +449,8 @@ async fn measure_worker_summarization(
         first_output_at: first_output_at.unwrap_or(response_completed_at),
         response_completed_at,
         completion_token_count: completed_token_counts.completion_token_count,
-        astro_ssd_prompt_cache_token_count: completed_token_counts
-            .astro_ssd_prompt_cache_token_count,
+        astro_ssd_prompt_cache_restored_token_count: completed_token_counts
+            .astro_ssd_prompt_cache_restored_token_count,
         generated_text,
         prefill_progress_samples,
         prompt_token_count: completed_token_counts.prompt_token_count,

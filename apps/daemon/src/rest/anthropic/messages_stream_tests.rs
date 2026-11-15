@@ -12,7 +12,7 @@ fn completed_event(reason: ChatGenerationCompletionReason) -> ChatGenerationStre
         prompt_token_count: 120,
         generated_token_count: 9,
         reasoning_token_count: 3,
-        astro_ssd_prompt_cache_token_count: 100,
+        astro_ssd_prompt_cache_restored_token_count: 100,
         reason,
     }
 }

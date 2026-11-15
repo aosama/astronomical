@@ -70,7 +70,7 @@ where
                 prompt_token_count,
                 generated_token_count: 0,
                 reasoning_token_count: 0,
-                astro_ssd_prompt_cache_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
                 astro_ssd_prompt_cache_diagnostics: None,
                 reason: ChatGenerationCompletionReason::EndOfSequence,
             })

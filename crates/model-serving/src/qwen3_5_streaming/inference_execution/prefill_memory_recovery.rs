@@ -115,7 +115,8 @@ impl Qwen3_5EngineState {
             self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             if let Some(restore_outcome) = restore_result? {
                 restored_prefill_cursor = restore_outcome.restored_token_count;
-                restored_next_position_tokens = restore_outcome.astro_ssd_prompt_cache_token_count;
+                restored_next_position_tokens =
+                    restore_outcome.astro_ssd_prompt_cache_restored_token_count;
                 restored_last_astro_ssd_prompt_cache_block_key =
                     restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
                 // The re-restore replaced the astro SSD prompt cache frontier, so the
@@ -124,7 +125,7 @@ impl Qwen3_5EngineState {
                 active_request.astro_ssd_prompt_cache_diagnostics =
                     Some(restore_outcome.astro_ssd_prompt_cache_diagnostics);
                 active_request.prompt_work_reuse.target_restored_token_count =
-                    u64::from(restore_outcome.astro_ssd_prompt_cache_token_count);
+                    u64::from(restore_outcome.astro_ssd_prompt_cache_restored_token_count);
             }
         }
         active_request.prefill_cursor = restored_prefill_cursor;

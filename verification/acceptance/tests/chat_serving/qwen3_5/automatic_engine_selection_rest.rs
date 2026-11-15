@@ -411,7 +411,7 @@ async fn should_restore_astro_ssd_prompt_cache_prefix_after_an_invisible_residen
         let prompt_token_count = attribution_counter(retry_report, "prompt_token_count");
         let restored_prefix_token_count = attribution_counter(
             retry_report,
-            "restored_astro_ssd_prompt_cache_token_count",
+            "astro_ssd_prompt_cache_restored_token_count",
         );
         assert!(
             restored_prefix_token_count > 0 && restored_prefix_token_count < prompt_token_count,

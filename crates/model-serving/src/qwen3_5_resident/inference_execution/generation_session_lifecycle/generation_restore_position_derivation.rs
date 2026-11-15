@@ -8,7 +8,7 @@ use super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome;
 /// Where the admitted session begins: how much prompt work already exists
 /// and which token position the first new token occupies.
 pub(super) struct GenerationSessionPosition {
-    pub(super) astro_ssd_prompt_cache_token_count: u32,
+    pub(super) astro_ssd_prompt_cache_restored_token_count: u32,
     pub(super) prefill_cursor: usize,
     pub(super) next_position_tokens: u32,
     pub(super) restored_target_work_token_count: u64,
@@ -30,7 +30,7 @@ pub(super) fn derive_generation_session_position(
 ) -> GenerationSessionPosition {
     let Some(restore_outcome) = restore_outcome else {
         return GenerationSessionPosition {
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             prefill_cursor: 0,
             next_position_tokens: 0,
             restored_target_work_token_count: 0,
@@ -39,11 +39,12 @@ pub(super) fn derive_generation_session_position(
         };
     };
     GenerationSessionPosition {
-        astro_ssd_prompt_cache_token_count: restore_outcome.astro_ssd_prompt_cache_token_count,
+        astro_ssd_prompt_cache_restored_token_count: restore_outcome
+            .astro_ssd_prompt_cache_restored_token_count,
         prefill_cursor: restore_outcome.restored_token_count,
-        next_position_tokens: restore_outcome.astro_ssd_prompt_cache_token_count,
+        next_position_tokens: restore_outcome.astro_ssd_prompt_cache_restored_token_count,
         restored_target_work_token_count: u64::from(
-            restore_outcome.astro_ssd_prompt_cache_token_count,
+            restore_outcome.astro_ssd_prompt_cache_restored_token_count,
         ),
         last_restored_astro_ssd_prompt_cache_block_key: restore_outcome
             .last_restored_astro_ssd_prompt_cache_block_key,

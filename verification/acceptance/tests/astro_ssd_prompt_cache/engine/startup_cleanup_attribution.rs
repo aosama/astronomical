@@ -91,7 +91,7 @@ async fn run_startup_cleanup_attribution_journey() {
         .await
         .expect("the cold Romeo and Juliet request should start");
     assert_eq!(
-        cold_generation_start.astro_ssd_prompt_cache_token_count(),
+        cold_generation_start.astro_ssd_prompt_cache_restored_token_count(),
         0
     );
     let cold_diagnostics = cold_generation_start
@@ -125,7 +125,7 @@ async fn run_startup_cleanup_attribution_journey() {
         .await
         .expect("the warm Romeo and Juliet request should start");
     assert!(
-        warm_generation_start.astro_ssd_prompt_cache_token_count()
+        warm_generation_start.astro_ssd_prompt_cache_restored_token_count()
             >= astro_ssd_prompt_cache_block_token_count as u32
     );
     let warm_diagnostics = warm_generation_start

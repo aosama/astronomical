@@ -94,7 +94,7 @@ pub(crate) struct PerformanceOperationEvidence {
 #[derive(Debug, Deserialize)]
 struct ThroughputSample {
     prompt_token_count: u32,
-    astro_ssd_prompt_cache_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
     generated_token_count: u16,
     prefill_tok_per_second: Option<f64>,
     generation_tok_per_second: Option<f64>,
@@ -285,7 +285,7 @@ fn sample_to_measurement(
         decode_astro_expert_cache_policy,
         total_input_tokens: measured.prompt_token_count,
         total_output_tokens: measured.generated_token_count,
-        cached_tokens: measured.astro_ssd_prompt_cache_token_count,
+        cached_tokens: measured.astro_ssd_prompt_cache_restored_token_count,
         prefill_time_seconds: measured.prefill_elapsed_millis as f64 / 1_000.0,
         decode_time_seconds: measured.generation_elapsed_millis as f64 / 1_000.0,
         prefill_tokens_per_second: measured.prefill_tok_per_second.unwrap_or(0.0),

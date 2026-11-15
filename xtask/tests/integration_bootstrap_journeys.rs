@@ -17,7 +17,7 @@ const FIXTURE_ARCHIVE_NAMES: [&str; 5] = [
 
 struct BootstrapSandbox {
     root_directory: PathBuf,
-    native_archive_directory: PathBuf,
+    astro_native_build_cache_dependencies_directory: PathBuf,
     fixture_repository_root: PathBuf,
     shim_directory: PathBuf,
 }
@@ -26,7 +26,7 @@ impl BootstrapSandbox {
     fn install() -> Self {
         // Tests run in parallel threads inside one process, so the process
         // id alone cannot name the sandbox root: a sibling test's cleanup
-        // would wipe this test's native archive directory mid-run.
+        // would wipe this test's astro native build cache dependencies folder mid-run.
         static SANDBOX_SEQUENCE: std::sync::atomic::AtomicU64 =
             std::sync::atomic::AtomicU64::new(0);
         let sandbox_sequence = SANDBOX_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -34,12 +34,13 @@ impl BootstrapSandbox {
             "astronomical-bootstrap-{}-{sandbox_sequence}",
             std::process::id()
         ));
-        let native_archive_directory = root_directory.join("native-archives");
+        let astro_native_build_cache_dependencies_directory =
+            root_directory.join("native-archives");
         let shim_directory = root_directory.join("shim-bin");
         let fixture_repository_root = root_directory.join("repository");
         for directory in [
             &root_directory,
-            &native_archive_directory,
+            &astro_native_build_cache_dependencies_directory,
             &shim_directory,
             &fixture_repository_root.join("third-party"),
         ] {
@@ -54,7 +55,7 @@ impl BootstrapSandbox {
         .unwrap();
         Self {
             root_directory,
-            native_archive_directory,
+            astro_native_build_cache_dependencies_directory,
             fixture_repository_root,
             shim_directory,
         }
@@ -64,7 +65,7 @@ impl BootstrapSandbox {
         format!("fixture-archive-payload-{archive_index}")
     }
 
-    /// Writes one fixture archive into the native archive directory, optionally with tampered
+    /// Writes one fixture archive into the astro native build cache dependencies folder, optionally with tampered
     /// content; returns its pinned SHA-256.
     fn seed_archive(&self, archive_index: usize, tamper: bool) -> String {
         let mut archive_bytes = Self::archive_bytes(archive_index);
@@ -72,7 +73,7 @@ impl BootstrapSandbox {
             archive_bytes.push_str("-tampered");
         }
         let archive_path = self
-            .native_archive_directory
+            .astro_native_build_cache_dependencies_directory
             .join(FIXTURE_ARCHIVE_NAMES[archive_index]);
         std::fs::write(archive_path, archive_bytes).unwrap();
         digest_bytes(Self::archive_bytes(archive_index).as_bytes())
@@ -87,7 +88,7 @@ impl BootstrapSandbox {
     }
 
     /// The pinned digests for the five fixture archives, without touching
-    /// the native archive directory: journeys that exercise the download path
+    /// the astro native build cache dependencies folder: journeys that exercise the download path
     /// need it empty while the manifest still names the pinned digests.
     fn pinned_digests() -> [String; 5] {
         core::array::from_fn(|archive_index| {
@@ -147,7 +148,9 @@ impl BootstrapSandbox {
             self.fixture_repository_root.display().to_string(),
             "bootstrap-native-dependencies".to_owned(),
             "--cache-dir".to_owned(),
-            self.native_archive_directory.display().to_string(),
+            self.astro_native_build_cache_dependencies_directory
+                .display()
+                .to_string(),
         ];
         xtask_arguments.extend(extra_arguments.iter().map(|argument| argument.to_string()));
         Command::new(env!("CARGO_BIN_EXE_xtask"))
@@ -191,7 +194,9 @@ fn verify_only_provisions_from_already_downloaded_archives() {
     assert_eq!(stdout_text.matches("status=verified-cached").count(), 5);
     assert!(stdout_text.contains("status=ready"));
     for (archive_index, archive_name) in FIXTURE_ARCHIVE_NAMES.into_iter().enumerate() {
-        let archive_path = sandbox.native_archive_directory.join(archive_name);
+        let archive_path = sandbox
+            .astro_native_build_cache_dependencies_directory
+            .join(archive_name);
         assert_eq!(
             std::fs::read(&archive_path).unwrap(),
             BootstrapSandbox::archive_bytes(archive_index).into_bytes(),
@@ -227,7 +232,7 @@ fn verify_only_refuses_a_missing_archive() {
     let output = sandbox.run_xtask(&["--verify"]);
     assert!(
         !output.status.success(),
-        "an empty native archive directory must fail the verify run: {}",
+        "an empty astro native build cache dependencies folder must fail the verify run: {}",
         command_text(&output)
     );
     let stderr_text = String::from_utf8_lossy(&output.stderr);
@@ -254,7 +259,9 @@ fn download_verifies_and_installs_archives_atomically() {
         5
     );
     for archive_name in FIXTURE_ARCHIVE_NAMES {
-        let archive_path = sandbox.native_archive_directory.join(archive_name);
+        let archive_path = sandbox
+            .astro_native_build_cache_dependencies_directory
+            .join(archive_name);
         let archive_bytes = std::fs::read(&archive_path).unwrap();
         assert_eq!(archive_bytes, b"downloaded-archive-payload");
         #[cfg(unix)]
@@ -267,16 +274,17 @@ fn download_verifies_and_installs_archives_atomically() {
             assert_eq!(archive_mode & 0o777, 0o600, "installed {archive_name} mode");
         }
     }
-    let leftover_staging_files: Vec<PathBuf> = std::fs::read_dir(&sandbox.native_archive_directory)
-        .unwrap()
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .map(|file_name| file_name.to_string_lossy().contains(".download."))
-                .unwrap_or(false)
-        })
-        .collect();
+    let leftover_staging_files: Vec<PathBuf> =
+        std::fs::read_dir(&sandbox.astro_native_build_cache_dependencies_directory)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .map(|file_name| file_name.to_string_lossy().contains(".download."))
+                    .unwrap_or(false)
+            })
+            .collect();
     assert!(
         leftover_staging_files.is_empty(),
         "download staging files must not survive the run"
@@ -322,11 +330,12 @@ fn download_refuses_an_archive_that_fails_its_pinned_digest() {
         stderr_text.contains("SHA-256 verification failed"),
         "the refusal should name the digest failure: {stderr_text}"
     );
-    let published_files: Vec<PathBuf> = std::fs::read_dir(&sandbox.native_archive_directory)
-        .unwrap()
-        .flatten()
-        .map(|entry| entry.path())
-        .collect();
+    let published_files: Vec<PathBuf> =
+        std::fs::read_dir(&sandbox.astro_native_build_cache_dependencies_directory)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .collect();
     assert!(
         published_files.is_empty(),
         "a refused download must not publish any archive"

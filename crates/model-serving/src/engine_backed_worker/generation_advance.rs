@@ -595,8 +595,8 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
-        active_generation.astro_ssd_prompt_cache_token_count =
-            generation_start.astro_ssd_prompt_cache_token_count();
+        active_generation.astro_ssd_prompt_cache_restored_token_count =
+            generation_start.astro_ssd_prompt_cache_restored_token_count();
         active_generation.required_prompt_processing_token_count = active_generation
             .prompt_token_count
             .saturating_sub(generation_start.restored_prompt_prefix_token_count());

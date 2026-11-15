@@ -96,7 +96,7 @@ async fn run_astro_ssd_prompt_cache_warmup_e2e(
     assert_eq!(
         cold_worker_pass
             .streaming_measurement
-            .astro_ssd_prompt_cache_token_count,
+            .astro_ssd_prompt_cache_restored_token_count,
         0,
         "the first request must not see tokens restored from the astro SSD prompt cache"
     );
@@ -182,17 +182,17 @@ fn assert_astro_ssd_prompt_cache_warmup(
     astro_ssd_prompt_cache_block_token_count: usize,
     saved_partial_tail_token_count: usize,
 ) {
-    let warm_astro_ssd_prompt_cache_token_count =
-        warm_streaming_measurement.astro_ssd_prompt_cache_token_count as usize;
+    let warm_astro_ssd_prompt_cache_restored_token_count =
+        warm_streaming_measurement.astro_ssd_prompt_cache_restored_token_count as usize;
     let warm_prompt_token_count_left_for_prefill = warm_streaming_measurement.prompt_token_count
         as usize
-        - warm_astro_ssd_prompt_cache_token_count;
+        - warm_astro_ssd_prompt_cache_restored_token_count;
     eprintln!(
-        "[astro-ssd-prompt-cache-warmup] warm restore reported {warm_astro_ssd_prompt_cache_token_count} tokens restored from the astro SSD prompt cache of {} prompt tokens",
+        "[astro-ssd-prompt-cache-warmup] warm restore reported {warm_astro_ssd_prompt_cache_restored_token_count} tokens restored from the astro SSD prompt cache of {} prompt tokens",
         warm_streaming_measurement.prompt_token_count
     );
     assert!(
-        warm_astro_ssd_prompt_cache_token_count > 0,
+        warm_astro_ssd_prompt_cache_restored_token_count > 0,
         "the second request should restore blocks from the astro SSD prompt cache"
     );
     // The restored extent must cover every complete block the cold pass
@@ -200,10 +200,10 @@ fn assert_astro_ssd_prompt_cache_warmup(
     // count: a partial tail contributes a non-block-sized amount, and the
     // final prompt token always stays on the prefill path.
     assert!(
-        warm_astro_ssd_prompt_cache_token_count
+        warm_astro_ssd_prompt_cache_restored_token_count
             >= saved_complete_block_count * astro_ssd_prompt_cache_block_token_count,
         "the warm request must restore every complete block saved by the cold request: \
-         restored {warm_astro_ssd_prompt_cache_token_count} tokens, but {} saved complete blocks of \
+         restored {warm_astro_ssd_prompt_cache_restored_token_count} tokens, but {} saved complete blocks of \
          {astro_ssd_prompt_cache_block_token_count} tokens require at least {}",
         saved_complete_block_count,
         saved_complete_block_count * astro_ssd_prompt_cache_block_token_count,
@@ -214,7 +214,7 @@ fn assert_astro_ssd_prompt_cache_warmup(
     assert!(
         warm_prompt_token_count_left_for_prefill <= astro_ssd_prompt_cache_block_token_count,
         "the warm request must leave at most one block of prompt work unrestored:\
-         {warm_prompt_token_count_left_for_prefill} tokens remain after restoring {warm_astro_ssd_prompt_cache_token_count}"
+         {warm_prompt_token_count_left_for_prefill} tokens remain after restoring {warm_astro_ssd_prompt_cache_restored_token_count}"
     );
     // When the cold pass persisted a partial tail, the warm pass must restore
     // it too: the pre-fix regression (a tail saved through the final prompt
@@ -223,7 +223,7 @@ fn assert_astro_ssd_prompt_cache_warmup(
     assert!(
         saved_partial_tail_token_count == 0 || warm_prompt_token_count_left_for_prefill <= 1,
         "the warm request must restore the persisted partial tail: \
-         {warm_prompt_token_count_left_for_prefill} tokens remain after restoring {warm_astro_ssd_prompt_cache_token_count}, \
+         {warm_prompt_token_count_left_for_prefill} tokens remain after restoring {warm_astro_ssd_prompt_cache_restored_token_count}, \
          but the cold pass saved a partial tail of {saved_partial_tail_token_count} tokens"
     );
     assert_eq!(
@@ -286,7 +286,7 @@ fn benchmark_report(
         "warm": worker_pass_report(warm_worker_pass, astro_ssd_prompt_cache_warmup_case.maximum_output_tokens),
         "comparison": {
             "cached_prompt_percent": percent(
-                warm_worker_pass.streaming_measurement.astro_ssd_prompt_cache_token_count as f64,
+                warm_worker_pass.streaming_measurement.astro_ssd_prompt_cache_restored_token_count as f64,
                 warm_worker_pass.streaming_measurement.prompt_token_count as f64,
             ),
             "prompt_latency_reduction_percent": percent(
@@ -314,7 +314,7 @@ fn worker_pass_report(worker_pass: &WorkerPassMeasurement, maximum_output_tokens
     assert!(streaming_measurement.prompt_token_count > 0);
     assert!(streaming_measurement.completion_token_count > 0);
     assert!(
-        streaming_measurement.astro_ssd_prompt_cache_token_count
+        streaming_measurement.astro_ssd_prompt_cache_restored_token_count
             <= streaming_measurement.prompt_token_count
     );
     if maximum_output_tokens > 1 {
@@ -323,12 +323,12 @@ fn worker_pass_report(worker_pass: &WorkerPassMeasurement, maximum_output_tokens
     let prompt_duration = streaming_measurement.prompt_duration();
     let generation_duration = streaming_measurement.generation_duration();
     let prompt_token_count_not_restored = streaming_measurement.prompt_token_count
-        - streaming_measurement.astro_ssd_prompt_cache_token_count;
+        - streaming_measurement.astro_ssd_prompt_cache_restored_token_count;
 
     json!({
         "prompt_tokens": streaming_measurement.prompt_token_count,
         "uncached_prompt_tokens": prompt_token_count_not_restored,
-        "cached_tokens": streaming_measurement.astro_ssd_prompt_cache_token_count,
+        "cached_tokens": streaming_measurement.astro_ssd_prompt_cache_restored_token_count,
         "completion_tokens": streaming_measurement.completion_token_count,
         "prompt_processing_seconds": prompt_duration.as_secs_f64(),
         "prompt_processing_tokens_per_second": streaming_measurement.prompt_token_count as f64

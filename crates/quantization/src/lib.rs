@@ -39,7 +39,7 @@
 //!    `optiq/metadata.json`, `optiq/sensitivity.json`, and the shard index so
 //!    the output is a complete, loadable artifact.
 //!
-//! [`latency`] (the roofline throughput model) and [`astro_decoder_state_cache`] (mixed-precision
+//! [`latency`] (the roofline throughput model) and [`astro_decoder_state_cache_precision`] (mixed-precision
 //! astro decoder state cache allocation) are ported alongside because they consume the
 //! same sensitivity signal, but neither sits on the critical path of a
 //! conversion.
@@ -65,7 +65,7 @@
 
 pub mod allocation;
 pub mod artifact;
-pub mod astro_decoder_state_cache;
+pub mod astro_decoder_state_cache_precision;
 pub mod bit_width;
 pub mod calibration;
 pub mod error;

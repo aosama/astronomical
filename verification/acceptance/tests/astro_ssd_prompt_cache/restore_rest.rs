@@ -40,7 +40,7 @@ async fn should_publish_and_restore_the_romeo_and_juliet_astro_ssd_prompt_cache_
 async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     maximum_mlx_memory_bytes: Option<u64>,
     expected_expert_memory_mode: Option<&str>,
-    astro_ssd_prompt_cache_prompt_token_count: usize,
+    astro_ssd_prompt_cache_restored_token_count: usize,
     expected_warm_request_expert_memory_mode: Option<&str>,
     maximum_output_token_count: u16,
     thinking_budget_token_count: u16,
@@ -63,7 +63,7 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     // Romeo-and-Juliet fixture near the astro SSD prompt cache boundary before it is sent as ordinary text.
     let prepared_romeo_and_juliet_prompt = prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt(
         &model_directory,
-        astro_ssd_prompt_cache_prompt_token_count,
+        astro_ssd_prompt_cache_restored_token_count,
     );
     let model_artifact_rest_server =
         serving_rest::launch_serving_rest_server_for_model_with_memory_limit(

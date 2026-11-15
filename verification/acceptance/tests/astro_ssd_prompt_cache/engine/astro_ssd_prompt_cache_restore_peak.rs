@@ -180,11 +180,11 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         .await
         .expect("the restored request should start");
     assert!(
-        restored_generation_start.astro_ssd_prompt_cache_token_count()
+        restored_generation_start.astro_ssd_prompt_cache_restored_token_count()
             >= (expected_complete_block_count
                 * ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize) as u32,
         "the warm request should restore every complete prefix block: astro_ssd_prompt_cache_restored_tokens={} expected_at_least={} blocks={expected_complete_block_count} block_tokens={}",
-        restored_generation_start.astro_ssd_prompt_cache_token_count(),
+        restored_generation_start.astro_ssd_prompt_cache_restored_token_count(),
         expected_complete_block_count * ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize,
         ASTRO_SSD_PROMPT_CACHE_RESTORE_PEAK_BLOCK_TOKENS
     );
@@ -198,7 +198,7 @@ async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
         .saturating_add(largest_source_block_bytes.saturating_mul(3));
     eprintln!(
         "[astro-ssd-prompt-cache-restore-peak] status=measured astro_ssd_prompt_cache_restored_tokens={} astro_ssd_prompt_cache_files={}active_before_bytes={active_memory_bytes_before_restore} peak_bytes={} peak_delta_bytes={restore_peak_delta_bytes} destination_byte_bound={destination_byte_bound} largest_source_block_bytes={largest_source_block_bytes} concat_restore_peak_bound_bytes={concat_restore_peak_bound_bytes}",
-        restored_generation_start.astro_ssd_prompt_cache_token_count(),
+        restored_generation_start.astro_ssd_prompt_cache_restored_token_count(),
         astro_ssd_prompt_cache_file_sizes.len(),
         restore_memory_snapshot.peak_memory_bytes(),
     );

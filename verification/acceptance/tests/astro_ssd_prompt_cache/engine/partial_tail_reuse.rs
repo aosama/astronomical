@@ -74,7 +74,7 @@ async fn run_partial_tail_reuse_acceptance() {
         .await
         .expect("the engine should accept the first turn");
     assert_eq!(
-        turn_one_start.astro_ssd_prompt_cache_token_count(),
+        turn_one_start.astro_ssd_prompt_cache_restored_token_count(),
         0,
         "the first turn on a fresh astro SSD prompt cache directory must prefill cold"
     );
@@ -112,7 +112,7 @@ async fn run_partial_tail_reuse_acceptance() {
         "the tail should end exactly one token short of turn one's prompt"
     );
     assert_eq!(
-        turn_two_start.astro_ssd_prompt_cache_token_count(),
+        turn_two_start.astro_ssd_prompt_cache_restored_token_count(),
         expected_restored_token_count,
         "the second turn should restore both complete blocks and the first turn's partial tail"
     );

@@ -116,7 +116,7 @@ impl Qwen3_5EngineState {
         self.astro_ssd_prompt_cache_counters
             .record_in_memory_prefix_adoption_hit();
         Ok(AstroSsdPromptCacheRestoreOutcome {
-            astro_ssd_prompt_cache_token_count: u32::try_from(adopted_token_count)
+            astro_ssd_prompt_cache_restored_token_count: u32::try_from(adopted_token_count)
                 .unwrap_or(u32::MAX),
             restored_token_count: adopted_token_count,
             last_restored_astro_ssd_prompt_cache_block_key: Some(adopted_boundary_block_key),

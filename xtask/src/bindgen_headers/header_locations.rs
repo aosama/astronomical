@@ -138,10 +138,10 @@ fn resolve_identity(
 }
 
 pub(crate) fn extraction_directory(
-    native_archive_directory: &Path,
+    astro_native_build_cache_dependencies_directory: &Path,
     source_identity: &str,
 ) -> PathBuf {
-    native_archive_directory
+    astro_native_build_cache_dependencies_directory
         .join(BINDGEN_HEADERS_SUBDIRECTORY)
         .join(source_identity)
 }

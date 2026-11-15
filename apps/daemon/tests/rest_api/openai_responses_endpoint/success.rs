@@ -8,7 +8,7 @@ async fn should_return_a_non_streaming_response_from_the_public_endpoint() {
             prompt_token_count: 10,
             generated_token_count: 2,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -51,7 +51,7 @@ async fn should_echo_validated_request_configuration_in_the_response() {
             prompt_token_count: 4,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -102,7 +102,7 @@ async fn should_return_non_streaming_responses_reasoning_without_visible_output_
             prompt_token_count: 10,
             generated_token_count: 2,
             reasoning_token_count: 2,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));
@@ -141,7 +141,7 @@ async fn should_return_extracted_json_and_a_warning_for_text_format_json_schema(
             prompt_token_count: 12,
             generated_token_count: 8,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         },
     ]));

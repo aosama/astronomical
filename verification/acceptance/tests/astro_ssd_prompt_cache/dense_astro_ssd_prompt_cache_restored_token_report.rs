@@ -111,12 +111,12 @@ async fn run_dense_astro_ssd_prompt_cache_restored_token_report_journey() {
         2,
         "the cold and warm requests should each produce one performance record"
     );
-    let warm_astro_ssd_prompt_cache_token_count =
-        performance_records[1]["astro_ssd_prompt_cache_token_count"]
+    let warm_astro_ssd_prompt_cache_restored_token_count =
+        performance_records[1]["astro_ssd_prompt_cache_restored_token_count"]
             .as_u64()
-            .expect("the warm performance record should report astro_ssd_prompt_cache_token_count");
+            .expect("the warm performance record should report astro_ssd_prompt_cache_restored_token_count");
     assert_eq!(
-        warm_astro_ssd_prompt_cache_token_count, expected_restored_token_count,
+        warm_astro_ssd_prompt_cache_restored_token_count, expected_restored_token_count,
         "issue #657 dense-path guard: the warm request must report exactly the block-aligned \
          dense restored prefix (expected {expected_restored_token_count})",
     );
@@ -128,7 +128,7 @@ async fn run_dense_astro_ssd_prompt_cache_restored_token_report_journey() {
 
     openai_rest::stop_serving_rest_server(model_artifact_rest_server).await;
     eprintln!(
-        "{acceptance_log_prefix} status=success prompt_tokens={} astro_ssd_prompt_cache_restored_tokens={warm_astro_ssd_prompt_cache_token_count}",
+        "{acceptance_log_prefix} status=success prompt_tokens={} astro_ssd_prompt_cache_restored_tokens={warm_astro_ssd_prompt_cache_restored_token_count}",
         warm_response.prompt_token_count,
     );
 }

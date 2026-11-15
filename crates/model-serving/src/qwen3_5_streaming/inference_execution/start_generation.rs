@@ -22,7 +22,7 @@ use crate::sampling_seed::current_time_millis_since_unix_epoch;
 /// The starting cursor of a generation session, derived from the `astro_ssd_prompt_cache`: what the
 /// `astro_ssd_prompt_cache` restored, and where prefill therefore resumes.
 struct RestoredPromptPrefixSession {
-    astro_ssd_prompt_cache_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
     prefill_cursor: usize,
     next_position_tokens: u32,
     last_restored_astro_ssd_prompt_cache_block_key: Option<AstroSsdPromptCacheBlockKey>,
@@ -395,23 +395,24 @@ impl Qwen3_5EngineState {
             let restore_outcome = restore_result?;
             if let Some(restore_outcome) = restore_outcome {
                 return Ok(RestoredPromptPrefixSession {
-                    astro_ssd_prompt_cache_token_count: restore_outcome
-                        .astro_ssd_prompt_cache_token_count,
+                    astro_ssd_prompt_cache_restored_token_count: restore_outcome
+                        .astro_ssd_prompt_cache_restored_token_count,
                     prefill_cursor: restore_outcome.restored_token_count,
-                    next_position_tokens: restore_outcome.astro_ssd_prompt_cache_token_count,
+                    next_position_tokens: restore_outcome
+                        .astro_ssd_prompt_cache_restored_token_count,
                     last_restored_astro_ssd_prompt_cache_block_key: restore_outcome
                         .last_restored_astro_ssd_prompt_cache_block_key,
                     astro_ssd_prompt_cache_diagnostics: Some(
                         restore_outcome.astro_ssd_prompt_cache_diagnostics,
                     ),
                     restored_target_work_token_count: u64::from(
-                        restore_outcome.astro_ssd_prompt_cache_token_count,
+                        restore_outcome.astro_ssd_prompt_cache_restored_token_count,
                     ),
                 });
             }
         }
         Ok(RestoredPromptPrefixSession {
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             prefill_cursor: 0,
             next_position_tokens: 0,
             last_restored_astro_ssd_prompt_cache_block_key: None,
@@ -538,8 +539,8 @@ impl Qwen3_5EngineState {
             u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
         );
         performance_attribution.record_counter(
-            PerformanceCounter::RestoredAstroSsdPromptCacheTokenCount,
-            u64::from(restored_prompt_prefix_session.astro_ssd_prompt_cache_token_count),
+            PerformanceCounter::AstroSsdPromptCacheRestoredTokenCount,
+            u64::from(restored_prompt_prefix_session.astro_ssd_prompt_cache_restored_token_count),
         );
         let target_eligible_prompt_work_token_count =
             u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX);

@@ -26,11 +26,11 @@ fn zeroed_request_diagnostics() -> WorkerAstroSsdPromptCacheRequestDiagnostics {
 }
 
 fn restore_outcome(
-    astro_ssd_prompt_cache_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
     restored_token_count: usize,
 ) -> AstroSsdPromptCacheRestoreOutcome {
     AstroSsdPromptCacheRestoreOutcome {
-        astro_ssd_prompt_cache_token_count,
+        astro_ssd_prompt_cache_restored_token_count,
         restored_token_count,
         last_restored_astro_ssd_prompt_cache_block_key: None,
         astro_ssd_prompt_cache_diagnostics: zeroed_request_diagnostics(),
@@ -41,7 +41,10 @@ fn restore_outcome(
 fn should_map_every_restored_field_into_its_session_position_slot() {
     let session_position = derive_generation_session_position(Some(restore_outcome(64, 64)));
 
-    assert_eq!(session_position.astro_ssd_prompt_cache_token_count, 64);
+    assert_eq!(
+        session_position.astro_ssd_prompt_cache_restored_token_count,
+        64
+    );
     assert_eq!(session_position.prefill_cursor, 64);
     assert_eq!(session_position.next_position_tokens, 64);
     assert_eq!(session_position.restored_target_work_token_count, 64);
@@ -67,7 +70,10 @@ fn should_keep_the_cursor_and_next_position_distinct_when_a_partial_tail_block_r
 fn should_reset_the_whole_session_position_when_nothing_was_restored() {
     let session_position = derive_generation_session_position(None);
 
-    assert_eq!(session_position.astro_ssd_prompt_cache_token_count, 0);
+    assert_eq!(
+        session_position.astro_ssd_prompt_cache_restored_token_count,
+        0
+    );
     assert_eq!(session_position.prefill_cursor, 0);
     assert_eq!(session_position.next_position_tokens, 0);
     assert_eq!(session_position.restored_target_work_token_count, 0);

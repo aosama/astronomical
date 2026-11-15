@@ -344,8 +344,8 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
-        let astro_ssd_prompt_cache_prompt_token_count =
-            generation_start.astro_ssd_prompt_cache_token_count();
+        let astro_ssd_prompt_cache_restored_token_count =
+            generation_start.astro_ssd_prompt_cache_restored_token_count();
         let restored_prompt_prefix_token_count =
             generation_start.restored_prompt_prefix_token_count();
         let initial_expert_memory_mode = generation_start.expert_memory_mode();
@@ -384,7 +384,7 @@ where
         let mut active_engine_generation = ActiveEngineGeneration::new(
             generation_command,
             prompt_token_count,
-            astro_ssd_prompt_cache_prompt_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             required_prompt_processing_token_count,
             prepared_request_output,
             streaming_retry_request,

@@ -22,7 +22,7 @@ const MAX_ARCHIVE_SIZE_BYTES: u64 = 268_435_456;
 const MINIMUM_FREE_SPACE_BYTES: u64 = 2_147_483_648;
 pub(crate) const ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_DIRECTORY_VARIABLE: &str =
     "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
-const DEFAULT_NATIVE_ARCHIVE_DIRECTORY_SUFFIX: &str =
+const DEFAULT_ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_SUFFIX: &str =
     "Library/Caches/Astronomical/native-dependencies";
 const USAGE_TEXT: &str =
     "usage: cargo xtask bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]";
@@ -66,11 +66,11 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         println!();
         println!("Downloads and SHA-256-verifies Astronomical's pinned MLX source archives.");
         println!(
-            "Default native dependency archive folder: $HOME/{DEFAULT_NATIVE_ARCHIVE_DIRECTORY_SUFFIX}"
+            "Default astro native build cache dependencies folder: $HOME/{DEFAULT_ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_SUFFIX}"
         );
         println!();
         println!(
-            "--cache-dir ABSOLUTE_PATH  Store or verify archives in this native dependency archive folder."
+            "--cache-dir ABSOLUTE_PATH  Store or verify archives in this astro native build cache dependencies folder."
         );
         println!(
             "--verify                   Verify the archives already downloaded without downloading."
@@ -82,28 +82,30 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         std::env::var(ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_DIRECTORY_VARIABLE)
             .ok()
             .filter(|directory| !directory.is_empty());
-    let native_archive_directory = resolve_astro_native_build_cache_dependencies_directory(
-        options
-            .astro_native_build_cache_dependencies_directory
-            .as_deref()
-            .or(environment_archive_directory.as_deref()),
-        std::env::var("HOME").ok().as_deref(),
-    )?;
+    let astro_native_build_cache_dependencies_directory =
+        resolve_astro_native_build_cache_dependencies_directory(
+            options
+                .astro_native_build_cache_dependencies_directory
+                .as_deref()
+                .or(environment_archive_directory.as_deref()),
+            std::env::var("HOME").ok().as_deref(),
+        )?;
 
     log_step("validate-inputs", "start");
-    std::fs::create_dir_all(&native_archive_directory)
+    std::fs::create_dir_all(&astro_native_build_cache_dependencies_directory)
         .map_err(|error| format!("native dependency archive directory failed: {error}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(
-            &native_archive_directory,
+            &astro_native_build_cache_dependencies_directory,
             std::fs::Permissions::from_mode(0o700),
         )
         .map_err(|error| format!("chmod failed: {error}"))?;
     }
     if !options.is_verify_only {
-        let df_output = read_free_space_statistics(&native_archive_directory)?;
+        let df_output =
+            read_free_space_statistics(&astro_native_build_cache_dependencies_directory)?;
         let available_kib_blocks = parse_available_kib_blocks(&df_output)?;
         if !has_required_free_space(available_kib_blocks) {
             return Err(format!(
@@ -121,7 +123,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     log_step("verify-or-download-archives", "start");
     for manifest_entry in &manifest_entries {
         provision_archive(
-            &native_archive_directory,
+            &astro_native_build_cache_dependencies_directory,
             manifest_entry,
             options.is_verify_only,
         )?;
@@ -130,14 +132,14 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
 
     println!(
         "[native-dependencies] native_dependency_cache_directory={} status=ready elapsed_seconds={}",
-        native_archive_directory.display(),
+        astro_native_build_cache_dependencies_directory.display(),
         started_at.elapsed().as_secs()
     );
     Ok(())
 }
 
 pub(crate) fn parse_arguments(arguments: &[String]) -> Result<BootstrapOptions, String> {
-    let mut native_archive_directory: Option<String> = None;
+    let mut astro_native_build_cache_dependencies_directory: Option<String> = None;
     let mut is_verify_only = false;
     let mut argument_index = 0;
     while argument_index < arguments.len() {
@@ -146,7 +148,7 @@ pub(crate) fn parse_arguments(arguments: &[String]) -> Result<BootstrapOptions, 
                 let Some(directory_value) = arguments.get(argument_index + 1) else {
                     return Err("--cache-dir requires an absolute path".to_owned());
                 };
-                native_archive_directory = Some(directory_value.clone());
+                astro_native_build_cache_dependencies_directory = Some(directory_value.clone());
                 argument_index += 2;
             }
             "--verify" => {
@@ -161,7 +163,7 @@ pub(crate) fn parse_arguments(arguments: &[String]) -> Result<BootstrapOptions, 
         }
     }
     Ok(BootstrapOptions {
-        astro_native_build_cache_dependencies_directory: native_archive_directory,
+        astro_native_build_cache_dependencies_directory,
         is_verify_only,
     })
 }
@@ -178,7 +180,7 @@ pub(crate) fn resolve_astro_native_build_cache_dependencies_directory(
                     "HOME is required when --cache-dir and {ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_DIRECTORY_VARIABLE} are unset"
                 ));
             };
-            PathBuf::from(home_directory).join(DEFAULT_NATIVE_ARCHIVE_DIRECTORY_SUFFIX)
+            PathBuf::from(home_directory).join(DEFAULT_ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_SUFFIX)
         }
     };
     if !candidate_directory.is_absolute() {
@@ -278,11 +280,12 @@ fn file_digest_matches(file_path: &Path, expected_sha256: &str) -> bool {
 }
 
 fn provision_archive(
-    native_archive_directory: &Path,
+    astro_native_build_cache_dependencies_directory: &Path,
     manifest_entry: &ManifestEntry,
     is_verify_only: bool,
 ) -> Result<(), String> {
-    let archive_path = native_archive_directory.join(&manifest_entry.archive_file_name);
+    let archive_path =
+        astro_native_build_cache_dependencies_directory.join(&manifest_entry.archive_file_name);
     let (archive_exists, archive_is_regular_file) = archive_regular_file_state(&archive_path);
     let digest_matches = archive_is_regular_file
         && file_digest_matches(&archive_path, &manifest_entry.archive_sha256);
@@ -301,18 +304,22 @@ fn provision_archive(
             );
         }
         ProvisionDecision::Download => {
-            download_and_install_archive(native_archive_directory, manifest_entry, &archive_path)?;
+            download_and_install_archive(
+                astro_native_build_cache_dependencies_directory,
+                manifest_entry,
+                &archive_path,
+            )?;
         }
     }
     Ok(())
 }
 
 fn download_and_install_archive(
-    native_archive_directory: &Path,
+    astro_native_build_cache_dependencies_directory: &Path,
     manifest_entry: &ManifestEntry,
     archive_path: &Path,
 ) -> Result<(), String> {
-    let download_destination = native_archive_directory.join(format!(
+    let download_destination = astro_native_build_cache_dependencies_directory.join(format!(
         ".{}.download.{}",
         manifest_entry.archive_file_name,
         unique_suffix()
@@ -431,10 +438,12 @@ pub(crate) fn read_pinned_manifest_text(repository_root: &Path) -> Result<String
         .map_err(|error| format!("native dependency manifest is unreadable: {error}"))
 }
 
-fn read_free_space_statistics(native_archive_directory: &Path) -> Result<String, String> {
+fn read_free_space_statistics(
+    astro_native_build_cache_dependencies_directory: &Path,
+) -> Result<String, String> {
     let df_output = Command::new("df")
         .args(["-k", "-P"])
-        .arg(native_archive_directory)
+        .arg(astro_native_build_cache_dependencies_directory)
         .output()
         .map_err(|error| format!("df failed to start: {error}"))?;
     if !df_output.status.success() {

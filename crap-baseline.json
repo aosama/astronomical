@@ -39118,7 +39118,7 @@
     },
     {
       "file": "crates/model-serving/src/engine_backed_worker/tests/chat/generation_lifecycle.rs",
-      "function": "should_report_engine_astro_ssd_prompt_cache_token_count_in_completion",
+      "function": "should_report_engine_astro_ssd_prompt_cache_restored_token_count_in_completion",
       "line": 375,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -40306,7 +40306,7 @@
     },
     {
       "file": "crates/model-serving/src/engine_backed_worker/tests/chat/scripted_chat_test_doubles.rs",
-      "function": "ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count",
+      "function": "ScriptedChatEngine::with_astro_ssd_prompt_cache_restored_token_count",
       "line": 250,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -40315,7 +40315,7 @@
     },
     {
       "file": "crates/model-serving/src/engine_backed_worker/tests/chat/scripted_chat_test_doubles.rs",
-      "function": "ScriptedChatEngine::with_astro_ssd_prompt_cache_token_count_and_generated_tokens",
+      "function": "ScriptedChatEngine::with_astro_ssd_prompt_cache_restored_token_count_and_generated_tokens",
       "line": 274,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -46111,7 +46111,7 @@
     },
     {
       "file": "crates/model-serving/src/inference_engine/contract.rs",
-      "function": "EngineGenerationStart::astro_ssd_prompt_cache_token_count",
+      "function": "EngineGenerationStart::astro_ssd_prompt_cache_restored_token_count",
       "line": 243,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -83019,7 +83019,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_allocator.rs",
       "function": "average_bits",
       "line": 88,
       "cyclomatic": 3.0,
@@ -83028,7 +83028,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_allocator.rs",
       "function": "estimate_astro_decoder_state_cache_bytes",
       "line": 61,
       "cyclomatic": 4.0,
@@ -83037,7 +83037,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_allocator.rs",
       "function": "is_better_upgrade",
       "line": 149,
       "cyclomatic": 5.0,
@@ -83046,7 +83046,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_allocator.rs",
       "function": "most_efficient_upgrade",
       "line": 102,
       "cyclomatic": 4.0,
@@ -83055,7 +83055,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_allocator.rs",
       "function": "next_rung",
       "line": 140,
       "cyclomatic": 3.0,
@@ -83064,7 +83064,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_allocator.rs",
       "function": "optimize_astro_decoder_state_cache",
       "line": 29,
       "cyclomatic": 3.0,
@@ -83073,7 +83073,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_allocator.rs",
       "function": "upgrade_efficiency",
       "line": 124,
       "cyclomatic": 3.0,
@@ -83082,7 +83082,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_sensitivity.rs",
       "function": "LayerProbe::mean_kl_divergence",
       "line": 131,
       "cyclomatic": 6.0,
@@ -83091,7 +83091,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_sensitivity.rs",
       "function": "layer_result",
       "line": 156,
       "cyclomatic": 1.0,
@@ -83100,7 +83100,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_sensitivity.rs",
       "function": "measure_astro_decoder_state_cache_sensitivity",
       "line": 71,
       "cyclomatic": 8.0,
@@ -83109,7 +83109,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_sensitivity.rs",
       "function": "probe_failure",
       "line": 194,
       "cyclomatic": 1.0,
@@ -83118,7 +83118,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_sensitivity.rs",
       "function": "require_engaged_measurement",
       "line": 177,
       "cyclomatic": 4.0,
@@ -83127,7 +83127,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_tests.rs",
       "function": "ScriptedCacheProbe::cached_layers",
       "line": 127,
       "cyclomatic": 2.0,
@@ -83136,7 +83136,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_tests.rs",
       "function": "ScriptedCacheProbe::forward_with_cache_bit_widths",
       "line": 140,
       "cyclomatic": 2.0,
@@ -83145,7 +83145,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_tests.rs",
       "function": "ScriptedCacheProbe::kl_divergence",
       "line": 154,
       "cyclomatic": 1.0,
@@ -83154,7 +83154,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_tests.rs",
       "function": "bits",
       "line": 7,
       "cyclomatic": 1.0,
@@ -83163,7 +83163,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_tests.rs",
       "function": "result",
       "line": 11,
       "cyclomatic": 1.0,
@@ -83172,7 +83172,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache_precision/astro_decoder_state_cache_tests.rs",
       "function": "two_samples",
       "line": 163,
       "cyclomatic": 1.0,

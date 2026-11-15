@@ -45,7 +45,7 @@ fn should_emit_the_exact_fragmented_text_lifecycle_and_skip_prefill_telemetry() 
                 prompt_token_count: 10,
                 generated_token_count: 2,
                 reasoning_token_count: 0,
-                astro_ssd_prompt_cache_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
                 reason: ChatGenerationCompletionReason::EndOfSequence,
             })
             .expect("completion should encode"),
@@ -119,7 +119,7 @@ fn should_stream_raw_reasoning_as_summary_text_without_encrypted_content() {
                 prompt_token_count: 10,
                 generated_token_count: 2,
                 reasoning_token_count: 2,
-                astro_ssd_prompt_cache_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
                 reason: ChatGenerationCompletionReason::ToolCalls,
             })
             .expect("tool completion should encode"),
@@ -196,7 +196,7 @@ fn should_close_open_text_before_emitting_an_incomplete_terminal_event() {
                 prompt_token_count: 10,
                 generated_token_count: 2,
                 reasoning_token_count: 0,
-                astro_ssd_prompt_cache_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
                 reason: ChatGenerationCompletionReason::MaximumOutputTokens,
             })
             .expect("the token ceiling should encode"),
@@ -333,7 +333,7 @@ fn should_withhold_reasoning_items_but_keep_reasoning_usage_when_excluded() {
                 prompt_token_count: 10,
                 generated_token_count: 7,
                 reasoning_token_count: 5,
-                astro_ssd_prompt_cache_token_count: 0,
+                astro_ssd_prompt_cache_restored_token_count: 0,
                 reason: ChatGenerationCompletionReason::EndOfSequence,
             })
             .expect("completion should encode"),

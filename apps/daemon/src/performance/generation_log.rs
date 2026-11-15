@@ -14,7 +14,7 @@ use serde::Serialize;
 ///
 /// - Throughput: `prefill_tok_per_second` and `generation_tok_per_second`
 /// - Latency: `total_elapsed_millis`, `prefill_elapsed_millis`, `generation_elapsed_millis`
-/// - Scale: `prompt_token_count`, `astro_ssd_prompt_cache_token_count`, `generated_token_count`
+/// - Scale: `prompt_token_count`, `astro_ssd_prompt_cache_restored_token_count`, `generated_token_count`
 /// - Resources: `mlx_peak_memory_bytes`, `mlx_active_memory_bytes`
 /// - Identity: `request_id`, `model_id`, `completion_reason`
 #[derive(Clone, Debug, Serialize)]
@@ -34,7 +34,7 @@ pub struct GenerationPerformanceRecord {
     /// Total prompt tokens (including tokens restored from the astro SSD prompt cache).
     pub prompt_token_count: u32,
     /// Prompt tokens restored from the persistent astro SSD prompt cache.
-    pub astro_ssd_prompt_cache_token_count: u32,
+    pub astro_ssd_prompt_cache_restored_token_count: u32,
     /// Output tokens the model produced.
     pub generated_token_count: u16,
     /// Why the generation stopped: `end_of_sequence`, `tool_calls`, or `maximum_output_tokens`.
@@ -54,7 +54,7 @@ pub struct GenerationPerformanceRecord {
     pub generation_preparation_expert_source_read_byte_count: u64,
     pub final_resident_expert_count: Option<u32>,
     pub final_resident_expert_payload_bytes: Option<u64>,
-    /// Prefill throughput: `(prompt_token_count - astro_ssd_prompt_cache_token_count) / (prefill_elapsed_millis / 1000)`.
+    /// Prefill throughput: `(prompt_token_count - astro_ssd_prompt_cache_restored_token_count) / (prefill_elapsed_millis / 1000)`.
     /// `None` when the entire prompt was restored from the astro SSD prompt cache (0 ms prefill).
     pub prefill_tok_per_second: Option<f64>,
     /// Decode throughput: `generated_token_count / (generation_elapsed_millis / 1000)`.
@@ -101,13 +101,13 @@ impl GenerationPerformanceRecord {
     /// - `generation_tok_per_second` is `None` when `generation_elapsed_millis == 0`.
     pub fn compute_throughput(
         prompt_token_count: u32,
-        astro_ssd_prompt_cache_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         generated_token_count: u16,
         prefill_elapsed_millis: u64,
         generation_elapsed_millis: u64,
     ) -> (Option<f64>, Option<f64>) {
         let prompt_tokens_not_restored =
-            prompt_token_count.saturating_sub(astro_ssd_prompt_cache_token_count);
+            prompt_token_count.saturating_sub(astro_ssd_prompt_cache_restored_token_count);
         let prefill_tok_per_second = if prefill_elapsed_millis > 0 && prompt_tokens_not_restored > 0
         {
             let prefill_seconds = prefill_elapsed_millis as f64 / 1000.0;

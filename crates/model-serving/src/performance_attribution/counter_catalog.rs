@@ -15,7 +15,7 @@
 #[repr(usize)]
 pub enum PerformanceCounter {
     PromptTokenCount,
-    RestoredAstroSsdPromptCacheTokenCount,
+    AstroSsdPromptCacheRestoredTokenCount,
     GeneratedTokenCount,
     ForcedThinkingTransitionTokenCount,
     PrefillChunkCount,
@@ -144,7 +144,7 @@ impl PerformanceCounter {
     /// counter with its stored value by position without an allocation.
     pub const ALL: [Self; Self::COUNT] = [
         Self::PromptTokenCount,
-        Self::RestoredAstroSsdPromptCacheTokenCount,
+        Self::AstroSsdPromptCacheRestoredTokenCount,
         Self::GeneratedTokenCount,
         Self::ForcedThinkingTransitionTokenCount,
         Self::PrefillChunkCount,
@@ -223,8 +223,8 @@ impl PerformanceCounter {
     pub const fn identifier(self) -> &'static str {
         match self {
             Self::PromptTokenCount => "prompt_token_count",
-            Self::RestoredAstroSsdPromptCacheTokenCount => {
-                "restored_astro_ssd_prompt_cache_token_count"
+            Self::AstroSsdPromptCacheRestoredTokenCount => {
+                "astro_ssd_prompt_cache_restored_token_count"
             }
             Self::GeneratedTokenCount => "generated_token_count",
             Self::ForcedThinkingTransitionTokenCount => "forced_thinking_transition_token_count",

@@ -162,7 +162,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         let structured_generation = inference_request.take_structured_generation();
         let mut performance_attribution = inference_request.take_performance_attribution();
         let prompt_token_ids = inference_request.input_token_ids().to_vec();
-        let mut astro_ssd_prompt_cache_token_count: u32 = 0;
+        let mut astro_ssd_prompt_cache_restored_token_count: u32 = 0;
         let mut last_published_block_key = None;
         let mut generation_state = StraightGenerationState::empty();
         if let Some(astro_ssd_prompt_cache) = self.astro_ssd_prompt_cache.clone() {
@@ -175,7 +175,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                     &mut self.astro_ssd_prompt_cache_counters,
                     &mut performance_attribution,
                 )?;
-            astro_ssd_prompt_cache_token_count = restore_outcome.restored_token_count;
+            astro_ssd_prompt_cache_restored_token_count = restore_outcome.restored_token_count;
             last_published_block_key =
                 restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
         }
@@ -184,10 +184,10 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             remaining_output_tokens: u32::from(inference_request.max_output_tokens()),
             prompt_token_ids: prompt_token_ids.clone(),
             remaining_prompt_token_ids: prompt_token_ids
-                [astro_ssd_prompt_cache_token_count as usize..]
+                [astro_ssd_prompt_cache_restored_token_count as usize..]
                 .to_vec(),
-            processed_prompt_token_count: astro_ssd_prompt_cache_token_count,
-            astro_ssd_prompt_cache_token_count,
+            processed_prompt_token_count: astro_ssd_prompt_cache_restored_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             generation_state,
             pending_sampled_token: None,
             penalized_token_ids,
@@ -199,7 +199,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             performance_attribution,
         });
         Ok(EngineGenerationStart::with_expert_memory_mode(
-            astro_ssd_prompt_cache_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             ExpertMemoryMode::Resident,
         ))
     }
@@ -528,7 +528,9 @@ impl PrismHadamardQwen35InferenceExecution {
         )?;
         let prompt_work_reuse = WorkerPromptWorkReuse {
             target_eligible_token_count: active.prompt_token_ids.len() as u64,
-            target_restored_token_count: u64::from(active.astro_ssd_prompt_cache_token_count),
+            target_restored_token_count: u64::from(
+                active.astro_ssd_prompt_cache_restored_token_count,
+            ),
         };
         Ok(prefill_progress_token(
             chunk_length,

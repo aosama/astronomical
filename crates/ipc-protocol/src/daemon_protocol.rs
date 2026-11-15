@@ -193,7 +193,7 @@ pub enum DaemonResponse {
         prompt_token_count: u32,
         generated_token_count: u16,
         reasoning_token_count: u16,
-        astro_ssd_prompt_cache_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         reason: ChatGenerationCompletionReason,
     },
     /// Terminal frame for a failed generation.

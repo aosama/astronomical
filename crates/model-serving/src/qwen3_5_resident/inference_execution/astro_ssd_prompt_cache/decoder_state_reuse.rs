@@ -32,7 +32,8 @@ use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 /// key lets later cold-prefilled blocks extend the same content-addressed
 /// chain instead of creating an unrelated root block.
 pub(in crate::qwen3_5_resident::inference_execution) struct AstroSsdPromptCacheRestoreOutcome {
-    pub(in crate::qwen3_5_resident::inference_execution) astro_ssd_prompt_cache_token_count: u32,
+    pub(in crate::qwen3_5_resident::inference_execution) astro_ssd_prompt_cache_restored_token_count:
+        u32,
     pub(in crate::qwen3_5_resident::inference_execution) restored_token_count: usize,
     pub(in crate::qwen3_5_resident::inference_execution) last_restored_astro_ssd_prompt_cache_block_key:
         Option<AstroSsdPromptCacheBlockKey>,
@@ -204,7 +205,7 @@ impl Qwen3_5EngineState {
         self.astro_ssd_prompt_cache_counters
             .record_astro_ssd_prompt_cache_miss();
         AstroSsdPromptCacheRestoreOutcome {
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             restored_token_count: 0,
             last_restored_astro_ssd_prompt_cache_block_key: None,
             astro_ssd_prompt_cache_diagnostics,
@@ -245,7 +246,7 @@ impl Qwen3_5EngineState {
             hit_finalization.lookup_diagnostics,
             target_expert_payload_bytes_reclaimed_during_restore,
         );
-        let astro_ssd_prompt_cache_token_count =
+        let astro_ssd_prompt_cache_restored_token_count =
             u32::try_from(hit_finalization.restored_token_count).map_err(|_| {
                 super::fatal_engine_error(
                     "persistent astro-ssd-prompt-cache token count exceeds the u32 range",
@@ -258,7 +259,7 @@ impl Qwen3_5EngineState {
                 .record_partial_tail_hit();
         }
         Ok(AstroSsdPromptCacheRestoreOutcome {
-            astro_ssd_prompt_cache_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
             restored_token_count: hit_finalization.restored_token_count,
             last_restored_astro_ssd_prompt_cache_block_key: hit_finalization
                 .last_restored_astro_ssd_prompt_cache_block_key,

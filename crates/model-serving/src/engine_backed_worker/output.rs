@@ -383,8 +383,8 @@ where
                 prompt_token_count: active_generation.prompt_token_count,
                 generated_token_count: active_generation.generated_token_count,
                 reasoning_token_count: active_generation.reasoning_token_count,
-                astro_ssd_prompt_cache_token_count: active_generation
-                    .astro_ssd_prompt_cache_token_count,
+                astro_ssd_prompt_cache_restored_token_count: active_generation
+                    .astro_ssd_prompt_cache_restored_token_count,
                 astro_ssd_prompt_cache_diagnostics: active_generation
                     .astro_ssd_prompt_cache_diagnostics
                     .clone(),

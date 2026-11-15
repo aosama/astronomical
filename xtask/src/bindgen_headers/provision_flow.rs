@@ -20,10 +20,11 @@ use crate::step_log::{log_line, start_step};
 pub(crate) fn provision_headers(
     repository_root: &Path,
     provision_options: &ProvisionOptions,
-    native_archive_directory: &Path,
+    astro_native_build_cache_dependencies_directory: &Path,
     patch_steps: &[PatchStep],
 ) -> Result<(), String> {
-    let headers_root_directory = native_archive_directory.join(BINDGEN_HEADERS_SUBDIRECTORY);
+    let headers_root_directory =
+        astro_native_build_cache_dependencies_directory.join(BINDGEN_HEADERS_SUBDIRECTORY);
     create_private_directory(&headers_root_directory)?;
     let read_manifest_step = start_step("read-pinned-manifest");
     let manifest_text = pinned_manifest_text(repository_root, provision_options)?;
@@ -31,7 +32,10 @@ pub(crate) fn provision_headers(
     read_manifest_step.finish("success");
     let identity_step = start_step("resolve-source-identity");
     let source_identity = source_identity(repository_root)?;
-    let extraction_directory = extraction_directory(native_archive_directory, &source_identity);
+    let extraction_directory = extraction_directory(
+        astro_native_build_cache_dependencies_directory,
+        &source_identity,
+    );
     identity_step.finish("success");
     log_line(&format!(
         "extraction_directory={}",
@@ -55,7 +59,7 @@ pub(crate) fn provision_headers(
     verify_step.finish("success");
     let publication = HeaderPublication {
         repository_root,
-        native_archive_directory,
+        astro_native_build_cache_dependencies_directory,
         source_identity,
         pinned_archives,
     };
@@ -105,7 +109,7 @@ fn extraction_is_intact(extraction_directory: &Path) -> Result<bool, String> {
 
 struct HeaderPublication<'publication> {
     repository_root: &'publication Path,
-    native_archive_directory: &'publication Path,
+    astro_native_build_cache_dependencies_directory: &'publication Path,
     source_identity: String,
     pinned_archives: PinnedHeaderArchives,
 }
@@ -185,7 +189,8 @@ impl HeaderPublication<'_> {
         };
         ExtractionRequest {
             repository_root: self.repository_root,
-            astro_native_build_cache_dependencies_directory: self.native_archive_directory,
+            astro_native_build_cache_dependencies_directory: self
+                .astro_native_build_cache_dependencies_directory,
             staging_directory,
             pinned_archive,
             dependency_description,

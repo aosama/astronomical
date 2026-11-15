@@ -108,7 +108,7 @@ where
             prompt_token_count: 2,
             generated_token_count: 4,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             astro_ssd_prompt_cache_diagnostics: Some(accepted_astro_ssd_prompt_cache_diagnostics()),
             reason: ChatGenerationCompletionReason::ToolCalls,
         })
@@ -149,7 +149,7 @@ where
             prompt_token_count: 100,
             generated_token_count: 10,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })
@@ -185,7 +185,7 @@ where
             prompt_token_count: 2,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })
@@ -205,7 +205,7 @@ where
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })
@@ -239,7 +239,7 @@ where
             prompt_token_count: 1,
             generated_token_count: 1,
             reasoning_token_count: 0,
-            astro_ssd_prompt_cache_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             astro_ssd_prompt_cache_diagnostics: None,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         })

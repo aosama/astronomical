@@ -223,7 +223,7 @@ fn prepared_generation(
 
 pub(crate) struct ScriptedChatEngine {
     cancellation_count: Arc<AtomicUsize>,
-    astro_ssd_prompt_cache_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
     restored_prompt_prefix_token_count: u32,
     generated_tokens: Vec<GeneratedToken>,
     is_active: bool,
@@ -244,14 +244,14 @@ pub(crate) struct ScriptedChatEngine {
 
 impl ScriptedChatEngine {
     pub(crate) fn new() -> Self {
-        Self::with_astro_ssd_prompt_cache_token_count(0)
+        Self::with_astro_ssd_prompt_cache_restored_token_count(0)
     }
 
-    pub(super) fn with_astro_ssd_prompt_cache_token_count(
-        astro_ssd_prompt_cache_token_count: u32,
+    pub(super) fn with_astro_ssd_prompt_cache_restored_token_count(
+        astro_ssd_prompt_cache_restored_token_count: u32,
     ) -> Self {
-        Self::with_astro_ssd_prompt_cache_token_count_and_generated_tokens(
-            astro_ssd_prompt_cache_token_count,
+        Self::with_astro_ssd_prompt_cache_restored_token_count_and_generated_tokens(
+            astro_ssd_prompt_cache_restored_token_count,
             vec![
                 GeneratedToken::TokenId {
                     token_id: 1,
@@ -273,14 +273,14 @@ impl ScriptedChatEngine {
         )
     }
 
-    pub(super) fn with_astro_ssd_prompt_cache_token_count_and_generated_tokens(
-        astro_ssd_prompt_cache_token_count: u32,
+    pub(super) fn with_astro_ssd_prompt_cache_restored_token_count_and_generated_tokens(
+        astro_ssd_prompt_cache_restored_token_count: u32,
         generated_tokens: Vec<GeneratedToken>,
     ) -> Self {
         Self {
             cancellation_count: Arc::new(AtomicUsize::new(0)),
-            astro_ssd_prompt_cache_token_count,
-            restored_prompt_prefix_token_count: astro_ssd_prompt_cache_token_count,
+            astro_ssd_prompt_cache_restored_token_count,
+            restored_prompt_prefix_token_count: astro_ssd_prompt_cache_restored_token_count,
             generated_tokens,
             is_active: false,
             next_token_index: 0,
@@ -333,7 +333,10 @@ impl ScriptedChatEngine {
 
     pub(super) fn with_fatal_decode_reason(fatal_decode_reason: &str) -> Self {
         let mut scripted_chat_engine =
-            Self::with_astro_ssd_prompt_cache_token_count_and_generated_tokens(0, Vec::new());
+            Self::with_astro_ssd_prompt_cache_restored_token_count_and_generated_tokens(
+                0,
+                Vec::new(),
+            );
         scripted_chat_engine.fatal_decode_reason = Some(fatal_decode_reason.to_owned());
         scripted_chat_engine
     }
@@ -408,10 +411,10 @@ impl InferenceEngine for ScriptedChatEngine {
         Ok(self
             .initial_expert_memory_mode
             .map_or_else(
-                || EngineGenerationStart::new(self.astro_ssd_prompt_cache_token_count),
+                || EngineGenerationStart::new(self.astro_ssd_prompt_cache_restored_token_count),
                 |expert_memory_mode| {
                     EngineGenerationStart::with_expert_memory_mode(
-                        self.astro_ssd_prompt_cache_token_count,
+                        self.astro_ssd_prompt_cache_restored_token_count,
                         expert_memory_mode,
                     )
                 },
