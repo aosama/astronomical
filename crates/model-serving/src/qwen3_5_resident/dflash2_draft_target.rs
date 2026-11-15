@@ -6,7 +6,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::InferenceEngineError;
-use crate::gpu_token_sampling::sampling_probability_rows;
+use crate::gpu_token_sampling::sampling_distribution_rows;
 use crate::speculative_decoding::dflash2_drafter::DFlash2DraftTarget;
 
 use super::model::Qwen3_5ResidentModel;
@@ -33,16 +33,18 @@ impl DFlash2DraftTarget for Qwen3_5ResidentModel {
 }
 
 impl Qwen3_5ResidentModel {
-    /// The probabilities this engine's sampler would draw each row of
-    /// `logits` [1, rows, vocabulary] from, for speculative verification.
-    pub fn sampling_probability_rows(
+    /// The distribution this engine's sampler draws each row of `logits`
+    /// [1, rows, vocabulary] from, as each row's `top_k` token ids and their
+    /// probabilities (every other token has probability zero), for
+    /// speculative verification.
+    pub fn sampling_distribution_rows(
         &self,
         logits: &MlxArray,
         temperature_thousandths: u16,
         top_p_thousandths: u16,
         top_k: u16,
-    ) -> Result<MlxArray, InferenceEngineError> {
-        sampling_probability_rows(
+    ) -> Result<(MlxArray, MlxArray), InferenceEngineError> {
+        sampling_distribution_rows(
             &self.runtime,
             logits,
             temperature_thousandths,

@@ -8,7 +8,7 @@
 //! distributed exactly as the target's own sampler would have chosen it, which
 //! is what makes drafting lossless at temperature 0.7 or 1.0.
 //!
-//! This module is pure host arithmetic over probabilities already read back:
+//! This module is pure host arithmetic over the few probabilities read back:
 //! the uniform random draws come in as arguments, so a decision is a
 //! deterministic function of its inputs and is unit-tested without a GPU.
 
@@ -49,36 +49,66 @@ pub fn decide_by_token_equality(
     }
 }
 
-/// Sampled: rejection sampling against the target's tempered, top-k and top-p
-/// masked probabilities. `target_probability_rows` holds one row per verified
-/// position (drafts plus one), each over the whole vocabulary.
-/// `uniform_draws` needs one value in [0, 1) per draft plus one.
+/// The target's sampling distribution at one verified row, as the token ids
+/// its top-k cut keeps and their probabilities after top-p and temperature.
+/// Every other token has probability zero under that law, so a handful of
+/// entries per row is exact and only those are read back from the GPU.
+pub struct TargetDistribution<'row> {
+    pub token_ids: &'row [u32],
+    pub probabilities: &'row [f32],
+}
+
+impl TargetDistribution<'_> {
+    fn probability_of(&self, token_id: u32) -> f64 {
+        let mut probability = 0.0;
+        for (candidate_id, candidate_probability) in self.token_ids.iter().zip(self.probabilities) {
+            if *candidate_id == token_id {
+                probability += f64::from(*candidate_probability);
+            }
+        }
+        probability
+    }
+}
+
+/// Sampled: rejection sampling against the target's distribution at each
+/// verified row (drafts plus one). `uniform_draws` needs one value in [0, 1)
+/// per draft plus one.
 pub fn decide_by_rejection_sampling(
     drafted_slots: &[DraftedSlot<'_>],
-    target_probability_rows: &[&[f32]],
+    target_distributions: &[TargetDistribution<'_>],
     uniform_draws: &[f64],
 ) -> VerificationDecision {
     for (slot_index, drafted_slot) in drafted_slots.iter().enumerate() {
-        let target_row = target_probability_rows[slot_index];
-        let target_probability = f64::from(target_row[drafted_slot.token_id as usize]);
+        let target_distribution = &target_distributions[slot_index];
+        let target_probability = target_distribution.probability_of(drafted_slot.token_id);
         let drafter_probability = sparse_probability(drafted_slot, drafted_slot.token_id);
         // Kept when u * q < p: the reference's form of u < min(1, p / q).
         if uniform_draws[slot_index] * drafter_probability < target_probability {
             continue;
         }
-        let leftover = leftover_distribution(target_row, drafted_slot);
+        let leftover = leftover_weights(target_distribution, drafted_slot);
         return VerificationDecision {
             kept_draft_count: slot_index,
-            next_token_id: sample_from(&leftover, uniform_draws[drafted_slots.len()]),
+            next_token_id: sample_from(
+                target_distribution.token_ids,
+                &leftover,
+                uniform_draws[drafted_slots.len()],
+            ),
         };
     }
-    let final_row: Vec<f64> = target_probability_rows[drafted_slots.len()]
+    let final_distribution = &target_distributions[drafted_slots.len()];
+    let final_weights: Vec<f64> = final_distribution
+        .probabilities
         .iter()
         .map(|value| f64::from(*value))
         .collect();
     VerificationDecision {
         kept_draft_count: drafted_slots.len(),
-        next_token_id: sample_from(&final_row, uniform_draws[drafted_slots.len()]),
+        next_token_id: sample_from(
+            final_distribution.token_ids,
+            &final_weights,
+            uniform_draws[drafted_slots.len()],
+        ),
     }
 }
 
@@ -96,41 +126,49 @@ fn sparse_probability(drafted_slot: &DraftedSlot<'_>, token_id: u32) -> f64 {
     probability
 }
 
-/// `max(0, p - q)` normalized; the target row itself when nothing is left
-/// (q covers p everywhere, which a refusal makes vanishingly rare).
-fn leftover_distribution(target_row: &[f32], drafted_slot: &DraftedSlot<'_>) -> Vec<f64> {
-    let mut leftover: Vec<f64> = target_row.iter().map(|value| f64::from(*value)).collect();
-    for (candidate_id, candidate_probability) in drafted_slot
-        .candidate_ids
+/// `max(0, p - q)` over the target's tokens (elsewhere p is zero, so the
+/// leftover is too); the target's own weights when nothing is left (q covers
+/// p everywhere, which a refusal makes vanishingly rare).
+fn leftover_weights(
+    target_distribution: &TargetDistribution<'_>,
+    drafted_slot: &DraftedSlot<'_>,
+) -> Vec<f64> {
+    let mut leftover = Vec::with_capacity(target_distribution.token_ids.len());
+    for (token_id, probability) in target_distribution
+        .token_ids
         .iter()
-        .zip(drafted_slot.candidate_probabilities)
+        .zip(target_distribution.probabilities)
     {
-        let entry = &mut leftover[*candidate_id as usize];
-        *entry = (*entry - f64::from(*candidate_probability)).max(0.0);
+        leftover
+            .push((f64::from(*probability) - sparse_probability(drafted_slot, *token_id)).max(0.0));
     }
-    let leftover_mass: f64 = leftover.iter().sum();
-    if leftover_mass <= 0.0 {
-        return target_row.iter().map(|value| f64::from(*value)).collect();
+    if leftover.iter().sum::<f64>() <= 0.0 {
+        return target_distribution
+            .probabilities
+            .iter()
+            .map(|value| f64::from(*value))
+            .collect();
     }
     leftover
 }
 
-/// Inverse-CDF draw from unnormalized `weights` with one uniform value.
-fn sample_from(weights: &[f64], uniform_draw: f64) -> u32 {
+/// Inverse-CDF draw of one of `token_ids` from its unnormalized `weights`
+/// with one uniform value.
+fn sample_from(token_ids: &[u32], weights: &[f64], uniform_draw: f64) -> u32 {
     let total: f64 = weights.iter().sum();
     let threshold = uniform_draw * total;
     let mut cumulative = 0.0;
     let mut last_positive_index = 0;
-    for (token_index, weight) in weights.iter().enumerate() {
+    for (entry_index, weight) in weights.iter().enumerate() {
         if *weight <= 0.0 {
             continue;
         }
         cumulative += weight;
-        last_positive_index = token_index;
+        last_positive_index = entry_index;
         if threshold < cumulative {
-            return token_index as u32;
+            return token_ids[entry_index];
         }
     }
     // Rounding can leave the threshold a hair above the final cumulative sum.
-    last_positive_index as u32
+    token_ids[last_positive_index]
 }

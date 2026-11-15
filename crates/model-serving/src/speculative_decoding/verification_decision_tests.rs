@@ -1,6 +1,17 @@
 use super::verification_decision::{
-    DraftedSlot, VerificationDecision, decide_by_rejection_sampling, decide_by_token_equality,
+    DraftedSlot, TargetDistribution, VerificationDecision, decide_by_rejection_sampling,
+    decide_by_token_equality,
 };
+
+/// The first `probabilities.len()` token ids, the shape tests build rows in.
+const DENSE_TOKEN_IDS: [u32; 4] = [0, 1, 2, 3];
+
+fn dense_row(probabilities: &[f32]) -> TargetDistribution<'_> {
+    TargetDistribution {
+        token_ids: &DENSE_TOKEN_IDS[..probabilities.len()],
+        probabilities,
+    }
+}
 
 /// A seeded uniform stream for the statistical test (splitmix64).
 struct UniformStream {
@@ -44,7 +55,7 @@ fn should_stop_at_the_first_greedy_mismatch_and_correct_it() {
 
 #[test]
 fn should_refuse_a_draft_the_target_gives_no_probability_and_resample_from_the_rest() {
-    let target_rows: [&[f32]; 2] = [&[0.0, 1.0, 0.0], &[1.0, 0.0, 0.0]];
+    let target_rows = [dense_row(&[0.0, 1.0, 0.0]), dense_row(&[1.0, 0.0, 0.0])];
     let drafted_slots = [DraftedSlot {
         token_id: 2,
         candidate_ids: &[2],
@@ -62,7 +73,7 @@ fn should_refuse_a_draft_the_target_gives_no_probability_and_resample_from_the_r
 
 #[test]
 fn should_always_keep_a_draft_the_target_is_certain_of() {
-    let target_rows: [&[f32]; 2] = [&[0.0, 1.0, 0.0], &[0.0, 0.0, 1.0]];
+    let target_rows = [dense_row(&[0.0, 1.0, 0.0]), dense_row(&[0.0, 0.0, 1.0])];
     let drafted_slots = [DraftedSlot {
         token_id: 1,
         candidate_ids: &[1, 2],
@@ -80,7 +91,7 @@ fn should_always_keep_a_draft_the_target_is_certain_of() {
 
 #[test]
 fn should_handle_an_empty_draft_by_sampling_the_target_row() {
-    let target_rows: [&[f32]; 1] = [&[0.25, 0.25, 0.5]];
+    let target_rows = [dense_row(&[0.25, 0.25, 0.5])];
     let decision = decide_by_rejection_sampling(&[], &target_rows, &[0.6]);
     assert_eq!(
         decision,
@@ -98,7 +109,10 @@ fn should_emit_first_tokens_distributed_exactly_as_the_target_over_many_rounds()
     let target_distribution: [f32; 4] = [0.1, 0.2, 0.3, 0.4];
     let drafter_candidates: [u32; 3] = [0, 1, 3];
     let drafter_distribution: [f32; 3] = [0.5, 0.3, 0.2];
-    let target_rows: [&[f32]; 2] = [&target_distribution, &target_distribution];
+    let target_rows = [
+        dense_row(&target_distribution),
+        dense_row(&target_distribution),
+    ];
     let mut uniforms = UniformStream { state: 20_261_115 };
     let round_count = 200_000;
     let mut first_token_counts = [0_u32; 4];
@@ -138,4 +152,38 @@ fn should_emit_first_tokens_distributed_exactly_as_the_target_over_many_rounds()
             "token {token_index}: observed {observed_probability}, target {expected_probability}"
         );
     }
+}
+
+#[test]
+fn should_resample_from_the_target_tokens_the_drafter_left_unused_when_its_draft_is_refused() {
+    // The target keeps three scattered tokens; the drafter proposes one the
+    // target never samples, so the correction must come from the target's own
+    // ids, weighted by what the drafter did not already cover.
+    let target_token_ids = [9_000_u32, 42, 248_000];
+    let target_probabilities = [0.5_f32, 0.3, 0.2];
+    let target_rows = [
+        TargetDistribution {
+            token_ids: &target_token_ids,
+            probabilities: &target_probabilities,
+        },
+        TargetDistribution {
+            token_ids: &target_token_ids,
+            probabilities: &target_probabilities,
+        },
+    ];
+    let drafted_slots = [DraftedSlot {
+        token_id: 7,
+        candidate_ids: &[7, 9_000],
+        candidate_probabilities: &[0.6, 0.4],
+    }];
+    // Leftover weights: 9000 -> 0.5 - 0.4 = 0.1, 42 -> 0.3, 248000 -> 0.2 (total 0.6);
+    // a draw of 0.5 lands at 0.3 of 0.6, inside token 42's span (0.1 to 0.4).
+    let decision = decide_by_rejection_sampling(&drafted_slots, &target_rows, &[0.0, 0.5]);
+    assert_eq!(
+        decision,
+        VerificationDecision {
+            kept_draft_count: 0,
+            next_token_id: 42
+        }
+    );
 }

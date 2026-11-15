@@ -19,7 +19,8 @@ use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
     PathChoice, bind_drafter_weights, drafted_hidden_rows, select_path,
 };
 use astronomical_model_serving::speculative_decoding::verification_decision::{
-    DraftedSlot, VerificationDecision, decide_by_rejection_sampling, decide_by_token_equality,
+    DraftedSlot, TargetDistribution, VerificationDecision, decide_by_rejection_sampling,
+    decide_by_token_equality,
 };
 use astronomical_model_serving::{
     PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5DraftedRowsVerification,
@@ -27,7 +28,7 @@ use astronomical_model_serving::{
     RequestDecoderStateStack, VerificationLogitsMode,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
-use mlx_bridge::{MlxArray, MlxDtype};
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::dflash2_journey_support::{
@@ -462,26 +463,31 @@ fn decide(
             &target_ids[target_ids.len() - drafted_ids.len() - 1..],
         );
     }
-    let probabilities = pair
+    // Only each row's top-k tokens can be sampled, so only they are read back.
+    let (distribution_ids, distribution_probabilities) = pair
         .target
-        .sampling_probability_rows(
+        .sampling_distribution_rows(
             logits,
             cell.temperature_thousandths,
             TOP_P_THOUSANDTHS,
             TOP_K,
         )
         .expect("the target's sampling law applies");
-    let probability_values = host_values(
-        runtime,
-        &runtime
-            .astype(&probabilities, MlxDtype::Float32)
-            .expect("probabilities convert"),
-    );
-    let vocabulary_size = probability_values.len() / row_count;
-    let rows: Vec<&[f32]> = probability_values
-        .chunks(vocabulary_size)
-        .skip(row_count - drafted_ids.len() - 1)
+    let kept_ids: Vec<u32> = host_values(runtime, &distribution_ids)
+        .iter()
+        .map(|value| *value as u32)
         .collect();
+    let kept_probabilities = host_values(runtime, &distribution_probabilities);
+    let kept_per_row = kept_ids.len() / row_count;
+    let first_row = row_count - drafted_ids.len() - 1;
+    let mut rows = Vec::with_capacity(drafted_ids.len() + 1);
+    for row_index in first_row..row_count {
+        let row_range = row_index * kept_per_row..(row_index + 1) * kept_per_row;
+        rows.push(TargetDistribution {
+            token_ids: &kept_ids[row_range.clone()],
+            probabilities: &kept_probabilities[row_range],
+        });
+    }
     let candidate_count = pair.drafter_configuration.selector_candidate_count as usize;
     let mut drafted_slots = Vec::with_capacity(drafted_ids.len());
     if let Some(distribution) = drafter_distribution {
