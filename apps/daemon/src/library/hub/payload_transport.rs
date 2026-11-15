@@ -49,9 +49,12 @@ impl HubPayloadRequest {
 
     /// Asks for exactly the bytes from `resume_offset_bytes` up to, but not
     /// including, `end_offset_bytes`. A response that ends where the request
-    /// does leaves its connection open for the next request; hanging up on an
-    /// open-ended response part-way does not, and every piece would then pay
-    /// for a new connection that starts slow.
+    /// does leaves its connection open for the next request and stops the
+    /// server sending bytes nobody will read; hanging up on an open-ended
+    /// response part-way tears the connection down for every piece. Measured
+    /// on a 500 Mbit/s line this did not change throughput (about 360 Mbit/s
+    /// either way over eight streams), so the gain is fewer connections and
+    /// handshakes, not speed.
     #[must_use]
     pub fn get_range(url: String, resume_offset_bytes: u64, end_offset_bytes: u64) -> Self {
         Self {

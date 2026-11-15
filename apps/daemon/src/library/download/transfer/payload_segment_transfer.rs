@@ -5,6 +5,9 @@
 //! whose connection drops, ends early or slows to a trickle is asked for
 //! again from the first byte it still lacks, instead of failing the whole
 //! download or holding its slot at a crawl.
+//!
+//! Eight streams stay the width of a download: sixteen measured no faster
+//! (333 and 127 Mbit/s against about 360 for eight on a 500 Mbit/s line).
 
 use std::{sync::Arc, time::Duration};
 
@@ -219,7 +222,12 @@ impl DownloadPayloadTransfer {
                 return Ok(SegmentAttemptEnd::SlowStream);
             }
             let payload_chunk = match next_chunk {
-                // The window ended with nothing new to write.
+                // The window ended with nothing new to write. A stalled
+                // stream must still notice a pause instead of waiting for
+                // its next byte.
+                Err(_window_elapsed) if self.is_pause_requested() => {
+                    return Ok(SegmentAttemptEnd::Paused);
+                }
                 Err(_window_elapsed) => continue,
                 Ok(None) => break,
                 Ok(Some(Err(transport_error))) => {
@@ -229,24 +237,14 @@ impl DownloadPayloadTransfer {
                 }
                 Ok(Some(Ok(payload_chunk))) => payload_chunk,
             };
-            // A server that ignores the upper bound sends the rest of the
-            // file, so a chunk may span the segment boundary; consume only
-            // this segment's share and drop the rest.
-            let remaining_segment_bytes = expected_segment_bytes - *transferred_bytes;
-            let consumed_chunk = if payload_chunk.len() as u64 > remaining_segment_bytes {
-                payload_chunk.slice(0..remaining_segment_bytes as usize)
-            } else {
-                payload_chunk
-            };
-            let consumed_bytes = consumed_chunk.len() as u64;
-            segment_target
-                .assembler
-                .write_chunk(
-                    segment_target.payload_segment.start_offset_bytes() + *transferred_bytes,
-                    consumed_chunk,
-                )
-                .await
-                .map_err(SegmentAttemptError::Fatal)?;
+            let consumed_bytes = write_segment_share_of_chunk(
+                segment_target,
+                payload_chunk,
+                *transferred_bytes,
+                expected_segment_bytes,
+            )
+            .await
+            .map_err(SegmentAttemptError::Fatal)?;
             *transferred_bytes += consumed_bytes;
             stream_measurement.record(consumed_bytes);
             self.publish_live_progress_when_due(segment_target, &mut last_progress_publication_at)
@@ -339,6 +337,33 @@ impl DownloadPayloadTransfer {
         *last_progress_publication_at = Some(Instant::now());
         Ok(())
     }
+}
+
+/// Hands the assembler this segment's share of one chunk and returns how
+/// many bytes that was. A server that ignores the upper bound sends the rest
+/// of the file, so a chunk may span the segment boundary; only the segment's
+/// share is consumed and the rest is dropped.
+async fn write_segment_share_of_chunk(
+    segment_target: &SegmentTransferTarget<'_>,
+    payload_chunk: bytes::Bytes,
+    transferred_bytes: u64,
+    expected_segment_bytes: u64,
+) -> Result<u64, DownloadPayloadTransferError> {
+    let remaining_segment_bytes = expected_segment_bytes - transferred_bytes;
+    let consumed_chunk = if payload_chunk.len() as u64 > remaining_segment_bytes {
+        payload_chunk.slice(0..remaining_segment_bytes as usize)
+    } else {
+        payload_chunk
+    };
+    let consumed_bytes = consumed_chunk.len() as u64;
+    segment_target
+        .assembler
+        .write_chunk(
+            segment_target.payload_segment.start_offset_bytes() + transferred_bytes,
+            consumed_chunk,
+        )
+        .await?;
+    Ok(consumed_bytes)
 }
 
 /// Folds a finished stream's rate into the download's reference. A healthy
