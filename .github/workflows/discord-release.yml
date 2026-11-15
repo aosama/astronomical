@@ -30,35 +30,45 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      # A manual run has no release event to read from, so the release is
-      # looked up by its tag. The notes go through a file-style output
-      # because they span many lines.
-      - name: Read the release for a manual run
+      # The release is read by its tag on every run, from the event or the
+      # manual input, so both post the same message. Discord shows Markdown
+      # headings in an embed far larger than the text around them, so they
+      # become bold lines, and the notes are cut to stay inside Discord's
+      # 4,096-character embed limit with room for the closing line.
+      - name: Read the release
         id: release
-        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json name,body,url > release.json
+          jq -r .body release.json | sed -E 's/^#{1,6}[[:space:]]+(.*)$/**\1**/' | head -c 3800 > release-notes.md
           {
             echo "name=$(jq -r .name release.json)"
             echo "url=$(jq -r .url release.json)"
             echo "body<<RELEASE_NOTES_END"
-            jq -r .body release.json
+            cat release-notes.md
+            echo
+            echo
+            echo "Download for Mac at getastronomical.com"
             echo "RELEASE_NOTES_END"
           } >> "$GITHUB_OUTPUT"
+      # Runs on Node.js 24; the previous action targeted Node.js 20, which
+      # GitHub has deprecated and now forces onto Node.js 24 with a warning.
       - name: Post the release
-        uses: SethCohen/github-releases-to-discord@24d166886aee4646d448c8a389ff9e1ebcab3682 # v1.20.0
+        uses: sarisia/actions-status-discord@eb045afee445dc055c18d3d90bd0f244fd062708 # v1.16.0
         with:
-          webhook_url: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
-          # The icon's violet, as a decimal colour.
-          color: '7028676'
+          webhook: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
           content: A new version of Astronomical is out.
-          release_name: ${{ steps.release.outputs.name }}
-          release_body: ${{ steps.release.outputs.body }}
-          release_html_url: ${{ steps.release.outputs.url }}
-          footer_title: Download for Mac at getastronomical.com
-          reduce_headings: true
-          remove_github_reference_links: true
+          title: ${{ steps.release.outputs.name }}
+          description: ${{ steps.release.outputs.body }}
+          url: ${{ steps.release.outputs.url }}
+          # The icon's violet.
+          color: '0x6B3FC4'
+          # A release announcement, not a CI status: no status prefix, no
+          # job fields, and a failed post fails the run so it can be re-run.
+          noprefix: true
+          nodetail: true
+          nocontext: true
+          nofail: false
