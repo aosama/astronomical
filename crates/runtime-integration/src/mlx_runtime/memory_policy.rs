@@ -40,9 +40,12 @@ use crate::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
     mlx_buffer_cache_exceeds_reclaim_threshold,
 };
+// The bridge keeps MLX's own function names, where "cache" alone means the
+// MLX buffer cache; they are imported under names that say so.
 use mlx_bridge::{
-    clear_allocator_cache as clear_mlx_buffer_cache, reset_peak_memory, set_cache_limit,
-    set_memory_limit, synchronize,
+    cache_memory_bytes as mlx_buffer_cache_bytes, clear_allocator_cache as clear_mlx_buffer_cache,
+    reset_peak_memory, set_cache_limit as set_mlx_buffer_cache_limit, set_memory_limit,
+    synchronize,
 };
 
 use super::error_classification;
@@ -136,8 +139,7 @@ impl MlxRuntime {
         Ok(MlxMemorySnapshot {
             active_memory_bytes: mlx_bridge::active_memory_bytes()
                 .map_err(MlxRuntimeError::from)?,
-            mlx_buffer_cache_bytes: mlx_bridge::cache_memory_bytes()
-                .map_err(MlxRuntimeError::from)?,
+            mlx_buffer_cache_bytes: mlx_buffer_cache_bytes().map_err(MlxRuntimeError::from)?,
             peak_memory_bytes: mlx_bridge::peak_memory_bytes().map_err(MlxRuntimeError::from)?,
         })
     }
@@ -271,7 +273,8 @@ fn set_memory_limits(memory_limits: MlxMemoryLimits) -> Result<(), MlxRuntimeErr
         set_memory_limit(memory_limits.active_memory_limit_bytes).map_err(MlxRuntimeError::from)?;
 
     if let Err(mlx_buffer_cache_error) =
-        set_cache_limit(memory_limits.mlx_buffer_cache_limit_bytes).map_err(MlxRuntimeError::from)
+        set_mlx_buffer_cache_limit(memory_limits.mlx_buffer_cache_limit_bytes)
+            .map_err(MlxRuntimeError::from)
     {
         // Best-effort rollback restores the previous valid limit after the
         // handler has been installed; nothing depends on the restore result.
