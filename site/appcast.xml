@@ -4,29 +4,46 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.105</title>
-            <pubDate>Fri, 13 Nov 2026 21:37:48 -0500</pubDate>
-            <sparkle:version>2293</sparkle:version>
-            <sparkle:shortVersionString>0.2.105</sparkle:shortVersionString>
+            <title>0.2.106</title>
+            <pubDate>Sun, 15 Nov 2026 11:15:37 -0500</pubDate>
+            <sparkle:version>2336</sparkle:version>
+            <sparkle:shortVersionString>0.2.106</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical v0.2.105
+            <description sparkle:format="markdown"><![CDATA[## Large sparse models at full speed on the whole memory range
 
-### New
-- A link can now open Astronomical on one model: `astronomical://models/huggingface/OWNER/NAME`. It shows Observatory's Models page with that model at the top and its own Get button. Nothing downloads until you press Get, and only models from Astronomical's checked list are offered.
+- Large sparse models now reply at full speed even with the memory limit set near the top of the range. On a 48 GB Mac, a 37.8 GB 122B model went from 7–11 to 36–37 tokens per second.
+- One memory governor now owns the streaming engine's memory limit. It keeps room for MLX to reuse its buffers between tokens and stays under the macOS wire limit, giving experts back to the SSD before macOS would slow the graphics processor.
+- Every streamed prompt is read one layer at a time, and expert layers are kept across a long prompt.
+- The memory limit can again be set up to 97.5% of the wired budget.
+- Dense models that do not fit in memory are moved to streaming, and requests wait while a replacement worker starts.
+- After a memory recovery during a long prompt, expert layers are kept in memory again for the rest of it.
 
-### Improved
-- Developer builds: when Apple refuses a notarization check, the release tool now shows Apple's own reply.
+## Observatory
 
-### Compatibility
-- Requires macOS 14 or later on Apple silicon.
-- Your settings, downloaded models, conversations and prompt cache are kept.
-- The app and its disk image are signed with a Developer ID and notarized by Apple.
+- New Memory page: the whole Mac's memory on one bar with the macOS wire limit marked, how much of the expert library is in memory, how many experts each token read from the SSD, and one column per token of the last reply. Copy as image turns the page into a picture you can share.
+- Overview shows how your memory limit is divided, including the room left for macOS and other apps.
+
+## Apps
+
+- The chat window calls itself Astronomical everywhere, including the permission sheet and the file picker.
+- When another copy of Astronomical already holds the engine address, the app says so plainly.
+- A model downloaded from the Models page is offered in the chat window straight away, and the finished first-run download screen says the model is ready.
+
+## Compatibility
+
+- Settings were renamed so every cache has one name: `prompt_cache` is now `ssd_prompt_cache`, and two chunking settings gain the `ssd_` prefix. Your configuration file is moved to the new names on first launch, keeping its values. A retired prompt setting is removed.
+- The REST routes `/v1/cache` and `/v1/cache/stats` are now `/v1/ssd-prompt-cache` and `/v1/ssd-prompt-cache/stats`.
+- Your models, conversations and settings are kept. Requires macOS 14 or later on Apple silicon.
+
+## Distribution
+
+Astronomical 0.2.106 is signed with a Developer ID certificate, notarized by Apple, and delivered through a signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.105/Astronomical-0.2.105-macOS-arm64.dmg" length="23628468" type="application/octet-stream" sparkle:edSignature="OjC1TAzZ4mAmdf6AyaHWaxql/CEIRgGQZCU5NRj8DCL4csijGwNZPnbj0LDTytwV8uVyWvrmfA0c/8tVfjJYAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.106/Astronomical-0.2.106-macOS-arm64.dmg" length="23694923" type="application/octet-stream" sparkle:edSignature="VuXTtC7CDWfFU4YZWVh5TObjptAtWGIJ1DUXbjqWu4YX9EeK2+1Tnb1h/ZPZcRxdPOK0qSHvXqgJmpYfSCSCDw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: LzKLkv7w47JgOJaBial0COv0ky7LiP/4TiGUhCoF2AMTrN4Qxr/kqn8svHuR+uwYRriUIsnfmCfPXed1y3LgBw==
-length: 1897
+edSignature: S0HtPse58AX4vuSkqwL5/oZAKQAAE4WXW5u7X/Ay7pT51mPqbhjaRDpqiAoaLKsYM686FJgK3avID3JfhLLECg==
+length: 3547
 -->
