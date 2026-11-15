@@ -1,28 +1,84 @@
-//! Exact paged forward completion after every layer route was resolved eagerly.
+//! The single evaluation that completes a paged forward, and what it found.
 //!
-//! Older paging designs could build a forward with unresolved expert routes and
-//! replay after discovering misses. The Rust streaming path resolves each sparse
-//! layer before constructing its expert computation, so completion has only one
-//! valid outcome: every route was a complete hit against the page selected for
-//! that layer. The small compatibility types below keep that invariant explicit
-//! at call sites without reviving replay state.
+//! A reply token can be served two ways. The exact way resolves every sparse
+//! layer's route on the host before building that layer, reading whatever is
+//! missing from storage; it always succeeds and costs one graphics-processor
+//! wait per layer that is not held whole. The optimistic way assumes every
+//! routed expert is already in memory: each layer looks its experts up in
+//! its table on the graphics processor and counts the ones that were not
+//! there, and those counts join the token's single evaluation. When every
+//! count is zero the token is finished without one extra wait; when any is
+//! not, the token's outputs are wrong and the caller runs it again the exact
+//! way. Optimistic serving is what lets memory be shared across layers: a cache
+//! that takes a few idle experts out of nearly every layer would otherwise
+//! make nearly every layer pay the wait.
+
+use std::cell::{Cell, RefCell};
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use mlx_bridge::MlxArray;
 
+/// One layer served on the graphics processor on the assumption that its
+/// table held every routed expert.
+#[derive(Debug)]
+pub(crate) struct OptimisticLayerServing {
+    /// How many of the token's routed experts the table did not hold; lazy
+    /// until the token's evaluation. `None` for a table that holds its whole
+    /// layer: it cannot miss, so nothing is computed or read back for it.
+    pub(crate) missing_assignment_count: Option<MlxArray>,
+    pub(crate) assignment_count: usize,
+    pub(crate) table_payload_bytes: u64,
+    pub(crate) expert_capacity: usize,
+}
+
+/// What the layers of one optimistic forward assumed, checked when the
+/// forward is evaluated.
 #[derive(Debug, Default)]
-pub(crate) struct PagedForwardMissingRouteCollector;
+pub(crate) struct PagedForwardMissingRouteCollector {
+    is_optimistic: Cell<bool>,
+    /// Set when a layer could not be served optimistically after all, so the
+    /// forward must be run again whatever the counts say.
+    has_abandoned_optimistic_serving: Cell<bool>,
+    optimistic_layer_servings: RefCell<Vec<OptimisticLayerServing>>,
+}
 
 impl PagedForwardMissingRouteCollector {
-    /// Intentionally a no-op: eager route resolution cannot accumulate misses.
-    pub(crate) const fn clear(&self) {}
+    pub(crate) fn clear(&self) {
+        self.has_abandoned_optimistic_serving.set(false);
+        self.optimistic_layer_servings.borrow_mut().clear();
+    }
+
+    pub(crate) fn set_optimistic(&self, is_optimistic: bool) {
+        self.is_optimistic.set(is_optimistic);
+    }
+
+    pub(crate) fn is_optimistic(&self) -> bool {
+        self.is_optimistic.get()
+    }
+
+    pub(crate) fn abandon_optimistic_serving(&self) {
+        self.has_abandoned_optimistic_serving.set(true);
+    }
+
+    pub(crate) fn record_optimistic_layer(&self, layer_serving: OptimisticLayerServing) {
+        self.optimistic_layer_servings
+            .borrow_mut()
+            .push(layer_serving);
+    }
+
+    fn take_optimistic_layer_servings(&self) -> Vec<OptimisticLayerServing> {
+        std::mem::take(&mut *self.optimistic_layer_servings.borrow_mut())
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum PagedRouteValidationOutcome {
     CompleteHit,
+    /// An optimistic forward routed to an expert that was not in memory: its
+    /// outputs are wrong and the forward must be run again the exact way.
+    MissedExperts,
 }
 
 impl Qwen3_5Model {
@@ -68,6 +124,10 @@ impl Qwen3_5Model {
         // demand recording afterwards is a host copy, not another evaluation.
         let deferred_expert_demand = self.deferred_expert_demand.borrow();
         completion_roots.extend(deferred_expert_demand.pending_route_array_refs());
+        let optimistic_layer_servings = self
+            .paged_forward_missing_route_collector
+            .take_optimistic_layer_servings();
+        extend_with_missing_assignment_counts(&mut completion_roots, &optimistic_layer_servings);
 
         // Attribute the blocking MLX evaluation boundary separately from graph
         // construction. With experimental solid-state-drive paging interval 0,
@@ -84,6 +144,37 @@ impl Qwen3_5Model {
         drop(completion_roots);
         drop(deferred_expert_demand);
         drop(pending_route_observation);
+        self.conclude_evaluated_forward(
+            &optimistic_layer_servings,
+            eval_elapsed,
+            completion_root_count,
+            performance_attribution,
+        )
+    }
+
+    /// Decides what an evaluated forward was worth: nothing when it was
+    /// optimistic and missed, otherwise its demand, hits and queued table
+    /// writes are recorded.
+    fn conclude_evaluated_forward(
+        &self,
+        optimistic_layer_servings: &[OptimisticLayerServing],
+        eval_elapsed: std::time::Duration,
+        completion_root_count: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
+        if self.optimistic_forward_missed_experts(optimistic_layer_servings)? {
+            // Nothing this forward learned is true: its routes came from
+            // wrong hidden states after the first missing expert.
+            self.deferred_expert_demand
+                .borrow_mut()
+                .discard_pending_layer_routes();
+            self.route_observation
+                .borrow_mut()
+                .discard_pending_layer_route_arrays();
+            self.paged_forward_missing_route_collector.clear();
+            return Ok(PagedRouteValidationOutcome::MissedExperts);
+        }
+        self.credit_optimistic_layer_hits(optimistic_layer_servings, performance_attribution);
         self.record_deferred_expert_demand(performance_attribution);
         if eval_elapsed > std::time::Duration::from_millis(500) {
             tracing::info!(
@@ -182,3 +273,76 @@ impl Qwen3_5Model {
         Ok(0)
     }
 }
+
+impl Qwen3_5Model {
+    /// Whether an optimistic forward routed to any expert its tables did not
+    /// hold. The counts were roots of the evaluation that just finished, so
+    /// reading them is a host copy, not another wait.
+    fn optimistic_forward_missed_experts(
+        &self,
+        optimistic_layer_servings: &[OptimisticLayerServing],
+    ) -> Result<bool, Qwen3_5ExecutionError> {
+        if self
+            .paged_forward_missing_route_collector
+            .has_abandoned_optimistic_serving
+            .get()
+        {
+            return Ok(true);
+        }
+        for optimistic_layer_serving in optimistic_layer_servings {
+            let Some(missing_assignment_count) =
+                optimistic_layer_serving.missing_assignment_count.as_ref()
+            else {
+                continue;
+            };
+            let missing_assignment_counts = missing_assignment_count.to_vec_u32()?;
+            if missing_assignment_counts
+                .iter()
+                .any(|missing_assignment_count| *missing_assignment_count > 0)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Counts the hits of an optimistic forward once it is known to have
+    /// been right, so a forward that is run again is never counted twice.
+    fn credit_optimistic_layer_hits(
+        &self,
+        optimistic_layer_servings: &[OptimisticLayerServing],
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
+        for optimistic_layer_serving in optimistic_layer_servings {
+            performance_attribution.record_counter(
+                PerformanceCounter::RetainedRouteAssignmentHitCount,
+                u64::try_from(optimistic_layer_serving.assignment_count).unwrap_or(u64::MAX),
+            );
+            self.record_resident_layer_decode_hit(
+                optimistic_layer_serving.assignment_count,
+                optimistic_layer_serving.table_payload_bytes,
+                optimistic_layer_serving.expert_capacity,
+                performance_attribution,
+            );
+        }
+    }
+}
+
+/// Adds each partly held layer's miss count to the roots of the token's
+/// evaluation, so checking them afterwards is a host copy.
+fn extend_with_missing_assignment_counts<'roots>(
+    completion_roots: &mut Vec<&'roots MlxArray>,
+    optimistic_layer_servings: &'roots [OptimisticLayerServing],
+) {
+    for optimistic_layer_serving in optimistic_layer_servings {
+        if let Some(missing_assignment_count) =
+            optimistic_layer_serving.missing_assignment_count.as_ref()
+        {
+            completion_roots.push(missing_assignment_count);
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "paged_route_resolution_tests.rs"]
+mod paged_route_resolution_tests;

@@ -6,7 +6,7 @@
 //! files inside the source-size budget.
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecutionMode};
+use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 
 use super::Qwen3_5Model;
 use super::forward_contract;
@@ -57,29 +57,14 @@ impl Qwen3_5Model {
             self.config.maximum_position_count(),
         )?;
         let token_indices = self.runtime.astype(generated_token, MlxDtype::Int32)?;
-        // Paged decode must resolve deferred missing-route bitmaps before the
-        // generated token becomes request-visible. Use a synchronous completion
-        // root with exact replay instead of decode-ahead async evaluation alone.
-        let maximum_paged_route_replay_attempts = 1;
-        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
-            let next_logits = self.build_forward_graph(
-                &token_indices,
-                1,
-                starting_position_tokens,
-                request_decoder_state,
-                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
-                performance_attribution,
-            )?;
-            match self.evaluate_forward_state_with_performance_attribution(
-                &next_logits,
-                request_decoder_state,
-                performance_attribution,
-            )? {
-                PagedRouteValidationOutcome::CompleteHit => return Ok(next_logits),
-            }
-        }
-        Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "paged route replay exceeded the sparse-layer safety bound",
-        })
+        // The token becomes visible to the request only once its routes are
+        // known to have been served from memory or read from storage.
+        self.forward_resolving_expert_routes(
+            &token_indices,
+            1,
+            starting_position_tokens,
+            request_decoder_state,
+            performance_attribution,
+        )
     }
 }

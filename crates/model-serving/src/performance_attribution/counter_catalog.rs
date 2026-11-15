@@ -53,6 +53,12 @@ pub enum PerformanceCounter {
     RetainedRouteAssignmentMissCount,
     HotExpertPartialRouteHitCount,
     HotExpertWarmInsertCount,
+    /// Reply tokens served on the assumption that every routed expert was
+    /// in memory.
+    OptimisticReplyTokenCount,
+    /// Optimistically served reply tokens that routed to an expert not in
+    /// memory and were run again the exact way.
+    OptimisticReplyTokenMissCount,
     /// Decode tokens whose routed experts were all warm (issue #373 baseline).
     HotExpertRouteFullyCoveredCount,
     /// Decode tokens with some warm and some cold routed experts: the mixed-serving target.
@@ -176,6 +182,8 @@ impl PerformanceCounter {
         Self::RetainedRouteAssignmentMissCount,
         Self::HotExpertPartialRouteHitCount,
         Self::HotExpertWarmInsertCount,
+        Self::OptimisticReplyTokenCount,
+        Self::OptimisticReplyTokenMissCount,
         Self::HotExpertRouteFullyCoveredCount,
         Self::HotExpertRoutePartiallyCoveredCount,
         Self::HotExpertRouteFullyMissedCount,
@@ -299,6 +307,8 @@ impl PerformanceCounter {
             Self::RetainedRouteAssignmentMissCount => "retained_route_assignment_miss_count",
             Self::HotExpertPartialRouteHitCount => "hot_expert_partial_route_hit_count",
             Self::HotExpertWarmInsertCount => "hot_expert_warm_insert_count",
+            Self::OptimisticReplyTokenCount => "optimistic_reply_token_count",
+            Self::OptimisticReplyTokenMissCount => "optimistic_reply_token_miss_count",
             Self::HotExpertRouteFullyCoveredCount => "hot_expert_route_fully_covered_count",
             Self::HotExpertRoutePartiallyCoveredCount => "hot_expert_route_partially_covered_count",
             Self::HotExpertRouteFullyMissedCount => "hot_expert_route_fully_missed_count",

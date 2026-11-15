@@ -70,6 +70,8 @@ pub(crate) use crate::qwen3_5_core::model_math::{
 mod forward;
 #[cfg(feature = "direct-mlx")]
 mod mixed_decode_execution;
+#[cfg(feature = "direct-mlx")]
+mod optimistic_table_serving;
 mod paged_execution;
 #[cfg(feature = "direct-mlx")]
 mod paged_execution_mode;
@@ -87,7 +89,6 @@ mod route_id_materialization;
 pub(crate) mod route_observation;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
-#[cfg(feature = "direct-mlx")]
 pub(crate) mod streaming_model;
 
 pub(crate) use crate::qwen3_5_core::model::Qwen3_5ModelBase;

@@ -38,6 +38,9 @@ pub struct Qwen3_5StreamingModel {
     pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,
     /// Deferred GPU missing-route roots collected during one paged forward.
     pub(crate) paged_forward_missing_route_collector: PagedForwardMissingRouteCollector,
+    /// What recent reply tokens say about serving the next one optimistically.
+    pub(super) optimistic_serving_history:
+        super::optimistic_table_serving::OptimisticServingHistory,
     /// Warm-table slot capacity for decode-time hot-expert warming; zero
     /// disables warming. The decode handoff derives it from the adaptive
     /// growth guard's headroom so warming only claims memory the guard can

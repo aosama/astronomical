@@ -110,7 +110,7 @@ impl Qwen3_5Model {
         }
         if should_use_loaded_model_mode
             && self.retained_experts.is_some()
-            && let Some(handled) = self.dispatch_retained_full_hit_packed_page(
+            && let Some(handled) = self.dispatch_table_page_without_host_route(
                 expert_pager,
                 layer_index,
                 token_count,
@@ -205,7 +205,7 @@ impl Qwen3_5Model {
     /// the table with the route remapped on-device. `Ok(None)` falls through
     /// to the routed-dispatch paths.
     #[allow(clippy::too_many_arguments)]
-    fn dispatch_retained_full_hit_packed_page(
+    pub(super) fn dispatch_retained_full_hit_packed_page(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
