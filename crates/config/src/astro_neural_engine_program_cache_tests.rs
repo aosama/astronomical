@@ -17,7 +17,7 @@ fn write_set(root: &Path, model: &str, revision: &str, set: &str, programs: usiz
 #[test]
 fn should_place_a_models_programs_by_id_revision_and_weights() {
     assert_eq!(
-        neural_engine_program_cache_directory_for_model(
+        astro_neural_engine_program_cache_directory_for_model(
             Path::new("/fictional/programs"),
             "fictional-model",
             "revision-1",

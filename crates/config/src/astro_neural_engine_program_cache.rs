@@ -27,7 +27,7 @@ const WEIGHTS_FINGERPRINT_BYTES: usize = 8;
 /// models or two quantizations can share both. A compiled program holds its weights, so
 /// sharing a folder would silently run one model's weights in the other.
 #[must_use]
-pub fn neural_engine_program_cache_directory_for_model(
+pub fn astro_neural_engine_program_cache_directory_for_model(
     neural_engine_program_directory: &Path,
     model_id: &str,
     model_revision: &str,
@@ -227,5 +227,5 @@ fn sorted_child_directories(directory: &Path) -> Vec<(String, PathBuf)> {
 }
 
 #[cfg(test)]
-#[path = "neural_engine_program_cache_tests.rs"]
+#[path = "astro_neural_engine_program_cache_tests.rs"]
 mod tests;

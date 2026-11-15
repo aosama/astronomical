@@ -201,7 +201,7 @@ fn snapshot_tree_metadata_path(
                 ),
             )
         })?;
-    let model_cache_directory = snapshot_directory
+    let model_astro_ssd_prompt_cache_directory = snapshot_directory
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| {
@@ -213,7 +213,7 @@ fn snapshot_tree_metadata_path(
                 ),
             )
         })?;
-    Ok(model_cache_directory
+    Ok(model_astro_ssd_prompt_cache_directory
         .join(TREES_DIRECTORY_NAME)
         .join(format!("{revision_name}.json")))
 }

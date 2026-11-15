@@ -12,8 +12,8 @@ use astronomical_model_serving::{
 };
 
 use super::atlas_conversion::AtlasTestFile;
+use super::macos_file_cache_bypassing_io::{any_vm_page_resident, open_bypassing_macos_file_cache};
 use super::progress_report::ProgressReporter;
-use super::uncached_file_io::{any_vm_page_resident, open_uncached};
 
 pub(super) struct PlannedPage {
     /// Position in `AtlasTestFile::layer_indexes`, not a model layer index.
@@ -32,7 +32,7 @@ impl ResidencyChecker {
     fn file(&mut self, path: &PathBuf) -> &File {
         self.open_files_by_path
             .entry(path.clone())
-            .or_insert_with(|| open_uncached(path))
+            .or_insert_with(|| open_bypassing_macos_file_cache(path))
     }
 
     pub(super) fn stock_page_is_cached(

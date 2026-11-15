@@ -13,13 +13,13 @@ use std::path::Path;
 
 use crate::atlas_manifest::ATLAS_RECORD_ALIGNMENT_BYTES;
 
-pub(crate) fn open_uncached(path: &Path) -> std::io::Result<File> {
+pub(crate) fn open_bypassing_macos_file_cache(path: &Path) -> std::io::Result<File> {
     let file = File::open(path)?;
     set_no_cache(&file)?;
     Ok(file)
 }
 
-pub(crate) fn create_uncached(path: &Path) -> std::io::Result<File> {
+pub(crate) fn create_bypassing_macos_file_cache(path: &Path) -> std::io::Result<File> {
     let file = OpenOptions::new()
         .create_new(true)
         .read(true)

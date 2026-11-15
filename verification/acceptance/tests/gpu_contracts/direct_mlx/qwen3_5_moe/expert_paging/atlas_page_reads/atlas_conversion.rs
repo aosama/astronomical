@@ -18,11 +18,11 @@ use astronomical_model_serving::{
 };
 
 use super::super::large_sparse_moe_fixture::StreamingProbeFixture;
-use super::progress_report::ProgressReporter;
-use super::uncached_file_io::{
-    DIRECT_READ_ALIGNMENT_BYTES, PageAlignedBuffer, available_bytes_on_volume, create_uncached,
-    open_uncached, read_cold_span,
+use super::macos_file_cache_bypassing_io::{
+    DIRECT_READ_ALIGNMENT_BYTES, PageAlignedBuffer, available_bytes_on_volume,
+    create_bypassing_macos_file_cache, open_bypassing_macos_file_cache, read_cold_span,
 };
+use super::progress_report::ProgressReporter;
 
 /// Free space kept beyond the atlas itself, so a full scratch volume fails
 /// the probe up front rather than the machine's other writers.
@@ -85,7 +85,7 @@ pub(super) fn write_atlas_test_file(
         assert_layer_matches_atlas_slots(*layer_index, tensor_sources, &atlas.slots);
     }
     assert_scratch_volume_fits(&atlas);
-    let atlas_file = create_uncached(atlas_path);
+    let atlas_file = create_bypassing_macos_file_cache(atlas_path);
     let mut progress = ProgressReporter::new("atlas-conversion", layer_indexes.len());
     let conversion_started_at = Instant::now();
     for (atlas_layer_position, tensor_sources) in layer_tensor_sources.iter().enumerate() {
@@ -248,7 +248,7 @@ fn scatter_tensor_into_records(
     atlas: &AtlasTestFile,
     layer_records: &mut [u8],
 ) {
-    let source_file = open_uncached(&tensor_source.source_file_path);
+    let source_file = open_bypassing_macos_file_cache(&tensor_source.source_file_path);
     let mut expert_batched_tensor = read_cold_span(
         &source_file,
         tensor_source.first_expert_file_offset,

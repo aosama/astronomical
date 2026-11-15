@@ -21928,7 +21928,7 @@
     },
     {
       "file": "apps/daemon/tests/rest_api/astro_ssd_prompt_cache_clear.rs",
-      "function": "should_clear_one_model_cache_by_its_model_id",
+      "function": "should_clear_one_model_astro_ssd_prompt_cache_by_its_model_id",
       "line": 49,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -25807,7 +25807,7 @@
     },
     {
       "file": "apps/inference-worker/src/model_family_factory/qwen3_5_model_startup.rs",
-      "function": "model_program_cache_directory",
+      "function": "model_astro_neural_engine_program_cache_directory",
       "line": 45,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -32295,7 +32295,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/model_discovery_huggingface_cache.rs",
+      "file": "crates/config/src/model_discovery_huggingface_hub_cache.rs",
       "function": "leaf_model_id",
       "line": 60,
       "cyclomatic": 1.0,
@@ -32304,8 +32304,8 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/model_discovery_huggingface_cache.rs",
-      "function": "resolve_huggingface_cache_entry",
+      "file": "crates/config/src/model_discovery_huggingface_hub_cache.rs",
+      "function": "resolve_huggingface_hub_cache_entry",
       "line": 15,
       "cyclomatic": 10.0,
       "coverage": null,
@@ -32323,7 +32323,7 @@
     },
     {
       "file": "crates/config/src/model_identity.rs",
-      "function": "decode_huggingface_cache_directory_name",
+      "function": "decode_huggingface_hub_cache_directory_name",
       "line": 87,
       "cyclomatic": 6.0,
       "coverage": null,
@@ -32358,7 +32358,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "compiled_program_count",
       "line": 202,
       "cyclomatic": 3.0,
@@ -32367,7 +32367,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "directory_byte_count",
       "line": 184,
       "cyclomatic": 3.0,
@@ -32376,7 +32376,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "holds_program_sets",
       "line": 76,
       "cyclomatic": 4.0,
@@ -32385,7 +32385,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "is_one_folder_name",
       "line": 70,
       "cyclomatic": 2.0,
@@ -32394,7 +32394,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "list_neural_engine_program_sets",
       "line": 158,
       "cyclomatic": 4.0,
@@ -32403,7 +32403,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "model_weights_fingerprint",
       "line": 99,
       "cyclomatic": 8.0,
@@ -32412,8 +32412,8 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
-      "function": "neural_engine_program_cache_directory_for_model",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
+      "function": "astro_neural_engine_program_cache_directory_for_model",
       "line": 29,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -32421,7 +32421,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "remove_other_weights_of_model",
       "line": 45,
       "cyclomatic": 6.0,
@@ -32430,7 +32430,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache.rs",
       "function": "sorted_child_directories",
       "line": 212,
       "cyclomatic": 4.0,
@@ -32439,7 +32439,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache_tests.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache_tests.rs",
       "function": "model_folder_with_shard",
       "line": 76,
       "cyclomatic": 1.0,
@@ -32448,7 +32448,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache_tests.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache_tests.rs",
       "function": "write_program_set",
       "line": 154,
       "cyclomatic": 1.0,
@@ -32457,7 +32457,7 @@
       "crate": "astronomical-config"
     },
     {
-      "file": "crates/config/src/neural_engine_program_cache_tests.rs",
+      "file": "crates/config/src/astro_neural_engine_program_cache_tests.rs",
       "function": "write_set",
       "line": 6,
       "cyclomatic": 2.0,
@@ -33582,7 +33582,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "AlignedSpan::bytes",
       "line": 119,
       "cyclomatic": 1.0,
@@ -33591,7 +33591,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "AlignedSpan::read",
       "line": 95,
       "cyclomatic": 4.0,
@@ -33600,7 +33600,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedBuffer::bytes",
       "line": 65,
       "cyclomatic": 1.0,
@@ -33609,7 +33609,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedBuffer::bytes_mut",
       "line": 70,
       "cyclomatic": 1.0,
@@ -33618,7 +33618,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedBuffer::drop",
       "line": 77,
       "cyclomatic": 1.0,
@@ -33627,7 +33627,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedBuffer::new",
       "line": 49,
       "cyclomatic": 2.0,
@@ -33636,7 +33636,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "available_bytes_on_volume",
       "line": 126,
       "cyclomatic": 3.0,
@@ -33645,8 +33645,8 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
-      "function": "create_uncached",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
+      "function": "create_bypassing_macos_file_cache",
       "line": 22,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -33654,8 +33654,8 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
-      "function": "open_uncached",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
+      "function": "open_bypassing_macos_file_cache",
       "line": 16,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -33663,7 +33663,7 @@
       "crate": "astronomical-expert-atlas"
     },
     {
-      "file": "crates/expert-atlas/src/uncached_file_io.rs",
+      "file": "crates/expert-atlas/src/macos_file_cache_bypassing_io.rs",
       "function": "set_no_cache",
       "line": 32,
       "cyclomatic": 2.0,
@@ -35473,7 +35473,7 @@
     },
     {
       "file": "crates/model-serving/src/artifact_validation/required_files.rs",
-      "function": "hugging_face_model_cache_directory",
+      "function": "huggingface_hub_cache_directory",
       "line": 401,
       "cyclomatic": 7.0,
       "coverage": null,
@@ -39406,7 +39406,7 @@
     },
     {
       "file": "crates/model-serving/src/engine_backed_worker/tests/chat/astro_ssd_prompt_cache_stats.rs",
-      "function": "should_delegate_a_loaded_model_cache_clear_to_the_engine_owner",
+      "function": "should_delegate_a_loaded_model_astro_ssd_prompt_cache_clear_to_the_engine_owner",
       "line": 59,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -67351,7 +67351,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_mlp_prefill/program_loading.rs",
-      "function": "open_program_cache",
+      "function": "open_astro_neural_engine_program_cache",
       "line": 376,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -67881,7 +67881,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "CoreMlProgramBuilder::build",
       "line": 340,
       "cyclomatic": 3.0,
@@ -67890,7 +67890,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "CoreMlProgramBuilder::build_kept",
       "line": 250,
       "cyclomatic": 6.0,
@@ -67899,8 +67899,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "CoreMlProgramBuilder::build_uncached",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "CoreMlProgramBuilder::build_bypassing_macos_file_cache",
       "line": 297,
       "cyclomatic": 6.0,
       "coverage": null,
@@ -67908,8 +67908,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "ProgramSetCache::ancestor_name",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "AstroNeuralEngineProgramSetCache::ancestor_name",
       "line": 111,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -67917,8 +67917,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "ProgramSetCache::manifest_already_records",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "AstroNeuralEngineProgramSetCache::manifest_already_records",
       "line": 85,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -67926,8 +67926,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "ProgramSetCache::open",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "AstroNeuralEngineProgramSetCache::open",
       "line": 49,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -67935,8 +67935,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "ProgramSetCache::program_path",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "AstroNeuralEngineProgramSetCache::program_path",
       "line": 65,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -67944,8 +67944,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "ProgramSetCache::record_finished_set",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "AstroNeuralEngineProgramSetCache::record_finished_set",
       "line": 73,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -67953,8 +67953,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "ProgramSetCache::set_directory",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "AstroNeuralEngineProgramSetCache::set_directory",
       "line": 61,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -67962,8 +67962,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
-      "function": "ProgramSetCache::write_manifest",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
+      "function": "AstroNeuralEngineProgramSetCache::write_manifest",
       "line": 95,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -67971,7 +67971,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "kept_program_path",
       "line": 121,
       "cyclomatic": 2.0,
@@ -67980,7 +67980,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "load_and_verify_kept_program",
       "line": 202,
       "cyclomatic": 9.0,
@@ -67989,7 +67989,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "log_program_load_timing",
       "line": 178,
       "cyclomatic": 1.0,
@@ -67998,7 +67998,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "remove_other_sets_of_family",
       "line": 128,
       "cyclomatic": 5.0,
@@ -68007,7 +68007,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "run_first_prediction",
       "line": 165,
       "cyclomatic": 2.0,
@@ -68016,7 +68016,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache.rs",
       "function": "verify_placement",
       "line": 147,
       "cyclomatic": 3.0,
@@ -68025,7 +68025,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/neural_engine_program_cache_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_resident/astro_neural_engine_program_cache_tests.rs",
       "function": "kept_build_job_without_a_package",
       "line": 144,
       "cyclomatic": 1.0,
@@ -92712,8 +92712,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
-      "function": "ColdFileCache::drop",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
+      "function": "ColdMacosFileCache::drop",
       "line": 145,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -92721,8 +92721,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
-      "function": "ColdFileCache::finish",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
+      "function": "ColdMacosFileCache::finish",
       "line": 134,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -92730,8 +92730,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
-      "function": "ColdFileCache::start",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
+      "function": "ColdMacosFileCache::start",
       "line": 110,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -92739,7 +92739,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
       "function": "MappedWeightFile::drop",
       "line": 93,
       "cyclomatic": 1.0,
@@ -92748,7 +92748,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
       "function": "MappedWeightFile::invalidate_cached_pages",
       "line": 74,
       "cyclomatic": 1.0,
@@ -92757,7 +92757,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
       "function": "MappedWeightFile::map",
       "line": 39,
       "cyclomatic": 1.0,
@@ -92766,7 +92766,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
       "function": "sweep_until_stopped",
       "line": 155,
       "cyclomatic": 3.0,
@@ -92775,7 +92775,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_file_cache.rs",
+      "file": "verification/acceptance/tests/chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs",
       "function": "weight_file_paths",
       "line": 167,
       "cyclomatic": 5.0,
@@ -97285,7 +97285,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/astro_ssd_prompt_cache_disk_store_clear.rs",
-      "function": "should_clear_every_model_cache_from_the_global_root",
+      "function": "should_clear_every_model_astro_ssd_prompt_cache_from_the_global_root",
       "line": 8,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -97330,7 +97330,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/astro_ssd_prompt_cache_disk_store_clear.rs",
-      "function": "should_treat_a_missing_model_cache_as_an_idempotent_clear",
+      "function": "should_treat_a_missing_model_astro_ssd_prompt_cache_as_an_idempotent_clear",
       "line": 54,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99588,7 +99588,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedBuffer::bytes_mut",
       "line": 71,
       "cyclomatic": 1.0,
@@ -99597,7 +99597,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedBuffer::drop",
       "line": 78,
       "cyclomatic": 1.0,
@@ -99606,7 +99606,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedBuffer::new",
       "line": 56,
       "cyclomatic": 1.0,
@@ -99615,7 +99615,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "PageAlignedSpan::bytes",
       "line": 119,
       "cyclomatic": 1.0,
@@ -99624,7 +99624,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "any_vm_page_resident",
       "line": 126,
       "cyclomatic": 1.0,
@@ -99633,7 +99633,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "available_bytes_on_volume",
       "line": 196,
       "cyclomatic": 1.0,
@@ -99642,8 +99642,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
-      "function": "create_uncached",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
+      "function": "create_bypassing_macos_file_cache",
       "line": 26,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99651,8 +99651,8 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
-      "function": "open_uncached",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
+      "function": "open_bypassing_macos_file_cache",
       "line": 19,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -99660,7 +99660,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "read_cold_span",
       "line": 86,
       "cyclomatic": 1.0,
@@ -99669,7 +99669,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "scatter_read_record",
       "line": 161,
       "cyclomatic": 1.0,
@@ -99678,7 +99678,7 @@
       "crate": "astronomical-acceptance"
     },
     {
-      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/uncached_file_io.rs",
+      "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5_moe/expert_paging/atlas_page_reads/macos_file_cache_bypassing_io.rs",
       "function": "set_no_cache",
       "line": 38,
       "cyclomatic": 1.0,

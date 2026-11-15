@@ -4,6 +4,7 @@
 pub mod dflash_draft;
 // Crate-visible so the sensitivity probe can swap one routed-expert
 // projection for a re-encoded copy and put the original back.
+mod astro_neural_engine_program_cache;
 pub(crate) mod experts;
 mod host_description;
 mod inference_execution;
@@ -13,7 +14,6 @@ mod neural_engine_idle_watch;
 mod neural_engine_mlp_prefill;
 mod neural_engine_output_gate_prefill;
 mod neural_engine_prefill_loading;
-mod neural_engine_program_cache;
 mod neural_engine_program_measurement;
 mod neural_engine_program_memory_record;
 mod neural_engine_program_placement_record;

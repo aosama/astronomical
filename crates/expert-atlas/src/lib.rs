@@ -29,7 +29,7 @@ pub mod source_checkpoint;
 // page-aligned allocation for direct reads. Every block carries its SAFETY
 // argument; the rest of the crate stays under the workspace's deny.
 #[allow(unsafe_code)]
-mod uncached_file_io;
+mod macos_file_cache_bypassing_io;
 
 pub use atlas_conversion::{
     AtlasConversionError, ConversionProgress, ConversionProgressObserver, ConversionRequest,

@@ -15,10 +15,10 @@ use crate::atlas_manifest::{
     AtlasExpertLayer, AtlasManifest, AtlasSource, EXPERT_LAYER_DIRECTORY_NAME,
 };
 use crate::layer_record_writer::{LayerRecordWriteError, SourceShardFiles, write_layer_records};
+use crate::macos_file_cache_bypassing_io::available_bytes_on_volume;
 use crate::record_layout::plan_layer_records;
 use crate::resident_bundle_writer::{ResidentBundleWriteError, write_resident_bundle};
 use crate::source_checkpoint::{SourceCheckpoint, SourceCheckpointError};
-use crate::uncached_file_io::available_bytes_on_volume;
 
 /// Free space kept beyond the Atlas itself, so a conversion fails up front
 /// rather than filling the volume other writers depend on.

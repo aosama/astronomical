@@ -84,10 +84,12 @@ fn clear_target_directory(
             },
         );
     }
-    let model_cache_directory = global_astro_ssd_prompt_cache_root_directory.join(model_id_path);
-    let model_cache_directory_exists =
+    let model_astro_ssd_prompt_cache_directory =
+        global_astro_ssd_prompt_cache_root_directory.join(model_id_path);
+    let model_astro_ssd_prompt_cache_directory_exists =
         verify_descendant_components(global_astro_ssd_prompt_cache_root_directory, model_id_path)?;
-    Ok(model_cache_directory_exists.then_some(model_cache_directory))
+    Ok(model_astro_ssd_prompt_cache_directory_exists
+        .then_some(model_astro_ssd_prompt_cache_directory))
 }
 
 fn verify_descendant_components(
@@ -253,15 +255,16 @@ impl AstroSsdPromptCacheDiskStore {
             self.global_astro_ssd_prompt_cache_root_directory
                 .join(model_id)
         });
-        let active_model_cache_was_cleared = clear_target_directory.as_ref().is_none_or(|target| {
-            self.active_model_astro_ssd_prompt_cache_directory
-                .starts_with(target)
-        });
+        let active_model_astro_ssd_prompt_cache_was_cleared =
+            clear_target_directory.as_ref().is_none_or(|target| {
+                self.active_model_astro_ssd_prompt_cache_directory
+                    .starts_with(target)
+            });
         let clear_outcome = clear_astro_ssd_prompt_cache_directory(
             &self.global_astro_ssd_prompt_cache_root_directory,
             model_id,
         )?;
-        if active_model_cache_was_cleared {
+        if active_model_astro_ssd_prompt_cache_was_cleared {
             *self.lock_tracked_files() = AstroSsdPromptCacheDiskStoreIndex::default();
             self.prepare_active_model_storage_directories()?;
         }

@@ -2,6 +2,7 @@
 
 use std::{net::SocketAddr, path::PathBuf};
 
+mod astro_neural_engine_program_cache;
 mod astro_ssd_prompt_cache_config;
 mod astronomical_runtime_instance;
 mod chunking_config;
@@ -19,13 +20,18 @@ mod logging_config;
 mod maximum_mlx_memory;
 mod model_config_entries;
 mod model_discovery;
-mod model_discovery_huggingface_cache;
+mod model_discovery_huggingface_hub_cache;
 mod model_identity;
 #[cfg(test)]
 mod model_identity_tests;
-mod neural_engine_program_cache;
 mod resolved_model_config;
 
+pub use astro_neural_engine_program_cache::{
+    ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
+    NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME, NeuralEngineProgramSetManifest,
+    astro_neural_engine_program_cache_directory_for_model, directory_byte_count,
+    list_neural_engine_program_sets, model_weights_fingerprint, remove_other_weights_of_model,
+};
 pub use astro_ssd_prompt_cache_config::AstroSsdPromptCacheConfig;
 pub use astronomical_runtime_instance::{
     AstronomicalInstancePaths, AstronomicalRuntimeInstance, CUSTOM_STATE_DIRECTORY_LABEL,
@@ -84,14 +90,8 @@ pub use model_discovery::{
     kokoro_speech_capabilities, phonon_speech_capabilities,
 };
 pub use model_identity::{
-    configured_model_id_for, decode_huggingface_cache_directory_name, leaf_model_id,
+    configured_model_id_for, decode_huggingface_hub_cache_directory_name, leaf_model_id,
     near_model_matches, resolve_model_id,
-};
-pub use neural_engine_program_cache::{
-    ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
-    NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME, NeuralEngineProgramSetManifest, directory_byte_count,
-    list_neural_engine_program_sets, model_weights_fingerprint,
-    neural_engine_program_cache_directory_for_model, remove_other_weights_of_model,
 };
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 

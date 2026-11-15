@@ -47,7 +47,7 @@ async fn should_clear_the_entire_ssd_cache_while_the_worker_is_idle() {
 }
 
 #[tokio::test]
-async fn should_clear_one_model_cache_by_its_model_id() {
+async fn should_clear_one_model_astro_ssd_prompt_cache_by_its_model_id() {
     run_bounded_test(async {
         let test_context = launch_astro_ssd_prompt_cache_clear_application().await;
 

@@ -92,7 +92,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         chunking: WorkerChunkingConfiguration,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
-        neural_engine_program_cache_directory: Option<PathBuf>,
+        astro_neural_engine_program_cache_directory: Option<PathBuf>,
     ) -> Result<Qwen3_5ResidentEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens)
@@ -141,7 +141,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             chunking,
             neural_engine_prefill_status: astronomical_ipc_protocol::NeuralEnginePrefillStatus::Off,
             neural_engine_prefill_preparation: None,
-            neural_engine_program_cache_directory,
+            astro_neural_engine_program_cache_directory,
             retained_live_prefix: None,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,

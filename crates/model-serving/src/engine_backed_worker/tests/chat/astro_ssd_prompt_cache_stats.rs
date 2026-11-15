@@ -58,7 +58,7 @@ async fn should_report_astro_ssd_prompt_cache_lookup_counters_when_generation_st
 }
 
 #[tokio::test]
-async fn should_delegate_a_loaded_model_cache_clear_to_the_engine_owner() {
+async fn should_delegate_a_loaded_model_astro_ssd_prompt_cache_clear_to_the_engine_owner() {
     timeout(Duration::from_secs(2), async {
         let expected_clear_event = WorkerEvent::AstroSsdPromptCacheCleared {
             model_id: Some("example/scripted-chat".to_owned()),

@@ -45,23 +45,27 @@ const MANIFEST_TEMPORARY_FILE_NAME: &str = ".programs.json.incomplete";
 const BUILT_WITH: &str = concat!("Astronomical ", env!("CARGO_PKG_VERSION"));
 
 /// One family's programs for one model revision, in the shape they run at.
-pub(crate) struct ProgramSetCache {
+pub(crate) struct AstroNeuralEngineProgramSetCache {
     set_directory: PathBuf,
 }
 
-impl ProgramSetCache {
-    /// Opens `model_cache_directory/<family>-<set_detail>` and removes the same
+impl AstroNeuralEngineProgramSetCache {
+    /// Opens `model_astro_ssd_prompt_cache_directory/<family>-<set_detail>` and removes the same
     /// family's other sets. A set is several gigabytes, and one left behind by an
     /// older chunk size or program format would otherwise stay on disk for good.
     pub(crate) fn open(
-        model_cache_directory: &Path,
+        model_astro_ssd_prompt_cache_directory: &Path,
         family: &str,
         set_detail: &str,
     ) -> Option<Self> {
         let set_directory_name = format!("{family}-{set_detail}");
-        let set_directory = model_cache_directory.join(&set_directory_name);
+        let set_directory = model_astro_ssd_prompt_cache_directory.join(&set_directory_name);
         fs::create_dir_all(&set_directory).ok()?;
-        remove_other_sets_of_family(model_cache_directory, family, &set_directory_name);
+        remove_other_sets_of_family(
+            model_astro_ssd_prompt_cache_directory,
+            family,
+            &set_directory_name,
+        );
         Some(Self { set_directory })
     }
 
@@ -126,14 +130,18 @@ impl ProgramSetCache {
 
 /// Where a layer's program stays between loads, when there is a cache to keep it in.
 pub(crate) fn kept_program_path(
-    program_cache: Option<&ProgramSetCache>,
+    astro_neural_engine_program_cache: Option<&AstroNeuralEngineProgramSetCache>,
     decoder_layer_index: usize,
 ) -> Option<PathBuf> {
-    Some(program_cache?.program_path(decoder_layer_index))
+    Some(astro_neural_engine_program_cache?.program_path(decoder_layer_index))
 }
 
-fn remove_other_sets_of_family(model_cache_directory: &Path, family: &str, kept_set_name: &str) {
-    let Ok(directory_entries) = fs::read_dir(model_cache_directory) else {
+fn remove_other_sets_of_family(
+    model_astro_ssd_prompt_cache_directory: &Path,
+    family: &str,
+    kept_set_name: &str,
+) {
+    let Ok(directory_entries) = fs::read_dir(model_astro_ssd_prompt_cache_directory) else {
         return;
     };
     let family_prefix = format!("{family}-");
@@ -263,11 +271,11 @@ impl CoreMlProgramBuilder {
             // about to be compiled to the same path.
             forget_placement_verified(kept_program_path);
             let Some(package) = &build_job.package else {
-                return ProgramBuildOutcome::NeedsUncachedPackage;
+                return ProgramBuildOutcome::NeedsPackageOutsideAstroNeuralEngineProgramCache;
             };
             let compile_started_at = Instant::now();
             if compile_model_to(&package.package_path, kept_program_path).is_err() {
-                return ProgramBuildOutcome::NeedsUncachedPackage;
+                return ProgramBuildOutcome::NeedsPackageOutsideAstroNeuralEngineProgramCache;
             }
             tracing::info!(
                 family = ?build_job.identity.family,
@@ -298,10 +306,12 @@ impl CoreMlProgramBuilder {
         if let Err(removal_error) = fs::remove_dir_all(kept_program_path) {
             tracing::warn!(error = %removal_error, "could not remove an unusable kept Neural Engine program");
         }
-        ProgramBuildOutcome::NeedsUncachedPackage
+        ProgramBuildOutcome::NeedsPackageOutsideAstroNeuralEngineProgramCache
     }
 
-    fn build_uncached(build_job: &ProgramBuildJob) -> ProgramBuildOutcome<CoreMlProgram> {
+    fn build_bypassing_macos_file_cache(
+        build_job: &ProgramBuildJob,
+    ) -> ProgramBuildOutcome<CoreMlProgram> {
         let Some(package) = &build_job.package else {
             return ProgramBuildOutcome::Failed("no package exists for the Core ML program");
         };
@@ -347,11 +357,11 @@ impl ProgramBuilder for CoreMlProgramBuilder {
     fn build(&self, build_job: &ProgramBuildJob) -> ProgramBuildOutcome<CoreMlProgram> {
         match &build_job.kept_program_path {
             Some(kept_program_path) => Self::build_kept(build_job, kept_program_path),
-            None => Self::build_uncached(build_job),
+            None => Self::build_bypassing_macos_file_cache(build_job),
         }
     }
 }
 
 #[cfg(test)]
-#[path = "neural_engine_program_cache_tests.rs"]
+#[path = "astro_neural_engine_program_cache_tests.rs"]
 mod tests;

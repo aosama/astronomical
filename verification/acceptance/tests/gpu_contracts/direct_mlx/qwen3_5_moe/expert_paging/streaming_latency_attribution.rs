@@ -121,7 +121,7 @@ fn measure_page_load(
 #[test]
 #[ignore = "streams one routed page from the installed large sparse MoE streaming model and attributes read latency"]
 #[serial]
-fn should_attribute_one_routed_page_load_cold_then_page_cache_warm() {
+fn should_attribute_one_routed_page_load_cold_then_macos_file_cache_warm() {
     let fixture = installed_large_sparse_moe_streaming_fixture();
     let runtime = probe_runtime();
     let experts_per_token = fixture.config.experts_per_token() as usize;

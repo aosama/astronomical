@@ -99,12 +99,12 @@ impl Drop for MappedWeightFile {
 /// The running sweeper; `finish` stops it and returns its sweep count.
 /// Dropping it also stops it, so a journey that times out or panics never
 /// leaves the cache being evicted under the next serial test.
-pub(super) struct ColdFileCache {
+pub(super) struct ColdMacosFileCache {
     should_stop: Arc<AtomicBool>,
     sweeping_thread: Option<JoinHandle<u64>>,
 }
 
-impl ColdFileCache {
+impl ColdMacosFileCache {
     /// Evicts every `.safetensors` and `.atlas` file under `model_directory`
     /// once, then keeps sweeping until `finish`.
     pub(super) fn start(model_directory: &Path) -> Self {
@@ -141,7 +141,7 @@ impl ColdFileCache {
     }
 }
 
-impl Drop for ColdFileCache {
+impl Drop for ColdMacosFileCache {
     fn drop(&mut self) {
         self.should_stop.store(true, Ordering::Relaxed);
         if let Some(sweeping_thread) = self.sweeping_thread.take() {

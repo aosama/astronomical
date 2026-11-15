@@ -13,10 +13,10 @@
 
 mod atlas_conversion;
 mod cold_page_plan;
+mod macos_file_cache_bypassing_io;
 mod page_read_shapes;
 mod page_timing_report;
 mod progress_report;
-mod uncached_file_io;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

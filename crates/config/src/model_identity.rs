@@ -84,7 +84,7 @@ pub fn near_model_matches(
 }
 
 /// Decodes a Hugging Face cache directory name into an `organization/model` ID.
-pub fn decode_huggingface_cache_directory_name(directory_name: &str) -> Option<String> {
+pub fn decode_huggingface_hub_cache_directory_name(directory_name: &str) -> Option<String> {
     let encoded_model_id = directory_name.strip_prefix("models--")?;
     if encoded_model_id.is_empty() {
         return None;

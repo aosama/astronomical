@@ -16,14 +16,14 @@ use std::path::Path;
 /// Alignment of offset, length and destination that a direct read needs.
 pub(super) const DIRECT_READ_ALIGNMENT_BYTES: u64 = 16_384;
 
-pub(super) fn open_uncached(path: &Path) -> File {
+pub(super) fn open_bypassing_macos_file_cache(path: &Path) -> File {
     let file =
         File::open(path).unwrap_or_else(|error| panic!("{} should open: {error}", path.display()));
     set_no_cache(&file);
     file
 }
 
-pub(super) fn create_uncached(path: &Path) -> File {
+pub(super) fn create_bypassing_macos_file_cache(path: &Path) -> File {
     let file = OpenOptions::new()
         .create(true)
         .truncate(true)

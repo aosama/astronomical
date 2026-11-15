@@ -12,7 +12,9 @@ use astronomical_runtime_integration::{BoundedReadInterval, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::atlas_conversion::{AtlasTestFile, tensor_name_suffix};
-use super::uncached_file_io::{DIRECT_READ_ALIGNMENT_BYTES, open_uncached, scatter_read_record};
+use super::macos_file_cache_bypassing_io::{
+    DIRECT_READ_ALIGNMENT_BYTES, open_bypassing_macos_file_cache, scatter_read_record,
+};
 
 /// The one tensor an atlas page presents to MLX: `[experts, record stride]`
 /// bytes, read as one MLX Load whose reader fetches one record per expert.
@@ -76,7 +78,7 @@ pub(super) fn load_atlas_records(
     let started_at = Instant::now();
     let atlas_page_load = runtime
         .load_safetensors_from_bounded_ranges(
-            open_uncached(&atlas.path),
+            open_bypassing_macos_file_cache(&atlas.path),
             synthetic_header,
             record_read_intervals,
             payload_byte_count,
@@ -183,7 +185,7 @@ pub(super) fn load_atlas_page_by_scatter_reads(
             "large allocations are page aligned on macOS"
         );
     }
-    let atlas_file = open_uncached(&atlas.path);
+    let atlas_file = open_bypassing_macos_file_cache(&atlas.path);
     let mut slot_destinations_by_expert =
         slot_destinations_by_page_expert(atlas, &mut tensor_buffers, expert_ids.len());
     std::thread::scope(|scope| {

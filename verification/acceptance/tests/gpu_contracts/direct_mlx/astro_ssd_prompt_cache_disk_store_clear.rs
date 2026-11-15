@@ -5,7 +5,7 @@ use std::time::Duration;
 const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[tokio::test]
-async fn should_clear_every_model_cache_from_the_global_root() {
+async fn should_clear_every_model_astro_ssd_prompt_cache_from_the_global_root() {
     run_bounded_test(async {
         eprintln!("[cache-clear] arranging two model cache namespaces");
         let cache_root = tempfile::tempdir().expect("cache root should be created");
@@ -51,7 +51,7 @@ async fn should_clear_only_the_requested_model_and_preserve_other_models() {
 }
 
 #[tokio::test]
-async fn should_treat_a_missing_model_cache_as_an_idempotent_clear() {
+async fn should_treat_a_missing_model_astro_ssd_prompt_cache_as_an_idempotent_clear() {
     run_bounded_test(async {
         let cache_root = tempfile::tempdir().expect("cache root should be created");
 

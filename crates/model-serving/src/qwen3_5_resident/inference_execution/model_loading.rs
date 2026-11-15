@@ -36,7 +36,7 @@ impl Qwen3_5EngineState {
         ) = begin_neural_engine_prefill_preparation(
             model,
             &self.chunking,
-            self.neural_engine_program_cache_directory.as_deref(),
+            self.astro_neural_engine_program_cache_directory.as_deref(),
             None,
         );
         Ok(())

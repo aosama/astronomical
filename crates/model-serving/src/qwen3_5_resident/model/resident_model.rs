@@ -183,12 +183,12 @@ impl Qwen3_5ResidentModel {
     pub fn prepare_neural_engine_prefill_matching_production(
         &mut self,
         chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
-        program_cache_directory: Option<&std::path::Path>,
+        astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
     ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
         crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
             self,
             chunking,
-            program_cache_directory,
+            astro_neural_engine_program_cache_directory,
             None,
         )
     }
