@@ -1,5 +1,6 @@
 //! OpenAI-compatible image generation with complete validation before shared queue admission.
 
+use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use astronomical_config::ModelCapabilities;
@@ -43,7 +44,7 @@ pub(crate) async fn create_image_generation(
     // This lock keeps validation, immutable queue admission, and configuration replacement on one
     // side of the same generation, while releasing before a queued request waits for execution.
     let configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
+        lock_configuration_transition_for_generation(&application_state).await;
     let target_model = match resolve_image_target_model(&application_state, &request_parts) {
         Ok(target_model) => target_model,
         Err(rejection_response) => return rejection_response,

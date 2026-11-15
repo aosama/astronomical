@@ -7,6 +7,7 @@
 //! allowed answer. Fields this endpoint does not know are ignored, as those
 //! clients expect.
 
+use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue, system_one_response};
 use axum::{
     Json,
@@ -42,7 +43,7 @@ pub(crate) async fn create_decisions(
         Err(rejection_response) => return rejection_response,
     };
     let configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
+        lock_configuration_transition_for_generation(&application_state).await;
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();

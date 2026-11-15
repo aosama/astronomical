@@ -1,3 +1,4 @@
+use crate::rest::worker_replacement_wait::lock_configuration_transition_for_generation;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use astronomical_config::ModelCapabilities;
@@ -50,7 +51,7 @@ pub(crate) async fn create_chat_completion(
     }
     // Policy resolution and queue admission must observe one side of a worker replacement.
     let configuration_transition_guard =
-        application_state.configuration_transition_lock.lock().await;
+        lock_configuration_transition_for_generation(&application_state).await;
     let requested_model = chat_completion_request.model();
     let resolved_model_id = match resolve_chat_target_model(&application_state, requested_model) {
         Ok(resolved_model_id) => resolved_model_id,
