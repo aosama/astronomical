@@ -175,13 +175,8 @@ impl Qwen3_5EngineState {
         attempted_prefill_chunk_token_count: usize,
         prompt_prefill_chunk_attempt_error: PromptPrefillChunkAttemptError,
     ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
-        // The resident failure path never touches the request: every failure
-        // demotes the request wholesale. The parameter stays for dispatch
-        // symmetry with the streaming twin's recovery path.
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(engine_lost_loaded_model_error)?;
+        // This engine's failure path never touches the request: every
+        // failure moves the whole request to the streaming engine.
         match prompt_prefill_chunk_attempt_error {
             PromptPrefillChunkAttemptError::Engine(generation_error) => Err(generation_error),
             PromptPrefillChunkAttemptError::ForwardAdmissionRejected {
@@ -191,7 +186,6 @@ impl Qwen3_5EngineState {
                     },
                 reason,
             } => self.demote_prefill_to_streaming_engine(
-                model,
                 request_id,
                 prefill_start,
                 attempted_prefill_chunk_token_count,
@@ -203,7 +197,6 @@ impl Qwen3_5EngineState {
                 attempted_allocation_bytes,
                 allowed_active_memory_bytes,
             } => Err(self.active_memory_limit_prefill_failure(
-                model,
                 request_id,
                 prefill_start,
                 attempted_prefill_chunk_token_count,
@@ -213,7 +206,6 @@ impl Qwen3_5EngineState {
             )),
             PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { reason } => {
                 Err(self.graphics_processor_memory_exhausted_prefill_failure(
-                    model,
                     request_id,
                     prefill_start,
                     attempted_prefill_chunk_token_count,
@@ -230,7 +222,6 @@ impl Qwen3_5EngineState {
     #[allow(clippy::too_many_arguments)]
     fn demote_prefill_to_streaming_engine(
         &self,
-        model: &Qwen3_5ResidentModel,
         request_id: RequestId,
         prefill_start: usize,
         attempted_prefill_chunk_token_count: usize,
@@ -247,9 +238,7 @@ impl Qwen3_5EngineState {
                     reason = %reason,
                     "prefill admission rejected the transient peak of the configured resident chunk"
                 );
-                Err(request_errors::resident_capacity_error(
-                    model,
-                    prefill_admission_cause,
+                Err(request_errors::resident_capacity_error(prefill_admission_cause,
                     super::prefill_terminal_failure_descriptions::transient_peak_shortfall_failure_description(
                         attempted_prefill_chunk_token_count,
                         reason,
@@ -266,9 +255,7 @@ impl Qwen3_5EngineState {
                     reason = %reason,
                     "prefill admission rejected the stable footprint of the attempted chunk"
                 );
-                Err(request_errors::resident_capacity_error(
-                    model,
-                    prefill_admission_cause,
+                Err(request_errors::resident_capacity_error(prefill_admission_cause,
                     super::prefill_terminal_failure_descriptions::stable_footprint_shortfall_failure_description(
                         attempted_prefill_chunk_token_count,
                         reason,
@@ -290,9 +277,7 @@ impl Qwen3_5EngineState {
                     reason = %reason,
                     "prefill admission rejected the request context or a runtime allocation"
                 );
-                Err(request_errors::resident_capacity_error(
-                    model,
-                    prefill_admission_cause,
+                Err(request_errors::resident_capacity_error(prefill_admission_cause,
                     super::prefill_terminal_failure_descriptions::request_context_or_allocation_shortfall_failure_description(
                         attempted_prefill_chunk_token_count,
                         reason,
@@ -307,7 +292,6 @@ impl Qwen3_5EngineState {
     #[allow(clippy::too_many_arguments)]
     fn active_memory_limit_prefill_failure(
         &self,
-        model: &Qwen3_5ResidentModel,
         request_id: RequestId,
         prefill_start: usize,
         attempted_prefill_chunk_token_count: usize,
@@ -324,9 +308,7 @@ impl Qwen3_5EngineState {
             allowed_active_memory_bytes,
             "prefill chunk forward exceeded the MLX active-memory limit"
         );
-        request_errors::resident_capacity_error(
-            model,
-            StreamingEngineRequirement::ForwardAllocationShortfall {
+        request_errors::resident_capacity_error(StreamingEngineRequirement::ForwardAllocationShortfall {
                 shortfall_bytes: super::prefill_terminal_failure_descriptions::active_memory_limit_shortfall_bytes(
                     active_memory_bytes,
                     attempted_allocation_bytes,
@@ -346,7 +328,6 @@ impl Qwen3_5EngineState {
     /// Mirrors the inlined arm, including the warn log.
     fn graphics_processor_memory_exhausted_prefill_failure(
         &self,
-        model: &Qwen3_5ResidentModel,
         request_id: RequestId,
         prefill_start: usize,
         attempted_prefill_chunk_token_count: usize,
@@ -359,9 +340,7 @@ impl Qwen3_5EngineState {
             reason = %reason,
             "prefill chunk forward exhausted graphics-processor memory"
         );
-        request_errors::resident_capacity_error(
-            model,
-            StreamingEngineRequirement::ForwardGraphicsProcessorMemoryExhausted,
+        request_errors::resident_capacity_error(StreamingEngineRequirement::ForwardGraphicsProcessorMemoryExhausted,
             super::prefill_terminal_failure_descriptions::graphics_processor_memory_exhausted_failure_description(
                 attempted_prefill_chunk_token_count,
                 reason,

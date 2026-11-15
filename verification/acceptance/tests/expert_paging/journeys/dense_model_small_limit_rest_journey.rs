@@ -7,6 +7,13 @@
 //! stays inside the limit while a long prompt is read. And once the long
 //! prompt is over, as many layers are kept again as before it, so the next
 //! request is not slower than the first.
+//!
+//! A limit just above the model's size is its own case. The whole model fits,
+//! so it is loaded into memory, and then a prompt's working memory does not.
+//! On 2026-11-14 a 9B model at 5 GiB answered every chat with an error
+//! there, because only a model with experts was moved to the streaming
+//! engine when a step did not fit. The second journey sends a short and a
+//! long prompt at that limit and asserts both are served.
 
 use std::{fs, net::SocketAddr, path::Path};
 
@@ -26,6 +33,9 @@ const JOURNEY_BUDGET: Duration = Duration::from_secs(115);
 const MEMORY_LIMIT_BYTES: u64 = 3 * (1 << 30);
 /// MLX may run one percent past the limit it is given.
 const ALLOWED_ACTIVE_MEMORY_BYTES: u64 = MEMORY_LIMIT_BYTES + MEMORY_LIMIT_BYTES / 100;
+/// A limit the model's weights fit under with almost nothing to spare. It
+/// defines this acceptance cell only.
+const BARELY_FITTING_MEMORY_LIMIT_BYTES: u64 = 5 * (1 << 30);
 const SHORT_PROMPT_TOKENS: usize = 450;
 const LONG_PROMPT_TOKENS: usize = 6_000;
 const MAXIMUM_OUTPUT_TOKENS: u64 = 16;
@@ -49,6 +59,54 @@ async fn should_serve_a_dense_model_inside_a_small_limit_and_keep_its_layers_aft
     timeout(JOURNEY_BUDGET, serve_a_dense_model_under_a_small_limit())
         .await
         .expect("the dense small-limit journey must finish inside the 120-second runner budget");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "loads a dense model under a 5 GiB limit its weights barely fit and sends a short and a long prompt"]
+#[serial]
+async fn should_serve_a_dense_model_at_a_limit_its_weights_barely_fit() {
+    timeout(
+        JOURNEY_BUDGET,
+        serve_a_dense_model_at_a_barely_fitting_limit(),
+    )
+    .await
+    .expect("the dense barely-fitting journey must finish inside the 120-second runner budget");
+}
+
+async fn serve_a_dense_model_at_a_barely_fitting_limit() {
+    let model_id = crate::support::dense_vision_model_id();
+    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id);
+    let worker_home = tempfile::tempdir().expect("the isolated worker home should exist");
+    write_everyday_configuration(worker_home.path());
+    let prompts = [
+        story_prompt(&model_directory, SHORT_PROMPT_TOKENS),
+        story_prompt(&model_directory, LONG_PROMPT_TOKENS),
+    ];
+    let server = launch_real_model_rest_server(
+        model_id,
+        model_directory,
+        worker_home.path(),
+        BARELY_FITTING_MEMORY_LIMIT_BYTES,
+    )
+    .await;
+    let client = LocalOpenAiClient::new(server.server_address, "dense-barely-fitting-limit");
+    let mut served_prompt_count = 0_usize;
+    for prompt in &prompts {
+        let stream = client
+            .create_streaming_chat_completion(&story_request(model_id, prompt))
+            .await
+            .expect("the request should start");
+        if consume_completion(stream).await {
+            served_prompt_count += 1;
+        }
+    }
+    let status_document = get_json_endpoint(server.server_address, "/v1/status").await;
+    stop_real_model_rest_server(server).await;
+    assert_eq!(
+        served_prompt_count,
+        prompts.len(),
+        "a short and a long prompt must both be served at a limit the weights barely fit: {status_document}"
+    );
 }
 
 async fn serve_a_dense_model_under_a_small_limit() {
