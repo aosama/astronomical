@@ -196,12 +196,17 @@ pub(crate) fn load_pair() -> JourneyPair {
             None,
         )
         .expect("the drafter loads");
-    let drafter_weights = bind_drafter_weights(
+    let mut drafter_weights = bind_drafter_weights(
         target.runtime(),
         &drafter_checkpoint,
         &drafter_configuration,
     )
     .expect("every drafter tensor binds");
+    // The drafter is served at 4 bits, as TensorFold serves it: it streams
+    // about 1 GB a round instead of the checkpoint's 3.6 GB of bf16.
+    drafter_weights
+        .quantize_linears(target.runtime(), row_batched_enabled)
+        .expect("the drafter quantizes to 4 bits");
     JourneyPair {
         target,
         tokenizer,

@@ -18,6 +18,8 @@ pub mod drafter_context_state;
 #[cfg(feature = "direct-mlx")]
 pub mod drafter_forward;
 #[cfg(feature = "direct-mlx")]
+pub mod drafter_linear;
+#[cfg(feature = "direct-mlx")]
 pub mod drafter_weights;
 #[cfg(feature = "direct-mlx")]
 mod grouped_dynamic_convolution;

@@ -11,7 +11,8 @@ use mlx_bridge::MlxArray;
 use super::block_attention_mask::block_attention_visibility;
 use super::drafter_configuration::DFlash2DrafterConfiguration;
 use super::drafter_context_state::DrafterLayerContextState;
-use super::drafter_weights::{DrafterLayerWeights, DrafterLinear};
+use super::drafter_linear::DrafterLinear;
+use super::drafter_weights::DrafterLayerWeights;
 
 /// Attends `block_rows` [1, L, H] (already normalized and convolved) to the
 /// layer's kept context plus this round's `fused_context_rows` [1, S, H].

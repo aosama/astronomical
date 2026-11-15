@@ -6,6 +6,7 @@ use mlx_bridge::MlxArray;
 use thiserror::Error;
 
 use super::drafter_configuration::DFlash2DrafterConfiguration;
+use super::drafter_linear::DrafterLinear;
 
 /// Why a drafter checkpoint could not be bound.
 #[derive(Debug, Error)]
@@ -23,22 +24,6 @@ pub enum DFlash2DrafterWeightsError {
     },
     #[error(transparent)]
     Runtime(#[from] MlxRuntimeError),
-}
-
-/// One full-precision linear layer, kept as the transposed view MLX's matmul
-/// reads directly: `input @ weightᵀ` with no copy of the stored `[out, in]`.
-pub struct DrafterLinear {
-    transposed_weight: MlxArray,
-}
-
-impl DrafterLinear {
-    pub fn forward(
-        &self,
-        runtime: &MlxRuntime,
-        input: &MlxArray,
-    ) -> Result<MlxArray, MlxRuntimeError> {
-        Ok(runtime.matmul(input, &self.transposed_weight)?)
-    }
 }
 
 /// One grouped dynamic causal convolution: a fixed kernel per stage plus a
@@ -239,11 +224,42 @@ impl TensorBinder<'_> {
         expected_shape: &[i32],
     ) -> Result<DrafterLinear, DFlash2DrafterWeightsError> {
         let weight = self.tensor(tensor_name, expected_shape)?;
-        Ok(DrafterLinear {
-            transposed_weight: self
-                .runtime
-                .transpose_axes(&weight, &[1, 0])
-                .map_err(MlxRuntimeError::from)?,
-        })
+        Ok(DrafterLinear::full_precision(self.runtime, &weight)?)
+    }
+}
+
+impl DFlash2DrafterWeights {
+    /// Quantizes every linear layer to 4 bits, group 64, in place: about
+    /// 1 GB to stream a round instead of the checkpoint's 3.6 GB for the 27B's
+    /// drafter. The selector's codebooks stay bf16: they are gathered, a few
+    /// rows a round, never streamed whole. `use_row_batched_matmul` routes
+    /// the 8-row block through the row-batched matmul; pass it only when this
+    /// GPU's capability probe has proven the kernel.
+    pub fn quantize_linears(
+        &mut self,
+        runtime: &MlxRuntime,
+        use_row_batched_matmul: bool,
+    ) -> Result<(), MlxRuntimeError> {
+        self.tap_fusion
+            .quantize_in_place(runtime, use_row_batched_matmul)?;
+        self.candidate_selector
+            .hidden_projection
+            .quantize_in_place(runtime, use_row_batched_matmul)?;
+        for layer in &mut self.layers {
+            for linear in [
+                &mut layer.query_projection,
+                &mut layer.key_projection,
+                &mut layer.value_projection,
+                &mut layer.output_projection,
+                &mut layer.gate_projection,
+                &mut layer.up_projection,
+                &mut layer.down_projection,
+                &mut layer.attention_convolution.kernel_projection,
+                &mut layer.mlp_convolution.kernel_projection,
+            ] {
+                linear.quantize_in_place(runtime, use_row_batched_matmul)?;
+            }
+        }
+        Ok(())
     }
 }

@@ -273,7 +273,7 @@ fn evaluate(runtime: &astronomical_runtime_integration::MlxRuntime, arrays: &[&M
 fn report(times: &mut StageTimes) {
     let labels = [
         "plain one-row decode step",
-        "drafter pass (bf16, 8 rows)",
+        "drafter pass (4-bit, 8 rows)",
         "target head on 7 draft rows",
         "selector walk + path readback",
         "target verify, 8 rows + row states",
