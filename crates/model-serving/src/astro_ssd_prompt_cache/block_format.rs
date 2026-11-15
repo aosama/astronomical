@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
-use crate::decoder_cache::DecoderCachePersistedTensorLayout;
+use crate::astro_decoder_state_cache::AstroDecoderStateCachePersistedTensorLayout;
 use crate::safetensors::SafetensorsTensorView;
 
 use super::block_format_error::AstroSsdPromptCacheBlockError;
@@ -243,10 +243,10 @@ fn validate_tensor_layout(
     // than a typed request failure.
     let expected_tensor_layouts = match astro_ssd_prompt_cache_file_kind {
         AstroSsdPromptCacheFileKind::SequenceStateBlock => astro_ssd_prompt_cache_model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_layouts(),
         AstroSsdPromptCacheFileKind::BoundaryStateSnapshot => astro_ssd_prompt_cache_model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .boundary_tensor_layouts(),
     };
     let expected_tensor_count = expected_tensor_layouts.len();
@@ -271,7 +271,7 @@ fn validate_tensor_layout(
 fn validate_expected_tensor_layout(
     tensors: &HashMap<String, SafetensorsTensorView>,
     block_token_count: usize,
-    expected_tensor_layout: &DecoderCachePersistedTensorLayout,
+    expected_tensor_layout: &AstroDecoderStateCachePersistedTensorLayout,
     astro_ssd_prompt_cache_block_path: &Path,
 ) -> Result<(), AstroSsdPromptCacheBlockError> {
     let tensor_name = expected_tensor_layout.persistent_tensor_name();

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{
-    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheModelContract, DecoderCacheLayerLayout,
-    DecoderCacheLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheModelContract,
 };
 
 use super::astro_ssd_prompt_cache_disk_store_support::{
@@ -25,7 +26,7 @@ async fn should_reopen_every_sequence_only_block_in_the_complete_active_chain() 
     let sequence_state_tensors = synthetic_tensors_for_contract(
         &runtime,
         &model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_layouts(),
         model_contract.block_token_count(),
     );
@@ -70,7 +71,7 @@ async fn should_reopen_every_boundary_only_block_without_invalid_compaction() {
     let boundary_state_tensors = synthetic_tensors_for_contract(
         &runtime,
         &model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .boundary_tensor_layouts(),
         model_contract.block_token_count(),
     );
@@ -137,27 +138,28 @@ fn publish_complete_chain(
 }
 
 fn sequence_only_contract() -> AstroSsdPromptCacheModelContract {
-    let decoder_cache_layout =
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
+    let astro_decoder_state_cache_layout = AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::append_only_attention(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.keys",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 4],
                 1,
             ),
-            DecoderCacheTensorLayout::sequence(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.values",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 4],
                 1,
             ),
             16,
-        )])
-        .expect("the sequence-only layout should be valid");
+        ),
+    ])
+    .expect("the sequence-only layout should be valid");
     AstroSsdPromptCacheModelContract::resolve(
         "fictional-sequence-only-model".to_owned(),
         "fictional-revision".to_owned(),
-        decoder_cache_layout,
+        astro_decoder_state_cache_layout,
         128,
         1_000_000,
         1_000_000,
@@ -168,19 +170,20 @@ fn sequence_only_contract() -> AstroSsdPromptCacheModelContract {
 }
 
 fn boundary_only_contract() -> AstroSsdPromptCacheModelContract {
-    let decoder_cache_layout =
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::recurrent_tensor(
-            DecoderCacheTensorLayout::fixed(
+    let astro_decoder_state_cache_layout = AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+            AstroDecoderStateCacheTensorLayout::fixed(
                 "recurrent.state",
-                DecoderCacheTensorDtype::Float32,
+                AstroDecoderStateCacheTensorDtype::Float32,
                 vec![25],
             ),
-        )])
-        .expect("the boundary-only layout should be valid");
+        ),
+    ])
+    .expect("the boundary-only layout should be valid");
     AstroSsdPromptCacheModelContract::resolve(
         "fictional-boundary-only-model".to_owned(),
         "fictional-revision".to_owned(),
-        decoder_cache_layout,
+        astro_decoder_state_cache_layout,
         100,
         1_000_000,
         10_000,

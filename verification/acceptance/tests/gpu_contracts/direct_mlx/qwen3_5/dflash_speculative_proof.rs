@@ -314,8 +314,8 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     );
 
     let target_decoder_state =
-        RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-            &target_model.decoder_cache_layout(),
+        RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+            &target_model.astro_decoder_state_cache_layout(),
             256,
         )
         .expect("the target decoder-state stack should allocate");

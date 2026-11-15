@@ -122,7 +122,8 @@ impl Qwen3_5Model {
         let mut boundary_checkpoint_collector =
             Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
-                self.decoder_cache_layout.boundary_tensor_count(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
                 checkpoint_interval_token_count,
             )?;
         let consumed_visual_embedding_count = self.build_visual_prefill_graph(
@@ -205,7 +206,8 @@ impl Qwen3_5Model {
         let mut boundary_checkpoint_collector =
             Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
                 completed_prefill_chunk_tokens.clone(),
-                self.decoder_cache_layout.boundary_tensor_count(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
                 checkpoint_interval_token_count,
             )?;
         let signed_token_ids = token_ids

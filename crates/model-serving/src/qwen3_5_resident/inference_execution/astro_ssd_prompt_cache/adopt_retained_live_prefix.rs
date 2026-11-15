@@ -12,8 +12,8 @@ use astronomical_ipc_protocol::{
     WorkerAstroSsdPromptCacheLookupOutcome, WorkerInMemoryPrefixAdoptionOutcome,
 };
 
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
 use crate::astro_ssd_prompt_cache::AstroSsdPromptCacheDiskStore;
-use crate::decoder_cache::DecoderCacheState;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::{
     AstroSsdPromptCachePrefixLookupResult, InferenceEngineError, PerformanceAttribution,
@@ -46,7 +46,7 @@ impl Qwen3_5EngineState {
 
         *request_decoder_state = retained_live_prefix.decoder_state;
         for layer_index in 0..request_decoder_state.layer_count() {
-            if let Some(DecoderCacheState::AppendOnlyAttention { attention }) =
+            if let Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) =
                 request_decoder_state.layer_mut(layer_index)
             {
                 attention

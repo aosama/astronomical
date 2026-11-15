@@ -5,8 +5,8 @@
 //! is restored when the leftover ceiling admits it so a fitting model is not left
 //! streaming. Final telemetry then reports that restored ownership.
 
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-use crate::decoder_cache::DecoderCacheState;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
@@ -187,7 +187,7 @@ impl Qwen3_5EngineState {
         let verified_state_offset_tokens = (0..active_request.request_decoder_state.layer_count())
             .filter_map(|layer_index| {
                 match active_request.request_decoder_state.layer(layer_index) {
-                    Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                    Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                         Some(attention.offset_tokens())
                     }
                     _ => None,
@@ -238,8 +238,8 @@ impl Qwen3_5EngineState {
             complete_block_keys.push(block_key);
         }
         let placeholder_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                self.model.as_ref()?.decoder_cache_layout(),
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                self.model.as_ref()?.astro_decoder_state_cache_layout(),
                 self.full_attention_kv_state_growth_tokens,
             )
             .ok()?;

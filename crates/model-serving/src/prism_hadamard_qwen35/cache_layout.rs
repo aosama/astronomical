@@ -1,4 +1,4 @@
-//! The folded-ternary decoder-cache layout contract for persistent prompt
+//! The folded-ternary astro-decoder-state-cache layout contract for persistent prompt
 //! storage.
 //!
 //! Dtypes come from the pack's own declared execution contract rather than a
@@ -11,8 +11,9 @@
 //! dtype change from silently producing unreadable cache files.
 
 use crate::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype,
-    DecoderCacheTensorLayout,
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheLayoutError, AstroDecoderStateCacheTensorDtype,
+    AstroDecoderStateCacheTensorLayout,
 };
 
 use super::configuration::FoldedPackConfig;
@@ -25,15 +26,15 @@ pub(crate) const PRISM_ATTENTION_VALUES_TENSOR_ROLE: &str = "attention.values";
 /// The KV slab growth granularity the straight forward pass allocates with.
 pub(crate) const PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS: usize = 256;
 
-/// Builds the validated persistent decoder-cache layout for one folded pack.
+/// Builds the validated persistent astro-decoder-state-cache layout for one folded pack.
 ///
 /// Layer ordering follows `layer_types` so persisted tensor names
 /// (`layer_<decoder_layer_index>_<role>`) use decoder-layer indices, while the
 /// live `StraightGenerationState` slots number layers within their attention
 /// kind; the mapping between the two is rebuilt from the same list.
-pub fn prism_hadamard_qwen35_decoder_cache_layout(
+pub fn prism_hadamard_qwen35_astro_decoder_state_cache_layout(
     folded_pack_config: &FoldedPackConfig,
-) -> Result<DecoderCacheLayout, DecoderCacheLayoutError> {
+) -> Result<AstroDecoderStateCacheLayout, AstroDecoderStateCacheLayoutError> {
     let text = folded_pack_config.text();
     let full_attention_key_value_dimensions = vec![
         1,
@@ -59,44 +60,48 @@ pub fn prism_hadamard_qwen35_decoder_cache_layout(
         .enumerate()
         .map(
             |(decoder_layer_index, layer_type)| match layer_type.as_str() {
-                "full_attention" => Ok(DecoderCacheLayerLayout::append_only_attention(
-                    DecoderCacheTensorLayout::sequence(
+                "full_attention" => Ok(AstroDecoderStateCacheLayerLayout::append_only_attention(
+                    AstroDecoderStateCacheTensorLayout::sequence(
                         PRISM_ATTENTION_KEYS_TENSOR_ROLE,
-                        DecoderCacheTensorDtype::Float16,
+                        AstroDecoderStateCacheTensorDtype::Float16,
                         full_attention_key_value_dimensions.clone(),
                         2,
                     ),
-                    DecoderCacheTensorLayout::sequence(
+                    AstroDecoderStateCacheTensorLayout::sequence(
                         PRISM_ATTENTION_VALUES_TENSOR_ROLE,
-                        DecoderCacheTensorDtype::Float16,
+                        AstroDecoderStateCacheTensorDtype::Float16,
                         full_attention_key_value_dimensions.clone(),
                         2,
                     ),
                     PRISM_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
                 )),
-                "linear_attention" => Ok(DecoderCacheLayerLayout::composite(vec![
-                    DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                        PRISM_CONVOLUTION_TENSOR_ROLE,
-                        DecoderCacheTensorDtype::Float16,
-                        linear_convolution_dimensions.clone(),
-                    )),
-                    DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                        PRISM_RECURRENCE_TENSOR_ROLE,
-                        DecoderCacheTensorDtype::Float32,
-                        linear_recurrent_dimensions.clone(),
-                    )),
+                "linear_attention" => Ok(AstroDecoderStateCacheLayerLayout::composite(vec![
+                    AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                        AstroDecoderStateCacheTensorLayout::fixed(
+                            PRISM_CONVOLUTION_TENSOR_ROLE,
+                            AstroDecoderStateCacheTensorDtype::Float16,
+                            linear_convolution_dimensions.clone(),
+                        ),
+                    ),
+                    AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                        AstroDecoderStateCacheTensorLayout::fixed(
+                            PRISM_RECURRENCE_TENSOR_ROLE,
+                            AstroDecoderStateCacheTensorDtype::Float32,
+                            linear_recurrent_dimensions.clone(),
+                        ),
+                    ),
                 ])),
                 // `validated_layer_types` already refused anything else, so this
                 // arm only exists to keep the match exhaustive.
-                _other_layer_type => {
-                    Err(DecoderCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
+                _other_layer_type => Err(
+                    AstroDecoderStateCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
                         layer_index: decoder_layer_index,
-                    })
-                }
+                    },
+                ),
             },
         )
         .collect::<Result<Vec<_>, _>>()?;
-    DecoderCacheLayout::new(decoder_layer_layouts)
+    AstroDecoderStateCacheLayout::new(decoder_layer_layouts)
 }
 
 #[cfg(test)]
@@ -168,33 +173,33 @@ mod tests {
 
     #[test]
     fn should_declare_sequence_state_only_for_full_attention_layers() {
-        let decoder_cache_layout =
-            prism_hadamard_qwen35_decoder_cache_layout(&shaped_pack_config(&[
+        let astro_decoder_state_cache_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
                 "linear_attention",
                 "linear_attention",
                 "full_attention",
             ]))
             .expect("the fixture layout must validate");
-        assert_eq!(decoder_cache_layout.layer_count(), 3);
-        assert_eq!(decoder_cache_layout.sequence_tensor_count(), 2);
+        assert_eq!(astro_decoder_state_cache_layout.layer_count(), 3);
+        assert_eq!(astro_decoder_state_cache_layout.sequence_tensor_count(), 2);
         // One convolution plus one gated-delta recurrent tensor per linear layer.
-        assert_eq!(decoder_cache_layout.boundary_tensor_count(), 4);
+        assert_eq!(astro_decoder_state_cache_layout.boundary_tensor_count(), 4);
     }
 
     #[test]
     fn should_name_persisted_tensors_by_decoder_layer_index() {
-        let decoder_cache_layout =
-            prism_hadamard_qwen35_decoder_cache_layout(&shaped_pack_config(&[
+        let astro_decoder_state_cache_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
                 "linear_attention",
                 "linear_attention",
                 "full_attention",
             ]))
             .expect("the fixture layout must validate");
-        let full_attention_layer = decoder_cache_layout
+        let full_attention_layer = astro_decoder_state_cache_layout
             .layer(2)
             .expect("the fixture has a full-attention layer at index 2");
         let persisted_tensor_names = match full_attention_layer {
-            DecoderCacheLayerLayout::AppendOnlyAttention { keys, values, .. } => {
+            AstroDecoderStateCacheLayerLayout::AppendOnlyAttention { keys, values, .. } => {
                 // `persistent_tensor_name` composes `layer_<decoder_layer_index>_
                 // <tensor_role_name>`; assert the role placement per layer index.
                 vec![
@@ -212,21 +217,21 @@ mod tests {
 
     #[test]
     fn should_name_linear_boundary_tensors_by_decoder_layer_index() {
-        let decoder_cache_layout =
-            prism_hadamard_qwen35_decoder_cache_layout(&shaped_pack_config(&[
+        let astro_decoder_state_cache_layout =
+            prism_hadamard_qwen35_astro_decoder_state_cache_layout(&shaped_pack_config(&[
                 "linear_attention",
                 "linear_attention",
                 "full_attention",
             ]))
             .expect("the fixture layout must validate");
-        let linear_layer = decoder_cache_layout
+        let linear_layer = astro_decoder_state_cache_layout
             .layer(0)
             .expect("the fixture has a linear layer at index 0");
         let persisted_tensor_names = match linear_layer {
-            DecoderCacheLayerLayout::Composite { components } => components
+            AstroDecoderStateCacheLayerLayout::Composite { components } => components
                 .iter()
                 .flat_map(|component| match component {
-                    DecoderCacheLayerLayout::RecurrentTensor { tensor } => {
+                    AstroDecoderStateCacheLayerLayout::RecurrentTensor { tensor } => {
                         vec![format!("layer_0_{}", tensor.tensor_role_name())]
                     }
                     _ => panic!("the linear layer composite holds only recurrent tensors"),

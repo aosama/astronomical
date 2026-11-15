@@ -140,7 +140,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let stored_state_growth_bytes = request_decoder_state
             .projected_persistent_state_growth_bytes(
-                model.decoder_cache_layout(),
+                model.astro_decoder_state_cache_layout(),
                 forward_shape.token_count,
             )
             .map_err(qwen3_5_runtime_error)?

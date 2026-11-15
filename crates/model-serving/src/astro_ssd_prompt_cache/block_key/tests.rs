@@ -1,5 +1,6 @@
-use crate::decoder_cache::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
 
 use super::AstroSsdPromptCacheBlockKey;
@@ -120,27 +121,28 @@ fn synthetic_model_contract(
     model_revision: &str,
     attention_capacity_growth_tokens: usize,
 ) -> AstroSsdPromptCacheModelContract {
-    let decoder_cache_layout =
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
+    let astro_decoder_state_cache_layout = AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::append_only_attention(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.keys",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 2],
                 1,
             ),
-            DecoderCacheTensorLayout::sequence(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.values",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 2],
                 1,
             ),
             attention_capacity_growth_tokens,
-        )])
-        .expect("the synthetic sequence layout should be valid");
+        ),
+    ])
+    .expect("the synthetic sequence layout should be valid");
     AstroSsdPromptCacheModelContract::resolve(
         model_id.to_owned(),
         model_revision.to_owned(),
-        decoder_cache_layout,
+        astro_decoder_state_cache_layout,
         128,
         1_000_000,
         1_000_000,

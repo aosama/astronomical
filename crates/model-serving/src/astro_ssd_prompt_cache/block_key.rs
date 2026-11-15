@@ -8,9 +8,9 @@ use super::model_contract::AstroSsdPromptCacheModelContract;
 #[cfg(test)]
 mod tests;
 
-const ASTRO_SSD_PROMPT_CACHE_ROOT_SEED: &[u8] = b"astronomical-decoder-cache-root";
+const ASTRO_SSD_PROMPT_CACHE_ROOT_SEED: &[u8] = b"astronomical-astro-decoder-state-cache-root";
 const ASTRO_SSD_PROMPT_CACHE_BLOCK_CAUSAL_INPUT_DOMAIN: &[u8] =
-    b"astronomical-decoder-cache-block-causal-input";
+    b"astronomical-astro-decoder-state-cache-block-causal-input";
 
 /// One immutable, content-addressed block identity inside a model-state chain.
 #[derive(Clone, Debug, Eq, PartialEq)]

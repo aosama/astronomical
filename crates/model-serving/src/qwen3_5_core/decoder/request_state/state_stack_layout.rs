@@ -1,34 +1,38 @@
-use crate::decoder_cache::{
-    ConvolutionState, DecoderCacheLayerLayout, DecoderCacheState, FullAttentionKeyValueState,
-    GatedDeltaRecurrentState,
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheState, ConvolutionState,
+    FullAttentionKeyValueState, GatedDeltaRecurrentState,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
 
-pub(super) fn decoder_cache_layout_projection_error(
-    decoder_cache_layout_error: crate::decoder_cache::DecoderCacheLayoutError,
+pub(super) fn astro_decoder_state_cache_layout_projection_error(
+    astro_decoder_state_cache_layout_error: crate::astro_decoder_state_cache::AstroDecoderStateCacheLayoutError,
 ) -> MlxRuntimeError {
     request_decoder_state_error_from_string(format!(
-        "validated decoder-cache tensor payload geometry is invalid: {decoder_cache_layout_error}"
+        "validated astro-decoder-state-cache tensor payload geometry is invalid: {astro_decoder_state_cache_layout_error}"
     ))
 }
 
 pub(super) fn request_decoder_layer_state_from_layout(
-    decoder_cache_layer_layout: &DecoderCacheLayerLayout,
+    astro_decoder_state_cache_layer_layout: &AstroDecoderStateCacheLayerLayout,
     full_attention_kv_state_growth_tokens_override: Option<i32>,
-) -> Result<DecoderCacheState, MlxRuntimeError> {
-    match decoder_cache_layer_layout {
-        DecoderCacheLayerLayout::AppendOnlyAttention {
+) -> Result<AstroDecoderStateCacheState, MlxRuntimeError> {
+    match astro_decoder_state_cache_layer_layout {
+        AstroDecoderStateCacheLayerLayout::AppendOnlyAttention {
             capacity_growth_tokens,
             ..
         } => append_only_attention_state(
             *capacity_growth_tokens,
             full_attention_kv_state_growth_tokens_override,
         ),
-        DecoderCacheLayerLayout::Composite { components } => qwen_composite_state(components),
-        DecoderCacheLayerLayout::RecurrentTensor { .. } => Err(request_decoder_state_error(
-            "Qwen decoder layers cannot contain a standalone recurrent tensor",
-        )),
-        DecoderCacheLayerLayout::RotatingWindowAttention { .. } => {
+        AstroDecoderStateCacheLayerLayout::Composite { components } => {
+            qwen_composite_state(components)
+        }
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor { .. } => {
+            Err(request_decoder_state_error(
+                "Qwen decoder layers cannot contain a standalone recurrent tensor",
+            ))
+        }
+        AstroDecoderStateCacheLayerLayout::RotatingWindowAttention { .. } => {
             Err(request_decoder_state_error(
                 "Qwen decoder layers cannot contain rotating window attention state",
             ))
@@ -44,7 +48,7 @@ pub(super) fn request_decoder_layer_state_from_layout(
 fn append_only_attention_state(
     capacity_growth_tokens: usize,
     full_attention_kv_state_growth_tokens_override: Option<i32>,
-) -> Result<DecoderCacheState, MlxRuntimeError> {
+) -> Result<AstroDecoderStateCacheState, MlxRuntimeError> {
     let full_attention_kv_state_growth_tokens = full_attention_kv_state_growth_tokens_override
         .map_or_else(
             || {
@@ -61,7 +65,7 @@ fn append_only_attention_state(
             "append-only attention growth must be positive",
         ));
     }
-    Ok(DecoderCacheState::AppendOnlyAttention {
+    Ok(AstroDecoderStateCacheState::AppendOnlyAttention {
         attention: FullAttentionKeyValueState::empty_with_validated_growth_tokens(
             full_attention_kv_state_growth_tokens,
         ),
@@ -74,13 +78,13 @@ fn append_only_attention_state(
 /// ranks with batch size one, and every dimension must fit i32 — the runtime
 /// states are constructed from these exact shapes.
 fn qwen_composite_state(
-    components: &[DecoderCacheLayerLayout],
-) -> Result<DecoderCacheState, MlxRuntimeError> {
+    components: &[AstroDecoderStateCacheLayerLayout],
+) -> Result<AstroDecoderStateCacheState, MlxRuntimeError> {
     let [
-        DecoderCacheLayerLayout::RecurrentTensor {
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor {
             tensor: convolution_tensor,
         },
-        DecoderCacheLayerLayout::RecurrentTensor {
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor {
             tensor: recurrent_tensor,
         },
     ] = components
@@ -118,7 +122,7 @@ fn qwen_composite_state(
     let convolution_kernel_dimension = convolution_history_tokens
         .checked_add(1)
         .ok_or_else(|| request_decoder_state_error("Qwen convolution history length overflowed"))?;
-    Ok(DecoderCacheState::Composite {
+    Ok(AstroDecoderStateCacheState::Composite {
         convolution: ConvolutionState::empty_with_shape(
             i32::try_from(convolution_kernel_dimension).map_err(|_| {
                 request_decoder_state_error("Qwen convolution kernel dimension exceeds i32")

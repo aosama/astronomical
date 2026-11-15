@@ -15,7 +15,7 @@
 //! The whole scheme rests on one layout fact: the target-image tokens must be the **contiguous
 //! suffix** of the joint sequence. The forward slices `joint_hidden_states[:, prefix_len:]` and
 //! caches `[0, prefix_len)` as single ranges, which is only correct under that invariant, so
-//! [`cache_is_valid`] checks it (and the `causal_condition` gate the reference requires) before the
+//! [`astro_image_prefix_key_value_cache_is_valid`] checks it (and the `causal_condition` gate the reference requires) before the
 //! runtime relies on it. This module is pure integer/tuple bookkeeping — no runtime dependency — so
 //! it is unit-tested against the diffusers oracle.
 
@@ -24,7 +24,7 @@ mod tests;
 
 /// Which caching mode a cache-carrying transformer forward would run for a step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CacheMode {
+pub enum AstroImagePrefixKeyValueCacheMode {
     /// Warm-up without caching: process the whole joint sequence, keep nothing.
     Prefill,
     /// Populate the cache: process the whole joint sequence once and store the prefix keys/values.
@@ -43,8 +43,8 @@ pub fn prefix_length(target_token_mask: &[bool]) -> usize {
         .count()
 }
 
-/// Whether the joint-sequence layout is cacheable, i.e. the runtime may use [`CacheMode::Extract`]
-/// then [`CacheMode::Reuse`] for this step.
+/// Whether the joint-sequence layout is cacheable, i.e. the runtime may use [`AstroImagePrefixKeyValueCacheMode::Extract`]
+/// then [`AstroImagePrefixKeyValueCacheMode::Reuse`] for this step.
 ///
 /// True requires all of: caching is enabled (`causal_condition_enabled`, the reference gates the
 /// whole KV-cache path on `causal_condition=True`), the target tokens form the contiguous suffix
@@ -52,7 +52,10 @@ pub fn prefix_length(target_token_mask: &[bool]) -> usize {
 /// A mixed/interleaved layout, a pure-target sequence, or a pure-text sequence all return `false`,
 /// because in each case the single-range `[prefix_len:]` / `[0, prefix_len)` split would be wrong.
 #[must_use]
-pub fn cache_is_valid(target_token_mask: &[bool], causal_condition_enabled: bool) -> bool {
+pub fn astro_image_prefix_key_value_cache_is_valid(
+    target_token_mask: &[bool],
+    causal_condition_enabled: bool,
+) -> bool {
     if !causal_condition_enabled {
         return false;
     }
@@ -76,10 +79,16 @@ pub fn cache_is_valid(target_token_mask: &[bool], causal_condition_enabled: bool
 /// `Prefill` and `Extract` compute the whole sequence `[0, seq_len)`; `Reuse` computes only the
 /// target queries `[prefix_len, seq_len)` and read the cached prefix for their keys/values.
 #[must_use]
-pub fn cache_query_slice(mode: CacheMode, seq_len: usize, prefix_len: usize) -> (usize, usize) {
+pub fn astro_image_prefix_key_value_cache_query_slice(
+    mode: AstroImagePrefixKeyValueCacheMode,
+    seq_len: usize,
+    prefix_len: usize,
+) -> (usize, usize) {
     match mode {
-        CacheMode::Prefill | CacheMode::Extract => (0, seq_len),
-        CacheMode::Reuse => (prefix_len, seq_len),
+        AstroImagePrefixKeyValueCacheMode::Prefill | AstroImagePrefixKeyValueCacheMode::Extract => {
+            (0, seq_len)
+        }
+        AstroImagePrefixKeyValueCacheMode::Reuse => (prefix_len, seq_len),
     }
 }
 
@@ -88,9 +97,14 @@ pub fn cache_query_slice(mode: CacheMode, seq_len: usize, prefix_len: usize) -> 
 /// Only `Extract` writes, and it writes the prefix `[0, prefix_len)`; `Prefill` keeps nothing and
 /// `Reuse` reads the values written by an earlier `Extract`.
 #[must_use]
-pub fn cache_write_slice(mode: CacheMode, prefix_len: usize) -> Option<(usize, usize)> {
+pub fn astro_image_prefix_key_value_cache_write_slice(
+    mode: AstroImagePrefixKeyValueCacheMode,
+    prefix_len: usize,
+) -> Option<(usize, usize)> {
     match mode {
-        CacheMode::Extract => Some((0, prefix_len)),
-        CacheMode::Prefill | CacheMode::Reuse => None,
+        AstroImagePrefixKeyValueCacheMode::Extract => Some((0, prefix_len)),
+        AstroImagePrefixKeyValueCacheMode::Prefill | AstroImagePrefixKeyValueCacheMode::Reuse => {
+            None
+        }
     }
 }

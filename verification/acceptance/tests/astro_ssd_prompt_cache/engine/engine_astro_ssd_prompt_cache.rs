@@ -24,7 +24,8 @@ use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use astronomical_model_serving::{
     AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheModelContract, GeneratedToken,
     InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
-    Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer, qwen3_5_decoder_cache_layout,
+    Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5Tokenizer,
+    qwen3_5_astro_decoder_state_cache_layout,
 };
 use tokio::time::{Instant, MissedTickBehavior, interval, sleep};
 
@@ -330,15 +331,15 @@ async fn astro_ssd_prompt_cache_eligible_prompt_token_count_for_block_multiplier
     let astro_ssd_prompt_cache_model_contract = AstroSsdPromptCacheModelContract::resolve(
         validated_artifact.model_id().to_owned(),
         validated_artifact.revision().to_owned(),
-        qwen3_5_decoder_cache_layout(
+        qwen3_5_astro_decoder_state_cache_layout(
             validated_artifact.config(),
             crate::common::standard_worker_chunking_configuration()
                 .full_attention_key_value_growth_tokens as usize,
-            &crate::common::qwen3_5_moe::float32_decoder_layer_cache_dtypes(
+            &crate::common::qwen3_5_moe::float32_astro_decoder_state_cache_layer_dtypes(
                 validated_artifact.config(),
             ),
         )
-        .expect("the validated artifact should provide a decoder-cache layout"),
+        .expect("the validated artifact should provide a astro-decoder-state-cache layout"),
         validated_artifact.config().maximum_position_count() as usize,
         mlx_memory_limits.active_memory_limit_bytes() as u64,
         crate::common::configured_model_artifact_astro_ssd_prompt_cache_maximum_size_bytes(),

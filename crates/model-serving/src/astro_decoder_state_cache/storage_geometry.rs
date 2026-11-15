@@ -1,6 +1,9 @@
-use super::{DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError};
+use super::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheLayoutError,
+};
 
-impl DecoderCacheLayout {
+impl AstroDecoderStateCacheLayout {
     /// Returns whether this model persists append-only sequence state.
     #[must_use]
     pub const fn has_sequence_state(&self) -> bool {
@@ -16,7 +19,7 @@ impl DecoderCacheLayout {
     /// Returns the total exact sequence-state payload bytes added by one token.
     pub fn sequence_state_payload_byte_count_per_token(
         &self,
-    ) -> Result<usize, DecoderCacheLayoutError> {
+    ) -> Result<usize, AstroDecoderStateCacheLayoutError> {
         self.sequence_tensor_layouts().iter().try_fold(
             0_usize,
             |sequence_payload_bytes_per_token, persisted_tensor_layout| {
@@ -26,7 +29,7 @@ impl DecoderCacheLayout {
                             .tensor_layout()
                             .sequence_payload_byte_count_per_token()?,
                     )
-                    .ok_or(DecoderCacheLayoutError::SequenceStatePayloadByteCountPerTokenOverflow)
+                    .ok_or(AstroDecoderStateCacheLayoutError::SequenceStatePayloadByteCountPerTokenOverflow)
             },
         )
     }
@@ -35,7 +38,7 @@ impl DecoderCacheLayout {
     pub fn maximum_sequence_tensor_payload_byte_count(
         &self,
         sequence_token_count: usize,
-    ) -> Result<usize, DecoderCacheLayoutError> {
+    ) -> Result<usize, AstroDecoderStateCacheLayoutError> {
         self.sequence_tensor_layouts().iter().try_fold(
             0_usize,
             |maximum_tensor_payload_bytes, persisted_tensor_layout| {
@@ -43,7 +46,9 @@ impl DecoderCacheLayout {
                     .tensor_layout()
                     .sequence_payload_byte_count_per_token()?
                     .checked_mul(sequence_token_count)
-                    .ok_or(DecoderCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?;
+                    .ok_or(
+                        AstroDecoderStateCacheLayoutError::SequenceTensorPayloadByteCountOverflow,
+                    )?;
                 Ok(maximum_tensor_payload_bytes.max(tensor_payload_bytes))
             },
         )
@@ -57,17 +62,19 @@ impl DecoderCacheLayout {
     pub fn incremental_restore_source_workspace_byte_count(
         &self,
         sequence_block_token_count: usize,
-    ) -> Result<usize, DecoderCacheLayoutError> {
+    ) -> Result<usize, AstroDecoderStateCacheLayoutError> {
         let sequence_source_bytes = self
             .sequence_state_payload_byte_count_per_token()?
             .checked_mul(sequence_block_token_count)
-            .ok_or(DecoderCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?;
+            .ok_or(AstroDecoderStateCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?;
         let boundary_source_bytes = self.boundary_snapshot_payload_byte_count()?;
         Ok(sequence_source_bytes.max(boundary_source_bytes))
     }
 
     /// Returns payload bytes for one complete boundary snapshot.
-    pub fn boundary_snapshot_payload_byte_count(&self) -> Result<usize, DecoderCacheLayoutError> {
+    pub fn boundary_snapshot_payload_byte_count(
+        &self,
+    ) -> Result<usize, AstroDecoderStateCacheLayoutError> {
         self.boundary_tensor_layouts().iter().try_fold(
             0_usize,
             |boundary_payload_bytes, persisted_tensor_layout| {
@@ -77,13 +84,17 @@ impl DecoderCacheLayout {
                             .tensor_layout()
                             .fixed_payload_byte_count()?,
                     )
-                    .ok_or(DecoderCacheLayoutError::BoundarySnapshotPayloadByteCountOverflow)
+                    .ok_or(
+                        AstroDecoderStateCacheLayoutError::BoundarySnapshotPayloadByteCountOverflow,
+                    )
             },
         )
     }
 
     /// Returns the natural token alignment shared by every append-only state component.
-    pub fn persistence_alignment_token_count(&self) -> Result<usize, DecoderCacheLayoutError> {
+    pub fn persistence_alignment_token_count(
+        &self,
+    ) -> Result<usize, AstroDecoderStateCacheLayoutError> {
         let mut persistence_alignment_token_count = 1_usize;
         for decoder_layer_index in 0..self.layer_count() {
             if let Some(decoder_layer_layout) = self.layer(decoder_layer_index) {
@@ -98,19 +109,21 @@ impl DecoderCacheLayout {
 }
 
 fn checked_layer_persistence_alignment(
-    decoder_layer_layout: &DecoderCacheLayerLayout,
+    decoder_layer_layout: &AstroDecoderStateCacheLayerLayout,
     current_alignment_token_count: usize,
-) -> Result<usize, DecoderCacheLayoutError> {
+) -> Result<usize, AstroDecoderStateCacheLayoutError> {
     match decoder_layer_layout {
-        DecoderCacheLayerLayout::AppendOnlyAttention {
+        AstroDecoderStateCacheLayerLayout::AppendOnlyAttention {
             capacity_growth_tokens,
             ..
         } => checked_least_common_multiple(current_alignment_token_count, *capacity_growth_tokens),
-        DecoderCacheLayerLayout::RotatingWindowAttention { .. } => {
+        AstroDecoderStateCacheLayerLayout::RotatingWindowAttention { .. } => {
             Ok(current_alignment_token_count)
         }
-        DecoderCacheLayerLayout::RecurrentTensor { .. } => Ok(current_alignment_token_count),
-        DecoderCacheLayerLayout::Composite { components } => components.iter().try_fold(
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor { .. } => {
+            Ok(current_alignment_token_count)
+        }
+        AstroDecoderStateCacheLayerLayout::Composite { components } => components.iter().try_fold(
             current_alignment_token_count,
             |component_alignment_token_count, component_layout| {
                 checked_layer_persistence_alignment(
@@ -125,14 +138,14 @@ fn checked_layer_persistence_alignment(
 fn checked_least_common_multiple(
     first_token_count: usize,
     second_token_count: usize,
-) -> Result<usize, DecoderCacheLayoutError> {
+) -> Result<usize, AstroDecoderStateCacheLayoutError> {
     let greatest_common_divisor = greatest_common_divisor(first_token_count, second_token_count);
     first_token_count
         .checked_div(greatest_common_divisor)
         .and_then(|reduced_first_token_count| {
             reduced_first_token_count.checked_mul(second_token_count)
         })
-        .ok_or(DecoderCacheLayoutError::PersistenceAlignmentTokenCountOverflow)
+        .ok_or(AstroDecoderStateCacheLayoutError::PersistenceAlignmentTokenCountOverflow)
 }
 
 fn greatest_common_divisor(mut first_token_count: usize, mut second_token_count: usize) -> usize {

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use astronomical_model_serving::{
-    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
+    AstroDecoderStateCachePersistedTensorLayout, AstroSsdPromptCacheBlockKey,
+    AstroSsdPromptCacheDiskStore, AstroSsdPromptCacheDiskStoreConfig,
     AstroSsdPromptCacheDiskStoreError, AstroSsdPromptCacheModelContract,
-    DecoderCachePersistedTensorLayout,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
@@ -71,7 +71,7 @@ pub(super) fn synthetic_kv_block_tensors(runtime: &MlxRuntime) -> HashMap<String
     synthetic_tensors_for_contract(
         runtime,
         &qwen3_5_moe::astro_ssd_prompt_cache_model_contract()
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_layouts(),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract().block_token_count(),
     )
@@ -83,7 +83,7 @@ pub(super) fn synthetic_recurrent_snapshot_tensors(
     synthetic_tensors_for_contract(
         runtime,
         &qwen3_5_moe::astro_ssd_prompt_cache_model_contract()
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .boundary_tensor_layouts(),
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract().block_token_count(),
     )
@@ -91,7 +91,7 @@ pub(super) fn synthetic_recurrent_snapshot_tensors(
 
 pub(super) fn synthetic_tensors_for_contract(
     runtime: &MlxRuntime,
-    persisted_tensor_layouts: &[DecoderCachePersistedTensorLayout],
+    persisted_tensor_layouts: &[AstroDecoderStateCachePersistedTensorLayout],
     block_token_count: usize,
 ) -> HashMap<String, MlxArray> {
     persisted_tensor_layouts

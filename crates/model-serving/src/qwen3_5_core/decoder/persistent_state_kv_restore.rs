@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use super::persistent_state_bridge::AstroSsdPromptCacheStateBridgeError;
 use super::request_state::RequestDecoderStateStack;
-use crate::decoder_cache::DecoderCacheState;
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheState;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
 
@@ -45,7 +45,7 @@ impl RequestDecoderStateStack {
         })?;
         for layer_index in 0..self.layer_count() {
             match self.layer_mut(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                     let keys_tensor_name = format!("layer_{layer_index}_attention.keys");
                     let values_tensor_name = format!("layer_{layer_index}_attention.values");
                     let keys_slices = block_slice_tensors_by_name(
@@ -99,7 +99,7 @@ impl RequestDecoderStateStack {
                             }
                         })?;
                 }
-                Some(DecoderCacheState::Composite { .. }) => {}
+                Some(AstroDecoderStateCacheState::Composite { .. }) => {}
                 None => {
                     return Err(AstroSsdPromptCacheStateBridgeError::MissingLayer { layer_index });
                 }
@@ -163,7 +163,7 @@ fn materialize_restored_full_attention_tensors(
     let mut restored_tensors = Vec::new();
     for layer_index in 0..request_decoder_state.layer_count() {
         match request_decoder_state.layer(layer_index) {
-            Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+            Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                 restored_tensors.push(attention.keys_state().ok_or(
                     AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                         layer_index,
@@ -177,7 +177,7 @@ fn materialize_restored_full_attention_tensors(
                     },
                 )?);
             }
-            Some(DecoderCacheState::Composite { .. }) => {}
+            Some(AstroDecoderStateCacheState::Composite { .. }) => {}
             None => {
                 return Err(AstroSsdPromptCacheStateBridgeError::MissingLayer { layer_index });
             }

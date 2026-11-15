@@ -108,8 +108,8 @@ impl Qwen3_5Model {
             .get(layer_index)
             .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
         let mut request_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &self.decoder_cache_layout,
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &self.astro_decoder_state_cache_layout,
                 probe_shape.full_attention_kv_state_growth_tokens,
             )?;
         self.runtime

@@ -8,8 +8,8 @@ fn bits(value: u32) -> BitWidth {
     BitWidth::new(value).expect("valid")
 }
 
-fn result(layer_index: usize, kl_at_four: f64) -> KvCacheSensitivityResult {
-    KvCacheSensitivityResult {
+fn result(layer_index: usize, kl_at_four: f64) -> AstroDecoderStateCacheSensitivityResult {
+    AstroDecoderStateCacheSensitivityResult {
         layer_index,
         layer_name: format!("model.layers.{layer_index}.self_attn"),
         kl_divergence_by_bit_width: BTreeMap::from([(bits(4), kl_at_four), (bits(8), 0.0)]),
@@ -31,7 +31,7 @@ fn should_protect_the_most_sensitive_layer_first() {
     ];
     let candidate_bit_widths = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
 
-    let configs = optimize_kv_cache(
+    let configs = optimize_astro_decoder_state_cache(
         &results,
         5.0,
         &candidate_bit_widths,
@@ -51,20 +51,20 @@ fn should_protect_the_most_sensitive_layer_first() {
 #[test]
 fn should_scale_cache_bytes_with_bit_width() {
     let results = vec![result(0, 0.1)];
-    let four_bit = vec![KvCacheLayerConfig {
+    let four_bit = vec![AstroDecoderStateCacheLayerConfig {
         layer_index: 0,
         layer_name: "model.layers.0.self_attn".to_owned(),
         bit_width: bits(4),
         group_size: GroupSize::new(64).expect("valid"),
     }];
-    let eight_bit = vec![KvCacheLayerConfig {
+    let eight_bit = vec![AstroDecoderStateCacheLayerConfig {
         bit_width: bits(8),
         ..four_bit[0].clone()
     }];
 
     assert!(
-        estimate_kv_cache_bytes(&four_bit, &results, 4096)
-            < estimate_kv_cache_bytes(&eight_bit, &results, 4096)
+        estimate_astro_decoder_state_cache_bytes(&four_bit, &results, 4096)
+            < estimate_astro_decoder_state_cache_bytes(&eight_bit, &results, 4096)
     );
 }
 
@@ -73,7 +73,7 @@ fn should_keep_every_layer_at_the_lowest_width_when_no_upgrade_reduces_kl() {
     let flat = vec![result(0, 0.0), result(1, 0.0)];
     let candidate_bit_widths = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
 
-    let configs = optimize_kv_cache(
+    let configs = optimize_astro_decoder_state_cache(
         &flat,
         8.0,
         &candidate_bit_widths,
@@ -90,7 +90,7 @@ fn should_keep_every_layer_at_the_lowest_width_when_no_upgrade_reduces_kl() {
 fn should_return_no_configs_for_no_cached_layers() {
     let candidate_bit_widths = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
 
-    let configs = optimize_kv_cache(
+    let configs = optimize_astro_decoder_state_cache(
         &[],
         6.0,
         &candidate_bit_widths,
@@ -103,14 +103,17 @@ fn should_return_no_configs_for_no_cached_layers() {
 
 #[test]
 fn should_skip_configs_without_a_measured_layer_when_estimating_bytes() {
-    let orphan = vec![KvCacheLayerConfig {
+    let orphan = vec![AstroDecoderStateCacheLayerConfig {
         layer_index: 9,
         layer_name: "model.layers.9.self_attn".to_owned(),
         bit_width: bits(4),
         group_size: GroupSize::new(64).expect("valid"),
     }];
 
-    assert_eq!(estimate_kv_cache_bytes(&orphan, &[result(0, 0.1)], 4096), 0);
+    assert_eq!(
+        estimate_astro_decoder_state_cache_bytes(&orphan, &[result(0, 0.1)], 4096),
+        0
+    );
 }
 
 /// A probe whose KL is scripted per layer: quantizing layer `n` moves the
@@ -121,7 +124,7 @@ struct ScriptedCacheProbe {
     forward_count: usize,
 }
 
-impl KvCacheProbeModel for ScriptedCacheProbe {
+impl AstroDecoderStateCacheProbeModel for ScriptedCacheProbe {
     type Logits = f64;
 
     fn cached_layers(&self) -> Vec<CachedLayerDescriptor> {
@@ -180,7 +183,7 @@ fn should_measure_each_cached_layer_at_each_width_against_full_precision() {
     };
     let mut silent_reporter = crate::progress::SilentProgressReporter;
 
-    let results = measure_kv_cache_sensitivity(
+    let results = measure_astro_decoder_state_cache_sensitivity(
         &mut probe,
         &two_samples(),
         &CandidateBitWidths::new(&[4, 8]).expect("valid ladder"),
@@ -206,7 +209,7 @@ fn should_refuse_a_model_without_any_cached_layer() {
     };
     let mut silent_reporter = crate::progress::SilentProgressReporter;
 
-    let refusal = measure_kv_cache_sensitivity(
+    let refusal = measure_astro_decoder_state_cache_sensitivity(
         &mut probe,
         &two_samples(),
         &CandidateBitWidths::new(&[4, 8]).expect("valid ladder"),
@@ -229,7 +232,7 @@ fn should_refuse_a_measurement_where_quantization_never_engaged() {
     };
     let mut silent_reporter = crate::progress::SilentProgressReporter;
 
-    let refusal = measure_kv_cache_sensitivity(
+    let refusal = measure_astro_decoder_state_cache_sensitivity(
         &mut probe,
         &two_samples(),
         &CandidateBitWidths::new(&[4, 8]).expect("valid ladder"),

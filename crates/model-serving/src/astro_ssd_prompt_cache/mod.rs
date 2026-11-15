@@ -1,6 +1,6 @@
 //! Architecture-neutral, SSD-backed model-state reuse.
 //!
-//! Model packages provide a validated DecoderCacheLayout and own live-state
+//! Model packages provide a validated AstroDecoderStateCacheLayout and own live-state
 //! restoration. This package owns block identity, bounded safetensors validation,
 //! prefix lookup, quota enforcement, and descriptor-backed tensor files for
 //! decoder state and projected visual embeddings.

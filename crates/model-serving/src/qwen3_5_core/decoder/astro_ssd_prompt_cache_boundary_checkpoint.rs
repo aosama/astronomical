@@ -170,7 +170,7 @@ impl Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector {
             checkpoint.recurrent_snapshot_tensors.len() != self.expected_boundary_tensor_count
         }) {
             return Err(collector_error(
-                "each boundary checkpoint must contain the complete decoder-cache tensor layout",
+                "each boundary checkpoint must contain the complete astro-decoder-state-cache tensor layout",
             ));
         }
         Ok(self.checkpoints)

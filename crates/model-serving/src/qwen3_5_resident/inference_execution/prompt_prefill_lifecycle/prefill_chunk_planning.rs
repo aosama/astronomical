@@ -93,7 +93,7 @@ impl Qwen3_5EngineState {
             0
         } else {
             model
-                    .decoder_cache_layout()
+                    .astro_decoder_state_cache_layout()
                     .boundary_snapshot_payload_byte_count()
                     .map_err(|error| {
                         super::fatal_engine_error(format!(

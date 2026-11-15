@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::DecoderCacheLayoutError;
+use crate::AstroDecoderStateCacheLayoutError;
 
 /// A model and its live resource budgets could not form a safe persistent-state contract.
 #[derive(Debug, Error)]
@@ -28,9 +28,9 @@ pub enum AstroSsdPromptCacheModelContractError {
         maximum_chain_bytes: u64,
         global_ssd_quota_bytes: u64,
     },
-    #[error("decoder-cache layout declares neither sequence nor boundary state")]
+    #[error("astro-decoder-state-cache layout declares neither sequence nor boundary state")]
     NoPersistentState,
-    #[error("decoder-cache storage geometry used a zero divisor")]
+    #[error("astro-decoder-state-cache storage geometry used a zero divisor")]
     ZeroStorageGeometryDivisor,
     #[error("persistent model-state block token count overflowed")]
     BlockTokenCountOverflow,
@@ -62,5 +62,5 @@ pub enum AstroSsdPromptCacheModelContractError {
     #[error("failed to derive persistent model-state storage geometry")]
     SerializeStorageGeometry(#[source] serde_json::Error),
     #[error(transparent)]
-    DecoderCacheLayout(#[from] DecoderCacheLayoutError),
+    AstroDecoderStateCacheLayout(#[from] AstroDecoderStateCacheLayoutError),
 }

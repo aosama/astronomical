@@ -174,7 +174,7 @@ impl StraightGenerationState {
     }
 
     /// Host-side byte estimate of every retained state array, matching the
-    /// payload accounting the decoder-cache state types publish. The memory
+    /// payload accounting the astro-decoder-state-cache state types publish. The memory
     /// telemetry breakdown uses it as the live-context owner share.
     pub(crate) fn payload_byte_count(&self) -> u64 {
         let convolution_state_payload_bytes = self

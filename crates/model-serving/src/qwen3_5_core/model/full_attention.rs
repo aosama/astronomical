@@ -40,7 +40,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use super::base::Qwen3_5ModelBase;
-use crate::decoder_cache::FullAttentionKeyValueState;
+use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5FullAttentionWeights,
 };

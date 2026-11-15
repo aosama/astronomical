@@ -34,8 +34,8 @@ impl Qwen3_5ResidentModel {
     ) -> Result<ProbedForwardMlxWorkingBuffers, Qwen3_5ExecutionError> {
         let probe_token_ids = self.probe_token_ids(prompt_chunk_token_count)?;
         let mut probe_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                self.decoder_cache_layout(),
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                self.astro_decoder_state_cache_layout(),
                 full_attention_kv_state_growth_tokens,
             )?;
         let prompt_chunk_mlx_working_buffer_bytes =

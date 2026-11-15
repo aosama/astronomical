@@ -13,8 +13,8 @@ use super::astro_ssd_prompt_cache_visual_identity::{
 };
 use super::engine_request::{Qwen3_5EngineRequest, ResidentRequestExtension};
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-use crate::decoder_cache::DecoderCacheLayout;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::text::sampler;
 use crate::qwen3_5_resident::model::request_errors;
@@ -121,7 +121,7 @@ impl Qwen3_5EngineState {
         // key-value cache — the model's memory of tokens it has already seen.
         // Recording attention once per token is what lets each new token be
         // processed without re-reading the whole conversation.
-        let decoder_cache_layout = model.decoder_cache_layout().clone();
+        let astro_decoder_state_cache_layout = model.astro_decoder_state_cache_layout().clone();
         // Memory gate: before any graphics memory is touched, verify the full
         // reserved context (prompt plus potential output) fits the live memory
         // limit. A rejection here is recorded into performance attribution so
@@ -160,8 +160,8 @@ impl Qwen3_5EngineState {
         // Full-attention layers grow in the configured slab granularity so
         // resize cost stays amortized across the request's lifetime.
         let mut request_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &decoder_cache_layout,
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &astro_decoder_state_cache_layout,
                 self.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;

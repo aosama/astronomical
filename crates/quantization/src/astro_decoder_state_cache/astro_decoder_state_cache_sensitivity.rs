@@ -13,7 +13,7 @@ use crate::sensitivity::CalibrationForwardSample;
 
 /// Per-layer cache sensitivity.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct KvCacheSensitivityResult {
+pub struct AstroDecoderStateCacheSensitivityResult {
     pub layer_index: usize,
     pub layer_name: String,
     pub kl_divergence_by_bit_width: BTreeMap<BitWidth, f64>,
@@ -33,7 +33,7 @@ pub struct CachedLayerDescriptor {
 }
 
 /// A loaded model whose per-layer cache precision can be set for a probe.
-pub trait KvCacheProbeModel {
+pub trait AstroDecoderStateCacheProbeModel {
     type Logits;
 
     /// Layers that own a key-value cache (linear-attention layers do not).
@@ -68,13 +68,15 @@ pub const MINIMUM_ENGAGED_KL_DIVERGENCE: f64 = 1e-6;
 /// records zero without a forward. Refuses (`ProbeModelFailure`) when no
 /// layer reports a cache or when no KL reaches
 /// [`MINIMUM_ENGAGED_KL_DIVERGENCE`]. Progress advances once per layer.
-pub fn measure_kv_cache_sensitivity<ProbeModel: KvCacheProbeModel>(
+pub fn measure_astro_decoder_state_cache_sensitivity<
+    ProbeModel: AstroDecoderStateCacheProbeModel,
+>(
     probe_model: &mut ProbeModel,
     calibration_samples: &[CalibrationForwardSample],
     candidate_bit_widths: &CandidateBitWidths,
     group_size: GroupSize,
     progress_reporter: &mut dyn ProgressReporter,
-) -> Result<Vec<KvCacheSensitivityResult>, QuantizationError> {
+) -> Result<Vec<AstroDecoderStateCacheSensitivityResult>, QuantizationError> {
     let cached_layers = probe_model.cached_layers();
     if cached_layers.is_empty() {
         return Err(probe_failure(
@@ -128,7 +130,7 @@ struct LayerProbe<'layer> {
 impl LayerProbe<'_> {
     /// Mean KL over the samples with only this layer's cache quantized,
     /// clamped at zero.
-    fn mean_kl_divergence<ProbeModel: KvCacheProbeModel>(
+    fn mean_kl_divergence<ProbeModel: AstroDecoderStateCacheProbeModel>(
         &self,
         probe_model: &mut ProbeModel,
         calibration_samples: &[CalibrationForwardSample],
@@ -156,13 +158,13 @@ impl LayerProbe<'_> {
 fn layer_result(
     cached_layer: CachedLayerDescriptor,
     kl_divergence_by_bit_width: BTreeMap<BitWidth, f64>,
-) -> KvCacheSensitivityResult {
+) -> AstroDecoderStateCacheSensitivityResult {
     // Keys and values, each float16, per head dimension per head.
     let cache_bytes_per_token = 2.0
         * f64::from(cached_layer.key_value_head_count)
         * f64::from(cached_layer.head_dimension)
         * 2.0;
-    KvCacheSensitivityResult {
+    AstroDecoderStateCacheSensitivityResult {
         layer_index: cached_layer.layer_index,
         layer_name: cached_layer.layer_name,
         kl_divergence_by_bit_width,
@@ -175,7 +177,7 @@ fn layer_result(
 /// OptiQ's `_assert_measured`: a peak KL below the floor is a broken
 /// measurement.
 fn require_engaged_measurement(
-    results: &[KvCacheSensitivityResult],
+    results: &[AstroDecoderStateCacheSensitivityResult],
 ) -> Result<(), QuantizationError> {
     let mut peak_kl_divergence = 0.0_f64;
     for result in results {

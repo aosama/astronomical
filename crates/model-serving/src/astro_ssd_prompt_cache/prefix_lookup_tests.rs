@@ -4,8 +4,9 @@
 //! contracts, including walking back to an earlier snapshot on a real chain,
 //! stay in `prefix_lookup/tests`.
 
-use crate::decoder_cache::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
 
 use super::super::prefix_lookup_steps::{
@@ -122,21 +123,23 @@ fn synthetic_sequence_only_contract() -> AstroSsdPromptCacheModelContract {
     AstroSsdPromptCacheModelContract::resolve(
         "prefix-lookup-unit-fixture".to_owned(),
         "revision".to_owned(),
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
-                "attention.keys",
-                DecoderCacheTensorDtype::Float16,
-                vec![1, 0, 2],
-                1,
+        AstroDecoderStateCacheLayout::new(vec![
+            AstroDecoderStateCacheLayerLayout::append_only_attention(
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.keys",
+                    AstroDecoderStateCacheTensorDtype::Float16,
+                    vec![1, 0, 2],
+                    1,
+                ),
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.values",
+                    AstroDecoderStateCacheTensorDtype::Float16,
+                    vec![1, 0, 2],
+                    1,
+                ),
+                4,
             ),
-            DecoderCacheTensorLayout::sequence(
-                "attention.values",
-                DecoderCacheTensorDtype::Float16,
-                vec![1, 0, 2],
-                1,
-            ),
-            4,
-        )])
+        ])
         .expect("the synthetic sequence-only layout should be valid"),
         FIXTURE_MAXIMUM_CONTEXT_TOKEN_COUNT,
         1_000_000,

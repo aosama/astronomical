@@ -16,7 +16,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
-use crate::{DecoderCacheLayout, ModelMemoryFacts};
+use crate::{AstroDecoderStateCacheLayout, ModelMemoryFacts};
 
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 
@@ -25,7 +25,7 @@ use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 pub struct Qwen3_5ModelBase {
     pub(crate) runtime: MlxRuntime,
     pub(crate) config: Qwen3_5Config,
-    pub(crate) decoder_cache_layout: DecoderCacheLayout,
+    pub(crate) astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
     pub(crate) weights: Qwen3_5Weights,
     /// Embedding rows read from the SSD per forward instead of a resident
     /// table; `None` keeps the table resident. Only a dense model the
@@ -109,10 +109,10 @@ impl Qwen3_5ModelBase {
         &self.config
     }
 
-    /// Returns the validated decoder-cache layout bound to this model artifact.
+    /// Returns the validated astro-decoder-state-cache layout bound to this model artifact.
     #[must_use]
-    pub const fn decoder_cache_layout(&self) -> &DecoderCacheLayout {
-        &self.decoder_cache_layout
+    pub const fn astro_decoder_state_cache_layout(&self) -> &AstroDecoderStateCacheLayout {
+        &self.astro_decoder_state_cache_layout
     }
 
     /// Returns the optional vision tower loaded beside the language model.

@@ -25,7 +25,7 @@ use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
-use crate::{DecoderCacheState, PerformanceAttribution, RequestDecoderStateStack};
+use crate::{AstroDecoderStateCacheState, PerformanceAttribution, RequestDecoderStateStack};
 
 /// One span of a layer-major prefill: the tokens one chunk would have run.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -479,7 +479,8 @@ impl Qwen3_5Model {
             forward_layer_weights,
             CompletedLayerRoots {
                 layer_output: &span_output,
-                convolution_state: layer_state.and_then(DecoderCacheState::convolution_state_array),
+                convolution_state: layer_state
+                    .and_then(AstroDecoderStateCacheState::convolution_state_array),
                 boundary_checkpoint_states,
             },
             previous_layer_output,

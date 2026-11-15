@@ -17,7 +17,7 @@ use crate::qwen3_5_streaming::{
     AstroExpertCache, PagedForwardMissingRouteCollector, Qwen3_5ExpertPager,
     Qwen3_5MoEPagedExecutionMode,
 };
-use crate::{DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution};
+use crate::{AstroDecoderStateCacheState, ExpertResidencyPlan, PerformanceAttribution};
 
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
@@ -308,7 +308,7 @@ impl Qwen3_5StreamingModel {
         rope_offset_tokens: i32,
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
-        layer_model_state: &mut DecoderCacheState,
+        layer_model_state: &mut AstroDecoderStateCacheState,
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,

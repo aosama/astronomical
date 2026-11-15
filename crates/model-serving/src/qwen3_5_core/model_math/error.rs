@@ -42,8 +42,8 @@ pub enum Qwen3_5ExecutionError {
     },
     #[error("invalid Qwen3.5 model input: {description}")]
     InvalidInput { description: &'static str },
-    #[error("invalid Qwen3.5 decoder-cache layout: {description}")]
-    InvalidDecoderCacheLayout { description: String },
+    #[error("invalid Qwen3.5 astro-decoder-state-cache layout: {description}")]
+    InvalidAstroDecoderStateCacheLayout { description: String },
     #[error(
         "request decoder state has {actual_decoder_layer_count} decoder layers, expected {expected_decoder_layer_count}"
     )]

@@ -1,35 +1,36 @@
 //! Flattened persistence ownership for append-only, rotating, and recurrent state.
 
 use super::layout::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCachePersistedTensorLayout,
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCachePersistedTensorLayout,
 };
 
-impl DecoderCacheLayout {
+impl AstroDecoderStateCacheLayout {
     /// Returns deterministic append-only sequence tensors for one persisted block.
     #[must_use]
-    pub fn sequence_tensor_layouts(&self) -> Vec<DecoderCachePersistedTensorLayout> {
+    pub fn sequence_tensor_layouts(&self) -> Vec<AstroDecoderStateCachePersistedTensorLayout> {
         collect_layout_tensors(self, true)
     }
 
     /// Returns deterministic rotating and recurrent tensors for one boundary.
     #[must_use]
-    pub fn boundary_tensor_layouts(&self) -> Vec<DecoderCachePersistedTensorLayout> {
+    pub fn boundary_tensor_layouts(&self) -> Vec<AstroDecoderStateCachePersistedTensorLayout> {
         collect_layout_tensors(self, false)
     }
 }
 
 fn collect_layout_tensors(
-    decoder_cache_layout: &DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     include_sequence_tensors: bool,
-) -> Vec<DecoderCachePersistedTensorLayout> {
+) -> Vec<AstroDecoderStateCachePersistedTensorLayout> {
     let expected_tensor_count = if include_sequence_tensors {
-        decoder_cache_layout.sequence_tensor_count()
+        astro_decoder_state_cache_layout.sequence_tensor_count()
     } else {
-        decoder_cache_layout.boundary_tensor_count()
+        astro_decoder_state_cache_layout.boundary_tensor_count()
     };
     let mut persisted_tensor_layouts = Vec::with_capacity(expected_tensor_count);
-    for decoder_layer_index in 0..decoder_cache_layout.layer_count() {
-        if let Some(layer_layout) = decoder_cache_layout.layer(decoder_layer_index) {
+    for decoder_layer_index in 0..astro_decoder_state_cache_layout.layer_count() {
+        if let Some(layer_layout) = astro_decoder_state_cache_layout.layer(decoder_layer_index) {
             collect_layer_tensors(
                 layer_layout,
                 decoder_layer_index,
@@ -42,13 +43,13 @@ fn collect_layout_tensors(
 }
 
 fn collect_layer_tensors(
-    layer_layout: &DecoderCacheLayerLayout,
+    layer_layout: &AstroDecoderStateCacheLayerLayout,
     decoder_layer_index: usize,
     include_sequence_tensors: bool,
-    persisted_tensor_layouts: &mut Vec<DecoderCachePersistedTensorLayout>,
+    persisted_tensor_layouts: &mut Vec<AstroDecoderStateCachePersistedTensorLayout>,
 ) {
     match layer_layout {
-        DecoderCacheLayerLayout::AppendOnlyAttention { keys, values, .. } => {
+        AstroDecoderStateCacheLayerLayout::AppendOnlyAttention { keys, values, .. } => {
             if include_sequence_tensors {
                 push_tensor(persisted_tensor_layouts, decoder_layer_index, keys.clone());
                 push_tensor(
@@ -58,7 +59,7 @@ fn collect_layer_tensors(
                 );
             }
         }
-        DecoderCacheLayerLayout::RotatingWindowAttention { keys, values, .. } => {
+        AstroDecoderStateCacheLayerLayout::RotatingWindowAttention { keys, values, .. } => {
             if !include_sequence_tensors {
                 push_tensor(persisted_tensor_layouts, decoder_layer_index, keys.clone());
                 push_tensor(
@@ -75,7 +76,7 @@ fn collect_layer_tensors(
                 }
             }
         }
-        DecoderCacheLayerLayout::RecurrentTensor { tensor } => {
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor { tensor } => {
             if !include_sequence_tensors {
                 push_tensor(
                     persisted_tensor_layouts,
@@ -84,7 +85,7 @@ fn collect_layer_tensors(
                 );
             }
         }
-        DecoderCacheLayerLayout::Composite { components } => {
+        AstroDecoderStateCacheLayerLayout::Composite { components } => {
             for component_layout in components {
                 collect_layer_tensors(
                     component_layout,
@@ -98,11 +99,11 @@ fn collect_layer_tensors(
 }
 
 fn push_tensor(
-    persisted_tensor_layouts: &mut Vec<DecoderCachePersistedTensorLayout>,
+    persisted_tensor_layouts: &mut Vec<AstroDecoderStateCachePersistedTensorLayout>,
     decoder_layer_index: usize,
-    tensor_layout: super::layout::DecoderCacheTensorLayout,
+    tensor_layout: super::layout::AstroDecoderStateCacheTensorLayout,
 ) {
-    persisted_tensor_layouts.push(DecoderCachePersistedTensorLayout::new(
+    persisted_tensor_layouts.push(AstroDecoderStateCachePersistedTensorLayout::new(
         decoder_layer_index,
         tensor_layout,
     ));

@@ -75,12 +75,12 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let decoder_cache_layout = model.decoder_cache_layout().clone();
+        let astro_decoder_state_cache_layout = model.astro_decoder_state_cache_layout().clone();
         // Drop the possibly half-updated decoder state first so its buffers are
         // unreferenced before the MLX buffer cache is cleared below.
         active_request.request_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &decoder_cache_layout,
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &astro_decoder_state_cache_layout,
                 self.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;

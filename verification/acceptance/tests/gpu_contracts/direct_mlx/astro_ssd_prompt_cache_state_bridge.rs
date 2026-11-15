@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_model_serving::{DecoderCacheState, RequestDecoderStateStack};
+use astronomical_model_serving::{AstroDecoderStateCacheState, RequestDecoderStateStack};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::qwen3_5_moe::{astro_ssd_prompt_cache_model_contract, frozen_ornith_1_0_config};
@@ -128,7 +128,7 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
         .layer(3)
         .expect("layer 3 should be present in the restored request decoder state");
     match full_attention_layer {
-        DecoderCacheState::AppendOnlyAttention { attention } => {
+        AstroDecoderStateCacheState::AppendOnlyAttention { attention } => {
             let restored_keys = attention
                 .keys_state()
                 .expect("full-attention keys should be restored");
@@ -150,14 +150,14 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
                 vec![12.0, 13.0, 22.0, 23.0]
             );
         }
-        DecoderCacheState::Composite { .. } => panic!("layer 3 should be full attention"),
+        AstroDecoderStateCacheState::Composite { .. } => panic!("layer 3 should be full attention"),
     }
 
     let linear_layer = restored_request_decoder_state
         .layer(0)
         .expect("layer 0 should be present in the restored request decoder state");
     match linear_layer {
-        DecoderCacheState::Composite {
+        AstroDecoderStateCacheState::Composite {
             convolution,
             recurrent,
         } => {
@@ -178,7 +178,9 @@ async fn should_restore_request_decoder_state_from_kv_blocks_and_recurrent_snaps
                 vec![35.0]
             );
         }
-        DecoderCacheState::AppendOnlyAttention { .. } => panic!("layer 0 should be linear"),
+        AstroDecoderStateCacheState::AppendOnlyAttention { .. } => {
+            panic!("layer 0 should be linear")
+        }
     }
 }
 
@@ -212,7 +214,7 @@ async fn should_restore_three_kv_blocks_in_sequence_order_at_final_length() {
         .layer(3)
         .expect("layer 3 should be present in the restored request decoder state");
     match full_attention_layer {
-        DecoderCacheState::AppendOnlyAttention { attention } => {
+        AstroDecoderStateCacheState::AppendOnlyAttention { attention } => {
             let restored_keys = attention
                 .keys_state()
                 .expect("full-attention keys should be restored");
@@ -225,7 +227,7 @@ async fn should_restore_three_kv_blocks_in_sequence_order_at_final_length() {
                 vec![10.0, 11.0, 20.0, 21.0, 30.0, 31.0]
             );
         }
-        DecoderCacheState::Composite { .. } => panic!("layer 3 should be full attention"),
+        AstroDecoderStateCacheState::Composite { .. } => panic!("layer 3 should be full attention"),
     }
 }
 
@@ -399,7 +401,7 @@ fn populate_request_decoder_state_with_full_attention_tokens(
             .layer_mut(layer_index)
             .expect("the layer slot should exist");
         match layer_model_state {
-            DecoderCacheState::AppendOnlyAttention { attention } => {
+            AstroDecoderStateCacheState::AppendOnlyAttention { attention } => {
                 let attention_keys = runtime
                     .zeros(
                         &[
@@ -426,7 +428,7 @@ fn populate_request_decoder_state_with_full_attention_tokens(
                     .restore_from_blocks(attention_keys, attention_values)
                     .expect("the test KV tensors should restore into the owner");
             }
-            DecoderCacheState::Composite {
+            AstroDecoderStateCacheState::Composite {
                 convolution,
                 recurrent,
             } => {

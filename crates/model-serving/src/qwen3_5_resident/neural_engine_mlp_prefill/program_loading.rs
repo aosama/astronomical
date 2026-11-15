@@ -175,7 +175,7 @@ fn memory_requirements_of(
 ) -> NeuralEnginePrefillMemoryRequirements {
     let context_state_bytes_per_token = model
         .base
-        .decoder_cache_layout()
+        .astro_decoder_state_cache_layout()
         .sequence_state_payload_byte_count_per_token()
         .unwrap_or(0);
     NeuralEnginePrefillMemoryRequirements {

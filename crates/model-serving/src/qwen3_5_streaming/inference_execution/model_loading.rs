@@ -441,7 +441,7 @@ fn open_streaming_astro_ssd_prompt_cache(
     let astro_ssd_prompt_cache_model_contract = AstroSsdPromptCacheModelContract::resolve(
         resolved_model_id.to_owned(),
         resolved_model_revision.to_owned(),
-        model.decoder_cache_layout().clone(),
+        model.astro_decoder_state_cache_layout().clone(),
         model.config().maximum_position_count() as usize,
         model.runtime().memory_limits().active_memory_limit_bytes() as u64,
         global_astro_ssd_prompt_cache_maximum_size_bytes,

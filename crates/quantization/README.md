@@ -57,7 +57,7 @@ Every `mod.rs` holds only module declarations and re-exports; each concern lives
 | Write the multi-token-prediction head | `requantize::{mtp_sidecar, mtp_sidecar_writer}`, `artifact::mtp_config` | `runtime/mtp_convert.py` `preserve_mtp` | `direct-mlx` for the writer | ported |
 | Evaluate a finished artifact against a reference | `evaluation::{prompts, kl_statistics, kl_evaluation}` through `evaluation::KlDivergenceEngine` | `eval/kl.py` `evaluate_kl` | engine-side only | ported; the Qwen3.5 engine in model-serving forwards both models; the reference is named explicitly rather than resolved from the Hub |
 | Roofline throughput model | `latency::{hardware_profile, roofline, calibrated_model}` | `core/latency.py` | no | ported |
-| Key-value cache allocation | `kv_cache::{cache_sensitivity, cache_allocator, cache_config_document}` | `core/kv_cache.py` | engine-side only | sweep driver and allocator ported; an engine probe is not yet written |
+| Key-value cache allocation | `astro_decoder_state_cache::{astro_decoder_state_cache_sensitivity, astro_decoder_state_cache_allocator, astro_decoder_state_cache_config_document}` | `core/kv_cache.py` | engine-side only | sweep driver and allocator ported; an engine probe is not yet written |
 | Orchestrate | `pipeline` with `artifact_files`, `conversion` and `probe_source_view` | `models/llm.py` `run_llm_pipeline` | `direct-mlx` for the full path | ported |
 | Progress and ETA | `progress` | the per-layer ETA prints | no | ported |
 
@@ -122,7 +122,7 @@ CLI journeys (`cargo test -p astronomical-cli --test integration_tests quantize`
 4. `encoder::reference` and `sensitivity::kl_divergence`, driven by `tests/integration/encoder_reference_parity.rs` and `tests/integration/kl_divergence_parity.rs`; then `encoder::mlx` against the direct-MLX contracts.
 5. `module_inventory` and `requantize`, driven by the integration journeys and then the direct-MLX requantizer contract. At this point `convert --method static` works end to end.
 6. `calibration`, `sensitivity::exact_sweep`, and the Qwen3.5 probe in model-serving, driven by the scripted-probe unit tests and then the acceptance sweep journey.
-7. `latency` and `kv_cache`, which have no consumer on the critical path.
+7. `latency` and `astro_decoder_state_cache`, which have no consumer on the critical path.
 
 ## Open questions recorded for the implementer
 

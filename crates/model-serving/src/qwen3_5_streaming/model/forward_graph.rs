@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
-use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
+use crate::{AstroDecoderStateCacheState, PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5Model;
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
@@ -486,7 +486,7 @@ fn completed_layer_roots<'layer>(
         layer_output,
         convolution_state: request_decoder_state
             .layer(layer_index)
-            .and_then(DecoderCacheState::convolution_state_array),
+            .and_then(AstroDecoderStateCacheState::convolution_state_array),
         boundary_checkpoint_states: boundary_checkpoint_collector
             .map(|collector| collector.layer_evaluation_arrays(layer_index))
             .unwrap_or_default(),

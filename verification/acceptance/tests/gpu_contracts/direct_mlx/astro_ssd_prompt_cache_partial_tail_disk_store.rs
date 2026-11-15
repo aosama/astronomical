@@ -316,14 +316,16 @@ fn tail_tokens_for_count(tail_token_count: usize) -> Vec<u32> {
         .collect()
 }
 
-fn sequence_tensor_layouts() -> Vec<astronomical_model_serving::DecoderCachePersistedTensorLayout> {
+fn sequence_tensor_layouts()
+-> Vec<astronomical_model_serving::AstroDecoderStateCachePersistedTensorLayout> {
     qwen3_5_moe::astro_ssd_prompt_cache_model_contract()
-        .decoder_cache_layout()
+        .astro_decoder_state_cache_layout()
         .sequence_tensor_layouts()
 }
 
-fn boundary_tensor_layouts() -> Vec<astronomical_model_serving::DecoderCachePersistedTensorLayout> {
+fn boundary_tensor_layouts()
+-> Vec<astronomical_model_serving::AstroDecoderStateCachePersistedTensorLayout> {
     qwen3_5_moe::astro_ssd_prompt_cache_model_contract()
-        .decoder_cache_layout()
+        .astro_decoder_state_cache_layout()
         .boundary_tensor_layouts()
 }

@@ -9,22 +9,25 @@
 //! The measurement is the same probe-and-KL idea as the weight sweep, with
 //! the cache quantized per layer instead of the weight; the allocation is
 //! the same greedy knapsack on bits per cached element. Both are ported
-//! here as pure logic over a [`KvCacheProbeModel`] trait. Wiring the result
+//! here as pure logic over a [`AstroDecoderStateCacheProbeModel`] trait. Wiring the result
 //! into Astronomical's decoder cache (which already supports per-layer
 //! quantized full-attention state) is serving work owned by model-serving's
 //! `memory` package, not this crate.
 
-pub mod cache_allocator;
-pub mod cache_config_document;
-pub mod cache_sensitivity;
+pub mod astro_decoder_state_cache_allocator;
+pub mod astro_decoder_state_cache_config_document;
+pub mod astro_decoder_state_cache_sensitivity;
 
-pub use cache_allocator::{KvCacheLayerConfig, estimate_kv_cache_bytes, optimize_kv_cache};
-pub use cache_config_document::KvCacheConfigDocument;
-pub use cache_sensitivity::{
-    CachedLayerDescriptor, KvCacheProbeModel, KvCacheSensitivityResult,
-    measure_kv_cache_sensitivity,
+pub use astro_decoder_state_cache_allocator::{
+    AstroDecoderStateCacheLayerConfig, estimate_astro_decoder_state_cache_bytes,
+    optimize_astro_decoder_state_cache,
+};
+pub use astro_decoder_state_cache_config_document::AstroDecoderStateCacheConfigDocument;
+pub use astro_decoder_state_cache_sensitivity::{
+    AstroDecoderStateCacheProbeModel, AstroDecoderStateCacheSensitivityResult,
+    CachedLayerDescriptor, measure_astro_decoder_state_cache_sensitivity,
 };
 
 #[cfg(test)]
-#[path = "kv_cache_tests.rs"]
-mod kv_cache_tests;
+#[path = "astro_decoder_state_cache_tests.rs"]
+mod astro_decoder_state_cache_tests;

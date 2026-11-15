@@ -117,7 +117,7 @@ impl Qwen3_5Model {
                     performance_attribution,
                 )?,
             };
-        let decoder_cache_layout = measured_decoder_cache_layout(
+        let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
             &config,
             &chunking,
             &weights,
@@ -144,14 +144,14 @@ impl Qwen3_5Model {
             &vision_model,
             expert_pager.as_ref(),
             dense_layer_streamer.as_ref(),
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             performance_attribution,
         )?;
         Ok(Self {
             base: Qwen3_5ModelBase {
                 runtime,
                 config,
-                decoder_cache_layout,
+                astro_decoder_state_cache_layout,
                 weights,
                 disk_embedding_rows,
                 vision_model,
@@ -202,17 +202,22 @@ fn compiled_model_graphs()
 /// Derives the decoder cache layout under attribution. It waits for bound
 /// weights and sparse plans, whose source dtypes decide MLX result-type
 /// promotion, and evaluates no tensor.
-fn measured_decoder_cache_layout(
+fn measured_astro_decoder_state_cache_layout(
     config: &crate::Qwen3_5Config,
     chunking: &super::Qwen3_5ModelChunkingConfiguration,
     weights: &Qwen3_5Weights,
     expert_pager: Option<&Qwen3_5ExpertPager>,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
+) -> Result<crate::AstroDecoderStateCacheLayout, Qwen3_5ExecutionError> {
     performance_attribution.measure_operation(
         PerformanceOperation::ModelTensorBinding,
         |_performance_attribution| {
-            decoder_cache_layout_at_tensor_binding(config, chunking, weights, expert_pager)
+            astro_decoder_state_cache_layout_at_tensor_binding(
+                config,
+                chunking,
+                weights,
+                expert_pager,
+            )
         },
     )
 }
@@ -430,7 +435,7 @@ fn build_streaming_expert_budget(
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_pager: Option<&Qwen3_5ExpertPager>,
     dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
-    decoder_cache_layout: &crate::DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &crate::AstroDecoderStateCacheLayout,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertBudgetOutcome, Qwen3_5ExecutionError> {
     let DenseStreamingGeometry {
@@ -496,7 +501,7 @@ fn build_streaming_expert_budget(
             largest_complete_expert_layer_bytes,
             largest_routed_expert_page_bytes,
             sequence_state_bytes_per_token: u64::try_from(
-                decoder_cache_layout
+                astro_decoder_state_cache_layout
                     .sequence_state_payload_byte_count_per_token()
                     .unwrap_or(0),
             )
@@ -563,31 +568,31 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
 /// Cache geometry cannot be finalized before weights and sparse plans are
 /// bound: their source dtypes determine MLX result-type promotion, so the
 /// persistence contract is derived here without evaluating tensors.
-fn decoder_cache_layout_at_tensor_binding(
+fn astro_decoder_state_cache_layout_at_tensor_binding(
     config: &crate::Qwen3_5Config,
     chunking: &super::Qwen3_5ModelChunkingConfiguration,
     weights: &Qwen3_5Weights,
     expert_pager: Option<&Qwen3_5ExpertPager>,
-) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
-    let decoder_layer_cache_dtypes =
-        crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_decoder_layer_cache_dtypes(
+) -> Result<crate::AstroDecoderStateCacheLayout, Qwen3_5ExecutionError> {
+    let astro_decoder_state_cache_layer_dtypes =
+        crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_astro_decoder_state_cache_layer_dtypes(
             weights,
             // A sparse layer without a pager finds no plan here, so the
             // derivation still fails, now with the shared "no layer plan" text.
             expert_pager.map_or(&[], Qwen3_5ExpertPager::layer_plans),
         )?;
-    crate::qwen3_5_core::decoder::qwen3_5_decoder_cache_layout(
+    crate::qwen3_5_core::decoder::qwen3_5_astro_decoder_state_cache_layout(
         config,
         usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "full-attention key/value growth tokens exceed the usize range",
             }
         })?,
-        &decoder_layer_cache_dtypes,
+        &astro_decoder_state_cache_layer_dtypes,
     )
-    .map_err(
-        |decoder_cache_layout_error| Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
-            description: decoder_cache_layout_error.to_string(),
-        },
-    )
+    .map_err(|astro_decoder_state_cache_layout_error| {
+        Qwen3_5ExecutionError::InvalidAstroDecoderStateCacheLayout {
+            description: astro_decoder_state_cache_layout_error.to_string(),
+        }
+    })
 }

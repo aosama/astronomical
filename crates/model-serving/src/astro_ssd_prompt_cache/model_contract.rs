@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 #[cfg(test)]
 mod tests;
 
-use crate::{DecoderCacheLayout, DecoderCachePersistedTensorLayout};
+use crate::{AstroDecoderStateCacheLayout, AstroDecoderStateCachePersistedTensorLayout};
 
 use super::block_format::ASTRO_SSD_PROMPT_CACHE_FORMAT_VERSION;
 use super::model_contract_error::AstroSsdPromptCacheModelContractError;
@@ -22,7 +22,7 @@ use super::model_contract_storage_geometry::{
 pub struct AstroSsdPromptCacheModelContract {
     model_id: String,
     model_revision: String,
-    decoder_cache_layout: DecoderCacheLayout,
+    astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
     maximum_context_token_count: usize,
     effective_mlx_memory_ceiling_bytes: u64,
     block_token_count: usize,
@@ -49,7 +49,7 @@ impl AstroSsdPromptCacheModelContract {
     pub fn resolve(
         model_id: String,
         model_revision: String,
-        decoder_cache_layout: DecoderCacheLayout,
+        astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
         maximum_context_token_count: usize,
         effective_mlx_memory_ceiling_bytes: u64,
         global_ssd_quota_bytes: u64,
@@ -59,17 +59,17 @@ impl AstroSsdPromptCacheModelContract {
         validated_resolve_inputs(
             &model_id,
             &model_revision,
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             maximum_context_token_count,
             common_prefix_checkpoint_stride_blocks,
         )?;
 
         let sequence_state_payload_bytes_per_token =
-            decoder_cache_layout.sequence_state_payload_byte_count_per_token()?;
+            astro_decoder_state_cache_layout.sequence_state_payload_byte_count_per_token()?;
         let boundary_state_payload_bytes =
-            decoder_cache_layout.boundary_snapshot_payload_byte_count()?;
+            astro_decoder_state_cache_layout.boundary_snapshot_payload_byte_count()?;
         let persistence_alignment_token_count =
-            decoder_cache_layout.persistence_alignment_token_count()?;
+            astro_decoder_state_cache_layout.persistence_alignment_token_count()?;
         // The block length belongs to the immutable artifact contract, not a deployment-wide
         // tuning constant. Matching append-only allocation growth avoids capture boundaries that
         // force incompatible state reshaping, while the quota-derived size prevents a laptop
@@ -90,7 +90,7 @@ impl AstroSsdPromptCacheModelContract {
         let resolved_block_file_geometry = block_file_geometry_within_ssd_quota(
             initial_block_token_count,
             &BlockFileSizingInputs {
-                decoder_cache_layout: &decoder_cache_layout,
+                astro_decoder_state_cache_layout: &astro_decoder_state_cache_layout,
                 maximum_context_token_count,
                 persistence_alignment_token_count,
                 global_ssd_quota_bytes,
@@ -109,7 +109,7 @@ impl AstroSsdPromptCacheModelContract {
             .ok_or(AstroSsdPromptCacheModelContractError::CapturePayloadByteCountOverflow)?;
         let direct_publication_workspace_bytes =
             direct_publication_workspace_bytes_for_block_token_count(
-                &decoder_cache_layout,
+                &astro_decoder_state_cache_layout,
                 block_token_count,
             )?;
         validated_capture_budgets(
@@ -125,7 +125,7 @@ impl AstroSsdPromptCacheModelContract {
         let storage_contract_fingerprint = storage_contract_fingerprint(
             &model_id,
             &model_revision,
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             block_token_count,
             common_prefix_checkpoint_stride_blocks,
         );
@@ -133,7 +133,7 @@ impl AstroSsdPromptCacheModelContract {
         Ok(Self {
             model_id,
             model_revision,
-            decoder_cache_layout,
+            astro_decoder_state_cache_layout,
             maximum_context_token_count,
             effective_mlx_memory_ceiling_bytes,
             block_token_count,
@@ -163,8 +163,8 @@ impl AstroSsdPromptCacheModelContract {
     }
 
     #[must_use]
-    pub const fn decoder_cache_layout(&self) -> &DecoderCacheLayout {
-        &self.decoder_cache_layout
+    pub const fn astro_decoder_state_cache_layout(&self) -> &AstroDecoderStateCacheLayout {
+        &self.astro_decoder_state_cache_layout
     }
 
     #[must_use]
@@ -184,12 +184,12 @@ impl AstroSsdPromptCacheModelContract {
 
     #[must_use]
     pub const fn has_sequence_state(&self) -> bool {
-        self.decoder_cache_layout.has_sequence_state()
+        self.astro_decoder_state_cache_layout.has_sequence_state()
     }
 
     #[must_use]
     pub const fn has_boundary_state(&self) -> bool {
-        self.decoder_cache_layout.has_boundary_state()
+        self.astro_decoder_state_cache_layout.has_boundary_state()
     }
 
     #[must_use]
@@ -229,7 +229,8 @@ impl AstroSsdPromptCacheModelContract {
         }
         exact_state_file_bytes(
             block_token_count,
-            self.decoder_cache_layout.sequence_tensor_layouts(),
+            self.astro_decoder_state_cache_layout
+                .sequence_tensor_layouts(),
         )
     }
 
@@ -246,7 +247,8 @@ impl AstroSsdPromptCacheModelContract {
         }
         exact_state_file_bytes(
             block_token_count,
-            self.decoder_cache_layout.boundary_tensor_layouts(),
+            self.astro_decoder_state_cache_layout
+                .boundary_tensor_layouts(),
         )
     }
 
@@ -363,7 +365,7 @@ fn checked_align_up(
 fn storage_contract_fingerprint(
     model_id: &str,
     model_revision: &str,
-    decoder_cache_layout: &DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     block_token_count: usize,
     common_prefix_checkpoint_stride_blocks: u32,
 ) -> [u8; 32] {
@@ -382,12 +384,12 @@ fn storage_contract_fingerprint(
     update_tensor_layout_fingerprint(
         &mut fingerprint_digest,
         b"sequence",
-        decoder_cache_layout.sequence_tensor_layouts(),
+        astro_decoder_state_cache_layout.sequence_tensor_layouts(),
     );
     update_tensor_layout_fingerprint(
         &mut fingerprint_digest,
         b"boundary",
-        decoder_cache_layout.boundary_tensor_layouts(),
+        astro_decoder_state_cache_layout.boundary_tensor_layouts(),
     );
     fingerprint_digest.finalize().into()
 }
@@ -395,7 +397,7 @@ fn storage_contract_fingerprint(
 fn update_tensor_layout_fingerprint(
     fingerprint_digest: &mut Sha256,
     state_kind_name: &[u8],
-    persisted_tensor_layouts: Vec<DecoderCachePersistedTensorLayout>,
+    persisted_tensor_layouts: Vec<AstroDecoderStateCachePersistedTensorLayout>,
 ) {
     update_length_prefixed_bytes(fingerprint_digest, state_kind_name);
     fingerprint_digest.update((persisted_tensor_layouts.len() as u64).to_be_bytes());
@@ -438,8 +440,9 @@ struct BlockTokenCountSizingInputs {
 
 /// The layout and budget inputs that size block files against the global SSD
 /// quota, grouped so the sizing loop receives one coherent view.
-struct BlockFileSizingInputs<'decoder_cache_layout> {
-    decoder_cache_layout: &'decoder_cache_layout DecoderCacheLayout,
+struct BlockFileSizingInputs<'astro_decoder_state_cache_layout> {
+    astro_decoder_state_cache_layout:
+        &'astro_decoder_state_cache_layout AstroDecoderStateCacheLayout,
     maximum_context_token_count: usize,
     persistence_alignment_token_count: usize,
     global_ssd_quota_bytes: u64,
@@ -461,7 +464,7 @@ struct ResolvedBlockFileGeometry {
 fn validated_resolve_inputs(
     model_id: &str,
     model_revision: &str,
-    decoder_cache_layout: &DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     maximum_context_token_count: usize,
     common_prefix_checkpoint_stride_blocks: u32,
 ) -> Result<(), AstroSsdPromptCacheModelContractError> {
@@ -477,7 +480,9 @@ fn validated_resolve_inputs(
     if common_prefix_checkpoint_stride_blocks == 0 {
         return Err(AstroSsdPromptCacheModelContractError::ZeroCommonPrefixCheckpointStrideBlocks);
     }
-    if !decoder_cache_layout.has_sequence_state() && !decoder_cache_layout.has_boundary_state() {
+    if !astro_decoder_state_cache_layout.has_sequence_state()
+        && !astro_decoder_state_cache_layout.has_boundary_state()
+    {
         return Err(AstroSsdPromptCacheModelContractError::NoPersistentState);
     }
     Ok(())
@@ -534,13 +539,13 @@ fn block_file_geometry_within_ssd_quota(
         let sequence_state_file_bytes = exact_state_file_bytes(
             block_token_count,
             block_file_sizing_inputs
-                .decoder_cache_layout
+                .astro_decoder_state_cache_layout
                 .sequence_tensor_layouts(),
         )?;
         let boundary_state_file_bytes = exact_state_file_bytes(
             block_token_count,
             block_file_sizing_inputs
-                .decoder_cache_layout
+                .astro_decoder_state_cache_layout
                 .boundary_tensor_layouts(),
         )?;
         let maximum_committed_block_bytes = sequence_state_file_bytes
@@ -595,16 +600,16 @@ fn block_file_geometry_within_ssd_quota(
 /// Derives the peak additional workspace direct safetensors publication needs
 /// for one block token count.
 fn direct_publication_workspace_bytes_for_block_token_count(
-    decoder_cache_layout: &DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     block_token_count: usize,
 ) -> Result<usize, AstroSsdPromptCacheModelContractError> {
     // Native safetensors publication evaluates and copies one tensor at a
     // time. Peak *additional* workspace is therefore the largest individual
     // tensor, not the sum of captured decoder state already owned by request.
-    Ok(decoder_cache_layout
+    Ok(astro_decoder_state_cache_layout
         .maximum_sequence_tensor_payload_byte_count(block_token_count)?
         .max(
-            decoder_cache_layout
+            astro_decoder_state_cache_layout
                 .boundary_tensor_layouts()
                 .iter()
                 .map(|persisted_tensor_layout| {

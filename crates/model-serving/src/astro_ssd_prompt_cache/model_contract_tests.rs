@@ -3,10 +3,11 @@
 //! input validation, block token count selection, SSD-quota block file
 //! sizing, and direct publication workspace derivation.
 
-use crate::astro_ssd_prompt_cache::model_contract_error::AstroSsdPromptCacheModelContractError;
-use crate::decoder_cache::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
+use crate::astro_ssd_prompt_cache::model_contract_error::AstroSsdPromptCacheModelContractError;
 
 use super::{
     BlockFileSizingInputs, BlockTokenCountSizingInputs, block_file_geometry_within_ssd_quota,
@@ -19,40 +20,42 @@ const FIXTURE_MAXIMUM_CONTEXT_TOKEN_COUNT: usize = 128;
 const FIXTURE_PERSISTENCE_ALIGNMENT_TOKEN_COUNT: usize = 4;
 const FITTING_GLOBAL_SSD_QUOTA_BYTES: u64 = 1_000_000_000;
 
-fn synthetic_hybrid_layout(boundary_element_count: usize) -> DecoderCacheLayout {
+fn synthetic_hybrid_layout(boundary_element_count: usize) -> AstroDecoderStateCacheLayout {
     // One composite layer: sequence payload costs 8 bytes per token and the
     // boundary snapshot costs 4 bytes per element, so fixture byte budgets
     // stay small and predictable.
-    DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::composite(vec![
-        DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
+    AstroDecoderStateCacheLayout::new(vec![AstroDecoderStateCacheLayerLayout::composite(vec![
+        AstroDecoderStateCacheLayerLayout::append_only_attention(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.keys",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 2],
                 1,
             ),
-            DecoderCacheTensorLayout::sequence(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.values",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 2],
                 1,
             ),
             FIXTURE_PERSISTENCE_ALIGNMENT_TOKEN_COUNT,
         ),
-        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-            "recurrent.state",
-            DecoderCacheTensorDtype::Float32,
-            vec![boundary_element_count],
-        )),
+        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+            AstroDecoderStateCacheTensorLayout::fixed(
+                "recurrent.state",
+                AstroDecoderStateCacheTensorDtype::Float32,
+                vec![boundary_element_count],
+            ),
+        ),
     ])])
     .expect("the synthetic hybrid layout should be valid")
 }
 
-fn synthetic_boundary_only_layout(boundary_element_count: usize) -> DecoderCacheLayout {
-    DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::recurrent_tensor(
-        DecoderCacheTensorLayout::fixed(
+fn synthetic_boundary_only_layout(boundary_element_count: usize) -> AstroDecoderStateCacheLayout {
+    AstroDecoderStateCacheLayout::new(vec![AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+        AstroDecoderStateCacheTensorLayout::fixed(
             "recurrent.state",
-            DecoderCacheTensorDtype::Float32,
+            AstroDecoderStateCacheTensorDtype::Float32,
             vec![boundary_element_count],
         ),
     )])
@@ -112,7 +115,7 @@ fn should_reject_a_zero_common_prefix_checkpoint_stride() {
 #[test]
 fn should_reject_a_layout_without_any_persistent_state() {
     let empty_layout =
-        DecoderCacheLayout::new(vec![]).expect("an empty layout should still construct");
+        AstroDecoderStateCacheLayout::new(vec![]).expect("an empty layout should still construct");
 
     let validation = validated_resolve_inputs("model", "revision", &empty_layout, 128, 4);
 
@@ -221,12 +224,12 @@ fn should_derive_the_block_from_boundary_payload_geometry_when_not_configured() 
 }
 
 fn block_file_sizing_inputs_fixture(
-    decoder_cache_layout: &DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     global_ssd_quota_bytes: u64,
     block_token_count_is_user_configured: bool,
 ) -> BlockFileSizingInputs<'_> {
     BlockFileSizingInputs {
-        decoder_cache_layout,
+        astro_decoder_state_cache_layout,
         maximum_context_token_count: FIXTURE_MAXIMUM_CONTEXT_TOKEN_COUNT,
         persistence_alignment_token_count: FIXTURE_PERSISTENCE_ALIGNMENT_TOKEN_COUNT,
         global_ssd_quota_bytes,
@@ -240,12 +243,12 @@ fn block_file_sizing_inputs_fixture(
 
 #[test]
 fn should_keep_a_user_block_whose_chain_fits_the_ssd_quota() {
-    let decoder_cache_layout = synthetic_hybrid_layout(8);
+    let astro_decoder_state_cache_layout = synthetic_hybrid_layout(8);
 
     let resolved_geometry = block_file_geometry_within_ssd_quota(
         16,
         &block_file_sizing_inputs_fixture(
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             FITTING_GLOBAL_SSD_QUOTA_BYTES,
             true,
         ),
@@ -255,13 +258,19 @@ fn should_keep_a_user_block_whose_chain_fits_the_ssd_quota() {
     assert_eq!(resolved_geometry.block_token_count, 16);
     assert_eq!(
         resolved_geometry.sequence_state_file_bytes,
-        exact_state_file_bytes(16, decoder_cache_layout.sequence_tensor_layouts())
-            .expect("the fixture sequence file size should resolve")
+        exact_state_file_bytes(
+            16,
+            astro_decoder_state_cache_layout.sequence_tensor_layouts()
+        )
+        .expect("the fixture sequence file size should resolve")
     );
     assert_eq!(
         resolved_geometry.boundary_state_file_bytes,
-        exact_state_file_bytes(16, decoder_cache_layout.boundary_tensor_layouts())
-            .expect("the fixture boundary file size should resolve")
+        exact_state_file_bytes(
+            16,
+            astro_decoder_state_cache_layout.boundary_tensor_layouts()
+        )
+        .expect("the fixture boundary file size should resolve")
     );
     assert!(
         resolved_geometry.maximum_committed_block_bytes
@@ -273,11 +282,11 @@ fn should_keep_a_user_block_whose_chain_fits_the_ssd_quota() {
 
 #[test]
 fn should_reject_a_user_block_whose_chain_exceeds_the_ssd_quota() {
-    let decoder_cache_layout = synthetic_hybrid_layout(8);
+    let astro_decoder_state_cache_layout = synthetic_hybrid_layout(8);
 
     let resolved_geometry = block_file_geometry_within_ssd_quota(
         16,
-        &block_file_sizing_inputs_fixture(&decoder_cache_layout, 1, true),
+        &block_file_sizing_inputs_fixture(&astro_decoder_state_cache_layout, 1, true),
     );
 
     assert!(matches!(
@@ -293,11 +302,11 @@ fn should_reject_a_user_block_whose_chain_exceeds_the_ssd_quota() {
 
 #[test]
 fn should_grow_an_automatic_block_until_its_chain_fits_the_ssd_quota() {
-    let decoder_cache_layout = synthetic_hybrid_layout(8);
+    let astro_decoder_state_cache_layout = synthetic_hybrid_layout(8);
     let fitting_geometry = block_file_geometry_within_ssd_quota(
         4,
         &block_file_sizing_inputs_fixture(
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             FITTING_GLOBAL_SSD_QUOTA_BYTES,
             false,
         ),
@@ -310,7 +319,7 @@ fn should_grow_an_automatic_block_until_its_chain_fits_the_ssd_quota() {
     let grown_geometry = block_file_geometry_within_ssd_quota(
         4,
         &block_file_sizing_inputs_fixture(
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             tight_global_ssd_quota_bytes,
             false,
         ),
@@ -320,18 +329,21 @@ fn should_grow_an_automatic_block_until_its_chain_fits_the_ssd_quota() {
     assert_eq!(grown_geometry.block_token_count, 8);
     assert_eq!(
         grown_geometry.sequence_state_file_bytes,
-        exact_state_file_bytes(8, decoder_cache_layout.sequence_tensor_layouts())
-            .expect("the grown sequence file size should resolve")
+        exact_state_file_bytes(
+            8,
+            astro_decoder_state_cache_layout.sequence_tensor_layouts()
+        )
+        .expect("the grown sequence file size should resolve")
     );
 }
 
 #[test]
 fn should_fail_when_a_saturated_block_chain_still_exceeds_the_ssd_quota() {
-    let decoder_cache_layout = synthetic_hybrid_layout(8);
+    let astro_decoder_state_cache_layout = synthetic_hybrid_layout(8);
 
     let resolved_geometry = block_file_geometry_within_ssd_quota(
         FIXTURE_MAXIMUM_CONTEXT_TOKEN_COUNT,
-        &block_file_sizing_inputs_fixture(&decoder_cache_layout, 1, false),
+        &block_file_sizing_inputs_fixture(&astro_decoder_state_cache_layout, 1, false),
     );
 
     // The block token count is pinned at the context limit, so automatic

@@ -12,7 +12,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeig
 use crate::qwen3_5_core::model_math::error::{
     Qwen3_5ExecutionError, invalid_request_decoder_state,
 };
-use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
+use crate::{AstroDecoderStateCacheState, PerformanceAttribution, PerformanceOperation};
 
 use super::base::Qwen3_5ModelBase;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
@@ -34,7 +34,7 @@ impl Qwen3_5ModelBase {
         rope_offset_tokens: i32,
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
-        layer_model_state: &mut DecoderCacheState,
+        layer_model_state: &mut AstroDecoderStateCacheState,
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
@@ -54,7 +54,7 @@ impl Qwen3_5ModelBase {
         let attention_output = match (&decoder_layer_weights.attention_weights, layer_model_state) {
             (
                 Qwen3_5AttentionWeights::Linear(linear_attention_weights),
-                DecoderCacheState::Composite {
+                AstroDecoderStateCacheState::Composite {
                     convolution,
                     recurrent,
                 },
@@ -75,7 +75,7 @@ impl Qwen3_5ModelBase {
             ),
             (
                 Qwen3_5AttentionWeights::Full(full_attention_weights),
-                DecoderCacheState::AppendOnlyAttention { attention },
+                AstroDecoderStateCacheState::AppendOnlyAttention { attention },
             ) => performance_attribution.measure_operation(
                 PerformanceOperation::FullAttentionGraphConstruction,
                 |_performance_attribution| {

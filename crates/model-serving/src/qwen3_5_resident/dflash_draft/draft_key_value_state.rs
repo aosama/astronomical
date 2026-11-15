@@ -15,7 +15,7 @@
 //! Rollback of rejected speculation is `truncate_to_offset`, the same
 //! transactional primitive the target's decode path uses.
 
-use crate::decoder_cache::FullAttentionKeyValueState;
+use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// Capacity growth granularity for draft key-value slabs, in tokens. The

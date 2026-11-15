@@ -155,7 +155,7 @@ async fn should_retry_the_same_captured_arrays_after_releasing_artificial_active
         let boundary_state_tensors = synthetic_recurrent_snapshot_tensors(&runtime);
         let model_contract = qwen3_5_moe::astro_ssd_prompt_cache_model_contract();
         let sequence_tensor_layout = model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_layouts()
             .into_iter()
             .next()

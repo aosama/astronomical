@@ -1,5 +1,5 @@
 use super::RequestDecoderStateStack;
-use crate::DecoderCacheState;
+use crate::AstroDecoderStateCacheState;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
 use std::collections::HashMap;
@@ -26,7 +26,7 @@ impl RequestDecoderStateStack {
         let mut kv_block_tensors = HashMap::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                     let attention_keys = attention.keys_state().ok_or(
                         AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
@@ -62,7 +62,7 @@ impl RequestDecoderStateStack {
                         )?,
                     );
                 }
-                Some(DecoderCacheState::Composite { .. }) => {}
+                Some(AstroDecoderStateCacheState::Composite { .. }) => {}
                 None => {
                     return Err(AstroSsdPromptCacheStateBridgeError::MissingLayer { layer_index });
                 }
@@ -78,8 +78,8 @@ impl RequestDecoderStateStack {
         let mut recurrent_snapshot_tensors = HashMap::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { .. }) => {}
-                Some(DecoderCacheState::Composite {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { .. }) => {}
+                Some(AstroDecoderStateCacheState::Composite {
                     convolution,
                     recurrent,
                 }) => {
@@ -120,8 +120,8 @@ impl RequestDecoderStateStack {
     ) -> Result<(), AstroSsdPromptCacheStateBridgeError> {
         for layer_index in 0..self.layer_count() {
             match self.layer_mut(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { .. }) => {}
-                Some(DecoderCacheState::Composite {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { .. }) => {}
+                Some(AstroDecoderStateCacheState::Composite {
                     convolution,
                     recurrent,
                 }) => {
@@ -165,7 +165,7 @@ impl RequestDecoderStateStack {
         let mut restored_tensors = Vec::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                     restored_tensors.push(attention.keys_state().ok_or(
                         AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
@@ -179,7 +179,7 @@ impl RequestDecoderStateStack {
                         },
                     )?);
                 }
-                Some(DecoderCacheState::Composite {
+                Some(AstroDecoderStateCacheState::Composite {
                     convolution,
                     recurrent,
                 }) => {

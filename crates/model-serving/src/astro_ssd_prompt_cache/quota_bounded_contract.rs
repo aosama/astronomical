@@ -8,7 +8,7 @@
 
 use super::model_contract::AstroSsdPromptCacheModelContract;
 use super::model_contract_error::AstroSsdPromptCacheModelContractError;
-use crate::DecoderCacheLayout;
+use crate::AstroDecoderStateCacheLayout;
 
 #[allow(clippy::too_many_arguments)]
 /// Resolves the model contract, shrinking the cacheable context on quota
@@ -16,7 +16,7 @@ use crate::DecoderCacheLayout;
 pub(crate) fn resolve_quota_bounded_astro_ssd_prompt_cache_contract(
     model_id: &str,
     model_revision: &str,
-    decoder_cache_layout: DecoderCacheLayout,
+    astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
     model_maximum_context_token_count: usize,
     effective_mlx_memory_ceiling_bytes: u64,
     global_ssd_quota_bytes: u64,
@@ -29,7 +29,7 @@ pub(crate) fn resolve_quota_bounded_astro_ssd_prompt_cache_contract(
         match AstroSsdPromptCacheModelContract::resolve(
             model_id.to_owned(),
             model_revision.to_owned(),
-            decoder_cache_layout.clone(),
+            astro_decoder_state_cache_layout.clone(),
             cacheable_context_token_count,
             effective_mlx_memory_ceiling_bytes,
             global_ssd_quota_bytes,
@@ -57,26 +57,28 @@ pub(crate) fn resolve_quota_bounded_astro_ssd_prompt_cache_contract(
 mod tests {
     use super::*;
     use crate::{
-        AstroSsdPromptCacheModelContractError, DecoderCacheLayerLayout, DecoderCacheTensorDtype,
-        DecoderCacheTensorLayout,
+        AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheTensorDtype,
+        AstroDecoderStateCacheTensorLayout, AstroSsdPromptCacheModelContractError,
     };
 
-    fn single_layer_layout() -> DecoderCacheLayout {
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
-                "attention.keys",
-                DecoderCacheTensorDtype::Float16,
-                vec![1, 1, 0, 1],
-                2,
+    fn single_layer_layout() -> AstroDecoderStateCacheLayout {
+        AstroDecoderStateCacheLayout::new(vec![
+            AstroDecoderStateCacheLayerLayout::append_only_attention(
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.keys",
+                    AstroDecoderStateCacheTensorDtype::Float16,
+                    vec![1, 1, 0, 1],
+                    2,
+                ),
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.values",
+                    AstroDecoderStateCacheTensorDtype::Float16,
+                    vec![1, 1, 0, 1],
+                    2,
+                ),
+                1,
             ),
-            DecoderCacheTensorLayout::sequence(
-                "attention.values",
-                DecoderCacheTensorDtype::Float16,
-                vec![1, 1, 0, 1],
-                2,
-            ),
-            1,
-        )])
+        ])
         .expect("the single-layer test layout must validate")
     }
 

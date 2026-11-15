@@ -1,10 +1,11 @@
-use crate::astro_ssd_prompt_cache::model_contract_error::AstroSsdPromptCacheModelContractError;
-use crate::decoder_cache::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
+use crate::astro_ssd_prompt_cache::model_contract_error::AstroSsdPromptCacheModelContractError;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::decoder::cache_layout::{
-    Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout,
+    Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
 };
 use crate::qwen3_5_core::frozen_config_test_support::{
     frozen_ornith_1_0_config, persistent_visual_embedding_model_contract,
@@ -23,12 +24,19 @@ const TEST_SSD_QUOTA_BYTES: u64 = 50_000_000_000;
 /// below holds only the facts it verifies.
 fn frozen_ornith_storage_contract() -> (AstroSsdPromptCacheModelContract, Qwen3_5Config) {
     let ornith_config = frozen_ornith_1_0_config();
-    let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
+    let astro_decoder_state_cache_layer_dtypes =
+        bfloat16_astro_decoder_state_cache_layer_dtypes(&ornith_config);
     let storage_contract = AstroSsdPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes)
-            .expect("the frozen Ornith 1.0 configuration should build a decoder-cache layout"),
+        qwen3_5_astro_decoder_state_cache_layout(
+            &ornith_config,
+            256,
+            &astro_decoder_state_cache_layer_dtypes,
+        )
+        .expect(
+            "the frozen Ornith 1.0 configuration should build a astro-decoder-state-cache layout",
+        ),
         ornith_config.maximum_position_count() as usize,
         TEST_MLX_MEMORY_CEILING_BYTES,
         TEST_SSD_QUOTA_BYTES,
@@ -52,16 +60,21 @@ fn should_report_frozen_model_identity_and_layer_geometry() {
         storage_contract.model_revision(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION
     );
-    assert_eq!(storage_contract.decoder_cache_layout().layer_count(), 40);
     assert_eq!(
         storage_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
+            .layer_count(),
+        40
+    );
+    assert_eq!(
+        storage_contract
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_count(),
         20
     );
     assert_eq!(
         storage_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .boundary_tensor_count(),
         60
     );
@@ -78,7 +91,7 @@ fn should_report_frozen_tensor_shapes_for_sequence_boundary_and_visual_state() {
 
     assert_eq!(
         storage_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_layouts()
             .first()
             .expect("the frozen layout should contain sequence state")
@@ -88,7 +101,7 @@ fn should_report_frozen_tensor_shapes_for_sequence_boundary_and_visual_state() {
     );
     assert_eq!(
         storage_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .boundary_tensor_layouts()
             .first()
             .expect("the frozen layout should contain boundary state")
@@ -105,22 +118,22 @@ fn should_report_frozen_tensor_shapes_for_sequence_boundary_and_visual_state() {
 #[test]
 fn should_preserve_frozen_dtype_composition_across_the_cache_layout() {
     let (storage_contract, _ornith_config) = frozen_ornith_storage_contract();
-    let decoder_cache_layout = storage_contract.decoder_cache_layout();
+    let astro_decoder_state_cache_layout = storage_contract.astro_decoder_state_cache_layout();
 
     assert!(
-        decoder_cache_layout
+        astro_decoder_state_cache_layout
             .sequence_tensor_layouts()
             .iter()
             .all(|tensor_layout| tensor_layout.tensor_layout().dtype()
-                == DecoderCacheTensorDtype::BFloat16)
+                == AstroDecoderStateCacheTensorDtype::BFloat16)
     );
-    let boundary_tensor_layouts = decoder_cache_layout.boundary_tensor_layouts();
+    let boundary_tensor_layouts = astro_decoder_state_cache_layout.boundary_tensor_layouts();
     let mut bfloat16_boundary_count = 0_usize;
     let mut float32_boundary_count = 0_usize;
     for tensor_layout in boundary_tensor_layouts {
         match tensor_layout.tensor_layout().dtype() {
-            DecoderCacheTensorDtype::BFloat16 => bfloat16_boundary_count += 1,
-            DecoderCacheTensorDtype::Float32 => float32_boundary_count += 1,
+            AstroDecoderStateCacheTensorDtype::BFloat16 => bfloat16_boundary_count += 1,
+            AstroDecoderStateCacheTensorDtype::Float32 => float32_boundary_count += 1,
             // The frozen layout pins only these two dtypes for boundary state;
             // any other variant still fails the exact counts asserted below.
             _ => {}
@@ -151,29 +164,35 @@ fn should_account_frozen_payload_bytes_per_block_within_the_position_budget() {
 #[test]
 fn should_preserve_mixed_execution_dtypes_in_astro_ssd_prompt_cache_geometry() {
     let ornith_config = frozen_ornith_1_0_config();
-    let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
-    decoder_layer_cache_dtypes[0] = Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-        convolution: DecoderCacheTensorDtype::Float32,
-    };
-    decoder_layer_cache_dtypes[3] = Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-        keys: DecoderCacheTensorDtype::Float32,
-        values: DecoderCacheTensorDtype::Float32,
-    };
+    let mut astro_decoder_state_cache_layer_dtypes =
+        bfloat16_astro_decoder_state_cache_layer_dtypes(&ornith_config);
+    astro_decoder_state_cache_layer_dtypes[0] =
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+            convolution: AstroDecoderStateCacheTensorDtype::Float32,
+        };
+    astro_decoder_state_cache_layer_dtypes[3] =
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+            keys: AstroDecoderStateCacheTensorDtype::Float32,
+            values: AstroDecoderStateCacheTensorDtype::Float32,
+        };
 
-    let decoder_cache_layout =
-        qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes)
-            .expect("mixed execution dtypes should build an exact decoder-cache layout");
+    let astro_decoder_state_cache_layout = qwen3_5_astro_decoder_state_cache_layout(
+        &ornith_config,
+        256,
+        &astro_decoder_state_cache_layer_dtypes,
+    )
+    .expect("mixed execution dtypes should build an exact astro-decoder-state-cache layout");
 
-    let first_boundary_tensor = decoder_cache_layout
+    let first_boundary_tensor = astro_decoder_state_cache_layout
         .boundary_tensor_layouts()
         .into_iter()
         .find(|persisted_tensor_layout| persisted_tensor_layout.decoder_layer_index() == 0)
         .expect("the first linear-attention layer should have boundary state");
     assert_eq!(
         first_boundary_tensor.tensor_layout().dtype(),
-        DecoderCacheTensorDtype::Float32
+        AstroDecoderStateCacheTensorDtype::Float32
     );
-    let first_full_attention_tensors = decoder_cache_layout
+    let first_full_attention_tensors = astro_decoder_state_cache_layout
         .sequence_tensor_layouts()
         .into_iter()
         .filter(|persisted_tensor_layout| persisted_tensor_layout.decoder_layer_index() == 3)
@@ -183,23 +202,29 @@ fn should_preserve_mixed_execution_dtypes_in_astro_ssd_prompt_cache_geometry() {
         first_full_attention_tensors
             .iter()
             .all(|persisted_tensor_layout| {
-                persisted_tensor_layout.tensor_layout().dtype() == DecoderCacheTensorDtype::Float32
+                persisted_tensor_layout.tensor_layout().dtype()
+                    == AstroDecoderStateCacheTensorDtype::Float32
             })
     );
 }
 
 #[test]
-fn should_reject_decoder_cache_execution_dtypes_with_a_missing_layer() {
+fn should_reject_astro_decoder_state_cache_execution_dtypes_with_a_missing_layer() {
     let ornith_config = frozen_ornith_1_0_config();
-    let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
-    decoder_layer_cache_dtypes.pop();
+    let mut astro_decoder_state_cache_layer_dtypes =
+        bfloat16_astro_decoder_state_cache_layer_dtypes(&ornith_config);
+    astro_decoder_state_cache_layer_dtypes.pop();
 
-    let rejection = qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes);
+    let rejection = qwen3_5_astro_decoder_state_cache_layout(
+        &ornith_config,
+        256,
+        &astro_decoder_state_cache_layer_dtypes,
+    );
 
     assert!(matches!(
         rejection,
         Err(
-            crate::decoder_cache::DecoderCacheLayoutError::ExecutionDtypeLayerCountMismatch {
+            crate::astro_decoder_state_cache::AstroDecoderStateCacheLayoutError::ExecutionDtypeLayerCountMismatch {
                 expected_layer_count: 40,
                 actual_layer_count: 39,
             }
@@ -208,39 +233,45 @@ fn should_reject_decoder_cache_execution_dtypes_with_a_missing_layer() {
 }
 
 #[test]
-fn should_reject_decoder_cache_execution_dtypes_for_the_wrong_attention_family() {
+fn should_reject_astro_decoder_state_cache_execution_dtypes_for_the_wrong_attention_family() {
     let ornith_config = frozen_ornith_1_0_config();
-    let mut decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
-    decoder_layer_cache_dtypes[0] = Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-        keys: DecoderCacheTensorDtype::BFloat16,
-        values: DecoderCacheTensorDtype::BFloat16,
-    };
+    let mut astro_decoder_state_cache_layer_dtypes =
+        bfloat16_astro_decoder_state_cache_layer_dtypes(&ornith_config);
+    astro_decoder_state_cache_layer_dtypes[0] =
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+            keys: AstroDecoderStateCacheTensorDtype::BFloat16,
+            values: AstroDecoderStateCacheTensorDtype::BFloat16,
+        };
 
-    let rejection = qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes);
+    let rejection = qwen3_5_astro_decoder_state_cache_layout(
+        &ornith_config,
+        256,
+        &astro_decoder_state_cache_layer_dtypes,
+    );
 
     assert!(matches!(
         rejection,
         Err(
-            crate::decoder_cache::DecoderCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
+            crate::astro_decoder_state_cache::AstroDecoderStateCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
                 layer_index: 0,
             }
         )
     ));
 }
 
-fn bfloat16_decoder_layer_cache_dtypes(
+fn bfloat16_astro_decoder_state_cache_layer_dtypes(
     ornith_config: &Qwen3_5Config,
-) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
+) -> Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes> {
     (0..ornith_config.layer_count() as usize)
         .map(|decoder_layer_index| {
             if ornith_config.decoder_layer_is_full_attention(decoder_layer_index) {
-                Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-                    keys: DecoderCacheTensorDtype::BFloat16,
-                    values: DecoderCacheTensorDtype::BFloat16,
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+                    keys: AstroDecoderStateCacheTensorDtype::BFloat16,
+                    values: AstroDecoderStateCacheTensorDtype::BFloat16,
                 }
             } else {
-                Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-                    convolution: DecoderCacheTensorDtype::BFloat16,
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+                    convolution: AstroDecoderStateCacheTensorDtype::BFloat16,
                 }
             }
         })
@@ -274,32 +305,34 @@ fn should_derive_different_block_sizes_from_sequence_and_boundary_geometry() {
 
 #[test]
 fn should_resolve_sequence_only_and_boundary_only_storage_contracts() {
-    let sequence_only_layout =
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
+    let sequence_only_layout = AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::append_only_attention(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.keys",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 4],
                 1,
             ),
-            DecoderCacheTensorLayout::sequence(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.values",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 4],
                 1,
             ),
             16,
-        )])
-        .expect("the sequence-only layout should be valid");
-    let boundary_only_layout =
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::recurrent_tensor(
-            DecoderCacheTensorLayout::fixed(
+        ),
+    ])
+    .expect("the sequence-only layout should be valid");
+    let boundary_only_layout = AstroDecoderStateCacheLayout::new(vec![
+        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+            AstroDecoderStateCacheTensorLayout::fixed(
                 "recurrent.state",
-                DecoderCacheTensorDtype::Float32,
+                AstroDecoderStateCacheTensorDtype::Float32,
                 vec![25],
             ),
-        )])
-        .expect("the boundary-only layout should be valid");
+        ),
+    ])
+    .expect("the boundary-only layout should be valid");
 
     let sequence_only_contract = resolve_synthetic_contract(
         "sequence-only",
@@ -438,7 +471,7 @@ fn should_reject_an_explicit_block_length_instead_of_silently_resizing_it_for_qu
 
 fn resolve_synthetic_contract(
     model_id: &str,
-    decoder_cache_layout: DecoderCacheLayout,
+    astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
     maximum_context_token_count: usize,
     effective_mlx_memory_ceiling_bytes: u64,
     global_ssd_quota_bytes: u64,
@@ -446,7 +479,7 @@ fn resolve_synthetic_contract(
     AstroSsdPromptCacheModelContract::resolve(
         model_id.to_owned(),
         "revision".to_owned(),
-        decoder_cache_layout,
+        astro_decoder_state_cache_layout,
         maximum_context_token_count,
         effective_mlx_memory_ceiling_bytes,
         global_ssd_quota_bytes,
@@ -456,28 +489,30 @@ fn resolve_synthetic_contract(
     .expect("the synthetic model should resolve an SSD storage contract")
 }
 
-fn synthetic_hybrid_layout(boundary_element_count: usize) -> DecoderCacheLayout {
-    DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::composite(vec![
-        DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
+fn synthetic_hybrid_layout(boundary_element_count: usize) -> AstroDecoderStateCacheLayout {
+    AstroDecoderStateCacheLayout::new(vec![AstroDecoderStateCacheLayerLayout::composite(vec![
+        AstroDecoderStateCacheLayerLayout::append_only_attention(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.keys",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 2],
                 1,
             ),
-            DecoderCacheTensorLayout::sequence(
+            AstroDecoderStateCacheTensorLayout::sequence(
                 "attention.values",
-                DecoderCacheTensorDtype::Float16,
+                AstroDecoderStateCacheTensorDtype::Float16,
                 vec![1, 0, 2],
                 1,
             ),
             4,
         ),
-        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-            "recurrent.state",
-            DecoderCacheTensorDtype::Float32,
-            vec![boundary_element_count],
-        )),
+        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+            AstroDecoderStateCacheTensorLayout::fixed(
+                "recurrent.state",
+                AstroDecoderStateCacheTensorDtype::Float32,
+                vec![boundary_element_count],
+            ),
+        ),
     ])])
     .expect("the synthetic hybrid layout should be valid")
 }

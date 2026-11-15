@@ -1,4 +1,4 @@
-//! Closed decoder-cache layouts shared by model implementations and persistent storage.
+//! Closed astro-decoder-state-cache layouts shared by model implementations and persistent storage.
 
 #[cfg(feature = "direct-mlx")]
 mod append_only_attention_state;
@@ -21,7 +21,7 @@ mod rotating_layout;
 mod storage_geometry;
 
 #[cfg(test)]
-mod decoder_cache_tests;
+mod astro_decoder_state_cache_tests;
 
 #[cfg(feature = "direct-mlx")]
 pub use append_only_attention_state::{
@@ -36,13 +36,15 @@ pub use gated_delta_recurrent_state::{
     GatedDeltaRecurrentState, GatedDeltaRecurrentStateCheckpoint,
 };
 pub use layout::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCachePersistedTensorLayout,
-    DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCachePersistedTensorLayout, AstroDecoderStateCacheTensorDtype,
+    AstroDecoderStateCacheTensorLayout,
 };
-pub use layout_error::DecoderCacheLayoutError;
+pub use layout_error::AstroDecoderStateCacheLayoutError;
 #[cfg(feature = "direct-mlx")]
 pub use live_state::{
-    DecoderCacheState, DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint,
+    AstroDecoderStateCacheState, AstroDecoderStateCacheStateAllocationCheckpoint,
+    AstroDecoderStateCacheStateCheckpoint,
 };
 #[cfg(feature = "direct-mlx")]
 pub use rotating_attention_state::{

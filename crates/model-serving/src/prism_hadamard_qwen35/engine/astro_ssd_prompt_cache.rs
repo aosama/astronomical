@@ -44,16 +44,17 @@ pub(super) fn open_astro_ssd_prompt_cache_store(
     disk_store_config: AstroSsdPromptCacheDiskStoreConfig,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Arc<AstroSsdPromptCacheDiskStore>, InferenceEngineError> {
-    let decoder_cache_layout = cache_layout::prism_hadamard_qwen35_decoder_cache_layout(
-        model.pack.config(),
-    )
-    .map_err(|layout_error| InferenceEngineError::Fatal {
-        reason: format!("folded-ternary astro-ssd-prompt-cache layout is invalid: {layout_error}"),
-    })?;
+    let astro_decoder_state_cache_layout =
+        cache_layout::prism_hadamard_qwen35_astro_decoder_state_cache_layout(model.pack.config())
+            .map_err(|layout_error| InferenceEngineError::Fatal {
+            reason: format!(
+                "folded-ternary astro-ssd-prompt-cache layout is invalid: {layout_error}"
+            ),
+        })?;
     let model_contract = resolve_quota_bounded_astro_ssd_prompt_cache_contract(
         model_id,
         model_revision,
-        decoder_cache_layout,
+        astro_decoder_state_cache_layout,
         model.pack.config().text().max_position_embeddings as usize,
         effective_mlx_memory_ceiling_bytes as u64,
         disk_store_config.global_astro_ssd_prompt_cache_maximum_size_bytes(),

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use mlx_bridge::MlxArray;
 
 use super::layer_major_prefill::{LayerMajorCheckpointContract, LayerMajorSpan};
-use crate::DecoderCacheState;
+use crate::AstroDecoderStateCacheState;
 use crate::qwen3_5_core::decoder::{
     Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
     Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
@@ -74,9 +74,9 @@ pub(super) fn span_collector(
 pub(super) fn record_end_state_snapshot(
     end_state_snapshot: &mut HashMap<String, MlxArray>,
     layer_index: usize,
-    layer_state: &DecoderCacheState,
+    layer_state: &AstroDecoderStateCacheState,
 ) -> Result<(), Qwen3_5ExecutionError> {
-    let DecoderCacheState::Composite {
+    let AstroDecoderStateCacheState::Composite {
         convolution,
         recurrent,
     } = layer_state
@@ -123,7 +123,7 @@ pub(super) fn completed_checkpoints(
         if let Some(recurrent_snapshot_tensors) = span_state.end_state_snapshot {
             if recurrent_snapshot_tensors.len() != expected_tensor_count {
                 return Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "a layer-major end-state snapshot lacks part of the decoder-cache tensor layout",
+                    description: "a layer-major end-state snapshot lacks part of the astro-decoder-state-cache tensor layout",
                 });
             }
             boundary_checkpoints.push(Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint {

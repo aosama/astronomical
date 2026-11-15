@@ -1,6 +1,7 @@
 use crate::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype,
-    DecoderCacheTensorLayout, rotating_committed_token_count,
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheLayoutError, AstroDecoderStateCacheTensorDtype,
+    AstroDecoderStateCacheTensorLayout, rotating_committed_token_count,
     rotating_prefill_transient_token_count,
 };
 
@@ -29,13 +30,13 @@ fn should_bound_committed_tokens_to_the_window() {
 
 #[test]
 fn should_validate_and_persist_rotating_boundary_geometry() {
-    let zero_window = DecoderCacheLayout::new(vec![rotating_layout(0)]);
+    let zero_window = AstroDecoderStateCacheLayout::new(vec![rotating_layout(0)]);
     assert_eq!(
         zero_window,
-        Err(DecoderCacheLayoutError::ZeroRotatingWindowSize { layer_index: 0 })
+        Err(AstroDecoderStateCacheLayoutError::ZeroRotatingWindowSize { layer_index: 0 })
     );
 
-    let layout = DecoderCacheLayout::new(vec![rotating_layout(8)])
+    let layout = AstroDecoderStateCacheLayout::new(vec![rotating_layout(8)])
         .expect("a positive rotating window should validate");
     assert_eq!(layout.sequence_tensor_count(), 0);
     assert_eq!(layout.boundary_tensor_count(), 4);
@@ -61,16 +62,16 @@ fn should_reject_zero_window_and_overflowing_transient_geometry() {
     assert!(rotating_prefill_transient_token_count(u32::MAX, 2).is_err());
 }
 
-fn rotating_layout(window_size: usize) -> DecoderCacheLayerLayout {
-    DecoderCacheLayerLayout::rotating_window_attention(
-        DecoderCacheTensorLayout::fixed(
+fn rotating_layout(window_size: usize) -> AstroDecoderStateCacheLayerLayout {
+    AstroDecoderStateCacheLayerLayout::rotating_window_attention(
+        AstroDecoderStateCacheTensorLayout::fixed(
             "attention.keys",
-            DecoderCacheTensorDtype::BFloat16,
+            AstroDecoderStateCacheTensorDtype::BFloat16,
             vec![1, 2, 8, 4],
         ),
-        DecoderCacheTensorLayout::fixed(
+        AstroDecoderStateCacheTensorLayout::fixed(
             "attention.values",
-            DecoderCacheTensorDtype::BFloat16,
+            AstroDecoderStateCacheTensorDtype::BFloat16,
             vec![1, 2, 8, 4],
         ),
         window_size,

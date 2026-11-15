@@ -6,8 +6,8 @@ use super::{
     GatedDeltaRecurrentStateCheckpoint,
 };
 
-/// One architecture-neutral in-memory decoder-cache state family.
-pub enum DecoderCacheState {
+/// One architecture-neutral in-memory astro-decoder-state-cache state family.
+pub enum AstroDecoderStateCacheState {
     /// Append-only attention keys and values.
     AppendOnlyAttention {
         attention: FullAttentionKeyValueState,
@@ -19,8 +19,8 @@ pub enum DecoderCacheState {
     },
 }
 
-/// Logical rollback point for one architecture-neutral decoder-cache state entry.
-pub enum DecoderCacheStateCheckpoint {
+/// Logical rollback point for one architecture-neutral astro-decoder-state-cache state entry.
+pub enum AstroDecoderStateCacheStateCheckpoint {
     AppendOnlyAttention {
         offset_tokens: i32,
     },
@@ -30,8 +30,8 @@ pub enum DecoderCacheStateCheckpoint {
     },
 }
 
-/// Physical owner checkpoint for retrying one decoder-cache update.
-pub enum DecoderCacheStateAllocationCheckpoint {
+/// Physical owner checkpoint for retrying one astro-decoder-state-cache update.
+pub enum AstroDecoderStateCacheStateAllocationCheckpoint {
     AppendOnlyAttention {
         attention: FullAttentionKeyValueStateAllocationCheckpoint,
     },
@@ -41,7 +41,7 @@ pub enum DecoderCacheStateAllocationCheckpoint {
     },
 }
 
-impl DecoderCacheState {
+impl AstroDecoderStateCacheState {
     /// Returns whether paired state tensors are both absent or both present.
     #[must_use]
     pub fn tensors_are_allocated_consistently(&self) -> bool {
@@ -82,17 +82,17 @@ impl DecoderCacheState {
     }
 
     /// Captures this layer's current logical state for transactional rollback.
-    pub fn checkpoint(&self) -> Result<DecoderCacheStateCheckpoint, MlxRuntimeError> {
+    pub fn checkpoint(&self) -> Result<AstroDecoderStateCacheStateCheckpoint, MlxRuntimeError> {
         match self {
             Self::AppendOnlyAttention { attention } => {
-                Ok(DecoderCacheStateCheckpoint::AppendOnlyAttention {
+                Ok(AstroDecoderStateCacheStateCheckpoint::AppendOnlyAttention {
                     offset_tokens: attention.offset_tokens(),
                 })
             }
             Self::Composite {
                 convolution,
                 recurrent,
-            } => Ok(DecoderCacheStateCheckpoint::Composite {
+            } => Ok(AstroDecoderStateCacheStateCheckpoint::Composite {
                 convolution: convolution.checkpoint()?,
                 recurrent: recurrent.checkpoint()?,
             }),
@@ -102,17 +102,17 @@ impl DecoderCacheState {
     /// Retains physical state owners for an operation that may need a full retry.
     pub fn allocation_checkpoint(
         &self,
-    ) -> Result<DecoderCacheStateAllocationCheckpoint, MlxRuntimeError> {
+    ) -> Result<AstroDecoderStateCacheStateAllocationCheckpoint, MlxRuntimeError> {
         match self {
-            Self::AppendOnlyAttention { attention } => {
-                Ok(DecoderCacheStateAllocationCheckpoint::AppendOnlyAttention {
+            Self::AppendOnlyAttention { attention } => Ok(
+                AstroDecoderStateCacheStateAllocationCheckpoint::AppendOnlyAttention {
                     attention: attention.allocation_checkpoint()?,
-                })
-            }
+                },
+            ),
             Self::Composite {
                 convolution,
                 recurrent,
-            } => Ok(DecoderCacheStateAllocationCheckpoint::Composite {
+            } => Ok(AstroDecoderStateCacheStateAllocationCheckpoint::Composite {
                 convolution: convolution.checkpoint()?,
                 recurrent: recurrent.checkpoint()?,
             }),
@@ -122,19 +122,19 @@ impl DecoderCacheState {
     /// Restores this layer to a transactional rollback point.
     pub fn restore_checkpoint(
         &mut self,
-        checkpoint: DecoderCacheStateCheckpoint,
+        checkpoint: AstroDecoderStateCacheStateCheckpoint,
     ) -> Result<(), MlxRuntimeError> {
         match (self, checkpoint) {
             (
                 Self::AppendOnlyAttention { attention },
-                DecoderCacheStateCheckpoint::AppendOnlyAttention { offset_tokens },
+                AstroDecoderStateCacheStateCheckpoint::AppendOnlyAttention { offset_tokens },
             ) => attention.truncate_to_offset(offset_tokens),
             (
                 Self::Composite {
                     convolution,
                     recurrent,
                 },
-                DecoderCacheStateCheckpoint::Composite {
+                AstroDecoderStateCacheStateCheckpoint::Composite {
                     convolution: convolution_checkpoint,
                     recurrent: recurrent_checkpoint,
                 },
@@ -144,7 +144,7 @@ impl DecoderCacheState {
                 Ok(())
             }
             _ => Err(MlxRuntimeError::RuntimeOperation {
-                operation: "restore decoder-cache state checkpoint",
+                operation: "restore astro-decoder-state-cache state checkpoint",
                 description: "checkpoint layer type does not match the decoder state".to_owned(),
             }),
         }
@@ -153,12 +153,12 @@ impl DecoderCacheState {
     /// Replaces every state owner with the retained pre-operation owner.
     pub fn restore_allocation_checkpoint(
         &mut self,
-        allocation_checkpoint: DecoderCacheStateAllocationCheckpoint,
+        allocation_checkpoint: AstroDecoderStateCacheStateAllocationCheckpoint,
     ) -> Result<(), MlxRuntimeError> {
         match (self, allocation_checkpoint) {
             (
                 Self::AppendOnlyAttention { attention },
-                DecoderCacheStateAllocationCheckpoint::AppendOnlyAttention {
+                AstroDecoderStateCacheStateAllocationCheckpoint::AppendOnlyAttention {
                     attention: attention_allocation_checkpoint,
                 },
             ) => attention.restore_allocation_checkpoint(attention_allocation_checkpoint),
@@ -167,7 +167,7 @@ impl DecoderCacheState {
                     convolution,
                     recurrent,
                 },
-                DecoderCacheStateAllocationCheckpoint::Composite {
+                AstroDecoderStateCacheStateAllocationCheckpoint::Composite {
                     convolution: convolution_checkpoint,
                     recurrent: recurrent_checkpoint,
                 },
@@ -177,7 +177,7 @@ impl DecoderCacheState {
                 Ok(())
             }
             _ => Err(MlxRuntimeError::RuntimeOperation {
-                operation: "restore decoder-cache allocation checkpoint",
+                operation: "restore astro-decoder-state-cache allocation checkpoint",
                 description: "checkpoint layer type does not match the decoder state".to_owned(),
             }),
         }

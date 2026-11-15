@@ -1,18 +1,18 @@
 use std::collections::HashSet;
 
-use super::layout_error::DecoderCacheLayoutError;
+use super::layout_error::AstroDecoderStateCacheLayoutError;
 
-/// Scalar type required by one persisted decoder-cache tensor.
+/// Scalar type required by one persisted astro-decoder-state-cache tensor.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DecoderCacheTensorDtype {
+pub enum AstroDecoderStateCacheTensorDtype {
     Float16,
     BFloat16,
     Float32,
     Int32,
 }
 
-impl DecoderCacheTensorDtype {
-    /// Returns the scalar payload width used by this decoder-cache tensor.
+impl AstroDecoderStateCacheTensorDtype {
+    /// Returns the scalar payload width used by this astro-decoder-state-cache tensor.
     #[must_use]
     pub const fn scalar_byte_count(self) -> usize {
         match self {
@@ -47,24 +47,27 @@ impl DecoderCacheTensorDtype {
     }
 }
 
-/// Static tensor contract for one named decoder-cache state component.
+/// Static tensor contract for one named astro-decoder-state-cache state component.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DecoderCacheTensorLayout {
+pub struct AstroDecoderStateCacheTensorLayout {
     tensor_role_name: String,
-    dtype: DecoderCacheTensorDtype,
+    dtype: AstroDecoderStateCacheTensorDtype,
     dimensions: Vec<usize>,
     sequence_axis: Option<usize>,
 }
 
 /// One flattened tensor contract used by a decoder-state persistence file.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DecoderCachePersistedTensorLayout {
+pub struct AstroDecoderStateCachePersistedTensorLayout {
     decoder_layer_index: usize,
-    tensor_layout: DecoderCacheTensorLayout,
+    tensor_layout: AstroDecoderStateCacheTensorLayout,
 }
 
-impl DecoderCachePersistedTensorLayout {
-    pub(super) fn new(decoder_layer_index: usize, tensor_layout: DecoderCacheTensorLayout) -> Self {
+impl AstroDecoderStateCachePersistedTensorLayout {
+    pub(super) fn new(
+        decoder_layer_index: usize,
+        tensor_layout: AstroDecoderStateCacheTensorLayout,
+    ) -> Self {
         Self {
             decoder_layer_index,
             tensor_layout,
@@ -79,7 +82,7 @@ impl DecoderCachePersistedTensorLayout {
 
     /// Returns the tensor contract for this persisted decoder-state component.
     #[must_use]
-    pub const fn tensor_layout(&self) -> &DecoderCacheTensorLayout {
+    pub const fn tensor_layout(&self) -> &AstroDecoderStateCacheTensorLayout {
         &self.tensor_layout
     }
 
@@ -94,12 +97,12 @@ impl DecoderCachePersistedTensorLayout {
     }
 }
 
-impl DecoderCacheTensorLayout {
+impl AstroDecoderStateCacheTensorLayout {
     /// Creates a fixed-shape tensor restored only from a boundary snapshot.
     #[must_use]
     pub fn fixed(
         tensor_role_name: impl Into<String>,
-        dtype: DecoderCacheTensorDtype,
+        dtype: AstroDecoderStateCacheTensorDtype,
         dimensions: Vec<usize>,
     ) -> Self {
         Self {
@@ -114,7 +117,7 @@ impl DecoderCacheTensorLayout {
     #[must_use]
     pub fn sequence(
         tensor_role_name: impl Into<String>,
-        dtype: DecoderCacheTensorDtype,
+        dtype: AstroDecoderStateCacheTensorDtype,
         dimensions: Vec<usize>,
         sequence_axis: usize,
     ) -> Self {
@@ -134,7 +137,7 @@ impl DecoderCacheTensorLayout {
 
     /// Returns the exact scalar type expected in memory and on disk.
     #[must_use]
-    pub const fn dtype(&self) -> DecoderCacheTensorDtype {
+    pub const fn dtype(&self) -> AstroDecoderStateCacheTensorDtype {
         self.dtype
     }
 
@@ -151,29 +154,37 @@ impl DecoderCacheTensorLayout {
     }
 
     /// Returns the checked payload bytes for a fixed-shape tensor.
-    pub fn fixed_payload_byte_count(&self) -> Result<usize, DecoderCacheLayoutError> {
+    pub fn fixed_payload_byte_count(&self) -> Result<usize, AstroDecoderStateCacheLayoutError> {
         if self.sequence_axis.is_some() || self.dimensions.contains(&0) {
-            return Err(DecoderCacheLayoutError::InvalidTensorPayloadGeometry {
-                tensor_role_name: self.tensor_role_name.clone(),
-                description: "a fixed tensor must not contain a sequence axis or dynamic dimension",
-            });
+            return Err(
+                AstroDecoderStateCacheLayoutError::InvalidTensorPayloadGeometry {
+                    tensor_role_name: self.tensor_role_name.clone(),
+                    description: "a fixed tensor must not contain a sequence axis or dynamic dimension",
+                },
+            );
         }
         checked_tensor_payload_byte_count(&self.tensor_role_name, &self.dimensions, self.dtype)
     }
 
     /// Returns checked payload bytes for one token of a sequence tensor.
-    pub fn sequence_payload_byte_count_per_token(&self) -> Result<usize, DecoderCacheLayoutError> {
+    pub fn sequence_payload_byte_count_per_token(
+        &self,
+    ) -> Result<usize, AstroDecoderStateCacheLayoutError> {
         let Some(sequence_axis) = self.sequence_axis else {
-            return Err(DecoderCacheLayoutError::InvalidTensorPayloadGeometry {
-                tensor_role_name: self.tensor_role_name.clone(),
-                description: "a sequence tensor must declare a sequence axis",
-            });
+            return Err(
+                AstroDecoderStateCacheLayoutError::InvalidTensorPayloadGeometry {
+                    tensor_role_name: self.tensor_role_name.clone(),
+                    description: "a sequence tensor must declare a sequence axis",
+                },
+            );
         };
         if sequence_axis >= self.dimensions.len() || self.dimensions[sequence_axis] != 0 {
-            return Err(DecoderCacheLayoutError::InvalidTensorPayloadGeometry {
-                tensor_role_name: self.tensor_role_name.clone(),
-                description: "the sequence axis must contain the dynamic dimension",
-            });
+            return Err(
+                AstroDecoderStateCacheLayoutError::InvalidTensorPayloadGeometry {
+                    tensor_role_name: self.tensor_role_name.clone(),
+                    description: "the sequence axis must contain the dynamic dimension",
+                },
+            );
         }
         let mut one_token_dimensions = self.dimensions.clone();
         one_token_dimensions[sequence_axis] = 1;
@@ -184,54 +195,60 @@ impl DecoderCacheTensorLayout {
 fn checked_tensor_payload_byte_count(
     tensor_role_name: &str,
     dimensions: &[usize],
-    dtype: DecoderCacheTensorDtype,
-) -> Result<usize, DecoderCacheLayoutError> {
+    dtype: AstroDecoderStateCacheTensorDtype,
+) -> Result<usize, AstroDecoderStateCacheLayoutError> {
     let element_count = dimensions
         .iter()
         .try_fold(1_usize, |current_element_count, dimension| {
             current_element_count.checked_mul(*dimension)
         });
     let Some(element_count) = element_count else {
-        return Err(DecoderCacheLayoutError::TensorPayloadByteCountOverflow {
-            tensor_role_name: tensor_role_name.to_owned(),
-        });
+        return Err(
+            AstroDecoderStateCacheLayoutError::TensorPayloadByteCountOverflow {
+                tensor_role_name: tensor_role_name.to_owned(),
+            },
+        );
     };
     element_count
         .checked_mul(dtype.scalar_byte_count())
-        .ok_or_else(|| DecoderCacheLayoutError::TensorPayloadByteCountOverflow {
-            tensor_role_name: tensor_role_name.to_owned(),
-        })
+        .ok_or_else(
+            || AstroDecoderStateCacheLayoutError::TensorPayloadByteCountOverflow {
+                tensor_role_name: tensor_role_name.to_owned(),
+            },
+        )
 }
 
-/// One exhaustive decoder-cache state family in a model layer.
+/// One exhaustive astro-decoder-state-cache state family in a model layer.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DecoderCacheLayerLayout {
+pub enum AstroDecoderStateCacheLayerLayout {
     /// Append-only attention state, stored in token-sliceable blocks.
     AppendOnlyAttention {
-        keys: DecoderCacheTensorLayout,
-        values: DecoderCacheTensorLayout,
+        keys: AstroDecoderStateCacheTensorLayout,
+        values: AstroDecoderStateCacheTensorLayout,
         capacity_growth_tokens: usize,
     },
     /// Bounded rotating attention state persisted at complete boundaries.
     RotatingWindowAttention {
-        keys: DecoderCacheTensorLayout,
-        values: DecoderCacheTensorLayout,
+        keys: AstroDecoderStateCacheTensorLayout,
+        values: AstroDecoderStateCacheTensorLayout,
         window_size: usize,
     },
     /// Fixed state restored only from the newest complete prompt boundary.
-    RecurrentTensor { tensor: DecoderCacheTensorLayout },
+    RecurrentTensor {
+        tensor: AstroDecoderStateCacheTensorLayout,
+    },
     /// Ordered state components for hybrid decoder layers.
     Composite {
-        components: Vec<DecoderCacheLayerLayout>,
+        components: Vec<AstroDecoderStateCacheLayerLayout>,
     },
 }
 
-impl DecoderCacheLayerLayout {
+impl AstroDecoderStateCacheLayerLayout {
     /// Defines append-only attention key/value state.
     #[must_use]
     pub fn append_only_attention(
-        keys: DecoderCacheTensorLayout,
-        values: DecoderCacheTensorLayout,
+        keys: AstroDecoderStateCacheTensorLayout,
+        values: AstroDecoderStateCacheTensorLayout,
         capacity_growth_tokens: usize,
     ) -> Self {
         Self::AppendOnlyAttention {
@@ -243,28 +260,30 @@ impl DecoderCacheLayerLayout {
 
     /// Defines one complete-boundary state tensor.
     #[must_use]
-    pub fn recurrent_tensor(tensor: DecoderCacheTensorLayout) -> Self {
+    pub fn recurrent_tensor(tensor: AstroDecoderStateCacheTensorLayout) -> Self {
         Self::RecurrentTensor { tensor }
     }
 
     /// Defines an ordered hybrid layer state.
     #[must_use]
-    pub fn composite(components: Vec<DecoderCacheLayerLayout>) -> Self {
+    pub fn composite(components: Vec<AstroDecoderStateCacheLayerLayout>) -> Self {
         Self::Composite { components }
     }
 }
 
-/// Validated, architecture-neutral request decoder-cache layout.
+/// Validated, architecture-neutral request astro-decoder-state-cache layout.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DecoderCacheLayout {
-    layers: Vec<DecoderCacheLayerLayout>,
+pub struct AstroDecoderStateCacheLayout {
+    layers: Vec<AstroDecoderStateCacheLayerLayout>,
     sequence_tensor_count: usize,
     boundary_tensor_count: usize,
 }
 
-impl DecoderCacheLayout {
-    /// Validates a model-owned decoder-cache layout before it creates live state or opens SSD files.
-    pub fn new(layers: Vec<DecoderCacheLayerLayout>) -> Result<Self, DecoderCacheLayoutError> {
+impl AstroDecoderStateCacheLayout {
+    /// Validates a model-owned astro-decoder-state-cache layout before it creates live state or opens SSD files.
+    pub fn new(
+        layers: Vec<AstroDecoderStateCacheLayerLayout>,
+    ) -> Result<Self, AstroDecoderStateCacheLayoutError> {
         let mut sequence_tensor_count = 0_usize;
         let mut boundary_tensor_count = 0_usize;
         for (layer_index, layer_layout) in layers.iter().enumerate() {
@@ -292,7 +311,7 @@ impl DecoderCacheLayout {
 
     /// Returns one model-owned layer layout by its decoder position.
     #[must_use]
-    pub fn layer(&self, layer_index: usize) -> Option<&DecoderCacheLayerLayout> {
+    pub fn layer(&self, layer_index: usize) -> Option<&AstroDecoderStateCacheLayerLayout> {
         self.layers.get(layer_index)
     }
 
@@ -309,46 +328,54 @@ impl DecoderCacheLayout {
 }
 
 fn validate_layer_layout(
-    layer_layout: &DecoderCacheLayerLayout,
+    layer_layout: &AstroDecoderStateCacheLayerLayout,
     layer_index: usize,
     layer_tensor_role_names: &mut HashSet<String>,
     sequence_tensor_count: &mut usize,
     boundary_tensor_count: &mut usize,
-) -> Result<(), DecoderCacheLayoutError> {
+) -> Result<(), AstroDecoderStateCacheLayoutError> {
     match layer_layout {
-        DecoderCacheLayerLayout::AppendOnlyAttention {
+        AstroDecoderStateCacheLayerLayout::AppendOnlyAttention {
             keys,
             values,
             capacity_growth_tokens,
         } => {
             if *capacity_growth_tokens == 0 {
-                return Err(DecoderCacheLayoutError::ZeroCapacityGrowthTokens { layer_index });
+                return Err(
+                    AstroDecoderStateCacheLayoutError::ZeroCapacityGrowthTokens { layer_index },
+                );
             }
             validate_sequence_tensor(keys, layer_index, layer_tensor_role_names)?;
             validate_sequence_tensor(values, layer_index, layer_tensor_role_names)?;
             if keys.dimensions != values.dimensions || keys.sequence_axis != values.sequence_axis {
-                return Err(DecoderCacheLayoutError::AttentionTensorContractMismatch {
-                    layer_index,
-                });
+                return Err(
+                    AstroDecoderStateCacheLayoutError::AttentionTensorContractMismatch {
+                        layer_index,
+                    },
+                );
             }
             *sequence_tensor_count = sequence_tensor_count.saturating_add(2);
         }
-        DecoderCacheLayerLayout::RotatingWindowAttention {
+        AstroDecoderStateCacheLayerLayout::RotatingWindowAttention {
             keys,
             values,
             window_size,
         } => {
             if *window_size == 0 {
-                return Err(DecoderCacheLayoutError::ZeroRotatingWindowSize { layer_index });
+                return Err(AstroDecoderStateCacheLayoutError::ZeroRotatingWindowSize {
+                    layer_index,
+                });
             }
             validate_boundary_tensor(keys, layer_index, layer_tensor_role_names)?;
             validate_boundary_tensor(values, layer_index, layer_tensor_role_names)?;
             if keys.dimensions != values.dimensions
                 || keys.dimensions.get(2).copied() != Some(*window_size)
             {
-                return Err(DecoderCacheLayoutError::AttentionTensorContractMismatch {
-                    layer_index,
-                });
+                return Err(
+                    AstroDecoderStateCacheLayoutError::AttentionTensorContractMismatch {
+                        layer_index,
+                    },
+                );
             }
             *boundary_tensor_count = boundary_tensor_count.saturating_add(2);
             for counter_layout in super::rotating_layout::rotating_window_counter_layouts() {
@@ -356,13 +383,13 @@ fn validate_layer_layout(
                 *boundary_tensor_count = boundary_tensor_count.saturating_add(1);
             }
         }
-        DecoderCacheLayerLayout::RecurrentTensor { tensor } => {
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor { tensor } => {
             validate_boundary_tensor(tensor, layer_index, layer_tensor_role_names)?;
             *boundary_tensor_count = boundary_tensor_count.saturating_add(1);
         }
-        DecoderCacheLayerLayout::Composite { components } => {
+        AstroDecoderStateCacheLayerLayout::Composite { components } => {
             if components.is_empty() {
-                return Err(DecoderCacheLayoutError::EmptyComposite { layer_index });
+                return Err(AstroDecoderStateCacheLayoutError::EmptyComposite { layer_index });
             }
             for component_layout in components {
                 validate_layer_layout(
@@ -379,28 +406,32 @@ fn validate_layer_layout(
 }
 
 fn validate_sequence_tensor(
-    tensor_layout: &DecoderCacheTensorLayout,
+    tensor_layout: &AstroDecoderStateCacheTensorLayout,
     layer_index: usize,
     layer_tensor_role_names: &mut HashSet<String>,
-) -> Result<(), DecoderCacheLayoutError> {
+) -> Result<(), AstroDecoderStateCacheLayoutError> {
     let Some(sequence_axis) = tensor_layout.sequence_axis else {
-        return Err(DecoderCacheLayoutError::SequenceTensorMissingAxis {
-            layer_index,
-            tensor_role_name: tensor_layout.tensor_role_name.clone(),
-        });
+        return Err(
+            AstroDecoderStateCacheLayoutError::SequenceTensorMissingAxis {
+                layer_index,
+                tensor_role_name: tensor_layout.tensor_role_name.clone(),
+            },
+        );
     };
     validate_tensor_role_and_dimensions(tensor_layout, layer_index, layer_tensor_role_names)?;
     if sequence_axis >= tensor_layout.dimensions.len() {
-        return Err(DecoderCacheLayoutError::SequenceAxisOutsideTensorRank {
-            layer_index,
-            tensor_role_name: tensor_layout.tensor_role_name.clone(),
-            sequence_axis,
-            tensor_rank: tensor_layout.dimensions.len(),
-        });
+        return Err(
+            AstroDecoderStateCacheLayoutError::SequenceAxisOutsideTensorRank {
+                layer_index,
+                tensor_role_name: tensor_layout.tensor_role_name.clone(),
+                sequence_axis,
+                tensor_rank: tensor_layout.dimensions.len(),
+            },
+        );
     }
     if tensor_layout.dimensions[sequence_axis] != 0 {
         return Err(
-            DecoderCacheLayoutError::SequenceAxisMustUseDynamicDimension {
+            AstroDecoderStateCacheLayoutError::SequenceAxisMustUseDynamicDimension {
                 layer_index,
                 tensor_role_name: tensor_layout.tensor_role_name.clone(),
             },
@@ -410,42 +441,46 @@ fn validate_sequence_tensor(
 }
 
 fn validate_boundary_tensor(
-    tensor_layout: &DecoderCacheTensorLayout,
+    tensor_layout: &AstroDecoderStateCacheTensorLayout,
     layer_index: usize,
     layer_tensor_role_names: &mut HashSet<String>,
-) -> Result<(), DecoderCacheLayoutError> {
+) -> Result<(), AstroDecoderStateCacheLayoutError> {
     if tensor_layout.sequence_axis.is_some() {
-        return Err(DecoderCacheLayoutError::BoundaryTensorHasSequenceAxis {
-            layer_index,
-            tensor_role_name: tensor_layout.tensor_role_name.clone(),
-        });
+        return Err(
+            AstroDecoderStateCacheLayoutError::BoundaryTensorHasSequenceAxis {
+                layer_index,
+                tensor_role_name: tensor_layout.tensor_role_name.clone(),
+            },
+        );
     }
     validate_tensor_role_and_dimensions(tensor_layout, layer_index, layer_tensor_role_names)?;
     if tensor_layout.dimensions.contains(&0) {
-        return Err(DecoderCacheLayoutError::BoundaryTensorHasDynamicDimension {
-            layer_index,
-            tensor_role_name: tensor_layout.tensor_role_name.clone(),
-        });
+        return Err(
+            AstroDecoderStateCacheLayoutError::BoundaryTensorHasDynamicDimension {
+                layer_index,
+                tensor_role_name: tensor_layout.tensor_role_name.clone(),
+            },
+        );
     }
     Ok(())
 }
 
 fn validate_tensor_role_and_dimensions(
-    tensor_layout: &DecoderCacheTensorLayout,
+    tensor_layout: &AstroDecoderStateCacheTensorLayout,
     layer_index: usize,
     layer_tensor_role_names: &mut HashSet<String>,
-) -> Result<(), DecoderCacheLayoutError> {
+) -> Result<(), AstroDecoderStateCacheLayoutError> {
     if tensor_layout.tensor_role_name.is_empty() {
-        return Err(DecoderCacheLayoutError::EmptyTensorRole { layer_index });
+        return Err(AstroDecoderStateCacheLayoutError::EmptyTensorRole { layer_index });
     }
     if tensor_layout.dimensions.is_empty() {
-        return Err(DecoderCacheLayoutError::ZeroTensorRank {
+        return Err(AstroDecoderStateCacheLayoutError::ZeroTensorRank {
             layer_index,
             tensor_role_name: tensor_layout.tensor_role_name.clone(),
         });
     }
     if !layer_tensor_role_names.insert(tensor_layout.tensor_role_name.clone()) {
-        return Err(DecoderCacheLayoutError::DuplicateTensorRole {
+        return Err(AstroDecoderStateCacheLayoutError::DuplicateTensorRole {
             layer_index,
             tensor_role_name: tensor_layout.tensor_role_name.clone(),
         });

@@ -312,12 +312,12 @@ pub(super) fn expected_tensor_names(
             let expected_tensor_layouts = match file_kind {
                 AstroSsdPromptCacheFileKind::SequenceStateBlock => {
                     astro_ssd_prompt_cache_model_contract
-                        .decoder_cache_layout()
+                        .astro_decoder_state_cache_layout()
                         .sequence_tensor_layouts()
                 }
                 AstroSsdPromptCacheFileKind::BoundaryStateSnapshot => {
                     astro_ssd_prompt_cache_model_contract
-                        .decoder_cache_layout()
+                        .astro_decoder_state_cache_layout()
                         .boundary_tensor_layouts()
                 }
                 AstroSsdPromptCacheFileKind::VisualEmbedding => Vec::new(),

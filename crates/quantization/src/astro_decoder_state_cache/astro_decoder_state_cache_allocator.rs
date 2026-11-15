@@ -8,11 +8,11 @@ use serde::{Deserialize, Serialize};
 use crate::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
 use crate::error::QuantizationError;
 
-use super::cache_sensitivity::KvCacheSensitivityResult;
+use super::astro_decoder_state_cache_sensitivity::AstroDecoderStateCacheSensitivityResult;
 
 /// One layer's cache decision.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct KvCacheLayerConfig {
+pub struct AstroDecoderStateCacheLayerConfig {
     pub layer_index: usize,
     pub layer_name: String,
     pub bit_width: BitWidth,
@@ -20,18 +20,18 @@ pub struct KvCacheLayerConfig {
 }
 
 /// Greedy allocation under an average cache bits target, OptiQ's
-/// `optimize_kv_cache`: every layer starts at the lowest width, and the
+/// `optimize_astro_decoder_state_cache`: every layer starts at the lowest width, and the
 /// upgrade with the largest KL reduction per added bit is taken until the
 /// plain mean of the per-layer widths meets the target. The target is a
 /// floor, so the discrete ladder may overshoot it. The mean is unweighted
 /// because every cached layer of one model holds the same heads and head
 /// dimension, so bytes per token are equal across layers.
-pub fn optimize_kv_cache(
-    results: &[KvCacheSensitivityResult],
+pub fn optimize_astro_decoder_state_cache(
+    results: &[AstroDecoderStateCacheSensitivityResult],
     target_average_bits: f64,
     candidate_bit_widths: &CandidateBitWidths,
     group_size: GroupSize,
-) -> Result<Vec<KvCacheLayerConfig>, QuantizationError> {
+) -> Result<Vec<AstroDecoderStateCacheLayerConfig>, QuantizationError> {
     let ladder = candidate_bit_widths.as_slice();
     let mut bit_width_by_result = vec![candidate_bit_widths.lowest(); results.len()];
     while average_bits(&bit_width_by_result) < target_average_bits {
@@ -44,7 +44,7 @@ pub fn optimize_kv_cache(
     }
     let mut configs = Vec::with_capacity(results.len());
     for (result, bit_width) in results.iter().zip(bit_width_by_result) {
-        configs.push(KvCacheLayerConfig {
+        configs.push(AstroDecoderStateCacheLayerConfig {
             layer_index: result.layer_index,
             layer_name: result.layer_name.clone(),
             bit_width,
@@ -58,9 +58,9 @@ pub fn optimize_kv_cache(
 /// memory report: each layer's float16 elements per token at its width,
 /// plus a float16 scale and bias per group when it is quantized.
 #[must_use]
-pub fn estimate_kv_cache_bytes(
-    configs: &[KvCacheLayerConfig],
-    results: &[KvCacheSensitivityResult],
+pub fn estimate_astro_decoder_state_cache_bytes(
+    configs: &[AstroDecoderStateCacheLayerConfig],
+    results: &[AstroDecoderStateCacheSensitivityResult],
     context_length_tokens: usize,
 ) -> u64 {
     let mut result_by_layer_index = std::collections::BTreeMap::new();
@@ -100,7 +100,7 @@ fn average_bits(bit_widths: &[BitWidth]) -> f64 {
 /// lower layer index, as OptiQ's heap orders them. An upgrade that does not
 /// reduce KL is never taken.
 fn most_efficient_upgrade(
-    results: &[KvCacheSensitivityResult],
+    results: &[AstroDecoderStateCacheSensitivityResult],
     bit_width_by_result: &[BitWidth],
     ladder: &[BitWidth],
 ) -> Option<(usize, BitWidth)> {
@@ -122,7 +122,7 @@ fn most_efficient_upgrade(
 /// KL reduction per added bit for one layer's next rung, or `None` at the
 /// top of the ladder or when the next rung does not reduce KL.
 fn upgrade_efficiency(
-    result: &KvCacheSensitivityResult,
+    result: &AstroDecoderStateCacheSensitivityResult,
     current_bit_width: BitWidth,
     ladder: &[BitWidth],
 ) -> Option<(f64, BitWidth)> {

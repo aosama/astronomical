@@ -128,7 +128,9 @@ impl Qwen3_5EngineState {
         let checkpoint_contract =
             plan.astro_ssd_prompt_cache_block_token_count
                 .map(|block_token_count| LayerMajorCheckpointContract {
-                    boundary_tensor_count: model.decoder_cache_layout().boundary_tensor_count(),
+                    boundary_tensor_count: model
+                        .astro_decoder_state_cache_layout()
+                        .boundary_tensor_count(),
                     block_token_count,
                 });
         let prompt_token_ids = &active_request.input_token_ids[prefill_start..prefill_end];

@@ -2,7 +2,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
 
 use super::base::Qwen3_5ModelBase;
-use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
+use crate::astro_decoder_state_cache::{ConvolutionState, GatedDeltaRecurrentState};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5LinearAttentionWeights;

@@ -19,13 +19,13 @@ use mlx_bridge::MlxArray;
 
 use super::layer_major_span_state::{SpanState, forget_layer_end_state};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::{DecoderCacheStateAllocationCheckpoint, RequestDecoderStateStack};
+use crate::{AstroDecoderStateCacheStateAllocationCheckpoint, RequestDecoderStateStack};
 
 /// What one span found when it began to run through one layer.
 struct SpanRedoPoint {
     span_index: usize,
     span_input: MlxArray,
-    layer_state: DecoderCacheStateAllocationCheckpoint,
+    layer_state: AstroDecoderStateCacheStateAllocationCheckpoint,
     previous_layer_output: Option<MlxArray>,
 }
 

@@ -39,7 +39,7 @@ fn should_accept_a_contract_generated_sequence_state_header() {
     assert_eq!(
         sequence_state_header.tensor_count(),
         astro_ssd_prompt_cache_model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_count()
     );
     assert_eq!(
@@ -74,7 +74,7 @@ fn should_accept_a_contract_generated_boundary_state_header() {
     assert_eq!(
         boundary_state_header.tensor_count(),
         astro_ssd_prompt_cache_model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .boundary_tensor_count()
     );
 }
@@ -84,7 +84,7 @@ fn should_reject_a_declared_dtype_that_differs_from_the_model_contract() {
     let astro_ssd_prompt_cache_model_contract =
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract();
     let first_sequence_tensor_name = astro_ssd_prompt_cache_model_contract
-        .decoder_cache_layout()
+        .astro_decoder_state_cache_layout()
         .sequence_tensor_layouts()
         .first()
         .expect("the frozen model should have sequence state")
@@ -119,7 +119,7 @@ fn should_reject_a_missing_declared_tensor() {
     let astro_ssd_prompt_cache_model_contract =
         qwen3_5_moe::astro_ssd_prompt_cache_model_contract();
     let first_sequence_tensor_name = astro_ssd_prompt_cache_model_contract
-        .decoder_cache_layout()
+        .astro_decoder_state_cache_layout()
         .sequence_tensor_layouts()
         .first()
         .expect("the frozen model should have sequence state")
@@ -215,11 +215,11 @@ fn write_contract_generated_file(
 ) {
     let persisted_tensor_layouts = if should_write_boundary_state {
         astro_ssd_prompt_cache_model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .boundary_tensor_layouts()
     } else {
         astro_ssd_prompt_cache_model_contract
-            .decoder_cache_layout()
+            .astro_decoder_state_cache_layout()
             .sequence_tensor_layouts()
     };
     let mut header_entries = Map::new();

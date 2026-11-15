@@ -11,7 +11,9 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerW
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_resident::Qwen3_5ResidentExpertWeights;
-use crate::{DecoderCacheState, ExpertWeightMemoryCacheStatistics, PerformanceAttribution};
+use crate::{
+    AstroDecoderStateCacheState, ExpertWeightMemoryCacheStatistics, PerformanceAttribution,
+};
 
 use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
@@ -167,10 +169,10 @@ impl Qwen3_5ResidentModel {
         &self,
         full_attention_kv_state_growth_tokens: i32,
     ) -> Result<RequestDecoderStateStack, astronomical_runtime_integration::MlxRuntimeError> {
-        let decoder_cache_layout = self.base.decoder_cache_layout().clone();
+        let astro_decoder_state_cache_layout = self.base.astro_decoder_state_cache_layout().clone();
         RequestDecoderStateStack::
-            empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &decoder_cache_layout,
+            empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &astro_decoder_state_cache_layout,
                 full_attention_kv_state_growth_tokens,
             )
     }
@@ -365,7 +367,7 @@ impl Qwen3_5ResidentModel {
         rope_offset_tokens: i32,
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
-        layer_model_state: &mut DecoderCacheState,
+        layer_model_state: &mut AstroDecoderStateCacheState,
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,

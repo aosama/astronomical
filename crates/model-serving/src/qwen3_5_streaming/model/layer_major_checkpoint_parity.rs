@@ -68,7 +68,9 @@ impl Qwen3_5Model {
             LayerMajorPrefillRequest {
                 spans: &spans,
                 checkpoint_contract: Some(LayerMajorCheckpointContract {
-                    boundary_tensor_count: self.decoder_cache_layout.boundary_tensor_count(),
+                    boundary_tensor_count: self
+                        .astro_decoder_state_cache_layout
+                        .boundary_tensor_count(),
                     block_token_count,
                 }),
                 should_materialize_logits: false,

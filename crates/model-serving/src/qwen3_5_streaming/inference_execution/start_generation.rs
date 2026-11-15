@@ -12,8 +12,8 @@ use super::astro_ssd_prompt_cache_visual_identity::{
 };
 use super::engine_request::{Qwen3_5EngineRequest, StreamingRequestExtension};
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-use crate::decoder_cache::DecoderCacheLayout;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::text::sampler;
 use crate::qwen3_5_streaming::model::request_refusal;
@@ -72,7 +72,7 @@ impl Qwen3_5EngineState {
         // emitted across this request's lifecycle reflects only this
         // request's expert storage reads (issue #1533).
         model.begin_request_expert_storage_read_observation();
-        let decoder_cache_layout = model.decoder_cache_layout().clone();
+        let astro_decoder_state_cache_layout = model.astro_decoder_state_cache_layout().clone();
         // No request is refused for memory (issue #1902): the governor sets
         // the prompt's stored state aside and the kept weights give back
         // what that displaces.
@@ -81,7 +81,7 @@ impl Qwen3_5EngineState {
         // not leave the memory governor holding its prompt's stored state.
         let admitted_generation_start = self.assemble_admitted_generation_session(
             &mut inference_request,
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
             reserved_context_tokens,
             thinking_budget_state,
             performance_attribution,
@@ -169,7 +169,7 @@ impl Qwen3_5EngineState {
     fn assemble_admitted_generation_session(
         &mut self,
         inference_request: &mut Qwen3_5InferenceRequest,
-        decoder_cache_layout: &DecoderCacheLayout,
+        astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
         reserved_context_tokens: usize,
         thinking_budget_state: Qwen3_5ThinkingBudgetState,
         mut performance_attribution: PerformanceAttribution,
@@ -215,8 +215,8 @@ impl Qwen3_5EngineState {
             prompt_image_pad_token_count,
         )?;
         let mut request_decoder_state = RequestDecoderStateStack::
-            empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                decoder_cache_layout,
+            empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                astro_decoder_state_cache_layout,
                 self.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;

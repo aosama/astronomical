@@ -1,6 +1,7 @@
 use crate::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError, DecoderCacheTensorDtype,
-    DecoderCacheTensorLayout,
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheLayoutError, AstroDecoderStateCacheTensorDtype,
+    AstroDecoderStateCacheTensorLayout,
 };
 
 use super::Qwen3_5Config;
@@ -12,13 +13,13 @@ pub(crate) const QWEN_ATTENTION_VALUES_TENSOR_ROLE: &str = "attention.values";
 
 /// Exact live execution dtypes for one Qwen decoder layer's persistent state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Qwen3_5DecoderLayerCacheDtypes {
+pub enum Qwen3_5AstroDecoderStateCacheLayerDtypes {
     LinearAttention {
-        convolution: DecoderCacheTensorDtype,
+        convolution: AstroDecoderStateCacheTensorDtype,
     },
     FullAttention {
-        keys: DecoderCacheTensorDtype,
-        values: DecoderCacheTensorDtype,
+        keys: AstroDecoderStateCacheTensorDtype,
+        values: AstroDecoderStateCacheTensorDtype,
     },
 }
 
@@ -27,21 +28,23 @@ pub enum Qwen3_5DecoderLayerCacheDtypes {
 /// Geometry comes from validated configuration, while scalar types come from
 /// actual weight propagation. Keeping those inputs separate prevents a nominal
 /// activation dtype from silently narrowing persistent state.
-pub fn qwen3_5_decoder_cache_layout(
+pub fn qwen3_5_astro_decoder_state_cache_layout(
     qwen3_5_config: &Qwen3_5Config,
     full_attention_key_value_growth_tokens: usize,
-    decoder_layer_cache_dtypes: &[Qwen3_5DecoderLayerCacheDtypes],
-) -> Result<DecoderCacheLayout, DecoderCacheLayoutError> {
+    astro_decoder_state_cache_layer_dtypes: &[Qwen3_5AstroDecoderStateCacheLayerDtypes],
+) -> Result<AstroDecoderStateCacheLayout, AstroDecoderStateCacheLayoutError> {
     let decoder_layer_count = qwen3_5_config.layer_count() as usize;
-    if decoder_layer_cache_dtypes.len() != decoder_layer_count {
-        return Err(DecoderCacheLayoutError::ExecutionDtypeLayerCountMismatch {
-            expected_layer_count: decoder_layer_count,
-            actual_layer_count: decoder_layer_cache_dtypes.len(),
-        });
+    if astro_decoder_state_cache_layer_dtypes.len() != decoder_layer_count {
+        return Err(
+            AstroDecoderStateCacheLayoutError::ExecutionDtypeLayerCountMismatch {
+                expected_layer_count: decoder_layer_count,
+                actual_layer_count: astro_decoder_state_cache_layer_dtypes.len(),
+            },
+        );
     }
     let linear_convolution_state_dimension =
         usize::try_from(qwen3_5_config.linear_convolution_state_dimension()).map_err(|_| {
-            DecoderCacheLayoutError::ModelConfigurationDimensionOutsideUsizeRange {
+            AstroDecoderStateCacheLayoutError::ModelConfigurationDimensionOutsideUsizeRange {
                 dimension_name: "linear convolution state",
             }
         })?;
@@ -62,54 +65,58 @@ pub fn qwen3_5_decoder_cache_layout(
         qwen3_5_config.linear_value_head_dimension() as usize,
         qwen3_5_config.linear_key_head_dimension() as usize,
     ];
-    let decoder_layer_layouts = decoder_layer_cache_dtypes
+    let decoder_layer_layouts = astro_decoder_state_cache_layer_dtypes
         .iter()
         .enumerate()
-        .map(|(decoder_layer_index, decoder_layer_cache_dtypes)| {
-            match (
+        .map(
+            |(decoder_layer_index, astro_decoder_state_cache_layer_dtypes)| match (
                 qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index),
-                decoder_layer_cache_dtypes,
+                astro_decoder_state_cache_layer_dtypes,
             ) {
-                (true, Qwen3_5DecoderLayerCacheDtypes::FullAttention { keys, values }) => {
-                    full_attention_layer_layout(
-                        *keys,
-                        *values,
-                        &full_attention_key_value_dimensions,
-                        full_attention_key_value_growth_tokens,
-                    )
-                }
-                (false, Qwen3_5DecoderLayerCacheDtypes::LinearAttention { convolution }) => {
-                    linear_attention_layer_layout(
-                        *convolution,
-                        &linear_convolution_dimensions,
-                        &linear_recurrent_dimensions,
-                    )
-                }
-                _ => Err(DecoderCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
-                    layer_index: decoder_layer_index,
-                }),
-            }
-        })
+                (
+                    true,
+                    Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention { keys, values },
+                ) => full_attention_layer_layout(
+                    *keys,
+                    *values,
+                    &full_attention_key_value_dimensions,
+                    full_attention_key_value_growth_tokens,
+                ),
+                (
+                    false,
+                    Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention { convolution },
+                ) => linear_attention_layer_layout(
+                    *convolution,
+                    &linear_convolution_dimensions,
+                    &linear_recurrent_dimensions,
+                ),
+                _ => Err(
+                    AstroDecoderStateCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
+                        layer_index: decoder_layer_index,
+                    },
+                ),
+            },
+        )
         .collect::<Result<Vec<_>, _>>()?;
-    DecoderCacheLayout::new(decoder_layer_layouts)
+    AstroDecoderStateCacheLayout::new(decoder_layer_layouts)
 }
 
 /// The append-only KV cache layout for one full-attention layer: keys and
 /// values as sequence-growing tensors that share the layer's head geometry.
 fn full_attention_layer_layout(
-    keys: DecoderCacheTensorDtype,
-    values: DecoderCacheTensorDtype,
+    keys: AstroDecoderStateCacheTensorDtype,
+    values: AstroDecoderStateCacheTensorDtype,
     full_attention_key_value_dimensions: &[usize],
     full_attention_key_value_growth_tokens: usize,
-) -> Result<DecoderCacheLayerLayout, DecoderCacheLayoutError> {
-    Ok(DecoderCacheLayerLayout::append_only_attention(
-        DecoderCacheTensorLayout::sequence(
+) -> Result<AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayoutError> {
+    Ok(AstroDecoderStateCacheLayerLayout::append_only_attention(
+        AstroDecoderStateCacheTensorLayout::sequence(
             QWEN_ATTENTION_KEYS_TENSOR_ROLE,
             keys,
             full_attention_key_value_dimensions.to_vec(),
             2,
         ),
-        DecoderCacheTensorLayout::sequence(
+        AstroDecoderStateCacheTensorLayout::sequence(
             QWEN_ATTENTION_VALUES_TENSOR_ROLE,
             values,
             full_attention_key_value_dimensions.to_vec(),
@@ -123,20 +130,24 @@ fn full_attention_layer_layout(
 /// convolution activation beside the gated-delta accumulator, which stays
 /// Float32 in live execution independently of the activation state's dtype.
 fn linear_attention_layer_layout(
-    convolution: DecoderCacheTensorDtype,
+    convolution: AstroDecoderStateCacheTensorDtype,
     linear_convolution_dimensions: &[usize],
     linear_recurrent_dimensions: &[usize],
-) -> Result<DecoderCacheLayerLayout, DecoderCacheLayoutError> {
-    Ok(DecoderCacheLayerLayout::composite(vec![
-        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-            QWEN_CONVOLUTION_TENSOR_ROLE,
-            convolution,
-            linear_convolution_dimensions.to_vec(),
-        )),
-        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-            QWEN_RECURRENCE_TENSOR_ROLE,
-            DecoderCacheTensorDtype::Float32,
-            linear_recurrent_dimensions.to_vec(),
-        )),
+) -> Result<AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayoutError> {
+    Ok(AstroDecoderStateCacheLayerLayout::composite(vec![
+        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+            AstroDecoderStateCacheTensorLayout::fixed(
+                QWEN_CONVOLUTION_TENSOR_ROLE,
+                convolution,
+                linear_convolution_dimensions.to_vec(),
+            ),
+        ),
+        AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+            AstroDecoderStateCacheTensorLayout::fixed(
+                QWEN_RECURRENCE_TENSOR_ROLE,
+                AstroDecoderStateCacheTensorDtype::Float32,
+                linear_recurrent_dimensions.to_vec(),
+            ),
+        ),
     ]))
 }

@@ -8,16 +8,16 @@ use std::path::PathBuf;
 
 use mlx_bridge::MlxDtype;
 
-use crate::decoder_cache::DecoderCacheTensorDtype;
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype;
 use crate::qwen3_5_core::artifacts::{
     QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
 };
-use crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 
-use super::decoder_cache_dtype_flow::{
+use super::astro_decoder_state_cache_dtype_flow::{
     AffineDtypeContract, DenseMlpDtypeFlow, FullAttentionDtypeFlow, LinearAttentionDtypeFlow,
-    MixtureOfExpertsDtypeFlow, affine_output_dtype, decoder_cache_tensor_dtype,
+    MixtureOfExpertsDtypeFlow, affine_output_dtype, astro_decoder_state_cache_tensor_dtype,
     dense_mlp_output_dtype, embedding_output_dtype, expert_parameter_dtype,
     expert_projection_output_dtype, full_attention_dtypes, linear_attention_dtypes,
     mixture_of_experts_output_dtype, promote_floating_dtypes,
@@ -228,8 +228,8 @@ fn should_derive_linear_attention_dtypes_across_all_bfloat16_layers() {
 
     assert_eq!(
         cache_dtypes,
-        Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-            convolution: DecoderCacheTensorDtype::BFloat16,
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+            convolution: AstroDecoderStateCacheTensorDtype::BFloat16,
         }
     );
     assert_eq!(output_dtype, MlxDtype::BFloat16);
@@ -256,8 +256,8 @@ fn should_widen_linear_attention_through_the_convolution_and_gate_promotions() {
 
     assert_eq!(
         cache_dtypes,
-        Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-            convolution: DecoderCacheTensorDtype::Float16,
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+            convolution: AstroDecoderStateCacheTensorDtype::Float16,
         }
     );
     assert_eq!(output_dtype, MlxDtype::Float32);
@@ -281,9 +281,9 @@ fn should_derive_full_attention_cache_dtypes_from_key_and_value_projections() {
 
     assert_eq!(
         cache_dtypes,
-        Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-            keys: DecoderCacheTensorDtype::Float32,
-            values: DecoderCacheTensorDtype::BFloat16,
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+            keys: AstroDecoderStateCacheTensorDtype::Float32,
+            values: AstroDecoderStateCacheTensorDtype::BFloat16,
         }
     );
     assert_eq!(output_dtype, MlxDtype::Float32);
@@ -389,14 +389,14 @@ fn should_promote_expert_projection_output_over_affine_companions() {
 #[test]
 fn should_narrow_only_floating_cache_dtypes() {
     assert_eq!(
-        decoder_cache_tensor_dtype(MlxDtype::Float16).unwrap(),
-        DecoderCacheTensorDtype::Float16
+        astro_decoder_state_cache_tensor_dtype(MlxDtype::Float16).unwrap(),
+        AstroDecoderStateCacheTensorDtype::Float16
     );
     assert_eq!(
-        decoder_cache_tensor_dtype(MlxDtype::Float32).unwrap(),
-        DecoderCacheTensorDtype::Float32
+        astro_decoder_state_cache_tensor_dtype(MlxDtype::Float32).unwrap(),
+        AstroDecoderStateCacheTensorDtype::Float32
     );
-    let result = decoder_cache_tensor_dtype(MlxDtype::Int32);
+    let result = astro_decoder_state_cache_tensor_dtype(MlxDtype::Int32);
     let Err(Qwen3_5ExecutionError::InvalidInput { description }) = result else {
         panic!("expected an InvalidInput error");
     };

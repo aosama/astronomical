@@ -2,10 +2,10 @@
 
 use astronomical_model_serving::AstroSsdPromptCacheModelContract;
 use astronomical_model_serving::{
-    DecoderCacheTensorDtype, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
-    ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingModelContract, Qwen3_5Config,
-    Qwen3_5DecoderLayerCacheDtypes, Qwen3_5ImageProcessor, Qwen3_5VisionConfig, TensorProfile,
-    qwen3_5_language_tensor_profiles,
+    AstroDecoderStateCacheTensorDtype, ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
+    ORNITH_1_0_35B_OPTIQ_4BIT_REVISION, PersistentVisualEmbeddingModelContract,
+    Qwen3_5AstroDecoderStateCacheLayerDtypes, Qwen3_5Config, Qwen3_5ImageProcessor,
+    Qwen3_5VisionConfig, TensorProfile, qwen3_5_language_tensor_profiles,
 };
 use serde_json::{Value, json};
 
@@ -28,16 +28,19 @@ pub fn astro_ssd_prompt_cache_model_contract() -> AstroSsdPromptCacheModelContra
     // This fixture has no bound MLX arrays. Supply its frozen BF16
     // state contract explicitly; real engine acceptance uses load-derived
     // dtypes and read the resulting block geometry back from the engine.
-    let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&frozen_ornith_1_0_config);
+    let astro_decoder_state_cache_layer_dtypes =
+        bfloat16_astro_decoder_state_cache_layer_dtypes(&frozen_ornith_1_0_config);
     AstroSsdPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
-        astronomical_model_serving::qwen3_5_decoder_cache_layout(
+        astronomical_model_serving::qwen3_5_astro_decoder_state_cache_layout(
             &frozen_ornith_1_0_config,
             256,
-            &decoder_layer_cache_dtypes,
+            &astro_decoder_state_cache_layer_dtypes,
         )
-        .expect("the frozen Ornith 1.0 configuration should build a decoder-cache layout"),
+        .expect(
+            "the frozen Ornith 1.0 configuration should build a astro-decoder-state-cache layout",
+        ),
         frozen_ornith_1_0_config.maximum_position_count() as usize,
         20_000_000_000,
         50_000_000_000,
@@ -47,31 +50,37 @@ pub fn astro_ssd_prompt_cache_model_contract() -> AstroSsdPromptCacheModelContra
     .expect("the frozen Ornith 1.0 configuration should resolve a storage contract")
 }
 
-pub fn bfloat16_decoder_layer_cache_dtypes(
+pub fn bfloat16_astro_decoder_state_cache_layer_dtypes(
     qwen3_5_config: &Qwen3_5Config,
-) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
-    decoder_layer_cache_dtypes(qwen3_5_config, DecoderCacheTensorDtype::BFloat16)
+) -> Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes> {
+    astro_decoder_state_cache_layer_dtypes(
+        qwen3_5_config,
+        AstroDecoderStateCacheTensorDtype::BFloat16,
+    )
 }
 
-pub fn float32_decoder_layer_cache_dtypes(
+pub fn float32_astro_decoder_state_cache_layer_dtypes(
     qwen3_5_config: &Qwen3_5Config,
-) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
-    decoder_layer_cache_dtypes(qwen3_5_config, DecoderCacheTensorDtype::Float32)
+) -> Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes> {
+    astro_decoder_state_cache_layer_dtypes(
+        qwen3_5_config,
+        AstroDecoderStateCacheTensorDtype::Float32,
+    )
 }
 
-fn decoder_layer_cache_dtypes(
+fn astro_decoder_state_cache_layer_dtypes(
     qwen3_5_config: &Qwen3_5Config,
-    activation_state_dtype: DecoderCacheTensorDtype,
-) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
+    activation_state_dtype: AstroDecoderStateCacheTensorDtype,
+) -> Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes> {
     (0..qwen3_5_config.layer_count() as usize)
         .map(|decoder_layer_index| {
             if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
-                Qwen3_5DecoderLayerCacheDtypes::FullAttention {
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
                     keys: activation_state_dtype,
                     values: activation_state_dtype,
                 }
             } else {
-                Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
                     convolution: activation_state_dtype,
                 }
             }

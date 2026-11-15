@@ -4,10 +4,11 @@
 //! construction. The end-to-end best-effort capture journey stays with the
 //! engine-level tests.
 
-use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
-use crate::decoder_cache::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
+use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::{
     AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheBlockKeyError, AstroSsdPromptCacheModelContract,
 };
@@ -178,21 +179,23 @@ fn synthetic_tail_capture_contract() -> AstroSsdPromptCacheModelContract {
     AstroSsdPromptCacheModelContract::resolve(
         "tail-capture-unit-fixture".to_owned(),
         "revision".to_owned(),
-        DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
-            DecoderCacheTensorLayout::sequence(
-                "attention.keys",
-                DecoderCacheTensorDtype::Float16,
-                vec![1, 0, 2],
-                1,
+        AstroDecoderStateCacheLayout::new(vec![
+            AstroDecoderStateCacheLayerLayout::append_only_attention(
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.keys",
+                    AstroDecoderStateCacheTensorDtype::Float16,
+                    vec![1, 0, 2],
+                    1,
+                ),
+                AstroDecoderStateCacheTensorLayout::sequence(
+                    "attention.values",
+                    AstroDecoderStateCacheTensorDtype::Float16,
+                    vec![1, 0, 2],
+                    1,
+                ),
+                FIXTURE_BLOCK_TOKEN_COUNT,
             ),
-            DecoderCacheTensorLayout::sequence(
-                "attention.values",
-                DecoderCacheTensorDtype::Float16,
-                vec![1, 0, 2],
-                1,
-            ),
-            FIXTURE_BLOCK_TOKEN_COUNT,
-        )])
+        ])
         .expect("the synthetic sequence-only layout should be valid"),
         FIXTURE_MAXIMUM_CONTEXT_TOKEN_COUNT,
         1_000_000,

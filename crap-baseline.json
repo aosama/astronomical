@@ -36192,7 +36192,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::allocation_checkpoint",
       "line": 177,
       "cyclomatic": 4.0,
@@ -36201,7 +36201,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::capacity_tokens",
       "line": 65,
       "cyclomatic": 1.0,
@@ -36210,7 +36210,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::empty_with_growth_tokens",
       "line": 48,
       "cyclomatic": 2.0,
@@ -36219,7 +36219,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::empty_with_validated_growth_tokens",
       "line": 36,
       "cyclomatic": 1.0,
@@ -36228,7 +36228,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::keys_state",
       "line": 154,
       "cyclomatic": 1.0,
@@ -36237,7 +36237,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::offset_tokens",
       "line": 73,
       "cyclomatic": 1.0,
@@ -36246,7 +36246,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::payload_byte_count",
       "line": 167,
       "cyclomatic": 1.0,
@@ -36255,7 +36255,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::projected_capacity_growth_tokens",
       "line": 82,
       "cyclomatic": 4.0,
@@ -36264,7 +36264,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::restore_allocation_checkpoint",
       "line": 194,
       "cyclomatic": 7.0,
@@ -36273,7 +36273,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::restore_from_blocks",
       "line": 263,
       "cyclomatic": 2.0,
@@ -36282,7 +36282,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::truncate_to_offset",
       "line": 242,
       "cyclomatic": 3.0,
@@ -36291,7 +36291,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::update_and_fetch",
       "line": 113,
       "cyclomatic": 9.0,
@@ -36300,7 +36300,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "FullAttentionKeyValueState::values_state",
       "line": 161,
       "cyclomatic": 1.0,
@@ -36309,7 +36309,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "validate_key_value_update",
       "line": 294,
       "cyclomatic": 13.0,
@@ -36318,7 +36318,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
       "function": "validate_restored_key_value_slabs",
       "line": 278,
       "cyclomatic": 4.0,
@@ -36327,7 +36327,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state_operations.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state_operations.rs",
       "function": "active_view",
       "line": 125,
       "cyclomatic": 2.0,
@@ -36336,7 +36336,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state_operations.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state_operations.rs",
       "function": "build_updated_storage",
       "line": 6,
       "cyclomatic": 15.0,
@@ -36345,7 +36345,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state_operations.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state_operations.rs",
       "function": "full_attention_error",
       "line": 140,
       "cyclomatic": 1.0,
@@ -36354,7 +36354,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/append_only_attention_state_operations.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state_operations.rs",
       "function": "projected_capacity_tokens",
       "line": 87,
       "cyclomatic": 6.0,
@@ -36363,7 +36363,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::checkpoint",
       "line": 247,
       "cyclomatic": 2.0,
@@ -36372,7 +36372,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::current_or_zero",
       "line": 84,
       "cyclomatic": 4.0,
@@ -36381,7 +36381,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::empty",
       "line": 37,
       "cyclomatic": 1.0,
@@ -36390,7 +36390,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::empty_with_shape",
       "line": 45,
       "cyclomatic": 1.0,
@@ -36399,7 +36399,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::is_unallocated",
       "line": 58,
       "cyclomatic": 1.0,
@@ -36408,7 +36408,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::payload_byte_count",
       "line": 240,
       "cyclomatic": 1.0,
@@ -36417,7 +36417,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::replace_state",
       "line": 66,
       "cyclomatic": 2.0,
@@ -36426,7 +36426,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::restore_checkpoint",
       "line": 254,
       "cyclomatic": 1.0,
@@ -36435,7 +36435,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::restore_from_snapshot",
       "line": 261,
       "cyclomatic": 1.0,
@@ -36444,7 +36444,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::state",
       "line": 234,
       "cyclomatic": 1.0,
@@ -36453,7 +36453,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::update",
       "line": 105,
       "cyclomatic": 2.0,
@@ -36462,7 +36462,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::update_internal",
       "line": 137,
       "cyclomatic": 16.0,
@@ -36471,7 +36471,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "ConvolutionState::update_with_boundary_checkpoints",
       "line": 117,
       "cyclomatic": 2.0,
@@ -36480,7 +36480,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/convolution_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/convolution_state.rs",
       "function": "convolution_error",
       "line": 266,
       "cyclomatic": 1.0,
@@ -36489,7 +36489,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::checkpoint",
       "line": 114,
       "cyclomatic": 2.0,
@@ -36498,7 +36498,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::current_or_zero",
       "line": 66,
       "cyclomatic": 5.0,
@@ -36507,7 +36507,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::empty",
       "line": 33,
       "cyclomatic": 1.0,
@@ -36516,7 +36516,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::empty_with_shape",
       "line": 42,
       "cyclomatic": 1.0,
@@ -36525,7 +36525,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::is_unallocated",
       "line": 57,
       "cyclomatic": 1.0,
@@ -36534,7 +36534,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::payload_byte_count",
       "line": 107,
       "cyclomatic": 1.0,
@@ -36543,7 +36543,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::restore_checkpoint",
       "line": 121,
       "cyclomatic": 1.0,
@@ -36552,7 +36552,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::restore_from_snapshot",
       "line": 127,
       "cyclomatic": 1.0,
@@ -36561,7 +36561,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::set_next",
       "line": 94,
       "cyclomatic": 1.0,
@@ -36570,7 +36570,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/gated_delta_recurrent_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/gated_delta_recurrent_state.rs",
       "function": "GatedDeltaRecurrentState::state",
       "line": 101,
       "cyclomatic": 1.0,
@@ -36579,7 +36579,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/incremental_block_restore.rs",
       "function": "FullAttentionKeyValueState::growth_headroom_tokens",
       "line": 55,
       "cyclomatic": 1.0,
@@ -36588,7 +36588,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/incremental_block_restore.rs",
       "function": "FullAttentionKeyValueState::restore_from_block_slices",
       "line": 26,
       "cyclomatic": 4.0,
@@ -36597,7 +36597,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/incremental_block_restore.rs",
       "function": "concatenated_block_slab",
       "line": 60,
       "cyclomatic": 5.0,
@@ -36606,7 +36606,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/incremental_block_restore.rs",
       "function": "concatenated_block_tensor",
       "line": 82,
       "cyclomatic": 5.0,
@@ -36615,7 +36615,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/incremental_block_restore.rs",
       "function": "restore_error",
       "line": 119,
       "cyclomatic": 1.0,
@@ -36624,7 +36624,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/incremental_block_restore.rs",
       "function": "validate_restore_bounds",
       "line": 104,
       "cyclomatic": 3.0,
@@ -36633,8 +36633,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayerLayout::append_only_attention",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayerLayout::append_only_attention",
       "line": 232,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36642,8 +36642,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayerLayout::composite",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayerLayout::composite",
       "line": 252,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36651,8 +36651,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayerLayout::recurrent_tensor",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayerLayout::recurrent_tensor",
       "line": 246,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36660,8 +36660,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayout::boundary_tensor_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayout::boundary_tensor_count",
       "line": 306,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36669,8 +36669,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayout::layer",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayout::layer",
       "line": 295,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36678,8 +36678,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayout::layer_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayout::layer_count",
       "line": 289,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36687,8 +36687,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayout::new",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayout::new",
       "line": 267,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -36696,8 +36696,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheLayout::sequence_tensor_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheLayout::sequence_tensor_count",
       "line": 301,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36705,8 +36705,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCachePersistedTensorLayout::decoder_layer_index",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCachePersistedTensorLayout::decoder_layer_index",
       "line": 76,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36714,8 +36714,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCachePersistedTensorLayout::new",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCachePersistedTensorLayout::new",
       "line": 67,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36723,8 +36723,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCachePersistedTensorLayout::persistent_tensor_name",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCachePersistedTensorLayout::persistent_tensor_name",
       "line": 88,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36732,8 +36732,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCachePersistedTensorLayout::tensor_layout",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCachePersistedTensorLayout::tensor_layout",
       "line": 82,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36741,8 +36741,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorDtype::mlx_dtype",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorDtype::mlx_dtype",
       "line": 40,
       "cyclomatic": 5.0,
       "coverage": null,
@@ -36750,8 +36750,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorDtype::safetensors_dtype_name",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorDtype::safetensors_dtype_name",
       "line": 28,
       "cyclomatic": 5.0,
       "coverage": null,
@@ -36759,8 +36759,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorDtype::scalar_byte_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorDtype::scalar_byte_count",
       "line": 17,
       "cyclomatic": 5.0,
       "coverage": null,
@@ -36768,8 +36768,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::dimensions",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::dimensions",
       "line": 143,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36777,8 +36777,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::dtype",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::dtype",
       "line": 137,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36786,8 +36786,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::fixed",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::fixed",
       "line": 100,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36795,8 +36795,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::fixed_payload_byte_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::fixed_payload_byte_count",
       "line": 154,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -36804,8 +36804,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::sequence",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::sequence",
       "line": 115,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36813,8 +36813,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::sequence_axis",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::sequence_axis",
       "line": 149,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36822,8 +36822,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::sequence_payload_byte_count_per_token",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::sequence_payload_byte_count_per_token",
       "line": 165,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -36831,8 +36831,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
-      "function": "DecoderCacheTensorLayout::tensor_role_name",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
+      "function": "AstroDecoderStateCacheTensorLayout::tensor_role_name",
       "line": 131,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36840,7 +36840,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
       "function": "checked_tensor_payload_byte_count",
       "line": 184,
       "cyclomatic": 1.0,
@@ -36849,7 +36849,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
       "function": "validate_boundary_tensor",
       "line": 412,
       "cyclomatic": 4.0,
@@ -36858,7 +36858,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
       "function": "validate_layer_layout",
       "line": 311,
       "cyclomatic": 21.0,
@@ -36867,7 +36867,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
       "function": "validate_sequence_tensor",
       "line": 381,
       "cyclomatic": 4.0,
@@ -36876,7 +36876,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/layout.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/layout.rs",
       "function": "validate_tensor_role_and_dimensions",
       "line": 433,
       "cyclomatic": 4.0,
@@ -36885,8 +36885,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/live_state.rs",
-      "function": "DecoderCacheState::allocation_checkpoint",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/live_state.rs",
+      "function": "AstroDecoderStateCacheState::allocation_checkpoint",
       "line": 103,
       "cyclomatic": 6.0,
       "coverage": null,
@@ -36894,8 +36894,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/live_state.rs",
-      "function": "DecoderCacheState::checkpoint",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/live_state.rs",
+      "function": "AstroDecoderStateCacheState::checkpoint",
       "line": 85,
       "cyclomatic": 5.0,
       "coverage": null,
@@ -36903,8 +36903,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/live_state.rs",
-      "function": "DecoderCacheState::convolution_state_array",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/live_state.rs",
+      "function": "AstroDecoderStateCacheState::convolution_state_array",
       "line": 63,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -36912,8 +36912,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/live_state.rs",
-      "function": "DecoderCacheState::payload_byte_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/live_state.rs",
+      "function": "AstroDecoderStateCacheState::payload_byte_count",
       "line": 72,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -36921,8 +36921,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/live_state.rs",
-      "function": "DecoderCacheState::restore_allocation_checkpoint",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/live_state.rs",
+      "function": "AstroDecoderStateCacheState::restore_allocation_checkpoint",
       "line": 154,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -36930,8 +36930,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/live_state.rs",
-      "function": "DecoderCacheState::restore_checkpoint",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/live_state.rs",
+      "function": "AstroDecoderStateCacheState::restore_checkpoint",
       "line": 123,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -36939,8 +36939,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/live_state.rs",
-      "function": "DecoderCacheState::tensors_are_allocated_consistently",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/live_state.rs",
+      "function": "AstroDecoderStateCacheState::tensors_are_allocated_consistently",
       "line": 47,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -36948,8 +36948,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/persistence_layouts.rs",
-      "function": "DecoderCacheLayout::boundary_tensor_layouts",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/persistence_layouts.rs",
+      "function": "AstroDecoderStateCacheLayout::boundary_tensor_layouts",
       "line": 16,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36957,8 +36957,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/persistence_layouts.rs",
-      "function": "DecoderCacheLayout::sequence_tensor_layouts",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/persistence_layouts.rs",
+      "function": "AstroDecoderStateCacheLayout::sequence_tensor_layouts",
       "line": 10,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -36966,7 +36966,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/persistence_layouts.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/persistence_layouts.rs",
       "function": "collect_layer_tensors",
       "line": 44,
       "cyclomatic": 10.0,
@@ -36975,7 +36975,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/persistence_layouts.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/persistence_layouts.rs",
       "function": "collect_layout_tensors",
       "line": 21,
       "cyclomatic": 4.0,
@@ -36984,7 +36984,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/persistence_layouts.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/persistence_layouts.rs",
       "function": "push_tensor",
       "line": 100,
       "cyclomatic": 1.0,
@@ -36993,7 +36993,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::absolute_position",
       "line": 51,
       "cyclomatic": 1.0,
@@ -37002,7 +37002,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::allocation_checkpoint",
       "line": 238,
       "cyclomatic": 4.0,
@@ -37011,7 +37011,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::append_growing",
       "line": 219,
       "cyclomatic": 6.0,
@@ -37020,7 +37020,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::chronological_append",
       "line": 198,
       "cyclomatic": 4.0,
@@ -37029,7 +37029,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::committed_token_count",
       "line": 63,
       "cyclomatic": 1.0,
@@ -37038,7 +37038,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::empty",
       "line": 36,
       "cyclomatic": 2.0,
@@ -37047,7 +37047,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::keys",
       "line": 75,
       "cyclomatic": 1.0,
@@ -37056,7 +37056,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::payload_byte_count",
       "line": 87,
       "cyclomatic": 1.0,
@@ -37065,7 +37065,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::restore_allocation_checkpoint",
       "line": 252,
       "cyclomatic": 2.0,
@@ -37074,7 +37074,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::restore_from_blocks",
       "line": 270,
       "cyclomatic": 12.0,
@@ -37083,7 +37083,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::ring_write_index",
       "line": 57,
       "cyclomatic": 1.0,
@@ -37092,7 +37092,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::update_and_fetch",
       "line": 97,
       "cyclomatic": 1.0,
@@ -37101,7 +37101,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::update_and_fetch_inner",
       "line": 110,
       "cyclomatic": 8.0,
@@ -37110,7 +37110,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::update_multi_token",
       "line": 168,
       "cyclomatic": 9.0,
@@ -37119,7 +37119,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::update_one_token",
       "line": 134,
       "cyclomatic": 9.0,
@@ -37128,7 +37128,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::values",
       "line": 81,
       "cyclomatic": 1.0,
@@ -37137,7 +37137,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "RotatingKeyValueState::window_size",
       "line": 69,
       "cyclomatic": 1.0,
@@ -37146,7 +37146,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "append_optional",
       "line": 380,
       "cyclomatic": 3.0,
@@ -37155,7 +37155,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "concatenate_tokens",
       "line": 391,
       "cyclomatic": 2.0,
@@ -37164,7 +37164,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "rotating_error",
       "line": 439,
       "cyclomatic": 1.0,
@@ -37173,7 +37173,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "slice_tokens",
       "line": 416,
       "cyclomatic": 2.0,
@@ -37182,7 +37182,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "take_last_tokens",
       "line": 399,
       "cyclomatic": 3.0,
@@ -37191,7 +37191,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "temporal_order",
       "line": 344,
       "cyclomatic": 6.0,
@@ -37200,7 +37200,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "token_count",
       "line": 431,
       "cyclomatic": 2.0,
@@ -37209,7 +37209,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "validate_paired_owners",
       "line": 330,
       "cyclomatic": 4.0,
@@ -37218,7 +37218,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "validate_rotating_update",
       "line": 308,
       "cyclomatic": 5.0,
@@ -37227,7 +37227,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_attention_state.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_attention_state.rs",
       "function": "write_token_slot",
       "line": 364,
       "cyclomatic": 2.0,
@@ -37236,8 +37236,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_layout.rs",
-      "function": "DecoderCacheLayerLayout::rotating_window_attention",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_layout.rs",
+      "function": "AstroDecoderStateCacheLayerLayout::rotating_window_attention",
       "line": 6,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -37245,7 +37245,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/rotating_layout.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_layout.rs",
       "function": "rotating_window_counter_layouts",
       "line": 21,
       "cyclomatic": 1.0,
@@ -37254,8 +37254,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
-      "function": "DecoderCacheLayout::boundary_snapshot_payload_byte_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
+      "function": "AstroDecoderStateCacheLayout::boundary_snapshot_payload_byte_count",
       "line": 70,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -37263,8 +37263,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
-      "function": "DecoderCacheLayout::has_boundary_state",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
+      "function": "AstroDecoderStateCacheLayout::has_boundary_state",
       "line": 12,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -37272,8 +37272,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
-      "function": "DecoderCacheLayout::has_sequence_state",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
+      "function": "AstroDecoderStateCacheLayout::has_sequence_state",
       "line": 6,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -37281,8 +37281,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
-      "function": "DecoderCacheLayout::incremental_restore_source_workspace_byte_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
+      "function": "AstroDecoderStateCacheLayout::incremental_restore_source_workspace_byte_count",
       "line": 57,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -37290,8 +37290,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
-      "function": "DecoderCacheLayout::maximum_sequence_tensor_payload_byte_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
+      "function": "AstroDecoderStateCacheLayout::maximum_sequence_tensor_payload_byte_count",
       "line": 35,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -37299,8 +37299,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
-      "function": "DecoderCacheLayout::persistence_alignment_token_count",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
+      "function": "AstroDecoderStateCacheLayout::persistence_alignment_token_count",
       "line": 86,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -37308,8 +37308,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
-      "function": "DecoderCacheLayout::sequence_state_payload_byte_count_per_token",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
+      "function": "AstroDecoderStateCacheLayout::sequence_state_payload_byte_count_per_token",
       "line": 17,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -37317,7 +37317,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
       "function": "checked_layer_persistence_alignment",
       "line": 100,
       "cyclomatic": 5.0,
@@ -37326,7 +37326,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
       "function": "checked_least_common_multiple",
       "line": 125,
       "cyclomatic": 1.0,
@@ -37335,7 +37335,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/decoder_cache/storage_geometry.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/storage_geometry.rs",
       "function": "greatest_common_divisor",
       "line": 138,
       "cyclomatic": 2.0,
@@ -50953,7 +50953,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/model_contract.rs",
-      "function": "AstroSsdPromptCacheModelContract::decoder_cache_layout",
+      "function": "AstroSsdPromptCacheModelContract::astro_decoder_state_cache_layout",
       "line": 166,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -51205,7 +51205,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/model_contract/tests.rs",
-      "function": "bfloat16_decoder_layer_cache_dtypes",
+      "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
       "line": 231,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -51619,7 +51619,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/prefix_lookup/tests/lookup_fixtures.rs",
-      "function": "bfloat16_decoder_layer_cache_dtypes",
+      "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
       "line": 42,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -51628,7 +51628,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/prefix_lookup/tests/lookup_fixtures.rs",
-      "function": "decoder_layer_cache_dtypes",
+      "function": "astro_decoder_state_cache_layer_dtypes",
       "line": 48,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -51997,7 +51997,7 @@
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/restore_support_tests_support.rs",
-      "function": "bfloat16_decoder_layer_cache_dtypes",
+      "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
       "line": 35,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -52699,7 +52699,7 @@
     },
     {
       "file": "crates/model-serving/src/prism_hadamard_qwen35/cache_layout.rs",
-      "function": "prism_hadamard_qwen35_decoder_cache_layout",
+      "function": "prism_hadamard_qwen35_astro_decoder_state_cache_layout",
       "line": 34,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -56632,7 +56632,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/decoder/cache_layout.rs",
-      "function": "qwen3_5_decoder_cache_layout",
+      "function": "qwen3_5_astro_decoder_state_cache_layout",
       "line": 30,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -56640,7 +56640,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "affine_output_dtype",
       "line": 216,
       "cyclomatic": 5.0,
@@ -56649,8 +56649,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
-      "function": "decoder_cache_tensor_dtype",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
+      "function": "astro_decoder_state_cache_tensor_dtype",
       "line": 301,
       "cyclomatic": 5.0,
       "coverage": null,
@@ -56658,7 +56658,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "dense_mlp_output_dtype",
       "line": 146,
       "cyclomatic": 4.0,
@@ -56667,7 +56667,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "embedding_output_dtype",
       "line": 200,
       "cyclomatic": 4.0,
@@ -56676,7 +56676,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "expert_parameter_dtype",
       "line": 255,
       "cyclomatic": 6.0,
@@ -56685,7 +56685,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "expert_projection_output_dtype",
       "line": 235,
       "cyclomatic": 5.0,
@@ -56694,7 +56694,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "full_attention_dtypes",
       "line": 116,
       "cyclomatic": 12.0,
@@ -56703,7 +56703,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "linear_attention_dtypes",
       "line": 86,
       "cyclomatic": 9.0,
@@ -56712,7 +56712,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "mixture_of_experts_output_dtype",
       "line": 159,
       "cyclomatic": 11.0,
@@ -56721,7 +56721,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow.rs",
       "function": "promote_floating_dtypes",
       "line": 281,
       "cyclomatic": 6.0,
@@ -56730,7 +56730,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow_tests.rs",
       "function": "affine_expert_layer_plan",
       "line": 61,
       "cyclomatic": 2.0,
@@ -56739,7 +56739,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow_tests.rs",
       "function": "assert_invalid_input_description",
       "line": 94,
       "cyclomatic": 1.0,
@@ -56748,7 +56748,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow_tests.rs",
       "function": "codebook_affine_contract",
       "line": 30,
       "cyclomatic": 1.0,
@@ -56757,7 +56757,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow_tests.rs",
       "function": "expert_tensor_source",
       "line": 38,
       "cyclomatic": 1.0,
@@ -56766,7 +56766,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow_tests.rs",
       "function": "native_affine_contract",
       "line": 26,
       "cyclomatic": 1.0,
@@ -56775,7 +56775,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow_tests.rs",
       "function": "native_bfloat16_expert_layer_plan",
       "line": 82,
       "cyclomatic": 1.0,
@@ -56784,7 +56784,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/decoder/decoder_cache_dtype_flow_tests.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/decoder/astro_decoder_state_cache_dtype_flow_tests.rs",
       "function": "quantized_affine_contract",
       "line": 34,
       "cyclomatic": 1.0,
@@ -57010,7 +57010,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/decoder/request_state/state_stack.rs",
-      "function": "RequestDecoderStateStack::empty_from_decoder_cache_layout",
+      "function": "RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout",
       "line": 36,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -57019,7 +57019,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/decoder/request_state/state_stack.rs",
-      "function": "RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens",
+      "function": "RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens",
       "line": 43,
       "cyclomatic": 2.0,
       "coverage": null,
@@ -57028,7 +57028,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/decoder/request_state/state_stack.rs",
-      "function": "RequestDecoderStateStack::empty_from_decoder_cache_layout_with_growth_override",
+      "function": "RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_growth_override",
       "line": 59,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -57127,7 +57127,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/decoder/request_state/state_stack_layout.rs",
-      "function": "decoder_cache_layout_projection_error",
+      "function": "astro_decoder_state_cache_layout_projection_error",
       "line": 7,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -57172,7 +57172,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/decoder/request_state/state_stack_tests.rs",
-      "function": "bfloat16_decoder_layer_cache_dtypes",
+      "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
       "line": 27,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -57217,7 +57217,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/decoder/request_state/state_stack_tests.rs",
-      "function": "ornith_decoder_cache_layout",
+      "function": "ornith_astro_decoder_state_cache_layout",
       "line": 17,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -57550,7 +57550,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
-      "function": "Qwen3_5ModelBase::decoder_cache_layout",
+      "function": "Qwen3_5ModelBase::astro_decoder_state_cache_layout",
       "line": 134,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -57721,7 +57721,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/bound_weight_dtype_flow.rs",
-      "function": "derive_decoder_layer_cache_dtypes",
+      "function": "derive_astro_decoder_state_cache_layer_dtypes",
       "line": 41,
       "cyclomatic": 9.0,
       "coverage": null,
@@ -66136,7 +66136,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/artifact_loading.rs",
-      "function": "decoder_cache_layout_at_tensor_binding",
+      "function": "astro_decoder_state_cache_layout_at_tensor_binding",
       "line": 331,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -72031,7 +72031,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/artifact_loading.rs",
-      "function": "decoder_cache_layout_at_tensor_binding",
+      "function": "astro_decoder_state_cache_layout_at_tensor_binding",
       "line": 594,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -72103,7 +72103,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/artifact_loading.rs",
-      "function": "measured_decoder_cache_layout",
+      "function": "measured_astro_decoder_state_cache_layout",
       "line": 207,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -76215,8 +76215,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen_image_21/kv_cache.rs",
-      "function": "cache_is_valid",
+      "file": "crates/model-serving/src/qwen_image_21/astro_image_prefix_key_value_cache.rs",
+      "function": "astro_image_prefix_key_value_cache_is_valid",
       "line": 55,
       "cyclomatic": 5.0,
       "coverage": null,
@@ -76224,8 +76224,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen_image_21/kv_cache.rs",
-      "function": "cache_query_slice",
+      "file": "crates/model-serving/src/qwen_image_21/astro_image_prefix_key_value_cache.rs",
+      "function": "astro_image_prefix_key_value_cache_query_slice",
       "line": 79,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -76233,8 +76233,8 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen_image_21/kv_cache.rs",
-      "function": "cache_write_slice",
+      "file": "crates/model-serving/src/qwen_image_21/astro_image_prefix_key_value_cache.rs",
+      "function": "astro_image_prefix_key_value_cache_write_slice",
       "line": 91,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -76242,7 +76242,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen_image_21/kv_cache.rs",
+      "file": "crates/model-serving/src/qwen_image_21/astro_image_prefix_key_value_cache.rs",
       "function": "prefix_length",
       "line": 39,
       "cyclomatic": 1.0,
@@ -78394,7 +78394,7 @@
     },
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
-      "function": "bfloat16_decoder_layer_cache_dtypes",
+      "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
       "line": 48,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -78403,7 +78403,7 @@
     },
     {
       "file": "crates/model-serving/tests/integration/artifacts/frozen_ornith_1_0_fixtures.rs",
-      "function": "decoder_layer_cache_dtypes",
+      "function": "astro_decoder_state_cache_layer_dtypes",
       "line": 54,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -83019,7 +83019,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
       "function": "average_bits",
       "line": 88,
       "cyclomatic": 3.0,
@@ -83028,8 +83028,8 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
-      "function": "estimate_kv_cache_bytes",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "function": "estimate_astro_decoder_state_cache_bytes",
       "line": 61,
       "cyclomatic": 4.0,
       "coverage": null,
@@ -83037,7 +83037,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
       "function": "is_better_upgrade",
       "line": 149,
       "cyclomatic": 5.0,
@@ -83046,7 +83046,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
       "function": "most_efficient_upgrade",
       "line": 102,
       "cyclomatic": 4.0,
@@ -83055,7 +83055,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
       "function": "next_rung",
       "line": 140,
       "cyclomatic": 3.0,
@@ -83064,8 +83064,8 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
-      "function": "optimize_kv_cache",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
+      "function": "optimize_astro_decoder_state_cache",
       "line": 29,
       "cyclomatic": 3.0,
       "coverage": null,
@@ -83073,7 +83073,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_allocator.rs",
       "function": "upgrade_efficiency",
       "line": 124,
       "cyclomatic": 3.0,
@@ -83082,7 +83082,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
       "function": "LayerProbe::mean_kl_divergence",
       "line": 131,
       "cyclomatic": 6.0,
@@ -83091,7 +83091,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
       "function": "layer_result",
       "line": 156,
       "cyclomatic": 1.0,
@@ -83100,8 +83100,8 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
-      "function": "measure_kv_cache_sensitivity",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
+      "function": "measure_astro_decoder_state_cache_sensitivity",
       "line": 71,
       "cyclomatic": 8.0,
       "coverage": null,
@@ -83109,7 +83109,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
       "function": "probe_failure",
       "line": 194,
       "cyclomatic": 1.0,
@@ -83118,7 +83118,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_sensitivity.rs",
       "function": "require_engaged_measurement",
       "line": 177,
       "cyclomatic": 4.0,
@@ -83127,7 +83127,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
       "function": "ScriptedCacheProbe::cached_layers",
       "line": 127,
       "cyclomatic": 2.0,
@@ -83136,7 +83136,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
       "function": "ScriptedCacheProbe::forward_with_cache_bit_widths",
       "line": 140,
       "cyclomatic": 2.0,
@@ -83145,7 +83145,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
       "function": "ScriptedCacheProbe::kl_divergence",
       "line": 154,
       "cyclomatic": 1.0,
@@ -83154,7 +83154,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
       "function": "bits",
       "line": 7,
       "cyclomatic": 1.0,
@@ -83163,7 +83163,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
       "function": "result",
       "line": 11,
       "cyclomatic": 1.0,
@@ -83172,7 +83172,7 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "file": "crates/quantization/src/astro_decoder_state_cache/astro_decoder_state_cache_tests.rs",
       "function": "two_samples",
       "line": 163,
       "cyclomatic": 1.0,
@@ -96295,7 +96295,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "bfloat16_decoder_layer_cache_dtypes",
+      "function": "bfloat16_astro_decoder_state_cache_layer_dtypes",
       "line": 50,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -96304,7 +96304,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "decoder_layer_cache_dtypes",
+      "function": "astro_decoder_state_cache_layer_dtypes",
       "line": 62,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -96340,7 +96340,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/common/qwen3_5_moe.rs",
-      "function": "float32_decoder_layer_cache_dtypes",
+      "function": "float32_astro_decoder_state_cache_layer_dtypes",
       "line": 56,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -97843,7 +97843,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/allocation_checkpoint.rs",
-      "function": "synthetic_append_only_attention_decoder_cache_layout",
+      "function": "synthetic_append_only_attention_astro_decoder_state_cache_layout",
       "line": 42,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -97852,7 +97852,7 @@
     },
     {
       "file": "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/allocation_checkpoint.rs",
-      "function": "synthetic_composite_decoder_cache_layout",
+      "function": "synthetic_composite_astro_decoder_state_cache_layout",
       "line": 26,
       "cyclomatic": 1.0,
       "coverage": null,

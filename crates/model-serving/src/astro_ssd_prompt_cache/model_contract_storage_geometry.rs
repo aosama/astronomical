@@ -4,14 +4,14 @@
 //! These formulas reproduce the safetensors header and payload layout using the
 //! same deterministic largest-tensor-first order as the native writer.
 
-use crate::DecoderCachePersistedTensorLayout;
+use crate::AstroDecoderStateCachePersistedTensorLayout;
 
 use super::block_format::ASTRO_SSD_PROMPT_CACHE_FORMAT_VERSION;
 use super::model_contract_error::AstroSsdPromptCacheModelContractError;
 
 pub(super) fn exact_state_file_bytes(
     block_token_count: usize,
-    persisted_tensor_layouts: Vec<DecoderCachePersistedTensorLayout>,
+    persisted_tensor_layouts: Vec<AstroDecoderStateCachePersistedTensorLayout>,
 ) -> Result<u64, AstroSsdPromptCacheModelContractError> {
     if persisted_tensor_layouts.is_empty() {
         return Ok(0);
@@ -92,9 +92,9 @@ pub(super) fn maximum_block_manifest_file_bytes(
 /// stay deterministic, mirroring the native writer's largest-tensor-first
 /// policy that bounds peak workspace.
 fn tensor_storage_geometry(
-    persisted_tensor_layout: crate::DecoderCachePersistedTensorLayout,
+    persisted_tensor_layout: crate::AstroDecoderStateCachePersistedTensorLayout,
     block_token_count: usize,
-) -> Result<(String, &'static str, Vec<usize>, usize), crate::DecoderCacheLayoutError> {
+) -> Result<(String, &'static str, Vec<usize>, usize), crate::AstroDecoderStateCacheLayoutError> {
     let tensor_layout = persisted_tensor_layout.tensor_layout();
     let dimensions = tensor_layout
         .dimensions()
@@ -112,7 +112,9 @@ fn tensor_storage_geometry(
         tensor_layout
             .sequence_payload_byte_count_per_token()?
             .checked_mul(block_token_count)
-            .ok_or(crate::DecoderCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?
+            .ok_or(
+                crate::AstroDecoderStateCacheLayoutError::SequenceTensorPayloadByteCountOverflow,
+            )?
     } else {
         tensor_layout.fixed_payload_byte_count()?
     };

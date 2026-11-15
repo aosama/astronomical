@@ -16,11 +16,11 @@
 
 use mlx_bridge::MlxDtype;
 
-use crate::decoder_cache::DecoderCacheTensorDtype;
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype;
 use crate::qwen3_5_core::artifacts::{
     QuantizationMode, QuantizedExpertLayerPlan, SafetensorsDtype,
 };
-use crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 
 /// The dtype contract one affine weight carries into the type flow. Each
@@ -85,7 +85,7 @@ pub(crate) struct MixtureOfExpertsDtypeFlow {
 /// attention output dtype for one layer.
 pub(crate) fn linear_attention_dtypes(
     flow: &LinearAttentionDtypeFlow,
-) -> Result<(Qwen3_5DecoderLayerCacheDtypes, MlxDtype), Qwen3_5ExecutionError> {
+) -> Result<(Qwen3_5AstroDecoderStateCacheLayerDtypes, MlxDtype), Qwen3_5ExecutionError> {
     let convolution_state_dtype = affine_output_dtype(
         flow.normalized_input_dtype,
         &flow.input_queries_keys_values_projection,
@@ -104,8 +104,8 @@ pub(crate) fn linear_attention_dtypes(
     let gated_output_dtype =
         promote_floating_dtypes(normalized_recurrent_output_dtype, output_gate_dtype)?;
     Ok((
-        Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-            convolution: decoder_cache_tensor_dtype(convolution_state_dtype)?,
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+            convolution: astro_decoder_state_cache_tensor_dtype(convolution_state_dtype)?,
         },
         affine_output_dtype(gated_output_dtype, &flow.output_projection)?,
     ))
@@ -115,7 +115,7 @@ pub(crate) fn linear_attention_dtypes(
 /// output dtype for one layer.
 pub(crate) fn full_attention_dtypes(
     flow: &FullAttentionDtypeFlow,
-) -> Result<(Qwen3_5DecoderLayerCacheDtypes, MlxDtype), Qwen3_5ExecutionError> {
+) -> Result<(Qwen3_5AstroDecoderStateCacheLayerDtypes, MlxDtype), Qwen3_5ExecutionError> {
     let query_projection_dtype =
         affine_output_dtype(flow.normalized_input_dtype, &flow.query_projection)?;
     let normalized_query_dtype = promote_floating_dtypes(
@@ -134,9 +134,9 @@ pub(crate) fn full_attention_dtypes(
     )?;
     let gated_attention_dtype = promote_floating_dtypes(attention_dtype, query_projection_dtype)?;
     Ok((
-        Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-            keys: decoder_cache_tensor_dtype(normalized_key_dtype)?,
-            values: decoder_cache_tensor_dtype(value_projection_dtype)?,
+        Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+            keys: astro_decoder_state_cache_tensor_dtype(normalized_key_dtype)?,
+            values: astro_decoder_state_cache_tensor_dtype(value_projection_dtype)?,
         },
         affine_output_dtype(gated_attention_dtype, &flow.output_projection)?,
     ))
@@ -298,13 +298,13 @@ pub(crate) fn promote_floating_dtypes(
 }
 
 /// Narrows one MLX dtype to the cache-serializable dtype set.
-pub(crate) fn decoder_cache_tensor_dtype(
+pub(crate) fn astro_decoder_state_cache_tensor_dtype(
     mlx_dtype: MlxDtype,
-) -> Result<DecoderCacheTensorDtype, Qwen3_5ExecutionError> {
+) -> Result<AstroDecoderStateCacheTensorDtype, Qwen3_5ExecutionError> {
     match mlx_dtype {
-        MlxDtype::Float16 => Ok(DecoderCacheTensorDtype::Float16),
-        MlxDtype::BFloat16 => Ok(DecoderCacheTensorDtype::BFloat16),
-        MlxDtype::Float32 => Ok(DecoderCacheTensorDtype::Float32),
+        MlxDtype::Float16 => Ok(AstroDecoderStateCacheTensorDtype::Float16),
+        MlxDtype::BFloat16 => Ok(AstroDecoderStateCacheTensorDtype::BFloat16),
+        MlxDtype::Float32 => Ok(AstroDecoderStateCacheTensorDtype::Float32),
         _ => Err(Qwen3_5ExecutionError::InvalidInput {
             description: "decoder cache state has an unsupported MLX dtype",
         }),
