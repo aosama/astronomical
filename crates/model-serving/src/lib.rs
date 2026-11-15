@@ -97,6 +97,8 @@ pub(crate) mod qwen_image_21;
 // the serving crate resolving without touching their many consumers.
 pub(crate) use astronomical_memory_policy::{safetensors, strict_json};
 
+pub mod row_batched_matmul;
+
 mod sampling_seed;
 
 mod sparse_experts;

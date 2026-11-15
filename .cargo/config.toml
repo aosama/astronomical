@@ -453,6 +453,19 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # back-to-back residency churn on the large sparse model; issues #1716 and
 # #1717). Each case loads the real model, so run them only when comparing
 # strategies; append --filter NAME to pick cases.
+# The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
+# every 27B shape at 1 to 32 rows, gives each row the same bits alone and
+# inside a 16-row block, and refuses packings it cannot read. Seconds.
+test-row-batched-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter row_batched_matmul"
+# Speculative decoding: what a verify pass over K drafted rows costs against
+# one row. Times the dense Qwen3.8 27B's real 4-bit projection shapes for
+# K = 1 to 32, through MLX's quantized matmul and through the row-batched
+# kernel (crates/model-serving/src/row_batched_matmul), over 12 distinct layers
+# so every pass reads DRAM, plus the 248,320-row output head, then each
+# projection shape on its own. Prints each K's cost against one row and the
+# read rate; asserts nothing. Needs about 6 GB of free GPU memory and no
+# model; runs in about 15 seconds.
+measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --filter k_row_verify_cost"
 measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
 # Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the

@@ -200,6 +200,15 @@ Copyright 2024 The Qwen team, Alibaba Group and the HuggingFace Inc. team. All r
 
 Licensed under the Apache License, Version 2.0. A complete copy of that license is provided in the repository root LICENSE and the distributed app bundle.
 
+TensorFold
+Source: https://github.com/ashhart/TensorFold
+Used as the upstream source of the row-batched 4-bit quantized matmul that Astronomical incorporates. The Metal source in crates/model-serving/src/row_batched_matmul/kernel_source.rs and the weight regrouping and input-slice rule beside it are adapted from TensorFold's lane matmul (src/tensorfold/kernels/qwen/dense/v1/lane_qmm.py at tag v0.3.5.1): M5 matrix units multiply the raw 4-bit codes, each group's scale and offset is applied after the product, and long inputs are split across simdgroups and added in slice order.
+
+TensorFold source translations
+Copyright 2026 TensorFold contributors
+
+Licensed under the Apache License, Version 2.0. A complete copy of that license is provided in the repository root LICENSE and the distributed app bundle.
+
 Kokoro
 Source: https://github.com/hexgrad/kokoro
 The Kokoro-82M text-to-speech model (StyleTTS2 with an iSTFTNet vocoder) is translated from its PyTorch reference into the MLX engine under crates/model-serving/src/speech_models/kokoro.

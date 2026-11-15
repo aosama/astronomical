@@ -1,4 +1,6 @@
 #[cfg(feature = "performance-measurement")]
+mod k_row_verify_cost;
+#[cfg(feature = "performance-measurement")]
 mod model_astro_ssd_prompt_cache_benchmark_case;
 #[cfg(feature = "performance-measurement")]
 mod model_astro_ssd_prompt_cache_warmup;
