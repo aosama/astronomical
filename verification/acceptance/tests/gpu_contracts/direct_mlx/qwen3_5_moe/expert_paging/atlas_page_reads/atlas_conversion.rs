@@ -182,9 +182,9 @@ fn assert_scratch_volume_fits(atlas: &AtlasTestFile) {
     assert!(
         available_byte_count >= atlas_byte_count + SCRATCH_VOLUME_RESERVE_BYTES,
         "the atlas needs {:.1} GB of scratch space plus {:.0} GB reserve; {:.1} GB are free",
-        atlas_byte_count as f64 / 1e9,
-        SCRATCH_VOLUME_RESERVE_BYTES as f64 / 1e9,
-        available_byte_count as f64 / 1e9
+        atlas_byte_count as f64 / 1_073_741_824.0,
+        SCRATCH_VOLUME_RESERVE_BYTES as f64 / 1_073_741_824.0,
+        available_byte_count as f64 / 1_073_741_824.0
     );
 }
 

@@ -215,10 +215,10 @@ fn report_and_check(
             layers_complete_before_request.len(),
             restreamed_layers.len(),
             prefill_streamed_bytes_among(generation_report, layers_complete_before_request) as f64
-                / 1e9,
-            prefill_streamed_bytes_among(generation_report, &all_layers()) as f64 / 1e9,
-            peak_memory_bytes(generation_report) as f64 / 1e9,
-            ceiling_bytes as f64 / 1e9,
+                / 1_073_741_824.0,
+            prefill_streamed_bytes_among(generation_report, &all_layers()) as f64 / 1_073_741_824.0,
+            peak_memory_bytes(generation_report) as f64 / 1_073_741_824.0,
+            ceiling_bytes as f64 / 1_073_741_824.0,
         );
         restreamed_layer_counts.push(restreamed_layers.len());
     }

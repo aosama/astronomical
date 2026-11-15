@@ -314,7 +314,7 @@ fn record_distinct_observation(
     println!(
         "[prefill-memory-refill] completed_layer_count={} active_memory_gb={:.1}",
         observation.completed_layer_count,
-        observation.active_memory_bytes as f64 / 1e9
+        observation.active_memory_bytes as f64 / 1_073_741_824.0
     );
     prefill_memory_observations.push(observation);
 }
@@ -340,8 +340,8 @@ fn assert_memory_was_refilled_during_prefill(
     assert!(
         highest_active_memory_bytes_after_measurement >= REFILL_MEMORY_CEILING_BYTES / 2,
         "after its first measured layers the engine held at most {:.1} GB of a {:.1} GB ceiling while still reading the prompt; readings: {prefill_memory_observations:?}; evidence in {}",
-        highest_active_memory_bytes_after_measurement as f64 / 1e9,
-        REFILL_MEMORY_CEILING_BYTES as f64 / 1e9,
+        highest_active_memory_bytes_after_measurement as f64 / 1_073_741_824.0,
+        REFILL_MEMORY_CEILING_BYTES as f64 / 1_073_741_824.0,
         worker_home.display()
     );
 }

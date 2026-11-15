@@ -155,7 +155,7 @@ async fn attribute_decode_token_time(file_cache_condition: FileCacheCondition) {
             "[decode-attribution] after={} resident_experts={} resident_gb={:.2} warm_tables={} evictions={}",
             probe_request.phase_name,
             expert_statistics.entry_count,
-            expert_statistics.resident_payload_byte_count as f64 / 1e9,
+            expert_statistics.resident_payload_byte_count as f64 / 1_073_741_824.0,
             expert_statistics.partial_layer_count,
             expert_statistics.eviction_count,
         );

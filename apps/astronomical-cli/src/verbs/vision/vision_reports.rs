@@ -3,12 +3,12 @@
 
 use std::io::Write;
 
+use crate::formatting::BYTES_PER_GIGABYTE;
 use astronomical_vision_tower::{
     BaseMatchReport, BaseMatchVerdict, TensorAgreement, TowerAdditionReport, TowerInspection,
     TowerStatus, TowerSummary,
 };
 
-const BYTES_PER_GIBIBYTE: f64 = 1_073_741_824.0;
 const PARAMETERS_PER_MILLION: f64 = 1_000_000.0;
 const SHORT_REVISION_LENGTH: usize = 7;
 
@@ -31,9 +31,9 @@ pub fn render_inspection_text(
     }
     writeln!(
         output,
-        "Weights: {} tensors, {:.2} GiB, in {} {}",
+        "Weights: {} tensors, {:.2} GB, in {} {}",
         inspection.total_tensor_count,
-        inspection.total_weight_bytes as f64 / BYTES_PER_GIBIBYTE,
+        inspection.total_weight_bytes as f64 / BYTES_PER_GIGABYTE,
         inspection.weight_file_count,
         plural_files(inspection.weight_file_count),
     )?;
@@ -53,9 +53,9 @@ fn render_tower_details(
 ) -> std::io::Result<()> {
     writeln!(
         output,
-        "  Size: {:.1}M parameters, {:.2} GiB",
+        "  Size: {:.1}M parameters, {:.2} GB",
         tower.parameter_count as f64 / PARAMETERS_PER_MILLION,
-        tower.byte_count as f64 / BYTES_PER_GIBIBYTE,
+        tower.byte_count as f64 / BYTES_PER_GIGABYTE,
     )?;
     writeln!(
         output,
@@ -156,9 +156,9 @@ pub fn render_addition_text(
     writeln!(output, "Built: {}", report.output_directory.display())?;
     writeln!(
         output,
-        "Tower: {} tensors, {:.2} GiB, from {}",
+        "Tower: {} tensors, {:.2} GB, from {}",
         report.tower_tensor_count,
-        report.tower_byte_count as f64 / BYTES_PER_GIBIBYTE,
+        report.tower_byte_count as f64 / BYTES_PER_GIGABYTE,
         artifact_heading(
             &report.base_match.tower_artifact,
             report.base_match.tower_revision.as_deref()
@@ -184,9 +184,9 @@ pub fn render_addition_text(
     )?;
     writeln!(
         output,
-        "Total: {} files, {:.2} GiB, hashes in astronomical-build.json",
+        "Total: {} files, {:.2} GB, hashes in astronomical-build.json",
         report.file_count,
-        report.total_byte_count as f64 / BYTES_PER_GIBIBYTE,
+        report.total_byte_count as f64 / BYTES_PER_GIGABYTE,
     )?;
     if !report.missing_image_settings.is_empty() {
         writeln!(

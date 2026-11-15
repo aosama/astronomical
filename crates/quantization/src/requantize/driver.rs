@@ -26,6 +26,12 @@ use super::source_tensor_reader::{SourceShardMaps, read_module_weight};
 use super::tensor_plan::{RequantizeTensorPlan, TensorPlanEntry};
 
 /// The progress stage name the CLI prints.
+/// The gigabyte the rest of Astronomical prints: 2³⁰ bytes, the
+/// one Apple means when it describes a Mac's memory. A figure printed here
+/// must match the same figure in the menu bar and Observatory, so no message
+/// divides by 10⁹.
+const BYTES_PER_GIGABYTE: f64 = 1_073_741_824.0;
+
 const REQUANTIZE_STAGE_NAME: &str = "requantize";
 
 /// Flushes a shard through the runtime's safetensors writer with
@@ -122,7 +128,7 @@ pub fn run_requantize(
         progress_tracker.advance(&format!(
             "{} (peak {:.2} GB)",
             entry.tensor_key,
-            peak_bytes as f64 / 1e9
+            peak_bytes as f64 / BYTES_PER_GIGABYTE
         ));
     }
     progress_tracker.report_now("every planned tensor written");

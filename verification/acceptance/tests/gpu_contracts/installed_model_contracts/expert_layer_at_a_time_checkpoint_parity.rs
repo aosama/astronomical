@@ -337,7 +337,7 @@ fn assert_parity_with_planned_layers_kept(
     );
     eprintln!(
         "[expert-layer-at-a-time-parity] progress=2/2 kept_expert_gb={:.2} tensors_per_boundary={}",
-        kept_expert_payload_bytes as f64 / 1e9,
+        kept_expert_payload_bytes as f64 / 1_073_741_824.0,
         streamed_boundaries[0].1.len()
     );
 }

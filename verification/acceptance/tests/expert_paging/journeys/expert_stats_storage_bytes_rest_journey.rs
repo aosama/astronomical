@@ -98,13 +98,13 @@ async fn run_expert_stats_storage_bytes_journey() {
     assert_avoided_bytes_never_exceed_no_cache_baseline(&stats_document);
     eprintln!(
         "[expert-stats-storage-bytes] requested_gb={:.2} physical_gb={:.2} avoided_gb={:.2} summaries_gb={:.2}",
-        requested_bytes(&stats_document) as f64 / 1e9,
+        requested_bytes(&stats_document) as f64 / 1_073_741_824.0,
         stats_document["value"]["expert_source_physical_disk_read_bytes"]
             .as_u64()
             .unwrap_or(0) as f64
-            / 1e9,
-        avoided_bytes(&stats_document) as f64 / 1e9,
-        streamed_source_plan_bytes(isolated_worker_home.path()) as f64 / 1e9,
+            / 1_073_741_824.0,
+        avoided_bytes(&stats_document) as f64 / 1_073_741_824.0,
+        streamed_source_plan_bytes(isolated_worker_home.path()) as f64 / 1_073_741_824.0,
     );
 }
 

@@ -9,6 +9,7 @@
 use std::io::Write;
 use std::time::{Duration, Instant};
 
+use crate::formatting::BYTES_PER_GIGABYTE;
 use astronomical_vision_tower::{
     ArtifactReference, ArtifactSource, BaseMatchProgress, BaseMatchVerdict, TowerAdditionProgress,
     TowerAdditionReport, TowerAdditionRequest, TowerAdditionStage, TowerStatus, VisionTowerError,
@@ -24,7 +25,6 @@ pub use vision_arguments::{
 };
 
 const COMPARE_STAGE_NAME: &str = "compare";
-const BYTES_PER_GIBIBYTE: f64 = 1_073_741_824.0;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VisionError {
@@ -176,9 +176,9 @@ impl TowerAdditionProgress for StandardErrorProgress<'_> {
             completed_bytes as f64,
             total_bytes as f64,
             &format!(
-                "{:.2}/{:.2} GiB",
-                completed_bytes as f64 / BYTES_PER_GIBIBYTE,
-                total_bytes as f64 / BYTES_PER_GIBIBYTE
+                "{:.2}/{:.2} GB",
+                completed_bytes as f64 / BYTES_PER_GIGABYTE,
+                total_bytes as f64 / BYTES_PER_GIGABYTE
             ),
         );
     }

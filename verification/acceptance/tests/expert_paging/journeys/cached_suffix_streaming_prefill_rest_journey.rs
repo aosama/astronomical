@@ -187,8 +187,8 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     eprintln!(
         "{LOG_MARKER} request=journey status=start timeout_seconds={} artifact_payload_bytes={artifact_payload_bytes} artifact_payload_gb={:.3} allocated_mlx_memory_bytes={allocated_mlx_memory_bytes} allocated_mlx_memory_gb={:.3} initial_prompt_tokens={initial_prompt_token_count} fixed_prefill_tokens={PREFILL_CHUNK_TOKEN_COUNT} persistent_prompt_cache_enabled=true",
         timeout_duration.as_secs(),
-        artifact_payload_bytes as f64 / 1_000_000_000.0,
-        allocated_mlx_memory_bytes as f64 / 1_000_000_000.0,
+        artifact_payload_bytes as f64 / 1_073_741_824.0,
+        allocated_mlx_memory_bytes as f64 / 1_073_741_824.0,
     );
 
     let real_model_rest_server = launch_real_model_rest_server(

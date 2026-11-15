@@ -26,12 +26,12 @@ pub(super) async fn assert_the_in_memory_ledger_matches_mlx(
     eprintln!(
         "[in-memory-ledger] measured_steps={} largest_unaccounted_gb={:.3} largest_overcounted_gb={:.3} allowed_gb={:.3} probed_working_memory_gb={:.3} largest_prompt_step_rise_gb={:.3} largest_reply_step_rise_gb={:.3}",
         ledger_reading.observed_step_count,
-        ledger_reading.largest_unaccounted_bytes as f64 / 1e9,
-        ledger_reading.largest_overcounted_bytes as f64 / 1e9,
-        allowed_unaccounted_bytes as f64 / 1e9,
-        ledger_reading.probed_working_memory_bytes.unwrap_or(0) as f64 / 1e9,
-        ledger_reading.largest_reading_step_peak_beyond_held_bytes as f64 / 1e9,
-        ledger_reading.largest_writing_step_peak_beyond_held_bytes as f64 / 1e9,
+        ledger_reading.largest_unaccounted_bytes as f64 / 1_073_741_824.0,
+        ledger_reading.largest_overcounted_bytes as f64 / 1_073_741_824.0,
+        allowed_unaccounted_bytes as f64 / 1_073_741_824.0,
+        ledger_reading.probed_working_memory_bytes.unwrap_or(0) as f64 / 1_073_741_824.0,
+        ledger_reading.largest_reading_step_peak_beyond_held_bytes as f64 / 1_073_741_824.0,
+        ledger_reading.largest_writing_step_peak_beyond_held_bytes as f64 / 1_073_741_824.0,
     );
     assert!(
         ledger_reading.observed_step_count > 0,

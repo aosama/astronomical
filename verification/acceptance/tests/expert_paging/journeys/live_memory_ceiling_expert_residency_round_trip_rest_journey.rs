@@ -139,9 +139,9 @@ async fn run_residency_round_trip() {
     eprintln!(
         "{LOG_MARKER} phase=journey status=success elapsed_seconds={:.3} turn_1_expert_read_gb={:.3} turn_2_expert_read_gb={:.3} turn_3_expert_read_gb={:.3}",
         journey_started_at.elapsed().as_secs_f64(),
-        generation_evidence[0].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[1].expert_source_read_bytes as f64 / 1_000_000_000.0,
-        generation_evidence[2].expert_source_read_bytes as f64 / 1_000_000_000.0,
+        generation_evidence[0].expert_source_read_bytes as f64 / 1_073_741_824.0,
+        generation_evidence[1].expert_source_read_bytes as f64 / 1_073_741_824.0,
+        generation_evidence[2].expert_source_read_bytes as f64 / 1_073_741_824.0,
     );
 }
 

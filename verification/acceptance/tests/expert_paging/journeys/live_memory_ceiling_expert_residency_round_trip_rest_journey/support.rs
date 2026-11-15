@@ -58,7 +58,7 @@ pub(super) async fn wait_for_idle_status(server_address: SocketAddr, request_lab
                 status_document["mlx_memory_snapshot"]["active_memory_bytes"]
                     .as_u64()
                     .unwrap_or(0) as f64
-                    / 1_000_000_000.0,
+                    / 1_073_741_824.0,
             );
             last_log_at = Instant::now();
         }
@@ -74,8 +74,8 @@ pub(super) fn assert_machine_supports_round_trip(status_document: &Value, raised
     assert!(
         machine_ceiling >= raised_ceiling,
         "this acceptance cell requires a machine MLX ceiling of at least {:.0} GB; worker reported {:.3} GB",
-        raised_ceiling as f64 / 1_000_000_000.0,
-        machine_ceiling as f64 / 1_000_000_000.0,
+        raised_ceiling as f64 / 1_073_741_824.0,
+        machine_ceiling as f64 / 1_073_741_824.0,
     );
 }
 
@@ -303,7 +303,7 @@ pub(super) async fn wait_for_settled_resident_status(
                 status_document["expert_memory_mode"]
                     .as_str()
                     .unwrap_or("unavailable"),
-                memory_bytes(&status_document, "expert_payload_bytes") as f64 / 1_000_000_000.0,
+                memory_bytes(&status_document, "expert_payload_bytes") as f64 / 1_073_741_824.0,
             );
             last_log_at = Instant::now();
         }

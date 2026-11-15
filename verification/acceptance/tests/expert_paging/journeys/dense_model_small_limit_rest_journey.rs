@@ -164,7 +164,7 @@ async fn serve_a_dense_model_under_a_small_limit() {
         kept_layers_after_load.kept_layer_count,
         kept_layers_after_long_prompt.kept_layer_count,
         kept_layers_after_load.decoder_layer_count,
-        largest_active_memory_bytes as f64 / 1e9,
+        largest_active_memory_bytes as f64 / 1_073_741_824.0,
     );
     assert!(
         kept_layers_after_long_prompt.kept_layer_count >= kept_layers_after_load.kept_layer_count,

@@ -22,7 +22,13 @@ use crate::uncached_file_io::available_bytes_on_volume;
 
 /// Free space kept beyond the Atlas itself, so a conversion fails up front
 /// rather than filling the volume other writers depend on.
-const VOLUME_RESERVE_BYTES: u64 = 4 * 1_000_000_000;
+/// The gigabyte the rest of Astronomical prints: 2³⁰ bytes, the
+/// one Apple means when it describes a Mac's memory. A figure printed here
+/// must match the same figure in the menu bar and Observatory, so no message
+/// divides by 10⁹.
+const BYTES_PER_GIGABYTE: f64 = 1_073_741_824.0;
+
+const VOLUME_RESERVE_BYTES: u64 = 4 * 1_073_741_824;
 
 pub struct ConversionRequest<'paths> {
     pub source_directory: &'paths Path,
@@ -247,9 +253,9 @@ fn prepare_staging_directory(
         available_bytes_on_volume(parent_directory).map_err(io_error(parent_directory))?;
     if available_byte_count < atlas_byte_count + VOLUME_RESERVE_BYTES {
         return Err(AtlasConversionError::NotEnoughSpace {
-            needed_gigabytes: atlas_byte_count as f64 / 1e9,
-            reserve_gigabytes: VOLUME_RESERVE_BYTES as f64 / 1e9,
-            available_gigabytes: available_byte_count as f64 / 1e9,
+            needed_gigabytes: atlas_byte_count as f64 / BYTES_PER_GIGABYTE,
+            reserve_gigabytes: VOLUME_RESERVE_BYTES as f64 / BYTES_PER_GIGABYTE,
+            available_gigabytes: available_byte_count as f64 / BYTES_PER_GIGABYTE,
         });
     }
     let output_name = output_directory

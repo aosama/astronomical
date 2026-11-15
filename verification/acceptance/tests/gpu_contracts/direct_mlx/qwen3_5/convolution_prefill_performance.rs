@@ -379,7 +379,7 @@ async fn measure_convolution_chain_costs() {
         .expect("the pressure blocks should evaluate");
     eprintln!(
         "[gdn-conv-bench] pressure held: {:.1} GB",
-        64.0 * f64::from(8192 * 8192) * 2.0 / 1e9
+        64.0 * f64::from(8192 * 8192) * 2.0 / 1_073_741_824.0
     );
 
     let pressured_chain_millis = bench_chain(&runtime, || {

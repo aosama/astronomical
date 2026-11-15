@@ -145,7 +145,7 @@ fn measure_raw_layer_read_rate(
     let read_seconds = read_started_at.elapsed().as_secs_f64();
     eprintln!(
         "[dense-speed] raw_layer_read layers={RAW_READ_LAYER_COUNT} bytes={read_bytes} seconds={read_seconds:.3} gb_per_second={:.2} ms_per_layer={:.1}",
-        read_bytes as f64 / read_seconds / 1e9,
+        read_bytes as f64 / read_seconds / 1_073_741_824.0,
         read_seconds * 1000.0 / RAW_READ_LAYER_COUNT as f64
     );
 }

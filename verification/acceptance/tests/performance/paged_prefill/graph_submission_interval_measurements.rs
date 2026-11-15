@@ -73,7 +73,7 @@ const MEASURED_OUTPUT_TOKENS: u64 = 500;
 const MINIMUM_MEASURED_OUTPUT_TOKENS: u64 = 450;
 const STATS_POLL_ATTEMPTS: usize = 50;
 const STATS_POLL_INTERVAL: Duration = Duration::from_millis(100);
-const BYTES_PER_GIGABYTE: f64 = 1e9;
+const BYTES_PER_GIGABYTE: f64 = 1_073_741_824.0;
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 /// The two instructions differ from their first word so the measured request

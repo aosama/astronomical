@@ -28,7 +28,7 @@ pub(super) fn report_shape_timings(
             sorted_milliseconds.len(),
             percentile(&sorted_milliseconds, 0.1),
             percentile(&sorted_milliseconds, 0.9),
-            page_byte_count as f64 / 1e9 / (median_milliseconds / 1_000.0),
+            page_byte_count as f64 / 1_073_741_824.0 / (median_milliseconds / 1_000.0),
             median_milliseconds * layer_count as f64,
         );
     }
