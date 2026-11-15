@@ -54,6 +54,7 @@ function wireDownloadModelsCatalog() {
         return Promise.resolve("unavailable");
     }
     wireDownloadModelsControls();
+    wireDownloadModelsSelectionGuard(catalogContainer);
     if (typeof window !== "undefined" && window.location) {
         downloadModelsLinkedModelId = readDownloadModelsLinkedModelId(window.location.search);
     }
@@ -125,6 +126,13 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         ...downloadModelsRemovalRenderState(), // changes no catalog field, so it counts here
     ]);
     if (renderStateFingerprint === downloadModelsRenderedStateFingerprint) {
+        return downloadModelsRenderedStateOutcome;
+    }
+    // A rebuild would cut the person's text selection out from under them;
+    // it waits (the fingerprint is left unchanged so the next poll retries)
+    // and only the running download's progress moves meanwhile.
+    if (downloadModelsRenderedStateOutcome === "ready" && isDownloadModelsSelectionHeld(resolvedCatalogContainer)) {
+        updateDownloadModelsBannerInPlace(resolvedCatalogContainer);
         return downloadModelsRenderedStateOutcome;
     }
     downloadModelsRenderedStateFingerprint = renderStateFingerprint;
@@ -476,13 +484,6 @@ function downloadModelsActionButtons(catalogRow) {
     return [downloadModelsActionButton("Pause", "pause"), downloadModelsActionButton("Cancel", "cancel")];
 }
 
-// True while a download holds the single download slot. A failed download does
-// not: the daemon discards it when another starts, so Get stays usable.
-function isDownloadModelsDownloadSlotBusy() {
-    return downloadModelsCurrentDownload.state !== "idle"
-        && downloadModelsCurrentDownload.state !== "failed";
-}
-
 function downloadModelsActionButton(label, action, huggingfaceId = null, extraClassName = "") {
     const button = document.createElement("button");
     const buttonStyle = action === "cancel" ? "button button-quiet" : "button button-secondary";
@@ -494,12 +495,9 @@ function downloadModelsActionButton(label, action, huggingfaceId = null, extraCl
 }
 
 async function performDownloadModelsAction(action, huggingfaceId) {
-    const actionPath = action === "start" ? LIBRARY_DOWNLOAD_URL : LIBRARY_DOWNLOAD_URL + "/" + action;
+    if (action === "start") return startDownloadModelsDownload(huggingfaceId);
+    const actionPath = LIBRARY_DOWNLOAD_URL + "/" + action;
     const request = { method: "POST", headers: {} };
-    if (action === "start") {
-        request.headers["Content-Type"] = "application/json";
-        request.body = JSON.stringify({ huggingface_id: huggingfaceId });
-    }
     try {
         const actionResponse = await fetch(actionPath, request);
         const actionDocument = await actionResponse.json();

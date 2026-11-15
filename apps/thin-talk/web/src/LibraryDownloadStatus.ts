@@ -7,6 +7,8 @@ export interface LibraryDownloadStatus {
   readonly bytesCompleted: number;
   readonly bytesTotal: number;
   readonly errorCode: string | null;
+  /** Models waiting to download after this one, oldest request first. */
+  readonly waitingHuggingfaceIDs: readonly string[];
 }
 
 export const IDLE_DOWNLOAD_STATUS: LibraryDownloadStatus = {
@@ -15,9 +17,11 @@ export const IDLE_DOWNLOAD_STATUS: LibraryDownloadStatus = {
   bytesCompleted: 0,
   bytesTotal: 0,
   errorCode: null,
+  waitingHuggingfaceIDs: [],
 };
 
-/** The download is held by another model and Astro must wait its turn. */
+/** A paused download of another model holds the list, so nothing new can
+ * start until someone resumes or cancels it. */
 export const LIBRARY_BUSY_ERROR_CODE = "library_busy";
 
 /** Reads a download document; anything unreadable is treated as idle, the
@@ -39,12 +43,28 @@ export function parseLibraryDownloadStatus(downloadBodyText: string): LibraryDow
   const bytesTotal = downloadRecord["bytes_total"];
   const errorCode = downloadRecord["error_code"];
   return {
+    waitingHuggingfaceIDs: waitingHuggingfaceIDsFrom(downloadRecord["queue"]),
     state: typeof state === "string" ? state : "idle",
     huggingfaceID: typeof huggingfaceID === "string" ? huggingfaceID : null,
     bytesCompleted: typeof bytesCompleted === "number" && bytesCompleted >= 0 ? bytesCompleted : 0,
     bytesTotal: typeof bytesTotal === "number" && bytesTotal >= 0 ? bytesTotal : 0,
     errorCode: typeof errorCode === "string" ? errorCode : null,
   };
+}
+
+/** The waiting models' ids from the `queue` part of a download document;
+ * anything unreadable is an empty list. */
+function waitingHuggingfaceIDsFrom(queueDocument: unknown): readonly string[] {
+  if (typeof queueDocument !== "object" || queueDocument === null) {
+    return [];
+  }
+  const waitingModels = (queueDocument as Record<string, unknown>)["waiting"];
+  if (!Array.isArray(waitingModels)) {
+    return [];
+  }
+  return waitingModels
+    .map((waitingModel: unknown) => (typeof waitingModel === "object" && waitingModel !== null ? (waitingModel as Record<string, unknown>)["huggingface_id"] : null))
+    .filter((waitingID): waitingID is string => typeof waitingID === "string");
 }
 
 /** The error code from a refused download request (`{"error": {"code": …}}`),

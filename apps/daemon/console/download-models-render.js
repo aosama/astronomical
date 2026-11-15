@@ -23,16 +23,19 @@ function createDownloadModelsParagraph(className, text) {
 function createDownloadModelsPageSections(catalogRows) {
     const installedRows = catalogRows.filter((catalogRow) => catalogRow.readyOnThisMac);
     const activeDownloadRow = downloadModelsActiveDownloadRow(catalogRows);
-    const hasModelsOrDownload = installedRows.length > 0 || activeDownloadRow !== null;
+    const hasModelsOrDownload = installedRows.length > 0 || activeDownloadRow !== null
+        || hasDownloadModelsQueueEntries();
     const pageSections = [
         hasModelsOrDownload
-            ? createDownloadModelsInstalledSection(installedRows, activeDownloadRow)
+            ? createDownloadModelsInstalledSection(installedRows, activeDownloadRow, catalogRows)
             : createDownloadModelsFirstVisitSection(catalogRows)
     ];
     const linkedSection = createDownloadModelsLinkedSection(catalogRows);
     if (linkedSection) pageSections.unshift(linkedSection);
     const removalNotice = createDownloadModelsRemovalNotice(catalogRows);
     if (removalNotice) pageSections.push(removalNotice);
+    const queueNotice = createDownloadModelsQueueNotice();
+    if (queueNotice) pageSections.push(queueNotice);
     pageSections.push(createDownloadModelsAddSection(downloadModelsRowsInPageOrder(catalogRows)));
     return pageSections;
 }
@@ -116,12 +119,6 @@ function createDownloadModelsAddSection(catalogRows) {
         .map((catalogSection) => createDownloadModelsCatalogSection(catalogSection, catalogRows))
         .filter((sectionElement) => sectionElement !== null);
     const sectionChildren = [createDownloadModelsAddHeading(), createDownloadModelsFilterBar()];
-    if (isDownloadModelsDownloadSlotBusy()) {
-        sectionChildren.push(createDownloadModelsParagraph(
-            "download-models-busy-hint",
-            "Downloads run one at a time. You can get another model when this one finishes."
-        ));
-    }
     sectionChildren.push(...sectionElements);
     if (sectionElements.length === 0) {
         sectionChildren.push(createDownloadModelsParagraph(
@@ -257,7 +254,6 @@ function createDownloadModelsGetButton(catalogRow, isPrimary = true) {
     );
     getButton.className = (isPrimary ? "button button-primary" : "button button-secondary")
         + " download-models-download-button";
-    getButton.disabled = isDownloadModelsDownloadSlotBusy();
     focusDownloadModelsRemovalControlIfRequested(catalogRow, "download", getButton);
     return getButton;
 }

@@ -43,7 +43,7 @@ const LINES: Record<AstroMoment, (nickname: string) => string> = {
   // what a newcomer does not know yet instead of repeating the headline.
   [AstroMoment.MODEL_READY]: () => "It is on this Mac now and works without the internet.",
   [AstroMoment.DOWNLOAD_FAILED]: () => "The download stopped. Try again?",
-  [AstroMoment.LIBRARY_BUSY]: () => "Another download is running. Try again when it finishes.",
+  [AstroMoment.LIBRARY_BUSY]: () => "Another download is paused. Resume or cancel it on the Models page, then try again.",
   [AstroMoment.SKILL_CHAT]: () => "Chat is ready. A question is in the message field.",
   [AstroMoment.SKILL_PICTURES]: () => "Pictures are ready. A prompt is in the message field.",
   [AstroMoment.NEEDS_IMAGE_MODEL]: () => "Pictures need an image model: a one-time download.",

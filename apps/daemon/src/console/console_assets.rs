@@ -20,6 +20,9 @@ const DOWNLOAD_MODELS_LINKED_JS: &str = include_str!("../../console/download-mod
 const DOWNLOAD_MODELS_INSTALLED_JS: &str =
     include_str!("../../console/download-models-installed.js");
 const DOWNLOAD_MODELS_REMOVAL_JS: &str = include_str!("../../console/download-models-removal.js");
+const DOWNLOAD_MODELS_QUEUE_JS: &str = include_str!("../../console/download-models-queue.js");
+const DOWNLOAD_MODELS_SELECTION_JS: &str =
+    include_str!("../../console/download-models-selection.js");
 const OVERVIEW_JS: &str = include_str!("../../console/overview.js");
 const OVERVIEW_CSS: &str = include_str!("../../console/overview.css");
 const NEURAL_ENGINE_PANEL_JS: &str = include_str!("../../console/neural-engine-panel.js");
@@ -102,6 +105,14 @@ where
             "/download-models-removal.js",
             get(download_models_removal_script),
         )
+        .route(
+            "/download-models-queue.js",
+            get(download_models_queue_script),
+        )
+        .route(
+            "/download-models-selection.js",
+            get(download_models_selection_script),
+        )
         .route("/overview.js", get(overview_script))
         .route("/overview.css", get(overview_stylesheet))
         .route("/neural-engine-panel.js", get(neural_engine_panel_script))
@@ -161,6 +172,17 @@ pub(crate) async fn download_models_installed_script() -> Response {
 
 pub(crate) async fn download_models_removal_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_REMOVAL_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-selection.js` — keeps the Models page's text
+/// selectable while a download runs.
+pub(crate) async fn download_models_selection_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_SELECTION_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-queue.js` — the Models page's download list.
+pub(crate) async fn download_models_queue_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_QUEUE_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn overview_script() -> Response {

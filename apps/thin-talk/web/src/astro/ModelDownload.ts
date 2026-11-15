@@ -10,7 +10,9 @@ export enum ModelDownloadPhase {
   FINISHING = "finishing",
   READY = "ready",
   FAILED = "failed",
-  /** Another model holds the Library's one download slot. */
+  /** Another model downloads first; this one waits its turn on the list. */
+  WAITING = "waiting",
+  /** A paused download of another model holds the list, so nothing can start. */
   BUSY = "busy",
 }
 
@@ -19,6 +21,9 @@ export interface ModelDownloadProgress {
   readonly bytesCompleted: number;
   readonly bytesTotal: number;
   readonly secondsLeft: number | null;
+  /** While waiting: the place in line, counting the download running now as
+   * first, so the next model to download is second. Null otherwise. */
+  readonly placeInLine: number | null;
 }
 
 /** What following a download needs from the outside world, injected so tests
@@ -77,7 +82,13 @@ export class ModelDownload {
     const currentStatus = await this.dependencies.readStatus().catch(() => null);
     if (currentStatus !== null && ACTIVE_STATES.has(currentStatus.state)) {
       if (currentStatus.huggingfaceID !== this.huggingfaceID) {
-        this.finish(ModelDownloadPhase.BUSY);
+        // Behind a running download the model joins the list; behind a
+        // paused one it would wait for a resume that may never come.
+        if (currentStatus.state === "paused") {
+          this.finish(ModelDownloadPhase.BUSY);
+          return;
+        }
+        await this.requestDownload();
         return;
       }
       if (currentStatus.state === "paused") {
@@ -124,6 +135,15 @@ export class ModelDownload {
     }
     if (status.huggingfaceID === this.huggingfaceID && status.state !== "idle") {
       await this.followOwnJob(status);
+      return;
+    }
+    const waitingIndex = status.waitingHuggingfaceIDs.indexOf(this.huggingfaceID);
+    if (waitingIndex >= 0) {
+      // Waiting is progress of a kind: the model is listed and its turn is
+      // coming, so it does not count toward giving up.
+      this.idlePollCount = 0;
+      this.report(ModelDownloadPhase.WAITING, 0, 0, waitingIndex + 2);
+      this.scheduleNextPoll();
       return;
     }
     await this.checkWhetherInstalled();
@@ -183,11 +203,11 @@ export class ModelDownload {
     this.isListening = false;
   }
 
-  private report(phase: ModelDownloadPhase, bytesCompleted: number, bytesTotal: number): void {
+  private report(phase: ModelDownloadPhase, bytesCompleted: number, bytesTotal: number, placeInLine: number | null = null): void {
     if (!this.isListening) {
       return;
     }
     const secondsLeft = phase === ModelDownloadPhase.DOWNLOADING ? this.estimate.secondsLeft(bytesTotal) : null;
-    this.onProgress({ phase, bytesCompleted, bytesTotal, secondsLeft });
+    this.onProgress({ phase, bytesCompleted, bytesTotal, secondsLeft, placeInLine });
   }
 }
