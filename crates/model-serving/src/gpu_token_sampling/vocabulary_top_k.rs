@@ -9,7 +9,7 @@
 //!
 //! One threadgroup takes a row: each thread keeps the best `K` of its
 //! strided share in registers, each simdgroup merges its 32 lists by `K`
-//! rounds of `simd_max`, and the first simdgroup merges the 32 simdgroups'
+//! rounds of `simd_max`, and the first simdgroup merges the 16 simdgroups'
 //! lists the same way. The result is exact and sorted best first; equal
 //! logits go to the lower token id.
 
@@ -21,13 +21,17 @@ use mlx_bridge::{
 use super::{sampling_failure, sampling_runtime_error};
 use crate::InferenceEngineError;
 
-const THREADS_PER_ROW: i32 = 1024;
+/// Sixteen simdgroups: within the 640 threads a threadgroup may hold on
+/// every Metal GPU this runs on (GitHub's virtual Macs allow no more), where
+/// 1,024 was refused outright.
+const THREADS_PER_ROW: i32 = 512;
 /// The largest `k` a call may ask for: registers hold `K` pairs a thread.
 pub(crate) const MAXIMUM_TOP_K: i32 = 32;
 
 /// Input `logits` [1, rows, V]; output `token_ids` [1, rows, K] uint32.
 const VOCABULARY_TOP_K_SOURCE: &str = r#"
-    constexpr uint THREADS = 1024;
+    constexpr uint THREADS = 512;
+    constexpr uint SIMDGROUPS = THREADS / 32;
     const uint row = threadgroup_position_in_grid.y;
     const uint thread_index = thread_position_in_threadgroup.x;
     const uint lane = thread_index_in_simdgroup;
@@ -79,8 +83,9 @@ const VOCABULARY_TOP_K_SOURCE: &str = r#"
     }
     head = 0;
     for (int round = 0; round < K; ++round) {
-        const float candidate = head < K ? simdgroup_values[lane * K + head] : -INFINITY;
-        const uint candidate_id = head < K ? simdgroup_ids[lane * K + head] : 0xFFFFFFFFu;
+        const bool lane_has_list = lane < SIMDGROUPS && head < K;
+        const float candidate = lane_has_list ? simdgroup_values[lane * K + head] : -INFINITY;
+        const uint candidate_id = lane_has_list ? simdgroup_ids[lane * K + head] : 0xFFFFFFFFu;
         const float round_best = simd_max(candidate);
         const uint round_id = simd_min(candidate == round_best ? candidate_id : 0xFFFFFFFFu);
         if (candidate == round_best && candidate_id == round_id) {
