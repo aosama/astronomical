@@ -38,9 +38,10 @@ use super::dflash2_kept_per_round::{
 /// TensorFold's community benchmark seeds its repetitions from 1234.
 pub(super) const FIRST_KEYED_SEED: u64 = 1234;
 
-pub(super) const ORACLE_CELLS: [Cell; 4] = [
+pub(super) const ORACLE_CELLS: [Cell; 5] = [
     oracle_cell("code completion greedy", true, CODE_PROMPT, 0),
     oracle_cell("code completion 0.7", true, CODE_PROMPT, 700),
+    oracle_cell("code completion 1.0", true, CODE_PROMPT, 1_000),
     oracle_cell("chat greedy", false, CHAT_PROMPT, 0),
     oracle_cell("chat 1.0", false, CHAT_PROMPT, 1_000),
 ];

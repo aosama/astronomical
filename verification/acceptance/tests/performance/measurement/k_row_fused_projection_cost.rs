@@ -230,3 +230,83 @@ fn median_pass_time(
     pass_times.sort();
     pass_times[pass_times.len() / 2]
 }
+
+const SMALL_OPERATIONS_PER_LAYER: [usize; 3] = [0, 12, 24];
+
+/// What one small kernel between projections costs: the separate-projection
+/// stack with a chain of row-sized RMS norms added to every layer, as a real
+/// layer interleaves its norms, activations and residual adds. The slope
+/// over the count is the cost of one small dispatch in a pass.
+#[test]
+#[ignore = "performance measurement on the GPU; run through cargo measure-k-row-verify-cost"]
+#[serial]
+fn should_price_one_small_operation_between_projections() {
+    let runtime = initialize_runtime();
+    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
+    let random_key = runtime.random_key(4321).expect("a key builds");
+    let mut layers = Vec::with_capacity(MEASURED_LAYER_COUNT);
+    let converter = Converter {
+        runtime: &runtime,
+        kernels: &kernels,
+        random_key: &random_key,
+    };
+    for layer_index in 0..MEASURED_LAYER_COUNT {
+        let mixer_widths: &[i32] = if layer_index % 4 == 3 {
+            &ATTENTION_MIXER_WIDTHS
+        } else {
+            &DELTA_NET_MIXER_WIDTHS
+        };
+        layers.push(converter.layer(mixer_widths, false));
+    }
+    let norm_weight = runtime
+        .astype(
+            &runtime
+                .ones(&[HIDDEN_WIDTH], mlx_bridge::MlxDtype::Float32)
+                .expect("ones"),
+            mlx_bridge::MlxDtype::BFloat16,
+        )
+        .expect("weight");
+    let layer_scale = MODEL_LAYER_COUNT / MEASURED_LAYER_COUNT as f64;
+    for row_count in [1, 16] {
+        let rows = [
+            random_rows(&runtime, &random_key, row_count, HIDDEN_WIDTH),
+            random_rows(&runtime, &random_key, row_count, MIXER_OUTPUT_WIDTH),
+            random_rows(&runtime, &random_key, row_count, MLP_WIDTH),
+        ];
+        runtime
+            .evaluate_arrays(&[&rows[0], &rows[1], &rows[2]])
+            .expect("rows materialize");
+        let mut line = format!("[k-row] small ops K={row_count:>2}:");
+        for small_operation_count in SMALL_OPERATIONS_PER_LAYER {
+            let mut pass_times = Vec::new();
+            for pass_index in 0..WARM_UP_PASS_COUNT + MEASURED_PASS_COUNT {
+                let started_at = Instant::now();
+                let projected = stack_pass(
+                    &runtime,
+                    &kernels,
+                    &layers,
+                    [&rows[0], &rows[1], &rows[2]],
+                    false,
+                );
+                let mut chained = runtime.multiply_scalar(&rows[0], 1.0).expect("copy");
+                for _ in 0..small_operation_count * layers.len() {
+                    chained = runtime
+                        .rms_norm(&chained, &norm_weight, 1e-6)
+                        .expect("norm");
+                }
+                runtime
+                    .evaluate_arrays(&[&projected, &chained])
+                    .expect("the pass evaluates");
+                if pass_index >= WARM_UP_PASS_COUNT {
+                    pass_times.push(started_at.elapsed());
+                }
+            }
+            pass_times.sort();
+            line.push_str(&format!(
+                " {small_operation_count} per layer {:.1} ms;",
+                pass_times[pass_times.len() / 2].as_secs_f64() * 1000.0 * layer_scale
+            ));
+        }
+        eprintln!("{line} (64 layers)");
+    }
+}

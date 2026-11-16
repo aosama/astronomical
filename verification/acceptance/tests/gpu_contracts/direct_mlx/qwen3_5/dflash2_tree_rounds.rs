@@ -264,7 +264,7 @@ fn should_measure_where_a_tree_round_spends_its_time() {
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    let cell = &ORACLE_CELLS[3];
+    let cell = &ORACLE_CELLS[4];
     let (mut round, mut decoder_state, _first_token_id) = prefill(&pair, cell);
     let mut stage_times: Vec<Vec<f64>> = vec![Vec::new(); BREAKDOWN_STAGES.len()];
     for round_index in 0..BREAKDOWN_ROUND_COUNT {
@@ -403,7 +403,7 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    let cell = &ORACLE_CELLS[2];
+    let cell = &ORACLE_CELLS[3];
     let mut row_tokens = Vec::with_capacity(16);
     let mut chain = DraftTree::default();
     for row in 0..16_usize {
@@ -463,5 +463,75 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
         "[dflash2-tree-round-cost] 16 rows: plain forward {:.1} ms, chain tree {:.1} ms (medians of {CHAIN_COMPARISON_ROUNDS})",
         plain_times[plain_times.len() / 2],
         tree_times[tree_times.len() / 2],
+    );
+}
+
+/// Where a plain 16-row forward spends its GPU time, stage by stage, from
+/// the engine's own per-stage evaluation boundaries: the rungs between the
+/// projection ladder (`cargo measure-k-row-verify-cost`) and a whole pass.
+/// Every boundary is a GPU wait, so the stages sum to more than a fused pass.
+#[test]
+#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
+    use astronomical_model_serving::{
+        PerformanceAttribution, PerformanceOperation, VerificationLogitsMode,
+    };
+    let pair = load_pair();
+    let cell = &ORACLE_CELLS[3];
+    let row_tokens: Vec<u32> = (1_000..1_016).collect();
+    let stages = [
+        ("DeltaNet input projections", PerformanceOperation::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait),
+        ("DeltaNet convolution + SiLU", PerformanceOperation::PrefillLinearAttentionConvolutionGraphicsProcessorCompletionWait),
+        ("DeltaNet norms, decay, rates", PerformanceOperation::PrefillLinearAttentionNormalizationGraphicsProcessorCompletionWait),
+        ("DeltaNet recurrence", PerformanceOperation::PrefillLinearAttentionRecurrenceGraphicsProcessorCompletionWait),
+        ("DeltaNet gate + output projection", PerformanceOperation::PrefillLinearAttentionEpilogueGraphicsProcessorCompletionWait),
+        ("DeltaNet layer remainder", PerformanceOperation::PrefillLinearAttentionGraphicsProcessorCompletionWait),
+        ("full attention layers", PerformanceOperation::PrefillFullAttentionGraphicsProcessorCompletionWait),
+        ("feed-forward (gate, up, down)", PerformanceOperation::PrefillFeedForwardGraphicsProcessorCompletionWait),
+    ];
+    let mut stage_totals = vec![Vec::new(); stages.len()];
+    let mut pass_totals = Vec::new();
+    for _ in 0..6 {
+        let (round, mut state, _) = prefill(&pair, cell);
+        let mut attribution = PerformanceAttribution::enabled();
+        let started_at = Instant::now();
+        let forward = pair
+            .target
+            .build_speculative_verification_forward(
+                &row_tokens,
+                round.fed_token_count,
+                &mut state,
+                &[],
+                VerificationLogitsMode::AllPositions,
+                &mut attribution,
+            )
+            .expect("the forward runs");
+        let logits = forward.per_position_logits.expect("the rows have logits");
+        pair.target
+            .runtime()
+            .evaluate_arrays(&[&logits])
+            .expect("evaluates");
+        pass_totals.push(started_at.elapsed().as_secs_f64() * 1000.0);
+        for (stage_index, (_, operation)) in stages.iter().enumerate() {
+            let milliseconds = match attribution.operation_measurement(*operation) {
+                Some(measurement) => measurement.total_elapsed_nanoseconds() as f64 / 1e6,
+                None => 0.0,
+            };
+            stage_totals[stage_index].push(milliseconds);
+        }
+    }
+    for ((label, _), totals) in stages.iter().zip(stage_totals.iter_mut()) {
+        totals.sort_by(f64::total_cmp);
+        eprintln!(
+            "[dflash2-layer-stages] {label:<36} {:7.1} ms",
+            totals[totals.len() / 2]
+        );
+    }
+    pass_totals.sort_by(f64::total_cmp);
+    eprintln!(
+        "[dflash2-layer-stages] {:<36} {:7.1} ms (16 rows, every stage synced)",
+        "whole pass with the head",
+        pass_totals[pass_totals.len() / 2]
     );
 }
