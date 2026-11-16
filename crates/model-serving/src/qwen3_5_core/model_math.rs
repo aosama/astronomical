@@ -11,6 +11,8 @@
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_weights;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod dense_projection;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod error;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_gate_up_fusion;

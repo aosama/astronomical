@@ -111,36 +111,13 @@ impl Qwen3_5ResidentModel {
             // Below the vocabulary size, which fits an i32, so this cannot fail.
             row_ids.push(*token_id as i32);
         }
-        let row_id_array = self
-            .runtime
-            .array_from_i32(&row_ids, &[row_ids.len() as i32])?;
-        let selected_rows = match &self.weights.language_model_head_weights {
-            Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                self.runtime.take_axis(weight, &row_id_array, 0)?
-            }
-            Qwen3_5AffineWeights::Quantized {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                quantization_bits,
-                quantization_group_size,
-            } => self.runtime.dequantize_affine(
-                &self.runtime.take_axis(packed_weight, &row_id_array, 0)?,
-                &self
-                    .runtime
-                    .take_axis(quantization_scales, &row_id_array, 0)?,
-                &self
-                    .runtime
-                    .take_axis(quantization_biases, &row_id_array, 0)?,
-                *quantization_group_size,
-                *quantization_bits,
-            )?,
-            Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "a codebook-encoded output projection has no readable rows",
-                });
-            }
-        };
+        let selected_rows = self
+            .weights
+            .language_model_head_weights
+            .dequantized_rows(&self.runtime, &row_ids)
+            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                description: "a codebook-encoded output projection has no readable rows",
+            })??;
         let float32_rows = self.runtime.astype(&selected_rows, MlxDtype::Float32)?;
         self.runtime.evaluate_arrays(&[&float32_rows])?;
         Ok(float32_rows)

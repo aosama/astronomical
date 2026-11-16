@@ -31,7 +31,7 @@ pub(crate) mod output_gate_engine;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod probe_token_ids;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod row_batched_projections;
+pub(crate) mod register_ordered_projections;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) use base::Qwen3_5ModelBase;

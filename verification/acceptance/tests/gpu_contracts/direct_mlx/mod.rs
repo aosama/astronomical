@@ -23,6 +23,7 @@ mod kernel_capability;
 mod model_artifact_memory_limits_tests;
 mod qwen3_5;
 mod qwen3_5_moe;
+mod register_ordered_matmul;
 mod row_batched_matmul;
 mod sparse_expert_projection;
 mod sparse_expert_projection_page_independence;

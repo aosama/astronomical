@@ -17,11 +17,17 @@ use super::dispatch_plan::{
 use super::kernel_source::{
     GROUP_SUM_SOURCE, ROW_BATCHED_MATMUL_HEADER, ROW_BATCHED_MATMUL_SOURCE,
 };
+use super::register_order_source::{
+    REGISTER_ORDER_CONVERSION_SOURCE, REGISTER_ORDERED_MATMUL_HEADER,
+    REGISTER_ORDERED_MATMUL_SOURCE,
+};
 
 /// The two kernels, declared once and shared by every projection.
 pub struct RowBatchedMatmulKernels {
     group_sum: MlxMetalKernel,
     matmul: MlxMetalKernel,
+    pub(crate) register_order_conversion: MlxMetalKernel,
+    pub(crate) register_ordered_matmul: MlxMetalKernel,
 }
 
 /// The kernel handles are opaque MLX objects; a model that holds them only
@@ -33,7 +39,7 @@ impl std::fmt::Debug for RowBatchedMatmulKernels {
 }
 
 impl RowBatchedMatmulKernels {
-    /// Declares both kernels. MLX compiles a custom kernel's Metal source only
+    /// Declares every kernel. MLX compiles a custom kernel's Metal source only
     /// on its first evaluation, so this succeeds on chips without M5 matrix
     /// units too: it is not a capability check, and serving must prove the
     /// kernel by evaluating it before routing rows to it.
@@ -51,6 +57,19 @@ impl RowBatchedMatmulKernels {
                 &["Y"],
                 ROW_BATCHED_MATMUL_HEADER,
                 ROW_BATCHED_MATMUL_SOURCE,
+            )?,
+            register_order_conversion: MlxMetalKernel::new(
+                "astro_register_order_conversion_4bit",
+                &["Wq", "S", "B"],
+                &["R", "P"],
+                REGISTER_ORDER_CONVERSION_SOURCE,
+            )?,
+            register_ordered_matmul: MlxMetalKernel::new_with_header(
+                "astro_register_ordered_matmul_4bit",
+                &["X", "XS", "W", "SB", "row_dimensions"],
+                &["Y"],
+                REGISTER_ORDERED_MATMUL_HEADER,
+                REGISTER_ORDERED_MATMUL_SOURCE,
             )?,
         })
     }
@@ -86,7 +105,11 @@ pub fn row_batched_quantized_matmul(
         kernels,
         &flat_rows,
         &row_dimensions,
-        &dispatch_plan,
+        GroupSumLayout {
+            padded_row_count: dispatch_plan.padded_row_count,
+            grid: dispatch_plan.group_sum_grid,
+            threadgroup: dispatch_plan.group_sum_threadgroup,
+        },
         input_width,
     )?;
     let mut outputs = runtime.apply_metal_kernel(
@@ -143,12 +166,21 @@ pub fn row_batched_quantized_matmul_accepts(
         && RowBatchedDispatchPlan::plan(row_count, output_width, input_width).is_ok()
 }
 
-fn group_sums(
+/// How tall the group sums are and the grid that writes them.
+pub(crate) struct GroupSumLayout {
+    pub(crate) padded_row_count: i32,
+    pub(crate) grid: [i32; 3],
+    pub(crate) threadgroup: [i32; 3],
+}
+
+/// Each row's sum over each 64-value group, `[input / 64, padded rows]`
+/// float32, zero past the real rows.
+pub(crate) fn group_sums(
     runtime: &MlxRuntime,
     kernels: &RowBatchedMatmulKernels,
     flat_rows: &MlxArray,
     row_dimensions: &MlxArray,
-    dispatch_plan: &RowBatchedDispatchPlan,
+    layout: GroupSumLayout,
     input_width: i32,
 ) -> Result<MlxArray, RowBatchedProjectionError> {
     let group_count = input_width / QUANTIZATION_GROUP_SIZE;
@@ -156,11 +188,11 @@ fn group_sums(
         &kernels.group_sum,
         &[flat_rows, row_dimensions],
         &[MlxMetalKernelOutput::new(
-            vec![group_count, dispatch_plan.padded_row_count],
+            vec![group_count, layout.padded_row_count],
             MlxDtype::Float32,
         )],
-        dispatch_plan.group_sum_grid,
-        dispatch_plan.group_sum_threadgroup,
+        layout.grid,
+        layout.threadgroup,
         &[
             integer("K", input_width),
             integer("GS", QUANTIZATION_GROUP_SIZE),
@@ -171,7 +203,7 @@ fn group_sums(
         .ok_or(RowBatchedProjectionError::MissingOutput)
 }
 
-fn integer(name: &'static str, value: i32) -> MlxMetalKernelTemplateArgument {
+pub(crate) fn integer(name: &'static str, value: i32) -> MlxMetalKernelTemplateArgument {
     MlxMetalKernelTemplateArgument::Integer {
         name,
         integer_template_argument: value,
@@ -200,7 +232,7 @@ pub enum RowBatchedProjectionError {
 /// count alone cannot tell 4-bit group 64 from other packings (8-bit has
 /// twice the words, group 32 twice the scales), so the scales' shape and every
 /// dtype are checked and anything else is refused rather than misread.
-fn check_quantization(
+pub(crate) fn check_quantization(
     packed_weight: &MlxArray,
     scales: &MlxArray,
     biases: &MlxArray,

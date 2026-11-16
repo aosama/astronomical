@@ -29,9 +29,10 @@ pub struct Qwen3_5OptionalAccelerators {
     pub(crate) output_gate_engine: Option<
         Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
     >,
-    /// The row-batched 4-bit matmul for projections over a few rows; None
-    /// until `enable_row_batched_projections` proves it on this GPU.
-    pub(crate) row_batched_matmul_kernels:
+    /// The register-ordered 4-bit matmul's kernels; set once
+    /// `convert_projections_to_register_order` has converted this model's
+    /// dense projections, which then multiply through it.
+    pub(crate) register_ordered_matmul_kernels:
         Option<crate::row_batched_matmul::RowBatchedMatmulKernels>,
 }
 
@@ -250,15 +251,26 @@ impl Qwen3_5ModelBase {
         }
     }
 
+    /// `activations` [..., input] times a projection's weight transposed:
+    /// [..., output]. Bound weights multiply through MLX; a dense projection
+    /// converted into register order through the register-ordered matmul.
     pub(crate) fn quantized_linear(
+        &self,
+        activations: &MlxArray,
+        projection_weights: &impl Qwen3_5LinearWeights,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        projection_weights.project_rows(self, activations)
+    }
+
+    /// `activations` times weights as bound from the artifact.
+    pub(crate) fn bound_linear(
         &self,
         activations: &MlxArray,
         affine_weights: &Qwen3_5AffineWeights,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         match affine_weights {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                let transposed_weight = self.runtime.transpose_axes(weight, &[1, 0])?;
-                Ok(self.runtime.matmul(activations, &transposed_weight)?)
+                self.native_bfloat16_linear(activations, weight)
             }
             Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
                 Err(Qwen3_5ExecutionError::InvalidInput {
@@ -271,25 +283,45 @@ impl Qwen3_5ModelBase {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => self
-                .row_batched_projection(
-                    activations,
-                    packed_weight,
-                    quantization_scales,
-                    quantization_biases,
-                )
-                .unwrap_or_else(|| {
-                    Ok(self.runtime.quantized_matmul_affine(
-                        activations,
-                        packed_weight,
-                        quantization_scales,
-                        quantization_biases,
-                        true,
-                        *quantization_group_size,
-                        *quantization_bits,
-                    )?)
-                }),
+            } => Ok(self.runtime.quantized_matmul_affine(
+                activations,
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                true,
+                *quantization_group_size,
+                *quantization_bits,
+            )?),
         }
+    }
+
+    fn native_bfloat16_linear(
+        &self,
+        activations: &MlxArray,
+        weight: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let transposed_weight = self.runtime.transpose_axes(weight, &[1, 0])?;
+        Ok(self.runtime.matmul(activations, &transposed_weight)?)
+    }
+}
+
+/// Weights `quantized_linear` multiplies rows by: those bound from the
+/// artifact, and dense projections that may have been converted at load.
+pub(crate) trait Qwen3_5LinearWeights {
+    fn project_rows(
+        &self,
+        model: &Qwen3_5ModelBase,
+        activations: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError>;
+}
+
+impl Qwen3_5LinearWeights for Qwen3_5AffineWeights {
+    fn project_rows(
+        &self,
+        model: &Qwen3_5ModelBase,
+        activations: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        model.bound_linear(activations, self)
     }
 }
 

@@ -14,14 +14,14 @@ use astronomical_neural_engine::documents::contraction_split::contraction_part_w
 use astronomical_neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp};
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::program_shape::ProgramShape;
+
+use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxDtype;
 
 use super::{NeuralEngineMlpPrefill, neural_engine_tokens_for_chunk};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
-    Qwen3_5AffineWeights, Qwen3_5DecoderFeedForwardWeights,
-};
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderFeedForwardWeights;
 use crate::qwen3_5_resident::astro_neural_engine_program_cache::{
     AstroNeuralEngineProgramSetCache, kept_program_path,
 };
@@ -433,28 +433,12 @@ fn mlp_weight_bytes_per_layer(model: &Qwen3_5ResidentModel) -> u64 {
 /// 0.3 percent of the weight RMS.
 pub(crate) fn weight_as_fp16_bits(
     runtime: &MlxRuntime,
-    affine_weights: &Qwen3_5AffineWeights,
+    projection: &Qwen3_5DenseProjection,
 ) -> Result<Vec<u16>, &'static str> {
-    let dequantized = match affine_weights {
-        Qwen3_5AffineWeights::NativeBfloat16 { weight } => runtime.copy(weight),
-        Qwen3_5AffineWeights::Quantized {
-            packed_weight,
-            quantization_scales,
-            quantization_biases,
-            quantization_group_size,
-            quantization_bits,
-        } => runtime.dequantize_affine(
-            packed_weight,
-            quantization_scales,
-            quantization_biases,
-            *quantization_group_size,
-            *quantization_bits,
-        ),
-        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
-            return Err(WEIGHT_READ_FAILURE);
-        }
-    };
-    let dequantized = dequantized.map_err(read_failure)?;
+    let dequantized = projection
+        .dequantized(runtime)
+        .ok_or(WEIGHT_READ_FAILURE)?
+        .map_err(runtime_read_failure)?;
     let half_precision = runtime
         .astype(&dequantized, MlxDtype::Float16)
         .map_err(read_failure)?;
@@ -462,6 +446,12 @@ pub(crate) fn weight_as_fp16_bits(
         .evaluate_arrays(&[&half_precision])
         .map_err(read_failure)?;
     half_precision.to_vec_f16_bits().map_err(read_failure)
+}
+
+fn runtime_read_failure(
+    _runtime_error: astronomical_runtime_integration::MlxRuntimeError,
+) -> &'static str {
+    WEIGHT_READ_FAILURE
 }
 
 fn read_failure(_mlx_error: mlx_bridge::MlxCError) -> &'static str {

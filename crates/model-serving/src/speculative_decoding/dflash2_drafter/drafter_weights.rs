@@ -232,19 +232,19 @@ impl DFlash2DrafterWeights {
     /// Quantizes every linear layer to 4 bits, group 64, in place: about
     /// 1 GB to stream a round instead of the checkpoint's 3.6 GB for the 27B's
     /// drafter. The selector's codebooks stay bf16: they are gathered, a few
-    /// rows a round, never streamed whole. `use_row_batched_matmul` routes
-    /// the 8-row block through the row-batched matmul; pass it only when this
-    /// GPU's capability probe has proven the kernel.
+    /// rows a round, never streamed whole. `use_register_order` converts
+    /// them into register order for the register-ordered matmul; pass it only
+    /// when this GPU's capability probe has proven the kernel.
     pub fn quantize_linears(
         &mut self,
         runtime: &MlxRuntime,
-        use_row_batched_matmul: bool,
+        use_register_order: bool,
     ) -> Result<(), MlxRuntimeError> {
         self.tap_fusion
-            .quantize_in_place(runtime, use_row_batched_matmul)?;
+            .quantize_in_place(runtime, use_register_order)?;
         self.candidate_selector
             .hidden_projection
-            .quantize_in_place(runtime, use_row_batched_matmul)?;
+            .quantize_in_place(runtime, use_register_order)?;
         for layer in &mut self.layers {
             for linear in [
                 &mut layer.query_projection,
@@ -257,7 +257,7 @@ impl DFlash2DrafterWeights {
                 &mut layer.attention_convolution.kernel_projection,
                 &mut layer.mlp_convolution.kernel_projection,
             ] {
-                linear.quantize_in_place(runtime, use_row_batched_matmul)?;
+                linear.quantize_in_place(runtime, use_register_order)?;
             }
         }
         Ok(())

@@ -140,19 +140,32 @@ impl Qwen3_5SensitivityProbe {
         self.swapped_out_weights
             .insert(module_name.to_owned(), SwappedOutWeights::Affine(previous));
         if self.ties_head_to(module_name) {
-            let head_replacement = mlx_step(
-                self.affine_weights_mut(module_name)?.retained_reference(),
-                "retain the tied head",
-            )?;
-            let previous_head = std::mem::replace(
-                &mut self.model.base.weights.language_model_head_weights,
-                head_replacement,
-            );
-            self.swapped_out_weights.insert(
-                tied_head_key(module_name),
-                SwappedOutWeights::Affine(previous_head),
-            );
+            self.swap_tied_head(module_name)?;
         }
+        Ok(())
+    }
+
+    /// Points the head tied to the swapped embedding at its replacement too.
+    fn swap_tied_head(&mut self, module_name: &str) -> Result<(), QuantizationError> {
+        let head_replacement = mlx_step(
+            self.affine_weights_mut(module_name)?.retained_reference(),
+            "retain the tied head",
+        )?;
+        let head_slot = self
+            .model
+            .base
+            .weights
+            .language_model_head_weights
+            .bound_mut()
+            .ok_or(unresolvable(
+                module_name,
+                "the tied head was converted for the register-ordered matmul",
+            ))?;
+        let previous_head = std::mem::replace(head_slot, head_replacement);
+        self.swapped_out_weights.insert(
+            tied_head_key(module_name),
+            SwappedOutWeights::Affine(previous_head),
+        );
         Ok(())
     }
 

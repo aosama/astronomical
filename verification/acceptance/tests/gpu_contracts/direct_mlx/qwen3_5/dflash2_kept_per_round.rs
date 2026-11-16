@@ -178,12 +178,13 @@ pub(crate) fn load_pair() -> JourneyPair {
     target
         .materialize_complete_weights_matching_production()
         .expect("the 27B weights materialize");
-    // Verify passes over 6 to 32 rows use the row-batched kernel once this
-    // GPU's probe proves it, as a drafting engine will.
-    let row_batched_enabled = target
-        .enable_row_batched_projections(&mut attribution)
-        .expect("the capability probe runs");
-    eprintln!("[dflash2] row-batched projections enabled: {row_batched_enabled}");
+    // A drafting engine converts its projections into register order once
+    // this GPU's probe proves the kernel; every row count then uses it.
+    let converted_projection_count = target
+        .convert_projections_to_register_order(&mut attribution)
+        .expect("the projections convert");
+    let register_order_enabled = converted_projection_count > 0;
+    eprintln!("[dflash2] register-ordered projections: {converted_projection_count}");
     let config_document: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(drafter_directory.join("config.json"))
             .expect("the drafter config reads"),
@@ -208,7 +209,7 @@ pub(crate) fn load_pair() -> JourneyPair {
     // The drafter is served at 4 bits, as TensorFold serves it: it streams
     // about 1 GB a round instead of the checkpoint's 3.6 GB of bf16.
     drafter_weights
-        .quantize_linears(target.runtime(), row_batched_enabled)
+        .quantize_linears(target.runtime(), register_order_enabled)
         .expect("the drafter quantizes to 4 bits");
     JourneyPair {
         target,

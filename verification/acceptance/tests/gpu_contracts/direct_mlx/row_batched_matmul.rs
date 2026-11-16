@@ -17,19 +17,19 @@ use serial_test::serial;
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1024 * 1024;
 /// `(output, input)`: wide, narrow-and-long, small, and the mixer output.
-const PROJECTION_SHAPES: [(i32, i32); 4] =
+pub(super) const PROJECTION_SHAPES: [(i32, i32); 4] =
     [(17408, 5120), (5120, 17408), (1024, 5120), (5120, 6144)];
 /// One row, a count inside a block, one block, just past it, and the most.
 const ROW_COUNTS: [i32; 5] = [1, 5, 16, 17, 32];
 /// bf16 keeps 8 significant bits, so two float32 sums of the same products
 /// taken in different orders can round to neighbouring bf16 values.
-const MINIMUM_COSINE_SIMILARITY: f64 = 0.9999;
+pub(super) const MINIMUM_COSINE_SIMILARITY: f64 = 0.9999;
 /// Two float32 sums of the same products in a different order, each rounded
 /// once to bf16 (8 significant bits), can land one bf16 step apart; for
 /// values a few times the RMS that step is a few hundredths of the RMS.
-const MAXIMUM_DIFFERENCE_OVER_RMS: f64 = 0.05;
+pub(super) const MAXIMUM_DIFFERENCE_OVER_RMS: f64 = 0.05;
 
-fn initialize_runtime() -> MlxRuntime {
+pub(super) fn initialize_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
             .expect("memory limits are valid"),
@@ -38,13 +38,13 @@ fn initialize_runtime() -> MlxRuntime {
 }
 
 /// One quantized weight in MLX's layout, which both kernels read as stored.
-struct ShapeFixture {
-    packed_weight: MlxArray,
-    scales: MlxArray,
-    biases: MlxArray,
+pub(super) struct ShapeFixture {
+    pub(super) packed_weight: MlxArray,
+    pub(super) scales: MlxArray,
+    pub(super) biases: MlxArray,
 }
 
-fn shape_fixture(
+pub(super) fn shape_fixture(
     runtime: &MlxRuntime,
     random_key: &MlxArray,
     output_width: i32,
@@ -90,7 +90,7 @@ impl ShapeFixture {
     }
 }
 
-fn values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
+pub(super) fn values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
     let single_precision = runtime
         .astype(array, MlxDtype::Float32)
         .expect("values convert");
@@ -101,14 +101,14 @@ fn values(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
 
 /// How two outputs of the same projection differ value by value. Cosine alone
 /// could hide a few wrong columns; the largest single difference cannot.
-struct OutputDifference {
-    differing_value_count: usize,
+pub(super) struct OutputDifference {
+    pub(super) differing_value_count: usize,
     /// The largest absolute difference over the reference output's RMS.
-    largest_difference_over_rms: f64,
+    pub(super) largest_difference_over_rms: f64,
 }
 
 impl OutputDifference {
-    fn between(candidate: &[f32], reference: &[f32]) -> Self {
+    pub(super) fn between(candidate: &[f32], reference: &[f32]) -> Self {
         let mut differing_value_count = 0;
         let mut largest_difference = 0.0_f64;
         let mut reference_square_sum = 0.0_f64;
@@ -128,7 +128,7 @@ impl OutputDifference {
     }
 }
 
-fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
+pub(super) fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
     let (mut dot, mut left_norm, mut right_norm) = (0.0_f64, 0.0_f64, 0.0_f64);
     for (left_value, right_value) in left.iter().zip(right) {
         dot += f64::from(*left_value) * f64::from(*right_value);

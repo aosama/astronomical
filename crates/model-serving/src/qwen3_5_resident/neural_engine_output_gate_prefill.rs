@@ -34,9 +34,7 @@ use super::neural_engine_program_preparation::{
     NeuralEngineProgramFamily, PlannedProgram, ProgramIdentity,
 };
 use crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
-    Qwen3_5AffineWeights, Qwen3_5AttentionWeights,
-};
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeights;
 
 const PROGRAM_FAMILY: &str = "output-gate";
 // Names the kept programs' set. Raise it whenever the encoded program changes, so
@@ -176,7 +174,8 @@ fn chunk_fits_surface_rows(chunk_token_count: u32) -> bool {
 /// One linear-attention layer's output gate projection as its own program.
 struct OutputGateProgramSource<'model> {
     runtime: &'model MlxRuntime,
-    output_gate_projection: &'model Qwen3_5AffineWeights,
+    output_gate_projection:
+        &'model crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection,
     shape: ProgramShape,
     contraction_part_count: usize,
 }

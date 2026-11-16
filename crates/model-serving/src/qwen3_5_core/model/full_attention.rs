@@ -41,9 +41,8 @@ use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use super::base::Qwen3_5ModelBase;
 use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
-    Qwen3_5AffineWeights, Qwen3_5FullAttentionWeights,
-};
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5FullAttentionWeights;
+use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::tensor_slicing;
 
@@ -411,7 +410,7 @@ impl Qwen3_5ModelBase {
         active_values: &MlxArray,
         output_gate: &MlxArray,
         score_scale: f32,
-        output_projection_weights: &Qwen3_5AffineWeights,
+        output_projection_weights: &Qwen3_5DenseProjection,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let gated_output = qwen3_5_full_attention_step(
             &self.runtime,
@@ -515,7 +514,7 @@ impl Qwen3_5ModelBase {
     fn prepare_query_vectors_and_output_gate(
         &self,
         hidden_states: &MlxArray,
-        query_projection_weight: &Qwen3_5AffineWeights,
+        query_projection_weight: &Qwen3_5DenseProjection,
         token_count: i32,
         query_head_count: i32,
         attention_head_dimension: i32,
@@ -574,7 +573,7 @@ impl Qwen3_5ModelBase {
     fn project_key_value_tensors(
         &self,
         hidden_states: &MlxArray,
-        projection_weights: &Qwen3_5AffineWeights,
+        projection_weights: &Qwen3_5DenseProjection,
         token_count: i32,
         key_value_head_count: i32,
         attention_head_dimension: i32,

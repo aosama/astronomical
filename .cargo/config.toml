@@ -478,10 +478,17 @@ test-dflash2-drafter-reference = "run -p xtask -- test-run --package astronomica
 # every 27B shape at 1 to 32 rows, gives each row the same bits alone and
 # inside a 16-row block, and refuses packings it cannot read. Seconds.
 test-row-batched-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter row_batched_matmul"
+# The register-ordered kernel's GPU contracts: its one-time conversion
+# matches a CPU transcription of TensorFold's regBlock word for word, its
+# values match MLX's quantized matmul on every 27B shape at 1 to 128 rows,
+# and each row gets the same bits alone and inside a 128-row dispatch. Seconds.
+test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter register_ordered_matmul"
 # Speculative decoding: what a verify pass over K drafted rows costs against
 # one row. Times the dense Qwen3.8 27B's real 4-bit projection shapes for
-# K = 1 to 32, through MLX's quantized matmul and through the row-batched
-# kernel (crates/model-serving/src/row_batched_matmul), over 12 distinct layers
+# K = 1 to 128, through MLX's quantized matmul, the row-batched kernel reading
+# MLX's layout, and the register-ordered kernel reading weights converted
+# into TensorFold's order (crates/model-serving/src/row_batched_matmul), over
+# 16 distinct layers
 # so every pass reads DRAM, plus the 248,320-row output head, then each
 # projection shape on its own. Prints each K's cost against one row and the
 # read rate; asserts nothing. Needs about 6 GB of free GPU memory and no

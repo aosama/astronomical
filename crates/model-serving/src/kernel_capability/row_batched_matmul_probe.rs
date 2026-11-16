@@ -1,8 +1,9 @@
-//! Bounded capability probe for the row-batched 4-bit matmul.
+//! Bounded capability probe for the register-ordered 4-bit matmul.
 //!
 //! The kernel needs the M5 GPU's matrix units (Metal Performance
 //! Primitives); MLX compiles its source only when it first runs, so only an
-//! evaluation proves a chip can use it. The probe runs one 6-row, 32-column,
+//! evaluation proves a chip can use it. The probe converts one weight into
+//! register order and runs one 6-row, 32-column,
 //! 256-wide projection whose answer is exact: integer codes with scale 1 and
 //! bias -8 give weights from -8 to 7, and each row holds three ones, so every
 //! output is a small integer bf16 stores exactly. The expected values come from
@@ -14,7 +15,9 @@ use mlx_bridge::{MlxArray, MlxDtype};
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,
 };
-use crate::row_batched_matmul::{RowBatchedMatmulKernels, row_batched_quantized_matmul};
+use crate::row_batched_matmul::{
+    RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
+};
 
 impl CustomMetalKernelFamily {
     /// Registry identifier of the row-batched 4-bit matmul.
@@ -122,12 +125,11 @@ fn run_probe_projection(
         )?,
         MlxDtype::BFloat16,
     )?;
+    let converted =
+        RegisterOrderedWeight::convert(runtime, kernels, &packed_weight, &scales, &biases)
+            .map_err(probe_failure)?;
     let projected =
-        row_batched_quantized_matmul(runtime, kernels, &rows, &packed_weight, &scales, &biases)
-            .map_err(|error| MlxRuntimeError::RuntimeOperation {
-                operation: "run the row-batched matmul probe",
-                description: error.to_string(),
-            })?;
+        register_ordered_matmul(runtime, kernels, &rows, &converted).map_err(probe_failure)?;
     Ok(runtime.array_to_vec_f32(&runtime.astype(&projected, MlxDtype::Float32)?)?)
 }
 
@@ -139,4 +141,13 @@ fn bf16_filled(
     let element_count: i32 = shape.iter().product();
     let values = vec![value; element_count as usize];
     Ok(runtime.astype(&runtime.array_from_f32(&values, shape)?, MlxDtype::BFloat16)?)
+}
+
+fn probe_failure(
+    projection_error: crate::row_batched_matmul::RowBatchedProjectionError,
+) -> MlxRuntimeError {
+    MlxRuntimeError::RuntimeOperation {
+        operation: "run the register-ordered matmul probe",
+        description: projection_error.to_string(),
+    }
 }

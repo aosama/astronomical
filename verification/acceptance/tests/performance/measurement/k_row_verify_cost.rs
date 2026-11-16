@@ -15,7 +15,8 @@
 use std::time::{Duration, Instant};
 
 use astronomical_model_serving::row_batched_matmul::{
-    RowBatchedMatmulKernels, row_batched_quantized_matmul, row_batched_quantized_matmul_accepts,
+    RegisterOrderedWeight, RowBatchedMatmulKernels, register_ordered_matmul,
+    row_batched_quantized_matmul, row_batched_quantized_matmul_accepts,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
@@ -33,7 +34,7 @@ const QUANTIZATION_BITS: i32 = 4;
 /// reads DRAM. Both kernels read the same arrays, so each layer is held once.
 const MEASURED_LAYER_COUNT: usize = 16;
 const MODEL_LAYER_COUNT: f64 = 64.0;
-const ROW_COUNTS: [i32; 9] = [1, 2, 4, 6, 8, 12, 13, 16, 32];
+const ROW_COUNTS: [i32; 9] = [1, 2, 4, 8, 12, 16, 32, 64, 128];
 const WARM_UP_PASS_COUNT: usize = 2;
 const MEASURED_PASS_COUNT: usize = 5;
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 12 * 1024 * 1024 * 1024;
@@ -46,6 +47,8 @@ const BYTES_PER_GB: f64 = 1_073_741_824.0;
 enum MatmulPath<'kernels> {
     Mlx,
     RowBatched(&'kernels RowBatchedMatmulKernels),
+    /// The weights converted once into TensorFold's register order.
+    RegisterOrdered(&'kernels RowBatchedMatmulKernels),
 }
 
 impl MatmulPath<'_> {
@@ -53,6 +56,7 @@ impl MatmulPath<'_> {
         match self {
             MatmulPath::Mlx => "MLX        ",
             MatmulPath::RowBatched(_) => "row-batched",
+            MatmulPath::RegisterOrdered(_) => "register   ",
         }
     }
 }
@@ -63,6 +67,8 @@ struct PackedProjection {
     weight: MlxArray,
     scales: MlxArray,
     biases: MlxArray,
+    /// The same weight in register order, when its shape tiles.
+    register_ordered: Option<RegisterOrderedWeight>,
     stored_bytes: usize,
 }
 
@@ -93,15 +99,30 @@ fn should_measure_k_row_projection_cost_against_one_row_for_the_dense_27b() {
     let random_key = runtime.random_key(1234).expect("a key builds");
     let mut layers = Vec::with_capacity(MEASURED_LAYER_COUNT);
     for layer_index in 0..MEASURED_LAYER_COUNT {
-        layers.push(build_layer(&runtime, &random_key, layer_index % 4 == 3));
+        layers.push(build_layer(
+            &runtime,
+            &kernels,
+            &random_key,
+            layer_index % 4 == 3,
+        ));
     }
-    let output_head = pack_projection(&runtime, &random_key, VOCABULARY_SIZE, HIDDEN_WIDTH);
+    let output_head = pack_projection(
+        &runtime,
+        &kernels,
+        &random_key,
+        VOCABULARY_SIZE,
+        HIDDEN_WIDTH,
+    );
     let stack_bytes: usize = layers.iter().map(layer_stored_bytes).sum();
     eprintln!(
         "[k-row] {MEASURED_LAYER_COUNT} distinct layers, {:.2} GB of packed weights a pass",
         stack_bytes as f64 / BYTES_PER_GB
     );
-    for matmul_path in [MatmulPath::Mlx, MatmulPath::RowBatched(&kernels)] {
+    for matmul_path in [
+        MatmulPath::Mlx,
+        MatmulPath::RowBatched(&kernels),
+        MatmulPath::RegisterOrdered(&kernels),
+    ] {
         let mut one_row_times = None;
         for row_count in ROW_COUNTS {
             let stack_time = median_pass_time(
@@ -157,12 +178,17 @@ fn should_measure_k_row_cost_against_one_row_for_each_projection_shape() {
         for _ in 0..MEASURED_LAYER_COUNT {
             shape_copies.push(pack_projection(
                 &runtime,
+                &kernels,
                 &random_key,
                 output_width,
                 input_width,
             ));
         }
-        for matmul_path in [MatmulPath::Mlx, MatmulPath::RowBatched(&kernels)] {
+        for matmul_path in [
+            MatmulPath::Mlx,
+            MatmulPath::RowBatched(&kernels),
+            MatmulPath::RegisterOrdered(&kernels),
+        ] {
             let mut row_cost_line = format!(
                 "[k-row] {} {output_width}x{input_width}:",
                 matmul_path.label()
@@ -191,7 +217,12 @@ fn should_measure_k_row_cost_against_one_row_for_each_projection_shape() {
     }
 }
 
-fn build_layer(runtime: &MlxRuntime, random_key: &MlxArray, is_attention: bool) -> MeasuredLayer {
+fn build_layer(
+    runtime: &MlxRuntime,
+    kernels: &RowBatchedMatmulKernels,
+    random_key: &MlxArray,
+    is_attention: bool,
+) -> MeasuredLayer {
     let mixer_input_widths: &[i32] = if is_attention {
         &[12288, 1024, 1024]
     } else {
@@ -201,6 +232,7 @@ fn build_layer(runtime: &MlxRuntime, random_key: &MlxArray, is_attention: bool) 
     for output_width in mixer_input_widths {
         mixer_inputs.push(pack_projection(
             runtime,
+            kernels,
             random_key,
             *output_width,
             HIDDEN_WIDTH,
@@ -208,27 +240,42 @@ fn build_layer(runtime: &MlxRuntime, random_key: &MlxArray, is_attention: bool) 
     }
     MeasuredLayer {
         mixer_inputs,
-        mixer_output: pack_projection(runtime, random_key, HIDDEN_WIDTH, MIXER_OUTPUT_WIDTH),
-        mlp_gate: pack_projection(runtime, random_key, MLP_WIDTH, HIDDEN_WIDTH),
-        mlp_up: pack_projection(runtime, random_key, MLP_WIDTH, HIDDEN_WIDTH),
-        mlp_down: pack_projection(runtime, random_key, HIDDEN_WIDTH, MLP_WIDTH),
+        mixer_output: pack_projection(
+            runtime,
+            kernels,
+            random_key,
+            HIDDEN_WIDTH,
+            MIXER_OUTPUT_WIDTH,
+        ),
+        mlp_gate: pack_projection(runtime, kernels, random_key, MLP_WIDTH, HIDDEN_WIDTH),
+        mlp_up: pack_projection(runtime, kernels, random_key, MLP_WIDTH, HIDDEN_WIDTH),
+        mlp_down: pack_projection(runtime, kernels, random_key, HIDDEN_WIDTH, MLP_WIDTH),
     }
 }
 
 fn pack_projection(
     runtime: &MlxRuntime,
+    kernels: &RowBatchedMatmulKernels,
     random_key: &MlxArray,
     output_width: i32,
     input_width: i32,
 ) -> PackedProjection {
     let (weight, scales, biases) =
         quantize_random_weight_in_row_slices(runtime, random_key, output_width, input_width);
+    let register_ordered =
+        RegisterOrderedWeight::convert(runtime, kernels, &weight, &scales, &biases).ok();
+    if let Some(converted) = &register_ordered {
+        runtime
+            .evaluate_arrays(&[&converted.codes, &converted.scale_bias_words])
+            .expect("the converted weight materializes");
+    }
     let element_count = output_width as usize * input_width as usize;
     let group_count = element_count / QUANTIZATION_GROUP_SIZE as usize;
     PackedProjection {
         weight,
         scales,
         biases,
+        register_ordered,
         // Four bits a value, plus a bf16 scale and bias for every group.
         stored_bytes: element_count / 2 + group_count * 4,
     }
@@ -307,8 +354,17 @@ fn project(
     rows: &MlxArray,
     projection: &PackedProjection,
 ) -> MlxArray {
-    // A shape the row-batched kernel cannot tile (the 48-wide DeltaNet gates)
+    // A shape the row-batched kernels cannot tile (the 48-wide DeltaNet gates)
     // stays on MLX, as serving does.
+    if let MatmulPath::RegisterOrdered(kernels) = matmul_path
+        && let Some(register_ordered) = &projection.register_ordered
+    {
+        let row_count: i32 = rows.shape()[..rows.shape().len() - 1].iter().product();
+        if row_count <= 128 {
+            return register_ordered_matmul(runtime, kernels, rows, register_ordered)
+                .expect("the register-ordered matmul builds");
+        }
+    }
     if let MatmulPath::RowBatched(kernels) = matmul_path
         && row_batched_quantized_matmul_accepts(
             rows,

@@ -3,14 +3,16 @@
 //!
 //! The drafter streams all its weights every round, so its precision is a
 //! direct cost: the 27B's drafter is 3.6 GB in bf16, 14.7 ms a round on an M5
-//! Pro, against about 1 GB at 4 bits. A quantized linear over a block's 8 rows
-//! uses the row-batched matmul when this GPU has proven it.
+//! Pro, against about 1 GB at 4 bits. A quantized linear is converted into
+//! register order when this GPU has proven the register-ordered matmul, as
+//! the target's projections are.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
 
 use crate::row_batched_matmul::{
-    RowBatchedMatmulKernels, row_batched_quantized_matmul, row_batched_quantized_matmul_accepts,
+    RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,
+    register_ordered_matmul,
 };
 
 const QUANTIZATION_GROUP_SIZE: i32 = 64;
@@ -25,9 +27,12 @@ pub enum DrafterLinear {
         packed_weight: MlxArray,
         scales: MlxArray,
         biases: MlxArray,
-        /// Present when the row-batched matmul is proven on this GPU. The
-        /// handles are cheap host objects; MLX compiles the kernel once.
-        row_batched_matmul_kernels: Option<RowBatchedMatmulKernels>,
+    },
+    /// The same 4-bit weight in register order. The kernel handles are cheap
+    /// host objects; MLX compiles each kernel once per process.
+    RegisterOrdered {
+        weight: RegisterOrderedWeight,
+        kernels: RowBatchedMatmulKernels,
     },
 }
 
@@ -54,45 +59,29 @@ impl DrafterLinear {
                 packed_weight,
                 scales,
                 biases,
-                row_batched_matmul_kernels,
-            } => {
-                if let Some(kernels) = row_batched_matmul_kernels
-                    && row_batched_quantized_matmul_accepts(input, packed_weight, scales, biases)
-                {
-                    return row_batched_quantized_matmul(
-                        runtime,
-                        kernels,
-                        input,
-                        packed_weight,
-                        scales,
-                        biases,
-                    )
-                    .map_err(|projection_error| {
-                        MlxRuntimeError::RuntimeOperation {
-                            operation: "project drafter rows through the row-batched matmul",
-                            description: projection_error.to_string(),
-                        }
-                    });
-                }
-                Ok(runtime.quantized_matmul_affine(
-                    input,
-                    packed_weight,
-                    scales,
-                    biases,
-                    true,
-                    QUANTIZATION_GROUP_SIZE,
-                    QUANTIZATION_BITS,
-                )?)
+            } => Ok(runtime.quantized_matmul_affine(
+                input,
+                packed_weight,
+                scales,
+                biases,
+                true,
+                QUANTIZATION_GROUP_SIZE,
+                QUANTIZATION_BITS,
+            )?),
+            Self::RegisterOrdered { weight, kernels } => {
+                register_ordered_matmul(runtime, kernels, input, weight).map_err(projection_failure)
             }
         }
     }
 
     /// Quantizes a full-precision linear to 4 bits in place and materializes
-    /// it, so the bf16 view can be released; a quantized one is left alone.
+    /// it, so the bf16 view can be released; with `use_register_order` it is
+    /// then converted into register order unless its shape cannot be tiled.
+    /// A linear already quantized is left alone.
     pub fn quantize_in_place(
         &mut self,
         runtime: &MlxRuntime,
-        use_row_batched_matmul: bool,
+        use_register_order: bool,
     ) -> Result<(), MlxRuntimeError> {
         let Self::FullPrecision { transposed_weight } = self else {
             return Ok(());
@@ -101,17 +90,39 @@ impl DrafterLinear {
         let (packed_weight, scales, biases) =
             runtime.quantize_affine(&weight, QUANTIZATION_GROUP_SIZE, QUANTIZATION_BITS)?;
         runtime.evaluate_arrays(&[&packed_weight, &scales, &biases])?;
-        let row_batched_matmul_kernels = if use_row_batched_matmul {
-            Some(RowBatchedMatmulKernels::declare()?)
-        } else {
-            None
-        };
+        if use_register_order {
+            let kernels = RowBatchedMatmulKernels::declare()?;
+            match RegisterOrderedWeight::convert(
+                runtime,
+                &kernels,
+                &packed_weight,
+                &scales,
+                &biases,
+            ) {
+                Ok(converted) => {
+                    runtime.evaluate_arrays(&[&converted.codes, &converted.scale_bias_words])?;
+                    *self = Self::RegisterOrdered {
+                        weight: converted,
+                        kernels,
+                    };
+                    return Ok(());
+                }
+                Err(RowBatchedProjectionError::Refused(_)) => {}
+                Err(conversion_error) => return Err(projection_failure(conversion_error)),
+            }
+        }
         *self = Self::Quantized {
             packed_weight,
             scales,
             biases,
-            row_batched_matmul_kernels,
         };
         Ok(())
+    }
+}
+
+fn projection_failure(projection_error: RowBatchedProjectionError) -> MlxRuntimeError {
+    MlxRuntimeError::RuntimeOperation {
+        operation: "project drafter rows through the register-ordered matmul",
+        description: projection_error.to_string(),
     }
 }
