@@ -78,6 +78,95 @@ impl Qwen3_5ResidentModel {
         logits_mode: VerificationLogitsMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5SpeculativeVerificationOutput, Qwen3_5ExecutionError> {
+        self.speculative_verification_forward(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            target_hidden_state_tap_layer_ids,
+            logits_mode,
+            None,
+            performance_attribution,
+        )
+    }
+
+    /// Runs one prompt chunk of a drafting session: the tap-capturing
+    /// forward, evaluated before it returns, with the decoder state captured
+    /// at every `astro_ssd_prompt_cache` block boundary the chunk completes
+    /// (`completed_prefill_chunk_tokens`, empty when the chunk completes
+    /// none) so a later request that starts the same way restores it.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prefill_chunk_with_taps_and_boundary_checkpoints(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        target_hidden_state_tap_layer_ids: &[i32],
+        logits_mode: VerificationLogitsMode,
+        completed_prefill_chunk_tokens: &[usize],
+        checkpoint_interval_token_count: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<
+        (
+            Qwen3_5SpeculativeVerificationOutput,
+            Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+        ),
+        Qwen3_5ExecutionError,
+    > {
+        let mut boundary_checkpoint_collector = if completed_prefill_chunk_tokens.is_empty() {
+            None
+        } else {
+            Some(Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+                completed_prefill_chunk_tokens.to_vec(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
+                checkpoint_interval_token_count,
+            )?)
+        };
+        let chunk_output = self.speculative_verification_forward(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            target_hidden_state_tap_layer_ids,
+            logits_mode,
+            boundary_checkpoint_collector.as_mut(),
+            performance_attribution,
+        )?;
+        match chunk_output.per_position_logits.as_ref() {
+            Some(terminal_logits) => self
+                .evaluate_terminal_prefill_state_with_performance_attribution(
+                    terminal_logits,
+                    request_decoder_state,
+                    boundary_checkpoint_collector.as_ref(),
+                    performance_attribution,
+                )?,
+            None => self.evaluate_decoder_state_with_performance_attribution(
+                request_decoder_state,
+                boundary_checkpoint_collector.as_ref(),
+                performance_attribution,
+            )?,
+        }
+        let tap_references: Vec<&MlxArray> = chunk_output.hidden_state_taps.iter().collect();
+        self.runtime.evaluate_arrays(&tap_references)?;
+        let boundary_checkpoints = match boundary_checkpoint_collector {
+            Some(boundary_checkpoint_collector) => boundary_checkpoint_collector.complete()?,
+            None => Vec::new(),
+        };
+        Ok((chunk_output, boundary_checkpoints))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn speculative_verification_forward(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        target_hidden_state_tap_layer_ids: &[i32],
+        logits_mode: VerificationLogitsMode,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+        >,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Qwen3_5SpeculativeVerificationOutput, Qwen3_5ExecutionError> {
         let SpeculativeVerificationInputs {
             rope_offset_tokens,
             token_count,
@@ -95,7 +184,7 @@ impl Qwen3_5ResidentModel {
             rope_offset_tokens,
             request_decoder_state,
             target_hidden_state_tap_layer_ids,
-            None,
+            boundary_checkpoint_collector,
             performance_attribution,
         )?;
         let per_position_logits =

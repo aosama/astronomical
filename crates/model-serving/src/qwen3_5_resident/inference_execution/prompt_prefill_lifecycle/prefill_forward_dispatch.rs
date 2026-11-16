@@ -58,7 +58,14 @@ impl Qwen3_5EngineState {
         )?;
 
         let dispatch_outcome = if active_request.engine_extension.speculative_session_admitted {
-            dispatch_speculative_forward(self, active_request, model, prefill_start, prefill_end)?
+            dispatch_speculative_forward(
+                self,
+                active_request,
+                model,
+                prefill_start,
+                prefill_end,
+                plan,
+            )?
         } else {
             dispatch_non_speculative_forward(
                 active_request,
@@ -75,18 +82,19 @@ impl Qwen3_5EngineState {
     }
 }
 
-/// The speculative counterpart of the non-speculative dispatch: every
-/// admitted text chunk runs through the tap-capturing verification forward
-/// so the drafter receives the target's tapped hidden rows chunk by chunk. The terminal chunk additionally seeds the first
-/// generated token exactly as the classic terminal path does. Boundary
-/// checkpoints are not produced: a speculative session forgoes astro SSD prompt cache
-/// capture in both directions by decision at admission.
+/// The drafting session's counterpart of the classic dispatch: every
+/// admitted text chunk runs through the tap-capturing forward so the drafter
+/// receives the target's tapped hidden rows chunk by chunk, and captures the
+/// same `astro_ssd_prompt_cache` boundary checkpoints the classic path does.
+/// The terminal chunk additionally seeds the first generated token exactly
+/// as the classic terminal path does.
 fn dispatch_speculative_forward(
     engine_state: &Qwen3_5EngineState,
     active_request: &mut Qwen3_5EngineRequest,
     model: &Qwen3_5ResidentModel,
     prefill_start: usize,
     prefill_end: usize,
+    plan: &PrefillChunkPlan,
 ) -> Result<ChunkForwardOutcome, PrefillForwardError> {
     let draft_runtime = engine_state.speculative_draft_runtime.as_ref().ok_or(
         Qwen3_5ExecutionError::InvalidInput {
@@ -104,15 +112,18 @@ fn dispatch_speculative_forward(
     };
     let chunk_token_ids = active_request.input_token_ids[prefill_start..prefill_end].to_vec();
     let chunk_first_position = active_request.next_position_tokens;
-    let chunk_output = model.build_speculative_verification_forward(
-        &chunk_token_ids,
-        chunk_first_position,
-        &mut active_request.request_decoder_state,
-        &draft_runtime.drafter_configuration.target_tap_layer_ids,
-        logits_mode,
-        &mut active_request.performance_attribution,
-    )?;
-    hand_chunk_taps_to_drafter_and_run_chunk(
+    let (chunk_output, boundary_checkpoints) = model
+        .prefill_chunk_with_taps_and_boundary_checkpoints(
+            &chunk_token_ids,
+            chunk_first_position,
+            &mut active_request.request_decoder_state,
+            &draft_runtime.drafter_configuration.target_tap_layer_ids,
+            logits_mode,
+            &plan.intermediate_completed_prefill_chunk_tokens,
+            plan.astro_ssd_prompt_cache_block_token_count.unwrap_or(0),
+            &mut active_request.performance_attribution,
+        )?;
+    hand_chunk_taps_to_drafter(
         active_request,
         model,
         &chunk_output.hidden_state_taps,
@@ -133,18 +144,14 @@ fn dispatch_speculative_forward(
         active_request.set_pending_generated_token(first_generated_token);
     }
     Ok(ChunkForwardOutcome {
-        boundary_checkpoints: Vec::new(),
+        boundary_checkpoints,
     })
 }
 
-/// Hands one chunk's tapped hidden rows to the request's draft session (the
-/// drafter absorbs them when the first round runs) and runs the chunk.
-///
-/// Each chunk runs before the next is built, as on the classic path: left
-/// lazy, the whole prompt would run as one graph at the first round,
-/// holding every chunk's workspace at once and booking prompt processing
-/// time as generation preparation.
-fn hand_chunk_taps_to_drafter_and_run_chunk(
+/// Hands one chunk's tapped hidden rows to the request's draft session; the
+/// drafter absorbs them when the first round runs. The joined rows are run
+/// here so they hold no graph of the chunk that produced them.
+fn hand_chunk_taps_to_drafter(
     active_request: &mut Qwen3_5EngineRequest,
     model: &Qwen3_5ResidentModel,
     chunk_hidden_state_taps: &[mlx_bridge::MlxArray],
@@ -158,18 +165,10 @@ fn hand_chunk_taps_to_drafter_and_run_chunk(
             description: "speculative prefill requires the request's draft session",
         })?;
     draft_session.append_tap_rows(model, chunk_hidden_state_taps, chunk_first_position)?;
-    model.evaluate_decoder_state_with_performance_attribution(
-        &active_request.request_decoder_state,
-        None,
-        &mut active_request.performance_attribution,
-    )?;
     draft_session.evaluate_pending_tap_rows(model)
 }
 
-/// What either prefill dispatch path produced for one chunk. Named for the
-/// payload, not either path: the speculative branch returns the same shape
-/// (its checkpoint list is always empty — admitted sessions forfeit
-/// astro SSD prompt cache capture by decision at admission).
+/// What either prefill dispatch path produced for one chunk.
 struct ChunkForwardOutcome {
     boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }

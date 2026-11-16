@@ -84,3 +84,17 @@ pub fn verification_token_choice_for_strategy(
         }),
     }
 }
+
+/// Whether an admitted session still drafts once its prompt prefix has been
+/// restored from the `astro_ssd_prompt_cache`. The drafter conditions on
+/// hidden rows the target taps while prefill computes the prompt's suffix; a
+/// prompt restored to its last token leaves no row to tap, so that session
+/// decodes classically.
+#[must_use]
+pub fn drafting_survives_prompt_restore(
+    speculative_session_admitted: bool,
+    restored_prompt_token_count: usize,
+    prompt_token_count: usize,
+) -> bool {
+    speculative_session_admitted && restored_prompt_token_count < prompt_token_count
+}

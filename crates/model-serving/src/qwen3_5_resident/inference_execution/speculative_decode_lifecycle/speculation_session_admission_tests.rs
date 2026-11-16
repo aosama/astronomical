@@ -1,7 +1,7 @@
 //! Unit tests for speculative session admission.
 
 use super::speculation_session_admission::{
-    SpeculationSessionRequestProperties, VerificationTokenChoice,
+    SpeculationSessionRequestProperties, VerificationTokenChoice, drafting_survives_prompt_restore,
     should_admit_speculation_for_session, verification_token_choice_for_strategy,
 };
 
@@ -97,4 +97,20 @@ fn should_map_request_strategies_onto_verification_token_choices() {
             top_p_thousandths: 950,
         })
     );
+}
+
+#[test]
+fn should_keep_drafting_when_prefill_still_computes_a_prompt_suffix() {
+    assert!(drafting_survives_prompt_restore(true, 4_096, 4_500));
+    assert!(drafting_survives_prompt_restore(true, 0, 1));
+}
+
+#[test]
+fn should_stop_drafting_when_the_whole_prompt_was_restored() {
+    assert!(!drafting_survives_prompt_restore(true, 4_096, 4_096));
+}
+
+#[test]
+fn should_not_start_drafting_for_a_session_that_was_never_admitted() {
+    assert!(!drafting_survives_prompt_restore(false, 0, 4_096));
 }
