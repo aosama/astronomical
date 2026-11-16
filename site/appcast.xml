@@ -4,37 +4,27 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.111</title>
-            <pubDate>Mon, 16 Nov 2026 08:16:34 -0500</pubDate>
-            <sparkle:version>2358</sparkle:version>
-            <sparkle:shortVersionString>0.2.111</sparkle:shortVersionString>
+            <title>0.2.112</title>
+            <pubDate>Mon, 16 Nov 2026 11:39:30 -0500</pubDate>
+            <sparkle:version>2364</sparkle:version>
+            <sparkle:shortVersionString>0.2.112</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Decision models learn from your own examples
+            <description sparkle:format="markdown"><![CDATA[## Decision models: train Kev and Clef as a whole model
 
-Astronomical's decision models (Laya, Kev and Clef) can now be fitted to your own labelled examples from the command line. Each command writes a new model folder and never changes the original:
+- **`astronomical decision train --whole-model` now trains Kev and Clef as well as Laya.** Small add-on weights in every layer learn together with the final layers, so the model can pick up what it did not notice before. In a test where a code at the start of each text decided the answer, Kev went from 53% to 100% right on questions it never saw, where training only its final layers did not learn it at all.
+- **Faster whole-model training.** Questions now share each pass through the model. Kev 0.8B trains 200 questions in about two minutes; Clef 9B takes about 40 minutes on a 48 GB Mac. Training sizes its batches to your Mac's memory.
+- **200 labelled questions are enough** for whole-model training, about 30 or more different texts, the same as for the final layers (it was 1,000).
+- **A safer `--output`.** `decision train` and `decision calibrate` now check the output folder before reading any example. If Astronomical would not find a model there, they stop at once and name the folders it does look in. A finished training never deletes its own result.
 
-- `astronomical decision calibrate EXAMPLES --output DIR` refits how confident the answers are, without changing which answer is picked.
-- `astronomical decision train EXAMPLES --output DIR` trains a decision model's final scoring layers on the graphics processor (200 labelled questions about 30 or more texts).
-- `astronomical decision train EXAMPLES --whole-model --output DIR` trains small add-on weights in every layer of Laya together with its final layers, so the whole model learns to read your examples differently (1,000 labelled questions about 100 or more texts; about 8 minutes for 1,200).
+Your existing configuration and trained models keep working as before.
 
-A result is kept only when it beats the shipped model on examples held back from training and keeps its other answers. The original files are copied unchanged, the trained parts are stored beside them, and the written model is checked against the trained one before it is used. Training shows progress with the time left, adjusts to your Mac's memory, and stops within seconds when you press Ctrl-C.
-
-## Fixes
-
-- Cancelling a decisions request or a training no longer restarts the engine.
-- Decision tools create a missing output folder's parent folders instead of refusing.
-
-## Compatibility
-
-Your models, conversations and settings carry over unchanged, and the configuration format is the same as 0.2.110. Requires macOS 14 or later on Apple silicon.
-
-This release is signed with Developer ID, notarized by Apple, and delivered as a signed Sparkle update.
+This release is signed with Astronomical's Developer ID, notarized by Apple, and delivered through the signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.111/Astronomical-0.2.111-macOS-arm64.dmg" length="24463192" type="application/octet-stream" sparkle:edSignature="tOnXtrEm3lvixpTXHZI7qg8iA+DagkgruD9+BXvUiJBopsTOAVXlUFw5GIK/emj389iJIHJ8Hx6wyaiY8OY/Dw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.112/Astronomical-0.2.112-macOS-arm64.dmg" length="24570847" type="application/octet-stream" sparkle:edSignature="icKSkLKz5OtC45OXEB5cNlnvw18kk6ebKCOWWI5mXcoIca5d0c1Q2GBcFM9X1KTBUDYQwAVZdI/V8m4mjYywCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: X1eQH3ZHmC/ouzpDxmY4A3HE0x/G5WMx/p3zixmYc0wJgGHb6vmpNxEPXvCSelRu+SbE0k8vW+iCW0pO1W/sBA==
-length: 2939
+edSignature: WTnDXOpOvYiHx3d7Uku+Kc78a9uqGi9tFSvGnZaQ7zY/7q6h5ol/hTERtP1t3b0sOuewDSaCaOAmEUheUHzWCA==
+length: 2553
 -->
