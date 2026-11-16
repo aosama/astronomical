@@ -68,6 +68,11 @@ fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_refer
     let pair = load_pair();
     for (cell_index, cell) in ORACLE_CELLS.iter().enumerate() {
         let reference = decode(&pair, cell, Drafting::SinglePath, &[]);
+        eprintln!(
+            "[dflash2-tree-oracle] {} reference begins: {:?}",
+            cell.label,
+            reference_text(&pair, &reference.emitted_token_ids)
+        );
         let replay = decode(&pair, cell, Drafting::Tree, &reference.emitted_token_ids);
         eprintln!(
             "[dflash2-tree-oracle {}/{}] {}: path {:.2} kept per round, tree {:.2} \
@@ -428,4 +433,19 @@ fn depth_reached(tree: &DraftTree, target_picks: &[u32], continuation: &[u32]) -
         }
     }
     continuation.len()
+}
+
+/// The first characters of a decoded reference, to see what the cell writes.
+fn reference_text(pair: &JourneyPair, token_ids: &[u32]) -> String {
+    let mut decoder = pair.tokenizer.incremental_decoder();
+    let mut text = String::new();
+    for token_id in token_ids {
+        if let Ok(Some(piece)) = decoder.push_token(*token_id) {
+            text.push_str(&piece);
+        }
+        if text.chars().count() > 240 {
+            break;
+        }
+    }
+    text.chars().take(240).collect()
 }

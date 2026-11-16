@@ -31,7 +31,9 @@ pub struct DraftLattice {
     pub edge_scores: Vec<f32>,
 }
 
-/// TensorFold's selector settings; `Default` gives its shipped values.
+/// TensorFold's selector settings; `Default` gives the values its serial
+/// loop uses on chips with matrix units (`loneSelection`: 16 children a node,
+/// so an uncertain slot can spend the whole budget on siblings).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DraftTreeOptions {
     /// Nodes in the tree besides its root (the anchor): rows verified past it.
@@ -52,7 +54,7 @@ impl Default for DraftTreeOptions {
     fn default() -> Self {
         Self {
             node_budget: 15,
-            children_per_node: 4,
+            children_per_node: 16,
             score_temperature: 1.5,
             edge_weight: 0.6,
             noise_weight: 0.7,
