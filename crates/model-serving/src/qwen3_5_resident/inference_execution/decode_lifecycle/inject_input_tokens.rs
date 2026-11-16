@@ -75,7 +75,7 @@ impl Qwen3_5EngineState {
         // one-token-ahead successor and its rollback verdict before forwarding
         // feedback; neither belongs to the newly injected token sequence.
         // The injected prefill bypasses the tap-capturing forward that grows
-        // the draft's context cache, so speculation suspends for the session's
+        // the draft's context key-value state, so speculation suspends for the session's
         // remainder; the classic path below owns feedback exactly.
         active_request.suspend_speculative_session("feedback_injection");
         active_request.pending_generated_token = None;

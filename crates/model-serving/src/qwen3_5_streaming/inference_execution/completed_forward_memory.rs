@@ -3,7 +3,7 @@
 //!
 //! The memory governor is told about every completed forward and answers
 //! with how much the kept weights may hold (issue #2221). Nothing else is
-//! learned here: the working memory a step needs is what the governor
+//! learned here: the MLX working buffers a step needs is what the governor
 //! measured, not an estimate fitted to earlier forwards.
 //!
 //! The sequence:
@@ -98,6 +98,7 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_forward(
         peak_bytes_during_forward: u64::try_from(memory_snapshot_after_forward.peak_memory_bytes())
             .unwrap_or(u64::MAX),
     });
+    model.govern_system_wired_memory();
     if measured_forward.memory_phase == MemoryPhase::Decode {
         resize_hot_expert_tables_to_the_capacity(model);
     }
@@ -112,7 +113,7 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_forward(
 fn resize_hot_expert_tables_to_the_capacity(model: &Qwen3_5Model) {
     let hot_expert_warm_slot_count = super::decode_expert_memory_handoff::decode_warm_slot_count(
         model,
-        model.expert_weight_memory_cache_statistics(),
+        model.astro_expert_cache_statistics(),
     );
     if hot_expert_warm_slot_count != model.hot_expert_warm_slot_count() {
         model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);

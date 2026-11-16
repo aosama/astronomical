@@ -1,7 +1,7 @@
 use super::{AccountInputs, LedgerAccounts, compose_accounts};
+use crate::ledger::mlx_working_buffers::MlxWorkingBufferReserve;
 use crate::ledger::model_shape::ModelMemoryShape;
 use crate::ledger::phase::LedgerPhase;
-use crate::ledger::working_memory::WorkingMemoryReserve;
 
 const GIBIBYTE: u64 = 1 << 30;
 const READING: LedgerPhase = LedgerPhase::ReadingPrompt {
@@ -23,8 +23,9 @@ fn inputs_at(limit_bytes: u64) -> AccountInputs {
         model_shape: MODEL_SHAPE,
         context_bytes: GIBIBYTE / 2,
         phase: READING,
-        working_memory_reserve: WorkingMemoryReserve::Measured(GIBIBYTE),
+        mlx_working_buffer_reserve: MlxWorkingBufferReserve::Measured(GIBIBYTE),
         lease_bytes: 0,
+        system_wired_reserve_bytes: 0,
     }
 }
 
@@ -83,14 +84,14 @@ fn should_keep_slot_bytes_fewer_weights_when_one_byte_short_of_fitting() {
 }
 
 #[test]
-fn should_keep_nothing_and_hold_the_rest_while_working_memory_is_unmeasured() {
+fn should_keep_nothing_and_hold_the_rest_while_mlx_working_buffers_are_unmeasured() {
     let mut account_inputs = inputs_at(16 * GIBIBYTE);
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Unmeasured;
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Unmeasured;
     let accounts = compose_accounts(account_inputs);
-    assert!(!accounts.working_memory_is_measured);
+    assert!(!accounts.mlx_working_buffers_are_measured);
     assert_eq!(accounts.kept_weight_capacity_bytes, 0);
     assert_eq!(accounts.stream_slot_bytes, 2 * GIBIBYTE);
-    assert!(accounts.working_memory_bytes > 0);
+    assert!(accounts.mlx_working_buffer_bytes > 0);
     assert_accounts_add_up(accounts);
 }
 
@@ -105,9 +106,9 @@ fn should_report_a_shortfall_instead_of_refusing_below_the_streaming_floor() {
 #[test]
 fn should_report_a_shortfall_below_the_floor_even_when_unmeasured() {
     let mut account_inputs = inputs_at(4 * GIBIBYTE);
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Unmeasured;
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Unmeasured;
     let accounts = compose_accounts(account_inputs);
-    assert_eq!(accounts.working_memory_bytes, 0);
+    assert_eq!(accounts.mlx_working_buffer_bytes, 0);
     assert!(accounts.shortfall_bytes > 0);
     assert_accounts_add_up(accounts);
 }
@@ -126,12 +127,12 @@ fn should_take_a_lease_straight_out_of_the_kept_weight_capacity() {
 }
 
 #[test]
-fn should_need_no_working_memory_or_slots_while_idle() {
+fn should_need_no_mlx_working_buffers_or_slots_while_idle() {
     let mut account_inputs = inputs_at(16 * GIBIBYTE);
     account_inputs.phase = LedgerPhase::Idle;
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Measured(0);
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Measured(0);
     let accounts = compose_accounts(account_inputs);
-    assert_eq!(accounts.working_memory_bytes, 0);
+    assert_eq!(accounts.mlx_working_buffer_bytes, 0);
     assert_eq!(accounts.stream_slot_bytes, 0);
     assert_accounts_add_up(accounts);
 }
@@ -140,7 +141,7 @@ fn should_need_no_working_memory_or_slots_while_idle() {
 fn should_use_the_small_reply_slot_while_writing_a_reply() {
     let mut account_inputs = inputs_at(16 * GIBIBYTE);
     account_inputs.phase = LedgerPhase::WritingReply;
-    account_inputs.working_memory_reserve = WorkingMemoryReserve::Measured(GIBIBYTE / 16);
+    account_inputs.mlx_working_buffer_reserve = MlxWorkingBufferReserve::Measured(GIBIBYTE / 16);
     let accounts = compose_accounts(account_inputs);
     assert_eq!(accounts.stream_slot_bytes, GIBIBYTE / 8);
     assert!(
@@ -157,4 +158,129 @@ fn should_saturate_instead_of_wrapping_on_absurd_inputs() {
     account_inputs.lease_bytes = u64::MAX;
     let accounts = compose_accounts(account_inputs);
     assert_eq!(accounts.kept_weight_capacity_bytes, 0);
+}
+
+fn writing_reply_inputs_at(limit_bytes: u64) -> AccountInputs {
+    AccountInputs {
+        phase: LedgerPhase::WritingReply,
+        mlx_working_buffer_reserve: MlxWorkingBufferReserve::Measured(GIBIBYTE / 4),
+        ..inputs_at(limit_bytes)
+    }
+}
+
+/// What the needs come to before any room for the `mlx_buffer_cache`.
+fn needed_without_mlx_buffer_cache_bytes(accounts: LedgerAccounts) -> u64 {
+    accounts.needed_bytes() - accounts.mlx_buffer_cache_bytes
+}
+
+#[test]
+fn should_set_aside_one_reply_steps_working_buffers_for_the_mlx_buffer_cache() {
+    let accounts = compose_accounts(writing_reply_inputs_at(20 * GIBIBYTE));
+
+    assert_eq!(accounts.mlx_buffer_cache_bytes, GIBIBYTE / 4);
+    assert_eq!(
+        accounts.kept_weight_capacity_bytes,
+        accounts.limit_bytes - needed_without_mlx_buffer_cache_bytes(accounts) - GIBIBYTE / 4,
+        "the room comes out of what would otherwise be kept"
+    );
+    assert_eq!(accounts.shortfall_bytes, 0);
+    assert_accounts_add_up(accounts);
+}
+
+#[test]
+fn should_set_nothing_aside_for_the_mlx_buffer_cache_while_reading_a_prompt_or_idle() {
+    let reading_accounts = compose_accounts(inputs_at(20 * GIBIBYTE));
+    let idle_accounts = compose_accounts(AccountInputs {
+        phase: LedgerPhase::Idle,
+        ..inputs_at(20 * GIBIBYTE)
+    });
+
+    assert_eq!(reading_accounts.mlx_buffer_cache_bytes, 0);
+    assert_eq!(idle_accounts.mlx_buffer_cache_bytes, 0);
+    assert_accounts_add_up(reading_accounts);
+    assert_accounts_add_up(idle_accounts);
+}
+
+#[test]
+fn should_shrink_the_mlx_buffer_cache_room_to_what_fits_beside_the_needs() {
+    let roomy_accounts = compose_accounts(writing_reply_inputs_at(20 * GIBIBYTE));
+    let needed_bytes = needed_without_mlx_buffer_cache_bytes(roomy_accounts);
+    // A tenth of a GiB to spare, less than the quarter the room would take;
+    // the margin is a fiftieth of the limit, so it is recomputed here.
+    let tight_limit_bytes = (needed_bytes - roomy_accounts.margin_bytes) * 50 / 49 + GIBIBYTE / 10;
+
+    let tight_accounts = compose_accounts(writing_reply_inputs_at(tight_limit_bytes));
+
+    assert!(tight_accounts.mlx_buffer_cache_bytes > 0);
+    assert!(tight_accounts.mlx_buffer_cache_bytes < GIBIBYTE / 4);
+    assert_eq!(tight_accounts.kept_weight_capacity_bytes, 0);
+    assert_eq!(tight_accounts.shortfall_bytes, 0);
+    assert_accounts_add_up(tight_accounts);
+}
+
+#[test]
+fn should_never_add_the_mlx_buffer_cache_room_to_a_shortfall() {
+    let accounts = compose_accounts(writing_reply_inputs_at(2 * GIBIBYTE));
+
+    let needs_that_serving_requires_bytes = MODEL_SHAPE.core_weight_bytes
+        + GIBIBYTE / 2
+        + GIBIBYTE / 4
+        + MODEL_SHAPE.writing_reply_stream_slot_bytes
+        + accounts.margin_bytes;
+    assert_eq!(accounts.mlx_buffer_cache_bytes, 0);
+    assert_eq!(
+        accounts.shortfall_bytes,
+        needs_that_serving_requires_bytes - accounts.limit_bytes,
+        "a limit too small to serve at is exactly as short as its required needs make it"
+    );
+    assert_accounts_add_up(accounts);
+}
+
+#[test]
+fn should_take_the_system_wired_reserve_from_what_would_be_kept() {
+    let accounts_without_reserve = compose_accounts(writing_reply_inputs_at(20 * GIBIBYTE));
+    let accounts = compose_accounts(AccountInputs {
+        system_wired_reserve_bytes: GIBIBYTE / 2,
+        ..writing_reply_inputs_at(20 * GIBIBYTE)
+    });
+
+    assert_eq!(accounts.system_wired_reserve_bytes, GIBIBYTE / 2);
+    assert_eq!(
+        accounts.kept_weight_capacity_bytes,
+        accounts_without_reserve.kept_weight_capacity_bytes - GIBIBYTE / 2
+    );
+    assert_eq!(accounts.mlx_buffer_cache_bytes, GIBIBYTE / 4);
+    assert_accounts_add_up(accounts);
+}
+
+#[test]
+fn should_shrink_the_system_wired_reserve_to_what_fits_and_leave_no_shortfall() {
+    let accounts_without_reserve = compose_accounts(writing_reply_inputs_at(20 * GIBIBYTE));
+    let accounts = compose_accounts(AccountInputs {
+        system_wired_reserve_bytes: 40 * GIBIBYTE,
+        ..writing_reply_inputs_at(20 * GIBIBYTE)
+    });
+
+    assert_eq!(
+        accounts.system_wired_reserve_bytes,
+        accounts_without_reserve.kept_weight_capacity_bytes
+            + accounts_without_reserve.mlx_buffer_cache_bytes,
+        "the reserve takes all the optional room and no more"
+    );
+    assert_eq!(accounts.kept_weight_capacity_bytes, 0);
+    assert_eq!(accounts.mlx_buffer_cache_bytes, 0);
+    assert_eq!(accounts.shortfall_bytes, 0);
+    assert_accounts_add_up(accounts);
+}
+
+#[test]
+fn should_reserve_nothing_for_the_system_on_a_limit_too_small_to_serve_at() {
+    let accounts = compose_accounts(AccountInputs {
+        system_wired_reserve_bytes: GIBIBYTE,
+        ..writing_reply_inputs_at(2 * GIBIBYTE)
+    });
+
+    assert_eq!(accounts.system_wired_reserve_bytes, 0);
+    assert!(accounts.shortfall_bytes > 0);
+    assert_accounts_add_up(accounts);
 }

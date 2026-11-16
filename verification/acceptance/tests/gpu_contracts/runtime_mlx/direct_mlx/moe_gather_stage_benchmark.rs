@@ -135,7 +135,7 @@ fn should_measure_moe_gather_stage_costs_at_ornith_shapes() {
         );
 
         runtime
-            .clear_allocator_cache()
+            .clear_mlx_buffer_cache()
             .expect("the sweep should release reclaimable MLX allocations");
     }
 }

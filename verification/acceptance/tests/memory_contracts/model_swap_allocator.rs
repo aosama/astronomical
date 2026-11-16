@@ -74,13 +74,13 @@ async fn run_model_swap_allocator_contract() {
         .memory_snapshot()
         .expect("the post-drop MLX allocator snapshot should be readable");
     eprintln!(
-        "[memory-contract] status=progress phase=first_model_dropped active_bytes={} cache_bytes={} peak_bytes={}",
+        "[memory-contract] status=progress phase=first_model_dropped active_bytes={} mlx_buffer_cache_bytes={} peak_bytes={}",
         post_drop_snapshot.active_memory_bytes(),
-        post_drop_snapshot.allocator_cache_memory_bytes(),
+        post_drop_snapshot.mlx_buffer_cache_bytes(),
         post_drop_snapshot.peak_memory_bytes(),
     );
     assert!(
-        post_drop_snapshot.allocator_cache_memory_bytes() > 0,
+        post_drop_snapshot.mlx_buffer_cache_bytes() > 0,
         "dropping {first_model_id} must leave reclaimable MLX allocator bytes before replacement loading"
     );
     assert_eq!(
@@ -114,28 +114,28 @@ async fn run_model_swap_allocator_contract() {
     let replacement_model_loading_report =
         model_loading_report(&attribution_report_documents, replacement_model_id);
     assert_replacement_cleanup_order(replacement_model_loading_report);
-    let replacement_model_loading_allocator_cache_memory_bytes =
-        replacement_model_loading_report["mlx_allocator_cache_memory_bytes"]
+    let replacement_model_loading_mlx_buffer_cache_bytes =
+        replacement_model_loading_report["mlx_buffer_cache_bytes"]
             .as_u64()
-            .expect("replacement model loading should report allocator-cache bytes");
+            .expect("replacement model loading should report MLX buffer-cache bytes");
     let replacement_model_loading_active_memory_bytes =
         replacement_model_loading_report["mlx_active_memory_bytes"]
             .as_u64()
             .expect("replacement model loading should report active memory bytes");
     eprintln!(
-        "[memory-contract] status=progress phase=replacement_memory active_bytes={replacement_model_loading_active_memory_bytes} cache_bytes={replacement_model_loading_allocator_cache_memory_bytes} prior_stale_cache_bytes={}",
-        post_drop_snapshot.allocator_cache_memory_bytes(),
+        "[memory-contract] status=progress phase=replacement_memory active_bytes={replacement_model_loading_active_memory_bytes} cache_bytes={replacement_model_loading_mlx_buffer_cache_bytes} prior_stale_cache_bytes={}",
+        post_drop_snapshot.mlx_buffer_cache_bytes(),
     );
     assert!(
-        replacement_model_loading_allocator_cache_memory_bytes
-            < u64::try_from(post_drop_snapshot.allocator_cache_memory_bytes())
-                .expect("the stale allocator-cache snapshot should fit in u64"),
-        "replacement model loading must remove the prior model-scale allocator cache"
+        replacement_model_loading_mlx_buffer_cache_bytes
+            < u64::try_from(post_drop_snapshot.mlx_buffer_cache_bytes())
+                .expect("the stale MLX buffer-cache snapshot should fit in u64"),
+        "replacement model loading must remove the prior model-scale MLX buffer cache"
     );
     assert!(
-        replacement_model_loading_allocator_cache_memory_bytes
+        replacement_model_loading_mlx_buffer_cache_bytes
             < replacement_model_loading_active_memory_bytes,
-        "replacement model loading may retain tiny graph bookkeeping, but not model-scale cache bytes"
+        "replacement model loading may retain tiny graph bookkeeping, but not model-scale MLX buffer cache bytes"
     );
     assert!(
         replacement_model_loading_active_memory_bytes > 0,
@@ -154,20 +154,20 @@ async fn run_model_swap_allocator_contract() {
     let replacement_generation_report =
         generation_report(&attribution_report_documents, REPLACEMENT_REQUEST_ID);
     assert_eq!(replacement_generation_report["outcome"], "success");
-    let replacement_generation_allocator_cache_memory_bytes =
-        replacement_generation_report["mlx_allocator_cache_memory_bytes"]
+    let replacement_generation_mlx_buffer_cache_bytes =
+        replacement_generation_report["mlx_buffer_cache_bytes"]
             .as_u64()
-            .expect("replacement generation should report allocator-cache bytes");
+            .expect("replacement generation should report MLX buffer-cache bytes");
     let replacement_generation_active_memory_bytes =
         replacement_generation_report["mlx_active_memory_bytes"]
             .as_u64()
             .expect("replacement generation should report active memory bytes");
     let replacement_generation_allocator_cleanup_operation =
-        operation_report(replacement_generation_report, "mlx_allocator_cache_cleanup");
+        operation_report(replacement_generation_report, "mlx_buffer_cache_cleanup");
     assert_minimum_mlx_allocator_cleanup_count(&replacement_generation_allocator_cleanup_operation);
     assert_eq!(
-        replacement_generation_allocator_cache_memory_bytes, 0,
-        "completed replacement generation must not retain reclaimable allocator-cache bytes"
+        replacement_generation_mlx_buffer_cache_bytes, 0,
+        "completed replacement generation must not retain reclaimable MLX buffer-cache bytes"
     );
     assert!(
         replacement_generation_active_memory_bytes > 0,
@@ -188,7 +188,7 @@ fn create_engine(
     Qwen3_5StreamingEngine::new_with_runtime_chunking_and_performance_attribution(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
         Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(
             FIXED_PREFILL_CHUNCK_TOKENS,
@@ -381,10 +381,8 @@ fn assert_replacement_cleanup_order(replacement_model_loading_report: &Value) {
         replacement_model_loading_report,
         "mlx_runtime_initialization",
     );
-    let allocator_cleanup = operation_report(
-        replacement_model_loading_report,
-        "mlx_allocator_cache_cleanup",
-    );
+    let allocator_cleanup =
+        operation_report(replacement_model_loading_report, "mlx_buffer_cache_cleanup");
     let runtime_initialization_end = runtime_initialization["last_ended_offset_nanoseconds"]
         .as_u64()
         .expect("runtime initialization should report an end offset");
@@ -418,10 +416,10 @@ fn assert_replacement_cleanup_order(replacement_model_loading_report: &Value) {
 }
 
 /// Two generation-time cleanups are mandatory (after prompt prefill and at
-/// request finalization). A third is legitimate: prompt-cache capture
-/// publication wipes the allocator cache when active memory sits within the
+/// request finalization). A third is legitimate: `astro_ssd_prompt_cache` capture
+/// publication wipes the MLX buffer cache when active memory sits within the
 /// publication comfort headroom of the ceiling
-/// (qwen3_5_core/prompt_cache_capture/block_capture.rs) — exactly this journey's
+/// (qwen3_5_core/astro_ssd_prompt_cache_capture/block_capture.rs) — exactly this journey's
 /// tight-ceiling scenario — so the count is a floor, not an exact tally.
 fn assert_minimum_mlx_allocator_cleanup_count(cleanup_operation: &Value) {
     let cleanup_occurrence_count = cleanup_operation["occurrence_count"].as_u64().unwrap_or(0);

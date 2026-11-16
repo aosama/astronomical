@@ -1,21 +1,20 @@
-//! Model catalog: family definitions, projection, and the REST endpoint.
+//! Model catalog: the projection onto installed models and the REST endpoint.
+//! The catalog itself and its parser live in `astronomical-download-catalog`.
 
-mod catalog_capabilities;
-mod catalog_classification;
 mod catalog_endpoint;
-mod catalog_presentation;
 mod catalog_projection;
-mod download_catalog;
 
 #[cfg(test)]
-mod download_catalog_tests;
+mod catalog_load_attribution_tests;
 
+pub use astronomical_download_catalog::{
+    DownloadCatalog, DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadCatalogError,
+    DownloadCatalogFamily, DownloadCatalogRole,
+};
+pub(crate) use astronomical_download_catalog::{
+    is_valid_huggingface_id, is_valid_immutable_revision,
+};
 pub(crate) use catalog_endpoint::library_catalog_routes;
 pub(crate) use catalog_projection::{
     CatalogEntryProjection, project_catalog_entries, requestable_model_id_from_huggingface_id,
 };
-pub use download_catalog::{
-    DownloadCatalog, DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadCatalogError,
-    DownloadCatalogFamily, DownloadCatalogRole,
-};
-pub(crate) use download_catalog::{is_valid_huggingface_id, is_valid_immutable_revision};

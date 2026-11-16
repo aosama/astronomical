@@ -377,7 +377,7 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
             .swapped_out_weights
             .remove(&tied_head_key(&restore_token.module_name))
         {
-            self.model.base.weights.language_model_head_weights = previous_head;
+            self.model.base.weights.language_model_head_weights = previous_head.into();
         }
         Ok(())
     }
@@ -390,14 +390,14 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
         mean_kl_divergence(self.model.runtime(), reference_logits, probe_logits)
     }
 
-    /// Drains the allocator cache: large tensors otherwise accumulate in
-    /// MLX's page cache and the process is killed within about ten modules.
+    /// Drains the MLX buffer cache: large tensors otherwise accumulate in
+    /// the `mlx_buffer_cache` and the process is killed within about ten modules.
     fn release_transient_memory(&mut self) -> Result<(), QuantizationError> {
         mlx_step(
             self.model
                 .runtime()
-                .synchronize_gpu_stream_and_clear_allocator_cache(),
-            "drain the allocator cache between probes",
+                .synchronize_gpu_stream_and_clear_mlx_buffer_cache(),
+            "drain the MLX buffer cache between probes",
         )
     }
 }

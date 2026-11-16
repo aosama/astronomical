@@ -2,36 +2,38 @@ use std::fs;
 
 use crate::{GenerationPerformanceLog, GenerationPerformanceRecord};
 use astronomical_ipc_protocol::{
-    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
-    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPersistentPromptCacheStartupCleanupCategory,
-    WorkerPersistentPromptCacheStartupCleanupEvidence,
+    WorkerAstroSsdPromptCacheExpectedBlockHashPrefix, WorkerAstroSsdPromptCacheLookupOutcome,
+    WorkerAstroSsdPromptCacheMissReason, WorkerAstroSsdPromptCacheRequestDiagnostics,
+    WorkerAstroSsdPromptCacheStartupCleanupCategory,
+    WorkerAstroSsdPromptCacheStartupCleanupEvidence,
 };
 
 #[test]
 fn should_create_generation_performance_record_with_computed_throughput() {
     let (prefill_tps, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 100_000, /* cached_token_count */ 50_000,
+        /* prompt_token_count */ 100_000,
+        /* astro_ssd_prompt_cache_restored_token_count */ 50_000,
         /* generated_token_count */ 500, /* prefill_elapsed_millis */ 1_000,
         /* generation_elapsed_millis */ 5_000,
     );
-    // 50,000 uncached tokens / 1.0 seconds = 50,000 tok/s
+    // 50,000 tokens not restored from the astro SSD prompt cache / 1.0 seconds = 50,000 tok/s
     assert_eq!(prefill_tps, Some(50_000.0));
     // 500 tokens / 5.0 seconds = 100 tok/s
     assert_eq!(generation_tps, Some(100.0));
 }
 
 #[test]
-fn should_return_none_for_prefill_tok_per_second_when_fully_cached() {
-    // When all tokens are cached (0 ms prefill elapsed), prefill TPS is None.
+fn should_return_none_for_prefill_tok_per_second_when_fully_restored_from_astro_ssd_prompt_cache() {
+    // When all tokens are restored from the astro SSD prompt cache (0 ms prefill elapsed), prefill TPS is None.
     let (prefill_tps, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 10_000, /* cached_token_count */ 10_000,
+        /* prompt_token_count */ 10_000,
+        /* astro_ssd_prompt_cache_restored_token_count */ 10_000,
         /* generated_token_count */ 200, /* prefill_elapsed_millis */ 0,
         /* generation_elapsed_millis */ 2_000,
     );
     assert!(
         prefill_tps.is_none(),
-        "fully cached prompt should have None prefill TPS"
+        "a prompt fully restored from the astro SSD prompt cache should have None prefill TPS"
     );
     assert_eq!(generation_tps, Some(100.0)); // 200 tokens / 2.0 seconds
 }
@@ -39,7 +41,8 @@ fn should_return_none_for_prefill_tok_per_second_when_fully_cached() {
 #[test]
 fn should_return_none_for_generation_tok_per_second_when_zero_elapsed() {
     let (prefill_tps, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 5_000, /* cached_token_count */ 0,
+        /* prompt_token_count */ 5_000,
+        /* astro_ssd_prompt_cache_restored_token_count */ 0,
         /* generated_token_count */ 1, /* prefill_elapsed_millis */ 500,
         /* generation_elapsed_millis */ 0,
     );
@@ -51,25 +54,27 @@ fn should_return_none_for_generation_tok_per_second_when_zero_elapsed() {
 }
 
 #[test]
-fn should_return_none_for_prefill_tps_when_uncached_tokens_is_zero() {
-    // If prompt_token_count == cached_token_count, uncached = 0, so TPS is None
+fn should_return_none_for_prefill_tps_when_tokens_not_restored_is_zero() {
+    // If prompt_token_count == astro_ssd_prompt_cache_restored_token_count, tokens not restored = 0, so TPS is None
     // even if prefill_elapsed_millis > 0 (which shouldn't happen in practice, but
     // the math should be robust).
     let (prefill_tps, _) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 1_000, /* cached_token_count */ 1_000,
+        /* prompt_token_count */ 1_000,
+        /* astro_ssd_prompt_cache_restored_token_count */ 1_000,
         /* generated_token_count */ 100, /* prefill_elapsed_millis */ 500,
         /* generation_elapsed_millis */ 1_000,
     );
     assert!(
         prefill_tps.is_none(),
-        "zero uncached tokens should produce None prefill TPS"
+        "zero tokens left to prefill should produce None prefill TPS"
     );
 }
 
 #[test]
 fn should_return_none_for_generation_tps_when_token_count_is_zero() {
     let (_, generation_tps) = GenerationPerformanceRecord::compute_throughput(
-        /* prompt_token_count */ 1_000, /* cached_token_count */ 0,
+        /* prompt_token_count */ 1_000,
+        /* astro_ssd_prompt_cache_restored_token_count */ 0,
         /* generated_token_count */ 0, /* prefill_elapsed_millis */ 100,
         /* generation_elapsed_millis */ 1_000,
     );
@@ -88,7 +93,7 @@ fn sample_generation_performance_record() -> GenerationPerformanceRecord {
         request_id: 42,
         model_id: "test-model".to_owned(),
         prompt_token_count: 10_000,
-        cached_token_count: 5_000,
+        astro_ssd_prompt_cache_restored_token_count: 5_000,
         generated_token_count: 200,
         completion_reason: "end_of_sequence".to_owned(),
         prefill_elapsed_millis: 1_000,
@@ -104,8 +109,8 @@ fn sample_generation_performance_record() -> GenerationPerformanceRecord {
         generation_tok_per_second: Some(100.0),
         mlx_peak_memory_bytes: Some(40_000_000_000),
         mlx_active_memory_bytes: Some(31_000_000_000),
-        persistent_prompt_cache_diagnostics: Some(WorkerPersistentPromptCacheRequestDiagnostics {
-            lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Hit,
+        astro_ssd_prompt_cache_diagnostics: Some(WorkerAstroSsdPromptCacheRequestDiagnostics {
+            lookup_outcome: WorkerAstroSsdPromptCacheLookupOutcome::Hit,
             block_token_count: 2_048,
             complete_prompt_block_count: 5,
             maximum_restorable_block_count: 4,
@@ -115,24 +120,23 @@ fn sample_generation_performance_record() -> GenerationPerformanceRecord {
             first_missing_sequence_state_block_index: None,
             miss_reason: None,
             expected_block_hash_prefix: None,
-            startup_cleanup_evidence: Some(WorkerPersistentPromptCacheStartupCleanupEvidence {
-                interrupted_transaction_recovery:
-                    WorkerPersistentPromptCacheStartupCleanupCategory {
-                        artifact_count: 1,
-                        block_count: 0,
-                        byte_count: 128,
-                    },
-                obsolete_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+            startup_cleanup_evidence: Some(WorkerAstroSsdPromptCacheStartupCleanupEvidence {
+                interrupted_transaction_recovery: WorkerAstroSsdPromptCacheStartupCleanupCategory {
+                    artifact_count: 1,
+                    block_count: 0,
+                    byte_count: 128,
+                },
+                obsolete_format: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                     artifact_count: 2,
                     block_count: 0,
                     byte_count: 256,
                 },
-                corrupt_current_format: WorkerPersistentPromptCacheStartupCleanupCategory {
+                corrupt_current_format: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                     artifact_count: 0,
                     block_count: 1,
                     byte_count: 512,
                 },
-                quota_eviction: WorkerPersistentPromptCacheStartupCleanupCategory {
+                quota_eviction: WorkerAstroSsdPromptCacheStartupCleanupCategory {
                     artifact_count: 0,
                     block_count: 2,
                     byte_count: 1_024,
@@ -168,7 +172,7 @@ fn should_open_and_append_to_performance_log() {
     assert_eq!(parsed["request_id"], 42);
     assert_eq!(parsed["model_id"], "test-model");
     assert_eq!(parsed["prompt_token_count"], 10_000);
-    assert_eq!(parsed["cached_token_count"], 5_000);
+    assert_eq!(parsed["astro_ssd_prompt_cache_restored_token_count"], 5_000);
     assert_eq!(parsed["generated_token_count"], 200);
     assert_eq!(parsed["completion_reason"], "end_of_sequence");
     assert_eq!(parsed["prefill_elapsed_millis"], 1_000);
@@ -185,19 +189,19 @@ fn should_open_and_append_to_performance_log() {
     assert_eq!(parsed["mlx_peak_memory_bytes"], 40_000_000_000_i64);
     assert_eq!(parsed["mlx_active_memory_bytes"], 31_000_000_000_i64);
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["matched_sequence_state_block_count"],
+        parsed["astro_ssd_prompt_cache_diagnostics"]["matched_sequence_state_block_count"],
         4
     );
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["published_block_count"],
+        parsed["astro_ssd_prompt_cache_diagnostics"]["published_block_count"],
         1
     );
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["expert_bytes_reclaimed_for_restore"],
+        parsed["astro_ssd_prompt_cache_diagnostics"]["expert_bytes_reclaimed_for_restore"],
         16_384
     );
     assert_eq!(
-        parsed["persistent_prompt_cache_diagnostics"]["startup_cleanup_evidence"]["obsolete_format"]
+        parsed["astro_ssd_prompt_cache_diagnostics"]["startup_cleanup_evidence"]["obsolete_format"]
             ["artifact_count"],
         2
     );
@@ -217,7 +221,7 @@ fn should_append_multiple_records_to_performance_log() {
         request_id: 1,
         model_id: "model-a".to_owned(),
         prompt_token_count: 1_000,
-        cached_token_count: 0,
+        astro_ssd_prompt_cache_restored_token_count: 0,
         generated_token_count: 50,
         completion_reason: "end_of_sequence".to_owned(),
         prefill_elapsed_millis: 200,
@@ -233,7 +237,7 @@ fn should_append_multiple_records_to_performance_log() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
         mlx_active_memory_bytes: None,
-        persistent_prompt_cache_diagnostics: None,
+        astro_ssd_prompt_cache_diagnostics: None,
     };
 
     let second_record = GenerationPerformanceRecord {
@@ -241,7 +245,7 @@ fn should_append_multiple_records_to_performance_log() {
         request_id: 2,
         model_id: "model-a".to_owned(),
         prompt_token_count: 50_000,
-        cached_token_count: 49_000,
+        astro_ssd_prompt_cache_restored_token_count: 49_000,
         generated_token_count: 500,
         completion_reason: "tool_calls".to_owned(),
         prefill_elapsed_millis: 100,
@@ -257,7 +261,7 @@ fn should_append_multiple_records_to_performance_log() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: Some(35_000_000_000),
         mlx_active_memory_bytes: Some(28_000_000_000),
-        persistent_prompt_cache_diagnostics: None,
+        astro_ssd_prompt_cache_diagnostics: None,
     };
 
     performance_log.record(&first_record);
@@ -287,7 +291,7 @@ fn should_serialize_null_for_optional_fields() {
         request_id: 1,
         model_id: "model-a".to_owned(),
         prompt_token_count: 1_000,
-        cached_token_count: 1_000,
+        astro_ssd_prompt_cache_restored_token_count: 1_000,
         generated_token_count: 50,
         completion_reason: "end_of_sequence".to_owned(),
         prefill_elapsed_millis: 0,
@@ -303,8 +307,8 @@ fn should_serialize_null_for_optional_fields() {
         generation_tok_per_second: Some(50.0),
         mlx_peak_memory_bytes: None,
         mlx_active_memory_bytes: None,
-        persistent_prompt_cache_diagnostics: Some(WorkerPersistentPromptCacheRequestDiagnostics {
-            lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Miss,
+        astro_ssd_prompt_cache_diagnostics: Some(WorkerAstroSsdPromptCacheRequestDiagnostics {
+            lookup_outcome: WorkerAstroSsdPromptCacheLookupOutcome::Miss,
             block_token_count: 2_048,
             complete_prompt_block_count: 1,
             maximum_restorable_block_count: 1,
@@ -312,9 +316,9 @@ fn should_serialize_null_for_optional_fields() {
             restored_block_count: 0,
             partial_tail_block_token_count: None,
             first_missing_sequence_state_block_index: Some(0),
-            miss_reason: Some(WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing),
+            miss_reason: Some(WorkerAstroSsdPromptCacheMissReason::RootSequenceStateBlockMissing),
             expected_block_hash_prefix: Some(
-                WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash([1_u8; 32]),
+                WorkerAstroSsdPromptCacheExpectedBlockHashPrefix::from_block_hash([1_u8; 32]),
             ),
             startup_cleanup_evidence: None,
             published_block_count: 1,

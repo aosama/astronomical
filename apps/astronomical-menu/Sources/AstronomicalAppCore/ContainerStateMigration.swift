@@ -6,7 +6,7 @@ import os
 ///
 /// Before the engine moved to the menu-bar agent, a store build was a single
 /// sandboxed application and kept everything (configuration, downloaded
-/// models, caches) in its container's Application Support. The agent is a
+/// models, astro SSD prompt cache) in its container's Application Support. The agent is a
 /// separate sandboxed application and cannot open that container, so the
 /// engine it runs would start empty and the models already downloaded would
 /// be stranded. Only the main app can still read the old location, which is

@@ -4,10 +4,10 @@
 
 use astronomical_ipc_protocol::{RequestId, WorkerPromptWorkReuse};
 
-use crate::decoder_cache::DecoderCacheTensorDtype;
+use crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_core::decoder::cache_layout::{
-    Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout,
+use crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::{
+    Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
 };
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config;
@@ -23,10 +23,10 @@ pub(crate) fn test_engine_request<RequestExtension>(
         request_decoder_state: empty_ornith_decoder_state(),
         generated_token_count: 0,
         input_token_ids: Vec::new(),
-        last_restored_persistent_prompt_cache_block_key: None,
-        can_use_persistent_prompt_cache: false,
+        last_restored_astro_ssd_prompt_cache_block_key: None,
+        can_use_astro_ssd_prompt_cache: false,
         maximum_output_tokens: 1,
-        persistent_prompt_cache_block_causal_inputs: Vec::new(),
+        astro_ssd_prompt_cache_block_causal_inputs: Vec::new(),
         next_position_tokens: 0,
         pending_generated_token: None,
         prefill_cursor: 0,
@@ -43,7 +43,7 @@ pub(crate) fn test_engine_request<RequestExtension>(
             .expect("a request outside thinking needs no forced transition"),
         performance_attribution: PerformanceAttribution::disabled(),
         prompt_work_reuse: WorkerPromptWorkReuse::default(),
-        persistent_prompt_cache_diagnostics: None,
+        astro_ssd_prompt_cache_diagnostics: None,
         generation_residency_preparation_attempted: false,
         first_decode_forward_elapsed_millis: None,
         generation_preparation_announced: false,
@@ -54,24 +54,29 @@ pub(crate) fn test_engine_request<RequestExtension>(
 
 fn empty_ornith_decoder_state() -> RequestDecoderStateStack {
     let ornith_config = frozen_ornith_1_0_config();
-    let mut decoder_layer_cache_dtypes = Vec::new();
+    let mut astro_decoder_state_cache_layer_dtypes = Vec::new();
     for decoder_layer_index in 0..ornith_config.layer_count() as usize {
-        decoder_layer_cache_dtypes.push(
+        astro_decoder_state_cache_layer_dtypes.push(
             if ornith_config.decoder_layer_is_full_attention(decoder_layer_index) {
-                Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-                    keys: DecoderCacheTensorDtype::BFloat16,
-                    values: DecoderCacheTensorDtype::BFloat16,
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+                    keys: AstroDecoderStateCacheTensorDtype::BFloat16,
+                    values: AstroDecoderStateCacheTensorDtype::BFloat16,
                 }
             } else {
-                Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-                    convolution: DecoderCacheTensorDtype::BFloat16,
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+                    convolution: AstroDecoderStateCacheTensorDtype::BFloat16,
                 }
             },
         );
     }
-    let decoder_cache_layout =
-        qwen3_5_decoder_cache_layout(&ornith_config, KV_SLAB_TOKENS, &decoder_layer_cache_dtypes)
-            .expect("the frozen configuration builds a decoder-cache layout");
-    RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
-        .expect("an empty decoder state")
+    let astro_decoder_state_cache_layout = qwen3_5_astro_decoder_state_cache_layout(
+        &ornith_config,
+        KV_SLAB_TOKENS,
+        &astro_decoder_state_cache_layer_dtypes,
+    )
+    .expect("the frozen configuration builds an astro-decoder-state-cache layout");
+    RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
+        &astro_decoder_state_cache_layout,
+    )
+    .expect("an empty decoder state")
 }

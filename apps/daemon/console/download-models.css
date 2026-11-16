@@ -60,6 +60,15 @@
 .download-models-download-progress-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 300ms ease; }
 .download-models-banner-paused .download-models-download-progress-fill { background: var(--ink-3); }
 
+/* The download list under the current download: who waits, and what could not finish */
+.download-models-queue { display: flex; flex-direction: column; gap: 4px; padding: 14px 22px; }
+.download-models-queue-summary { margin: 0 0 4px; color: var(--ink-2); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.download-models-queue-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 36px; }
+.download-models-queue-line-text { display: flex; flex-direction: column; gap: 2px; flex: 999 1 280px; min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.download-models-queue-line-failed { padding: 8px 0; }
+.download-models-queue-line-title { font-weight: var(--weight-strong); }
+.download-models-queue-line-detail { color: var(--ink-2); font-size: var(--text-sm); }
+
 /* First visit: one question, three answers */
 .download-models-first-visit-title { margin: 0; font-size: var(--text-3xl); font-weight: 750; letter-spacing: -0.025em; line-height: 1.1; }
 .download-models-first-visit-lede { margin: -6px 0 6px; max-width: 620px; color: var(--ink-2); font-size: var(--text-xl); }

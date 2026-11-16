@@ -100,7 +100,7 @@ pub(super) fn qwen3_5_vision_self_attention(
     attention_sequence_boundaries: &[u32],
     rotary_cosines: &MlxArray,
     rotary_sines: &MlxArray,
-    padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
+    vision_padding_zero_cache: &Qwen3_5VisionPaddingZeroCache,
 ) -> Result<MlxArray, Qwen3_5ExecutionError> {
     let patch_count = normalized_hidden_states.shape()[0];
     let head_count = u32_to_i32(vision_config.head_count())?;
@@ -138,21 +138,21 @@ pub(super) fn qwen3_5_vision_self_attention(
     // The pinned head width is 72. The MLX fused SDPA kernel supports [64, 80,
     // 128], so pad to the next specialization and slice back afterward.
     let fused_head_dimension = fused_sdpa_head_dimension(head_dimension);
-    let query_states = padding_zero_cache.pad_attention_head_dimension(
+    let query_states = vision_padding_zero_cache.pad_attention_head_dimension(
         runtime,
         &query_states,
         head_count,
         patch_count,
         fused_head_dimension,
     )?;
-    let key_states = padding_zero_cache.pad_attention_head_dimension(
+    let key_states = vision_padding_zero_cache.pad_attention_head_dimension(
         runtime,
         &key_states,
         head_count,
         patch_count,
         fused_head_dimension,
     )?;
-    let value_states = padding_zero_cache.pad_attention_head_dimension(
+    let value_states = vision_padding_zero_cache.pad_attention_head_dimension(
         runtime,
         &value_states,
         head_count,

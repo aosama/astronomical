@@ -23,7 +23,7 @@ pub const ATLAS_FORMAT_NAME: &str = "astronomical-expert-atlas";
 /// Atlas takes the next number so a reader never mistakes one for the other.
 pub const ATLAS_FORMAT_VERSION: u32 = 4;
 /// Record starts and lengths are multiples of the Apple Silicon page size, so
-/// a record read is a direct (uncached) read and a record can be wrapped as a
+/// a record read is a direct read that bypasses the macOS file cache and a record can be wrapped as a
 /// Metal buffer without copying.
 pub const ATLAS_RECORD_ALIGNMENT_BYTES: u64 = 16_384;
 

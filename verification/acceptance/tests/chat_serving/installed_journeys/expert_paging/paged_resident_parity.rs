@@ -202,7 +202,7 @@ async fn load_resident_engine(model_directory: &Path) -> (Qwen3_5ResidentEngine,
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,
         mlx_memory_limits.active_memory_limit_bytes(),
-        mlx_memory_limits.allocator_cache_memory_limit_bytes(),
+        mlx_memory_limits.mlx_buffer_cache_limit_bytes(),
         None,
         prefill_chunk_sizer,
         IMAGE_PAD_TOKEN_ID,

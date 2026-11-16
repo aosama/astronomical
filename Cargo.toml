@@ -9,6 +9,7 @@ members = [
     "crates/decision-training",
     "crates/ipc-protocol",
     "crates/lowercase-hex",
+    "crates/download-catalog",
     "crates/english-number-words",
     "crates/english-phonemes",
     "crates/speech-contract",
@@ -40,6 +41,7 @@ default-members = [
     "crates/decision-training",
     "crates/ipc-protocol",
     "crates/lowercase-hex",
+    "crates/download-catalog",
     "crates/english-number-words",
     "crates/english-phonemes",
     "crates/speech-contract",
@@ -71,7 +73,7 @@ repository = "https://github.com/aosama/astronomical"
 # exact compiler remains pinned by rust-toolchain.toml
 # (nightly-2026-11-07); this field only records the major.minor floor.
 rust-version = "1.101"
-version = "0.2.105"
+version = "0.2.110"
 
 [workspace.dependencies]
 # The complete stock MLX-C bridge, published to crates.io as mlx-bridge
@@ -165,7 +167,7 @@ too_many_lines = "deny"
 # loop: a one-line edit to the serving crate rebuilds its direct-MLX test
 # binary in about 2 s incrementally against about 6.4 s from scratch
 # (measured on an Apple Silicon laptop), at roughly 0.4 GB of incremental
-# cache per compiled variant. The setting was off for a while because
+# Cargo incremental-compilation state per compiled variant. The setting was off for a while because
 # sccache refuses incremental compilation; CI, which relies on sccache, now
 # pins CARGO_INCREMENTAL=0 in its own environment (the variable overrides
 # the profile), and a local machine that still wraps rustc with sccache

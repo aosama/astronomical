@@ -104,7 +104,7 @@ pub enum ArtifactValidationError {
         file_name: String,
     },
 
-    /// A Hugging Face snapshot symlink resolves outside its cache entry's blobs directory.
+    /// A Hugging Face snapshot symlink resolves outside its Hugging Face hub cache entry's blobs directory.
     #[error(
         "Hugging Face snapshot file {file_name} resolves to {resolved_target_path:?}, outside expected blob directory {expected_blob_directory:?}"
     )]
@@ -113,13 +113,13 @@ pub enum ArtifactValidationError {
         file_name: String,
         /// Canonical target reached through the snapshot symlink.
         resolved_target_path: PathBuf,
-        /// Canonical blob directory permitted for this cache entry.
+        /// Canonical blob directory permitted for this Hugging Face hub cache entry.
         expected_blob_directory: PathBuf,
     },
 
-    /// A Hugging Face shared cache blob could not be checked against its snapshot tree record.
+    /// A Hugging Face hub cache shared blob could not be checked against its snapshot tree record.
     #[error(
-        "Hugging Face shared cache file {file_name} could not be verified against its snapshot tree record"
+        "Hugging Face hub cache shared file {file_name} could not be verified against its snapshot tree record"
     )]
     HuggingFaceSharedBlobMetadataUnavailable {
         /// Required file name from the artifact profile.
@@ -129,9 +129,9 @@ pub enum ArtifactValidationError {
         source: io::Error,
     },
 
-    /// A resolved Hugging Face shared cache blob is not the content address the snapshot records.
+    /// A resolved Hugging Face hub cache shared blob is not the content address the snapshot records.
     #[error(
-        "Hugging Face snapshot file {file_name} resolves to a shared cache blob that is not the content-addressed object for digest {recorded_digest_text}"
+        "Hugging Face snapshot file {file_name} resolves to a shared Hugging Face hub cache blob that is not the content-addressed object for digest {recorded_digest_text}"
     )]
     HuggingFaceSharedBlobIdentityMismatch {
         /// Required file name from the artifact profile.
@@ -140,9 +140,9 @@ pub enum ArtifactValidationError {
         recorded_digest_text: String,
     },
 
-    /// A resolved Hugging Face shared cache blob disagrees with its recorded size.
+    /// A resolved Hugging Face hub cache shared blob disagrees with its recorded size.
     #[error(
-        "Hugging Face shared cache file {file_name} has {actual_size_bytes} bytes, but its snapshot tree record declares {recorded_size_bytes} bytes"
+        "Hugging Face hub cache shared file {file_name} has {actual_size_bytes} bytes, but its snapshot tree record declares {recorded_size_bytes} bytes"
     )]
     HuggingFaceSharedBlobSizeMismatch {
         /// Required file name from the artifact profile.
@@ -409,15 +409,15 @@ impl ArtifactValidationError {
                 "a model file resolves outside its permitted Hugging Face snapshot".to_owned()
             }
             Self::HuggingFaceSharedBlobMetadataUnavailable { .. } => {
-                "a Hugging Face shared cache file could not be verified against its snapshot tree record"
+                "a Hugging Face hub cache shared file could not be verified against its snapshot tree record"
                     .to_owned()
             }
             Self::HuggingFaceSharedBlobIdentityMismatch { .. } => {
-                "a Hugging Face shared cache file is not the object its snapshot record declares"
+                "a Hugging Face hub cache shared file is not the object its snapshot record declares"
                     .to_owned()
             }
             Self::HuggingFaceSharedBlobSizeMismatch { .. } => {
-                "a Hugging Face shared cache file disagrees with the size its snapshot record declares"
+                "a Hugging Face hub cache shared file disagrees with the size its snapshot record declares"
                     .to_owned()
             }
             Self::TruncatedSafetensorsFile { .. } => self

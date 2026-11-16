@@ -76,7 +76,7 @@ fn assert_download_started(daemon_response: &DaemonResponse, context: &str) {
 /// Polls the job the way the CLI does until the daemon reports no job.
 async fn wait_until_no_job(service: &DaemonIpcService) {
     for _poll_attempt in 0..200 {
-        if let DaemonResponse::DownloadStatus { job: None } =
+        if let DaemonResponse::DownloadStatus { job: None, .. } =
             ask(service, DaemonRequest::DownloadStatus).await
         {
             return;
@@ -89,7 +89,7 @@ async fn wait_until_no_job(service: &DaemonIpcService) {
 /// Polls until the job exists and has reached `Downloading`.
 async fn wait_until_downloading(service: &DaemonIpcService) {
     for _poll_attempt in 0..200 {
-        if let DaemonResponse::DownloadStatus { job: Some(job) } =
+        if let DaemonResponse::DownloadStatus { job: Some(job), .. } =
             ask(service, DaemonRequest::DownloadStatus).await
             && job.state == "downloading"
         {
@@ -280,6 +280,7 @@ async fn should_resume_after_a_daemon_restart_through_download_start() {
 
         let DaemonResponse::DownloadStatus {
             job: Some(recovered_job),
+            ..
         } = job_before_asking
         else {
             panic!("the restarted daemon must still hold the interrupted job");
@@ -327,7 +328,7 @@ async fn should_let_two_simultaneous_requests_share_one_fresh_download() {
 /// Polls the job the way the CLI does until it reports `Failed`.
 async fn wait_until_failed(service: &DaemonIpcService) {
     for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
-        if let DaemonResponse::DownloadStatus { job: Some(job) } =
+        if let DaemonResponse::DownloadStatus { job: Some(job), .. } =
             ask(service, DaemonRequest::DownloadStatus).await
             && job.state == "failed"
         {
@@ -342,7 +343,7 @@ async fn wait_until_failed(service: &DaemonIpcService) {
 /// job a moment after the start is answered, so one poll is not enough.
 async fn wait_until_job_names(service: &DaemonIpcService, huggingface_id: &str) {
     for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
-        if let DaemonResponse::DownloadStatus { job: Some(job) } =
+        if let DaemonResponse::DownloadStatus { job: Some(job), .. } =
             ask(service, DaemonRequest::DownloadStatus).await
             && job.huggingface_id == huggingface_id
         {
@@ -527,4 +528,56 @@ async fn should_start_even_when_the_staging_folder_cannot_be_tidied() {
         .expect("a failed tidy-up must not stop startup");
 
     assert!(outside_directory.is_dir());
+}
+
+/// `astronomical models download` of a second model while the first one runs
+/// joins the download list instead of being refused, and the status reply
+/// names it as waiting until its turn comes.
+#[tokio::test]
+async fn should_list_another_model_behind_a_running_download_through_download_start() {
+    timeout(Duration::from_secs(10), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let catalog = two_model_catalog();
+        let coordinator = build_test_coordinator(
+            test_directory.path(),
+            Arc::clone(&catalog),
+            Arc::new(ScriptedHub::delayed(Duration::from_millis(250))),
+        );
+        coordinator.start_queue_driver();
+        let service = start_ipc_service(test_directory.path(), catalog, coordinator).await;
+        assert_download_started(&ask(&service, download_start()).await, "the first model");
+        wait_until_job_names(&service, REPOSITORY_ID).await;
+
+        let other_model_response = ask(
+            &service,
+            DaemonRequest::DownloadStart {
+                model_id: OTHER_REPOSITORY_ID.to_owned(),
+            },
+        )
+        .await;
+        let listed_status = ask(&service, DaemonRequest::DownloadStatus).await;
+
+        assert_eq!(
+            other_model_response,
+            DaemonResponse::DownloadStarted {
+                huggingface_id: OTHER_REPOSITORY_ID.to_owned()
+            },
+            "the second model must join the list, not be refused"
+        );
+        let DaemonResponse::DownloadStatus {
+            waiting_huggingface_ids,
+            ..
+        } = listed_status
+        else {
+            panic!("the status request should answer with a status");
+        };
+        assert_eq!(
+            waiting_huggingface_ids,
+            vec![OTHER_REPOSITORY_ID.to_owned()]
+        );
+        wait_until_job_names(&service, OTHER_REPOSITORY_ID).await;
+        service.shutdown().await.expect("clean shutdown");
+    })
+    .await
+    .expect("the listed-second-model journey should remain bounded");
 }

@@ -16,18 +16,18 @@ function finishingDaemon(): { client: DaemonClient; startRequests: string[] } {
   const client = {
     startLibraryDownload: async (huggingfaceID: string) => {
       startRequests.push(huggingfaceID);
-      return { state: "checking_disk", huggingfaceID, bytesCompleted: 0, bytesTotal: 0, errorCode: null };
+      return { state: "checking_disk", huggingfaceID, bytesCompleted: 0, bytesTotal: 0, errorCode: null, waitingHuggingfaceIDs: [] };
     },
     resumeLibraryDownload: async () => undefined,
     fetchLibraryDownloadStatus: async () => {
       statusReads += 1;
       if (statusReads === 2) {
-        return { state: "downloading", huggingfaceID: CHAT_MODEL_ID, bytesCompleted: 5, bytesTotal: 10, errorCode: null };
+        return { state: "downloading", huggingfaceID: CHAT_MODEL_ID, bytesCompleted: 5, bytesTotal: 10, errorCode: null, waitingHuggingfaceIDs: [] };
       }
       if (statusReads >= 3) {
         isInstalled = true;
       }
-      return { state: "idle", huggingfaceID: null, bytesCompleted: 0, bytesTotal: 0, errorCode: null };
+      return { state: "idle", huggingfaceID: null, bytesCompleted: 0, bytesTotal: 0, errorCode: null, waitingHuggingfaceIDs: [] };
     },
     fetchLibraryCatalogText: async () => JSON.stringify({ entries: [{ huggingface_id: CHAT_MODEL_ID, ready_on_this_mac: isInstalled }] }),
   };

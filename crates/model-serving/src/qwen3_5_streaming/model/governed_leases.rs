@@ -3,7 +3,7 @@
 //!
 //! A lease is room taken out of the kept-weight capacity for as long as
 //! something temporary needs it: snapshots waiting to be written to the
-//! prompt cache, blocks read back from it. Granting one lowers the
+//! `astro_ssd_prompt_cache`, blocks read back from it. Granting one lowers the
 //! capacity, the kept weights give back what that displaces, and giving the
 //! lease back raises the capacity again.
 
@@ -12,8 +12,8 @@ use astronomical_memory_policy::ledger::{LeasePurpose, MemoryGovernor};
 use super::Qwen3_5Model;
 
 impl Qwen3_5Model {
-    /// Publishing prompt-cache blocks needs `workspace_bytes` more than is
-    /// free. Leases them until the next forward completes, has the cache
+    /// Publishing astro SSD prompt cache blocks needs `workspace_bytes` more than is
+    /// free. Leases them until the next forward completes, has the astro expert cache
     /// give back that much, and returns the allocator's freed buffers to
     /// the system so the retry finds the room.
     pub(crate) fn govern_publication_workspace(
@@ -28,8 +28,10 @@ impl Qwen3_5Model {
             if let Some(earlier_lease) = self.governed_memory.publication_workspace_lease.take() {
                 let _ = memory_governor.give_back_lease(earlier_lease);
             }
-            let (publication_lease, capacity) =
-                memory_governor.grant_lease(LeasePurpose::PromptCachePublication, workspace_bytes);
+            let (publication_lease, capacity) = memory_governor.grant_lease(
+                LeasePurpose::AstroSsdPromptCachePublication,
+                workspace_bytes,
+            );
             self.governed_memory
                 .publication_workspace_lease
                 .set(Some(publication_lease));
@@ -37,7 +39,7 @@ impl Qwen3_5Model {
         };
         self.apply_kept_weight_capacity(capacity);
         self.runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .map_err(crate::qwen3_5_streaming::inference_execution::qwen3_5_runtime_error)
     }
 
@@ -62,7 +64,7 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Blocks read back from the prompt cache need `workspace_bytes` while
+    /// Blocks read back from the `astro_ssd_prompt_cache` need `workspace_bytes` while
     /// they are loaded, beside the stored state they become. Leases that
     /// room until the restore is over and returns the kept weight bytes
     /// given back for it.
@@ -74,8 +76,8 @@ impl Qwen3_5Model {
                 return 0;
             };
             self.give_back_restore_workspace_lease(memory_governor);
-            let (restore_lease, capacity) =
-                memory_governor.grant_lease(LeasePurpose::PromptCacheRestore, workspace_bytes);
+            let (restore_lease, capacity) = memory_governor
+                .grant_lease(LeasePurpose::AstroSsdPromptCacheRestore, workspace_bytes);
             self.governed_memory
                 .restore_workspace_lease
                 .set(Some(restore_lease));

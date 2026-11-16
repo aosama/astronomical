@@ -192,13 +192,13 @@ test("should_finish_without_downloading_when_the_newcomer_skips", async () => {
   assert.deepEqual(daemon.requestedLibraryDownloads, []);
 });
 
-test("should_say_plainly_when_another_download_holds_the_library", async () => {
+test("should_say_plainly_when_a_paused_download_holds_the_library", async () => {
   bootNewcomer({ models: [], libraryDownloadRefusal: { status: 409, code: "library_busy" } });
   await getStarted();
   await waitForStep("download");
   await waitFor(() => isPresent("astro-download"), "the Download button");
   element<HTMLButtonElement>("astro-download").click();
-  await waitFor(() => /Another download is running/.test(astroSays()), "the busy line");
+  await waitFor(() => /Another download is paused/.test(astroSays()), "the busy line");
   assert.equal(element<HTMLButtonElement>("astro-download").textContent, "Try again");
   element<HTMLButtonElement>("astro-continue").click();
   await waitFor(() => overlay().hidden, "the journey to close");

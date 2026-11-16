@@ -2,9 +2,11 @@
 //!
 //! Layer-plan construction reads SafeTensors headers only and is available
 //! without Machine Learning framework for Apple silicon so mixed OptiQ storage
-//! can be proven in unit tests. Pagers, pages, and resident caches still need
+//! can be proven in unit tests. Pagers, pages, and resident astro expert caches still need
 //! the graphics-processor runtime.
 
+#[cfg(feature = "direct-mlx")]
+mod astro_expert_cache;
 #[cfg(feature = "direct-mlx")]
 pub mod expert_pager;
 #[cfg(feature = "direct-mlx")]
@@ -16,8 +18,6 @@ mod paged_expert_weights;
 #[cfg(feature = "direct-mlx")]
 mod retained_page_payload;
 pub mod route_observation;
-#[cfg(feature = "direct-mlx")]
-mod warm_expert_slot_table_cache;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_usage_history::PersistedExpertUsage;
@@ -27,10 +27,10 @@ pub(crate) use expert_usage_history::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub(crate) use astro_expert_cache::AstroExpertCache;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use astro_expert_cache::RoutedExpertCoverage;
+#[cfg(feature = "direct-mlx")]
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use retained_page_payload::retained_expert_layer_page_payload_bytes;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use warm_expert_slot_table_cache::RoutedExpertCoverage;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use warm_expert_slot_table_cache::WarmExpertSlotTableCache;

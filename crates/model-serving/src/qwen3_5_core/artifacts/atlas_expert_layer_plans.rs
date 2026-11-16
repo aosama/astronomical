@@ -1,10 +1,10 @@
 //! Expert layer plans for an Expert Atlas model.
 //!
 //! The ordinary plan builder finds each routed-expert tensor through the
-//! shard index and a cache of parsed safetensors headers, then validates its
+//! shard index and a safetensors_header_cache of parsed headers, then validates its
 //! geometry. An Atlas keeps those tensors in layer record files instead, so
 //! this module hands the same builder an index that points the expert
-//! tensors at their layer files and a header cache already holding one
+//! tensors at their layer files and a safetensors header cache already holding one
 //! synthesized header per layer file. Every tensor then passes through the
 //! same shape, bit-width and mode validation as a stock checkpoint. The only
 //! Atlas-specific fact the plans carry afterwards is the record stride: in a
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use astronomical_expert_atlas::{AtlasExpertLayer, AtlasManifest};
 
-use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache;
+use super::quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache;
 use crate::expert_paging::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertLayerPlan,
 };
@@ -101,7 +101,7 @@ fn build_atlas_expert_layer_plans(
 ) -> Result<Vec<QuantizedExpertLayerPlan>, ExpertManifestError> {
     let mut atlas_weight_map = weight_map.clone();
     let mut atlas_stored_names = stored_tensor_name_by_canonical_name.clone();
-    let mut header_cache = HashMap::new();
+    let mut safetensors_header_cache = HashMap::new();
     let mut record_stride_by_layer_file = HashMap::new();
     for expert_layer in &expert_atlas.expert_layers {
         let layer_file_path = model_dir.join(&expert_layer.file_name);
@@ -113,20 +113,21 @@ fn build_atlas_expert_layer_plans(
             );
             atlas_stored_names.remove(&tensor_entry.tensor_name);
         }
-        header_cache.insert(layer_file_path.clone(), synthesized_header);
+        safetensors_header_cache.insert(layer_file_path.clone(), synthesized_header);
         record_stride_by_layer_file.insert(layer_file_path, expert_layer.record_stride_bytes);
     }
     let mut layer_plans = Vec::with_capacity(decoder_layer_count);
     for decoder_layer_index in 0..decoder_layer_count {
         let layer_prefix = layer_prefix(decoder_layer_index);
-        let mut layer_plan = build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
-            model_dir,
-            &atlas_weight_map,
-            &atlas_stored_names,
-            &layer_prefix,
-            config,
-            &mut header_cache,
-        )?;
+        let mut layer_plan =
+            build_quantized_expert_layer_plan_with_stored_names_and_safetensors_header_cache(
+                model_dir,
+                &atlas_weight_map,
+                &atlas_stored_names,
+                &layer_prefix,
+                config,
+                &mut safetensors_header_cache,
+            )?;
         apply_record_strides(&mut layer_plan, &record_stride_by_layer_file)?;
         layer_plans.push(layer_plan);
     }

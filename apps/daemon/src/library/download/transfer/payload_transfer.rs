@@ -1,22 +1,14 @@
 //! Resume orchestration for one download: ranged transfer of payload files, creation of the
 //! zero-byte files the transfer window never schedules, and provider-digest verification.
 
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::{Duration, Instant},
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
-use futures_util::StreamExt;
 use thiserror::Error;
 
-use super::{
-    payload_response::{payload_url, validate_payload_response},
-    payload_transfer_segment::{PayloadSegment, SegmentedFileAssembler},
-    payload_transfer_window::{ObservedTransferProgress, SegmentOutcome, TransferWindowStop},
-};
+use super::payload_transfer_window::{ObservedTransferProgress, TransferWindowStop};
 use crate::library::download::publication::reconciliation::reconcile_publication_intent;
 use crate::library::download::transfer::payload_verification::verify_download_job;
 use crate::library::download::transfer::staged_file::{
@@ -24,8 +16,7 @@ use crate::library::download::transfer::staged_file::{
 };
 use crate::library::{
     DownloadJob, DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore,
-    DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadRequest, HubPayloadTransport,
-    HubTransportError,
+    DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadTransport, HubTransportError,
 };
 use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
@@ -43,8 +34,6 @@ enum ResumeDownloadOutcome {
         transfer_error: DownloadPayloadTransferError,
     },
 }
-
-const LIVE_PROGRESS_PUBLICATION_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Default)]
 pub struct DownloadTransferControl {
@@ -358,117 +347,6 @@ impl DownloadPayloadTransfer {
         Ok(download_job)
     }
 
-    /// Streams one segment's ranged response through the file's ordered assembler while
-    /// publishing live progress. The assembler appends only at the contiguous prefix, so the
-    /// staged file's synchronized length keeps equaling its received bytes for pause and restart
-    /// reconciliation no matter which segment finishes first.
-    pub(super) async fn transfer_payload_segment(
-        &self,
-        download_job: &DownloadJob,
-        download_file: &crate::library::DownloadJobFile,
-        payload_segment: &PayloadSegment,
-        assembler: std::sync::Arc<SegmentedFileAssembler>,
-        updated_at_unix_millis: u64,
-        observed_transfer_progress: &ObservedTransferProgress,
-    ) -> Result<SegmentOutcome, DownloadPayloadTransferError> {
-        let segment_start_bytes = payload_segment.start_offset_bytes();
-        let expected_segment_bytes = payload_segment.end_offset_bytes() - segment_start_bytes;
-        let payload_url = payload_url(
-            download_job.huggingface_id(),
-            download_job.revision(),
-            download_file.relative_path(),
-        )?;
-        let payload_response = self
-            .transport
-            .execute_payload(HubPayloadRequest::get(payload_url, segment_start_bytes))
-            .await?;
-        if matches!(payload_response.status(), 401 | 403) {
-            return Err(DownloadPayloadTransferError::DownloadGated);
-        }
-        validate_payload_response(
-            payload_response.status(),
-            payload_response.content_range(),
-            payload_response.content_length(),
-            segment_start_bytes,
-            download_file.expected_bytes(),
-        )?;
-        let mut transferred_bytes = 0_u64;
-        let mut last_progress_publication_at = None;
-        let mut deferred_transfer_error = None;
-        let mut payload_stream = payload_response.into_byte_stream();
-        while let Some(payload_chunk) = payload_stream.next().await {
-            let payload_chunk = match payload_chunk {
-                Ok(payload_chunk) => payload_chunk,
-                Err(transport_error) => {
-                    deferred_transfer_error =
-                        Some(DownloadPayloadTransferError::Transport(transport_error));
-                    break;
-                }
-            };
-            let remaining_segment_bytes = expected_segment_bytes - transferred_bytes;
-            // Open-ended responses carry the whole remaining tail, so a single chunk may span
-            // the segment boundary; consume only this segment's share and drop the rest.
-            let consumed_chunk = if payload_chunk.len() as u64 > remaining_segment_bytes {
-                payload_chunk.slice(0..remaining_segment_bytes as usize)
-            } else {
-                payload_chunk
-            };
-            let Some(updated_transferred_bytes) =
-                transferred_bytes.checked_add(consumed_chunk.len() as u64)
-            else {
-                deferred_transfer_error = Some(DownloadPayloadTransferError::InvalidPayloadLength);
-                break;
-            };
-            transferred_bytes = updated_transferred_bytes;
-            assembler
-                .write_chunk(
-                    segment_start_bytes + transferred_bytes - consumed_chunk.len() as u64,
-                    consumed_chunk,
-                )
-                .await?;
-            let should_publish_progress =
-                last_progress_publication_at.is_none_or(|last_publication_at: Instant| {
-                    last_publication_at.elapsed() >= LIVE_PROGRESS_PUBLICATION_INTERVAL
-                });
-            if should_publish_progress {
-                observed_transfer_progress
-                    .record_received_bytes(
-                        download_file.relative_path(),
-                        assembler.contiguous_end_bytes().await,
-                        updated_at_unix_millis,
-                    )
-                    .map_err(DownloadJobStoreError::from)?;
-                last_progress_publication_at = Some(Instant::now());
-            }
-            if transferred_bytes == expected_segment_bytes {
-                break;
-            }
-            if self.transfer_control.is_pause_requested() {
-                break;
-            }
-        }
-        if let Some(transfer_error) = deferred_transfer_error {
-            return Err(transfer_error);
-        }
-        if !self.transfer_control.is_pause_requested()
-            && transferred_bytes != expected_segment_bytes
-        {
-            return Err(DownloadPayloadTransferError::InvalidPayloadLength);
-        }
-        let contiguous_end_bytes = assembler.contiguous_end_bytes().await;
-        // The file completes when the assembler's contiguous prefix reaches the expected size;
-        // whichever segment's write advances the prefix past the file end observes it first.
-        let file_completed = !self.transfer_control.is_pause_requested()
-            && contiguous_end_bytes == download_file.expected_bytes();
-        if file_completed {
-            assembler.finalize().await?;
-        }
-        Ok(SegmentOutcome {
-            contiguous_end_bytes,
-            file_completed,
-        })
-    }
-
     async fn load_recovered_job(
         &self,
         updated_at_unix_millis: u64,
@@ -500,6 +378,10 @@ impl DownloadPayloadTransfer {
         };
         replace_result?;
         Ok(())
+    }
+
+    pub(super) fn transport(&self) -> &dyn HubPayloadTransport {
+        self.transport.as_ref()
     }
 
     pub(super) fn attribution_log(&self) -> &DaemonPerformanceAttributionLog {

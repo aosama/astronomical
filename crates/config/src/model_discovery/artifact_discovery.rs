@@ -1,6 +1,6 @@
 //! Per-directory discovery of one executable model artifact.
 //!
-//! Neutral scan orchestration walks model roots (including Hugging Face cache entries) and asks
+//! Neutral scan orchestration walks model roots (including Hugging Face hub cache entries) and asks
 //! this module to classify each candidate directory and project its family-owned metadata into
 //! the neutral DiscoveredModel DTO.
 
@@ -29,7 +29,7 @@ pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
 
 /// Attempts to discover an executable model from a directory with an explicit model ID.
 ///
-/// This variant accepts a custom `model_id`, useful for HuggingFace cache entries
+/// This variant accepts a custom `model_id`, useful for Hugging Face hub cache entries
 /// where the model_id is derived from the decoded `models--org--repo` directory name
 /// rather than the snapshot hash.
 pub fn try_discover_model_with_id(

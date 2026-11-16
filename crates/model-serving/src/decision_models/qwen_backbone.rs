@@ -18,7 +18,7 @@ use crate::{
     RequestDecoderStateStack,
 };
 
-/// The KV-cache growth step and graph-submission intervals the chat engine
+/// The `astro_decoder_state_cache` KV growth step and graph-submission intervals the chat engine
 /// uses by default; decision reads are prefills of the same shapes.
 const FULL_ATTENTION_KV_GROWTH_TOKENS: u32 = 256;
 const PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;

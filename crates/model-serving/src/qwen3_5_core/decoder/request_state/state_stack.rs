@@ -1,13 +1,14 @@
-use crate::decoder_cache::{
-    ConvolutionState, DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheState,
-    DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint, DecoderCacheTensorLayout,
-    FullAttentionKeyValueState, GatedDeltaRecurrentState,
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout, AstroDecoderStateCacheState,
+    AstroDecoderStateCacheStateAllocationCheckpoint, AstroDecoderStateCacheStateCheckpoint,
+    AstroDecoderStateCacheTensorLayout, ConvolutionState, FullAttentionKeyValueState,
+    GatedDeltaRecurrentState,
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use astronomical_runtime_integration::MlxRuntimeError;
 
 use super::state_stack_layout::{
-    decoder_cache_layout_projection_error, request_decoder_layer_state_from_layout,
+    astro_decoder_state_cache_layout_projection_error, request_decoder_layer_state_from_layout,
     request_decoder_state_error, request_decoder_state_error_from_string,
 };
 
@@ -18,30 +19,33 @@ use super::state_stack_layout::{
 /// KV tensor and recurrent state for one request; the engine threads a
 /// `&mut RequestDecoderStateStack` through every forward pass.
 pub struct RequestDecoderStateStack {
-    layers: Vec<DecoderCacheState>,
+    layers: Vec<AstroDecoderStateCacheState>,
 }
 
 /// Retained checkpoint of a request's complete decoder-state stack.
 pub struct RequestDecoderStateStackCheckpoint {
-    layers: Vec<DecoderCacheStateCheckpoint>,
+    layers: Vec<AstroDecoderStateCacheStateCheckpoint>,
 }
 
 /// Retained physical owner checkpoint of a request's complete decoder-state stack.
 pub struct RequestDecoderStateStackAllocationCheckpoint {
-    layers: Vec<DecoderCacheStateAllocationCheckpoint>,
+    layers: Vec<AstroDecoderStateCacheStateAllocationCheckpoint>,
 }
 
 impl RequestDecoderStateStack {
-    /// Creates Qwen's live state owners from the validated, model-owned cache layout.
-    pub fn empty_from_decoder_cache_layout(
-        decoder_cache_layout: &DecoderCacheLayout,
+    /// Creates Qwen's live state owners from the validated, model-owned astro decoder state cache layout.
+    pub fn empty_from_astro_decoder_state_cache_layout(
+        astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     ) -> Result<Self, MlxRuntimeError> {
-        Self::empty_from_decoder_cache_layout_with_growth_override(decoder_cache_layout, None)
+        Self::empty_from_astro_decoder_state_cache_layout_with_growth_override(
+            astro_decoder_state_cache_layout,
+            None,
+        )
     }
 
     /// Creates live state from the model-owned layout with an explicit attention slab granularity.
-    pub fn empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-        decoder_cache_layout: &DecoderCacheLayout,
+    pub fn empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+        astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
         full_attention_kv_state_growth_tokens: i32,
     ) -> Result<Self, MlxRuntimeError> {
         if full_attention_kv_state_growth_tokens <= 0 {
@@ -50,26 +54,25 @@ impl RequestDecoderStateStack {
                 description: "full-attention KV-state growth tokens must be positive".to_owned(),
             });
         }
-        Self::empty_from_decoder_cache_layout_with_growth_override(
-            decoder_cache_layout,
+        Self::empty_from_astro_decoder_state_cache_layout_with_growth_override(
+            astro_decoder_state_cache_layout,
             Some(full_attention_kv_state_growth_tokens),
         )
     }
 
-    fn empty_from_decoder_cache_layout_with_growth_override(
-        decoder_cache_layout: &DecoderCacheLayout,
+    fn empty_from_astro_decoder_state_cache_layout_with_growth_override(
+        astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
         full_attention_kv_state_growth_tokens_override: Option<i32>,
     ) -> Result<Self, MlxRuntimeError> {
-        let mut layers = Vec::with_capacity(decoder_cache_layout.layer_count());
-        for decoder_layer_index in 0..decoder_cache_layout.layer_count() {
-            let layer_layout =
-                decoder_cache_layout
-                    .layer(decoder_layer_index)
-                    .ok_or_else(|| {
-                        request_decoder_state_error(
-                            "decoder-cache layout lost a declared decoder layer",
-                        )
-                    })?;
+        let mut layers = Vec::with_capacity(astro_decoder_state_cache_layout.layer_count());
+        for decoder_layer_index in 0..astro_decoder_state_cache_layout.layer_count() {
+            let layer_layout = astro_decoder_state_cache_layout
+                .layer(decoder_layer_index)
+                .ok_or_else(|| {
+                    request_decoder_state_error(
+                        "astro-decoder-state-cache layout lost a declared decoder layer",
+                    )
+                })?;
             layers.push(request_decoder_layer_state_from_layout(
                 layer_layout,
                 full_attention_kv_state_growth_tokens_override,
@@ -93,39 +96,39 @@ impl RequestDecoderStateStack {
         // This config-only constructor is retained for synthetic tests that have
         // no bound weights to inspect. Production model loading derives each
         // layer's exact dtype from the live affine graph before creating state.
-        let configured_activation_cache_dtype =
-            crate::decoder_cache::DecoderCacheTensorDtype::BFloat16;
-        let decoder_layer_cache_dtypes = (0..qwen3_5_config.layer_count() as usize)
+        let configured_activation_astro_decoder_state_cache_dtype =
+            crate::astro_decoder_state_cache::AstroDecoderStateCacheTensorDtype::BFloat16;
+        let astro_decoder_state_cache_layer_dtypes = (0..qwen3_5_config.layer_count() as usize)
             .map(|decoder_layer_index| {
                 if qwen3_5_config.decoder_layer_is_full_attention(decoder_layer_index) {
-                    crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-                        keys: configured_activation_cache_dtype,
-                        values: configured_activation_cache_dtype,
+                    crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+                        keys: configured_activation_astro_decoder_state_cache_dtype,
+                        values: configured_activation_astro_decoder_state_cache_dtype,
                     }
                 } else {
-                    crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-                        convolution: configured_activation_cache_dtype,
+                    crate::qwen3_5_core::decoder::Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+                        convolution: configured_activation_astro_decoder_state_cache_dtype,
                     }
                 }
             })
             .collect::<Vec<_>>();
-        let decoder_cache_layout =
-            crate::qwen3_5_core::decoder::cache_layout::qwen3_5_decoder_cache_layout(
+        let astro_decoder_state_cache_layout =
+            crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::qwen3_5_astro_decoder_state_cache_layout(
                 qwen3_5_config,
                 usize::try_from(full_attention_kv_state_growth_tokens).map_err(|_| {
                     request_decoder_state_error(
                         "full-attention key/value growth tokens exceed the usize range",
                     )
                 })?,
-                &decoder_layer_cache_dtypes,
+                &astro_decoder_state_cache_layer_dtypes,
             )
-            .map_err(|decoder_cache_layout_error| {
+            .map_err(|astro_decoder_state_cache_layout_error| {
                 request_decoder_state_error_from_string(format!(
-                    "validated Qwen decoder-cache layout is invalid: {decoder_cache_layout_error}"
+                    "validated Qwen astro-decoder-state-cache layout is invalid: {astro_decoder_state_cache_layout_error}"
                 ))
             })?;
-        Self::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-            &decoder_cache_layout,
+        Self::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+            &astro_decoder_state_cache_layout,
             full_attention_kv_state_growth_tokens,
         )
     }
@@ -136,12 +139,12 @@ impl RequestDecoderStateStack {
     }
 
     #[must_use]
-    pub fn layer(&self, layer_index: usize) -> Option<&DecoderCacheState> {
+    pub fn layer(&self, layer_index: usize) -> Option<&AstroDecoderStateCacheState> {
         self.layers.get(layer_index)
     }
 
     #[must_use]
-    pub fn layer_mut(&mut self, layer_index: usize) -> Option<&mut DecoderCacheState> {
+    pub fn layer_mut(&mut self, layer_index: usize) -> Option<&mut AstroDecoderStateCacheState> {
         self.layers.get_mut(layer_index)
     }
 
@@ -150,7 +153,7 @@ impl RequestDecoderStateStack {
     pub fn payload_byte_count(&self) -> u64 {
         self.layers
             .iter()
-            .map(DecoderCacheState::payload_byte_count)
+            .map(AstroDecoderStateCacheState::payload_byte_count)
             .fold(0, u64::saturating_add)
     }
 
@@ -180,11 +183,11 @@ impl RequestDecoderStateStack {
                 matches!(
                     (decoder_layer_state, layer_checkpoint),
                     (
-                        DecoderCacheState::AppendOnlyAttention { .. },
-                        DecoderCacheStateCheckpoint::AppendOnlyAttention { .. }
+                        AstroDecoderStateCacheState::AppendOnlyAttention { .. },
+                        AstroDecoderStateCacheStateCheckpoint::AppendOnlyAttention { .. }
                     ) | (
-                        DecoderCacheState::Composite { .. },
-                        DecoderCacheStateCheckpoint::Composite { .. }
+                        AstroDecoderStateCacheState::Composite { .. },
+                        AstroDecoderStateCacheStateCheckpoint::Composite { .. }
                     )
                 )
             },
@@ -229,11 +232,11 @@ impl RequestDecoderStateStack {
                 matches!(
                     (decoder_layer_state, decoder_layer_allocation_checkpoint),
                     (
-                        DecoderCacheState::AppendOnlyAttention { .. },
-                        DecoderCacheStateAllocationCheckpoint::AppendOnlyAttention { .. }
+                        AstroDecoderStateCacheState::AppendOnlyAttention { .. },
+                        AstroDecoderStateCacheStateAllocationCheckpoint::AppendOnlyAttention { .. }
                     ) | (
-                        DecoderCacheState::Composite { .. },
-                        DecoderCacheStateAllocationCheckpoint::Composite { .. }
+                        AstroDecoderStateCacheState::Composite { .. },
+                        AstroDecoderStateCacheStateAllocationCheckpoint::Composite { .. }
                     )
                 )
             },
@@ -259,38 +262,41 @@ impl RequestDecoderStateStack {
     /// recurrent state contributes only on first use.
     pub fn projected_persistent_state_growth_bytes(
         &self,
-        decoder_cache_layout: &DecoderCacheLayout,
+        astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
         update_token_count: usize,
     ) -> Result<usize, MlxRuntimeError> {
-        if self.layers.len() != decoder_cache_layout.layer_count() {
+        if self.layers.len() != astro_decoder_state_cache_layout.layer_count() {
             return Err(request_decoder_state_error(
-                "decoder-state layer count does not match the validated decoder-cache layout",
+                "decoder-state layer count does not match the validated astro-decoder-state-cache layout",
             ));
         }
         let mut persistent_growth_bytes = 0_usize;
         for (decoder_layer_index, decoder_layer_state) in self.layers.iter().enumerate() {
-            let decoder_cache_layer_layout = decoder_cache_layout
+            let astro_decoder_state_cache_layer_layout = astro_decoder_state_cache_layout
                 .layer(decoder_layer_index)
                 .ok_or_else(|| {
                     request_decoder_state_error(
-                        "validated decoder-cache layout lost a declared decoder layer",
+                        "validated astro-decoder-state-cache layout lost a declared decoder layer",
                     )
                 })?;
-            let layer_growth_bytes = match (decoder_layer_state, decoder_cache_layer_layout) {
+            let layer_growth_bytes = match (
+                decoder_layer_state,
+                astro_decoder_state_cache_layer_layout,
+            ) {
                 (
-                    DecoderCacheState::AppendOnlyAttention { attention },
-                    DecoderCacheLayerLayout::AppendOnlyAttention { keys, values, .. },
+                    AstroDecoderStateCacheState::AppendOnlyAttention { attention },
+                    AstroDecoderStateCacheLayerLayout::AppendOnlyAttention { keys, values, .. },
                 ) => full_attention_growth_bytes(attention, keys, values, update_token_count)?,
                 (
-                    DecoderCacheState::Composite {
+                    AstroDecoderStateCacheState::Composite {
                         convolution,
                         recurrent,
                     },
-                    DecoderCacheLayerLayout::Composite { components },
+                    AstroDecoderStateCacheLayerLayout::Composite { components },
                 ) => composite_first_use_bytes(convolution, recurrent, components)?,
                 _ => {
                     return Err(request_decoder_state_error(
-                        "decoder state family does not match the validated decoder-cache layout",
+                        "decoder state family does not match the validated astro-decoder-state-cache layout",
                     ));
                 }
             };
@@ -311,18 +317,18 @@ impl RequestDecoderStateStack {
 /// slab adds nothing.
 fn full_attention_growth_bytes(
     attention: &FullAttentionKeyValueState,
-    keys: &DecoderCacheTensorLayout,
-    values: &DecoderCacheTensorLayout,
+    keys: &AstroDecoderStateCacheTensorLayout,
+    values: &AstroDecoderStateCacheTensorLayout,
     update_token_count: usize,
 ) -> Result<usize, MlxRuntimeError> {
     let capacity_growth_tokens = attention.projected_capacity_growth_tokens(update_token_count)?;
     let bytes_per_token = keys
         .sequence_payload_byte_count_per_token()
-        .map_err(decoder_cache_layout_projection_error)?
+        .map_err(astro_decoder_state_cache_layout_projection_error)?
         .checked_add(
             values
                 .sequence_payload_byte_count_per_token()
-                .map_err(decoder_cache_layout_projection_error)?,
+                .map_err(astro_decoder_state_cache_layout_projection_error)?,
         )
         .ok_or_else(|| {
             request_decoder_state_error("full-attention key/value bytes per token overflowed")
@@ -339,13 +345,13 @@ fn full_attention_growth_bytes(
 fn composite_first_use_bytes(
     convolution: &ConvolutionState,
     recurrent: &GatedDeltaRecurrentState,
-    components: &[DecoderCacheLayerLayout],
+    components: &[AstroDecoderStateCacheLayerLayout],
 ) -> Result<usize, MlxRuntimeError> {
     let [
-        DecoderCacheLayerLayout::RecurrentTensor {
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor {
             tensor: convolution_layout,
         },
-        DecoderCacheLayerLayout::RecurrentTensor {
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor {
             tensor: recurrent_layout,
         },
     ] = components
@@ -357,11 +363,11 @@ fn composite_first_use_bytes(
     match (convolution.is_unallocated(), recurrent.is_unallocated()) {
         (true, true) => convolution_layout
             .fixed_payload_byte_count()
-            .map_err(decoder_cache_layout_projection_error)?
+            .map_err(astro_decoder_state_cache_layout_projection_error)?
             .checked_add(
                 recurrent_layout
                     .fixed_payload_byte_count()
-                    .map_err(decoder_cache_layout_projection_error)?,
+                    .map_err(astro_decoder_state_cache_layout_projection_error)?,
             )
             .ok_or_else(|| {
                 request_decoder_state_error("composite persistent state growth bytes overflowed")

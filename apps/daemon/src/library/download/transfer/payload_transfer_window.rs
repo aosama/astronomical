@@ -15,7 +15,9 @@ use futures_util::stream::{FuturesUnordered, StreamExt};
 
 use super::{
     DownloadPayloadTransfer, DownloadPayloadTransferError,
+    payload_segment_transfer::SegmentTransferTarget,
     payload_transfer_segment::{PayloadSegment, SegmentedFileAssembler, plan_payload_segments},
+    slow_stream_watch::StreamRateReference,
 };
 use crate::library::{DownloadJob, DownloadJobError, DownloadJobFile, DownloadProgressSnapshot};
 use crate::{
@@ -50,6 +52,9 @@ pub(super) struct SegmentOutcome {
 pub(super) struct ObservedTransferProgress {
     live_job: Mutex<DownloadJob>,
     snapshot: DownloadProgressSnapshot,
+    /// What this window's streams have recently achieved, so one that falls
+    /// far behind the others can be told from a slow network.
+    stream_rate_reference: StreamRateReference,
 }
 
 impl ObservedTransferProgress {
@@ -57,7 +62,12 @@ impl ObservedTransferProgress {
         Self {
             live_job: Mutex::new(download_job),
             snapshot,
+            stream_rate_reference: StreamRateReference::default(),
         }
+    }
+
+    pub(super) const fn stream_rate_reference(&self) -> &StreamRateReference {
+        &self.stream_rate_reference
     }
 
     pub(super) fn select_file(
@@ -71,14 +81,19 @@ impl ObservedTransferProgress {
         Ok(())
     }
 
+    /// Records what has arrived for one file, for the user interface only;
+    /// durable progress is recorded separately from the contiguous prefix on
+    /// disk. Pieces of one file report concurrently, so a report can arrive
+    /// after a larger one: the larger count stands rather than going back.
     pub(super) fn record_received_bytes(
         &self,
         relative_path: &str,
-        bytes_on_disk: u64,
+        received_bytes: u64,
         updated_at_unix_millis: u64,
     ) -> Result<(), DownloadJobError> {
         let mut live_job = self.lock_live_job();
-        live_job.record_file_progress(relative_path, bytes_on_disk, updated_at_unix_millis)?;
+        let reportable_bytes = received_bytes.max(reported_file_bytes(&live_job, relative_path));
+        live_job.record_file_progress(relative_path, reportable_bytes, updated_at_unix_millis)?;
         self.snapshot.publish(live_job.clone());
         Ok(())
     }
@@ -88,6 +103,16 @@ impl ObservedTransferProgress {
             .lock()
             .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
     }
+}
+
+/// The bytes the live job already shows for one file, or zero for a file it
+/// does not list.
+fn reported_file_bytes(live_job: &DownloadJob, relative_path: &str) -> u64 {
+    live_job
+        .files()
+        .iter()
+        .find(|download_file| download_file.relative_path() == relative_path)
+        .map_or(0, DownloadJobFile::bytes_on_disk)
 }
 
 /// Orders pending files so the largest remaining file starts first, and interleaves their
@@ -339,14 +364,16 @@ async fn transfer_segment_with_attribution(
         .measure_async_operation(
             DaemonPerformanceOperation::FileTransfer,
             || {
-                segment_transfer.transfer.transfer_payload_segment(
-                    &segment_transfer.transfer_job,
-                    &pending_file,
-                    &payload_segment,
-                    assembler,
-                    segment_transfer.updated_at_unix_millis,
-                    segment_transfer.observed_transfer_progress,
-                )
+                segment_transfer
+                    .transfer
+                    .transfer_payload_segment(SegmentTransferTarget {
+                        download_job: &segment_transfer.transfer_job,
+                        download_file: &pending_file,
+                        payload_segment: &payload_segment,
+                        assembler,
+                        updated_at_unix_millis: segment_transfer.updated_at_unix_millis,
+                        observed_transfer_progress: segment_transfer.observed_transfer_progress,
+                    })
             },
             |transfer_outcome| {
                 let measurement = if transfer_outcome.is_ok() {

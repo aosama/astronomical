@@ -29,7 +29,7 @@
 //! - **3 layer states** — when a reply begins, `residency` plans one
 //!   `ExpertLayerState` per sparse decoder layer: `Kept`, `Hot` or
 //!   `Absent`. What to do about a layer follows from its state and from
-//!   what the cache holds.
+//!   what the astro expert cache holds.
 //! - **2 page classes** — `StableCompleteLayer` and `ElasticRoutedExperts`,
 //!   the eviction-priority classes for retained *prefill* pages.
 //!
@@ -59,12 +59,24 @@ mod decode_seating_tests;
 // The dense-resident ceiling policy is consumed only by the direct-MLX
 // engine, so an isolated default-feature build would otherwise flag the
 // whole module as dead (workspace builds unify the feature away).
+mod astro_expert_cache_arithmetic;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
-mod expert_cache;
 // Only the direct-MLX decision and speech engines report through it.
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod forward_pass_telemetry;
+// Only the direct-MLX streaming engine reads it; the unit tests read it
+// without the graphics-processor runtime.
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) mod macos_wired_memory;
+// Only the direct-MLX streaming engine records replies through it; the unit
+// tests own it without the graphics-processor runtime.
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) mod mlx_buffer_cache_reply_record;
+// Only the direct-MLX streaming engine records replies through it; the unit
+// tests own it without the graphics-processor runtime.
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) mod reply_expert_route_record;
 pub(crate) mod serving_phase;
 pub(crate) mod telemetry;
 mod utilization;
@@ -94,6 +106,16 @@ pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_by
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
 // direct-MLX admission callers and the unit artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) use astro_expert_cache_arithmetic::expert_page_peak_allocation_bytes;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use astro_expert_cache_arithmetic::source_expert_page_payload_bytes;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use astro_expert_cache_arithmetic::{
+    ExpertStreamingSessionCounters, RouteCoverageClass, StreamedPageSourcePlan,
+    expert_layer_topology_from_residency, no_astro_expert_cache_route_source_bytes,
+    record_streamed_page_source_plan_in_both_ledgers,
+};
 pub use astronomical_memory_policy::forward_admission::{
     ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
@@ -105,16 +127,6 @@ pub use astronomical_memory_policy::placement::{
 };
 pub use astronomical_memory_policy::reclamation::ExpertMemoryAdmissionError;
 pub use astronomical_memory_policy::residency::seated_complete_layer_count;
-#[cfg(any(feature = "direct-mlx", test))]
-pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use expert_cache::source_expert_page_payload_bytes;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use expert_cache::{
-    ExpertStreamingSessionCounters, RouteCoverageClass, StreamedPageSourcePlan,
-    expert_layer_topology_from_residency, no_cache_route_source_bytes,
-    record_streamed_page_source_plan_in_both_ledgers,
-};
 pub use serving_phase::SessionStreamingPhase;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path

@@ -223,8 +223,8 @@ async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sy
                         prompt_token_count: 1,
                         generated_token_count: 1,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
-                        persistent_prompt_cache_diagnostics: None,
+                        astro_ssd_prompt_cache_restored_token_count: 0,
+                        astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
                     .await?;
@@ -289,9 +289,9 @@ fn runtime_configuration(
 ) -> WorkerRuntimeFeatureConfiguration {
     WorkerRuntimeFeatureConfiguration {
         configuration_generation: acknowledged_generation.to_owned(),
-        persistent_prompt_cache_enabled: startup_configuration.persistent_prompt_cache_enabled,
-        prompt_cache_maximum_size_bytes: startup_configuration
-            .global_prompt_cache_maximum_size_bytes,
+        astro_ssd_prompt_cache_enabled: startup_configuration.astro_ssd_prompt_cache_enabled,
+        astro_ssd_prompt_cache_maximum_size_bytes: startup_configuration
+            .global_astro_ssd_prompt_cache_maximum_size_bytes,
         loaded_model,
     }
 }
@@ -336,7 +336,7 @@ where
             mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                 source,
                 active_memory_bytes: 1_000_000_000,
-                allocator_cache_memory_bytes: 0,
+                mlx_buffer_cache_bytes: 0,
                 peak_memory_bytes: 1_000_000_000,
                 expert_payload_bytes: 0,
                 model_core_payload_bytes: 0,

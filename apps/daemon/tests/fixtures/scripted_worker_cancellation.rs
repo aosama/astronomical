@@ -1,7 +1,7 @@
 //! Telemetry the scripted worker can emit between a `Cancel` command and
 //! its acknowledgement. The daemon classifies every event in that window
 //! through its cancellation drain, so these helpers exist to prove benign
-//! telemetry (persistent prompt-cache write-out, the per-generation
+//! telemetry (persistent astro SSD prompt cache write-out, the per-generation
 //! expert-streaming report, MLX memory samples) gets recorded rather than
 //! treated as a protocol violation that replaces the worker.
 
@@ -14,7 +14,7 @@ use astronomical_ipc_protocol::{
 };
 
 /// Fixture that publishes expert-streaming stats during the cancellation
-/// drain. It shares a dispatch arm with the prompt-cache fixture, so the
+/// drain. It shares a dispatch arm with the astro SSD prompt cache fixture, so the
 /// ids stay together where that arm lives.
 pub(super) const EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID: &str =
     "astronomical/expert-streaming-stats-during-cancellation-fixture";
@@ -31,13 +31,13 @@ pub(super) enum CancellationMlxTelemetry {
 /// cannot replay events into a later drain.
 pub(super) async fn emit_cancellation_telemetry(
     event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
-    should_emit_prompt_cache_stats: &mut bool,
+    should_emit_astro_ssd_prompt_cache_stats: &mut bool,
     should_emit_expert_streaming_stats: &mut bool,
     cancellation_mlx_telemetry: &mut CancellationMlxTelemetry,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    if *should_emit_prompt_cache_stats {
-        *should_emit_prompt_cache_stats = false;
-        send_prompt_cache_stats(event_writer).await?;
+    if *should_emit_astro_ssd_prompt_cache_stats {
+        *should_emit_astro_ssd_prompt_cache_stats = false;
+        send_astro_ssd_prompt_cache_stats(event_writer).await?;
     }
     if *should_emit_expert_streaming_stats {
         *should_emit_expert_streaming_stats = false;
@@ -51,27 +51,27 @@ pub(super) async fn emit_cancellation_telemetry(
     Ok(())
 }
 
-/// The cache publication a real worker flushes when a generation ends,
+/// The astro SSD prompt cache publication a real worker flushes when a generation ends,
 /// landing after the client already dropped the stream.
-async fn send_prompt_cache_stats(
+async fn send_astro_ssd_prompt_cache_stats(
     event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     event_writer
-        .send_event(&WorkerEvent::PersistentPromptCacheStats {
-            persistent_prompt_cache_hits: 1,
-            persistent_prompt_cache_misses: 0,
-            persistent_prompt_cache_tokens_saved: 2_048,
-            persistent_prompt_cache_block_token_count: 2_048,
-            persistent_prompt_cache_sequence_state_block_count: 1,
-            persistent_prompt_cache_boundary_state_snapshot_count: 1,
-            persistent_prompt_cache_visual_embedding_count: 0,
-            persistent_prompt_cache_total_size_bytes: 4_096,
-            persistent_prompt_cache_visual_embedding_total_size_bytes: 0,
-            persistent_prompt_cache_maximum_size_bytes: 50_000_000_000,
-            persistent_prompt_cache_visual_embedding_hits: 0,
-            persistent_prompt_cache_visual_embedding_misses: 0,
-            persistent_prompt_cache_visual_embedding_rows_loaded: 0,
-            persistent_prompt_cache_partial_tail_hits: 0,
+        .send_event(&WorkerEvent::AstroSsdPromptCacheStats {
+            astro_ssd_prompt_cache_hits: 1,
+            astro_ssd_prompt_cache_misses: 0,
+            astro_ssd_prompt_cache_tokens_saved: 2_048,
+            astro_ssd_prompt_cache_block_token_count: 2_048,
+            astro_ssd_prompt_cache_sequence_state_block_count: 1,
+            astro_ssd_prompt_cache_boundary_state_snapshot_count: 1,
+            astro_ssd_prompt_cache_visual_embedding_count: 0,
+            astro_ssd_prompt_cache_total_size_bytes: 4_096,
+            astro_ssd_prompt_cache_visual_embedding_total_size_bytes: 0,
+            astro_ssd_prompt_cache_maximum_size_bytes: 50_000_000_000,
+            astro_ssd_prompt_cache_visual_embedding_hits: 0,
+            astro_ssd_prompt_cache_visual_embedding_misses: 0,
+            astro_ssd_prompt_cache_visual_embedding_rows_loaded: 0,
+            astro_ssd_prompt_cache_partial_tail_hits: 0,
         })
         .await?;
     Ok(())
@@ -136,6 +136,7 @@ fn expert_streaming_stats_snapshot() -> WorkerExpertStreamingStats {
         mandatory_decode_source_bytes: 0,
         prompt_token_count: 1,
         generated_token_count: 1,
+        last_reply_memory_record: None,
     }
 }
 
@@ -144,7 +145,7 @@ pub(super) fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMl
     WorkerMlxMemorySnapshot {
         source: MlxMemorySnapshotSource::Finalized,
         active_memory_bytes,
-        allocator_cache_memory_bytes: 2_000,
+        mlx_buffer_cache_bytes: 2_000,
         peak_memory_bytes: active_memory_bytes + 1_000,
         expert_payload_bytes: 20_000,
         model_core_payload_bytes: 10_000,

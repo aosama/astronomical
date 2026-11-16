@@ -666,7 +666,7 @@ fn is_executable_file(file_path: &Path) -> bool {
 }
 
 /// A symlink does not count: a bundle must carry its own bytes, not a
-/// pointer into a cache macOS may purge.
+/// pointer into the `~/Library/Caches` folder, which macOS may purge.
 fn is_non_empty_file(file_path: &Path) -> bool {
     match std::fs::symlink_metadata(file_path) {
         Ok(file_metadata) => file_metadata.file_type().is_file() && file_metadata.len() > 0,

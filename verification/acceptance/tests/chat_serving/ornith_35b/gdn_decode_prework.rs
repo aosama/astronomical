@@ -5,7 +5,7 @@
 //! switch arms. Direct fused-versus-composed numeric tests remain separate.
 //!
 //! A 500-token Romeo and Juliet warmup requests 50 output tokens, then a
-//! 10,000-token prompt requests 500 output tokens with persistent caching off.
+//! 10,000-token prompt requests 500 output tokens with the astro SSD prompt cache off.
 //! Decode rates come from daemon status differencing, never attribution spans.
 //! Run the optimized diagnostic with `cargo xtask test-run --package
 //! astronomical-acceptance --test chat_serving --features serving-acceptance

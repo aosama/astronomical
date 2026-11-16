@@ -17,9 +17,9 @@ use std::{
 };
 
 use astronomical_config::{
-    AstronomicalInstancePaths, AstronomicalRuntimeInstance, DiscoveredModel,
-    ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities, ModelFamily,
-    ModelLicense, PromptCacheConfig,
+    AstroSsdPromptCacheConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance,
+    DiscoveredModel, ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities,
+    ModelFamily, ModelLicense,
 };
 use astronomical_daemon::{
     DaemonIpcGenerationContext, DaemonPerformanceAttributionLog, DownloadCatalog,
@@ -32,9 +32,9 @@ const TEST_WORKER_EXECUTABLE_PATH_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_TEST_WORKER_EXECUTABLE_PATH";
 const DISCOVERED_IMAGE_MODEL_ID_ENVIRONMENT_VARIABLE: &str =
     "ASTRONOMICAL_TEST_DAEMON_DISCOVERED_IMAGE_MODEL_ID";
-/// Decimal SI bound (50 GB) for the fixture prompt-cache config; the scripted
+/// Decimal SI bound (50 GB) for the fixture astro SSD prompt cache config; the scripted
 /// worker never stores blocks, so only the wiring must be coherent.
-const FIXTURE_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 = 50_000_000_000;
+const FIXTURE_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES: u64 = 50_000_000_000;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -129,7 +129,7 @@ fn discovered_image_model_from_environment() -> Option<DiscoveredModel> {
 }
 
 /// Builds the live configuration the IPC service consults, mirroring the real
-/// daemon's wiring: the discovered model list, the worker path, and the cache
+/// daemon's wiring: the discovered model list, the worker path, and the astro SSD prompt cache
 /// and log directories under the test state root. The model-policy catalog
 /// stays empty because the scripted worker admits every generation.
 fn fixture_resolved_runtime_config(
@@ -149,15 +149,15 @@ fn fixture_resolved_runtime_config(
         model_policy_catalog: Arc::new(HashMap::new()),
         unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        persistent_prompt_cache_enabled: true,
-        configured_persistent_prompt_cache_enabled: None,
+        astro_ssd_prompt_cache_enabled: true,
+        configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         idle_model_unload_seconds: 0,
-        configured_prompt_cache_maximum_size_bytes: None,
+        configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        prompt_cache_config: PromptCacheConfig::new(
-            state_directory.join("prompt-cache"),
-            FIXTURE_PROMPT_CACHE_MAXIMUM_SIZE_BYTES,
+        astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(
+            state_directory.join("astro-ssd-prompt-cache"),
+            FIXTURE_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES,
         ),
         bind_address,
         logging_config: LoggingConfig::new(instance_paths.logging_directory(), LogLevel::Warn, 7),

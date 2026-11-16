@@ -1,6 +1,6 @@
 //! A separate 37-gigabyte diagnostic cell, not a change to the 36-gigabyte sweep.
 
-use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use astronomical_test_harness::{sparse_decode_full_fit, test_run::TestRunContext};
 use serde_json::json;
 use serial_test::serial;
@@ -28,7 +28,7 @@ async fn should_complete_decode_residency_at_37_gigabytes_after_multi_chunk_pref
     );
     let journey = ThroughputJourney {
         journey_kind: ThroughputJourneyKind::DecodeFullFit,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         warmup_input_prompt: format!(
             "Continue Romeo and Juliet.\n\n{}",
             include_str!("../../fixtures/model_metrics_warmup_romeo_and_juliet.txt")

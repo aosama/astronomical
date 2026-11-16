@@ -16,8 +16,8 @@ use sha2::{Digest, Sha256};
 
 use crate::atlas_manifest::{AtlasDeclaredFile, RESIDENT_BUNDLE_FILE_NAME};
 use crate::layer_record_writer::SourceShardFiles;
+use crate::macos_file_cache_bypassing_io::AlignedSpan;
 use crate::source_checkpoint::{SourceCheckpoint, SourceTensor};
-use crate::uncached_file_io::AlignedSpan;
 
 /// Copies at most this many bytes of one tensor at a time, so a large
 /// embedding table never needs one allocation of its own size.

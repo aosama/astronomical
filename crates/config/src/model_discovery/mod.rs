@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::model_discovery_huggingface_cache;
+use crate::model_discovery_huggingface_hub_cache;
 
 const MAXIMUM_PUBLIC_DISCOVERY_DIAGNOSTICS: usize = 32;
 
@@ -208,7 +208,7 @@ impl ModelLicense {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiscoveredModel {
     /// The model identity from the leaf directory name (e.g. "fake-mixture-of-experts").
-    /// For HuggingFace cache entries, this is derived from the decoded `org/repo` path
+    /// For Hugging Face hub cache entries, this is derived from the decoded `org/repo` path
     /// with the org prefix stripped (e.g. "Ornith-1.0-35B-6bit" from "mlx-community/Ornith-1.0-35B-6bit").
     pub model_id: String,
     /// Upstream provider identity retained as provenance, never as the local routing key.
@@ -437,18 +437,20 @@ fn scan_directory_recursive(
         return Ok(());
     }
 
-    // If this directory is a HuggingFace cache entry (models--org--repo/),
+    // If this directory is a Hugging Face hub cache entry (models--org--repo/),
     // resolve it to the active snapshot and discover from there.
     if current_directory
         .file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.starts_with("models--"))
-        && let Some(huggingface_cache_entry) =
-            model_discovery_huggingface_cache::resolve_huggingface_cache_entry(current_directory)
+        && let Some(huggingface_hub_cache_entry) =
+            model_discovery_huggingface_hub_cache::resolve_huggingface_hub_cache_entry(
+                current_directory,
+            )
     {
         if let Some(discovered_model) = try_discover_model_with_id(
-            &huggingface_cache_entry.snapshot_directory,
-            &huggingface_cache_entry.model_id,
+            &huggingface_hub_cache_entry.snapshot_directory,
+            &huggingface_hub_cache_entry.model_id,
         ) {
             discovered_models.extend(artifact_discovery::discover_bundled_checkpoints(
                 &discovered_model,
@@ -498,7 +500,7 @@ fn scan_directory_recursive(
         };
         let entry_path = directory_entry.path();
         if entry_path.is_dir() {
-            // Skip hidden directories (e.g. `.cache`, `.git`).
+            // Skip hidden directories (e.g. `.huggingface_hub_cache`, `.git`).
             if entry_path
                 .file_name()
                 .and_then(|name| name.to_str())
@@ -515,7 +517,7 @@ fn scan_directory_recursive(
 
 /// Attempts to discover an executable model from a classified family root.
 ///
-/// Uses the leaf directory name as `model_id`. For HuggingFace cache entries
+/// Uses the leaf directory name as `model_id`. For Hugging Face hub cache entries
 /// where the snapshot hash is not a meaningful model ID, use
 /// `try_discover_model_with_id` instead.
 ///

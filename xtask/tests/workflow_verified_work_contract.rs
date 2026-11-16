@@ -73,7 +73,7 @@ fn should_record_verified_work_only_after_the_verdict_passed_on_a_real_macos_run
     );
     assert!(
         required_text(run_step, "if", "run record").contains("'push'"),
-        "only a default-branch push publishes caches"
+        "only a default-branch push publishes the github_actions_cache"
     );
     let run_inputs = required_field(run_step, "with", "run record");
     assert_eq!(
@@ -83,7 +83,7 @@ fn should_record_verified_work_only_after_the_verdict_passed_on_a_real_macos_run
     );
     assert!(
         required_u64(run_inputs, "retention-days", "run record inputs") < 7,
-        "it must expire before GitHub evicts a cache left unused for seven days"
+        "it must expire before GitHub evicts a github_actions_cache entry left unused for seven days"
     );
 }
 

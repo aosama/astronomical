@@ -1,7 +1,7 @@
 //! Redoes one prompt-processing forward that ran out of memory instead of
 //! failing the request.
 //!
-//! The memory governor leases room for another attempt and the expert cache
+//! The memory governor leases room for another attempt and the astro expert cache
 //! gives back just the experts that room displaces (issue #2221). The
 //! forward that failed is then run again unchanged. A forward that fits is
 //! measured, and that measurement replaces the guess that was too small.
@@ -9,10 +9,10 @@
 //! The decoder state is rebuilt, not rewound. A failed command buffer can
 //! leave some layers' K/V and recurrent state updated and others not, and
 //! checkpointing live state before every forward would keep old K/V handles
-//! alive, defeating MLX buffer donation and copying the whole cache per
+//! alive, defeating MLX buffer donation and copying the whole `astro_decoder_state_cache` per
 //! forward. Every completed forward already published its durable
-//! prompt-cache blocks before the cursor advanced, so re-seeding from the
-//! persistent prompt cache reproduces exactly the verified frontier.
+//! astro SSD prompt cache blocks before the cursor advanced, so re-seeding from the
+//! `astro_ssd_prompt_cache` reproduces exactly the verified frontier.
 //!
 //! The retry never shrinks the forward: smaller chunks re-pay
 //! complete-layer storage reads without changing the outcome.
@@ -54,14 +54,18 @@ impl Qwen3_5EngineState {
         if !model.govern_redo_after_memory_failure(MemoryPhase::Prefill, known_shortfall_bytes) {
             return Ok(false);
         }
-        self.reseed_prefill_from_prompt_cache(request_id, active_request, failed_prefill_start)?;
+        self.reseed_prefill_from_astro_ssd_prompt_cache(
+            request_id,
+            active_request,
+            failed_prefill_start,
+        )?;
         Ok(true)
     }
 
     /// Drops the possibly half-updated decoder state and rebuilds it from
-    /// the persistent prompt cache, moving the cursor back to the last
+    /// the `astro_ssd_prompt_cache`, moving the cursor back to the last
     /// published boundary.
-    pub(super) fn reseed_prefill_from_prompt_cache(
+    pub(super) fn reseed_prefill_from_astro_ssd_prompt_cache(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
@@ -71,12 +75,12 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let decoder_cache_layout = model.decoder_cache_layout().clone();
+        let astro_decoder_state_cache_layout = model.astro_decoder_state_cache_layout().clone();
         // Drop the possibly half-updated decoder state first so its buffers are
-        // unreferenced before the allocator cache is cleared below.
+        // unreferenced before the MLX buffer cache is cleared below.
         active_request.request_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &decoder_cache_layout,
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &astro_decoder_state_cache_layout,
                 self.full_attention_kv_state_growth_tokens,
             )
             .map_err(qwen3_5_runtime_error)?;
@@ -84,23 +88,22 @@ impl Qwen3_5EngineState {
         model.forget_expert_layer_states();
         model
             .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .map_err(qwen3_5_runtime_error)?;
         let mut restored_prefill_cursor = 0_usize;
         let mut restored_next_position_tokens = 0_u32;
-        let mut restored_last_persistent_prompt_cache_block_key = None;
-        if self.persistent_prompt_cache.is_some() && active_request.can_use_persistent_prompt_cache
-        {
+        let mut restored_last_astro_ssd_prompt_cache_block_key = None;
+        if self.astro_ssd_prompt_cache.is_some() && active_request.can_use_astro_ssd_prompt_cache {
             // Same split borrow as request start: the store must be reinstalled
-            // even when restore fails, or later requests silently lose caching.
-            let persistent_prompt_cache = self.persistent_prompt_cache.take();
+            // even when restore fails, or later requests silently lose the `astro_ssd_prompt_cache`.
+            let astro_ssd_prompt_cache = self.astro_ssd_prompt_cache.take();
             let restore_result =
-                if let Some(persistent_prompt_cache) = persistent_prompt_cache.as_ref() {
-                    self.restore_persistent_prompt_cache_prefix(
+                if let Some(astro_ssd_prompt_cache) = astro_ssd_prompt_cache.as_ref() {
+                    self.restore_astro_ssd_prompt_cache_prefix(
                         request_id,
-                        persistent_prompt_cache,
+                        astro_ssd_prompt_cache,
                         &active_request.input_token_ids,
-                        &active_request.persistent_prompt_cache_block_causal_inputs,
+                        &active_request.astro_ssd_prompt_cache_block_causal_inputs,
                         active_request.engine_extension.reserved_context_tokens,
                         &mut active_request.request_decoder_state,
                         &mut active_request.performance_attribution,
@@ -109,25 +112,26 @@ impl Qwen3_5EngineState {
                 } else {
                     Ok(None)
                 };
-            self.persistent_prompt_cache = persistent_prompt_cache;
+            self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
             if let Some(restore_outcome) = restore_result? {
                 restored_prefill_cursor = restore_outcome.restored_token_count;
-                restored_next_position_tokens = restore_outcome.persistent_prompt_cache_token_count;
-                restored_last_persistent_prompt_cache_block_key =
-                    restore_outcome.last_restored_persistent_prompt_cache_block_key;
-                // The re-restore replaced the prompt-cache frontier, so the
+                restored_next_position_tokens =
+                    restore_outcome.astro_ssd_prompt_cache_restored_token_count;
+                restored_last_astro_ssd_prompt_cache_block_key =
+                    restore_outcome.last_restored_astro_ssd_prompt_cache_block_key;
+                // The re-restore replaced the astro SSD prompt cache frontier, so the
                 // request's reported diagnostics and reuse counts must describe
                 // this restore, not the one from request start.
-                active_request.persistent_prompt_cache_diagnostics =
-                    Some(restore_outcome.persistent_prompt_cache_diagnostics);
+                active_request.astro_ssd_prompt_cache_diagnostics =
+                    Some(restore_outcome.astro_ssd_prompt_cache_diagnostics);
                 active_request.prompt_work_reuse.target_restored_token_count =
-                    u64::from(restore_outcome.persistent_prompt_cache_token_count);
+                    u64::from(restore_outcome.astro_ssd_prompt_cache_restored_token_count);
             }
         }
         active_request.prefill_cursor = restored_prefill_cursor;
         active_request.next_position_tokens = restored_next_position_tokens;
-        active_request.last_restored_persistent_prompt_cache_block_key =
-            restored_last_persistent_prompt_cache_block_key;
+        active_request.last_restored_astro_ssd_prompt_cache_block_key =
+            restored_last_astro_ssd_prompt_cache_block_key;
         // Demand evidence recorded by the discarded forward must not steer
         // the reply's first tokens, so the retry opens a fresh window.
         active_request
@@ -137,7 +141,7 @@ impl Qwen3_5EngineState {
             request_id = request_id.value(),
             failed_prefill_start,
             resumed_prefill_cursor = restored_prefill_cursor,
-            "re-seeded a prompt from the persistent prompt cache to redo a forward that ran out of memory"
+            "re-seeded a prompt from the astro-ssd-prompt-cache to redo a forward that ran out of memory"
         );
         Ok(())
     }
@@ -198,7 +202,7 @@ impl Qwen3_5EngineState {
     /// Routes a failed attempt. An engine failure ends the request. A
     /// prompt still in flight runs its failed span again with more room.
     /// A prompt that could not be put back to a span, as a dense model's
-    /// cannot, is read again from the prompt cache with more room. Every
+    /// cannot, is read again from the `astro_ssd_prompt_cache` with more room. Every
     /// redo stops once the memory governor's attempts are spent.
     pub(super) fn recover_failed_prefill_attempt(
         &mut self,
@@ -227,7 +231,7 @@ impl Qwen3_5EngineState {
 
     /// Leaves the request ready to run what failed again: the failed span
     /// of a prompt still in flight, the dense fallback to chunks, or a
-    /// governed redo from the prompt cache. `Ok(false)` when none applies:
+    /// governed redo from the `astro_ssd_prompt_cache`. `Ok(false)` when none applies:
     /// an image request with no prompt in flight, or the redo attempts are
     /// spent.
     fn make_room_to_run_failed_attempt_again(
@@ -282,7 +286,7 @@ impl Qwen3_5EngineState {
         }
         model
             .runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             .map_err(qwen3_5_runtime_error)?;
         tracing::warn!(
             request_id = request_id.value(),

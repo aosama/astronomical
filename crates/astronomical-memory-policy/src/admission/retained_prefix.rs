@@ -11,7 +11,7 @@ pub struct RetainedPrefixRetentionRequirements {
     /// Whether the serving configuration enables in-memory prefix adoption.
     pub adoption_enabled: bool,
     /// Token count the retained state can adopt: the boundary of the last
-    /// complete prompt-cache block the generation published. Zero means the
+    /// complete astro SSD prompt cache block the generation published. Zero means the
     /// generation published nothing adoptable.
     pub adoptable_token_count: usize,
     /// The retained decoder state's payload bytes, measured from the live state.
@@ -33,7 +33,7 @@ impl RetainedPrefixRetentionRequirements {
     /// next request.
     ///
     /// A retained state above half the ceiling is dropped: an unrelated next
-    /// conversation would otherwise start with half of its working memory
+    /// conversation would otherwise start with half of its MLX working buffers
     /// already promised to a state it will never adopt. Smaller states are
     /// cheap to keep (the bytes are already active) and any pressure they
     /// cause is relieved by dropping them when a new request fails to adopt.

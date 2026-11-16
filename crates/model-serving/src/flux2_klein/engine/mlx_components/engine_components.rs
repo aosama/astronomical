@@ -44,7 +44,7 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
             self.runtime()?.memory_snapshot().ok().map(|snapshot| {
                 (
                     snapshot.active_memory_bytes() as u64,
-                    snapshot.allocator_cache_memory_bytes() as u64,
+                    snapshot.mlx_buffer_cache_bytes() as u64,
                     snapshot.peak_memory_bytes() as u64,
                 )
             })
@@ -130,9 +130,9 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
             .as_ref()
             .is_ok_and(|is_complete| *is_complete)
         {
-            attribution.measure_operation(PerformanceOperation::MlxAllocatorCacheCleanup, |_| {
+            attribution.measure_operation(PerformanceOperation::MlxBufferCacheCleanup, |_| {
                 self.runtime()?
-                    .synchronize_gpu_stream_and_clear_allocator_cache()
+                    .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
                     .map_err(|error| error.to_string())
             })
         } else {
@@ -227,7 +227,7 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
             .map(|snapshot| {
                 let mut telemetry = MlxMemoryTelemetry::new(
                     snapshot.active_memory_bytes() as u64,
-                    snapshot.allocator_cache_memory_bytes() as u64,
+                    snapshot.mlx_buffer_cache_bytes() as u64,
                     snapshot.peak_memory_bytes() as u64,
                     crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
                 );
@@ -262,25 +262,24 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
         let residency_plan =
             Flux2KleinMemoryAdmission::plan(requested_mlx_memory_ceiling_bytes, &geometry)
                 .map_err(|error| error.to_string())?;
-        let allocator_cache_memory_limit_bytes = allocator_cache_limit_for_ceiling(
-            self.original_allocator_cache_memory_limit_bytes,
+        let mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_for_ceiling(
+            self.original_mlx_buffer_cache_limit_bytes,
             requested_ceiling,
         );
-        let memory_limits =
-            MlxMemoryLimits::new(requested_ceiling, allocator_cache_memory_limit_bytes)
-                .map_err(|error| error.to_string())?;
+        let memory_limits = MlxMemoryLimits::new(requested_ceiling, mlx_buffer_cache_limit_bytes)
+            .map_err(|error| error.to_string())?;
         self.runtime
             .as_mut()
             .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?
             .update_memory_limits(memory_limits)
             .map_err(|error| error.to_string())?;
         self.effective_mlx_memory_ceiling_bytes = requested_ceiling;
-        self.allocator_cache_memory_limit_bytes = allocator_cache_memory_limit_bytes;
+        self.mlx_buffer_cache_limit_bytes = mlx_buffer_cache_limit_bytes;
         let minimum_mlx_memory_ceiling_bytes = residency_plan.minimum_mlx_memory_ceiling_bytes();
         self.residency_plan = Some(residency_plan);
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes as u64,
+            mlx_buffer_cache_limit_bytes as u64,
             minimum_mlx_memory_ceiling_bytes,
             ExpertMemoryMode::Resident,
             self.collect_mlx_memory_telemetry(),
@@ -288,11 +287,11 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
     }
 }
 
-fn allocator_cache_limit_for_ceiling(
-    original_allocator_cache_memory_limit_bytes: usize,
+fn mlx_buffer_cache_limit_for_ceiling(
+    original_mlx_buffer_cache_limit_bytes: usize,
     requested_mlx_memory_ceiling_bytes: usize,
 ) -> usize {
-    original_allocator_cache_memory_limit_bytes.min(requested_mlx_memory_ceiling_bytes)
+    original_mlx_buffer_cache_limit_bytes.min(requested_mlx_memory_ceiling_bytes)
 }
 
 use crate::MlxMemoryLimitAdjustment;

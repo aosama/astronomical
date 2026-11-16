@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn should_apply_prompt_cache_policy_after_config_file_reload() {
+async fn should_apply_astro_ssd_prompt_cache_policy_after_config_file_reload() {
     let worker_executable_path = PathBuf::from(
         std::env::var("CARGO_BIN_EXE_astronomical-daemon-idle-worker")
             .expect("Cargo should provide the idle worker fixture path"),
@@ -12,7 +12,7 @@ async fn should_apply_prompt_cache_policy_after_config_file_reload() {
     write_config_file(
         &config_home_directory,
         r#"{
-            "prompt_cache": { "enabled": true }
+            "ssd_prompt_cache": { "enabled": true }
         }"#,
     );
     let performance_log_directory = config_home_directory.join("performance");
@@ -35,8 +35,8 @@ async fn should_apply_prompt_cache_policy_after_config_file_reload() {
     let mut initial_resolved_config = runtime_config_resolver
         .load()
         .expect("the initial configuration should resolve");
-    initial_resolved_config.persistent_prompt_cache_enabled = false;
-    initial_resolved_config.configured_persistent_prompt_cache_enabled = Some(false);
+    initial_resolved_config.astro_ssd_prompt_cache_enabled = false;
+    initial_resolved_config.configured_astro_ssd_prompt_cache_enabled = Some(false);
     let reloadable_config = Arc::new(RwLock::new(initial_resolved_config));
     let application = build_application_with_full_control(
         worker_handle.clone(),
@@ -64,7 +64,7 @@ async fn should_apply_prompt_cache_policy_after_config_file_reload() {
         reload_document["candidate_generation"]
     );
     assert_eq!(
-        reload_document["worker_runtime_feature_configuration"]["persistent_prompt_cache_enabled"],
+        reload_document["worker_runtime_feature_configuration"]["astro_ssd_prompt_cache_enabled"],
         true
     );
 
@@ -91,14 +91,14 @@ async fn should_apply_prompt_cache_policy_after_config_file_reload() {
         true
     );
     assert_eq!(
-        status_document["worker_runtime_feature_configuration"]["persistent_prompt_cache_enabled"],
+        status_document["worker_runtime_feature_configuration"]["astro_ssd_prompt_cache_enabled"],
         true
     );
     assert!(
         reloadable_config
             .read()
             .expect("the applied config should remain readable")
-            .persistent_prompt_cache_enabled
+            .astro_ssd_prompt_cache_enabled
     );
 
     worker_handle
@@ -143,16 +143,16 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         model_policy_catalog: Arc::new(std::collections::HashMap::new()),
         unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        persistent_prompt_cache_enabled: true,
-        configured_persistent_prompt_cache_enabled: None,
+        astro_ssd_prompt_cache_enabled: true,
+        configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         // These reload tests write config files that omit the span, so the
         // live fixture holds the default the reload will resolve; any other
         // value would make every reload report a span change.
         idle_model_unload_seconds: astronomical_config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
-        configured_prompt_cache_maximum_size_bytes: None,
+        configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        prompt_cache_config: astronomical_config::PromptCacheConfig::new(
+        astro_ssd_prompt_cache_config: astronomical_config::AstroSsdPromptCacheConfig::new(
             config_home_directory
                 .join(".astronomical-dev")
                 .join("cache"),
@@ -505,14 +505,14 @@ fn discovered_model_for(model_id: &str) -> astronomical_config::DiscoveredModel 
 }
 
 #[tokio::test]
-async fn should_reject_prompt_cache_reload_when_worker_replacement_is_unavailable() {
+async fn should_reject_astro_ssd_prompt_cache_reload_when_worker_replacement_is_unavailable() {
     let config_home_directory = tempfile::tempdir()
         .expect("a config home should be created")
         .keep();
     write_config_file(
         &config_home_directory,
         r#"{
-            "prompt_cache": { "enabled": false }
+            "ssd_prompt_cache": { "enabled": false }
         }"#,
     );
     let mut initial_resolved_config = sample_resolved_config();

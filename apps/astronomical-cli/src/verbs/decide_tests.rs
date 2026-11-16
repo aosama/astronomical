@@ -55,7 +55,10 @@ fn should_surface_a_failed_frame_with_the_models_reason() {
 
 #[test]
 fn should_treat_an_unrelated_frame_as_a_daemon_that_stopped_responding() {
-    let answer_outcome = decisions_answered(DaemonResponse::DownloadStatus { job: None });
+    let answer_outcome = decisions_answered(DaemonResponse::DownloadStatus {
+        job: None,
+        waiting_huggingface_ids: Vec::new(),
+    });
 
     assert!(matches!(
         answer_outcome,

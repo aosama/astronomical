@@ -90,7 +90,7 @@ final class MlxHeadroomSplitTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"generating","mlx_memory_ceiling_bytes":23000000000,"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":18030000000,"allocator_cache_memory_bytes":0,"peak_memory_bytes":19570000000,"expert_payload_bytes":14950000000,"model_core_payload_bytes":2600000000,"context_state_payload_bytes":1120000000,"memory_ceiling_utilization":{"unused_headroom_bytes":4970000000,"reserved_model_core_slack_bytes":670000000,"reserved_context_growth_bytes":1300000000,"reserved_activation_and_workspace_bytes":30000000,"unseated_expert_entitlement_bytes":2970000000,"unexplained_headroom_bytes":0,"owner_overrun_bytes":0}}}
+        {"status":"ready","activity":"generating","mlx_memory_ceiling_bytes":23000000000,"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":18030000000,"mlx_buffer_cache_bytes":0,"peak_memory_bytes":19570000000,"expert_payload_bytes":14950000000,"model_core_payload_bytes":2600000000,"context_state_payload_bytes":1120000000,"memory_ceiling_utilization":{"unused_headroom_bytes":4970000000,"reserved_model_core_slack_bytes":670000000,"reserved_context_growth_bytes":1300000000,"reserved_activation_and_workspace_bytes":30000000,"unseated_expert_entitlement_bytes":2970000000,"unexplained_headroom_bytes":0,"owner_overrun_bytes":0}}}
         """.utf8)
     )
 
@@ -108,7 +108,7 @@ final class MlxHeadroomSplitTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","mlx_memory_ceiling_bytes":23000000000,"mlx_memory_snapshot":{"source":"idle_poll","active_memory_bytes":17600000000,"allocator_cache_memory_bytes":0,"peak_memory_bytes":19480000000,"expert_payload_bytes":15000000000,"model_core_payload_bytes":2600000000,"context_state_payload_bytes":0}}
+        {"status":"ready","activity":"idle","mlx_memory_ceiling_bytes":23000000000,"mlx_memory_snapshot":{"source":"idle_poll","active_memory_bytes":17600000000,"mlx_buffer_cache_bytes":0,"peak_memory_bytes":19480000000,"expert_payload_bytes":15000000000,"model_core_payload_bytes":2600000000,"context_state_payload_bytes":0}}
         """.utf8)
     )
 
@@ -209,7 +209,7 @@ final class MlxHeadroomSplitTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"generating","mlx_memory_ceiling_bytes":39000000000,"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":15000000000,"allocator_cache_memory_bytes":0,"peak_memory_bytes":16000000000,"expert_payload_bytes":0,"model_core_payload_bytes":2600000000,"context_state_payload_bytes":750000000,"memory_ceiling_utilization":{"unused_headroom_bytes":24000000000,"reserved_model_core_slack_bytes":0,"reserved_context_growth_bytes":24000000000,"reserved_activation_and_workspace_bytes":72000000000,"unseated_expert_entitlement_bytes":0,"unexplained_headroom_bytes":0,"owner_overrun_bytes":72000000000}}}
+        {"status":"ready","activity":"generating","mlx_memory_ceiling_bytes":39000000000,"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":15000000000,"mlx_buffer_cache_bytes":0,"peak_memory_bytes":16000000000,"expert_payload_bytes":0,"model_core_payload_bytes":2600000000,"context_state_payload_bytes":750000000,"memory_ceiling_utilization":{"unused_headroom_bytes":24000000000,"reserved_model_core_slack_bytes":0,"reserved_context_growth_bytes":24000000000,"reserved_activation_and_workspace_bytes":72000000000,"unseated_expert_entitlement_bytes":0,"unexplained_headroom_bytes":0,"owner_overrun_bytes":72000000000}}}
         """.utf8)
     )
 

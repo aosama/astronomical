@@ -8,7 +8,7 @@ use std::cell::RefCell;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_streaming::expert_streaming::WarmExpertSlotTableCache;
+use crate::qwen3_5_streaming::expert_streaming::AstroExpertCache;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
@@ -24,12 +24,12 @@ impl Qwen3_5Model {
     /// adopting it is pure reuse — without this offer every later chunk
     /// re-read the same bytes from storage (the 2026-10-23 Ornith flight
     /// streamed 389 GB for one 23,976-token prompt while 26.95 GB of ceiling
-    /// sat unused). Budget admission inside the cache remains the only refusal
+    /// sat unused). Budget admission inside the astro expert cache remains the only refusal
     /// path.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn offer_multi_token_union_to_retained_ownership(
         &self,
-        retained_experts: &RefCell<WarmExpertSlotTableCache>,
+        astro_expert_cache: &RefCell<AstroExpertCache>,
         layer_index: usize,
         expert_capacity: usize,
         route_token_count: i32,
@@ -50,7 +50,7 @@ impl Qwen3_5Model {
                 expert_capacity,
             )
         {
-            let seated = retained_experts.borrow_mut().try_adopt_complete_layer(
+            let seated = astro_expert_cache.borrow_mut().try_adopt_complete_layer(
                 &self.runtime,
                 layer_index,
                 routed_expert_ids,
@@ -78,7 +78,7 @@ impl Qwen3_5Model {
             routed_expert_ids.len(),
             expert_capacity,
         ) {
-            let inserted_expert_count = retained_experts.borrow_mut().insert_streamed_experts(
+            let inserted_expert_count = astro_expert_cache.borrow_mut().insert_streamed_experts(
                 &self.runtime,
                 layer_index,
                 routed_expert_ids,
@@ -106,7 +106,7 @@ impl Qwen3_5Model {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn queue_decode_warm_inserts(
         &self,
-        retained_experts: &RefCell<WarmExpertSlotTableCache>,
+        astro_expert_cache: &RefCell<AstroExpertCache>,
         layer_index: usize,
         expert_capacity: usize,
         route_token_count: i32,
@@ -124,7 +124,7 @@ impl Qwen3_5Model {
                 self.expert_layer_state(layer_index),
                 false,
             ) {
-                retained_experts
+                astro_expert_cache
                     .borrow_mut()
                     .queue_pending_routed_expert_insert(
                         layer_index,
@@ -135,7 +135,7 @@ impl Qwen3_5Model {
             } else if performance_attribution.is_enabled() {
                 // Issue #537: keep this token's streamed route in leftover
                 // slots when the residency plan would have dropped it.
-                retained_experts
+                astro_expert_cache
                     .borrow_mut()
                     .queue_pending_prefetch_insert(
                         layer_index,

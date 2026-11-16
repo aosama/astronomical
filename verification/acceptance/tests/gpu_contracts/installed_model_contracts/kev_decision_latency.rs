@@ -29,7 +29,7 @@ use super::decision_memory_peak::{peak_memory_bytes_after_request, peak_memory_r
 
 /// Kev-9B in bfloat16 is about 18 GB; a 65,536-token prefill needs room beside it.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 36 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const QUESTION_COUNTS: [usize; 3] = [1, 5, 10];
 /// Timed requests per question count; the median is reported. Each one
 /// prefills a full 65,536-token state, which dominates the request: three
@@ -124,7 +124,7 @@ async fn should_measure_kev_decision_latency_at_the_state_limit() {
         "kev",
         &TestRunContext::current().required_model_directory(),
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the converted Kev folder should validate");
     decision_engine

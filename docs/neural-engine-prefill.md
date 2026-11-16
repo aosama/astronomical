@@ -26,12 +26,12 @@ Only full 2,048-token pieces use the Neural Engine, so short prompts see little 
 
 ## What was measured
 
-On Ornith-1.5-9B, on one M5-class Mac, with 10,000-token Shakespeare prompts sent through the app with the prompt cache on:
+On Ornith-1.5-9B, on one M5-class Mac, with 10,000-token Shakespeare prompts sent through the app with the astro SSD prompt cache on:
 
 | | Graphics chip alone | With the Neural Engine | Gain |
 | --- | --- | --- | --- |
 | Reading the prompt | about 1,207 tokens per second | 1,362 to 1,444 tokens per second | 1.13× to 1.2× |
-| Direct model runs, without the cache's work | | | about 1.27× |
+| Direct model runs, without the astro SSD prompt cache's work | | | about 1.27× |
 | Writing the reply | no change | no change | none |
 
 The first long prompt after a model loads sees less of the gain.
@@ -55,7 +55,7 @@ The Neural Engine's programs need memory of their own. The amount depends on the
 
 ### Disk space and preparation time
 
-- **Disk:** a model keeps about 10 GB of compiled programs in the `neural-engine-programs` folder of the app's state folder. macOS keeps its own copies in the app's cache folder as well.
+- **Disk:** a model keeps about 10 GB of compiled programs in the `neural-engine-programs` folder of the app's state folder. macOS keeps its own copies in the `coreml_model_cache`, in the app's cache folder as well.
 - **You are not kept waiting.** A model answers on the graphics chip as soon as it loads, while its programs are prepared in the background. The menu-bar app shows a banner while they prepare and another when they start being used.
 - **Preparation gets quicker.** On a 9B model with its compiled programs already on disk, preparation took 94 seconds on the first load after the app itself changed, then 43, 13 and about 3 seconds on the next loads, as macOS rebuilt its own compiled copies.
 - **The very first preparation does more.** It writes and compiles the programs, then measures them once the graphics chip has been idle for 30 seconds. Measuring takes about 3 seconds and delays no request. A request restarts that 30-second wait, so a steady stream of requests holds the programs back until there is a pause, and 1.2 GB of memory is held for them meanwhile.

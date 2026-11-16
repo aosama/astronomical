@@ -32,8 +32,8 @@ pub mod native_store;
 // Root re-exports so consumers address the orchestration surface through
 // the crate root; the module paths stay public for narrower imports.
 pub use native_compile::{
-    NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE,
-    NATIVE_DEPENDENCY_CACHE_VARIABLE, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
+    ASTRO_NATIVE_BUILD_CACHE_DEPENDENCIES_VARIABLE, NATIVE_BUILD_STATUS_FILE_VARIABLE,
+    NATIVE_BUILD_STORE_VARIABLE, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
     build_pinned_native_runtime, detect_host_target_triple, native_build_store_directory,
     native_parallel_job_count, required_path_variable, resolve_native_build_identity,
     write_native_build_status,

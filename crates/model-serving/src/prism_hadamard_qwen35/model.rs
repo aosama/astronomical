@@ -82,12 +82,12 @@ impl PrismHadamardTextModel {
         let weights = load_family_weights(&runtime, &pack, &loaded_tensors)?;
         // Fusing stacked copies of the sibling projections, so the members'
         // own arrays are garbage once the tensor map drops; without this
-        // release their buffers stay in the MLX allocator cache for the
+        // release their buffers stay in the MLX buffer cache for the
         // life of the process, inflating the worker's resident footprint by
         // most of the pack size.
         drop(loaded_tensors);
         runtime
-            .clear_allocator_cache()
+            .clear_mlx_buffer_cache()
             .map_err(PrismHadamardModelError::ForwardRuntime)?;
         let head_dimension = pack.config().text().linear_key_head_dim;
         let (gdn_query_scale_weight, gdn_key_scale_weight) =
@@ -102,7 +102,7 @@ impl PrismHadamardTextModel {
             MlxCompiledGatedDeltaRateActivation::new().map_err(PrismHadamardModelError::Forward)?;
         let compiled_dual_head_norm = MlxCompiledDualHeadNorm::new(rms_norm_epsilon)
             .map_err(PrismHadamardModelError::Forward)?;
-        // The capability probes are cached per worker process, so this
+        // The capability probes are memoized per worker process, so this
         // mirrors the core loader's cost and its fused-vs-ops decision exactly.
         let kernel_capabilities = crate::kernel_capability::worker_process_kernel_capabilities(
             &runtime,

@@ -30,12 +30,12 @@ const DIAGRAM_SVG_OPTIONS: Config = {
  * disappearing.
  */
 export class DiagramPipeline {
-  private readonly diagramCache = new Map<string, string>();
+  private readonly diagramSvgMemo = new Map<string, string>();
   private mermaidInitialised = false;
   /** Numbers each paper drawing, since mermaid needs a fresh id per render. */
   private paperDrawingCount = 0;
 
-  /** Renders every diagram in one finished message. Finished SVGs are cached by
+  /** Renders every diagram in one finished message. Finished SVGs are memoized by
    * content key so a later re-render of the same message re-installs them
    * synchronously instead of parsing mermaid again. */
   public render(root: ParentNode): void {
@@ -57,16 +57,16 @@ export class DiagramPipeline {
       }
       const storedDiagramSource: string | null = diagramBlock.textContent;
       const diagramSource: string = storedDiagramSource != null ? storedDiagramSource : "";
-      const cacheKey = `diagram-${ContentKey.hash(diagramSource)}`;
-      const cachedSvg = this.diagramCache.get(cacheKey);
-      if (cachedSvg !== undefined) {
-        DiagramPipeline.installFigure(codeBlockWrapper, cachedSvg, diagramSource);
+      const diagramSvgMemoKey = `diagram-${ContentKey.hash(diagramSource)}`;
+      const memoizedSvg = this.diagramSvgMemo.get(diagramSvgMemoKey);
+      if (memoizedSvg !== undefined) {
+        DiagramPipeline.installFigure(codeBlockWrapper, memoizedSvg, diagramSource);
         (diagramBlock as HTMLElement).dataset.diagram = "true";
         return;
       }
       (diagramBlock as HTMLElement).dataset.diagram = "pending";
       mermaid
-        .render(cacheKey, diagramSource)
+        .render(diagramSvgMemoKey, diagramSource)
         .then((renderResult) => {
           if (!renderResult || !renderResult.svg) {
             throw new Error("mermaid produced no svg");
@@ -76,7 +76,7 @@ export class DiagramPipeline {
           if (sanitisedSvg.indexOf("<svg") === -1) {
             throw new Error("diagram svg did not survive sanitisation");
           }
-          this.diagramCache.set(cacheKey, sanitisedSvg);
+          this.diagramSvgMemo.set(diagramSvgMemoKey, sanitisedSvg);
           if (codeBlockWrapper.isConnected) {
             DiagramPipeline.installFigure(codeBlockWrapper, sanitisedSvg, diagramSource);
           }

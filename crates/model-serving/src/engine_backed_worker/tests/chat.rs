@@ -1,6 +1,7 @@
 //! Engine-backed chat worker journeys driven over the real IPC framing with
 //! scripted engines, factories, and processors.
 
+mod astro_ssd_prompt_cache_stats;
 mod count_chat_tokens;
 mod expert_memory_mode;
 mod generation_lifecycle;
@@ -8,7 +9,6 @@ mod live_memory_limit_wired_budget;
 mod model_visible_correction;
 mod neural_engine_preparation;
 mod prefill_progress;
-mod prompt_cache_stats;
 mod ready_and_model_lifecycle;
 mod resident_promotion;
 mod resident_promotion_failures;

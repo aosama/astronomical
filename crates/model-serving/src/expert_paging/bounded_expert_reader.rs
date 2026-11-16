@@ -23,7 +23,7 @@
 //!
 //! The optional positional-read metrics count logical reads issued by this path.
 //! They are not proof of equal physical SSD traffic; macOS may satisfy reads from
-//! its file cache.
+//! the `macos_file_cache`.
 
 use std::{collections::HashMap, sync::Arc};
 

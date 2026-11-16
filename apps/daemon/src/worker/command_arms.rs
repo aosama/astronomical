@@ -18,7 +18,7 @@ use tokio::time::Interval;
 
 use crate::serving::chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect};
 use crate::serving::decisions_executor::DecisionsResultSender;
-use crate::worker::cache_clear::handle_prompt_cache_clear_command;
+use crate::worker::astro_ssd_prompt_cache_clear::handle_astro_ssd_prompt_cache_clear_command;
 use crate::worker::event_reaction::{
     cancel_active_request, fail_model_load_deadline, react_to_worker_event_outcome,
     sample_idle_mlx_memory_telemetry, send_stepped_deadline_exceeded,
@@ -133,7 +133,7 @@ pub(in crate::worker) async fn run_worker_iteration(
     drain_pending_idle_work(
         &mut worker_loop_state,
         &mut runtime.pending_mlx_memory_limit_update,
-        &mut runtime.pending_prompt_cache_clear,
+        &mut runtime.pending_astro_ssd_prompt_cache_clear,
         &runtime.active_generation_permits,
         &runtime.generation_queue_permits,
     )
@@ -209,7 +209,7 @@ pub(in crate::worker) async fn run_worker_iteration(
         _ = idle_control_interval.tick(), if is_worker_running
             && runtime.is_ready
             && runtime.active_generation.is_none()
-            && (has_loaded_model || runtime.pending_prompt_cache_clear.is_some()) => {
+            && (has_loaded_model || runtime.pending_astro_ssd_prompt_cache_clear.is_some()) => {
             sample_idle_mlx_memory_telemetry(runtime, has_loaded_model).await;
             if should_unload_idle_model(runtime, has_loaded_model, tokio::time::Instant::now()) {
                 unload_idle_model(runtime).await;
@@ -283,8 +283,8 @@ pub(in crate::worker) async fn handle_worker_loop_command(
             replace_model_policy_catalog(runtime, routed_command);
             WorkerLoopFlow::Continue
         }
-        routed_command @ WorkerLoopCommand::ClearPromptCache { .. } => {
-            clear_prompt_cache(runtime, routed_command).await;
+        routed_command @ WorkerLoopCommand::ClearAstroSsdPromptCache { .. } => {
+            clear_astro_ssd_prompt_cache(runtime, routed_command).await;
             WorkerLoopFlow::Continue
         }
     }
@@ -615,20 +615,23 @@ fn replace_model_policy_catalog(
     let _send_outcome = update_sender.send(Ok(()));
 }
 
-/// Delegates a prompt-cache clear to its handler with the loop's shared
-/// mutation surface. Mirrors the inlined `ClearPromptCache` arm.
-async fn clear_prompt_cache(runtime: &mut WorkerLoopRuntime, routed_command: WorkerLoopCommand) {
-    let WorkerLoopCommand::ClearPromptCache {
+/// Delegates an astro SSD prompt cache clear to its handler with the loop's shared
+/// mutation surface. Mirrors the inlined `ClearAstroSsdPromptCache` arm.
+async fn clear_astro_ssd_prompt_cache(
+    runtime: &mut WorkerLoopRuntime,
+    routed_command: WorkerLoopCommand,
+) {
+    let WorkerLoopCommand::ClearAstroSsdPromptCache {
         model_id,
         clear_sender,
     } = routed_command
     else {
         return;
     };
-    handle_prompt_cache_clear_command(
+    handle_astro_ssd_prompt_cache_clear_command(
         model_id,
         clear_sender,
-        &mut runtime.pending_prompt_cache_clear,
+        &mut runtime.pending_astro_ssd_prompt_cache_clear,
         &mut runtime.worker_process,
         &runtime.health_snapshot,
         &mut runtime.active_generation,

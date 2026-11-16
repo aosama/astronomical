@@ -30,6 +30,10 @@ pub(crate) mod model_chunking_configuration;
 pub(crate) mod output_gate_engine;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod probe_token_ids;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod register_ordered_projections;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod tree_layer_attention;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) use base::Qwen3_5ModelBase;

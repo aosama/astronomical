@@ -1,7 +1,7 @@
 // One shared seam for starting Astronomical at login (issue #1341).
 //
 // The system's Login Items registration is the single source of truth: the
-// menu item reads the live registration status instead of a cached
+// menu item reads the live registration status instead of a memoized
 // preference, so a change made in System Settings under General → Login Items
 // & Extensions is reflected the next time the menu opens, and the check mark
 // can never disagree with what launchd will actually do.

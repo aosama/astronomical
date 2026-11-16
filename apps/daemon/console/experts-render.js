@@ -217,7 +217,7 @@ function expertSessionScopeSentence(activity) {
 }
 
 // Requested bytes are what the code asked storage for; physical bytes are what
-// the operating system actually served from the disk. The file cache can
+// the operating system actually served from the disk. The macOS file cache can
 // satisfy requests from RAM, so the two numbers are honestly different and
 // both belong on the page (issue #1715).
 function expertPhysicalReadSentence(valueSection) {

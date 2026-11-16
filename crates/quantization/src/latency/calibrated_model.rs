@@ -6,7 +6,7 @@
 use super::hardware_profile::HardwareProfile;
 
 /// Calibrates the model's constant per-token overhead (attention, norms,
-/// cache, framework) from one real throughput measurement, after which it
+/// astro decoder state cache, framework) from one real throughput measurement, after which it
 /// predicts relative throughput between quantization configurations well.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CalibratedLatencyModel {

@@ -36,7 +36,7 @@ pub(crate) struct ConfigurationStatusSummary {
     model_discovery_diagnostics: Vec<ModelDiscoveryDiagnosticSummary>,
     unmatched_model_config_ids: Vec<String>,
     ready_model: Option<ReadyModelConfigurationSummary>,
-    prompt_cache: PromptCacheConfigurationSummary,
+    astro_ssd_prompt_cache: AstroSsdPromptCacheConfigurationSummary,
     memory: MemoryConfigurationSummary,
 }
 
@@ -65,12 +65,12 @@ struct ChunkingConfigurationSummary {
     full_attention_key_value_growth_tokens: ConfigurationValue<u32>,
     prefill_graph_submission_layer_interval: ConfigurationValue<u32>,
     experimental_ssd_paging_generation_graph_submission_layer_interval: ConfigurationValue<u32>,
-    prompt_cache_block_tokens: NullableConfigurationValue<u32>,
-    prompt_cache_common_prefix_stride_blocks: ConfigurationValue<u32>,
+    ssd_prompt_cache_block_tokens: NullableConfigurationValue<u32>,
+    ssd_prompt_cache_common_prefix_stride_blocks: ConfigurationValue<u32>,
 }
 
 #[derive(Serialize)]
-struct PromptCacheConfigurationSummary {
+struct AstroSsdPromptCacheConfigurationSummary {
     enabled: ConfigurationValue<bool>,
     capacity_bytes: ConfigurationValue<u64>,
 }
@@ -154,7 +154,10 @@ impl ConfigurationStatusSummary {
                 worker_health_snapshot.ready_model_id.as_deref(),
                 worker_configuration.and_then(|configuration| configuration.loaded_model.as_ref()),
             ),
-            prompt_cache: prompt_cache_summary(configured_config.as_ref(), worker_configuration),
+            astro_ssd_prompt_cache: astro_ssd_prompt_cache_summary(
+                configured_config.as_ref(),
+                worker_configuration,
+            ),
             memory: MemoryConfigurationSummary {
                 configured_maximum_bytes: configured_config
                     .as_ref()
@@ -280,18 +283,18 @@ fn chunking_summary(
                 chunking.experimental_ssd_paging_generation_graph_submission_layer_interval
             }),
         ),
-        prompt_cache_block_tokens: reported_nullable_chunking_configuration_value(
-            configured_fields.prompt_cache_block_tokens,
-            configured_chunking.and_then(|chunking| chunking.prompt_cache_block_tokens),
-            effective_chunking.and_then(|chunking| chunking.prompt_cache_block_tokens),
+        ssd_prompt_cache_block_tokens: reported_nullable_chunking_configuration_value(
+            configured_fields.ssd_prompt_cache_block_tokens,
+            configured_chunking.and_then(|chunking| chunking.ssd_prompt_cache_block_tokens),
+            effective_chunking.and_then(|chunking| chunking.ssd_prompt_cache_block_tokens),
         ),
-        prompt_cache_common_prefix_stride_blocks: reported_chunking_configuration_value(
-            configured_fields.prompt_cache_common_prefix_stride_blocks,
+        ssd_prompt_cache_common_prefix_stride_blocks: reported_chunking_configuration_value(
+            configured_fields.ssd_prompt_cache_common_prefix_stride_blocks,
             configured_chunking
-                .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks),
-            astronomical_config::DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
+                .map(|chunking| chunking.ssd_prompt_cache_common_prefix_stride_blocks),
+            astronomical_config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
             effective_chunking
-                .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks),
+                .map(|chunking| chunking.ssd_prompt_cache_common_prefix_stride_blocks),
         ),
     }
 }
@@ -344,22 +347,23 @@ fn sampling_value(
     }
 }
 
-fn prompt_cache_summary(
+fn astro_ssd_prompt_cache_summary(
     configured: Option<&ResolvedRuntimeConfig>,
     effective: Option<&astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
-) -> PromptCacheConfigurationSummary {
-    PromptCacheConfigurationSummary {
+) -> AstroSsdPromptCacheConfigurationSummary {
+    AstroSsdPromptCacheConfigurationSummary {
         enabled: ConfigurationValue {
             configured: configured
-                .and_then(|config| config.configured_persistent_prompt_cache_enabled),
+                .and_then(|config| config.configured_astro_ssd_prompt_cache_enabled),
             default: Some(true),
-            effective: effective.map(|configuration| configuration.persistent_prompt_cache_enabled),
+            effective: effective.map(|configuration| configuration.astro_ssd_prompt_cache_enabled),
         },
         capacity_bytes: ConfigurationValue {
             configured: configured
-                .and_then(|config| config.configured_prompt_cache_maximum_size_bytes),
-            default: Some(astronomical_config::DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_BYTES),
-            effective: effective.map(|configuration| configuration.prompt_cache_maximum_size_bytes),
+                .and_then(|config| config.configured_astro_ssd_prompt_cache_maximum_size_bytes),
+            default: Some(astronomical_config::DEFAULT_ASTRO_SSD_PROMPT_CACHE_MAXIMUM_SIZE_BYTES),
+            effective: effective
+                .map(|configuration| configuration.astro_ssd_prompt_cache_maximum_size_bytes),
         },
     }
 }

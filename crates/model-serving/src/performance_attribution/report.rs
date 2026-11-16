@@ -30,7 +30,7 @@ pub struct ModelLoadingPerformanceAttributionMetadata {
     pub resident_model_payload_bytes: Option<u64>,
     pub model_shard_count: Option<usize>,
     pub mlx_active_memory_bytes: Option<u64>,
-    pub mlx_allocator_cache_memory_bytes: Option<u64>,
+    pub mlx_buffer_cache_bytes: Option<u64>,
     pub mlx_peak_memory_bytes: Option<u64>,
     pub failure_description: Option<String>,
 }
@@ -46,7 +46,7 @@ pub struct GenerationPerformanceAttributionMetadata {
     pub request_id: u64,
     pub configured_maximum_output_tokens: u16,
     pub mlx_active_memory_bytes: Option<u64>,
-    pub mlx_allocator_cache_memory_bytes: Option<u64>,
+    pub mlx_buffer_cache_bytes: Option<u64>,
     pub mlx_peak_memory_bytes: Option<u64>,
     pub failure_description: Option<String>,
 }
@@ -73,7 +73,7 @@ pub struct ModelLoadingPerformanceAttributionReport {
     resident_model_payload_bytes: Option<u64>,
     model_shard_count: Option<usize>,
     mlx_active_memory_bytes: Option<u64>,
-    mlx_allocator_cache_memory_bytes: Option<u64>,
+    mlx_buffer_cache_bytes: Option<u64>,
     mlx_peak_memory_bytes: Option<u64>,
     failure_description: Option<String>,
 }
@@ -89,7 +89,7 @@ pub struct GenerationPerformanceAttributionReport {
     request_id: u64,
     configured_maximum_output_tokens: u16,
     mlx_active_memory_bytes: Option<u64>,
-    mlx_allocator_cache_memory_bytes: Option<u64>,
+    mlx_buffer_cache_bytes: Option<u64>,
     mlx_peak_memory_bytes: Option<u64>,
     failure_description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -139,7 +139,7 @@ pub struct EmbeddingsPerformanceAttributionReport {
 struct ImageGenerationMemorySnapshot {
     phase: &'static str,
     mlx_active_memory_bytes: Option<u64>,
-    mlx_allocator_cache_memory_bytes: Option<u64>,
+    mlx_buffer_cache_bytes: Option<u64>,
     mlx_peak_memory_bytes: Option<u64>,
 }
 
@@ -205,8 +205,7 @@ impl PerformanceAttribution {
                 resident_model_payload_bytes: model_loading_metadata.resident_model_payload_bytes,
                 model_shard_count: model_loading_metadata.model_shard_count,
                 mlx_active_memory_bytes: model_loading_metadata.mlx_active_memory_bytes,
-                mlx_allocator_cache_memory_bytes: model_loading_metadata
-                    .mlx_allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes: model_loading_metadata.mlx_buffer_cache_bytes,
                 mlx_peak_memory_bytes: model_loading_metadata.mlx_peak_memory_bytes,
                 failure_description: model_loading_metadata.failure_description,
             },
@@ -236,8 +235,7 @@ impl PerformanceAttribution {
                 configured_maximum_output_tokens: generation_metadata
                     .configured_maximum_output_tokens,
                 mlx_active_memory_bytes: generation_metadata.mlx_active_memory_bytes,
-                mlx_allocator_cache_memory_bytes: generation_metadata
-                    .mlx_allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes: generation_metadata.mlx_buffer_cache_bytes,
                 mlx_peak_memory_bytes: generation_metadata.mlx_peak_memory_bytes,
                 failure_description: generation_metadata.failure_description,
                 decode_token_forward_latency_p95_nanoseconds,
@@ -382,7 +380,7 @@ fn image_memory_snapshot(
     ImageGenerationMemorySnapshot {
         phase,
         mlx_active_memory_bytes: memory.0,
-        mlx_allocator_cache_memory_bytes: memory.1,
+        mlx_buffer_cache_bytes: memory.1,
         mlx_peak_memory_bytes: memory.2,
     }
 }

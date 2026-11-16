@@ -16,16 +16,38 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
-use crate::{DecoderCacheLayout, ModelMemoryFacts};
+use crate::{AstroDecoderStateCacheLayout, ModelMemoryFacts};
 
 use super::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
+
+/// Faster paths a model turns on only after proving them on this machine;
+/// a freshly loaded model has every one off and runs MLX's own kernels.
+#[derive(Debug, Default)]
+pub struct Qwen3_5OptionalAccelerators {
+    /// Opt-in engine for linear-attention output gates during prefill; `None`
+    /// keeps them on the GPU.
+    pub(crate) output_gate_engine: Option<
+        Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
+    >,
+    /// The register-ordered 4-bit matmul's kernels; set once
+    /// `convert_projections_to_register_order` has converted this model's
+    /// dense projections, which then multiply through it.
+    pub(crate) register_ordered_matmul_kernels:
+        Option<crate::row_batched_matmul::RowBatchedMatmulKernels>,
+    /// The gated-delta recurrence over a draft tree's rows; set by
+    /// `enable_draft_tree_verification`.
+    pub(crate) gated_delta_tree_kernel: Option<mlx_bridge::MlxMetalKernel>,
+    /// Advances a DeltaNet layer over a verified tree's kept rows; set with
+    /// the tree kernel.
+    pub(crate) gated_delta_replay_kernel: Option<mlx_bridge::MlxMetalKernel>,
+}
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
 #[derive(Debug)]
 pub struct Qwen3_5ModelBase {
     pub(crate) runtime: MlxRuntime,
     pub(crate) config: Qwen3_5Config,
-    pub(crate) decoder_cache_layout: DecoderCacheLayout,
+    pub(crate) astro_decoder_state_cache_layout: AstroDecoderStateCacheLayout,
     pub(crate) weights: Qwen3_5Weights,
     /// Embedding rows read from the SSD per forward instead of a resident
     /// table; `None` keeps the table resident. Only a dense model the
@@ -39,11 +61,8 @@ pub struct Qwen3_5ModelBase {
     pub(crate) gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
     /// Fused decode prework kernel; None when demoted or environment-disabled.
     pub(crate) gdn_decode_prework_kernel: Option<MlxMetalKernel>,
-    /// Opt-in engine for linear-attention output gates during prefill; `None`
-    /// keeps them on the GPU.
-    pub(crate) output_gate_engine: Option<
-        Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
-    >,
+    /// Faster paths a model turns on only after proving them; all off by default.
+    pub(crate) optional_accelerators: Qwen3_5OptionalAccelerators,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,
@@ -109,10 +128,10 @@ impl Qwen3_5ModelBase {
         &self.config
     }
 
-    /// Returns the validated decoder-cache layout bound to this model artifact.
+    /// Returns the validated astro decoder state cache layout bound to this model artifact.
     #[must_use]
-    pub const fn decoder_cache_layout(&self) -> &DecoderCacheLayout {
-        &self.decoder_cache_layout
+    pub const fn astro_decoder_state_cache_layout(&self) -> &AstroDecoderStateCacheLayout {
+        &self.astro_decoder_state_cache_layout
     }
 
     /// Returns the optional vision tower loaded beside the language model.
@@ -124,7 +143,7 @@ impl Qwen3_5ModelBase {
     /// Releases the vision tower's weights once an image request has resolved
     /// its embeddings, and returns their bytes to the system.
     ///
-    /// The allocator cache is cleared here rather than at request end, so the
+    /// The MLX buffer cache is cleared here rather than at request end, so the
     /// freed bytes are available to this request's own prefill: on a small
     /// Mac that prefill is the peak that matters. A failed release only logs,
     /// because the request already has its embeddings; the tower then stays
@@ -137,15 +156,15 @@ impl Qwen3_5ModelBase {
             Ok(false) => {}
             Ok(true) => match self
                 .runtime
-                .synchronize_gpu_stream_and_clear_allocator_cache()
+                .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
             {
                 Ok(()) => tracing::debug!(
                     released_vision_payload_bytes = vision_model.tower_payload_bytes(),
                     "released the vision tower weights after the image request"
                 ),
-                Err(cache_clear_error) => tracing::warn!(
-                    error = %cache_clear_error,
-                    "released the vision tower weights but could not clear the allocator cache"
+                Err(astro_ssd_prompt_cache_clear_error) => tracing::warn!(
+                    error = %astro_ssd_prompt_cache_clear_error,
+                    "released the vision tower weights but could not clear the MLX buffer cache"
                 ),
             },
             Err(release_error) => tracing::warn!(
@@ -238,15 +257,26 @@ impl Qwen3_5ModelBase {
         }
     }
 
+    /// `activations` [..., input] times a projection's weight transposed:
+    /// [..., output]. Bound weights multiply through MLX; a dense projection
+    /// converted into register order through the register-ordered matmul.
     pub(crate) fn quantized_linear(
+        &self,
+        activations: &MlxArray,
+        projection_weights: &impl Qwen3_5LinearWeights,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        projection_weights.project_rows(self, activations)
+    }
+
+    /// `activations` times weights as bound from the artifact.
+    pub(crate) fn bound_linear(
         &self,
         activations: &MlxArray,
         affine_weights: &Qwen3_5AffineWeights,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         match affine_weights {
             Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                let transposed_weight = self.runtime.transpose_axes(weight, &[1, 0])?;
-                Ok(self.runtime.matmul(activations, &transposed_weight)?)
+                self.native_bfloat16_linear(activations, weight)
             }
             Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
                 Err(Qwen3_5ExecutionError::InvalidInput {
@@ -269,6 +299,35 @@ impl Qwen3_5ModelBase {
                 *quantization_bits,
             )?),
         }
+    }
+
+    fn native_bfloat16_linear(
+        &self,
+        activations: &MlxArray,
+        weight: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let transposed_weight = self.runtime.transpose_axes(weight, &[1, 0])?;
+        Ok(self.runtime.matmul(activations, &transposed_weight)?)
+    }
+}
+
+/// Weights `quantized_linear` multiplies rows by: those bound from the
+/// artifact, and dense projections that may have been converted at load.
+pub(crate) trait Qwen3_5LinearWeights {
+    fn project_rows(
+        &self,
+        model: &Qwen3_5ModelBase,
+        activations: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError>;
+}
+
+impl Qwen3_5LinearWeights for Qwen3_5AffineWeights {
+    fn project_rows(
+        &self,
+        model: &Qwen3_5ModelBase,
+        activations: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        model.bound_linear(activations, self)
     }
 }
 

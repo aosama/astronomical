@@ -276,8 +276,8 @@ async fn should_preserve_the_prior_runtime_when_a_replacement_model_load_fails_m
     let worker = EngineBackedWorker::idle_with_model_factory(factory, 8_000)
         .with_worker_runtime_feature_configuration(WorkerRuntimeFeatureConfiguration {
             configuration_generation: "generation-192".to_owned(),
-            persistent_prompt_cache_enabled: false,
-            prompt_cache_maximum_size_bytes: 0,
+            astro_ssd_prompt_cache_enabled: false,
+            astro_ssd_prompt_cache_maximum_size_bytes: 0,
             loaded_model: None,
         });
     let (mut events, mut commands, worker_task) = start_worker(worker).await;

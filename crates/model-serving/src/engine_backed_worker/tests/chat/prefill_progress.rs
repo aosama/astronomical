@@ -12,15 +12,15 @@ use astronomical_ipc_protocol::{
 use tokio::io::{duplex, split};
 #[tokio::test]
 #[expect(clippy::too_many_lines)]
-async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_cached_usage()
+async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_astro_ssd_prompt_cache_usage()
  {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(15),
-        ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_restored_token_count_and_generated_tokens(
             3,
             vec![
                 GeneratedToken::PrefillProgress {
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     neural_engine_chunk: None,
                     prompt_layer_progress: None,
                     processed_token_count: 2,
@@ -54,7 +54,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     },
                 },
                 GeneratedToken::PrefillProgress {
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     neural_engine_chunk: None,
                     prompt_layer_progress: None,
                     processed_token_count: 3,
@@ -127,7 +127,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             assert_eq!(elapsed_millis, 0);
             assert_eq!(completed_prefill_chunk_tokens, None);
         }
-        other_event => panic!("expected initial uncached prefill progress, got {other_event:?}"),
+        other_event => panic!(
+            "expected initial prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
+        ),
     }
 
     let first_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
@@ -166,7 +168,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 Some(WorkerMlxMemorySnapshot {
                     source: MlxMemorySnapshotSource::Prefill,
                     active_memory_bytes: 11_000,
-                    allocator_cache_memory_bytes: 12_000,
+                    mlx_buffer_cache_bytes: 12_000,
                     peak_memory_bytes: 13_000,
                     expert_payload_bytes: 1_000,
                     model_core_payload_bytes: 4_000,
@@ -176,7 +178,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 })
             );
         }
-        other_event => panic!("expected uncached prefill progress, got {other_event:?}"),
+        other_event => panic!(
+            "expected prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
+        ),
     }
     let second_completed_prefill_progress_event = next_event(&mut daemon_reader).await;
     match second_completed_prefill_progress_event {
@@ -194,7 +198,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             assert_eq!(elapsed_millis, 1_000);
             assert_eq!(completed_prefill_chunk_tokens, Some(2_048));
         }
-        other_event => panic!("expected uncached prefill progress, got {other_event:?}"),
+        other_event => panic!(
+            "expected prefill progress with nothing restored from the astro SSD prompt cache, got {other_event:?}"
+        ),
     }
     let _first_output_event = next_event(&mut daemon_reader).await;
     let _second_output_event = next_event(&mut daemon_reader).await;
@@ -212,7 +218,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
         next_event(&mut daemon_reader).await,
         WorkerEvent::Completed {
             prompt_token_count: 15,
-            cached_token_count: 3,
+            astro_ssd_prompt_cache_restored_token_count: 3,
             ..
         }
     ));
@@ -231,10 +237,10 @@ async fn should_report_where_a_chunk_ran_when_the_model_has_programs() {
     };
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_prompt_token_count(15),
-        ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
+        ScriptedChatEngine::with_astro_ssd_prompt_cache_restored_token_count_and_generated_tokens(
             0,
             vec![GeneratedToken::PrefillProgress {
-                persistent_prompt_cache_diagnostics: None,
+                astro_ssd_prompt_cache_diagnostics: None,
                 neural_engine_chunk: Some(chunk_report),
                 prompt_layer_progress: None,
                 processed_token_count: 15,

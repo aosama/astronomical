@@ -55,8 +55,7 @@ fn should_carry_the_exact_mlx_memory_range_failure_texts() {
     // Any genuinely failing integer conversion yields the one TryFromIntError.
     let try_from_int_error = u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32");
     let active_memory_error = mlx_active_memory_bytes_exceed_u64_range_error(try_from_int_error);
-    let allocator_cache_error =
-        mlx_allocator_cache_memory_bytes_exceed_u64_range_error(try_from_int_error);
+    let mlx_buffer_cache_error = mlx_buffer_cache_bytes_exceed_u64_range_error(try_from_int_error);
     let peak_memory_error = mlx_peak_memory_bytes_exceed_u64_range_error(try_from_int_error);
 
     assert!(matches!(
@@ -64,8 +63,8 @@ fn should_carry_the_exact_mlx_memory_range_failure_texts() {
         crate::InferenceEngineError::Fatal { reason } if reason == "MLX active memory bytes exceed the u64 range"
     ));
     assert!(matches!(
-        allocator_cache_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "MLX allocator-cache memory bytes exceed the u64 range"
+        mlx_buffer_cache_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "MLX buffer cache memory bytes exceed the u64 range"
     ));
     assert!(matches!(
         peak_memory_error,
@@ -99,16 +98,17 @@ fn should_carry_the_exact_visual_embedding_and_restored_prefix_range_failure_tex
 #[test]
 fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
     let eligible_capture_error =
-        eligible_prompt_cache_capture_has_no_persistent_cache_owner_error();
+        eligible_astro_ssd_prompt_cache_capture_has_no_astro_ssd_prompt_cache_owner_error();
     let boundary_workspace_error = boundary_checkpoint_workspace_bytes_overflowed_error();
-    let publication_workspace_error = prompt_cache_publication_workspace_bytes_overflowed_error();
+    let publication_workspace_error =
+        astro_ssd_prompt_cache_publication_workspace_bytes_overflowed_error();
     let completed_chunk_tokens_error = completed_prefill_chunk_tokens_exceed_u32_range_error(
         u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32"),
     );
 
     assert!(matches!(
         eligible_capture_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "eligible prompt-cache capture has no persistent cache owner"
+        crate::InferenceEngineError::Fatal { reason } if reason == "eligible astro-ssd-prompt-cache capture has no astro-ssd-prompt-cache owner"
     ));
     assert!(matches!(
         boundary_workspace_error,
@@ -116,7 +116,7 @@ fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
     ));
     assert!(matches!(
         publication_workspace_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "prompt-cache publication workspace bytes overflowed"
+        crate::InferenceEngineError::Fatal { reason } if reason == "astro-ssd-prompt-cache publication workspace bytes overflowed"
     ));
     assert!(matches!(
         completed_chunk_tokens_error,
@@ -162,8 +162,7 @@ fn should_carry_the_exact_memory_governance_failure_texts() {
     let ceiling_range_error =
         current_mlx_memory_ceiling_exceeds_u64_range_error(try_from_int_error);
     let active_memory_error = mlx_active_memory_exceeds_u64_range_error(try_from_int_error);
-    let allocator_cache_error =
-        mlx_allocator_cache_memory_exceeds_u64_range_error(try_from_int_error);
+    let mlx_buffer_cache_error = mlx_buffer_cache_exceeds_u64_range_error(try_from_int_error);
     let peak_memory_error = mlx_peak_memory_exceeds_u64_range_error(try_from_int_error);
 
     assert!(matches!(
@@ -187,8 +186,8 @@ fn should_carry_the_exact_memory_governance_failure_texts() {
         crate::InferenceEngineError::Fatal { reason } if reason == "MLX active memory exceeds the u64 range"
     ));
     assert!(matches!(
-        allocator_cache_error,
-        crate::InferenceEngineError::Fatal { reason } if reason == "MLX allocator-cache memory exceeds the u64 range"
+        mlx_buffer_cache_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "MLX buffer cache memory exceeds the u64 range"
     ));
     assert!(matches!(
         peak_memory_error,

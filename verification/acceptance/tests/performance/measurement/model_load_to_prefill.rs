@@ -6,7 +6,7 @@
 //! - Start: the instant the journey submits its `ChatGenerationCommand`. On an
 //!   idle worker that request triggers `SwapModel`, so this instant is the
 //!   observable start of model loading (weight binding, tokenizer, any
-//!   per-family startup work) plus tokenization and prompt-cache lookup.
+//!   per-family startup work) plus tokenization and astro SSD prompt cache lookup.
 //! - End: the arrival of the first `PrefillProgress` stream event carrying
 //!   `processed_tokens == 0, elapsed_millis == 0`. The worker emits that event
 //!   from `PromptProcessingPhaseStarted` — a confirmed prompt phase is about to
@@ -14,7 +14,7 @@
 //!   exactly on "prefill starts" and excludes prefill execution entirely.
 //!
 //! Method: one real worker process in an isolated temporary home (no SSD
-//! prompt cache, fixed 2,048-token prefill chunks per the repo standard), one
+//! astro SSD prompt cache, fixed 2,048-token prefill chunks per the repo standard), one
 //! ~500-token Romeo and Juliet warmup-fixture request, and a one-field JSON
 //! report on stderr. The request runs to completion only so the journey can
 //! verify it succeeded; no other metric is collected. Laptop-only: it loads
@@ -40,7 +40,7 @@ use tokio::time::{Instant, MissedTickBehavior, interval, sleep, timeout};
 
 /// The whole journey (worker launch, idle-ready wait, one load-plus-request
 /// pass) must finish within this budget; it stays under the repo's 120-second
-/// test ceiling like the sibling prompt-cache warmup lane.
+/// test ceiling like the sibling astro SSD prompt cache warmup lane.
 const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 
 /// The worker's launch handshake gets its own bounded wait, mirroring the
@@ -101,7 +101,7 @@ fn should_configure_model_directory_and_fixed_chunk_for_load_measurement_worker(
         configuration_document
             .get("prompt_cache_max_size_gb")
             .is_none(),
-        "the load-measurement worker must not enable the SSD prompt cache",
+        "the load-measurement worker must not enable the astro SSD prompt cache",
     );
 }
 
@@ -120,7 +120,7 @@ async fn should_measure_model_load_to_prefill_start_latency() {
 struct LoadToPrefillMeasurement {
     load_to_prefill_elapsed_millis: u128,
     prompt_token_count: u32,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
 }
 
 async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
@@ -172,8 +172,8 @@ async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
         "the measured request must have carried prompt tokens",
     );
     assert_eq!(
-        measurement.cached_token_count, 0,
-        "the isolated cold worker must not restore SSD-cached tokens",
+        measurement.astro_ssd_prompt_cache_restored_token_count, 0,
+        "the isolated cold worker must not restore tokens from the astro SSD prompt cache",
     );
 
     let measurement_report = json!({
@@ -269,10 +269,13 @@ async fn run_single_measured_request(
             | ChatGenerationStreamEvent::ToolCall { .. } => {}
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_restored_token_count,
                 ..
             } => {
-                completed_token_counts = Some((prompt_token_count, cached_token_count));
+                completed_token_counts = Some((
+                    prompt_token_count,
+                    astro_ssd_prompt_cache_restored_token_count,
+                ));
                 break;
             }
             ChatGenerationStreamEvent::Failed { reason } => {
@@ -286,14 +289,14 @@ async fn run_single_measured_request(
 
     let prefill_start_arrival_at = prefill_start_arrival_at
         .expect("the journey must observe the prefill-start boundary event");
-    let (prompt_token_count, cached_token_count) =
+    let (prompt_token_count, astro_ssd_prompt_cache_restored_token_count) =
         completed_token_counts.expect("the terminal worker event should report the token counts");
     LoadToPrefillMeasurement {
         load_to_prefill_elapsed_millis: prefill_start_arrival_at
             .duration_since(request_accepted_at)
             .as_millis(),
         prompt_token_count,
-        cached_token_count,
+        astro_ssd_prompt_cache_restored_token_count,
     }
 }
 

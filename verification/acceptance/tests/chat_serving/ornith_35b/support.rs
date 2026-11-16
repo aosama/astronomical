@@ -47,8 +47,8 @@ pub(super) fn romeo_and_juliet_long_context_prompt() -> String {
 }
 
 /// A short Romeo and Juliet excerpt that absorbs the model load and first-use
-/// JIT kernel compilation without caching the full measurement prompt, so the
-/// measured completion's prefill runs against a cold prompt cache.
+/// JIT kernel compilation without saving the full measurement prompt into the astro SSD prompt cache, so the
+/// measured completion's prefill runs against a cold astro SSD prompt cache.
 pub(super) fn prefill_attribution_warmup_prompt() -> String {
     let excerpt: String = ROMEO_AND_JULIET_SOURCE.chars().take(400).collect();
     format!(
@@ -82,7 +82,7 @@ fn isolated_home(
     model_directory: &Path,
     home_prefix: &str,
     performance_attribution_enabled: bool,
-    persistent_prompt_cache_enabled: Option<bool>,
+    astro_ssd_prompt_cache_enabled: Option<bool>,
 ) -> tempfile::TempDir {
     let development_config =
         astronomical_config::AstronomicalConfig::load_from_development_location()
@@ -113,9 +113,9 @@ fn isolated_home(
         serde_json::json!(performance_attribution_enabled);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
-    if let Some(persistent_prompt_cache_enabled) = persistent_prompt_cache_enabled {
-        config_document["prompt_cache"]["enabled"] =
-            serde_json::json!(persistent_prompt_cache_enabled);
+    if let Some(astro_ssd_prompt_cache_enabled) = astro_ssd_prompt_cache_enabled {
+        config_document["ssd_prompt_cache"]["enabled"] =
+            serde_json::json!(astro_ssd_prompt_cache_enabled);
     }
     if let Some(prefix_adoption_enabled) = run_configuration.prefix_adoption_enabled {
         config_document["chunking"]["experimental_in_memory_prefix_adoption_enabled"] =

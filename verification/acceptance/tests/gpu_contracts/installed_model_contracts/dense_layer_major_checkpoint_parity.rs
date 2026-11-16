@@ -1,4 +1,4 @@
-//! A layer-major prefill must publish the prompt-cache state the chunk path
+//! A layer-major prefill must publish the `astro_ssd_prompt_cache` state the chunk path
 //! publishes, bit for bit (issue #1985).
 //!
 //! The engine prefills a dense model that streams layers one layer at a time
@@ -22,7 +22,7 @@ use tokio::time::timeout;
 #[path = "../../support/romeo_and_juliet.rs"]
 mod romeo_and_juliet;
 
-/// The engine's SSD-streaming chunk and the 9B model's cache block.
+/// The engine's SSD-streaming chunk and the 9B model's astro SSD prompt cache block.
 const CHUNK_TOKEN_COUNT: usize = 4096;
 const BLOCK_TOKEN_COUNT: usize = 1792;
 /// About 4,600 tokens: two spans, with boundaries at 1,792 and 3,584.
@@ -31,9 +31,9 @@ const KEPT_LAYER_COUNTS: [usize; 2] = [0, 8];
 const CHECKPOINT_PARITY_BUDGET: Duration = Duration::from_secs(120);
 
 #[tokio::test]
-#[ignore = "loads the streamed_dense model and compares published prompt-cache state"]
+#[ignore = "loads the streamed_dense model and compares published astro SSD prompt cache state"]
 #[serial]
-async fn should_publish_the_chunk_path_prompt_cache_state_from_a_layer_major_prefill() {
+async fn should_publish_the_chunk_path_astro_ssd_prompt_cache_state_from_a_layer_major_prefill() {
     timeout(CHECKPOINT_PARITY_BUDGET, assert_checkpoint_parity())
         .await
         .expect("the checkpoint parity journey must finish within its budget");
@@ -86,7 +86,7 @@ async fn assert_checkpoint_parity() {
             )
             .expect("the dense layers should be probed");
         let chunk_path_boundaries = streaming_model
-            .prefill_chunk_by_chunk_with_prompt_cache_checkpoints(
+            .prefill_chunk_by_chunk_with_astro_ssd_prompt_cache_checkpoints(
                 &prompt_token_ids,
                 CHUNK_TOKEN_COUNT,
                 BLOCK_TOKEN_COUNT,
@@ -94,7 +94,7 @@ async fn assert_checkpoint_parity() {
             )
             .expect("the chunk path should prefill");
         let layer_major_boundaries = streaming_model
-            .prefill_layer_major_with_prompt_cache_checkpoints(
+            .prefill_layer_major_with_astro_ssd_prompt_cache_checkpoints(
                 &prompt_token_ids,
                 CHUNK_TOKEN_COUNT,
                 BLOCK_TOKEN_COUNT,

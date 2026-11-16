@@ -8,8 +8,8 @@ Repository tooling is typed Rust in the `xtask` crate (`cargo xtask <command>`, 
 |---|---|---|
 | `ci-step-timing.sh` | Records named step-timing segments | It runs as the first and last command of almost every step in every job, including the Swift and Node jobs and steps that run before any toolchain is installed. |
 | `publish-ci-timing-summary.sh` | Writes the timing table to the run summary | It is each job's final `if: always()` step, so it must work even when the job failed before a toolchain was set up. |
-| `report-build-cache-restoration.sh` | Reports cache-restore outcomes in action logs | It runs inside the `astronomical-cache` composite action, before any toolchain exists. |
-| `tests/test-ci-native-cache-coordination.sh` | Contract for the cache-restoration reporter | It tests the shell reporter above directly, so it lives and dies with it. |
+| `report-build-cache-restoration.sh` | Reports `github_actions_cache` restore outcomes in action logs | It runs inside the `astronomical-cache` composite action, before any toolchain exists. |
+| `tests/test-ci-native-cache-coordination.sh` | Contract for the `github_actions_cache` restoration reporter | It tests the shell reporter above directly, so it lives and dies with it. |
 | `timeout` | POSIX `timeout` for runners without GNU coreutils | The remaining shell contracts in `verification/tooling_contracts/` bound their subjects with it. |
 
 ## Tooling that moved to xtask

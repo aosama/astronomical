@@ -51,7 +51,7 @@ struct ScriptedBuilder {
 
 #[derive(Clone, Copy)]
 enum ScriptedAnswer {
-    NeedsUncachedPackage,
+    NeedsPackageOutsideAstroNeuralEngineProgramCache,
     Failed(&'static str),
 }
 
@@ -67,8 +67,8 @@ impl ProgramBuilder for ScriptedBuilder {
         for scripted_position in 0..first_answers.len() {
             if first_answers[scripted_position].0 == job.identity.decoder_layer_index {
                 return match first_answers.remove(scripted_position).1 {
-                    ScriptedAnswer::NeedsUncachedPackage => {
-                        ProgramBuildOutcome::NeedsUncachedPackage
+                    ScriptedAnswer::NeedsPackageOutsideAstroNeuralEngineProgramCache => {
+                        ProgramBuildOutcome::NeedsPackageOutsideAstroNeuralEngineProgramCache
                     }
                     ScriptedAnswer::Failed(reason) => ProgramBuildOutcome::Failed(reason),
                 };
@@ -196,7 +196,10 @@ fn should_retry_from_a_temporary_package_when_a_kept_program_is_unusable() {
     let kept_programs = tempfile::tempdir().expect("a scratch directory");
     let (mut preparation, seen_jobs) = start_preparation(
         vec![planned(mlp(0), Some(kept_programs.path().to_owned()))],
-        vec![(0, ScriptedAnswer::NeedsUncachedPackage)],
+        vec![(
+            0,
+            ScriptedAnswer::NeedsPackageOutsideAstroNeuralEngineProgramCache,
+        )],
     );
 
     advance_until_finished(&mut preparation, &WritingPackages);
@@ -340,7 +343,10 @@ fn should_never_report_more_programs_than_the_total_after_a_retry() {
             planned(mlp(0), Some(kept_programs.path().to_owned())),
             planned(mlp(1), Some(kept_programs.path().to_owned())),
         ],
-        vec![(0, ScriptedAnswer::NeedsUncachedPackage)],
+        vec![(
+            0,
+            ScriptedAnswer::NeedsPackageOutsideAstroNeuralEngineProgramCache,
+        )],
     );
 
     advance_until_finished(&mut preparation, &WritingPackages);

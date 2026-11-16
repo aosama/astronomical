@@ -19,7 +19,7 @@ const APPLY_PATCH_HELPER_PATH: &str =
 
 pub(crate) struct ExtractionRequest<'request> {
     pub(crate) repository_root: &'request Path,
-    pub(crate) cache_directory: &'request Path,
+    pub(crate) astro_native_build_cache_dependencies_directory: &'request Path,
     pub(crate) staging_directory: &'request Path,
     pub(crate) pinned_archive: &'request PinnedArchive,
     pub(crate) dependency_description: &'static str,
@@ -32,7 +32,7 @@ pub(crate) fn extract_and_patch_archive(
     patch_steps: &[PatchStep],
 ) -> Result<usize, String> {
     let archive_path = extraction_request
-        .cache_directory
+        .astro_native_build_cache_dependencies_directory
         .join(&extraction_request.pinned_archive.archive_file_name);
     require_verified_archive(&archive_path, extraction_request)?;
     let archive_staging_directory = extraction_request.staging_directory.join(format!(
@@ -94,7 +94,7 @@ fn require_verified_archive(
         return Ok(());
     }
     Err(format!(
-        "{} archive is missing or fails its pinned SHA-256: {}\nrun cargo xtask bootstrap-native-dependencies to provision the verified cache",
+        "{} archive is missing or fails its pinned SHA-256: {}\nrun cargo xtask bootstrap-native-dependencies to provision the verified native archives",
         extraction_request.dependency_description,
         archive_path.display()
     ))

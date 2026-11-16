@@ -4,10 +4,10 @@
 //!
 //! 1. **Visual prefill** — the current chunk contains image-pad tokens and the
 //!    request still owns visual embeddings. A request-level vision tensor alone
-//!    is not enough; text-only suffixes must use the text path so cache restore
+//!    is not enough; text-only suffixes must use the text path so astro SSD prompt cache restore
 //!    and cold prefill seed the first generated token the same way.
 //! 2. **Plain text prefill** — the common path; may seed the first generated
-//!    token if this is the terminal chunk, or forward with optional prompt-cache
+//!    token if this is the terminal chunk, or forward with optional astro SSD prompt cache
 //!    boundary checkpoints.
 
 use super::Qwen3_5EngineState;
@@ -15,7 +15,7 @@ use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_chunk_planning::PrefillChunkPlan;
 use super::terminal_prefill_seed::{
     chunk_requires_visual_embeddings, seed_first_generated_token_from_terminal_prefill_chunk,
-    seed_terminal_text_prefill_after_prompt_cache_boundaries,
+    seed_terminal_text_prefill_after_astro_ssd_prompt_cache_boundaries,
 };
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
@@ -24,7 +24,7 @@ use crate::qwen3_5_resident::model::VerificationLogitsMode;
 
 /// Outcome of visual, history-capture, or text prefill.
 pub(super) struct ForwardDispatchOutcome {
-    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// Forward-path failure before the orchestrator attaches a request checkpoint.
@@ -58,7 +58,14 @@ impl Qwen3_5EngineState {
         )?;
 
         let dispatch_outcome = if active_request.engine_extension.speculative_session_admitted {
-            dispatch_speculative_forward(self, active_request, model, prefill_start, prefill_end)?
+            dispatch_speculative_forward(
+                self,
+                active_request,
+                model,
+                prefill_start,
+                prefill_end,
+                plan,
+            )?
         } else {
             dispatch_non_speculative_forward(
                 active_request,
@@ -75,19 +82,19 @@ impl Qwen3_5EngineState {
     }
 }
 
-/// The speculative counterpart of the non-speculative dispatch: every
-/// admitted text chunk runs through the tap-capturing verification forward
-/// so the draft's context key-value cache grows from the target's hidden
-/// states chunk by chunk. The terminal chunk additionally seeds the first
-/// generated token exactly as the classic terminal path does. Boundary
-/// checkpoints are not produced: a speculative session forgoes prompt-cache
-/// capture in both directions by decision at admission.
+/// The drafting session's counterpart of the classic dispatch: every
+/// admitted text chunk runs through the tap-capturing forward so the drafter
+/// receives the target's tapped hidden rows chunk by chunk, and captures the
+/// same `astro_ssd_prompt_cache` boundary checkpoints the classic path does.
+/// The terminal chunk additionally seeds the first generated token exactly
+/// as the classic terminal path does.
 fn dispatch_speculative_forward(
     engine_state: &Qwen3_5EngineState,
     active_request: &mut Qwen3_5EngineRequest,
     model: &Qwen3_5ResidentModel,
     prefill_start: usize,
     prefill_end: usize,
+    plan: &PrefillChunkPlan,
 ) -> Result<ChunkForwardOutcome, PrefillForwardError> {
     let draft_runtime = engine_state.speculative_draft_runtime.as_ref().ok_or(
         Qwen3_5ExecutionError::InvalidInput {
@@ -104,41 +111,25 @@ fn dispatch_speculative_forward(
         VerificationLogitsMode::NoLogits
     };
     let chunk_token_ids = active_request.input_token_ids[prefill_start..prefill_end].to_vec();
-    let chunk_output = model.build_speculative_verification_forward(
-        &chunk_token_ids,
-        active_request.next_position_tokens,
-        &mut active_request.request_decoder_state,
-        draft_runtime.draft_configuration.target_layer_ids(),
-        logits_mode,
-        &mut active_request.performance_attribution,
+    let chunk_first_position = active_request.next_position_tokens;
+    let (chunk_output, boundary_checkpoints) = model
+        .prefill_chunk_with_taps_and_boundary_checkpoints(
+            &chunk_token_ids,
+            chunk_first_position,
+            &mut active_request.request_decoder_state,
+            &draft_runtime.drafter_configuration.target_tap_layer_ids,
+            logits_mode,
+            &plan.intermediate_completed_prefill_chunk_tokens,
+            plan.astro_ssd_prompt_cache_block_token_count.unwrap_or(0),
+            &mut active_request.performance_attribution,
+        )?;
+    hand_chunk_taps_to_drafter(
+        active_request,
+        model,
+        draft_runtime.drafter_configuration.context_row_limit(),
+        &chunk_output.hidden_state_taps,
+        chunk_first_position as i32,
     )?;
-    let mut draft_key_value_states = active_request
-        .engine_extension
-        .speculative_draft_key_value_states
-        .take()
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
-            description: "speculative prefill requires the request's draft key-value states",
-        })?;
-    let conditioned_states =
-        crate::qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states(
-            model.runtime(),
-            &draft_runtime.draft.weights,
-            &chunk_output.hidden_state_taps,
-            draft_runtime.draft_configuration.rms_norm_epsilon(),
-        )
-        .map_err(Qwen3_5ExecutionError::from)?;
-    crate::qwen3_5_resident::dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values(
-        model.runtime(),
-        &draft_runtime.draft.weights,
-        &draft_runtime.draft_configuration,
-        &mut draft_key_value_states,
-        &conditioned_states,
-        prefill_start as i32,
-    )
-    .map_err(Qwen3_5ExecutionError::from)?;
-    active_request
-        .engine_extension
-        .speculative_draft_key_value_states = Some(draft_key_value_states);
     if chunk_includes_final_prompt_token {
         let terminal_logits =
             chunk_output
@@ -154,16 +145,39 @@ fn dispatch_speculative_forward(
         active_request.set_pending_generated_token(first_generated_token);
     }
     Ok(ChunkForwardOutcome {
-        boundary_checkpoints: Vec::new(),
+        boundary_checkpoints,
     })
 }
 
-/// What either prefill dispatch path produced for one chunk. Named for the
-/// payload, not either path: the speculative branch returns the same shape
-/// (its checkpoint list is always empty — admitted sessions forfeit
-/// prompt-cache capture by decision at admission).
+/// Hands one chunk's tapped hidden rows to the request's draft session; the
+/// drafter absorbs them when the first round runs. The joined rows are run
+/// here so they hold no graph of the chunk that produced them.
+fn hand_chunk_taps_to_drafter(
+    active_request: &mut Qwen3_5EngineRequest,
+    model: &Qwen3_5ResidentModel,
+    context_row_limit: Option<i32>,
+    chunk_hidden_state_taps: &[mlx_bridge::MlxArray],
+    chunk_first_position: i32,
+) -> Result<(), Qwen3_5ExecutionError> {
+    let draft_session = active_request
+        .engine_extension
+        .speculative_draft_session
+        .as_mut()
+        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            description: "speculative prefill requires the request's draft session",
+        })?;
+    draft_session.append_tap_rows(
+        model,
+        context_row_limit,
+        chunk_hidden_state_taps,
+        chunk_first_position,
+    )?;
+    draft_session.evaluate_pending_tap_rows(model)
+}
+
+/// What either prefill dispatch path produced for one chunk.
 struct ChunkForwardOutcome {
-    boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 fn dispatch_non_speculative_forward(
@@ -175,8 +189,8 @@ fn dispatch_non_speculative_forward(
 ) -> Result<ChunkForwardOutcome, PrefillForwardError> {
     let boundary_checkpoints;
     // Request-owned visual embeddings stay attached after every image-pad in this
-    // prompt has already been consumed. Dispatching on that tensor made a cached
-    // suffix take text prefill with first-token seeding while the cold suffix of
+    // prompt has already been consumed. Dispatching on that tensor made a suffix restored from the `astro_ssd_prompt_cache`
+    // take text prefill with first-token seeding while the cold suffix of
     // the same text took visual prefill without seeding, so the first generated
     // token diverged after a lossless KV restore.
     let chunk_requires_visual_embeddings = chunk_requires_visual_embeddings(
@@ -199,7 +213,7 @@ fn dispatch_non_speculative_forward(
                 prefill_start,
                 prefill_end,
                 &plan.intermediate_completed_prefill_chunk_tokens,
-                plan.persistent_prompt_cache_block_token_count,
+                plan.astro_ssd_prompt_cache_block_token_count,
             )?;
         boundary_checkpoints = visual_boundary_checkpoints;
         active_request.consumed_visual_embedding_count += consumed_visual_embedding_count;
@@ -210,7 +224,7 @@ fn dispatch_non_speculative_forward(
             prefill_start,
             prefill_end,
             &plan.intermediate_completed_prefill_chunk_tokens,
-            plan.persistent_prompt_cache_block_token_count,
+            plan.astro_ssd_prompt_cache_block_token_count,
         )?;
     }
 
@@ -229,11 +243,11 @@ fn dispatch_visual_prefill(
     prefill_start: usize,
     prefill_end: usize,
     intermediate_completed_prefill_chunk_tokens: &[usize],
-    persistent_prompt_cache_block_token_count: Option<usize>,
+    astro_ssd_prompt_cache_block_token_count: Option<usize>,
 ) -> Result<
     (
         usize,
-        Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+        Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
     ),
     Qwen3_5ExecutionError,
 > {
@@ -256,8 +270,8 @@ fn dispatch_visual_prefill(
             )
             .map(|consumed_visual_embedding_count| (consumed_visual_embedding_count, Vec::new()))
     } else {
-        let persistent_prompt_cache_block_token_count = persistent_prompt_cache_block_token_count
-.ok_or_else(super::prefill_invalid_input_error_constructors::visual_prompt_cache_checkpoints_have_no_block_contract_invalid_input)?;
+        let astro_ssd_prompt_cache_block_token_count = astro_ssd_prompt_cache_block_token_count
+.ok_or_else(super::prefill_invalid_input_error_constructors::visual_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input)?;
         model
             .prefill_chunk_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
                 &active_request.input_token_ids[prefill_start..prefill_end],
@@ -267,7 +281,7 @@ fn dispatch_visual_prefill(
                 &mut active_request.request_decoder_state,
                 active_request.image_pad_token_id,
                 intermediate_completed_prefill_chunk_tokens.to_vec(),
-                persistent_prompt_cache_block_token_count,
+                astro_ssd_prompt_cache_block_token_count,
                 &mut active_request.performance_attribution,
             )
             .map(|checkpoint_outcome| {
@@ -289,8 +303,8 @@ fn dispatch_text_prefill(
     prefill_start: usize,
     prefill_end: usize,
     intermediate_completed_prefill_chunk_tokens: &[usize],
-    persistent_prompt_cache_block_token_count: Option<usize>,
-) -> Result<Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+    astro_ssd_prompt_cache_block_token_count: Option<usize>,
+) -> Result<Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
     let chunk_includes_final_prompt_token = prefill_end == active_request.input_token_ids.len();
     if chunk_includes_final_prompt_token && intermediate_completed_prefill_chunk_tokens.is_empty() {
         seed_first_generated_token_from_terminal_prefill_chunk(
@@ -310,16 +324,16 @@ fn dispatch_text_prefill(
             )
             .map(|()| Vec::new())
     } else {
-        let persistent_prompt_cache_block_token_count = persistent_prompt_cache_block_token_count
-.ok_or_else(super::prefill_invalid_input_error_constructors::text_prompt_cache_checkpoints_have_no_block_contract_invalid_input)?;
+        let astro_ssd_prompt_cache_block_token_count = astro_ssd_prompt_cache_block_token_count
+.ok_or_else(super::prefill_invalid_input_error_constructors::text_astro_ssd_prompt_cache_checkpoints_have_no_block_contract_invalid_input)?;
         if chunk_includes_final_prompt_token {
-            return seed_terminal_text_prefill_after_prompt_cache_boundaries(
+            return seed_terminal_text_prefill_after_astro_ssd_prompt_cache_boundaries(
                 active_request,
                 model,
                 prefill_start,
                 prefill_end,
                 intermediate_completed_prefill_chunk_tokens,
-                persistent_prompt_cache_block_token_count,
+                astro_ssd_prompt_cache_block_token_count,
             );
         }
         model
@@ -328,7 +342,7 @@ fn dispatch_text_prefill(
                 active_request.next_position_tokens,
                 &mut active_request.request_decoder_state,
                 intermediate_completed_prefill_chunk_tokens.to_vec(),
-                persistent_prompt_cache_block_token_count,
+                astro_ssd_prompt_cache_block_token_count,
                 &mut active_request.performance_attribution,
             )
             .map(|checkpoint_outcome| checkpoint_outcome.boundary_checkpoints)

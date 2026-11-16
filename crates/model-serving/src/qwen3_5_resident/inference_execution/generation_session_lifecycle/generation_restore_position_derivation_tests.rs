@@ -1,12 +1,12 @@
-use astronomical_ipc_protocol::WorkerPersistentPromptCacheLookupOutcome;
-use astronomical_ipc_protocol::WorkerPersistentPromptCacheRequestDiagnostics;
+use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheLookupOutcome;
+use astronomical_ipc_protocol::WorkerAstroSsdPromptCacheRequestDiagnostics;
 
-use super::super::decoder_state_reuse::PersistentPromptCacheRestoreOutcome;
+use super::super::decoder_state_reuse::AstroSsdPromptCacheRestoreOutcome;
 use super::derive_generation_session_position;
 
-fn zeroed_request_diagnostics() -> WorkerPersistentPromptCacheRequestDiagnostics {
-    WorkerPersistentPromptCacheRequestDiagnostics {
-        lookup_outcome: WorkerPersistentPromptCacheLookupOutcome::Hit,
+fn zeroed_request_diagnostics() -> WorkerAstroSsdPromptCacheRequestDiagnostics {
+    WorkerAstroSsdPromptCacheRequestDiagnostics {
+        lookup_outcome: WorkerAstroSsdPromptCacheLookupOutcome::Hit,
         block_token_count: 0,
         complete_prompt_block_count: 0,
         maximum_restorable_block_count: 0,
@@ -26,14 +26,14 @@ fn zeroed_request_diagnostics() -> WorkerPersistentPromptCacheRequestDiagnostics
 }
 
 fn restore_outcome(
-    persistent_prompt_cache_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
     restored_token_count: usize,
-) -> PersistentPromptCacheRestoreOutcome {
-    PersistentPromptCacheRestoreOutcome {
-        persistent_prompt_cache_token_count,
+) -> AstroSsdPromptCacheRestoreOutcome {
+    AstroSsdPromptCacheRestoreOutcome {
+        astro_ssd_prompt_cache_restored_token_count,
         restored_token_count,
-        last_restored_persistent_prompt_cache_block_key: None,
-        persistent_prompt_cache_diagnostics: zeroed_request_diagnostics(),
+        last_restored_astro_ssd_prompt_cache_block_key: None,
+        astro_ssd_prompt_cache_diagnostics: zeroed_request_diagnostics(),
     }
 }
 
@@ -41,13 +41,16 @@ fn restore_outcome(
 fn should_map_every_restored_field_into_its_session_position_slot() {
     let session_position = derive_generation_session_position(Some(restore_outcome(64, 64)));
 
-    assert_eq!(session_position.persistent_prompt_cache_token_count, 64);
+    assert_eq!(
+        session_position.astro_ssd_prompt_cache_restored_token_count,
+        64
+    );
     assert_eq!(session_position.prefill_cursor, 64);
     assert_eq!(session_position.next_position_tokens, 64);
     assert_eq!(session_position.restored_target_work_token_count, 64);
     assert!(
         session_position
-            .persistent_prompt_cache_diagnostics
+            .astro_ssd_prompt_cache_diagnostics
             .is_some()
     );
 }
@@ -56,7 +59,7 @@ fn should_map_every_restored_field_into_its_session_position_slot() {
 fn should_keep_the_cursor_and_next_position_distinct_when_a_partial_tail_block_restores() {
     // A partial tail block restores more tokens than the complete-block
     // token count reports: the cursor advances by the restored tokens while
-    // positions continue from the persistent prompt-cache token count.
+    // positions continue from the persistent astro SSD prompt cache token count.
     let session_position = derive_generation_session_position(Some(restore_outcome(64, 100)));
 
     assert_eq!(session_position.prefill_cursor, 100);
@@ -67,17 +70,20 @@ fn should_keep_the_cursor_and_next_position_distinct_when_a_partial_tail_block_r
 fn should_reset_the_whole_session_position_when_nothing_was_restored() {
     let session_position = derive_generation_session_position(None);
 
-    assert_eq!(session_position.persistent_prompt_cache_token_count, 0);
+    assert_eq!(
+        session_position.astro_ssd_prompt_cache_restored_token_count,
+        0
+    );
     assert_eq!(session_position.prefill_cursor, 0);
     assert_eq!(session_position.next_position_tokens, 0);
     assert_eq!(session_position.restored_target_work_token_count, 0);
     assert_eq!(
-        session_position.last_restored_persistent_prompt_cache_block_key,
+        session_position.last_restored_astro_ssd_prompt_cache_block_key,
         None
     );
     assert!(
         session_position
-            .persistent_prompt_cache_diagnostics
+            .astro_ssd_prompt_cache_diagnostics
             .is_none()
     );
 }

@@ -195,7 +195,7 @@ async fn read_recovery_acknowledgement(
             WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
-            | WorkerEvent::PersistentPromptCacheStats { .. } => {}
+            | WorkerEvent::AstroSsdPromptCacheStats { .. } => {}
             _ => {
                 return Err(WorkerControlError::WorkerProtocolViolation {
                     description: "replacement worker emitted an unexpected startup event",
@@ -430,9 +430,9 @@ fn react_to_cancellation_event(
             );
             Ok(CancellationEventReaction::KeepDraining)
         }
-        telemetry_event @ (WorkerEvent::PersistentPromptCacheStats { .. }
+        telemetry_event @ (WorkerEvent::AstroSsdPromptCacheStats { .. }
         | WorkerEvent::ExpertStreamingStats { .. }) => {
-            // Cache write-out and the per-generation expert-streaming report
+            // Astro SSD prompt cache write-out and the per-generation expert-streaming report
             // can land after the client drops the stream. Record them and
             // keep the healthy worker; the serving path's dispatcher stays
             // the one place that publishes them.

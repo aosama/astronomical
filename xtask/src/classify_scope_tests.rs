@@ -1,7 +1,7 @@
 use crate::classify_scope::{
-    CiEvent, classify_change_scope, is_cache_input_path, is_notices_freshness_input_path,
-    is_static_only_path, is_swift_node_input_path, may_reuse_verified_tree,
-    verdict_for_verified_tree,
+    CiEvent, classify_change_scope, is_github_actions_cache_input_path,
+    is_notices_freshness_input_path, is_static_only_path, is_swift_node_input_path,
+    may_reuse_verified_tree, verdict_for_verified_tree,
 };
 
 fn verdict_for(
@@ -36,7 +36,7 @@ fn static_only_paths_span_site_docs_assets_and_the_pages_workflow() {
 }
 
 #[test]
-fn static_only_changes_skip_macos_verification_and_cache_publication() {
+fn static_only_changes_skip_macos_verification_and_github_actions_cache_publication() {
     assert_eq!(
         verdict_for(CiEvent::PullRequest, &["README.md", "site/a.html"], false),
         (false, false, false, "static_only".to_owned(), 2)
@@ -227,8 +227,8 @@ fn should_not_treat_lookalikes_of_housekeeping_files_as_static() {
 }
 
 #[test]
-fn should_call_every_cache_key_input_a_cache_input() {
-    for cache_input in [
+fn should_call_every_github_actions_cache_key_input_a_github_actions_cache_input() {
+    for github_actions_cache_input in [
         "Cargo.lock",
         "rust-toolchain.toml",
         "third-party/tool-pins/Cargo.toml",
@@ -241,12 +241,15 @@ fn should_call_every_cache_key_input_a_cache_input() {
         "apps/thin-talk/Tests/Canvas.swift",
         "apps/thin-talk/web/package-lock.json",
     ] {
-        assert!(is_cache_input_path(cache_input), "{cache_input}");
+        assert!(
+            is_github_actions_cache_input_path(github_actions_cache_input),
+            "{github_actions_cache_input}"
+        );
     }
 }
 
 #[test]
-fn should_not_call_ordinary_code_a_cache_input() {
+fn should_not_call_ordinary_code_a_github_actions_cache_input() {
     for ordinary_path in [
         "crates/model-serving/src/lib.rs",
         "apps/daemon/src/main.rs",
@@ -258,7 +261,10 @@ fn should_not_call_ordinary_code_a_cache_input() {
         "crates/native-identity/src/lib.rs",
         "crates/test-harness/src/lib.rs",
     ] {
-        assert!(!is_cache_input_path(ordinary_path), "{ordinary_path}");
+        assert!(
+            !is_github_actions_cache_input_path(ordinary_path),
+            "{ordinary_path}"
+        );
     }
 }
 
@@ -297,7 +303,7 @@ fn should_never_reuse_a_verified_tree_on_a_pull_request_or_manual_run() {
 }
 
 #[test]
-fn should_run_in_full_when_a_push_has_a_cache_to_publish() {
+fn should_run_in_full_when_a_push_has_a_github_actions_cache_entry_to_publish() {
     let changed_paths = paths(&["crates/config/src/lib.rs", "Cargo.lock"]);
     assert!(!may_reuse_verified_tree(
         CiEvent::Push,
@@ -424,7 +430,7 @@ fn should_run_the_swift_lane_on_a_full_push_with_no_swift_input() {
     assert!(push_verdict.macos_verification_required);
     assert!(
         push_verdict.swift_node_required,
-        "only a full default-branch run saves the Swift caches"
+        "only a full default-branch run saves the SwiftPM entries of the github_actions_cache"
     );
     let pull_request_verdict =
         classify_change_scope(CiEvent::PullRequest, &rust_paths, false, false);
@@ -440,4 +446,67 @@ fn should_keep_the_swift_lane_off_on_a_push_that_needs_no_macos_lanes() {
     let rust_paths = paths(&["crates/config/src/lib.rs"]);
     let full_verdict = classify_change_scope(CiEvent::Push, &rust_paths, false, false);
     assert!(!verdict_for_verified_tree(full_verdict).swift_node_required);
+}
+
+fn pull_request_verdict(changed_paths: &[&str]) -> crate::classify_scope::ChangeScopeVerdict {
+    classify_change_scope(CiEvent::PullRequest, &paths(changed_paths), false, false)
+}
+
+#[test]
+fn should_check_a_catalog_edit_alone_in_the_catalog_lane_without_the_macos_lanes() {
+    let verdict = pull_request_verdict(&["registry/download_catalog.json"]);
+
+    assert_eq!(verdict.classification, "catalog_only");
+    assert!(verdict.code_changed);
+    assert!(verdict.catalog_check_required);
+    assert!(!verdict.macos_verification_required);
+    assert!(!verdict.swift_node_required);
+}
+
+#[test]
+fn should_keep_a_catalog_edit_with_static_content_beside_it_catalog_only() {
+    let verdict = pull_request_verdict(&[
+        "registry/download_catalog.json",
+        "README.md",
+        "site/index.html",
+    ]);
+
+    assert_eq!(verdict.classification, "catalog_only");
+    assert!(!verdict.macos_verification_required);
+}
+
+#[test]
+fn should_run_every_lane_when_a_catalog_edit_comes_with_code() {
+    let verdict = pull_request_verdict(&[
+        "registry/download_catalog.json",
+        "apps/daemon/src/library/catalog.rs",
+    ]);
+
+    assert_eq!(verdict.classification, "code_or_build");
+    assert!(verdict.macos_verification_required);
+    assert!(verdict.catalog_check_required);
+}
+
+#[test]
+fn should_treat_a_change_to_the_catalog_crate_as_code_and_also_open_the_catalog_lane() {
+    let verdict = pull_request_verdict(&["crates/download-catalog/src/download_catalog.rs"]);
+
+    assert_eq!(verdict.classification, "code_or_build");
+    assert!(verdict.macos_verification_required);
+    assert!(verdict.catalog_check_required);
+}
+
+#[test]
+fn should_not_open_the_catalog_lane_for_static_content_or_other_registry_files() {
+    assert!(!pull_request_verdict(&["README.md"]).catalog_check_required);
+    let other_registry_verdict = pull_request_verdict(&["registry/e2e_test_model_names.json"]);
+    assert!(!other_registry_verdict.catalog_check_required);
+    assert!(other_registry_verdict.macos_verification_required);
+}
+
+#[test]
+fn should_open_the_catalog_lane_on_a_manual_run() {
+    let verdict = classify_change_scope(CiEvent::WorkflowDispatch, &[], false, false);
+
+    assert!(verdict.catalog_check_required);
 }

@@ -43,7 +43,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # ci.yml's rust-core saves this macOS entry on main; restore-only here,
       # so a release-edge 504 cannot fail the nightly check.
-      - name: Restore verification-tools-cache
+      - name: Restore verification tools from the github_actions_cache
         uses: ./.github/actions/astronomical-cache
         with:
           operation: restore

@@ -9,10 +9,10 @@ use super::channel_profile::{Channel, ChannelProfile, SandboxPolicy};
 use super::code_signing::{SigningRequest, signing_plan};
 use super::command::{AppCommand, DevOpenPlacement, PlistSubject, parse_app_command};
 use super::dev_pipeline::DevPipelinePaths;
-use super::icon_cache::cached_icon_file_name;
 use super::info_plist::{escape_xml_text, render_agent_info_plist, render_info_plist};
 use super::instance_control::{InstanceAction, status_report_lines};
 use super::native_metallib::metallib_store_path;
+use super::rendered_icon_memo::rendered_icon_file_name;
 use super::running_instance::open_bundle_arguments;
 use super::step_reporter::estimate_remaining_seconds;
 
@@ -271,12 +271,12 @@ fn should_estimate_eta_from_the_rest_of_the_current_step_and_later_steps() {
 }
 
 #[test]
-fn should_key_the_cached_icon_on_channel_and_renderer_digest() {
+fn should_key_the_rendered_icon_on_channel_and_renderer_digest() {
     assert_eq!(
-        cached_icon_file_name("development", "0123456789abcdef0123"),
+        rendered_icon_file_name("development", "0123456789abcdef0123"),
         "development-0123456789abcdef.icns"
     );
-    assert_eq!(cached_icon_file_name("stable", "abc"), "stable-abc.icns");
+    assert_eq!(rendered_icon_file_name("stable", "abc"), "stable-abc.icns");
 }
 
 #[test]
@@ -409,7 +409,7 @@ fn should_reject_unknown_or_incomplete_app_subcommands() {
 }
 
 #[test]
-fn should_stage_and_keep_caches_outside_the_cargo_profile_directory() {
+fn should_stage_and_keep_step_timings_and_rendered_icons_outside_the_cargo_profile_directory() {
     let pipeline_paths = DevPipelinePaths::for_profile(
         Path::new("/repository"),
         &ChannelProfile::for_channel(Channel::Development),
@@ -427,7 +427,7 @@ fn should_stage_and_keep_caches_outside_the_cargo_profile_directory() {
             .starts_with("/repository/target/astronomical-macos-development.noindex/.staging")
     );
     assert_eq!(
-        pipeline_paths.cache_directory,
+        pipeline_paths.step_timings_and_icons_directory,
         PathBuf::from("/repository/target/app-dev-cache")
     );
 }

@@ -13,7 +13,7 @@ const MAXIMUM_OQ_REPORT_BYTES: usize = 1024 * 1024;
 /// producer calibrated; it never constrains how the artifact executes, so
 /// every field is optional and a sparse or newer report still reads.
 ///
-/// The report's cache path is deliberately not retained: it names the
+/// The report's imatrix calibration cache file path is deliberately not retained: it names the
 /// producer's machine, which has no meaning on the serving host.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct OqImatrixProvenance {

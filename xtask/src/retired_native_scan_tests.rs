@@ -48,12 +48,15 @@ mod should_parse_scan_arguments {
                 "--target-directory",
                 "/tmp/target",
                 "--fail-on-found",
-                "/tmp/cache-a",
-                "/tmp/cache-b"
+                "/tmp/scan-root-a",
+                "/tmp/scan-root-b"
             ])),
             ScanArguments::Scan {
                 target_directory_override: Some("/tmp/target".to_owned()),
-                extra_scan_roots: vec!["/tmp/cache-a".to_owned(), "/tmp/cache-b".to_owned()],
+                extra_scan_roots: vec![
+                    "/tmp/scan-root-a".to_owned(),
+                    "/tmp/scan-root-b".to_owned()
+                ],
                 fail_on_found: true
             }
         );

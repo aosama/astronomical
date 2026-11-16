@@ -43,7 +43,7 @@ pub struct MeasuredStep {
     /// What the engine's own owners say is in memory after the step.
     pub held_memory: HeldMemory,
     /// Weights the step read from storage that were alive during it. They
-    /// are the ledger's slots, not working memory.
+    /// are the ledger's slots, not MLX working buffers.
     pub in_flight_weight_bytes: u64,
     pub active_bytes_before_step: u64,
     pub active_bytes_after_step: u64,
@@ -64,10 +64,10 @@ impl MeasuredStep {
             .saturating_sub(held_around_step_bytes)
     }
 
-    /// The step's working memory: its rise less the weights it had in
+    /// The step's MLX working buffers: its rise less the weights it had in
     /// flight.
     #[must_use]
-    pub const fn working_memory_bytes(&self) -> u64 {
+    pub const fn mlx_working_buffer_bytes(&self) -> u64 {
         self.peak_beyond_held_bytes()
             .saturating_sub(self.in_flight_weight_bytes)
     }
@@ -91,9 +91,9 @@ pub struct LedgerReading {
     /// it, and the same for a reply step: what one step needs for a moment.
     pub largest_reading_step_peak_beyond_held_bytes: u64,
     pub largest_writing_step_peak_beyond_held_bytes: u64,
-    /// The largest working memory measured outside a request, such as one
+    /// The largest MLX working buffers measured outside a request, such as one
     /// layer step probed at load; `None` when nothing was probed.
-    pub probed_working_memory_bytes: Option<u64>,
+    pub probed_mlx_working_buffer_bytes: Option<u64>,
     /// The emptiest the kept weights were against the capacity while a
     /// prompt was read, in thousandths; `None` until a prompt step with
     /// nonzero capacity has been measured.
@@ -102,6 +102,9 @@ pub struct LedgerReading {
     pub overflow_count: u64,
     /// Redo attempts made since the model loaded.
     pub redo_attempt_count: u64,
+    /// The last reading of the memory macOS has wired across the whole
+    /// system and the kernel's wire limit, in that order.
+    pub system_wired_reading: Option<(u64, u64)>,
 }
 
 /// What the governor says after one measured step.
@@ -151,7 +154,7 @@ struct WorstReadings {
 pub struct MemoryGovernor {
     ledger: MemoryLedger,
     worst_readings: WorstReadings,
-    probed_working_memory_bytes: Option<u64>,
+    probed_mlx_working_buffer_bytes: Option<u64>,
     overflow_count: u64,
     redo_attempt_count: u64,
     latest_reading: Option<LedgerReading>,
@@ -164,7 +167,7 @@ impl MemoryGovernor {
         Ok(Self {
             ledger: MemoryLedger::new(limit_bytes, model_shape)?,
             worst_readings: WorstReadings::default(),
-            probed_working_memory_bytes: None,
+            probed_mlx_working_buffer_bytes: None,
             overflow_count: 0,
             redo_attempt_count: 0,
             latest_reading: None,
@@ -226,21 +229,34 @@ impl MemoryGovernor {
         self.redo_attempt_count
     }
 
-    /// A working memory measured outside a request, such as one layer step
+    /// MLX working buffers measured outside a request, such as one layer step
     /// probed at load.
     pub fn record_probe(
         &mut self,
         phase: LedgerPhase,
-        working_memory_bytes: u64,
+        mlx_working_buffer_bytes: u64,
     ) -> KeptWeightCapacity {
-        self.probed_working_memory_bytes = Some(
-            self.probed_working_memory_bytes
+        self.probed_mlx_working_buffer_bytes = Some(
+            self.probed_mlx_working_buffer_bytes
                 .unwrap_or(0)
-                .max(working_memory_bytes),
+                .max(mlx_working_buffer_bytes),
         );
         capacity_of(
             self.ledger
-                .record_working_memory(phase, working_memory_bytes),
+                .record_mlx_working_buffers(phase, mlx_working_buffer_bytes),
+        )
+    }
+
+    /// A reading of the memory macOS has wired across the whole system; the
+    /// capacity moves so that total stays under the system's wired ceiling.
+    pub fn observe_system_wired(
+        &mut self,
+        system_wired_bytes: u64,
+        system_wire_limit_bytes: u64,
+    ) -> KeptWeightCapacity {
+        capacity_of(
+            self.ledger
+                .observe_system_wired(system_wired_bytes, system_wire_limit_bytes),
         )
     }
 
@@ -299,9 +315,10 @@ impl MemoryGovernor {
 
     /// One step completed and was measured.
     pub fn complete_step(&mut self, measured_step: MeasuredStep) -> StepVerdict {
-        let accounts = self
-            .ledger
-            .record_working_memory(measured_step.phase, measured_step.working_memory_bytes());
+        let accounts = self.ledger.record_mlx_working_buffers(
+            measured_step.phase,
+            measured_step.mlx_working_buffer_bytes(),
+        );
         self.verdict_after(measured_step, accounts)
     }
 
@@ -324,7 +341,7 @@ impl MemoryGovernor {
         let (attempt_number, doubled_headroom_bytes) = match failed_attempt {
             None => {
                 self.overflow_count += 1;
-                (1, self.ledger.accounts().working_memory_bytes.max(1))
+                (1, self.ledger.accounts().mlx_working_buffer_bytes.max(1))
             }
             Some(failed_attempt) => {
                 // The lease was granted by this governor, so giving it back
@@ -365,14 +382,15 @@ impl MemoryGovernor {
         let settled_accounts = self.ledger.settle_redone_step(
             redo_attempt.headroom_lease,
             redo_attempt.phase,
-            measured_step.working_memory_bytes(),
+            measured_step.mlx_working_buffer_bytes(),
         );
         // A lease already gone leaves only the measurement to record.
         let accounts = match settled_accounts {
             Ok(accounts) => accounts,
-            Err(_) => self
-                .ledger
-                .record_working_memory(redo_attempt.phase, measured_step.working_memory_bytes()),
+            Err(_) => self.ledger.record_mlx_working_buffers(
+                redo_attempt.phase,
+                measured_step.mlx_working_buffer_bytes(),
+            ),
         };
         self.verdict_after(measured_step, accounts)
     }
@@ -408,11 +426,12 @@ impl MemoryGovernor {
                 .largest_reading_step_peak_beyond_held_bytes,
             largest_writing_step_peak_beyond_held_bytes: worst_readings
                 .largest_writing_step_peak_beyond_held_bytes,
-            probed_working_memory_bytes: self.probed_working_memory_bytes,
+            probed_mlx_working_buffer_bytes: self.probed_mlx_working_buffer_bytes,
             lowest_kept_share_while_reading_permille: worst_readings
                 .lowest_kept_share_while_reading_permille,
             overflow_count: self.overflow_count,
             redo_attempt_count: self.redo_attempt_count,
+            system_wired_reading: self.ledger.latest_system_wired_reading(),
         };
         self.latest_reading = Some(reading);
         StepVerdict {

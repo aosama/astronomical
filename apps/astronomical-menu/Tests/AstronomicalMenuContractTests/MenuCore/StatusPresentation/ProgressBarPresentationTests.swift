@@ -1,5 +1,5 @@
 // Contract for `showsProgressBar`, which alone decides whether the popover's
-// progress bar is drawn. Cases where it is hidden (model load, prompt-cache
+// progress bar is drawn. Cases where it is hidden (model load, astro SSD prompt cache
 // restore, the default generation budget) are pinned beside their journeys in
 // ModelLoadInFlightPresentationTests and StatusPresentationContractTests.
 

@@ -14,7 +14,7 @@ function downloadModelsActiveDownloadRow(catalogRows) {
         && DOWNLOAD_MODELS_ACTIVE_STATES.includes(downloadModelsRowDownloadState(catalogRow))) || null;
 }
 
-function createDownloadModelsInstalledSection(installedRows, activeDownloadRow) {
+function createDownloadModelsInstalledSection(installedRows, activeDownloadRow, catalogRows = []) {
     const section = createDownloadModelsElement("section", "download-models-installed");
     const heading = createDownloadModelsElement("div", "download-models-section-heading");
     const headingChildren = [createDownloadModelsElement("h3", "", "On this Mac")];
@@ -26,6 +26,8 @@ function createDownloadModelsInstalledSection(installedRows, activeDownloadRow) 
     heading.replaceChildren(...headingChildren);
     const lineList = createDownloadModelsElement("div", "download-models-list");
     const lines = installedRows.map(createDownloadModelsInstalledLine);
+    const queueList = createDownloadModelsQueueList(catalogRows);
+    if (queueList) lines.unshift(queueList);
     if (activeDownloadRow) lines.unshift(createDownloadModelsDownloadBanner(activeDownloadRow));
     lineList.replaceChildren(...lines);
     section.replaceChildren(heading, lineList);

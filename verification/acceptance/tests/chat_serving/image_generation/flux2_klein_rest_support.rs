@@ -28,7 +28,15 @@ pub(crate) struct FluxRestServer {
 }
 
 pub(crate) async fn launch_flux_rest_server() -> FluxRestServer {
-    let isolated_development_home = crate::support::isolated_development_home_from_user_config();
+    launch_flux_rest_server_in(crate::support::isolated_development_home_from_user_config()).await
+}
+
+/// Launches the production worker and daemon in the given isolated home. A
+/// caller that serves a model from Development's Library folder passes a
+/// home that lists that folder, since an isolated home's own Library is empty.
+pub(crate) async fn launch_flux_rest_server_in(
+    isolated_development_home: tempfile::TempDir,
+) -> FluxRestServer {
     enable_isolated_acceptance_diagnostics(&isolated_development_home);
     let production_worker_executable_path =
         astronomical_test_harness::workspace_binary("astronomical-inference-worker");
@@ -182,13 +190,10 @@ pub(crate) fn assert_image_attribution(
                 .bytes()
                 .all(|byte| byte.is_ascii_hexdigit())
         );
-        assert_eq!(
-            required_u64(final_memory, "mlx_allocator_cache_memory_bytes"),
-            0
-        );
+        assert_eq!(required_u64(final_memory, "mlx_buffer_cache_bytes"), 0);
     }
     eprintln!(
-        "[flux-acceptance] phase=cleanup reports={} allocator_cache_bytes=0",
+        "[flux-acceptance] phase=cleanup reports={} mlx_buffer_cache_bytes=0",
         image_reports.len()
     );
 }
@@ -265,7 +270,7 @@ fn enable_isolated_acceptance_diagnostics(isolated_home: &tempfile::TempDir) {
     )
     .expect("the copied Development config should contain JSON");
     config_document["diagnostics"]["performance_attribution_enabled"] = serde_json::json!(true);
-    config_document["prompt_cache"]["enabled"] = serde_json::json!(false);
+    config_document["ssd_prompt_cache"]["enabled"] = serde_json::json!(false);
     fs::write(
         config_path,
         serde_json::to_vec_pretty(&config_document)
@@ -315,10 +320,7 @@ pub(super) fn assert_worker_reuse_state(
         matches!(memory_snapshot_source, Some("finalized" | "idle_poll")),
         "status should retain finalized cleanup or a newer idle sample: {memory_snapshot}"
     );
-    assert_eq!(
-        required_u64(memory_snapshot, "allocator_cache_memory_bytes"),
-        0
-    );
+    assert_eq!(required_u64(memory_snapshot, "mlx_buffer_cache_bytes"), 0);
     assert_eq!(required_u64(memory_snapshot, "expert_payload_bytes"), 0);
     assert_eq!(
         required_u64(memory_snapshot, "context_state_payload_bytes"),

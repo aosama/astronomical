@@ -244,31 +244,31 @@ test("should_list_no_facts_and_show_the_empty_note_once_nothing_is_loaded", () =
     assert.equal(elementsById["overview-model-empty"].hidden, false);
 });
 
-test("should_name_which_cache_each_reuse_figure_measures", () => {
+test("should_name_which_cache_kind_each_reuse_figure_measures", () => {
     const scriptContext = createConsoleContext();
     const sessionPresentation = evaluate(scriptContext, "overviewSessionPresentation(sessionForTest)", {
         sessionForTest: { completed_request_count: 12, average_generation_tok_per_second: 67.4, total_prompt_token_count: 2490, total_reused_prompt_token_count: 2284 }
     });
-    const promptCachePresentation = evaluate(scriptContext, "overviewPromptCachePresentation(settingForTest, cacheForTest)", {
+    const astroSsdPromptCachePresentation = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation(settingForTest, astroSsdPromptCacheStatsForTest)", {
         settingForTest: { enabled: { effective: true }, capacity_bytes: { effective: 53687091200 } },
-        cacheForTest: { persistent_prompt_cache_hit_rate: 0.34, persistent_prompt_cache_hits: 34, persistent_prompt_cache_misses: 66, persistent_prompt_cache_total_size_bytes: 1288490188, persistent_prompt_cache_maximum_size_bytes: 0 }
+        astroSsdPromptCacheStatsForTest: { astro_ssd_prompt_cache_hit_rate: 0.34, astro_ssd_prompt_cache_hits: 34, astro_ssd_prompt_cache_misses: 66, astro_ssd_prompt_cache_total_size_bytes: 1288490188, astro_ssd_prompt_cache_maximum_size_bytes: 0 }
     });
 
     assert.deepEqual(sessionPresentation, { requests: "12", speed: "67 tok/s", memoryReuse: "92%", memoryReuseHint: "2,284 of 2,490 prompt tokens" });
-    assert.deepEqual(promptCachePresentation, { usage: "1.2 GB of 50.0 GB", hint: "34% of prompts found there" });
+    assert.deepEqual(astroSsdPromptCachePresentation, { usage: "1.2 GB of 50.0 GB", hint: "34% of prompts found there" });
 });
 
-test("should_fall_back_to_the_configured_cache_setting_until_the_worker_acknowledges_it", () => {
+test("should_fall_back_to_the_configured_astro_ssd_prompt_cache_setting_until_the_worker_acknowledges_it", () => {
     const scriptContext = createConsoleContext();
     const beforeAcknowledgement = evaluate(scriptContext,
-        "overviewPromptCachePresentation({ enabled: { effective: null, configured: false, default: true } }, null)");
+        "overviewAstroSsdPromptCachePresentation({ enabled: { effective: null, configured: false, default: true } }, null)");
     const capacityFromDefault = evaluate(scriptContext,
-        "overviewPromptCachePresentation({ enabled: { effective: null, default: true }, capacity_bytes: { effective: null, default: 53687091200 } }, null)");
-    const beforeStatus = evaluate(scriptContext, "overviewPromptCachePresentation(null, { persistent_prompt_cache_total_size_bytes: 1 })");
+        "overviewAstroSsdPromptCachePresentation({ enabled: { effective: null, default: true }, capacity_bytes: { effective: null, default: 53687091200 } }, null)");
+    const beforeStatus = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation(null, { astro_ssd_prompt_cache_total_size_bytes: 1 })");
 
     assert.equal(beforeAcknowledgement.usage, "Off");
     assert.equal(capacityFromDefault.usage, "0.0 GB of 50.0 GB");
-    assert.equal(beforeStatus.usage, "—", "cache stats alone cannot say whether the cache is on");
+    assert.equal(beforeStatus.usage, "—", "astro SSD prompt cache stats alone cannot say whether the astro SSD prompt cache is on");
 });
 
 test("should_switch_context_units_by_the_rounded_value", () => {
@@ -315,9 +315,9 @@ test("should_clamp_reused_prompt_tokens_to_the_total", () => {
 test("should_show_dashes_before_any_request_and_off_only_when_the_setting_is_off", () => {
     const scriptContext = createConsoleContext();
     const sessionPresentation = evaluate(scriptContext, "overviewSessionPresentation(undefined)");
-    const switchedOff = evaluate(scriptContext, "overviewPromptCachePresentation({ enabled: { effective: false } }, null)");
+    const switchedOff = evaluate(scriptContext, "overviewAstroSsdPromptCachePresentation({ enabled: { effective: false } }, null)");
     const onButUnused = evaluate(scriptContext,
-        "overviewPromptCachePresentation({ enabled: { effective: true }, capacity_bytes: { effective: 53687091200 } }, { persistent_prompt_cache_maximum_size_bytes: 0 })");
+        "overviewAstroSsdPromptCachePresentation({ enabled: { effective: true }, capacity_bytes: { effective: 53687091200 } }, { astro_ssd_prompt_cache_maximum_size_bytes: 0 })");
 
     assert.deepEqual(sessionPresentation, { requests: "0", speed: "—", memoryReuse: "—", memoryReuseHint: "No prompts yet" });
     assert.equal(switchedOff.usage, "Off");
@@ -332,14 +332,14 @@ function ledgerForTest(overrides = {}) {
         limit_bytes: 16 * GIBIBYTE,
         core_weight_bytes: 3 * GIBIBYTE,
         context_bytes: 1 * GIBIBYTE,
-        working_memory_bytes: 2 * GIBIBYTE,
+        mlx_working_buffer_bytes: 2 * GIBIBYTE,
         lease_bytes: 0,
         stream_slot_bytes: 1 * GIBIBYTE,
         margin_bytes: 0.32 * GIBIBYTE,
         kept_weight_capacity_bytes: 8.68 * GIBIBYTE,
         unassigned_bytes: 0,
         shortfall_bytes: 0,
-        working_memory_is_measured: true,
+        mlx_working_buffers_are_measured: true,
         held_kept_weight_bytes: 8.5 * GIBIBYTE,
         observed_step_count: 40,
         largest_unaccounted_bytes: 64 * 1048576,
@@ -365,11 +365,12 @@ test("should_divide_the_limit_into_parts_that_add_up_to_it", () => {
 
     assert.equal(limitPresentation.isAvailable, true);
     assert.deepEqual(limitPresentation.parts.map((part) => part.key),
-        ["fixed", "conversation", "working", "reading", "margin", "rest", "spare"]);
+        ["fixed", "conversation", "working", "reading", "margin", "system", "rest", "spare"]);
     const totalWidthPercent = limitPresentation.parts.reduce((total, part) => total + part.widthPercent, 0);
     assert.ok(Math.abs(totalWidthPercent - 100) < 0.01, "the parts must fill the bar: " + totalWidthPercent);
     assert.equal(limitPresentation.parts[0].text, "3.0 GB");
-    assert.equal(limitPresentation.parts[5].text, "8.7 GB · 8.5 GB in use");
+    assert.equal(limitPresentation.parts[5].text, "0.0 GB");
+    assert.equal(limitPresentation.parts[6].text, "8.7 GB · 8.5 GB in use");
     assert.equal(limitPresentation.note, "Checked against the graphics system after every step. Largest difference seen: 64 MB.");
 });
 
@@ -379,13 +380,30 @@ test("should_count_room_lent_for_a_retry_as_room_to_work", () => {
     assert.equal(limitPresentation.parts[2].text, "3.0 GB");
 });
 
+test("should_show_what_is_left_free_for_macos_and_say_why", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({
+        system_wired_reserve_bytes: 0.5 * GIBIBYTE, kept_weight_capacity_bytes: 8.18 * GIBIBYTE
+    }));
+
+    assert.equal(limitPresentation.parts[5].key, "system");
+    assert.equal(limitPresentation.parts[5].text, "0.5 GB · keeps replies fast");
+    const totalWidthPercent = limitPresentation.parts.reduce((total, part) => total + part.widthPercent, 0);
+    assert.ok(Math.abs(totalWidthPercent - 100) < 0.01, "the parts must still fill the bar: " + totalWidthPercent);
+});
+
+test("should_count_room_kept_for_the_mlx_buffer_cache_as_room_to_work", () => {
+    const limitPresentation = limitPresentationFor(ledgerForTest({ mlx_buffer_cache_bytes: 0.5 * GIBIBYTE, kept_weight_capacity_bytes: 8.18 * GIBIBYTE }));
+
+    assert.equal(limitPresentation.parts[2].text, "2.5 GB");
+});
+
 test("should_say_that_room_to_work_is_held_until_a_step_is_measured", () => {
     const limitPresentation = limitPresentationFor(ledgerForTest({
-        working_memory_is_measured: false, working_memory_bytes: 10.68 * GIBIBYTE, kept_weight_capacity_bytes: 0, held_kept_weight_bytes: 0, observed_step_count: 0
+        mlx_working_buffers_are_measured: false, mlx_working_buffer_bytes: 10.68 * GIBIBYTE, kept_weight_capacity_bytes: 0, held_kept_weight_bytes: 0, observed_step_count: 0
     }));
 
     assert.equal(limitPresentation.parts[2].text, "10.7 GB · held until a step is measured");
-    assert.equal(limitPresentation.parts[5].text, "0.0 GB · 0.0 GB in use");
+    assert.equal(limitPresentation.parts[6].text, "0.0 GB · 0.0 GB in use");
     assert.equal(limitPresentation.note, "Nothing has run yet, so nothing has been checked.");
 });
 

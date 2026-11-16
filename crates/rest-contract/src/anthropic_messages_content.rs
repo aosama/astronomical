@@ -164,7 +164,7 @@ pub(crate) struct AnthropicImageBudget {
 
 impl AnthropicSystemPrompt {
     /// Joins system blocks with a blank line, the separator Anthropic clients
-    /// assume between independently cached system sections.
+    /// assume between system sections that Anthropic's `cache_control` caches independently.
     pub(crate) fn into_text(self) -> Result<String, AnthropicMessagesValidationError> {
         match self {
             Self::Text(system_text) => Ok(system_text),

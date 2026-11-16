@@ -35,12 +35,12 @@
 //!   into consumers that never link MLX.
 //! - [`mlx_runtime`] — [`MlxRuntime`], the process-global policy owner: one
 //!   installed error handler, one Metallib path, one pair of memory limits
-//!   per worker process, plus live-limit updates, allocator-cache reclamation,
+//!   per worker process, plus live-limit updates, MLX buffer cache reclamation,
 //!   and GPU-stream synchronization.
 //! - [`safetensors`] — the custom C-ABI input/output engines handed to MLX:
 //!   the retained-descriptor reader for whole-file weight loading, the
 //!   bounded multi-range reader that expert paging is built on, the
-//!   descriptor-backed and in-memory writers used by the persistent prompt
+//!   descriptor-backed and in-memory writers used by the astro SSD prompt
 //!   cache and the quantization tools, and the positional-read metrics that
 //!   make the input/output observable.
 //!
@@ -82,8 +82,8 @@ mod safetensors;
 
 pub use mlx_metallib_path::resolve_mlx_metallib_path;
 pub use mlx_runtime_types::{
-    ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError,
-    allocator_cache_exceeds_reclaim_threshold,
+    MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemoryLimits, MlxMemorySnapshot, MlxRuntimeError,
+    mlx_buffer_cache_exceeds_reclaim_threshold,
 };
 
 #[cfg(feature = "mlx")]

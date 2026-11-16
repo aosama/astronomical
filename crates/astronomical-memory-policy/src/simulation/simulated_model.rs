@@ -1,4 +1,4 @@
-//! A model as sizes, with its true working memory.
+//! A model as sizes, with its true MLX working buffers.
 
 use crate::ledger::{LedgerPhase, ModelMemoryShape};
 
@@ -15,8 +15,8 @@ pub(crate) struct SimulatedModel {
     pub(crate) writing_reply_stream_slot_bytes: u64,
     /// What one layer step truly needs per token of its span while reading.
     /// The engine is not told this; it has to measure it.
-    pub(crate) true_reading_working_memory_bytes_per_span_token: u64,
-    pub(crate) true_writing_working_memory_bytes: u64,
+    pub(crate) true_reading_mlx_working_buffer_bytes_per_span_token: u64,
+    pub(crate) true_writing_mlx_working_buffer_bytes: u64,
 }
 
 impl SimulatedModel {
@@ -48,12 +48,12 @@ impl SimulatedModel {
     }
 
     /// What one layer step of `phase` truly needs.
-    pub(crate) fn true_working_memory_bytes(&self, phase: LedgerPhase) -> u64 {
+    pub(crate) fn true_mlx_working_buffer_bytes(&self, phase: LedgerPhase) -> u64 {
         match phase {
             LedgerPhase::Idle => 0,
-            LedgerPhase::WritingReply => self.true_writing_working_memory_bytes,
+            LedgerPhase::WritingReply => self.true_writing_mlx_working_buffer_bytes,
             LedgerPhase::ReadingPrompt { span_token_count } => self
-                .true_reading_working_memory_bytes_per_span_token
+                .true_reading_mlx_working_buffer_bytes_per_span_token
                 .saturating_mul(u64::from(span_token_count)),
         }
     }

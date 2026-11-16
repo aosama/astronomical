@@ -69,7 +69,12 @@ MLX patches (`mlx-0.32.4-*.patch`):
   Metal allocator an enforced active-memory ceiling with a distinct error
   marker (`ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED`) so the Rust memory
   manager can treat limit exhaustion separately from ordinary allocation
-  failure. Retires never; it is serving behavior upstream does not offer.
+  failure. It also moves the allocator's cache-collection line from a
+  fixed 95% of Metal's recommended working set to the configured limit
+  (never above the recommended working set), because a limit above 95%
+  otherwise drains the buffer cache on every allocation and a large model
+  replies at about a third of its speed. Retires never; it is serving
+  behavior upstream does not offer.
 - `streaming-safetensors-writer` — Astronomical feature. Streams safetensors
   output through the bounded descriptor writer and orders payloads so the
   allocator can reuse one contiguous materialization. Retires never.

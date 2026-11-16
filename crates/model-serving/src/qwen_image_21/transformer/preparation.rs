@@ -14,7 +14,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
-use crate::qwen_image_21::kv_cache;
+use crate::qwen_image_21::astro_image_prefix_key_value_cache;
 use crate::qwen_image_21::mask;
 use crate::qwen_image_21::mlx_math;
 use crate::qwen_image_21::modulation;
@@ -213,7 +213,7 @@ fn build_rope_tables(
 }
 
 /// The prefix segments and additive masks every block attends through, plus the
-/// prefix length the KV cache and modulation row selection share.
+/// prefix length the `astro_image_prefix_key_value_cache` and modulation row selection share.
 struct AttentionStructure {
     segments: Vec<AttentionSegment>,
     segment_masks: Vec<MlxArray>,
@@ -227,7 +227,7 @@ fn build_attention_structure(
 ) -> Result<AttentionStructure, QwenImage21EngineError> {
     let image_ids = mask::build_image_ids(request.img_shapes, joint_mask);
     let target_token_mask = modulation::build_target_token_mask(request.img_shapes, joint_mask);
-    let prefix_len = kv_cache::prefix_length(&target_token_mask);
+    let prefix_len = astro_image_prefix_key_value_cache::prefix_length(&target_token_mask);
     let segments: Vec<AttentionSegment> = mask::prefix_segments(&image_ids, prefix_len)
         .into_iter()
         .map(|(start, end, is_text)| AttentionSegment {

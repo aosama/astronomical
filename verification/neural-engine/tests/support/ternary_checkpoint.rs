@@ -74,7 +74,7 @@ pub(crate) struct TernaryCheckpoint {
 
 impl TernaryCheckpoint {
     /// Opens the checkpoint named by `model_directory` in the configuration
-    /// passed to `cargo xtask test-run`, so no machine's cache layout is assumed.
+    /// passed to `cargo xtask test-run`, so no machine's `huggingface_hub_cache` layout is assumed.
     pub(crate) fn open() -> Self {
         let weights_path = TestRunContext::current()
             .required_model_directory()

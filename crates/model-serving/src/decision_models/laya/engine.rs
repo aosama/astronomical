@@ -57,7 +57,7 @@ pub struct LayaDecisionEngine {
     /// The model folder, which head training reads the shipped scorer from.
     model_directory: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     resident_weight_bytes: u64,
     preloaded_artifact: Option<LayaArtifact>,
     /// Temperatures fitted on the person's own examples, read at
@@ -87,7 +87,7 @@ impl LayaDecisionEngine {
         model_id: impl Into<String>,
         model_directory: &Path,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
     ) -> Result<Self, DecisionFailure> {
         let artifact = match LayaArtifact::load(model_directory) {
             Ok(artifact) => artifact,
@@ -105,7 +105,7 @@ impl LayaDecisionEngine {
             calibration_override,
             head_tuning,
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             resident_weight_bytes: artifact.weights_file_bytes,
             preloaded_artifact: Some(artifact),
             loaded_state: None,
@@ -264,7 +264,7 @@ impl DecisionEngine for LayaDecisionEngine {
         };
         let Ok(memory_limits) = MlxMemoryLimits::new(
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         ) else {
             return Err(DecisionFailure::fatal_execution(
                 "decision runtime memory limits are invalid",
@@ -337,12 +337,12 @@ impl DecisionEngine for LayaDecisionEngine {
             head_input_request,
         );
         // The pass arrays are dropped by now, whether or not a pass failed;
-        // synchronizing and clearing the allocator cache returns their memory
+        // synchronizing and clearing the MLX buffer cache returns their memory
         // before the next request.
         let _cleanup_result = loaded_state
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache();
-        // Taken after the cleanup, so it holds no reusable-cache bytes and is
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
+        // Taken after the cleanup, so it holds no `mlx_buffer_cache` bytes and is
         // the state the next request starts from.
         let post_cleanup_memory_telemetry = match loaded_state.runtime.memory_snapshot() {
             Ok(memory_snapshot) => Some(forward_pass_memory_telemetry(

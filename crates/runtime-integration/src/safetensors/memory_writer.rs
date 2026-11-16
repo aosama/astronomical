@@ -5,7 +5,7 @@
 //! The descriptor writer persists multi-gigabyte captures straight to disk;
 //! this writer serves the opposite niche — captures small enough (or
 //! budgeted enough) to live in memory, such as block transactions the
-//! persistent cache composes and hands to a non-MLX writer thread. Giving
+//! astro SSD prompt cache composes and hands to a non-MLX writer thread. Giving
 //! MLX a memory sink lets that hand-off happen while MLX arrays and runtime
 //! state stay confined to their owner thread, as the thread-affinity
 //! contract of the runtime requires.
@@ -41,7 +41,7 @@ impl MlxRuntime {
     ///
     /// Unbounded variant: see
     /// [`serialize_safetensors_with_maximum_byte_count`] for the budgeted
-    /// form the persistent cache actually uses.
+    /// form the astro SSD prompt cache actually uses.
     pub fn serialize_safetensors(
         &self,
         named_arrays: &[(&str, &MlxArray)],

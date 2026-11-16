@@ -54,6 +54,7 @@ function wireDownloadModelsCatalog() {
         return Promise.resolve("unavailable");
     }
     wireDownloadModelsControls();
+    wireDownloadModelsSelectionGuard(catalogContainer);
     if (typeof window !== "undefined" && window.location) {
         downloadModelsLinkedModelId = readDownloadModelsLinkedModelId(window.location.search);
     }
@@ -125,6 +126,13 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         ...downloadModelsRemovalRenderState(), // changes no catalog field, so it counts here
     ]);
     if (renderStateFingerprint === downloadModelsRenderedStateFingerprint) {
+        return downloadModelsRenderedStateOutcome;
+    }
+    // A rebuild would cut the person's text selection out from under them;
+    // it waits (the fingerprint is left unchanged so the next poll retries)
+    // and only the running download's progress moves meanwhile.
+    if (downloadModelsRenderedStateOutcome === "ready" && isDownloadModelsSelectionHeld(resolvedCatalogContainer)) {
+        updateDownloadModelsBannerInPlace(resolvedCatalogContainer);
         return downloadModelsRenderedStateOutcome;
     }
     downloadModelsRenderedStateFingerprint = renderStateFingerprint;
@@ -375,15 +383,25 @@ function downloadModelsRowDownloadState(catalogRow) {
     return currentModelId ? null : catalogRow.downloadState;
 }
 
-// "9.2 of 21.9 GB · about 12 minutes left" for a running download; the time
-// is left out until the transfer rate has been measured, rather than guessed.
+// "9.2 of 21.9 GB · 41 MB/s · about 12 minutes left" for a running download;
+// the speed and time are left out until the transfer rate has been measured,
+// rather than guessed.
 function downloadModelsTransferProgressText(activeDownload) {
     const transferredText = formatDownloadModelsGigabyteCount(activeDownload.bytes_completed)
         + " of " + formatDownloadModelsCardSize(activeDownload.bytes_total);
     const bytesPerSecond = downloadModelsMeasuredBytesPerSecond;
     if (activeDownload.state !== "downloading" || !(bytesPerSecond > 0)) return transferredText;
     const remainingBytes = activeDownload.bytes_total - activeDownload.bytes_completed;
-    return transferredText + " · " + formatDownloadModelsRemainingTime(remainingBytes / bytesPerSecond);
+    return transferredText + " · " + formatDownloadModelsTransferRate(bytesPerSecond)
+        + " · " + formatDownloadModelsRemainingTime(remainingBytes / bytesPerSecond);
+}
+
+// The speed in megabytes of 1,048,576 bytes per second, matching the 2^30
+// gigabyte the page uses for sizes. A whole number reads steadily at the usual
+// tens of MB/s; one decimal keeps a slow link from showing as 0.
+function formatDownloadModelsTransferRate(bytesPerSecond) {
+    const megabytesPerSecond = bytesPerSecond / 1_048_576;
+    return (megabytesPerSecond < 10 ? megabytesPerSecond.toFixed(1) : String(Math.round(megabytesPerSecond))) + " MB/s";
 }
 
 function smoothDownloadModelsTransferRate(previousBytesPerSecond, measuredBytesPerSecond) {
@@ -476,13 +494,6 @@ function downloadModelsActionButtons(catalogRow) {
     return [downloadModelsActionButton("Pause", "pause"), downloadModelsActionButton("Cancel", "cancel")];
 }
 
-// True while a download holds the single download slot. A failed download does
-// not: the daemon discards it when another starts, so Get stays usable.
-function isDownloadModelsDownloadSlotBusy() {
-    return downloadModelsCurrentDownload.state !== "idle"
-        && downloadModelsCurrentDownload.state !== "failed";
-}
-
 function downloadModelsActionButton(label, action, huggingfaceId = null, extraClassName = "") {
     const button = document.createElement("button");
     const buttonStyle = action === "cancel" ? "button button-quiet" : "button button-secondary";
@@ -494,19 +505,18 @@ function downloadModelsActionButton(label, action, huggingfaceId = null, extraCl
 }
 
 async function performDownloadModelsAction(action, huggingfaceId) {
-    const actionPath = action === "start" ? LIBRARY_DOWNLOAD_URL : LIBRARY_DOWNLOAD_URL + "/" + action;
+    if (action === "start") return startDownloadModelsDownload(huggingfaceId);
+    const actionPath = LIBRARY_DOWNLOAD_URL + "/" + action;
     const request = { method: "POST", headers: {} };
-    if (action === "start") {
-        request.headers["Content-Type"] = "application/json";
-        request.body = JSON.stringify({ huggingface_id: huggingfaceId });
-    }
     try {
         const actionResponse = await fetch(actionPath, request);
         const actionDocument = await actionResponse.json();
         if (!actionResponse.ok) {
             throw new Error(actionDocument?.error?.message || "Download control failed");
         }
-        downloadModelsCurrentDownload = actionDocument;
+        // A pause, resume or cancel answers with the download alone; the list
+        // stays as last read until the next poll, rather than vanishing.
+        downloadModelsCurrentDownload = { ...actionDocument, queue: downloadModelsCurrentDownload.queue };
     } catch {
         downloadModelsCurrentDownload = { state: "failed", error_code: "download_failed" };
     }

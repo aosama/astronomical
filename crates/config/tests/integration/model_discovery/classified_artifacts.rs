@@ -18,13 +18,14 @@ fn should_find_local_and_hugging_face_classified_artifacts_without_advertising_e
     )
     .expect("the local revision metadata should be written");
 
-    let cache_snapshot = configured_root
+    let huggingface_hub_cache_snapshot = configured_root
         .path()
-        .join("models--example-org--Qwen35-Cache-Test")
+        .join("models--example-org--Qwen35-Hub-Cache-Test")
         .join("snapshots")
         .join("2222222222222222222222222222222222222222");
-    fs::create_dir_all(&cache_snapshot).expect("the cache snapshot should be created");
-    super::write_minimal_model_config(&cache_snapshot, "qwen3_5", 4_096);
+    fs::create_dir_all(&huggingface_hub_cache_snapshot)
+        .expect("the Hugging Face hub cache snapshot should be created");
+    super::write_minimal_model_config(&huggingface_hub_cache_snapshot, "qwen3_5", 4_096);
 
     let artifacts = astronomical_config::discover_classified_model_artifacts(&[configured_root
         .path()
@@ -39,7 +40,7 @@ fn should_find_local_and_hugging_face_classified_artifacts_without_advertising_e
             && artifact.model_family == ModelFamily::Qwen3_5
     }));
     assert!(artifacts.iter().any(|artifact| {
-        artifact.model_id == "example-org/Qwen35-Cache-Test"
+        artifact.model_id == "example-org/Qwen35-Hub-Cache-Test"
             && artifact.upstream_revision.as_deref()
                 == Some("2222222222222222222222222222222222222222")
             && artifact.model_family == ModelFamily::Qwen3_5

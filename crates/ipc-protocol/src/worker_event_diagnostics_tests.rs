@@ -49,24 +49,24 @@ fn should_name_a_model_event_without_its_failure_text() {
 }
 
 #[test]
-fn should_name_the_scoped_and_global_prompt_cache_clears_apart() {
-    let scoped_clear = WorkerEvent::PromptCacheCleared {
+fn should_name_the_scoped_and_global_astro_ssd_prompt_cache_clears_apart() {
+    let scoped_clear = WorkerEvent::AstroSsdPromptCacheCleared {
         model_id: Some("ornith-9b".to_owned()),
         blocks_removed: 3,
         bytes_freed: 4096,
     };
-    let global_clear = WorkerEvent::PromptCacheCleared {
+    let global_clear = WorkerEvent::AstroSsdPromptCacheCleared {
         model_id: None,
         blocks_removed: 0,
         bytes_freed: 0,
     };
     assert_eq!(
         scoped_clear.diagnostic_summary(),
-        "prompt_cache_cleared model_id=Some(\"ornith-9b\")"
+        "astro_ssd_prompt_cache_cleared model_id=Some(\"ornith-9b\")"
     );
     assert_eq!(
         global_clear.diagnostic_summary(),
-        "prompt_cache_cleared model_id=None"
+        "astro_ssd_prompt_cache_cleared model_id=None"
     );
 }
 

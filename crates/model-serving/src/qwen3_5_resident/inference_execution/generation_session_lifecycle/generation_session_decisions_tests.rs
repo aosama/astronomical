@@ -1,25 +1,25 @@
 use astronomical_ipc_protocol::WorkerPromptProcessingPhase;
 
-use super::{can_use_persistent_prompt_cache, initial_prompt_processing_phase};
+use super::{can_use_astro_ssd_prompt_cache, initial_prompt_processing_phase};
 
 #[test]
-fn should_enable_the_persistent_prompt_cache_for_a_text_request_when_it_is_available() {
-    assert!(can_use_persistent_prompt_cache(true, false));
+fn should_enable_the_astro_ssd_prompt_cache_for_a_text_request_when_it_is_available() {
+    assert!(can_use_astro_ssd_prompt_cache(true, false));
 }
 
 #[test]
-fn should_disable_the_persistent_prompt_cache_for_precomputed_visual_embeddings() {
-    assert!(!can_use_persistent_prompt_cache(true, true));
+fn should_disable_the_astro_ssd_prompt_cache_for_precomputed_visual_embeddings() {
+    assert!(!can_use_astro_ssd_prompt_cache(true, true));
 }
 
 #[test]
-fn should_disable_the_persistent_prompt_cache_when_no_store_is_installed() {
-    assert!(!can_use_persistent_prompt_cache(false, false));
+fn should_disable_the_astro_ssd_prompt_cache_when_no_store_is_installed() {
+    assert!(!can_use_astro_ssd_prompt_cache(false, false));
 }
 
 #[test]
-fn should_keep_the_persistent_prompt_cache_disabled_when_both_conditions_block_it() {
-    assert!(!can_use_persistent_prompt_cache(false, true));
+fn should_keep_the_astro_ssd_prompt_cache_disabled_when_both_conditions_block_it() {
+    assert!(!can_use_astro_ssd_prompt_cache(false, true));
 }
 
 #[test]

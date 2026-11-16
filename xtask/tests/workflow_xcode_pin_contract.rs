@@ -4,7 +4,7 @@
 //! workflow-level Xcode version, the one resolution script every macOS job
 //! calls, and the absence of inline copies of that script. Split from the
 //! companion `workflow_structural_contract` test the way the verdict and
-//! cache-owner contracts were.
+//! `github_actions_cache` owner contracts were.
 
 mod contract_support;
 
@@ -16,7 +16,7 @@ use serde_yaml::Value;
 
 // The macOS toolchain pin contract: one workflow-level Xcode version keeps
 // the xcodebuild/xcrun/swift identity inputs stable across runner-image
-// rollouts, so the native-build and SwiftPM caches stay valid until the pin
+// rollouts, so the native-build and SwiftPM entries of the `github_actions_cache` stay valid until the pin
 // is bumped deliberately. Each macOS job resolves the version to an
 // installed Xcode through the one shared assert-pinned-xcode action, which
 // exports DEVELOPER_DIR for every later step and makes a stale pin fail the

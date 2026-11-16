@@ -4,7 +4,7 @@ use super::*;
 /// decode step, a two-bucket latency histogram, both streaming payload
 /// summaries, and the complete counter set the diagnostic evidence parser
 /// must recover.
-fn measured_generation_cache_report() -> serde_json::Value {
+fn measured_generation_astro_expert_cache_report() -> serde_json::Value {
     serde_json::json!({
         "report_kind": "generation",
         "request_id": 42,
@@ -69,7 +69,7 @@ fn measured_generation_cache_report() -> serde_json::Value {
             {"counter": "hot_expert_route_fully_covered_count", "amount": 1},
             {"counter": "hot_expert_route_partially_covered_count", "amount": 2},
             {"counter": "hot_expert_route_fully_missed_count", "amount": 3},
-            {"counter": "decode_expert_cache_slot_eviction_count", "amount": 4},
+            {"counter": "decode_astro_expert_cache_slot_eviction_count", "amount": 4},
             {"counter": "positional_file_read_call_count", "amount": 8},
             {"counter": "positional_file_read_byte_count", "amount": 1_024},
             {"counter": "positional_file_read_elapsed_nanoseconds", "amount": 9_000},
@@ -83,7 +83,7 @@ fn measured_generation_cache_report() -> serde_json::Value {
 
 /// Writes the warmup report plus the measured fixture the way the worker
 /// does: one JSON report per line in performance-attribution.jsonl.
-fn write_generation_cache_reports(logging_directory: &std::path::Path) {
+fn write_generation_astro_expert_cache_reports(logging_directory: &std::path::Path) {
     let warmup_report = serde_json::json!({
         "report_kind": "generation",
         "request_id": 1,
@@ -91,17 +91,20 @@ fn write_generation_cache_reports(logging_directory: &std::path::Path) {
     });
     fs::write(
         logging_directory.join("performance-attribution.jsonl"),
-        format!("{warmup_report}\n{}\n", measured_generation_cache_report()),
+        format!(
+            "{warmup_report}\n{}\n",
+            measured_generation_astro_expert_cache_report()
+        ),
     )
     .expect("the attribution reports should be written");
 }
 
 /// Parses the measured request's evidence from the written reports; every
 /// facet test below starts from this same parsed value.
-fn parse_measured_generation_cache_evidence(
+fn parse_measured_generation_astro_expert_cache_evidence(
     logging_directory: &std::path::Path,
-) -> DecodeCacheDiagnosticEvidence {
-    read_decode_cache_diagnostic_evidence(logging_directory, 42)
+) -> DecodeAstroExpertCacheDiagnosticEvidence {
+    read_decode_astro_expert_cache_diagnostic_evidence(logging_directory, 42)
         .expect("the measured request report should be parsed")
 }
 
@@ -139,9 +142,10 @@ fn operation_maximum_elapsed_nanoseconds(
 fn should_parse_the_decode_latency_histogram_from_the_measured_generation_report() {
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");
-    write_generation_cache_reports(logging_directory.path());
+    write_generation_astro_expert_cache_reports(logging_directory.path());
 
-    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
+    let diagnostic_evidence =
+        parse_measured_generation_astro_expert_cache_evidence(logging_directory.path());
 
     assert_eq!(
         diagnostic_evidence.decode_token_forward_latency_p95_nanoseconds,
@@ -157,9 +161,10 @@ fn should_parse_the_decode_latency_histogram_from_the_measured_generation_report
 fn should_parse_every_operation_row_from_the_measured_generation_report() {
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");
-    write_generation_cache_reports(logging_directory.path());
+    write_generation_astro_expert_cache_reports(logging_directory.path());
 
-    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
+    let diagnostic_evidence =
+        parse_measured_generation_astro_expert_cache_evidence(logging_directory.path());
 
     assert_eq!(
         operation_occurrence_count(diagnostic_evidence.decode_advance_span.as_ref()),
@@ -209,9 +214,10 @@ fn should_parse_every_operation_row_from_the_measured_generation_report() {
 fn should_parse_every_counter_from_the_measured_generation_report() {
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");
-    write_generation_cache_reports(logging_directory.path());
+    write_generation_astro_expert_cache_reports(logging_directory.path());
 
-    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
+    let diagnostic_evidence =
+        parse_measured_generation_astro_expert_cache_evidence(logging_directory.path());
 
     assert_eq!(diagnostic_evidence.decode_expert_source_payload_bytes, 321);
     assert_eq!(
@@ -228,7 +234,7 @@ fn should_parse_every_counter_from_the_measured_generation_report() {
     );
     assert_eq!(diagnostic_evidence.hot_expert_route_fully_missed_count, 3);
     assert_eq!(
-        diagnostic_evidence.decode_expert_cache_slot_eviction_count,
+        diagnostic_evidence.decode_astro_expert_cache_slot_eviction_count,
         4
     );
     assert_eq!(diagnostic_evidence.positional_file_read_call_count, 8);
@@ -251,9 +257,10 @@ fn should_parse_every_counter_from_the_measured_generation_report() {
 fn should_parse_process_and_memory_totals_from_the_measured_generation_report() {
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");
-    write_generation_cache_reports(logging_directory.path());
+    write_generation_astro_expert_cache_reports(logging_directory.path());
 
-    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
+    let diagnostic_evidence =
+        parse_measured_generation_astro_expert_cache_evidence(logging_directory.path());
 
     assert_eq!(
         diagnostic_evidence.process_physical_disk_read_bytes,
@@ -280,7 +287,7 @@ fn should_not_use_warmup_evidence_when_the_measured_report_is_missing() {
     .expect("the warmup attribution report should be written");
 
     assert!(
-        read_decode_cache_diagnostic_evidence(logging_directory.path(), 42).is_none(),
+        read_decode_astro_expert_cache_diagnostic_evidence(logging_directory.path(), 42).is_none(),
         "a warmup report must not stand in for missing measured evidence"
     );
 }
@@ -303,12 +310,13 @@ fn should_treat_omitted_zero_counters_as_zero() {
     )
     .expect("the measured attribution report should be written");
 
-    let diagnostic_evidence = read_decode_cache_diagnostic_evidence(logging_directory.path(), 42)
-        .expect("an empty valid report should parse");
+    let diagnostic_evidence =
+        read_decode_astro_expert_cache_diagnostic_evidence(logging_directory.path(), 42)
+            .expect("an empty valid report should parse");
 
     assert_eq!(diagnostic_evidence.decode_expert_source_payload_bytes, 0);
     assert_eq!(
-        diagnostic_evidence.decode_expert_cache_slot_eviction_count,
+        diagnostic_evidence.decode_astro_expert_cache_slot_eviction_count,
         0
     );
     assert_eq!(
@@ -353,8 +361,9 @@ fn should_prefer_the_final_generation_report_when_a_request_emits_an_early_empty
     )
     .expect("the attribution reports should be written");
 
-    let diagnostic_evidence = read_decode_cache_diagnostic_evidence(logging_directory.path(), 42)
-        .expect("the final report for the request should be parsed");
+    let diagnostic_evidence =
+        read_decode_astro_expert_cache_diagnostic_evidence(logging_directory.path(), 42)
+            .expect("the final report for the request should be parsed");
 
     assert_eq!(diagnostic_evidence.decode_expert_source_payload_bytes, 321);
 }

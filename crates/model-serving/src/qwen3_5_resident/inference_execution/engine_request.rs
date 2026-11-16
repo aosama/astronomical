@@ -6,10 +6,10 @@ pub(in crate::qwen3_5_resident) type Qwen3_5EngineRequest =
 
 /// Request state only the resident engine reads.
 pub(crate) struct ResidentRequestExtension {
-    /// Draft key-value states for the speculative session; present only
-    /// while the session was admitted for draft-and-verify decoding.
-    pub(in crate::qwen3_5_resident) speculative_draft_key_value_states: Option<
-        crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
+    /// The drafter's state for the speculative session; present only while
+    /// the session was admitted for draft-and-verify decoding.
+    pub(in crate::qwen3_5_resident) speculative_draft_session: Option<
+        crate::qwen3_5_resident::inference_execution::speculative_decode_lifecycle::draft_tree_round::DraftSession,
     >,
     /// Tokens one accepted speculative round still owes the caller, in
     /// emission order, as host token ids. The tail entry seeds the next
@@ -25,6 +25,46 @@ pub(crate) struct ResidentRequestExtension {
     pub(in crate::qwen3_5_resident) speculative_session_admitted: bool,
 }
 
+impl ResidentRequestExtension {
+    /// The resident engine's part of a new request: whether the session
+    /// drafts (admitted, and prefill still computes prompt rows for the
+    /// drafter to condition on) and the drafting state it then starts from.
+    /// A sampled session's key comes from the request's seed (or the clock,
+    /// as its sampler's does), so a seeded request samples the same reply
+    /// every time.
+    pub(in crate::qwen3_5_resident) fn for_new_request(
+        speculative_session_admitted: bool,
+        restored_prompt_token_count: usize,
+        prompt_token_count: usize,
+        sampling_strategy: crate::Qwen3_5SamplingStrategy,
+    ) -> Self {
+        use crate::qwen3_5_resident::inference_execution::speculative_decode_lifecycle::{
+            draft_tree_round::DraftSession,
+            speculation_session_admission::drafting_survives_prompt_restore,
+        };
+        let speculative_session_admitted = drafting_survives_prompt_restore(
+            speculative_session_admitted,
+            restored_prompt_token_count,
+            prompt_token_count,
+        );
+        let keyed_seed = match sampling_strategy {
+            crate::Qwen3_5SamplingStrategy::HighestLogit => 0,
+            crate::Qwen3_5SamplingStrategy::TopKTopP { seed, .. } => {
+                crate::qwen3_5_core::text::resolve_sampling_seed(
+                    seed,
+                    crate::sampling_seed::current_time_millis_since_unix_epoch,
+                )
+            }
+        };
+        Self {
+            speculative_draft_session: speculative_session_admitted
+                .then_some(DraftSession::new(keyed_seed)),
+            speculative_emission_queue: std::collections::VecDeque::new(),
+            speculative_session_admitted,
+        }
+    }
+}
+
 impl Qwen3_5EngineRequest {
     /// Whether a speculative round has anything to advance: a pending
     /// successor to verify from, or accepted tokens still owed the caller.
@@ -38,7 +78,7 @@ impl Qwen3_5EngineRequest {
     /// Called when a path the block contract cannot preserve takes over:
     /// a forced thinking transition replaces the conditioned successor, and
     /// feedback injection's prefill bypasses the tap-capturing forward that
-    /// grows the draft's context cache. The queue (including its uncommitted
+    /// grows the draft's context key-value state. The queue (including its uncommitted
     /// tail) and the draft states drop; the classic path owns everything
     /// from here.
     pub(in crate::qwen3_5_resident) fn suspend_speculative_session(
@@ -50,7 +90,7 @@ impl Qwen3_5EngineRequest {
         }
         self.engine_extension.speculative_session_admitted = false;
         self.engine_extension.speculative_emission_queue.clear();
-        self.engine_extension.speculative_draft_key_value_states = None;
+        self.engine_extension.speculative_draft_session = None;
         tracing::info!(
             request_id = self.request_id.value(),
             suspension_reason,

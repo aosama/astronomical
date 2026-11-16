@@ -121,8 +121,8 @@ fn prewarm_profiles(
 }
 
 /// The MLX-C bindings crate's build script resolves its headers from this
-/// extraction. The step is idempotent: a warm cache verifies in about a
-/// second and never touches the network. It runs in-process, since the
+/// extraction. The step is idempotent: an already extracted header tree
+/// verifies in about a second and never touches the network. It runs in-process, since the
 /// provisioning command lives in this same binary.
 fn provision_bindgen_headers(repository_root: &Path) -> Result<(), String> {
     println!("{STATUS_PREFIX} status=provision-bindgen-headers start");
@@ -136,7 +136,7 @@ fn provision_bindgen_headers(repository_root: &Path) -> Result<(), String> {
             Ok(())
         }
         Err(provision_error) => Err(format!(
-            "{STATUS_PREFIX} Error: bindgen header provisioning failed: {provision_error}\n{STATUS_PREFIX} Error: run cargo xtask bootstrap-native-dependencies if the archive cache is empty"
+            "{STATUS_PREFIX} Error: bindgen header provisioning failed: {provision_error}\n{STATUS_PREFIX} Error: run cargo xtask bootstrap-native-dependencies if the native archive folder is empty"
         )),
     }
 }

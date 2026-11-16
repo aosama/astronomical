@@ -64,7 +64,7 @@ pub enum AnthropicStopReason {
     ToolUse,
 }
 
-/// Token usage. `input_tokens` excludes prompt-cache hits, which Anthropic
+/// Token usage. `input_tokens` excludes astro SSD prompt cache hits, which Anthropic
 /// reports separately in `cache_read_input_tokens`.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 pub struct AnthropicUsage {
@@ -75,18 +75,19 @@ pub struct AnthropicUsage {
 }
 
 impl AnthropicUsage {
-    /// Splits the worker's whole prompt count into uncached and cached input.
+    /// Splits the worker's whole prompt count into input read in full and input restored from the astro SSD prompt cache.
     #[must_use]
     pub fn from_worker_counts(
         prompt_token_count: u32,
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         output_token_count: u32,
     ) -> Self {
         Self {
-            input_tokens: prompt_token_count.saturating_sub(cached_token_count),
+            input_tokens: prompt_token_count
+                .saturating_sub(astro_ssd_prompt_cache_restored_token_count),
             output_tokens: output_token_count,
             cache_creation_input_tokens: 0,
-            cache_read_input_tokens: cached_token_count,
+            cache_read_input_tokens: astro_ssd_prompt_cache_restored_token_count,
         }
     }
 }

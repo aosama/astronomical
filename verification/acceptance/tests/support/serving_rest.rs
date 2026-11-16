@@ -6,7 +6,7 @@
 //! can actually serve a configured model after memory-policy changes.
 //!
 //! Every journey supplies an isolated application home so configuration, logs,
-//! prompt-cache files, and attribution cannot leak between runs. Cargo supplies
+//! `astro_ssd_prompt_cache` files, and attribution cannot leak between runs. Cargo supplies
 //! the just-built worker executable path; no developer-machine path is embedded.
 
 use std::{

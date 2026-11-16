@@ -186,7 +186,7 @@ test("should_show_a_model_on_this_mac_as_here_instead_of_offering_get", () => {
     assert.deepEqual(textsOfClass(modelRow, "download-models-download-button"), []);
 });
 
-test("should_disable_get_and_say_why_while_another_download_holds_the_slot", () => {
+test("should_keep_get_usable_while_another_model_downloads_so_it_can_join_the_list", () => {
     const { downloadModelsDocument } = renderModelsPage(
         [entryNamed("Talker"), entryNamed("Painter", { role: "image_generation" })],
         `downloadModelsCurrentDownload = { huggingface_id: "astronomical-test/Talker", state: "downloading", bytes_total: 10, bytes_completed: 4 };`
@@ -194,20 +194,56 @@ test("should_disable_get_and_say_why_while_another_download_holds_the_slot", () 
     const catalogContainer = downloadModelsDocument.catalogContainer;
     const getButtons = findRenderedElementsByClass(catalogContainer, "download-models-download-button");
 
-    assert.deepEqual(getButtons.map((getButton) => getButton.disabled), [true]);
-    assert.equal(textsOfClass(catalogContainer, "download-models-busy-hint").length, 1);
+    assert.deepEqual(getButtons.map((getButton) => Boolean(getButton.disabled)), [false]);
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-busy-hint"), []);
     assert.deepEqual(textsOfClass(catalogContainer, "download-models-row-status"), ["Downloading · 40%"]);
 });
 
-test("should_keep_get_enabled_and_show_no_hint_when_nothing_is_downloading", () => {
+test("should_show_a_waiting_model_with_its_place_in_line_instead_of_get", () => {
+    const { downloadModelsDocument } = renderModelsPage(
+        [entryNamed("Talker"), entryNamed("Painter", { role: "image_generation" })],
+        `downloadModelsCurrentDownload = {
+            huggingface_id: "astronomical-test/Talker", state: "downloading", bytes_total: 10, bytes_completed: 4,
+            queue: { waiting: [{ huggingface_id: "astronomical-test/Painter", approximate_size_bytes: ${2 * GIGABYTE} }], failed: [] }
+        };`
+    );
+    const catalogContainer = downloadModelsDocument.catalogContainer;
+
+    assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-download-button"), []);
+    assert.deepEqual(
+        textsOfClass(catalogContainer, "download-models-row-status"),
+        ["Downloading · 40%", "Waiting · 2nd in line"]
+    );
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-queue-summary"), ["1 model waiting · 2.0 GB"]);
+    assert.equal(findRenderedElementsByClass(catalogContainer, "download-models-queue-remove").length, 1);
+});
+
+test("should_list_a_model_that_could_not_finish_with_try_again_and_remove", () => {
+    const { downloadModelsDocument } = renderModelsPage(
+        [entryNamed("Talker"), entryNamed("Painter", { role: "image_generation" })],
+        `downloadModelsCurrentDownload = {
+            huggingface_id: "astronomical-test/Talker", state: "downloading", bytes_total: 10, bytes_completed: 4,
+            queue: { waiting: [], failed: [{ huggingface_id: "astronomical-test/Painter", error_code: "insufficient_disk" }] }
+        };`
+    );
+    const catalogContainer = downloadModelsDocument.catalogContainer;
+    const failedTexts = renderedTexts(findRenderedElementsByClass(catalogContainer, "download-models-queue-line-failed")[0]);
+
+    assert.equal(failedTexts.includes("Couldn't finish Painter"), true);
+    assert.equal(failedTexts.includes("Try again"), true);
+    assert.equal(failedTexts.includes("Remove from list"), true);
+    assert.deepEqual(textsOfClass(catalogContainer, "download-models-queue-summary"), []);
+});
+
+test("should_show_get_and_no_list_when_nothing_is_downloading_or_listed", () => {
     const { downloadModelsDocument } = renderModelsPage([entryNamed("Talker")]);
     const catalogContainer = downloadModelsDocument.catalogContainer;
 
     assert.deepEqual(
-        findRenderedElementsByClass(catalogContainer, "download-models-download-button").map((getButton) => getButton.disabled),
+        findRenderedElementsByClass(catalogContainer, "download-models-download-button").map((getButton) => Boolean(getButton.disabled)),
         [false]
     );
-    assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-busy-hint"), []);
+    assert.deepEqual(findRenderedElementsByClass(catalogContainer, "download-models-queue"), []);
 });
 
 test("should_draw_the_speed_meter_with_fewer_filled_bars_for_a_model_above_the_ceiling", () => {

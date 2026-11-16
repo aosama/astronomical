@@ -34,7 +34,7 @@ struct DaemonStatusDocument: Codable, Equatable {
   struct MlxMemorySnapshot: Codable, Equatable {
     let source: String
     let activeMemoryBytes: UInt64
-    let allocatorCacheMemoryBytes: UInt64
+    let mlxBufferCacheBytes: UInt64
     let peakMemoryBytes: UInt64
     let expertPayloadBytes: UInt64
     let modelCorePayloadBytes: UInt64
@@ -44,7 +44,7 @@ struct DaemonStatusDocument: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
       case source
       case activeMemoryBytes = "active_memory_bytes"
-      case allocatorCacheMemoryBytes = "allocator_cache_memory_bytes"
+      case mlxBufferCacheBytes = "mlx_buffer_cache_bytes"
       case peakMemoryBytes = "peak_memory_bytes"
       case expertPayloadBytes = "expert_payload_bytes"
       case modelCorePayloadBytes = "model_core_payload_bytes"
@@ -56,8 +56,8 @@ struct DaemonStatusDocument: Codable, Equatable {
       let container = try decoder.container(keyedBy: CodingKeys.self)
       source = try container.decode(String.self, forKey: .source)
       activeMemoryBytes = try container.decode(UInt64.self, forKey: .activeMemoryBytes)
-      allocatorCacheMemoryBytes =
-        try container.decode(UInt64.self, forKey: .allocatorCacheMemoryBytes)
+      mlxBufferCacheBytes =
+        try container.decode(UInt64.self, forKey: .mlxBufferCacheBytes)
       peakMemoryBytes = try container.decode(UInt64.self, forKey: .peakMemoryBytes)
       expertPayloadBytes = try container.decode(UInt64.self, forKey: .expertPayloadBytes)
       modelCorePayloadBytes = try container.decode(UInt64.self, forKey: .modelCorePayloadBytes)

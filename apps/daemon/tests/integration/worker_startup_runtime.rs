@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use astronomical_daemon::{ChatGenerationExecutor, GenerationPerformanceLog, WorkerHandle};
 use astronomical_ipc_protocol::{
-    WorkerDecodeExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
+    WorkerDecodeAstroExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
 };
 use tokio::time::timeout;
 
@@ -41,12 +41,14 @@ async fn should_complete_generation_when_startup_runtime_acknowledgement_is_stil
         WorkerStartupConfiguration {
             neural_engine_program_directory: "neural-engine-programs".into(),
             configuration_generation: DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION.to_owned(),
-            global_prompt_cache_root_directory: temporary_log_directory.path().join("prompt-cache"),
-            global_prompt_cache_maximum_size_bytes: 50_000_000_000,
-            persistent_prompt_cache_enabled: true,
+            global_astro_ssd_prompt_cache_root_directory: temporary_log_directory
+                .path()
+                .join("astro-ssd-prompt-cache"),
+            global_astro_ssd_prompt_cache_maximum_size_bytes: 50_000_000_000,
+            astro_ssd_prompt_cache_enabled: true,
             configured_maximum_mlx_memory_bytes: None,
             performance_attribution_enabled: false,
-            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+            decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             diagnostic_qwen3_5_engine_override:
                 astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             logging_directory: temporary_log_directory.path().to_path_buf(),

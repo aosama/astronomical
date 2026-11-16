@@ -45,19 +45,19 @@ fn should_write_unequal_noncontiguous_views_with_one_largest_tensor_workspace() 
         RuntimeMemoryLimitGuard::new(runtime, original_memory_limits, constrained_memory_limits);
     let temporary_directory =
         tempfile::tempdir().expect("the test should create a temporary directory");
-    let cache_file_path = temporary_directory
+    let streamed_views_file_path = temporary_directory
         .path()
         .join("streamed-views.safetensors");
-    let cache_file = OpenOptions::new()
+    let streamed_views_file = OpenOptions::new()
         .create_new(true)
         .write(true)
-        .open(&cache_file_path)
+        .open(&streamed_views_file_path)
         .expect("the test should create the streamed output file");
 
     guarded_runtime
         .runtime()
         .save_safetensors(
-            cache_file,
+            streamed_views_file,
             &[
                 ("largest", &largest_view),
                 ("medium", &medium_view),
@@ -75,7 +75,8 @@ fn should_write_unequal_noncontiguous_views_with_one_largest_tensor_workspace() 
     let restored_safetensors = guarded_runtime
         .runtime()
         .load_safetensors(
-            File::open(&cache_file_path).expect("the test should reopen the streamed output"),
+            File::open(&streamed_views_file_path)
+                .expect("the test should reopen the streamed output"),
             None,
         )
         .expect("the streamed views should reload");
@@ -148,6 +149,6 @@ impl Drop for RuntimeMemoryLimitGuard {
         }
         let _cleanup_result = self
             .runtime
-            .synchronize_gpu_stream_and_clear_allocator_cache();
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache();
     }
 }

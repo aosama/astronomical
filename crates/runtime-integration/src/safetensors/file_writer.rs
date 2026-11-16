@@ -2,7 +2,7 @@
 //!
 //! # Why a descriptor instead of bytes
 //!
-//! Prompt-cache state can be many gigabytes. Serializing it into one Rust
+//! Astro SSD prompt cache state can be many gigabytes. Serializing it into one Rust
 //! byte vector would temporarily duplicate the complete capture. This bridge
 //! instead gives MLX one retained writable descriptor, allowing MLX to
 //! materialize and write one tensor at a time while Rust retains explicit

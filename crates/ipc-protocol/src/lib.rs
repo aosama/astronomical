@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+mod astro_ssd_prompt_cache_diagnostics;
+#[cfg(test)]
+mod astro_ssd_prompt_cache_diagnostics_tests;
 mod base64_bytes;
 mod chat_generation;
 #[cfg(test)]
@@ -30,9 +33,6 @@ mod message_codec;
 mod model_load_in_flight;
 mod neural_engine_chunk_report;
 mod neural_engine_prefill_status;
-mod persistent_prompt_cache_diagnostics;
-#[cfg(test)]
-mod persistent_prompt_cache_diagnostics_tests;
 #[cfg(test)]
 mod prompt_processing_progress_protocol_tests;
 mod protocol_error;
@@ -41,11 +41,13 @@ mod protocol_message;
 mod protocol_message_tests;
 mod protocol_reader;
 mod protocol_writer;
+mod reply_memory_record;
 mod speech;
 mod worker_chunking_configuration;
 #[cfg(test)]
 mod worker_chunking_configuration_tests;
 mod worker_event_diagnostics;
+mod worker_memory_ledger_snapshot;
 mod worker_model_capabilities;
 mod worker_model_configuration;
 #[cfg(test)]
@@ -54,6 +56,12 @@ mod worker_startup_configuration;
 #[cfg(test)]
 mod worker_startup_configuration_tests;
 
+pub use astro_ssd_prompt_cache_diagnostics::{
+    WorkerAstroSsdPromptCacheExpectedBlockHashPrefix, WorkerAstroSsdPromptCacheLookupOutcome,
+    WorkerAstroSsdPromptCacheMissReason, WorkerAstroSsdPromptCacheRequestDiagnostics,
+    WorkerAstroSsdPromptCacheStartupCleanupCategory,
+    WorkerAstroSsdPromptCacheStartupCleanupEvidence, WorkerInMemoryPrefixAdoptionOutcome,
+};
 pub use chat_generation::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
@@ -91,29 +99,24 @@ pub use message_codec::{
 pub use model_load_in_flight::ModelLoadInFlight;
 pub use neural_engine_chunk_report::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};
 pub use neural_engine_prefill_status::NeuralEnginePrefillStatus;
-pub use persistent_prompt_cache_diagnostics::{
-    WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
-    WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,
-    WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPersistentPromptCacheStartupCleanupCategory,
-    WorkerPersistentPromptCacheStartupCleanupEvidence,
-};
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, RequestId, WorkerCommand,
     WorkerDenseLayerResidency, WorkerEvent, WorkerExpertLayerTopology,
     WorkerExpertResidencySnapshot, WorkerExpertStreamingStats,
-    WorkerMemoryCeilingUtilizationSnapshot, WorkerMemoryLedgerSnapshot, WorkerMlxMemorySnapshot,
-    WorkerPromptLayerProgress, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerMemoryCeilingUtilizationSnapshot, WorkerMlxMemorySnapshot, WorkerPromptLayerProgress,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;
+pub use reply_memory_record::ReplyMemoryRecord;
 pub use speech::{
     SpeechCommand, SpeechResultMetadata, SpokenAudioSegment, WorkerSpeechCapabilities,
 };
 pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
 };
+pub use worker_memory_ledger_snapshot::WorkerMemoryLedgerSnapshot;
 pub use worker_model_capabilities::{
     WorkerModelCapabilities, WorkerModelCapabilitiesValidationError,
 };
@@ -126,6 +129,6 @@ pub use worker_model_configuration::{
     WorkerSpeechModelFamily,
 };
 pub use worker_startup_configuration::{
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };

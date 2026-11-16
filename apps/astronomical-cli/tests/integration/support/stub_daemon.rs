@@ -7,6 +7,7 @@
 //! sequence, like the real daemon.
 
 use super::stub_decisions::{scripted_decisions_response, training_refusal};
+use crate::integration::support::stub_download_status::scripted_download_status;
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -118,6 +119,8 @@ pub struct StubDaemonConfig {
     /// FIFO of jobs for `DownloadStatus` requests; the last entry repeats
     /// once the scripted list is exhausted. `None` means no active job.
     pub download_jobs: Vec<Option<DaemonDownloadJob>>,
+    /// The download list sent with each `DownloadStatus`, in step with `download_jobs`.
+    pub download_waiting_huggingface_ids: Vec<Vec<String>>,
 }
 
 impl Default for StubDaemonConfig {
@@ -144,6 +147,7 @@ impl Default for StubDaemonConfig {
             image_outcome: StubImageOutcome::Completed(Vec::new()),
             image_request_capture: Arc::new(std::sync::Mutex::new(None)),
             download_jobs: Vec::new(),
+            download_waiting_huggingface_ids: Vec::new(),
             image_capture: Arc::new(std::sync::Mutex::new(None)),
             messages_capture: Arc::new(std::sync::Mutex::new(None)),
             settings_capture: Arc::new(std::sync::Mutex::new(None)),
@@ -385,22 +389,15 @@ pub fn spawn_stub_daemon(
                         }
                         DaemonRequest::DownloadStatus => {
                             // The guard must drop before the send await so the task stays Send.
-                            let scripted_job = {
+                            let download_status = {
                                 let mut job_index = download_job_index
                                     .lock()
                                     .expect("the stub job index should stay live");
-                                let scripted_job = if *job_index < config.download_jobs.len() {
-                                    config.download_jobs[*job_index].clone()
-                                } else {
-                                    config.download_jobs.last().cloned().unwrap_or(None)
-                                };
                                 *job_index += 1;
-                                scripted_job
+                                scripted_download_status(&config, *job_index - 1)
                             };
                             protocol_writer
-                                .send_daemon_response(&DaemonResponse::DownloadStatus {
-                                    job: scripted_job,
-                                })
+                                .send_daemon_response(&download_status)
                                 .await
                                 .expect("the stub download status should transmit");
                         }
@@ -459,7 +456,7 @@ pub fn spawn_stub_daemon(
                                         prompt_token_count: 7,
                                         generated_token_count: 2,
                                         reasoning_token_count: 0,
-                                        cached_token_count: 0,
+                                        astro_ssd_prompt_cache_restored_token_count: 0,
                                         reason:
                                             astronomical_ipc_protocol::ChatGenerationCompletionReason::EndOfSequence,
                                     },

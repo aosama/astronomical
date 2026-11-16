@@ -1,8 +1,8 @@
-//! What the load-time working-memory probes share: the shape they run at
+//! What the load-time MLX working-buffer probes share: the shape they run at
 //! and the layers they run.
 //!
 //! A dense model and an expert model measure different things
-//! (`dense_layer_working_memory_probe`, `expert_layer_working_memory_probe`),
+//! (`dense_layer_mlx_working_buffer_probe`, `expert_layer_mlx_working_buffer_probe`),
 //! but both run one layer of each attention kind over a chunk of the size
 //! the engine will serve.
 

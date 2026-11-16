@@ -2,7 +2,7 @@
 //! for it (issue #1985).
 //!
 //! The dense layer plan keeps layers beside a reserve for one streamed
-//! forward: two layer slots and the working memory measured on one layer at
+//! forward: two layer slots and the MLX working buffers measured on one layer at
 //! the engine's prefill chunk. Anything a real forward holds beyond that,
 //! other than the decoder state it writes, which admission charges as
 //! context, overruns the limit the plan was made for. Two such terms were
@@ -124,7 +124,7 @@ async fn assert_prompt_forwards_stay_within_reserve() {
 }
 
 /// The whole prompt in one layer-major prefill over probe-sized spans holds
-/// one span's working memory plus every span's hidden states.
+/// one span's MLX working buffers plus every span's hidden states.
 fn assert_layer_major_prefill_stays_within_reserve(
     streaming_model: &Qwen3_5StreamingModel,
     qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
@@ -135,8 +135,8 @@ fn assert_layer_major_prefill_stays_within_reserve(
     let runtime = streaming_model.runtime();
     let mut request_decoder_state = crate::common::standard_request_decoder_state(qwen3_5_config);
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
-        .expect("the allocator cache should clear");
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("the MLX buffer cache should clear");
     runtime.reset_peak_memory().expect("the peak should reset");
     let final_logits = streaming_model
         .prefill_prompt_layer_major(
@@ -154,8 +154,8 @@ fn assert_layer_major_prefill_stays_within_reserve(
         .expect("the MLX memory snapshot should be readable")
         .peak_memory_bytes() as u64;
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
-        .expect("the allocator cache should clear");
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("the MLX buffer cache should clear");
     let active_bytes_with_state = runtime
         .memory_snapshot()
         .expect("the MLX memory snapshot should be readable")
@@ -198,8 +198,8 @@ fn measure_chunk_forward_growth(
             .expect("the preceding chunk should run");
     }
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
-        .expect("the allocator cache should clear");
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("the MLX buffer cache should clear");
     runtime.reset_peak_memory().expect("the peak should reset");
     let final_logits = streaming_model
         .forward_chunk(
@@ -216,8 +216,8 @@ fn measure_chunk_forward_growth(
         .expect("the MLX memory snapshot should be readable")
         .peak_memory_bytes() as u64;
     runtime
-        .synchronize_gpu_stream_and_clear_allocator_cache()
-        .expect("the allocator cache should clear");
+        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
+        .expect("the MLX buffer cache should clear");
     let active_bytes_with_state = runtime
         .memory_snapshot()
         .expect("the MLX memory snapshot should be readable")

@@ -8,7 +8,7 @@
 
 use serde_json::{Value, json};
 
-use crate::persistent_cache::PersistentVisualEmbeddingModelContract;
+use crate::astro_ssd_prompt_cache::PersistentVisualEmbeddingModelContract;
 use crate::qwen3_5_core::artifacts::qwen3_5_language_tensor_profiles;
 use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 

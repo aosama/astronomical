@@ -8,8 +8,8 @@ use astronomical_ipc_protocol::{
 };
 
 use super::{
-    ActiveRequestProgress, ExpertResidencySnapshot, PendingPromptCacheClear, WorkerActivity,
-    WorkerHealthSnapshot,
+    ActiveRequestProgress, ExpertResidencySnapshot, PendingAstroSsdPromptCacheClear,
+    WorkerActivity, WorkerHealthSnapshot,
 };
 
 pub(crate) fn publish_health(
@@ -161,12 +161,12 @@ pub(crate) fn publish_worker_expert_residency(
     );
 }
 
-pub(crate) fn publish_persistent_prompt_cache_stats(
+pub(crate) fn publish_astro_ssd_prompt_cache_stats(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    persistent_prompt_cache_stats: WorkerEvent,
+    astro_ssd_prompt_cache_stats: WorkerEvent,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.persistent_prompt_cache_stats = Some(persistent_prompt_cache_stats);
+        worker_health_snapshot.astro_ssd_prompt_cache_stats = Some(astro_ssd_prompt_cache_stats);
     }
 }
 
@@ -223,12 +223,13 @@ pub(crate) fn publish_pending_mlx_memory_ceiling(
     }
 }
 
-pub(crate) fn publish_pending_prompt_cache_clear(
+pub(crate) fn publish_pending_astro_ssd_prompt_cache_clear(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    pending_prompt_cache_clear: Option<PendingPromptCacheClear>,
+    pending_astro_ssd_prompt_cache_clear: Option<PendingAstroSsdPromptCacheClear>,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
-        worker_health_snapshot.pending_prompt_cache_clear = pending_prompt_cache_clear;
+        worker_health_snapshot.pending_astro_ssd_prompt_cache_clear =
+            pending_astro_ssd_prompt_cache_clear;
     }
 }
 
@@ -297,7 +298,7 @@ pub(crate) fn publish_mlx_memory_limit_rejection(
 pub(crate) fn record_serving_session(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     prompt_token_count: u32,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
     prefill_tok_per_second: Option<f64>,
     generation_tok_per_second: Option<f64>,
 ) {
@@ -306,7 +307,7 @@ pub(crate) fn record_serving_session(
             .serving_session
             .record_completed_request(
                 prompt_token_count,
-                cached_token_count,
+                astro_ssd_prompt_cache_restored_token_count,
                 prefill_tok_per_second,
                 generation_tok_per_second,
             );

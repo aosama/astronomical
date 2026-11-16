@@ -67,6 +67,9 @@ struct SegmentAssembly {
     staged_file: tokio::fs::File,
     contiguous_end_bytes: u64,
     buffered_chunks_by_offset: BTreeMap<u64, Bytes>,
+    /// The bytes waiting in `buffered_chunks_by_offset`, kept as a running
+    /// total so live progress need not walk the buffer on every report.
+    buffered_bytes: u64,
 }
 
 impl SegmentAssembly {
@@ -88,6 +91,7 @@ impl SegmentAssembly {
             .buffered_chunks_by_offset
             .remove(&self.contiguous_end_bytes)
         {
+            self.buffered_bytes -= chunk_bytes.len() as u64;
             self.append_chunk(&chunk_bytes).await?;
         }
         Ok(())
@@ -133,6 +137,7 @@ impl SegmentedFileAssembler {
                 staged_file: tokio::fs::File::from_std(staged_file),
                 contiguous_end_bytes: resume_offset_bytes,
                 buffered_chunks_by_offset: BTreeMap::new(),
+                buffered_bytes: 0,
             })),
         })
     }
@@ -148,11 +153,23 @@ impl SegmentedFileAssembler {
             assembly.append_chunk(&chunk_bytes).await?;
             assembly.drain_buffered_chunks().await?;
         } else {
+            assembly.buffered_bytes += chunk_bytes.len() as u64;
             assembly
                 .buffered_chunks_by_offset
                 .insert(start_offset_bytes, chunk_bytes);
         }
         Ok(())
+    }
+
+    /// Every byte of the file received so far: the contiguous prefix on disk
+    /// plus the later pieces waiting in memory for it. This is what the
+    /// person sees move. With several pieces in flight, the later ones
+    /// usually finish first, so the prefix alone stands still for long
+    /// stretches and a speed worked out from it sinks far below the real one.
+    #[must_use]
+    pub(super) async fn received_bytes(&self) -> u64 {
+        let assembly = self.assembly.lock().await;
+        assembly.contiguous_end_bytes + assembly.buffered_bytes
     }
 
     #[must_use]
@@ -170,3 +187,7 @@ impl SegmentedFileAssembler {
             .map_err(DownloadPayloadTransferError::WritePayload)
     }
 }
+
+#[cfg(test)]
+#[path = "payload_transfer_segment_tests.rs"]
+mod payload_transfer_segment_tests;

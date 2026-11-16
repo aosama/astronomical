@@ -17,7 +17,7 @@ use astronomical_daemon::{
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatImageInput, ChatMessage, ChatToolChoice,
-    RequestId, WorkerDecodeExpertCachePolicy,
+    RequestId, WorkerDecodeAstroExpertCachePolicy,
 };
 use serde::Deserialize;
 
@@ -27,7 +27,7 @@ const PERFORMANCE_THROUGHPUT_SAMPLING_SEED: u64 = 42;
 #[derive(Clone, Debug)]
 pub(crate) struct ThroughputMeasurement {
     pub(crate) model_id: String,
-    pub(crate) decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub(crate) decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     pub(crate) total_input_tokens: u32,
     pub(crate) total_output_tokens: u16,
     pub(crate) cached_tokens: u32,
@@ -37,7 +37,8 @@ pub(crate) struct ThroughputMeasurement {
     pub(crate) decode_tokens_per_second: f64,
     pub(crate) mlx_peak_memory_bytes: Option<u64>,
     pub(crate) measured_output_text: Option<String>,
-    pub(crate) decode_cache_diagnostic_evidence: Option<DecodeCacheDiagnosticEvidence>,
+    pub(crate) decode_astro_expert_cache_diagnostic_evidence:
+        Option<DecodeAstroExpertCacheDiagnosticEvidence>,
     /// Which completion of this worker's life the measurement came from:
     /// the warmup is ordinal one, the first measured completion ordinal two,
     /// and every later measured completion counts on. First-touch graph
@@ -49,7 +50,7 @@ pub(crate) struct ThroughputMeasurement {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct DecodeCacheDiagnosticEvidence {
+pub(crate) struct DecodeAstroExpertCacheDiagnosticEvidence {
     pub(crate) decode_token_forward_latency_p95_nanoseconds: Option<u64>,
     pub(crate) decode_token_forward_latency_sample_count: Option<u64>,
     pub(crate) decode_advance_span: Option<PerformanceOperationEvidence>,
@@ -71,7 +72,7 @@ pub(crate) struct DecodeCacheDiagnosticEvidence {
     pub(crate) hot_expert_route_fully_covered_count: u64,
     pub(crate) hot_expert_route_partially_covered_count: u64,
     pub(crate) hot_expert_route_fully_missed_count: u64,
-    pub(crate) decode_expert_cache_slot_eviction_count: u64,
+    pub(crate) decode_astro_expert_cache_slot_eviction_count: u64,
     pub(crate) positional_file_read_call_count: u64,
     pub(crate) positional_file_read_byte_count: u64,
     pub(crate) positional_file_read_elapsed_nanoseconds: u64,
@@ -93,7 +94,7 @@ pub(crate) struct PerformanceOperationEvidence {
 #[derive(Debug, Deserialize)]
 struct ThroughputSample {
     prompt_token_count: u32,
-    cached_token_count: u32,
+    astro_ssd_prompt_cache_restored_token_count: u32,
     generated_token_count: u16,
     prefill_tok_per_second: Option<f64>,
     generation_tok_per_second: Option<f64>,
@@ -127,7 +128,7 @@ pub(crate) async fn drive_completion(
             temperature_thousandths: Some(temperature_thousandths),
             top_p_thousandths: None,
             repetition_penalty_thousandths: None,
-            // Repeatable token routes keep baseline and candidate cache policies comparable.
+            // Repeatable token routes keep baseline and candidate decode astro expert cache policies comparable.
             seed: Some(PERFORMANCE_THROUGHPUT_SAMPLING_SEED),
             thinking_budget: None,
         },
@@ -218,13 +219,13 @@ pub(crate) async fn wait_until_idle(worker_handle: &WorkerHandle, ready_attempt_
 pub(crate) fn read_measured_completion(
     log_path: &Path,
     model_id: &str,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     completion_ordinal_in_worker: u32,
 ) -> Option<ThroughputMeasurement> {
     read_completion_by_index(
         log_path,
         model_id,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         CompletionIndex::Last,
         completion_ordinal_in_worker,
     )
@@ -247,7 +248,7 @@ pub(crate) enum CompletionIndex {
 pub(crate) fn read_completion_by_index(
     log_path: &Path,
     model_id: &str,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     completion_index: CompletionIndex,
     completion_ordinal_in_worker: u32,
 ) -> Option<ThroughputMeasurement> {
@@ -258,7 +259,7 @@ pub(crate) fn read_completion_by_index(
     };
     Some(sample_to_measurement(
         model_id,
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         completion_ordinal_in_worker,
         sample,
     ))
@@ -275,23 +276,23 @@ fn read_throughput_samples(log_path: &Path) -> Option<Vec<ThroughputSample>> {
 
 fn sample_to_measurement(
     model_id: &str,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     completion_ordinal_in_worker: u32,
     measured: &ThroughputSample,
 ) -> ThroughputMeasurement {
     ThroughputMeasurement {
         model_id: model_id.to_owned(),
-        decode_expert_cache_policy,
+        decode_astro_expert_cache_policy,
         total_input_tokens: measured.prompt_token_count,
         total_output_tokens: measured.generated_token_count,
-        cached_tokens: measured.cached_token_count,
+        cached_tokens: measured.astro_ssd_prompt_cache_restored_token_count,
         prefill_time_seconds: measured.prefill_elapsed_millis as f64 / 1_000.0,
         decode_time_seconds: measured.generation_elapsed_millis as f64 / 1_000.0,
         prefill_tokens_per_second: measured.prefill_tok_per_second.unwrap_or(0.0),
         decode_tokens_per_second: measured.generation_tok_per_second.unwrap_or(0.0),
         mlx_peak_memory_bytes: measured.mlx_peak_memory_bytes,
         measured_output_text: None,
-        decode_cache_diagnostic_evidence: None,
+        decode_astro_expert_cache_diagnostic_evidence: None,
         completion_ordinal_in_worker,
     }
 }
@@ -321,10 +322,10 @@ fn final_generation_report_for_request(
 }
 
 #[expect(clippy::too_many_lines)]
-pub(crate) fn read_decode_cache_diagnostic_evidence(
+pub(crate) fn read_decode_astro_expert_cache_diagnostic_evidence(
     logging_directory: &Path,
     request_id: u64,
-) -> Option<DecodeCacheDiagnosticEvidence> {
+) -> Option<DecodeAstroExpertCacheDiagnosticEvidence> {
     let attribution_log =
         fs::read_to_string(logging_directory.join("performance-attribution.jsonl")).ok()?;
     let generation_report = final_generation_report_for_request(&attribution_log, request_id)?;
@@ -352,7 +353,7 @@ pub(crate) fn read_decode_cache_diagnostic_evidence(
                 })
         });
 
-    Some(DecodeCacheDiagnosticEvidence {
+    Some(DecodeAstroExpertCacheDiagnosticEvidence {
         decode_token_forward_latency_p95_nanoseconds: generation_report
             .get("decode_token_forward_latency_p95_nanoseconds")
             .and_then(serde_json::Value::as_u64),
@@ -423,9 +424,9 @@ pub(crate) fn read_decode_cache_diagnostic_evidence(
             counters,
             "hot_expert_route_fully_missed_count",
         )?,
-        decode_expert_cache_slot_eviction_count: counter_amount(
+        decode_astro_expert_cache_slot_eviction_count: counter_amount(
             counters,
-            "decode_expert_cache_slot_eviction_count",
+            "decode_astro_expert_cache_slot_eviction_count",
         )?,
         positional_file_read_call_count: counter_amount(
             counters,

@@ -61,7 +61,7 @@ pub(crate) struct StraightGenerationState {
     recurrent_states: Vec<GatedDeltaRecurrentState>,
     key_value_states: Vec<FullAttentionKeyValueState>,
     /// How many tokens the state already covers (prefill chunks and decoded
-    /// tokens together), feeding RoPE offsets and KV-cache views.
+    /// tokens together), feeding RoPE offsets and `astro_decoder_state_cache` KV views.
     sequence_position_offset: i32,
 }
 
@@ -118,7 +118,7 @@ impl StraightGenerationState {
     }
 
     /// The allocated K/V slabs of one full-attention layer's slot, for the
-    /// persistent prompt-cache capture bridge.
+    /// persistent astro SSD prompt cache capture bridge.
     pub(crate) fn key_value_slabs(&self, slot: usize) -> Option<(&MlxArray, &MlxArray)> {
         let key_value_state = self.key_value_states.get(slot)?;
         Some((
@@ -127,7 +127,7 @@ impl StraightGenerationState {
         ))
     }
 
-    /// Replaces one full-attention layer's slabs from restored SSD prompt-cache
+    /// Replaces one full-attention layer's slabs from restored SSD astro SSD prompt cache
     /// block tensors (already concatenated to the full restored length).
     pub(crate) fn restore_key_value_slabs(
         &mut self,
@@ -164,7 +164,7 @@ impl StraightGenerationState {
     }
 
     /// Retargets the covered position after a restored prefix so RoPE offsets
-    /// and KV-cache views continue from the restored length.
+    /// and `astro_decoder_state_cache` views continue from the restored length.
     pub(crate) fn set_sequence_position_offset(&mut self, covered_token_count: i32) {
         self.sequence_position_offset = covered_token_count;
     }
@@ -174,7 +174,7 @@ impl StraightGenerationState {
     }
 
     /// Host-side byte estimate of every retained state array, matching the
-    /// payload accounting the decoder-cache state types publish. The memory
+    /// payload accounting the astro decoder state cache state types publish. The memory
     /// telemetry breakdown uses it as the live-context owner share.
     pub(crate) fn payload_byte_count(&self) -> u64 {
         let convolution_state_payload_bytes = self

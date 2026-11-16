@@ -39,8 +39,8 @@ fn should_reject_with_the_maximum_shortfall_when_the_projection_overflows() {
 }
 
 #[test]
-fn should_admit_with_allocator_cache_when_the_total_lands_exactly_on_the_ceiling() {
-    // Reclaimable cache is excluded from active-limit enforcement, so a
+fn should_admit_with_mlx_buffer_cache_when_the_total_lands_exactly_on_the_ceiling() {
+    // The reclaimable `mlx_buffer_cache` is excluded from active-limit enforcement, so a
     // total arriving exactly at the ceiling stays a plain Admit.
     let decision = AllocationAdmissionObservation::new(90, 10, 0, 100).decide();
 
@@ -48,22 +48,22 @@ fn should_admit_with_allocator_cache_when_the_total_lands_exactly_on_the_ceiling
 }
 
 #[test]
-fn should_clear_the_allocator_cache_one_byte_of_total_pressure_past_the_ceiling() {
+fn should_clear_the_mlx_buffer_cache_one_byte_of_total_pressure_past_the_ceiling() {
     let decision = AllocationAdmissionObservation::new(90, 11, 10, 100).decide();
 
     assert_eq!(
         decision,
-        AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit
+        AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit
     );
 }
 
 #[test]
-fn should_clear_the_allocator_cache_when_the_total_projection_overflows() {
+fn should_clear_the_mlx_buffer_cache_when_the_total_projection_overflows() {
     let decision = AllocationAdmissionObservation::new(10, u64::MAX, 0, u64::MAX).decide();
 
     assert_eq!(
         decision,
-        AllocationAdmissionDecision::ClearAllocatorCacheThenAdmit,
-        "an overflowing total still fits once the reclaimable cache is cleared"
+        AllocationAdmissionDecision::ClearMlxBufferCacheThenAdmit,
+        "an overflowing total still fits once the reclaimable `mlx_buffer_cache` is cleared"
     );
 }

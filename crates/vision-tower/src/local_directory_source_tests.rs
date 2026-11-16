@@ -69,7 +69,7 @@ fn should_fail_to_open_a_missing_directory() {
 }
 
 #[test]
-fn should_recover_provenance_from_a_cache_snapshot_path() {
+fn should_recover_provenance_from_a_huggingface_hub_cache_snapshot_path() {
     let directory = tempfile::tempdir().unwrap();
     let snapshot = directory
         .path()

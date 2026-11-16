@@ -11,7 +11,7 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
           "$schema":"./astronomical-config.schema.json",
           "schema_version":1,
           "runtime":{"model_directories":[],"maximum_mlx_memory_gb":16},
-          "prompt_cache":{"enabled":false,"maximum_size_gb":20},
+          "ssd_prompt_cache":{"enabled":false,"maximum_size_gb":20},
           "chunking":{"fixed_prompt_processing_chunk_size_tokens":2048,"full_attention_key_value_growth_tokens":256},
           "models":{"organization/target":{"limits":{"maximum_context_tokens":32768},"generation_defaults":{"temperature":0.7,"top_p":0.9,"maximum_output_tokens":4096},"chunking":{"fixed_prompt_processing_chunk_size_tokens":4096}}},
           "diagnostics":{"performance_attribution_enabled":true,"log_level":"debug","retained_log_files":3}
@@ -47,12 +47,12 @@ fn should_resolve_full_v1_model_configuration_over_global_chunking() {
             .expect("memory ceiling should resolve"),
         Some(17_179_869_184)
     );
-    assert!(!astronomical_config.persistent_prompt_cache_enabled());
+    assert!(!astronomical_config.astro_ssd_prompt_cache_enabled());
     assert_eq!(
         astronomical_config
-            .prompt_cache()
-            .expect("prompt cache should resolve")
-            .global_prompt_cache_maximum_size_bytes(),
+            .astro_ssd_prompt_cache()
+            .expect("astro SSD prompt cache should resolve")
+            .global_astro_ssd_prompt_cache_maximum_size_bytes(),
         21_474_836_480
     );
     assert!(astronomical_config.performance_attribution_enabled());
@@ -70,7 +70,7 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     write_config(
         temporary_home_directory.path(),
-        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"fixed_prompt_processing_chunk_size_tokens":6144,"prompt_cache_block_tokens":1024},"models":{"target":{"chunking":{"full_attention_key_value_growth_tokens":512,"prompt_cache_block_tokens":null}}}}"#,
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"chunking":{"fixed_prompt_processing_chunk_size_tokens":6144,"ssd_prompt_cache_block_tokens":1024},"models":{"target":{"chunking":{"full_attention_key_value_growth_tokens":512,"ssd_prompt_cache_block_tokens":null}}}}"#,
     );
     let astronomical_config =
         AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
@@ -99,11 +99,13 @@ fn should_inherit_model_defaults_when_model_entry_or_properties_are_omitted() {
         512
     );
     assert_eq!(
-        configured_model.chunking().prompt_cache_block_tokens(),
+        configured_model.chunking().ssd_prompt_cache_block_tokens(),
         None
     );
     assert_eq!(
-        unconfigured_model.chunking().prompt_cache_block_tokens(),
+        unconfigured_model
+            .chunking()
+            .ssd_prompt_cache_block_tokens(),
         Some(1_024)
     );
     assert_eq!(unconfigured_model.maximum_output_tokens(), 20_480);

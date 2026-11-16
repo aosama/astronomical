@@ -11,7 +11,7 @@ pub use crate::expert_paging::contiguous_selected_runs;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use expert_streaming::WarmExpertSlotTableCache;
+pub(crate) use expert_streaming::AstroExpertCache;
 pub use expert_streaming::route_observation::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };
@@ -31,7 +31,7 @@ pub use model::{
 pub(crate) use model::{PagedForwardMissingRouteCollector, PagedRouteValidationOutcome};
 #[cfg(feature = "direct-mlx")]
 pub use model::{
-    Qwen3_5MoECachedPlusStreamedPageRoute, Qwen3_5MoEPagedExecutionMode,
+    Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute, Qwen3_5MoEPagedExecutionMode,
     qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,

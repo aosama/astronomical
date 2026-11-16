@@ -29,7 +29,7 @@ use super::decision_memory_peak::{peak_memory_bytes_after_request, peak_memory_r
 
 /// The 8-bit build is about 11 GB; a 16,384-token forward needs room beside it.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 24 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const QUESTION_COUNTS: [usize; 3] = [1, 5, 10];
 /// Timed requests per question count; the median is reported.
 const TIMED_REQUESTS_PER_QUESTION_COUNT: usize = 3;
@@ -88,7 +88,7 @@ async fn should_measure_clef_decision_latency_at_the_sequence_limit() {
         "clef",
         &TestRunContext::current().required_model_directory(),
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the Clef build should validate");
     decision_engine.load().expect("the Clef build should load");

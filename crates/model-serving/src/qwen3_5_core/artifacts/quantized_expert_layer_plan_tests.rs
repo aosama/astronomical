@@ -1,7 +1,7 @@
 //! Unit contracts for the pure quantized expert layer plan assembly steps.
 //!
 //! `drain_projection_tensor_sources()` and `assemble_expert_layer_plan()`
-//! answer without opening files or touching shared caches, so their
+//! answer without opening files or touching the shared safetensors header cache, so their
 //! ordering, error, and boundary behavior is covered here directly.
 
 use std::collections::HashMap;

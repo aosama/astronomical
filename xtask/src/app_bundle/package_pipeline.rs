@@ -16,10 +16,10 @@ use super::bundle_assembly::{BundleInputs, BundlePlists, assemble_bundle, missin
 use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{SigningRequest, sign_bundle};
-use super::icon_cache::cached_channel_icon;
 use super::info_plist::{render_agent_info_plist, render_info_plist};
 use super::native_metallib::packaged_metallib_source;
 use super::release_build_steps::ReleaseBuildContext;
+use super::rendered_icon_memo::rendered_channel_icon;
 use super::step_reporter::StepReporter;
 use super::tool_command::run_quiet_tool;
 
@@ -274,7 +274,7 @@ fn release_plist_texts(
 }
 
 /// The icon is rendered into the disposable target directory, so a release
-/// never reuses an icon the edit loop cached.
+/// never reuses an icon the edit loop rendered and kept under `target/`.
 fn release_bundle_inputs(release_build: &ReleaseBuildContext<'_>) -> Result<BundleInputs, String> {
     let Ok(home_directory) = std::env::var("HOME") else {
         return Err("HOME is required to locate the native build store".to_owned());
@@ -286,7 +286,7 @@ fn release_bundle_inputs(release_build: &ReleaseBuildContext<'_>) -> Result<Bund
     )?;
     let icon_directory = release_build.cargo_target_directory.join("app-icons");
     create_directory(&icon_directory)?;
-    let icon = cached_channel_icon(
+    let icon = rendered_channel_icon(
         release_build.repository_root,
         &icon_directory,
         release_build.channel_profile.icon_channel,

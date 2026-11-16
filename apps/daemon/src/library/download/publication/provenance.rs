@@ -100,7 +100,7 @@ fn write_atomic_provenance_file(
 /// Whether `model_directory` holds the provenance record a Download Models
 /// publication writes, naming `huggingface_id`. Only such a folder may be
 /// removed from disk: a model discovered anywhere else (a configured folder,
-/// the Hugging Face cache) was put there by the person, not by Astronomical.
+/// the Hugging Face hub cache) was put there by the person, not by Astronomical.
 pub(crate) fn publication_provenance_names_model(
     model_directory: &Path,
     huggingface_id: &str,

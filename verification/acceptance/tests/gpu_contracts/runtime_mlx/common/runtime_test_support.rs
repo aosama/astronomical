@@ -4,14 +4,12 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
-const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
+const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 256 * 1024 * 1024;
 
 pub fn runtime() -> MlxRuntime {
-    let memory_limits = MlxMemoryLimits::new(
-        ACTIVE_MEMORY_LIMIT_BYTES,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-    )
-    .expect("the test memory limits should be valid");
+    let memory_limits =
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
+            .expect("the test memory limits should be valid");
     MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize")
 }
 

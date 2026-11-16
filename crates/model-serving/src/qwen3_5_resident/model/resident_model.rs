@@ -11,15 +11,15 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerW
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_resident::Qwen3_5ResidentExpertWeights;
-use crate::{DecoderCacheState, ExpertWeightMemoryCacheStatistics, PerformanceAttribution};
+use crate::{AstroDecoderStateCacheState, AstroExpertCacheStatistics, PerformanceAttribution};
 
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 
 /// The resident engine's model: shared base plus complete expert arrays.
 #[derive(Debug)]
 pub struct Qwen3_5ResidentModel {
     pub(crate) base: Qwen3_5ModelBase,
-    /// Shared artifact-derived metadata used for loading and cache dtype flow.
+    /// Shared artifact-derived metadata used for loading and `astro_decoder_state_cache` dtype flow.
     pub(crate) expert_layer_plans: Vec<QuantizedExpertLayerPlan>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
@@ -28,7 +28,7 @@ pub struct Qwen3_5ResidentModel {
     pub(crate) neural_engine_mlp_prefill:
         Option<crate::qwen3_5_resident::neural_engine_mlp_prefill::NeuralEngineMlpPrefill>,
     /// The owner of this model's memory ledger, opened once the model has
-    /// loaded and its working memory has been measured.
+    /// loaded and its MLX working buffers have been measured.
     pub(crate) memory_governor:
         std::cell::RefCell<Option<astronomical_memory_policy::ledger::MemoryGovernor>>,
 }
@@ -47,7 +47,7 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qw
     }
 
     fn held_expert_payload_bytes(&self) -> u64 {
-        self.expert_weight_memory_cache_statistics()
+        self.astro_expert_cache_statistics()
             .resident_payload_byte_count
     }
 
@@ -153,24 +153,24 @@ impl Qwen3_5ResidentModel {
         astronomical_ipc_protocol::ExpertMemoryMode::Resident
     }
 
-    /// Creates an empty per-request decoder state whose per-layer cache
-    /// dtypes match this model's loaded weights, exactly as production
+    /// Creates an empty per-request decoder state whose per-layer
+    /// `astro_decoder_state_cache` dtypes match this model's loaded weights, exactly as production
     /// generation does.
     ///
     /// Direct-MLX probes drive raw forwards without the engine's request
     /// plumbing; this constructor keeps their decoder state identical to
     /// production. The public config-only constructor instead assumes
-    /// BFloat16 caches, which can diverge from a loaded artifact's dtypes
+    /// BFloat16 in the `astro_decoder_state_cache`, which can diverge from a loaded artifact's dtypes
     /// and would quietly measure a different graph than the one serving.
     #[cfg(feature = "direct-mlx")]
     pub fn empty_request_decoder_state_matching_loaded_weights(
         &self,
         full_attention_kv_state_growth_tokens: i32,
     ) -> Result<RequestDecoderStateStack, astronomical_runtime_integration::MlxRuntimeError> {
-        let decoder_cache_layout = self.base.decoder_cache_layout().clone();
+        let astro_decoder_state_cache_layout = self.base.astro_decoder_state_cache_layout().clone();
         RequestDecoderStateStack::
-            empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &decoder_cache_layout,
+            empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &astro_decoder_state_cache_layout,
                 full_attention_kv_state_growth_tokens,
             )
     }
@@ -181,12 +181,12 @@ impl Qwen3_5ResidentModel {
     pub fn prepare_neural_engine_prefill_matching_production(
         &mut self,
         chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
-        program_cache_directory: Option<&std::path::Path>,
+        astro_neural_engine_program_cache_directory: Option<&std::path::Path>,
     ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
         crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
             self,
             chunking,
-            program_cache_directory,
+            astro_neural_engine_program_cache_directory,
             None,
         )
     }
@@ -210,7 +210,7 @@ impl Qwen3_5ResidentModel {
     #[cfg(feature = "direct-mlx")]
     pub fn release_neural_engine_mlp_prefill(&mut self) {
         self.neural_engine_mlp_prefill = None;
-        self.base.output_gate_engine = None;
+        self.base.optional_accelerators.output_gate_engine = None;
     }
 
     /// Sends full chunks to the GPU alone while paused, so one loaded model can
@@ -225,7 +225,9 @@ impl Qwen3_5ResidentModel {
     /// As [`Self::set_neural_engine_mlp_prefill_paused`] for the output gate programs.
     #[cfg(feature = "direct-mlx")]
     pub fn set_neural_engine_output_gate_paused(&self, is_paused: bool) {
-        if let Some(output_gate_engine) = self.base.output_gate_engine.as_ref() {
+        if let Some(output_gate_engine) =
+            self.base.optional_accelerators.output_gate_engine.as_ref()
+        {
             output_gate_engine.set_paused(is_paused);
         }
     }
@@ -236,7 +238,7 @@ impl Qwen3_5ResidentModel {
     /// Direct-MLX probes need the same weight residency the daemon serves
     /// with: `load` alone binds shared metadata without evaluating the
     /// payload, so the first forward would fail with a missing resident
-    /// expert tensor. The allocator-cache drain between the two stages
+    /// expert tensor. The `mlx_buffer_cache` drain between the two stages
     /// mirrors production so transient load buffers cannot outlive the
     /// materialization the same way they must not in serving.
     #[cfg(feature = "direct-mlx")]
@@ -245,7 +247,7 @@ impl Qwen3_5ResidentModel {
     ) -> Result<(), Qwen3_5ExecutionError> {
         self.materialize_target_weights()?;
         self.runtime()
-            .synchronize_gpu_stream_and_clear_allocator_cache()?;
+            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()?;
         if !self.expert_layer_plans.is_empty() {
             let resident_expert_weights =
                 Qwen3_5ResidentExpertWeights::load(self.runtime(), &self.expert_layer_plans, None)?;
@@ -258,7 +260,7 @@ impl Qwen3_5ResidentModel {
         &self,
         active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
     ) -> crate::inference_engine::contract::ExpertResidencyTelemetry {
-        let resident_expert_statistics = self.expert_weight_memory_cache_statistics();
+        let resident_expert_statistics = self.astro_expert_cache_statistics();
         let (complete_expert_payload_byte_count, expert_capacity) =
             resident_expert_library_facts(&self.expert_layer_plans);
         crate::inference_engine::contract::ExpertResidencyTelemetry {
@@ -276,9 +278,9 @@ impl Qwen3_5ResidentModel {
 
     /// Returns complete-owner expert-memory telemetry without page counters.
     #[must_use]
-    pub fn expert_weight_memory_cache_statistics(&self) -> ExpertWeightMemoryCacheStatistics {
+    pub fn astro_expert_cache_statistics(&self) -> AstroExpertCacheStatistics {
         if let Some(resident_expert_weights) = self.resident_expert_weights.as_ref() {
-            return ExpertWeightMemoryCacheStatistics {
+            return AstroExpertCacheStatistics {
                 entry_count: resident_expert_weights.expert_entry_count(),
                 resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
                 maximum_resident_payload_byte_count: resident_expert_weights.payload_byte_count(),
@@ -294,7 +296,7 @@ impl Qwen3_5ResidentModel {
                 partial_layer_eviction_count: 0,
             };
         }
-        ExpertWeightMemoryCacheStatistics::default()
+        AstroExpertCacheStatistics::default()
     }
 
     /// Executes one prompt chunk, injecting visual embeddings at image_pad positions.
@@ -365,10 +367,10 @@ impl Qwen3_5ResidentModel {
         rope_offset_tokens: i32,
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
-        layer_model_state: &mut DecoderCacheState,
+        layer_model_state: &mut AstroDecoderStateCacheState,
         token_position_offsets: Option<&MlxArray>,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {

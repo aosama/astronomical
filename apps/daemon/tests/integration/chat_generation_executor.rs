@@ -56,7 +56,7 @@ async fn should_stream_ordered_chat_outputs() {
             prompt_token_count: 2,
             generated_token_count: 4,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::ToolCalls,
         }
     );
@@ -90,7 +90,7 @@ async fn should_replace_prefill_memory_with_finalized_residency_memory() {
             forward_prefill_chunk_elapsed_millis: Some(1_400),
             completed_prefill_chunk_tokens: Some(2_048),
             mlx_active_memory_bytes: Some(11_000),
-            mlx_allocator_cache_memory_bytes: Some(12_000),
+            mlx_buffer_cache_bytes: Some(12_000),
             mlx_peak_memory_bytes: Some(13_000),
         }
     );
@@ -214,7 +214,7 @@ async fn should_send_large_but_bounded_chat_commands_to_the_worker_in_one_ipc_fr
             prompt_token_count: 1,
             generated_token_count: 0,
             reasoning_token_count: 0,
-            cached_token_count: 0,
+            astro_ssd_prompt_cache_restored_token_count: 0,
             reason: ChatGenerationCompletionReason::EndOfSequence,
         }
     );

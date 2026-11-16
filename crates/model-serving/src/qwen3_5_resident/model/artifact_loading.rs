@@ -87,13 +87,13 @@ impl Qwen3_5ResidentModel {
                     )
                 }
             };
-        // Cache geometry cannot be finalized before weights and sparse plans are
+        // astro decoder state cache geometry cannot be finalized before weights and sparse plans are
         // bound: their source dtypes determine MLX result-type promotion. Derive
         // the persistence contract at that boundary without evaluating tensors.
-        let decoder_cache_layout = performance_attribution.measure_operation(
+        let astro_decoder_state_cache_layout = performance_attribution.measure_operation(
             PerformanceOperation::ModelTensorBinding,
             |_performance_attribution| {
-                decoder_cache_layout_at_tensor_binding(
+                astro_decoder_state_cache_layout_at_tensor_binding(
                     &config,
                     &chunking,
                     &weights,
@@ -120,21 +120,21 @@ impl Qwen3_5ResidentModel {
             &weights,
             &vision_model,
             &expert_layer_plans,
-            &decoder_cache_layout,
+            &astro_decoder_state_cache_layout,
         )?;
         Ok(Self {
             base: super::Qwen3_5ModelBase {
                 disk_embedding_rows: None,
                 runtime,
                 config,
-                decoder_cache_layout,
+                astro_decoder_state_cache_layout,
                 weights,
                 vision_model,
                 memory_facts: std::cell::RefCell::new(memory_facts),
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
-                output_gate_engine: None,
+                optional_accelerators: Default::default(),
                 sorted_expert_weighted_sum_kernel,
                 compiled_swiglu,
                 compiled_elementwise_graphs,
@@ -242,7 +242,7 @@ fn build_resident_model_memory_facts(
     weights: &Qwen3_5Weights,
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
-    decoder_cache_layout: &crate::DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &crate::AstroDecoderStateCacheLayout,
 ) -> Result<ModelMemoryFacts, Qwen3_5ExecutionError> {
     let model_core_payload_bytes =
         crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
@@ -308,7 +308,7 @@ fn build_resident_model_memory_facts(
             largest_complete_expert_layer_bytes,
             largest_routed_expert_page_bytes,
             sequence_state_bytes_per_token: u64::try_from(
-                decoder_cache_layout
+                astro_decoder_state_cache_layout
                     .sequence_state_payload_byte_count_per_token()
                     .unwrap_or(0),
             )
@@ -320,35 +320,35 @@ fn build_resident_model_memory_facts(
     })
 }
 
-/// Derives the decoder cache layout at the tensor-binding boundary.
+/// Derives the astro decoder state cache layout at the tensor-binding boundary.
 ///
-/// Cache geometry cannot be finalized before weights and sparse plans are
+/// astro decoder state cache geometry cannot be finalized before weights and sparse plans are
 /// bound: their source dtypes determine MLX result-type promotion, so the
 /// persistence contract is derived here without evaluating tensors. The
 /// resident path derives dtypes from the quantized expert layer plans.
-fn decoder_cache_layout_at_tensor_binding(
+fn astro_decoder_state_cache_layout_at_tensor_binding(
     config: &crate::Qwen3_5Config,
     chunking: &super::Qwen3_5ModelChunkingConfiguration,
     weights: &Qwen3_5Weights,
     expert_layer_plans: &[QuantizedExpertLayerPlan],
-) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
-    let decoder_layer_cache_dtypes =
-        crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_decoder_layer_cache_dtypes(
+) -> Result<crate::AstroDecoderStateCacheLayout, Qwen3_5ExecutionError> {
+    let astro_decoder_state_cache_layer_dtypes =
+        crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_astro_decoder_state_cache_layer_dtypes(
             weights,
             expert_layer_plans,
         )?;
-    crate::qwen3_5_core::decoder::qwen3_5_decoder_cache_layout(
+    crate::qwen3_5_core::decoder::qwen3_5_astro_decoder_state_cache_layout(
         config,
         usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "full-attention key/value growth tokens exceed the usize range",
             }
         })?,
-        &decoder_layer_cache_dtypes,
+        &astro_decoder_state_cache_layer_dtypes,
     )
-    .map_err(
-        |decoder_cache_layout_error| Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
-            description: decoder_cache_layout_error.to_string(),
-        },
-    )
+    .map_err(|astro_decoder_state_cache_layout_error| {
+        Qwen3_5ExecutionError::InvalidAstroDecoderStateCacheLayout {
+            description: astro_decoder_state_cache_layout_error.to_string(),
+        }
+    })
 }

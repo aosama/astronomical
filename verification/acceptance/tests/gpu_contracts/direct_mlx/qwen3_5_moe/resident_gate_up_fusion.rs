@@ -5,7 +5,7 @@ use tokio::time::timeout;
 
 use super::resident_gate_up_fusion_support::*;
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 use mlx_bridge::{MlxArray, MlxCompiledSwiGlu};
 
@@ -18,7 +18,7 @@ async fn should_preserve_resident_expert_outputs_after_gate_up_fusion() {
         let runtime = MlxRuntime::initialize(
             MlxMemoryLimits::new(
                 DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-                DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+                DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
             )
             .expect("the fusion parity memory limits should be valid"),
         )

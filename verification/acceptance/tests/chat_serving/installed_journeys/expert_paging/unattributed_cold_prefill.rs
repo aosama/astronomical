@@ -8,7 +8,7 @@
 //! journey serves the same requests with attribution off, through the
 //! in-process engine, so the storage reads behind a production prefill can be
 //! examined directly. The model's weight files are kept out of the file
-//! cache (`cold_file_cache`), as on a Mac whose RAM is the limit.
+//! macOS file cache (`cold_macos_file_cache`), as on a Mac whose RAM is the limit.
 //!
 //! Run it with `cargo measure-unattributed-cold-prefill --configuration PATH`.
 
@@ -21,7 +21,7 @@ use astronomical_test_harness::test_run::TestRunContext;
 use serial_test::serial;
 use tokio::time::timeout;
 
-use super::cold_file_cache::ColdFileCache;
+use super::cold_macos_file_cache::ColdMacosFileCache;
 use crate::serving_acceptance::support::performance_attribution::{
     GenerationSampling, RequestAttribution, create_attributed_engine, load_engine_with_progress,
     run_generation_with_request_attribution,
@@ -38,7 +38,7 @@ const MEASURED_OUTPUT_TOKEN_COUNT: u16 = 2;
 const PREFILL_JOURNEY_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[tokio::test]
-#[ignore = "serves a 10,240-token Shakespeare prefill without attribution on an installed sparse model with a cold file cache"]
+#[ignore = "serves a 10,240-token Shakespeare prefill without attribution on an installed sparse model with a cold macOS file cache"]
 #[serial]
 async fn should_measure_cold_prefill_without_attribution() {
     timeout(PREFILL_JOURNEY_TIMEOUT, measure_cold_prefill())
@@ -70,7 +70,7 @@ async fn measure_cold_prefill() {
         paging_experiment.streaming_prompt_processing_chunk_tokens,
     );
     load_engine_with_progress(&mut engine, "unattributed_prefill_model_load").await;
-    let cold_file_cache = ColdFileCache::start(&model_directory);
+    let cold_macos_file_cache = ColdMacosFileCache::start(&model_directory);
     for (request_id, prompt_token_count, output_token_count, phase_name) in [
         (
             WARMUP_REQUEST_ID,
@@ -114,8 +114,8 @@ async fn measure_cold_prefill() {
         );
     }
     eprintln!(
-        "[unattributed-prefill] file_cache_sweeps={}",
-        cold_file_cache.finish()
+        "[unattributed-prefill] macos_file_cache_sweeps={}",
+        cold_macos_file_cache.finish()
     );
 }
 

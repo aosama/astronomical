@@ -2,10 +2,10 @@
 //!
 //! xtask has no dependency on `astronomical-native-build-orchestration`, which
 //! owns the store, so it mirrors the two facts it needs: the default root
-//! under the user's cache directory, and the schema version file that names
-//! the store's layout generation. Packaging reads the MLX metallib from an
-//! entry, and CI restores and saves entries as GitHub Actions caches; both
-//! must agree with the store byte for byte, so the layout lives in one place.
+//! under the user's `~/Library/Caches` folder, and the schema version file
+//! that names the store's layout generation. Packaging reads the MLX metallib
+//! from an entry, and CI restores and saves entries in the
+//! `github_actions_cache`; both must agree with the store byte for byte, so the layout lives in one place.
 
 use std::path::{Path, PathBuf};
 

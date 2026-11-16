@@ -21,7 +21,7 @@ impl WorkerEvent {
                 stats.model_id.as_deref(),
                 stats.retained_route_assignment_count,
             ),
-            Self::PromptCacheCleared { model_id, .. } => {
+            Self::AstroSsdPromptCacheCleared { model_id, .. } => {
                 format!("{event_name} model_id={model_id:?}")
             }
             _ => event_name.to_owned(),
@@ -44,7 +44,7 @@ impl WorkerEvent {
             Self::ModelLoadInFlight => "model_load_in_flight",
             Self::GenerationFinalized => "generation_finalized",
             Self::ExpertStreamingStats => "expert_streaming_stats",
-            Self::PersistentPromptCacheStats => "persistent_prompt_cache_stats",
+            Self::AstroSsdPromptCacheStats => "astro_ssd_prompt_cache_stats",
             Self::ImageGenerationProgress => "image_generation_progress",
             Self::ImageGenerationCompleted => "image_generation_completed",
             Self::ImageGenerationFailed => "image_generation_failed",
@@ -72,7 +72,7 @@ impl WorkerEvent {
             Self::Failed => "failed",
             Self::ModelSwapped => "model_swapped",
             Self::ModelSwapFailed => "model_swap_failed",
-            Self::PromptCacheCleared => "prompt_cache_cleared",
+            Self::AstroSsdPromptCacheCleared => "astro_ssd_prompt_cache_cleared",
         })
     }
 
@@ -116,11 +116,11 @@ impl WorkerEvent {
             | Self::NeuralEngineChunkFinished { .. }
             | Self::ModelLoadInFlight { .. }
             | Self::ExpertStreamingStats { .. }
-            | Self::PersistentPromptCacheStats { .. }
+            | Self::AstroSsdPromptCacheStats { .. }
             | Self::Ready { .. }
             | Self::ModelSwapped { .. }
             | Self::ModelSwapFailed { .. }
-            | Self::PromptCacheCleared { .. } => None,
+            | Self::AstroSsdPromptCacheCleared { .. } => None,
         }
     }
 }

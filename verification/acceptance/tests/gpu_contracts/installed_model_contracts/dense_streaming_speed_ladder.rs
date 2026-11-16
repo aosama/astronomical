@@ -9,10 +9,10 @@
 //!    kept layers, each after a 500-in, 50-out warmup.
 //!
 //! The streamed_dense model loads under the machine's own limit with the
-//! kept count pinned, prefills layer by layer, and decodes greedily. A cold
-//! file cache keeps the weight files out of the macOS file cache throughout,
+//! kept count pinned, prefills layer by layer, and decodes greedily. Cold
+//! reads keep the weight files out of the `macos_file_cache` throughout,
 //! so reads cost what they cost on a Mac whose RAM is no larger than the
-//! model; no prompt cache is involved. Run it on an optimized build.
+//! model; no `astro_ssd_prompt_cache` is involved. Run it on an optimized build.
 
 use std::time::{Duration, Instant};
 
@@ -25,8 +25,8 @@ use serial_test::serial;
 #[path = "../../support/romeo_and_juliet.rs"]
 mod romeo_and_juliet;
 
-#[path = "../../chat_serving/installed_journeys/expert_paging/cold_file_cache.rs"]
-mod cold_file_cache;
+#[path = "../../chat_serving/installed_journeys/expert_paging/cold_macos_file_cache.rs"]
+mod cold_macos_file_cache;
 
 const KEPT_LAYER_COUNTS: [usize; 4] = [0, 8, 16, 24];
 const PROMPT_TOKEN_COUNT: usize = 10_000;
@@ -40,8 +40,8 @@ const PROMPT_WORD_COUNT: usize = 9000;
 /// Layers whose cold reads make the raw read rate.
 const RAW_READ_LAYER_COUNT: usize = 8;
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
-/// Long enough for the cold file cache to sweep the layer just read.
-const COLD_FILE_CACHE_SETTLE: Duration = Duration::from_millis(500);
+/// Long enough for the cold macOS file cache to sweep the layer just read.
+const COLD_MACOS_FILE_CACHE_SETTLE: Duration = Duration::from_millis(500);
 
 #[tokio::test]
 #[ignore = "streams the streamed_dense model from a cold SSD for many minutes"]
@@ -54,7 +54,7 @@ async fn should_measure_dense_streaming_speed_from_the_layer_read_up() {
         crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
     let (streaming_model, qwen3_5_config) =
         load_streaming_model(&model_directory, machine_mlx_memory_ceiling_bytes);
-    let cold_file_cache = cold_file_cache::ColdFileCache::start(&model_directory);
+    let cold_macos_file_cache = cold_macos_file_cache::ColdMacosFileCache::start(&model_directory);
 
     measure_raw_layer_read_rate(&streaming_model, &qwen3_5_config);
     measure_one_streamed_layer(&streaming_model, &qwen3_5_config);
@@ -86,8 +86,8 @@ async fn should_measure_dense_streaming_speed_from_the_layer_read_up() {
             KEPT_LAYER_COUNTS.len()
         );
     }
-    let sweep_count = cold_file_cache.finish();
-    eprintln!("[dense-speed] status=success cold_file_cache_sweeps={sweep_count}");
+    let sweep_count = cold_macos_file_cache.finish();
+    eprintln!("[dense-speed] status=success cold_macos_file_cache_sweeps={sweep_count}");
 }
 
 fn load_streaming_model(
@@ -171,7 +171,7 @@ fn measure_one_streamed_layer(
             streaming_model
                 .run_streamed_dense_layer_for_measurement(layer_index, token_count)
                 .expect("the streamed layer should run");
-            std::thread::sleep(COLD_FILE_CACHE_SETTLE);
+            std::thread::sleep(COLD_MACOS_FILE_CACHE_SETTLE);
             let layer_started_at = Instant::now();
             streaming_model
                 .run_streamed_dense_layer_for_measurement(layer_index, token_count)

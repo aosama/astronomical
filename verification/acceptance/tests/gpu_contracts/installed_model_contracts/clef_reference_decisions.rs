@@ -33,7 +33,7 @@ use super::decision_reference_fixture::{
 
 /// The 8-bit build is about 11 GB; a 16,384-token forward needs room beside it.
 const TEST_MLX_MEMORY_CEILING_BYTES: usize = 24 * 1024 * 1024 * 1024;
-const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
+const TEST_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 /// The largest probability difference accepted against the float32 reference.
 ///
 /// Both sides read identical weights; the backbone runs in bfloat16 in MLX
@@ -200,7 +200,7 @@ async fn should_match_the_reference_decisions_within_the_stated_tolerance() {
         "clef",
         &TestRunContext::current().required_model_directory(),
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     )
     .expect("the Clef build should validate");
     decision_engine.load().expect("the Clef build should load");

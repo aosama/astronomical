@@ -180,9 +180,8 @@ impl HubPayloadTransport for ReqwestHubTransport {
                     USER_AGENT,
                     concat!("Astronomical/", env!("CARGO_PKG_VERSION")),
                 );
-            if request.resume_offset_bytes() > 0 {
-                request_builder = request_builder
-                    .header(RANGE, format!("bytes={}-", request.resume_offset_bytes()));
+            if let Some(range_header_value) = request.range_header_value() {
+                request_builder = request_builder.header(RANGE, range_header_value);
             }
             let response = request_builder.send().await.map_err(|source| {
                 HubTransportError::with_source("Hub payload request failed", source)

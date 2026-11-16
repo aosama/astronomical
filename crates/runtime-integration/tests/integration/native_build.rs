@@ -28,7 +28,7 @@ const PINNED_ARCHIVE_CONTENTS: &[u8] = b"verified source archive";
 fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {
     assert!(
         NATIVE_BUILD_CONFIGURATION.contains("set(MLX_METAL_JIT ON"),
-        "the native runtime must let MLX select and cache NAX kernels on capable Apple GPUs"
+        "the native runtime must let MLX select NAX kernels and keep them in the `metal_kernel_cache` on capable Apple GPUs"
     );
 }
 
@@ -61,17 +61,19 @@ fn should_resolve_archives_without_per_archive_rust_environment_inputs() {
 }
 
 #[test]
-fn should_resolve_pinned_cache_archives_despite_stale_definitions_and_environment_entries() {
+fn should_resolve_pinned_astro_native_build_cache_archives_despite_stale_definitions_and_environment_entries()
+ {
     let test_directory = tempfile::tempdir().expect("the test directory should be created");
-    let dependency_cache_directory = test_directory.path().join("dependency-cache");
-    fs::create_dir_all(&dependency_cache_directory).unwrap();
+    let astro_native_build_cache_directory = test_directory.path().join("dependency-cache");
+    fs::create_dir_all(&astro_native_build_cache_directory).unwrap();
     fs::write(
-        dependency_cache_directory.join("pinned.tar.gz"),
+        astro_native_build_cache_directory.join("pinned.tar.gz"),
         PINNED_ARCHIVE_CONTENTS,
     )
     .unwrap();
 
-    let archive_check = check_pinned_archives(test_directory.path(), &dependency_cache_directory);
+    let archive_check =
+        check_pinned_archives(test_directory.path(), &astro_native_build_cache_directory);
 
     assert!(
         archive_check.status.success(),
@@ -81,12 +83,14 @@ fn should_resolve_pinned_cache_archives_despite_stale_definitions_and_environmen
 }
 
 #[test]
-fn should_reject_a_missing_cache_archive_even_when_an_override_points_to_verified_contents() {
+fn should_reject_a_missing_astro_native_build_cache_archive_even_when_an_override_points_to_verified_contents()
+ {
     let test_directory = tempfile::tempdir().expect("the test directory should be created");
-    let dependency_cache_directory = test_directory.path().join("dependency-cache");
-    fs::create_dir_all(&dependency_cache_directory).unwrap();
+    let astro_native_build_cache_directory = test_directory.path().join("dependency-cache");
+    fs::create_dir_all(&astro_native_build_cache_directory).unwrap();
 
-    let archive_check = check_pinned_archives(test_directory.path(), &dependency_cache_directory);
+    let archive_check =
+        check_pinned_archives(test_directory.path(), &astro_native_build_cache_directory);
 
     assert!(!archive_check.status.success());
     assert!(
@@ -95,17 +99,18 @@ fn should_reject_a_missing_cache_archive_even_when_an_override_points_to_verifie
 }
 
 #[test]
-fn should_reject_a_cache_archive_with_the_wrong_digest() {
+fn should_reject_an_astro_native_build_cache_archive_with_the_wrong_digest() {
     let test_directory = tempfile::tempdir().expect("the test directory should be created");
-    let dependency_cache_directory = test_directory.path().join("dependency-cache");
-    fs::create_dir_all(&dependency_cache_directory).unwrap();
+    let astro_native_build_cache_directory = test_directory.path().join("dependency-cache");
+    fs::create_dir_all(&astro_native_build_cache_directory).unwrap();
     fs::write(
-        dependency_cache_directory.join("pinned.tar.gz"),
+        astro_native_build_cache_directory.join("pinned.tar.gz"),
         b"corrupted source archive",
     )
     .unwrap();
 
-    let archive_check = check_pinned_archives(test_directory.path(), &dependency_cache_directory);
+    let archive_check =
+        check_pinned_archives(test_directory.path(), &astro_native_build_cache_directory);
 
     assert!(!archive_check.status.success());
     let archive_error = String::from_utf8_lossy(&archive_check.stderr)
@@ -119,10 +124,13 @@ fn should_reject_a_cache_archive_with_the_wrong_digest() {
 }
 
 #[test]
-fn should_reject_a_relative_dependency_cache_directory() {
+fn should_reject_a_relative_astro_native_build_cache_directory() {
     let test_directory = tempfile::tempdir().expect("the test directory should be created");
 
-    let archive_check = check_pinned_archives(test_directory.path(), Path::new("relative-cache"));
+    let archive_check = check_pinned_archives(
+        test_directory.path(),
+        Path::new("relative-astro-native-build-cache"),
+    );
 
     assert!(!archive_check.status.success());
     assert!(String::from_utf8_lossy(&archive_check.stderr).contains("must be an absolute path"));
@@ -145,7 +153,7 @@ fn should_keep_production_tile_selection_shape_driven_without_environment_overri
 
 fn check_pinned_archives(
     test_directory: &Path,
-    dependency_cache_directory: &Path,
+    astro_native_build_cache_directory: &Path,
 ) -> std::process::Output {
     let archive_function_start = NATIVE_BUILD_CONFIGURATION
         .find("function(require_pinned_archive ")
@@ -158,7 +166,7 @@ fn check_pinned_archives(
         astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(PINNED_ARCHIVE_CONTENTS));
     let mut check_script = format!(
         "set(ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR \"{}\")\n{archive_function}endfunction()\n",
-        dependency_cache_directory.display()
+        astro_native_build_cache_directory.display()
     );
     let ignored_archive_path = test_directory.join("ignored-archive.tar.gz");
     fs::write(&ignored_archive_path, PINNED_ARCHIVE_CONTENTS).unwrap();
@@ -167,7 +175,7 @@ fn check_pinned_archives(
         check_script.push_str(&format!(
             "require_pinned_archive({archive_variable} \"test dependency\" \"pinned.tar.gz\" \"{archive_digest}\")\n\
              if(NOT \"${{{archive_variable}}}\" STREQUAL \"${{ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR}}/pinned.tar.gz\")\n\
-             message(FATAL_ERROR \"archive escaped the pinned dependency cache\")\n\
+             message(FATAL_ERROR \"archive escaped the pinned astro native build cache\")\n\
              endif()\n"
         ));
         archive_check_command

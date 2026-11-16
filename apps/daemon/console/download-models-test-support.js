@@ -20,6 +20,10 @@ const downloadModelsInstalledScriptPath = path.join(__dirname, "download-models-
 const downloadModelsInstalledScript = fs.readFileSync(downloadModelsInstalledScriptPath, "utf8");
 const downloadModelsRemovalScriptPath = path.join(__dirname, "download-models-removal.js");
 const downloadModelsRemovalScript = fs.readFileSync(downloadModelsRemovalScriptPath, "utf8");
+const downloadModelsQueueScriptPath = path.join(__dirname, "download-models-queue.js");
+const downloadModelsQueueScript = fs.readFileSync(downloadModelsQueueScriptPath, "utf8");
+const downloadModelsSelectionScriptPath = path.join(__dirname, "download-models-selection.js");
+const downloadModelsSelectionScript = fs.readFileSync(downloadModelsSelectionScriptPath, "utf8");
 const observatoryShellPath = path.join(__dirname, "index.html");
 const observatoryShell = fs.readFileSync(observatoryShellPath, "utf8");
 const ASYNC_TEST_OPTIONS = { timeout: 5_000 };
@@ -39,6 +43,8 @@ function createDownloadModelsContext() {
     vm.runInContext(downloadModelsLinkedScript, scriptContext, { filename: downloadModelsLinkedScriptPath });
     vm.runInContext(downloadModelsInstalledScript, scriptContext, { filename: downloadModelsInstalledScriptPath });
     vm.runInContext(downloadModelsRemovalScript, scriptContext, { filename: downloadModelsRemovalScriptPath });
+    vm.runInContext(downloadModelsQueueScript, scriptContext, { filename: downloadModelsQueueScriptPath });
+    vm.runInContext(downloadModelsSelectionScript, scriptContext, { filename: downloadModelsSelectionScriptPath });
     return scriptContext;
 }
 

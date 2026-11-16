@@ -15,7 +15,7 @@ use super::measured_projection::{
 use super::projection_fixture::ProjectionFixture;
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 8 * 1024 * 1024 * 1024;
-const ALLOCATOR_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
+const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub(crate) const PRODUCTION_QUANTIZATION_GROUP_SIZE: i32 = 64;
 
 pub(crate) enum MlxProjectionForm<'arrays> {
@@ -116,7 +116,7 @@ pub(crate) fn upload(
 
 pub(crate) fn initialize_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
-        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, ALLOCATOR_CACHE_LIMIT_BYTES)
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
             .expect("memory limits are valid"),
     )
     .expect("the MLX runtime initializes")

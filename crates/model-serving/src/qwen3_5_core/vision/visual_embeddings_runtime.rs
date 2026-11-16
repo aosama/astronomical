@@ -1,16 +1,16 @@
 //! Shared visual-embedding resolution for both Qwen3.5 engines.
 //!
-//! The function owns the cache-hit/miss policy and the vision-forward path;
+//! The function owns the `astro_ssd_prompt_cache` hit/miss policy and the vision-forward path;
 //! each engine supplies its loaded state through `VisualEmbeddingEngineContext`.
 //! This keeps the engine modules from importing each other while the
-//! prompt-cache store and counters stay shared in this module (issue #1132).
+//! astro SSD prompt cache store and counters stay shared in this module (issue #1132).
 
 use super::Qwen3_5ProcessedImage;
 use super::vision_model::Qwen3_5VisionModel;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingRequiredImage;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingSuffixPlan;
-use crate::persistent_cache::{
-    PersistentPromptCacheCounters, PersistentPromptCacheDiskStore,
+use crate::astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheCounters, AstroSsdPromptCacheDiskStore,
     PersistentVisualEmbeddingModelContract,
 };
 use crate::{
@@ -25,23 +25,23 @@ use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 pub(crate) struct VisualEmbeddingEngineContext<'context> {
     pub(crate) runtime: &'context MlxRuntime,
     /// Present only when the artifact carries a vision tower; required once a
-    /// suffix plan demands un-cached image rows.
+    /// suffix plan demands image rows not held in the `astro_ssd_prompt_cache`.
     pub(crate) vision_model: Option<&'context Qwen3_5VisionModel>,
     pub(crate) compiled_elementwise_graphs: &'context MlxCompiledElementwiseGraphs,
     pub(crate) visual_embedding_model_contract: &'context PersistentVisualEmbeddingModelContract,
-    pub(crate) persistent_prompt_cache: Option<&'context PersistentPromptCacheDiskStore>,
+    pub(crate) astro_ssd_prompt_cache: Option<&'context AstroSsdPromptCacheDiskStore>,
 }
 
 /// Resolves the visual-embedding suffix tensor for the images one request plans.
 ///
-/// Cached full-image embeddings are sliced per required image; missing images
+/// Full-image embeddings restored from the `astro_ssd_prompt_cache` are sliced per required image; missing images
 /// run the vision forward once and publish their embeddings back to the
 /// persistent store. Returns the suffix rows concatenated in plan order, or
 /// `None` when the plan needs no visual rows.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn resolve_visual_embeddings_for_processed_images(
     visual_embedding_context: VisualEmbeddingEngineContext<'_>,
-    persistent_prompt_cache_counters: &mut PersistentPromptCacheCounters,
+    astro_ssd_prompt_cache_counters: &mut AstroSsdPromptCacheCounters,
     request_id: RequestId,
     processed_visual_images: &[Qwen3_5ProcessedImage],
     visual_embedding_suffix_plan: &Qwen3_5VisualEmbeddingSuffixPlan,
@@ -59,10 +59,10 @@ pub(crate) fn resolve_visual_embeddings_for_processed_images(
     visual_embeddings_by_required_image.resize_with(required_images.len(), || None);
     let mut missing_required_image_indexes = Vec::new();
     let mut missing_processed_visual_images = Vec::new();
-    let mut persistent_prompt_cache_visual_embedding_hit_row_counts = Vec::new();
-    let mut persistent_prompt_cache_visual_embedding_miss_count = 0_u64;
+    let mut astro_ssd_prompt_cache_visual_embedding_hit_row_counts = Vec::new();
+    let mut astro_ssd_prompt_cache_visual_embedding_miss_count = 0_u64;
 
-    collect_cached_visual_embeddings(
+    collect_astro_ssd_prompt_cache_visual_embeddings(
         &visual_embedding_context,
         required_images,
         processed_visual_images,
@@ -71,8 +71,8 @@ pub(crate) fn resolve_visual_embeddings_for_processed_images(
         &mut visual_embeddings_by_required_image,
         &mut missing_required_image_indexes,
         &mut missing_processed_visual_images,
-        &mut persistent_prompt_cache_visual_embedding_hit_row_counts,
-        &mut persistent_prompt_cache_visual_embedding_miss_count,
+        &mut astro_ssd_prompt_cache_visual_embedding_hit_row_counts,
+        &mut astro_ssd_prompt_cache_visual_embedding_miss_count,
     )?;
 
     if !missing_processed_visual_images.is_empty() {
@@ -115,17 +115,17 @@ pub(crate) fn resolve_visual_embeddings_for_processed_images(
     finalize_visual_embedding_resolution(
         runtime,
         suffix_visual_embedding_arrays,
-        persistent_prompt_cache_counters,
-        persistent_prompt_cache_visual_embedding_hit_row_counts,
-        persistent_prompt_cache_visual_embedding_miss_count,
+        astro_ssd_prompt_cache_counters,
+        astro_ssd_prompt_cache_visual_embedding_hit_row_counts,
+        astro_ssd_prompt_cache_visual_embedding_miss_count,
     )
 }
 
-/// Loads every required image's full-image embedding from the persistent
-/// cache, recording hit rows and miss counts and collecting the images the
-/// cache could not serve.
+/// Loads every required image's full-image embedding from the
+/// `astro_ssd_prompt_cache`, recording hit rows and miss counts and collecting the images the
+/// `astro_ssd_prompt_cache` could not serve.
 #[allow(clippy::too_many_arguments)]
-fn collect_cached_visual_embeddings(
+fn collect_astro_ssd_prompt_cache_visual_embeddings(
     visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
     required_images: &[Qwen3_5VisualEmbeddingRequiredImage],
     processed_visual_images: &[Qwen3_5ProcessedImage],
@@ -134,21 +134,21 @@ fn collect_cached_visual_embeddings(
     visual_embeddings_by_required_image: &mut [Option<MlxArray>],
     missing_required_image_indexes: &mut Vec<usize>,
     missing_processed_visual_images: &mut Vec<Qwen3_5ProcessedImage>,
-    persistent_prompt_cache_visual_embedding_hit_row_counts: &mut Vec<usize>,
-    persistent_prompt_cache_visual_embedding_miss_count: &mut u64,
+    astro_ssd_prompt_cache_visual_embedding_hit_row_counts: &mut Vec<usize>,
+    astro_ssd_prompt_cache_visual_embedding_miss_count: &mut u64,
 ) -> Result<(), InferenceEngineError> {
-    // A projected embedding is ordinary inference work when caching is
-    // disabled, not a cache miss. Emit cache-specific diagnostics only for a
+    // A projected embedding is ordinary inference work when the `astro_ssd_prompt_cache` is
+    // disabled, not an `astro_ssd_prompt_cache` miss. Emit `astro_ssd_prompt_cache` diagnostics only for a
     // real lookup attempt.
-    let persistent_prompt_cache_visual_embedding_lookup_was_attempted =
-        visual_embedding_context.persistent_prompt_cache.is_some();
+    let astro_ssd_prompt_cache_visual_embedding_lookup_was_attempted =
+        visual_embedding_context.astro_ssd_prompt_cache.is_some();
     for (required_image_index, required_image) in required_images.iter().enumerate() {
         let processed_visual_image = processed_visual_images
             .get(required_image.image_index())
             .ok_or_else(|| {
                 visual_embedding_fatal_error("visual suffix plan refers to a missing image")
             })?;
-        let loaded_visual_embeddings = load_cached_visual_embedding_for_image(
+        let loaded_visual_embeddings = load_astro_ssd_prompt_cache_visual_embedding_for_image(
             visual_embedding_context,
             processed_visual_image,
             required_image,
@@ -156,19 +156,19 @@ fn collect_cached_visual_embeddings(
             visual_embedding_hidden_size,
         );
         if let Some(loaded_visual_embeddings) = loaded_visual_embeddings {
-            persistent_prompt_cache_visual_embedding_hit_row_counts
+            astro_ssd_prompt_cache_visual_embedding_hit_row_counts
                 .push(required_image.image_visual_embedding_row_count());
             visual_embeddings_by_required_image[required_image_index] =
                 Some(loaded_visual_embeddings);
         } else {
-            if persistent_prompt_cache_visual_embedding_lookup_was_attempted {
-                *persistent_prompt_cache_visual_embedding_miss_count =
-                    persistent_prompt_cache_visual_embedding_miss_count.saturating_add(1);
+            if astro_ssd_prompt_cache_visual_embedding_lookup_was_attempted {
+                *astro_ssd_prompt_cache_visual_embedding_miss_count =
+                    astro_ssd_prompt_cache_visual_embedding_miss_count.saturating_add(1);
                 tracing::debug!(
                     request_id = request_id.value(),
                     image_ordinal = required_image.image_index(),
                     visual_embedding_row_count = required_image.image_visual_embedding_row_count(),
-                    "persistent visual embedding cache miss"
+                    "persistent astro_ssd_prompt_cache visual embedding miss"
                 );
             }
             missing_required_image_indexes.push(required_image_index);
@@ -178,19 +178,18 @@ fn collect_cached_visual_embeddings(
     Ok(())
 }
 
-/// Loads one required image's embedding from the persistent cache. Cache
-/// misses, stale shapes, and load failures all resolve to `None` so the
+/// Loads one required image's embedding from the `astro_ssd_prompt_cache`. Misses, stale shapes, and load failures all resolve to `None` so the
 /// caller recomputes through the vision forward.
-fn load_cached_visual_embedding_for_image(
+fn load_astro_ssd_prompt_cache_visual_embedding_for_image(
     visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
     processed_visual_image: &Qwen3_5ProcessedImage,
     required_image: &Qwen3_5VisualEmbeddingRequiredImage,
     request_id: RequestId,
     visual_embedding_hidden_size: usize,
 ) -> Option<MlxArray> {
-    let persistent_prompt_cache = visual_embedding_context.persistent_prompt_cache.as_ref()?;
-    // Construct disk identity only after proving a cache owner exists. The
-    // cache-disabled path proceeds directly to projection without
+    let astro_ssd_prompt_cache = visual_embedding_context.astro_ssd_prompt_cache.as_ref()?;
+    // Construct disk identity only after proving an `astro_ssd_prompt_cache` owner exists. The
+    // path with the `astro_ssd_prompt_cache` disabled proceeds directly to projection without
     // model/revision key construction.
     let visual_embedding_key = PersistentVisualEmbeddingKey::for_image(
         processed_visual_image.encoded_image_sha256,
@@ -201,7 +200,7 @@ fn load_cached_visual_embedding_for_image(
             .visual_embedding_model_contract
             .model_revision(),
     );
-    match persistent_prompt_cache.load_visual_embedding(
+    match astro_ssd_prompt_cache.load_visual_embedding(
         visual_embedding_context.runtime,
         &visual_embedding_key,
         visual_embedding_context.visual_embedding_model_contract,
@@ -217,7 +216,7 @@ fn load_cached_visual_embedding_for_image(
                 request_id = request_id.value(),
                 image_ordinal = required_image.image_index(),
                 visual_embedding_row_count = required_image.image_visual_embedding_row_count(),
-                "persistent visual embedding cache hit"
+                "persistent astro_ssd_prompt_cache visual embedding hit"
             );
             Some(loaded_visual_embeddings)
         }
@@ -244,7 +243,7 @@ fn load_cached_visual_embedding_for_image(
     }
 }
 
-/// Runs the vision forward for the images the cache could not serve and
+/// Runs the vision forward for the images the `astro_ssd_prompt_cache` could not serve and
 /// synchronizes the evaluation under attribution.
 fn compute_missing_visual_embeddings(
     visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
@@ -300,7 +299,7 @@ fn fold_missing_visual_embedding_row_count(
 }
 
 /// Slices each missing image's rows out of the computed embedding tensor and
-/// publishes them back to the persistent cache; save failures warn without
+/// publishes them back to the `astro_ssd_prompt_cache`; save failures warn without
 /// failing the request.
 #[allow(clippy::too_many_arguments)]
 fn publish_and_slice_missing_visual_embeddings(
@@ -327,8 +326,8 @@ fn publish_and_slice_missing_visual_embeddings(
             missing_visual_embedding_end_row,
             visual_embedding_hidden_size,
         )?;
-        if let Some(persistent_prompt_cache) =
-            visual_embedding_context.persistent_prompt_cache.as_ref()
+        if let Some(astro_ssd_prompt_cache) =
+            visual_embedding_context.astro_ssd_prompt_cache.as_ref()
         {
             let processed_visual_image = processed_visual_images
                 .get(required_image.image_index())
@@ -344,7 +343,7 @@ fn publish_and_slice_missing_visual_embeddings(
                     .visual_embedding_model_contract
                     .model_revision(),
             );
-            if let Err(visual_embedding_save_error) = persistent_prompt_cache.save_visual_embedding(
+            if let Err(visual_embedding_save_error) = astro_ssd_prompt_cache.save_visual_embedding(
                 runtime,
                 &visual_embedding_key,
                 &image_visual_embeddings,
@@ -403,14 +402,14 @@ fn assemble_suffix_visual_embeddings(
 }
 
 /// Concatenates the suffix arrays in plan order (a single image needs no
-/// concatenation), clears the allocator cache, and records the cache hit and
+/// concatenation), clears the MLX buffer cache, and records the `astro_ssd_prompt_cache` hit and
 /// miss counters.
 fn finalize_visual_embedding_resolution(
     runtime: &MlxRuntime,
     mut suffix_visual_embedding_arrays: Vec<MlxArray>,
-    persistent_prompt_cache_counters: &mut PersistentPromptCacheCounters,
-    persistent_prompt_cache_visual_embedding_hit_row_counts: Vec<usize>,
-    persistent_prompt_cache_visual_embedding_miss_count: u64,
+    astro_ssd_prompt_cache_counters: &mut AstroSsdPromptCacheCounters,
+    astro_ssd_prompt_cache_visual_embedding_hit_row_counts: Vec<usize>,
+    astro_ssd_prompt_cache_visual_embedding_miss_count: u64,
 ) -> Result<Option<MlxArray>, InferenceEngineError> {
     let resolved_visual_embeddings = if suffix_visual_embedding_arrays.len() == 1 {
         suffix_visual_embedding_arrays.pop()
@@ -424,19 +423,19 @@ fn finalize_visual_embedding_resolution(
         )
     };
     runtime
-        .clear_allocator_cache()
+        .clear_mlx_buffer_cache()
         .map_err(visual_embedding_runtime_error)?;
-    for persistent_prompt_cache_visual_embedding_hit_row_count in
-        persistent_prompt_cache_visual_embedding_hit_row_counts
+    for astro_ssd_prompt_cache_visual_embedding_hit_row_count in
+        astro_ssd_prompt_cache_visual_embedding_hit_row_counts
     {
-        persistent_prompt_cache_counters.record_persistent_prompt_cache_visual_embedding_hit(
-            persistent_prompt_cache_visual_embedding_hit_row_count,
+        astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_visual_embedding_hit(
+            astro_ssd_prompt_cache_visual_embedding_hit_row_count,
         );
     }
-    for _persistent_prompt_cache_visual_embedding_miss_index in
-        0..persistent_prompt_cache_visual_embedding_miss_count
+    for _astro_ssd_prompt_cache_visual_embedding_miss_index in
+        0..astro_ssd_prompt_cache_visual_embedding_miss_count
     {
-        persistent_prompt_cache_counters.record_persistent_prompt_cache_visual_embedding_miss();
+        astro_ssd_prompt_cache_counters.record_astro_ssd_prompt_cache_visual_embedding_miss();
     }
     Ok(resolved_visual_embeddings)
 }

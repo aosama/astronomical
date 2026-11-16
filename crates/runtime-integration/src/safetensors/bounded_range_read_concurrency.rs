@@ -206,14 +206,14 @@ static PIECE_READ_POOL: PieceReadPool = PieceReadPool::new();
 /// one interval per selected expert. Reading those one after another kept the
 /// SSD at a queue depth of one per tensor. Measured through MLX on one
 /// 8-expert page (`cargo measure-cold-expert-page-reads`), read from the SSD
-/// and from the file cache respectively:
+/// and from the macOS file cache respectively:
 ///
 /// | Model, page size | Serial | This reader |
 /// |---|---|---|
 /// | 35B A3B 8-bit, 26.7 MB | 4.40 / 0.69 ms | 2.77 / 0.49 ms |
 /// | 122B 2-bit experts, 23.6 MB | 4.18 / 0.65 ms | 2.45 / 0.47 ms |
 ///
-/// The pool threads are why the cached case improves too; see
+/// The pool threads are why the case served from the macOS file cache improves too; see
 /// `piece_read_pool`. Every piece is attempted even after a failure, and the
 /// call returns only when every piece has finished; the result is `true` only
 /// when all pieces read exactly.
@@ -253,7 +253,7 @@ pub(super) fn read_source_pieces(
 /// than the permit pool could serve at once. Once workers were long-lived,
 /// one per piece measured slightly faster than one per 64 KiB of span on both
 /// models above (2.45 against 2.55 ms read from the SSD on the 122B) and the
-/// same from the file cache, so no size rule remains. Zero only for an empty
+/// same from the macOS file cache, so no size rule remains. Zero only for an empty
 /// span.
 fn piece_worker_count(piece_count: usize, permit_count: usize) -> usize {
     piece_count.min(permit_count)

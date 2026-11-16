@@ -19,7 +19,7 @@ const REPORTED_DIFFERENCE_LIMIT: usize = 10;
 pub(crate) fn verify_headers_against_native_build(
     repository_root: &Path,
     provision_options: &ProvisionOptions,
-    cache_directory: &Path,
+    astro_native_build_cache_dependencies_directory: &Path,
     store_directory: &Path,
 ) -> Result<(), String> {
     let identity_step = start_step("resolve-built-identity");
@@ -40,7 +40,10 @@ pub(crate) fn verify_headers_against_native_build(
     }
     identity_step.finish("success");
     let source_identity = source_identity(repository_root)?;
-    let extraction = extraction_directory(cache_directory, &source_identity);
+    let extraction = extraction_directory(
+        astro_native_build_cache_dependencies_directory,
+        &source_identity,
+    );
     if !extraction.join(COMPLETION_MARKER_FILE_NAME).is_file() {
         return Err(format!(
             "no provisioned bindgen headers for identity {source_identity}; run cargo xtask provision-bindgen-headers first"

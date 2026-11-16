@@ -14,7 +14,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 /// Headroom for the complete-layer probe: one full 8-bit expert layer is
 /// roughly 0.8 GB, and evaluation may transiently hold copies.
 const PROBE_ACTIVE_MEMORY_LIMIT_BYTES: usize = 32 * 1_000_000_000;
-const PROBE_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 512 * 1_000_000;
+const PROBE_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 512 * 1_000_000;
 const MODEL_INDEX_FILE_NAME: &str = "model.safetensors.index.json";
 
 pub(super) struct StreamingProbeFixture {
@@ -79,7 +79,7 @@ pub(super) fn probe_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(
             PROBE_ACTIVE_MEMORY_LIMIT_BYTES,
-            PROBE_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            PROBE_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the streaming probe memory limits should be valid"),
     )

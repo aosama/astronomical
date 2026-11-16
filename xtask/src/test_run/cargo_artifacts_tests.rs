@@ -13,13 +13,13 @@ fn arguments(command_line: &str) -> Vec<String> {
 #[test]
 fn should_build_the_selected_profile_and_features_without_executing_tests() {
     let request = TestRunRequest::parse(&arguments(
-        "--package astronomical-acceptance --test engine_prompt_cache --features direct-mlx --profile full-debug",
+        "--package astronomical-acceptance --test engine_astro_ssd_prompt_cache --features direct-mlx --profile full-debug",
     ))
     .expect("test request");
     assert_eq!(
         test_build_arguments(&request),
         arguments(
-            "test --package astronomical-acceptance --no-run --message-format=json --test engine_prompt_cache --profile full-debug --features direct-mlx"
+            "test --package astronomical-acceptance --no-run --message-format=json --test engine_astro_ssd_prompt_cache --profile full-debug --features direct-mlx"
         )
     );
     assert!(

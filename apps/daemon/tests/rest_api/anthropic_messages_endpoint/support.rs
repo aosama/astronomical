@@ -5,7 +5,7 @@ pub(super) fn completed_event(reason: ChatGenerationCompletionReason) -> ChatGen
         prompt_token_count: 40,
         generated_token_count: 6,
         reasoning_token_count: 2,
-        cached_token_count: 32,
+        astro_ssd_prompt_cache_restored_token_count: 32,
         reason,
     }
 }

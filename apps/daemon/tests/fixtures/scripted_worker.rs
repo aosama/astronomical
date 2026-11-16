@@ -44,7 +44,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut cancellation_acknowledgement_delay = Duration::ZERO;
     let mut should_acknowledge_cancellation = true;
     let mut should_emit_unexpected_cancellation_event = false;
-    let mut should_emit_cache_stats_before_cancellation_acknowledgement = false;
+    let mut should_emit_astro_ssd_prompt_cache_stats_before_cancellation_acknowledgement = false;
     let mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement = false;
     let mut expert_streaming_session_request_count = 0_u64;
     let mut cancellation_mlx_telemetry = CancellationMlxTelemetry::None;
@@ -90,8 +90,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         prompt_token_count: message_count.saturating_mul(7),
                         generated_token_count: 0,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
-                        persistent_prompt_cache_diagnostics: None,
+                        astro_ssd_prompt_cache_restored_token_count: 0,
+                        astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::EndOfSequence,
                     })
                     .await?;
@@ -118,8 +118,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         cancellation_mlx_telemetry: &mut cancellation_mlx_telemetry,
                         should_emit_unexpected_cancellation_event:
                             &mut should_emit_unexpected_cancellation_event,
-                        should_emit_cache_stats_before_cancellation_acknowledgement:
-                            &mut should_emit_cache_stats_before_cancellation_acknowledgement,
+                        should_emit_astro_ssd_prompt_cache_stats_before_cancellation_acknowledgement:
+                            &mut should_emit_astro_ssd_prompt_cache_stats_before_cancellation_acknowledgement,
                         should_emit_expert_streaming_stats_before_cancellation_acknowledgement:
                             &mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
                         expert_streaming_session_request_count:
@@ -154,8 +154,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             prompt_token_count: 1,
                             generated_token_count: 0,
                             reasoning_token_count: 0,
-                            cached_token_count: 0,
-                            persistent_prompt_cache_diagnostics: None,
+                            astro_ssd_prompt_cache_restored_token_count: 0,
+                            astro_ssd_prompt_cache_diagnostics: None,
                             reason: ChatGenerationCompletionReason::Cancelled,
                         })
                         .await?;
@@ -166,7 +166,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 // without failing it; the helper fires each flag once.
                 emit_cancellation_telemetry(
                     &mut event_writer,
-                    &mut should_emit_cache_stats_before_cancellation_acknowledgement,
+                    &mut should_emit_astro_ssd_prompt_cache_stats_before_cancellation_acknowledgement,
                     &mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
                     &mut cancellation_mlx_telemetry,
                 )
@@ -181,8 +181,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         prompt_token_count: 1,
                         generated_token_count: 0,
                         reasoning_token_count: 0,
-                        cached_token_count: 0,
-                        persistent_prompt_cache_diagnostics: None,
+                        astro_ssd_prompt_cache_restored_token_count: 0,
+                        astro_ssd_prompt_cache_diagnostics: None,
                         reason: ChatGenerationCompletionReason::Cancelled,
                     })
                     .await?;
@@ -206,9 +206,9 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 )
                 .await?;
             }
-            WorkerCommand::ClearPromptCache { model_id } => {
+            WorkerCommand::ClearAstroSsdPromptCache { model_id } => {
                 event_writer
-                    .send_event(&WorkerEvent::PromptCacheCleared {
+                    .send_event(&WorkerEvent::AstroSsdPromptCacheCleared {
                         model_id,
                         blocks_removed: 0,
                         bytes_freed: 0,
@@ -228,7 +228,7 @@ struct CancellationFixtureState<'a> {
     cancellation_acknowledgement_delay: &'a mut Duration,
     cancellation_mlx_telemetry: &'a mut CancellationMlxTelemetry,
     should_emit_unexpected_cancellation_event: &'a mut bool,
-    should_emit_cache_stats_before_cancellation_acknowledgement: &'a mut bool,
+    should_emit_astro_ssd_prompt_cache_stats_before_cancellation_acknowledgement: &'a mut bool,
     should_emit_expert_streaming_stats_before_cancellation_acknowledgement: &'a mut bool,
     expert_streaming_session_request_count: &'a mut u64,
 }
@@ -273,7 +273,7 @@ async fn dispatch_unstructured_chat(
         cancellation_acknowledgement_delay,
         cancellation_mlx_telemetry,
         should_emit_unexpected_cancellation_event,
-        should_emit_cache_stats_before_cancellation_acknowledgement,
+        should_emit_astro_ssd_prompt_cache_stats_before_cancellation_acknowledgement,
         should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
         expert_streaming_session_request_count,
     } = cancellation_fixture_state;
@@ -333,7 +333,7 @@ async fn dispatch_unstructured_chat(
             *should_acknowledge_cancellation = true;
             *should_emit_unexpected_cancellation_event = true;
         }
-        "astronomical/cache-stats-during-cancellation-fixture"
+        "astronomical/astro-ssd-prompt-cache-stats-during-cancellation-fixture"
         | EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID => {
             *active_request_id = Some(request_id);
             *should_acknowledge_cancellation = true;
@@ -341,7 +341,7 @@ async fn dispatch_unstructured_chat(
             // acknowledgement; only the published kind differs.
             let emits_expert_streaming_stats =
                 generation_command.model.as_str() == EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID;
-            *should_emit_cache_stats_before_cancellation_acknowledgement =
+            *should_emit_astro_ssd_prompt_cache_stats_before_cancellation_acknowledgement =
                 !emits_expert_streaming_stats;
             *should_emit_expert_streaming_stats_before_cancellation_acknowledgement =
                 emits_expert_streaming_stats;
@@ -419,8 +419,8 @@ async fn dispatch_unstructured_chat(
                     prompt_token_count: 1,
                     generated_token_count: 1,
                     reasoning_token_count: 0,
-                    cached_token_count: 0,
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_restored_token_count: 0,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     reason: ChatGenerationCompletionReason::EndOfSequence,
                 })
                 .await?;
@@ -467,8 +467,8 @@ async fn dispatch_unstructured_chat(
                     prompt_token_count: 1,
                     generated_token_count: 17,
                     reasoning_token_count: 0,
-                    cached_token_count: 0,
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_restored_token_count: 0,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     reason: ChatGenerationCompletionReason::ToolCalls,
                 })
                 .await?;
@@ -480,8 +480,8 @@ async fn dispatch_unstructured_chat(
                     prompt_token_count: 1,
                     generated_token_count: 0,
                     reasoning_token_count: 0,
-                    cached_token_count: 0,
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_restored_token_count: 0,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     reason: ChatGenerationCompletionReason::Cancelled,
                 })
                 .await?;
@@ -507,8 +507,8 @@ async fn dispatch_unstructured_chat(
                     prompt_token_count: 1,
                     generated_token_count: 1,
                     reasoning_token_count: 0,
-                    cached_token_count: 0,
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_restored_token_count: 0,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     reason: ChatGenerationCompletionReason::MaximumOutputTokens,
                 })
                 .await?;
@@ -526,7 +526,7 @@ async fn dispatch_unstructured_chat(
                     mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                         source: MlxMemorySnapshotSource::Prefill,
                         active_memory_bytes: 11_000,
-                        allocator_cache_memory_bytes: 12_000,
+                        mlx_buffer_cache_bytes: 12_000,
                         peak_memory_bytes: 13_000,
                         expert_payload_bytes: 4_000,
                         model_core_payload_bytes: 3_000,
@@ -564,7 +564,7 @@ async fn dispatch_unstructured_chat(
                     mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
                         source: MlxMemorySnapshotSource::Finalized,
                         active_memory_bytes: 24_000,
-                        allocator_cache_memory_bytes: 0,
+                        mlx_buffer_cache_bytes: 0,
                         peak_memory_bytes: 25_000,
                         expert_payload_bytes: 19_000,
                         model_core_payload_bytes: 3_000,
@@ -580,8 +580,8 @@ async fn dispatch_unstructured_chat(
                     prompt_token_count: 50_000,
                     generated_token_count: 1,
                     reasoning_token_count: 0,
-                    cached_token_count: 0,
-                    persistent_prompt_cache_diagnostics: None,
+                    astro_ssd_prompt_cache_restored_token_count: 0,
+                    astro_ssd_prompt_cache_diagnostics: None,
                     reason: ChatGenerationCompletionReason::EndOfSequence,
                 })
                 .await?;

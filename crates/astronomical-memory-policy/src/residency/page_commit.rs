@@ -1,8 +1,8 @@
-//! Whether just-read experts may stay in the retained cache.
+//! Whether just-read experts may stay in the `astro_expert_cache`.
 //!
-//! Two caching strategies live here, both answering "may this page stay":
-//! whole-layer caching seats an entire decoder layer's experts or none of
-//! them, and hot-expert caching keeps the individual routed experts the
+//! Two holding strategies live here, both answering "may this page stay":
+//! whole-layer holding seats an entire decoder layer's experts or none of
+//! them, and hot-expert holding keeps the individual routed experts the
 //! router keeps choosing. In "hot-expert," *hot* means routing frequency, not
 //! temperature.
 
@@ -11,10 +11,10 @@ use super::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 /// Keep a whole layer that was just read when the layer should be kept.
 ///
 /// While a prompt is read every layer is in that state, so a layer read
-/// whole is kept as long as the cache has room: the read already paid the
+/// whole is kept as long as the `astro_expert_cache` has room: the read already paid the
 /// whole-layer cost and discarding it would read the same bytes again. A
 /// reply does it too for the layers its plan keeps, or room left over never
-/// becomes resident memory and every token reads from storage. The cache's
+/// becomes resident memory and every token reads from storage. The `astro_expert_cache`
 /// capacity remains the only refusal.
 #[must_use]
 pub const fn should_commit_mandatory_complete_layer(
@@ -26,8 +26,8 @@ pub const fn should_commit_mandatory_complete_layer(
 }
 
 /// Keep routed experts after a mandatory read so the next forward can hit them
-/// (hot-expert caching). Overflow is handled by evicting the least-used
-/// retained page, not by refusing to cache what this forward used.
+/// (hot-expert holding). Overflow is handled by evicting the least-used
+/// retained page, not by refusing to hold what this forward used.
 ///
 /// A layer the reply's plan leaves absent keeps nothing new: it is not
 /// refilled behind the plan's back.
@@ -55,7 +55,7 @@ pub const fn should_commit_mandatory_routed_page(
 /// over the model's whole expert set — while 26.95 GB of ceiling sat unused).
 /// The offer is honest only when the plan funds the layer's complete claim
 /// (the layer should be kept whole) and the union covers the layer exactly;
-/// budget admission inside the retained cache remains the only refusal path.
+/// budget admission inside the `astro_expert_cache` remains the only refusal path.
 #[must_use]
 pub const fn should_commit_multi_token_union_as_complete_layer(
     route_token_count: i32,
@@ -75,7 +75,7 @@ pub const fn should_commit_multi_token_union_as_complete_layer(
 ///
 /// A multi-token chunk often routes most, but not all, experts of a layer.
 /// Retaining that union lets the next read fetch only the remainder and finish
-/// the table. Cache admission still enforces the actual retained-byte ceiling.
+/// the table. `astro_expert_cache` admission still enforces the actual retained-byte ceiling.
 #[must_use]
 pub const fn should_seed_partial_layer_on_prefill_read(
     route_token_count: i32,
@@ -119,7 +119,7 @@ pub const fn should_complete_partial_layer_on_prefill_read(
         && matches!(layer_state, super::ExpertLayerState::Kept)
 }
 
-/// Structural slot cap for one decode warm table (hot-expert caching).
+/// Structural slot cap for one decode warm table (hot-expert holding).
 ///
 /// Issue #514: a history-length multiplier (`experts_per_token * 8`) left
 /// leftover decode entitlement unclaimed on every machine, because the cap

@@ -32,7 +32,10 @@ fn should_report_core_ml_failure_and_leave_no_compiled_model_for_an_absent_packa
 #[test]
 fn should_create_missing_destination_folders_before_compiling() {
     let scratch_directory = tempfile::tempdir().expect("a scratch directory");
-    let destination_parent = scratch_directory.path().join("cache").join("program-set");
+    let destination_parent = scratch_directory
+        .path()
+        .join("astro_neural_engine_program_cache")
+        .join("program-set");
 
     let compile_result = compile_model_to(
         &scratch_directory.path().join("absent.mlpackage"),

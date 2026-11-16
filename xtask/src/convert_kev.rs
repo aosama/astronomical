@@ -9,7 +9,7 @@
 //! one folder and never reads a pickle.
 //!
 //! The base must be the exact revision the adapter was trained on: `head.pt`
-//! names it, and a Hugging Face cache snapshot of any other revision is
+//! names it, and a `huggingface_hub_cache` snapshot of any other revision is
 //! refused. Merging is arithmetic on the CPU, one tensor at a time; for the
 //! 9B adapter build xtask with `--release`, or the merge takes many minutes.
 
@@ -123,7 +123,7 @@ pub(crate) fn convert_checkpoint(invocation: &ConvertKevInvocation) -> Result<()
     Ok(())
 }
 
-/// A Hugging Face cache snapshot is named after its revision, so a base of
+/// A `huggingface_hub_cache` snapshot is named after its revision, so a base of
 /// another revision than the adapter's is caught before any merge. A plain
 /// folder carries no revision and is taken as given.
 fn refuse_a_different_base_revision(

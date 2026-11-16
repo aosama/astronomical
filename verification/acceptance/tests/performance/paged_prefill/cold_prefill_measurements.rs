@@ -32,7 +32,7 @@ fn model_id() -> &'static str {
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const SOURCE_DOCUMENT_FIXTURE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
-const CACHE_SCALING_FIXTURE: &str =
+const FIFTY_THOUSAND_WORD_SCALING_FIXTURE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
 struct StreamingMeasurement {
@@ -40,10 +40,10 @@ struct StreamingMeasurement {
     first_output_at: Instant,
     response_completed_at: Instant,
     completion_token_count: u64,
-    cached_token_count: u64,
+    astro_ssd_prompt_cache_restored_token_count: u64,
     generated_text: String,
     maximum_prefill_mlx_active_memory_bytes: Option<u64>,
-    maximum_prefill_mlx_allocator_cache_memory_bytes: Option<u64>,
+    maximum_prefill_mlx_buffer_cache_bytes: Option<u64>,
     maximum_prefill_mlx_peak_memory_bytes: Option<u64>,
     prompt_token_count: u64,
 }
@@ -67,16 +67,22 @@ fn should_keep_static_metrics_fixture_at_exactly_five_thousand_words() {
 }
 
 #[test]
-fn should_keep_cache_scaling_fixture_at_exactly_fifty_thousand_words() {
-    assert_eq!(CACHE_SCALING_FIXTURE.split_whitespace().count(), 50_000);
+fn should_keep_the_scaling_fixture_at_exactly_fifty_thousand_words() {
+    assert_eq!(
+        FIFTY_THOUSAND_WORD_SCALING_FIXTURE
+            .split_whitespace()
+            .count(),
+        50_000
+    );
 }
 
 #[test]
 fn should_configure_fixed_prompt_processing_chunks_for_summary_metrics_worker() {
-    let (isolated_worker_home, _worker_executable_path) = isolated_prompt_cache_worker_launcher(
-        Path::new("/bin/true"),
-        Path::new("/tmp/model-artifact-measurement"),
-    );
+    let (isolated_worker_home, _worker_executable_path) =
+        isolated_astro_ssd_prompt_cache_worker_launcher(
+            Path::new("/bin/true"),
+            Path::new("/tmp/model-artifact-measurement"),
+        );
     let configuration_document_path = isolated_worker_home
         .path()
         .join(".astronomical-dev/config.json");
@@ -106,15 +112,17 @@ async fn should_measure_paged_prefill_summarization_throughput_and_peak_memory()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the Ornith model and measures 50,000-word cold-cache paged prefill"]
+#[ignore = "loads the Ornith model and measures 50,000-word paged prefill with a cold macOS file cache"]
 #[serial]
-async fn should_measure_paged_prefill_cold_cache_at_fifty_thousand_words() {
+async fn should_measure_paged_prefill_with_a_cold_macos_file_cache_at_fifty_thousand_words() {
     timeout(
         BENCHMARK_TIMEOUT,
         run_cold_prefill_measurement(fifty_thousand_word_case()),
     )
     .await
-    .expect("the model-artifact cold-cache 50K measurement must finish within 60 seconds");
+    .expect(
+        "the model-artifact cold macOS file cache 50K measurement must finish within 60 seconds",
+    );
 }
 
 #[expect(clippy::too_many_lines)]
@@ -122,10 +130,11 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
     let configured_model_directory = configured_model_directory_from_user_config();
     let production_worker_executable_path =
         astronomical_test_harness::workspace_binary("astronomical-inference-worker");
-    let (isolated_worker_home, worker_executable_path) = isolated_prompt_cache_worker_launcher(
-        Path::new(&production_worker_executable_path),
-        &configured_model_directory,
-    );
+    let (isolated_worker_home, worker_executable_path) =
+        isolated_astro_ssd_prompt_cache_worker_launcher(
+            Path::new(&production_worker_executable_path),
+            &configured_model_directory,
+        );
     let machine_mlx_memory_ceiling_bytes = worker_startup::machine_mlx_memory_ceiling_bytes()
         .await
         .expect("the machine MLX memory ceiling should be available");
@@ -190,8 +199,8 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
     assert!(streaming_measurement.prompt_token_count > 0);
     assert!(streaming_measurement.completion_token_count > 0);
     assert_eq!(
-        streaming_measurement.cached_token_count, 0,
-        "the performance test must measure model prefill rather than SSD cache restoration"
+        streaming_measurement.astro_ssd_prompt_cache_restored_token_count, 0,
+        "the performance test must measure model prefill rather than astro SSD prompt cache restoration"
     );
 
     let prompt_processing_duration = streaming_measurement
@@ -218,13 +227,13 @@ async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCa
 
     let metrics_report = json!({
         "completion_tokens": streaming_measurement.completion_token_count,
-        "cached_tokens": streaming_measurement.cached_token_count,
+        "cached_tokens": streaming_measurement.astro_ssd_prompt_cache_restored_token_count,
         "generation_seconds": generation_duration.as_secs_f64(),
         "generation_tokens_per_second": generation_tokens_per_second,
         "machine_mlx_memory_ceiling_bytes": machine_mlx_memory_ceiling_bytes,
         "max_output_tokens": measurement_case.maximum_output_tokens,
         "maximum_prefill_mlx_active_memory_bytes": streaming_measurement.maximum_prefill_mlx_active_memory_bytes,
-        "maximum_prefill_mlx_allocator_cache_memory_bytes": streaming_measurement.maximum_prefill_mlx_allocator_cache_memory_bytes,
+        "maximum_prefill_mlx_buffer_cache_bytes": streaming_measurement.maximum_prefill_mlx_buffer_cache_bytes,
         "maximum_prefill_mlx_peak_memory_bytes": streaming_measurement.maximum_prefill_mlx_peak_memory_bytes,
         "model": model_id(),
         "output_paragraphs": output_paragraph_count,
@@ -245,15 +254,16 @@ fn configured_model_directory_from_user_config() -> PathBuf {
     crate::support::configured_installed_model_directory_by_id(model_id())
 }
 
-fn isolated_prompt_cache_worker_launcher(
+fn isolated_astro_ssd_prompt_cache_worker_launcher(
     production_worker_executable_path: &Path,
     model_directory: &Path,
 ) -> (tempfile::TempDir, PathBuf) {
     let isolated_worker_home = tempfile::tempdir()
-        .expect("the isolated prompt-cache metrics worker home should be created");
+        .expect("the isolated astro-ssd-prompt-cache metrics worker home should be created");
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
-    fs::create_dir(&configuration_directory)
-        .expect("the isolated prompt-cache metrics configuration directory should be created");
+    fs::create_dir(&configuration_directory).expect(
+        "the isolated astro-ssd-prompt-cache metrics configuration directory should be created",
+    );
     let configuration_document = json!({
         "model_directories": [model_directory],
         "chunking": {
@@ -263,9 +273,9 @@ fn isolated_prompt_cache_worker_launcher(
     fs::write(
         configuration_directory.join("config.json"),
         serde_json::to_vec_pretty(&configuration_document)
-            .expect("the isolated prompt-cache metrics configuration should serialize"),
+            .expect("the isolated astro-ssd-prompt-cache metrics configuration should serialize"),
     )
-    .expect("the isolated prompt-cache metrics configuration should be written");
+    .expect("the isolated astro-ssd-prompt-cache metrics configuration should be written");
 
     (
         isolated_worker_home,
@@ -334,9 +344,9 @@ async fn measure_worker_summarization(
     let mut generated_text = String::new();
     let mut prompt_token_count: Option<u64> = None;
     let mut completion_token_count: Option<u64> = None;
-    let mut cached_token_count: Option<u64> = None;
+    let mut astro_ssd_prompt_cache_restored_token_count: Option<u64> = None;
     let mut maximum_prefill_mlx_active_memory_bytes: Option<u64> = None;
-    let mut maximum_prefill_mlx_allocator_cache_memory_bytes: Option<u64> = None;
+    let mut maximum_prefill_mlx_buffer_cache_bytes: Option<u64> = None;
     let mut maximum_prefill_mlx_peak_memory_bytes: Option<u64> = None;
     let mut progress_interval = interval(Duration::from_secs(10));
     progress_interval.tick().await;
@@ -383,7 +393,7 @@ async fn measure_worker_summarization(
             }
             ChatGenerationStreamEvent::PrefillProgress {
                 mlx_active_memory_bytes,
-                mlx_allocator_cache_memory_bytes,
+                mlx_buffer_cache_bytes,
                 mlx_peak_memory_bytes,
                 ..
             } => {
@@ -391,9 +401,9 @@ async fn measure_worker_summarization(
                     maximum_prefill_mlx_active_memory_bytes,
                     mlx_active_memory_bytes,
                 );
-                maximum_prefill_mlx_allocator_cache_memory_bytes = maximum_optional_u64(
-                    maximum_prefill_mlx_allocator_cache_memory_bytes,
-                    mlx_allocator_cache_memory_bytes,
+                maximum_prefill_mlx_buffer_cache_bytes = maximum_optional_u64(
+                    maximum_prefill_mlx_buffer_cache_bytes,
+                    mlx_buffer_cache_bytes,
                 );
                 maximum_prefill_mlx_peak_memory_bytes = maximum_optional_u64(
                     maximum_prefill_mlx_peak_memory_bytes,
@@ -403,12 +413,15 @@ async fn measure_worker_summarization(
             ChatGenerationStreamEvent::Completed {
                 prompt_token_count: completed_prompt_token_count,
                 generated_token_count,
-                cached_token_count: completed_cached_token_count,
+                astro_ssd_prompt_cache_restored_token_count:
+                    completed_astro_ssd_prompt_cache_restored_token_count,
                 ..
             } => {
                 prompt_token_count = Some(u64::from(completed_prompt_token_count));
                 completion_token_count = Some(u64::from(generated_token_count));
-                cached_token_count = Some(u64::from(completed_cached_token_count));
+                astro_ssd_prompt_cache_restored_token_count = Some(u64::from(
+                    completed_astro_ssd_prompt_cache_restored_token_count,
+                ));
                 break;
             }
             ChatGenerationStreamEvent::Failed { reason } => {
@@ -426,11 +439,11 @@ async fn measure_worker_summarization(
         response_completed_at,
         completion_token_count: completion_token_count
             .expect("the terminal worker event should report completion tokens"),
-        cached_token_count: cached_token_count
-            .expect("the terminal worker event should report cached prompt tokens"),
+        astro_ssd_prompt_cache_restored_token_count: astro_ssd_prompt_cache_restored_token_count
+            .expect("the terminal worker event should report prompt tokens restored from the astro SSD prompt cache"),
         generated_text,
         maximum_prefill_mlx_active_memory_bytes,
-        maximum_prefill_mlx_allocator_cache_memory_bytes,
+        maximum_prefill_mlx_buffer_cache_bytes,
         maximum_prefill_mlx_peak_memory_bytes,
         prompt_token_count: prompt_token_count
             .expect("the terminal worker event should report prompt tokens"),
@@ -465,7 +478,7 @@ fn fifty_thousand_word_case() -> ColdPrefillMeasurementCase {
         // plus the one visible answer token, or the worker rejects the
         // request before prefill — defeating the measurement's purpose.
         maximum_output_tokens: 64,
-        source_document: CACHE_SCALING_FIXTURE,
+        source_document: FIFTY_THOUSAND_WORD_SCALING_FIXTURE,
         source_word_count: 50_000,
         should_require_three_paragraphs: false,
     }

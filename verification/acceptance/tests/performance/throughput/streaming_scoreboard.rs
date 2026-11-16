@@ -5,7 +5,7 @@
 //! One cell is one model under an MLX limit small enough that the model has
 //! to stream from storage. Each cell runs the standard serving journey — a
 //! short warmup, then about 10,000 prompt tokens and 500 reply tokens of the
-//! Romeo and Juliet fixture — with the persistent prompt cache off,
+//! Romeo and Juliet fixture — with the astro SSD prompt cache off,
 //! performance attribution off and the product's default prompt chunk, so a
 //! row describes what a person running the app gets.
 //!
@@ -29,7 +29,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronomical_daemon::WorkerHealthSnapshot;
-use astronomical_ipc_protocol::{ChatImageInput, WorkerDecodeExpertCachePolicy};
+use astronomical_ipc_protocol::{ChatImageInput, WorkerDecodeAstroExpertCachePolicy};
 use serde::Serialize;
 use serial_test::serial;
 
@@ -151,9 +151,9 @@ struct LedgerScoreboardReading {
     largest_kept_over_capacity_bytes: u64,
     largest_reading_step_peak_beyond_held_bytes: u64,
     largest_writing_step_peak_beyond_held_bytes: u64,
-    probed_working_memory_bytes: Option<u64>,
+    probed_mlx_working_buffer_bytes: Option<u64>,
     lowest_kept_share_while_reading_permille: Option<u32>,
-    working_memory_bytes: u64,
+    mlx_working_buffer_bytes: u64,
     kept_weight_capacity_bytes: u64,
 }
 
@@ -176,7 +176,7 @@ async fn run_scoreboard_cell(model_id: &str, limit_gibibytes: u64) {
 fn scoreboard_journey(limit_bytes: u64) -> ThroughputJourney {
     ThroughputJourney {
         journey_kind: ThroughputJourneyKind::StreamingScoreboard,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
         warmup_input_prompt: throughput_support::romeo_and_juliet_warmup_prompt(
             WARMUP_INPUT_INSTRUCTION,
             WARMUP_ROMEO_AND_JULIET_SOURCE,
@@ -266,10 +266,10 @@ fn ledger_scoreboard_reading(
             .largest_reading_step_peak_beyond_held_bytes,
         largest_writing_step_peak_beyond_held_bytes: ledger_snapshot
             .largest_writing_step_peak_beyond_held_bytes,
-        probed_working_memory_bytes: ledger_snapshot.probed_working_memory_bytes,
+        probed_mlx_working_buffer_bytes: ledger_snapshot.probed_mlx_working_buffer_bytes,
         lowest_kept_share_while_reading_permille: ledger_snapshot
             .lowest_kept_share_while_reading_permille,
-        working_memory_bytes: ledger_snapshot.working_memory_bytes,
+        mlx_working_buffer_bytes: ledger_snapshot.mlx_working_buffer_bytes,
         kept_weight_capacity_bytes: ledger_snapshot.kept_weight_capacity_bytes,
     })
 }

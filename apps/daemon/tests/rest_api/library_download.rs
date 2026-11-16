@@ -20,6 +20,7 @@ use tower::ServiceExt;
 use crate::support::ScriptedExecutor;
 
 mod ipc_download_start;
+mod queued_downloads;
 mod removal;
 mod replacing_a_failed_download;
 mod restart;
@@ -456,10 +457,26 @@ fn build_test_coordinator(
     download_catalog: Arc<DownloadCatalog>,
     hub: Arc<ScriptedHub>,
 ) -> Arc<LibraryDownloadCoordinator> {
+    build_test_coordinator_with_capacity(
+        test_directory,
+        download_catalog,
+        hub,
+        Arc::new(AvailableCapacity),
+    )
+}
+
+/// `build_test_coordinator` with a chosen free-space reading, for the
+/// journeys that need a disk too small for the whole download list.
+fn build_test_coordinator_with_capacity(
+    test_directory: &Path,
+    download_catalog: Arc<DownloadCatalog>,
+    hub: Arc<ScriptedHub>,
+    capacity_query: Arc<dyn DiskCapacityQuery>,
+) -> Arc<LibraryDownloadCoordinator> {
     Arc::new(LibraryDownloadCoordinator::new(
         download_catalog,
         test_directory.join("models"),
-        Arc::new(AvailableCapacity),
+        capacity_query,
         hub.clone(),
         hub,
         Arc::new(ValidatingDiscoveryRefresh),

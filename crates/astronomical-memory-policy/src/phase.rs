@@ -13,7 +13,7 @@ pub enum MemoryPhase {
     Prefill,
     /// The prompt finished; resident expert ownership is prepared before the
     /// first generated token. Planned like `Decode` because writing a token
-    /// needs little working memory, but kept distinct so residency plans
+    /// needs few MLX working buffers, but kept distinct so residency plans
     /// can preserve more expert payload before generation begins.
     GenerationPreparation,
     /// Tokens are being generated one at a time.

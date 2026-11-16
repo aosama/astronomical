@@ -7,10 +7,10 @@
 //! related, so its tests build and run in the integration lane in a fraction of a
 //! second and a ledger or residency change never pulls in the MLX bindings.
 //!
-//! The layering contract (`cargo xtask check-architecture`) fails if a MLX
+//! The layering contract (`cargo xtask check-architecture`) fails if an MLX
 //! dependency is
 //! reintroduced here, so the boundary is enforced by the dependency graph
-//! instead of by convention. The MLX-facing owners (retained cache slot
+//! instead of by convention. The MLX-facing owners (retained astro expert cache slot
 //! tables, streaming readers, the runtime-backed allocation admission, the
 //! direct-MLX admission logging) stay in `astronomical-model-serving` and
 //! depend on this crate; the dependency direction is one way.
@@ -20,12 +20,12 @@
 //! - `admission` — may this operation begin (`AllocationAdmissionDecision`,
 //!   `CompleteResidencyDecision`, context workspaces, retained-prefix
 //!   retention, rotating admission).
-//! - `expert_cache` — the expert cache as arithmetic: one capacity across
+//! - `astro_expert_cache_model` — the astro expert cache as arithmetic: one capacity across
 //!   all layers, one eviction order, and a record of every hit, read and
 //!   eviction; real replies are replayed through it on every commit.
 //! - `expert_paging` — pure expert-paging support arithmetic: the
 //!   safetensors header parsing (`safetensors_header`, over `safetensors`
-//!   and `strict_json`) and the expert weight memory-cache statistics. The
+//!   and `strict_json`) and the expert weight `astro_expert_cache` statistics. The
 //!   quantized expert manifests stay in `astronomical-model-serving` — they
 //!   embed model-family configuration types.
 //! - `phase` — the one lifecycle phase type (`MemoryPhase`).
@@ -57,8 +57,8 @@
 //!   configuration and the machine bound.
 
 pub mod admission;
+pub mod astro_expert_cache_model;
 pub mod ceiling;
-pub mod expert_cache;
 pub mod expert_paging;
 pub mod forward_admission;
 pub mod geometry_floor;

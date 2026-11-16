@@ -12,7 +12,7 @@
 //! The warm variant leaves the macOS file cache alone, so on a Mac with more
 //! RAM than the limit most expert reads come from memory. The cold variant
 //! keeps the model's weight files evicted for the whole run
-//! (`cold_file_cache`), which is what the same reads cost on a Mac whose RAM
+//! (`cold_macos_file_cache`), which is what the same reads cost on a Mac whose RAM
 //! is the limit.
 //!
 //! Run through `cargo xtask test-run --configuration FILE`, whose
@@ -32,7 +32,7 @@ use serde_json::Value;
 use serial_test::serial;
 use tokio::time::timeout;
 
-use super::cold_file_cache::ColdFileCache;
+use super::cold_macos_file_cache::ColdMacosFileCache;
 use crate::serving_acceptance::support::performance_attribution::{
     counter_amount, create_attributed_engine, generation_report_for_request,
     load_engine_with_progress, read_attribution_report_documents, run_attributed_generation,
@@ -64,7 +64,7 @@ const DECODE_ATTRIBUTION_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Whether the model's weight files may stay in the macOS file cache.
 #[derive(Clone, Copy, Debug)]
-enum FileCacheCondition {
+enum MacosFileCacheCondition {
     Warm,
     Cold,
 }
@@ -75,25 +75,25 @@ enum FileCacheCondition {
 async fn should_attribute_decode_token_time_to_route_copies_and_storage_reads() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(FileCacheCondition::Warm),
+        attribute_decode_token_time(MacosFileCacheCondition::Warm),
     )
     .await
     .expect("the decode attribution probe must finish within 120 seconds");
 }
 
 #[tokio::test]
-#[ignore = "serves a 10,000-token Shakespeare request with the model's files kept out of the file cache and attributes each decode token's time"]
+#[ignore = "serves a 10,000-token Shakespeare request with the model's files kept out of the macOS file cache and attributes each decode token's time"]
 #[serial]
 async fn should_attribute_decode_token_time_with_a_cold_file_cache() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(FileCacheCondition::Cold),
+        attribute_decode_token_time(MacosFileCacheCondition::Cold),
     )
     .await
     .expect("the cold decode attribution probe must finish within 120 seconds");
 }
 
-async fn attribute_decode_token_time(file_cache_condition: FileCacheCondition) {
+async fn attribute_decode_token_time(macos_file_cache_condition: MacosFileCacheCondition) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let test_run_configuration = TestRunContext::current().configuration;
     let model_directory = test_run_configuration
@@ -128,8 +128,8 @@ async fn attribute_decode_token_time(file_cache_condition: FileCacheCondition) {
     load_engine_with_progress(&mut engine, "decode_attribution_model_load").await;
     // Started after loading: the resident bundle is copied into MLX memory at
     // load, so only reads made while serving should pay storage cost.
-    let cold_file_cache = matches!(file_cache_condition, FileCacheCondition::Cold)
-        .then(|| ColdFileCache::start(&model_directory));
+    let cold_macos_file_cache = matches!(macos_file_cache_condition, MacosFileCacheCondition::Cold)
+        .then(|| ColdMacosFileCache::start(&model_directory));
     for probe_request in &probe_requests {
         let generated_token_ids = run_attributed_generation(
             &mut engine,
@@ -148,7 +148,7 @@ async fn attribute_decode_token_time(file_cache_condition: FileCacheCondition) {
         // The residency each request leaves is what the next one starts
         // from; printing it shows whether decode's warm experts survive.
         let expert_statistics = engine
-            .expert_weight_memory_cache_statistics_for_tests()
+            .astro_expert_cache_statistics_for_tests()
             .await
             .expect("the engine reports its expert residency");
         eprintln!(
@@ -160,9 +160,9 @@ async fn attribute_decode_token_time(file_cache_condition: FileCacheCondition) {
             expert_statistics.eviction_count,
         );
     }
-    let file_cache_sweep_count = cold_file_cache.map_or(0, ColdFileCache::finish);
+    let macos_file_cache_sweep_count = cold_macos_file_cache.map_or(0, ColdMacosFileCache::finish);
     eprintln!(
-        "[decode-attribution] file_cache={file_cache_condition:?} file_cache_sweeps={file_cache_sweep_count}"
+        "[decode-attribution] macos_file_cache={macos_file_cache_condition:?} macos_file_cache_sweeps={macos_file_cache_sweep_count}"
     );
     let report_documents = read_attribution_report_documents(&attribution_log_path);
     let measured_report =
@@ -301,7 +301,7 @@ fn print_follow_up_operation_breakdown(follow_up_report: &Value) {
         );
     }
     // Physical disk bytes against requested file bytes says whether the
-    // decode's expert reads came from the SSD or from the OS page cache,
+    // decode's expert reads came from the SSD or from the macOS file cache,
     // which a machine with RAM beyond the MLX limit fills with the model.
     eprintln!(
         "[decode-attribution] follow_up process_physical_disk_read_bytes_per_token={:.0}",

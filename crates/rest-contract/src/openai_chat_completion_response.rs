@@ -338,12 +338,12 @@ impl OpenAiTokenUsage {
             })
     }
 
-    /// Attaches the number of prompt tokens served from the persistent cache.
+    /// Attaches the number of prompt tokens served from the astro SSD prompt cache.
     ///
     /// When zero, the `prompt_tokens_details` field is omitted entirely
     /// so existing clients see no change in the response shape.
     #[must_use]
-    pub fn with_cached_tokens(mut self, cached_tokens: u32) -> Self {
+    pub fn with_astro_ssd_prompt_cache_restored_tokens(mut self, cached_tokens: u32) -> Self {
         self.prompt_tokens_details = if cached_tokens > 0 {
             Some(OpenAiPromptTokenDetails { cached_tokens })
         } else {

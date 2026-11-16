@@ -15,7 +15,7 @@ pub enum PerformanceOperation {
     ModelTensorBinding,
     ExpertPagerPlanConstruction,
     ResidentWeightMaterializationSynchronizationWait,
-    PersistentPromptCacheOpenAndScan,
+    AstroSsdPromptCacheOpenAndScan,
     ChatCommandValidation,
     ImagePreprocessing,
     VisionEmbeddingGraphConstruction,
@@ -26,20 +26,20 @@ pub enum PerformanceOperation {
     MemoryAdmissionSnapshot,
     LinearAttentionGraphConstruction,
     FullAttentionGraphConstruction,
-    PersistentPromptCacheCausalInputPlanning,
-    PersistentPromptCachePrefixLookup,
-    PersistentPromptCacheKvBlockRead,
-    PersistentPromptCacheRecurrentSnapshotRead,
-    PersistentPromptCacheStateReconstruction,
-    PersistentPromptCacheStateMaterializationSynchronizationWait,
-    PersistentPromptCacheStateExtraction,
-    PersistentPromptCacheKvBlockSerialization,
-    PersistentPromptCacheRecurrentSnapshotSerialization,
-    PersistentPromptCachePublicationValidation,
-    PersistentPromptCacheGlobalQuotaEviction,
-    PersistentPromptCacheRetentionCleanup,
-    PersistentPromptCachePublicationSynchronizationWait,
-    PersistentPromptCacheAtomicCommit,
+    AstroSsdPromptCacheCausalInputPlanning,
+    AstroSsdPromptCachePrefixLookup,
+    AstroSsdPromptCacheKvBlockRead,
+    AstroSsdPromptCacheRecurrentSnapshotRead,
+    AstroSsdPromptCacheStateReconstruction,
+    AstroSsdPromptCacheStateMaterializationSynchronizationWait,
+    AstroSsdPromptCacheStateExtraction,
+    AstroSsdPromptCacheKvBlockSerialization,
+    AstroSsdPromptCacheRecurrentSnapshotSerialization,
+    AstroSsdPromptCachePublicationValidation,
+    AstroSsdPromptCacheGlobalQuotaEviction,
+    AstroSsdPromptCacheRetentionCleanup,
+    AstroSsdPromptCachePublicationSynchronizationWait,
+    AstroSsdPromptCacheAtomicCommit,
     PagedRouterGraphConstruction,
     RetainedExpertPagePlanning,
     ExpertResidencyPlanning,
@@ -111,7 +111,7 @@ pub enum PerformanceOperation {
     SharedExpertExecution,
     MlpForwardSpan,
     GenerationFinalization,
-    MlxAllocatorCacheCleanup,
+    MlxBufferCacheCleanup,
     ImageRuntimeSetup,
     ImageTextComponentMapping,
     ImageTextComponentLoading,
@@ -183,7 +183,7 @@ impl PerformanceOperation {
         Self::ModelTensorBinding,
         Self::ExpertPagerPlanConstruction,
         Self::ResidentWeightMaterializationSynchronizationWait,
-        Self::PersistentPromptCacheOpenAndScan,
+        Self::AstroSsdPromptCacheOpenAndScan,
         Self::ChatCommandValidation,
         Self::ImagePreprocessing,
         Self::VisionEmbeddingGraphConstruction,
@@ -194,20 +194,20 @@ impl PerformanceOperation {
         Self::MemoryAdmissionSnapshot,
         Self::LinearAttentionGraphConstruction,
         Self::FullAttentionGraphConstruction,
-        Self::PersistentPromptCacheCausalInputPlanning,
-        Self::PersistentPromptCachePrefixLookup,
-        Self::PersistentPromptCacheKvBlockRead,
-        Self::PersistentPromptCacheRecurrentSnapshotRead,
-        Self::PersistentPromptCacheStateReconstruction,
-        Self::PersistentPromptCacheStateMaterializationSynchronizationWait,
-        Self::PersistentPromptCacheStateExtraction,
-        Self::PersistentPromptCacheKvBlockSerialization,
-        Self::PersistentPromptCacheRecurrentSnapshotSerialization,
-        Self::PersistentPromptCachePublicationValidation,
-        Self::PersistentPromptCacheGlobalQuotaEviction,
-        Self::PersistentPromptCacheRetentionCleanup,
-        Self::PersistentPromptCachePublicationSynchronizationWait,
-        Self::PersistentPromptCacheAtomicCommit,
+        Self::AstroSsdPromptCacheCausalInputPlanning,
+        Self::AstroSsdPromptCachePrefixLookup,
+        Self::AstroSsdPromptCacheKvBlockRead,
+        Self::AstroSsdPromptCacheRecurrentSnapshotRead,
+        Self::AstroSsdPromptCacheStateReconstruction,
+        Self::AstroSsdPromptCacheStateMaterializationSynchronizationWait,
+        Self::AstroSsdPromptCacheStateExtraction,
+        Self::AstroSsdPromptCacheKvBlockSerialization,
+        Self::AstroSsdPromptCacheRecurrentSnapshotSerialization,
+        Self::AstroSsdPromptCachePublicationValidation,
+        Self::AstroSsdPromptCacheGlobalQuotaEviction,
+        Self::AstroSsdPromptCacheRetentionCleanup,
+        Self::AstroSsdPromptCachePublicationSynchronizationWait,
+        Self::AstroSsdPromptCacheAtomicCommit,
         Self::PagedRouterGraphConstruction,
         Self::RetainedExpertPagePlanning,
         Self::ExpertResidencyPlanning,
@@ -269,7 +269,7 @@ impl PerformanceOperation {
         Self::SharedExpertExecution,
         Self::MlpForwardSpan,
         Self::GenerationFinalization,
-        Self::MlxAllocatorCacheCleanup,
+        Self::MlxBufferCacheCleanup,
         Self::ImageRuntimeSetup,
         Self::ImageTextComponentMapping,
         Self::ImageTextComponentLoading,
@@ -330,7 +330,7 @@ impl PerformanceOperation {
             Self::ResidentWeightMaterializationSynchronizationWait => {
                 "resident_weight_materialization_synchronization_wait"
             }
-            Self::PersistentPromptCacheOpenAndScan => "persistent_prompt_cache_open_and_scan",
+            Self::AstroSsdPromptCacheOpenAndScan => "astro_ssd_prompt_cache_open_and_scan",
             Self::ChatCommandValidation => "chat_command_validation",
             Self::ImagePreprocessing => "image_preprocessing",
             Self::VisionEmbeddingGraphConstruction => "vision_embedding_graph_construction",
@@ -345,42 +345,38 @@ impl PerformanceOperation {
             Self::MemoryAdmissionSnapshot => "memory_admission_snapshot",
             Self::LinearAttentionGraphConstruction => "linear_attention_graph_construction",
             Self::FullAttentionGraphConstruction => "full_attention_graph_construction",
-            Self::PersistentPromptCacheCausalInputPlanning => {
-                "persistent_prompt_cache_causal_input_planning"
+            Self::AstroSsdPromptCacheCausalInputPlanning => {
+                "astro_ssd_prompt_cache_causal_input_planning"
             }
-            Self::PersistentPromptCachePrefixLookup => "persistent_prompt_cache_prefix_lookup",
-            Self::PersistentPromptCacheKvBlockRead => "persistent_prompt_cache_kv_block_read",
-            Self::PersistentPromptCacheRecurrentSnapshotRead => {
-                "persistent_prompt_cache_recurrent_snapshot_read"
+            Self::AstroSsdPromptCachePrefixLookup => "astro_ssd_prompt_cache_prefix_lookup",
+            Self::AstroSsdPromptCacheKvBlockRead => "astro_ssd_prompt_cache_kv_block_read",
+            Self::AstroSsdPromptCacheRecurrentSnapshotRead => {
+                "astro_ssd_prompt_cache_recurrent_snapshot_read"
             }
-            Self::PersistentPromptCacheStateReconstruction => {
-                "persistent_prompt_cache_state_reconstruction"
+            Self::AstroSsdPromptCacheStateReconstruction => {
+                "astro_ssd_prompt_cache_state_reconstruction"
             }
-            Self::PersistentPromptCacheStateMaterializationSynchronizationWait => {
-                "persistent_prompt_cache_state_materialization_synchronization_wait"
+            Self::AstroSsdPromptCacheStateMaterializationSynchronizationWait => {
+                "astro_ssd_prompt_cache_state_materialization_synchronization_wait"
             }
-            Self::PersistentPromptCacheStateExtraction => {
-                "persistent_prompt_cache_state_extraction"
+            Self::AstroSsdPromptCacheStateExtraction => "astro_ssd_prompt_cache_state_extraction",
+            Self::AstroSsdPromptCacheKvBlockSerialization => {
+                "astro_ssd_prompt_cache_kv_block_serialization"
             }
-            Self::PersistentPromptCacheKvBlockSerialization => {
-                "persistent_prompt_cache_kv_block_serialization"
+            Self::AstroSsdPromptCacheRecurrentSnapshotSerialization => {
+                "astro_ssd_prompt_cache_recurrent_snapshot_serialization"
             }
-            Self::PersistentPromptCacheRecurrentSnapshotSerialization => {
-                "persistent_prompt_cache_recurrent_snapshot_serialization"
+            Self::AstroSsdPromptCachePublicationValidation => {
+                "astro_ssd_prompt_cache_publication_validation"
             }
-            Self::PersistentPromptCachePublicationValidation => {
-                "persistent_prompt_cache_publication_validation"
+            Self::AstroSsdPromptCacheGlobalQuotaEviction => {
+                "astro_ssd_prompt_cache_global_quota_eviction"
             }
-            Self::PersistentPromptCacheGlobalQuotaEviction => {
-                "persistent_prompt_cache_global_quota_eviction"
+            Self::AstroSsdPromptCacheRetentionCleanup => "astro_ssd_prompt_cache_retention_cleanup",
+            Self::AstroSsdPromptCachePublicationSynchronizationWait => {
+                "astro_ssd_prompt_cache_publication_synchronization_wait"
             }
-            Self::PersistentPromptCacheRetentionCleanup => {
-                "persistent_prompt_cache_retention_cleanup"
-            }
-            Self::PersistentPromptCachePublicationSynchronizationWait => {
-                "persistent_prompt_cache_publication_synchronization_wait"
-            }
-            Self::PersistentPromptCacheAtomicCommit => "persistent_prompt_cache_atomic_commit",
+            Self::AstroSsdPromptCacheAtomicCommit => "astro_ssd_prompt_cache_atomic_commit",
             Self::PagedRouterGraphConstruction => "paged_router_graph_construction",
             Self::RetainedExpertPagePlanning => "retained_expert_page_planning",
             Self::ExpertResidencyPlanning => "phase_aware_expert_residency_planning",
@@ -491,7 +487,7 @@ impl PerformanceOperation {
             Self::SharedExpertExecution => "shared_expert_execution",
             Self::MlpForwardSpan => "mlp_forward_span",
             Self::GenerationFinalization => "generation_finalization",
-            Self::MlxAllocatorCacheCleanup => "mlx_allocator_cache_cleanup",
+            Self::MlxBufferCacheCleanup => "mlx_buffer_cache_cleanup",
             Self::ImageRuntimeSetup => "image_runtime_setup",
             Self::ImageTextComponentMapping => "image_text_component_mapping",
             Self::ImageTextComponentLoading => "image_text_component_loading",

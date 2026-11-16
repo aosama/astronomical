@@ -50,7 +50,7 @@ const THREADGROUP_SIZE: i32 = 256;
 /// avoids materializing a second full expert-weight tensor in the native basis.
 ///
 /// The decoded page is evaluated and detached before it is returned so the
-/// retained output never pins its packed source in the allocator cache.
+/// retained output never pins its packed source in the MLX buffer cache.
 pub fn decode_expert_weight_rows(
     runtime: &MlxRuntime,
     packed_code_words: &MlxArray,
@@ -136,10 +136,10 @@ pub fn decode_expert_weight_rows(
     // closure used to inline now lives in the named launch helpers below,
     // and each binding names its own role instead of shadowing one name.
     let decoded_weight_bfloat16 = PAGE_DECODE_KERNEL.with(|thread_local_kernel| {
-        let mut cached_kernel = thread_local_kernel.borrow_mut();
-        let page_decode_kernel = match cached_kernel.as_mut() {
+        let mut page_decode_kernel_memo = thread_local_kernel.borrow_mut();
+        let page_decode_kernel = match page_decode_kernel_memo.as_mut() {
             Some(page_decode_kernel) => page_decode_kernel,
-            None => cached_kernel.insert(PageDecodeKernel::new()?),
+            None => page_decode_kernel_memo.insert(PageDecodeKernel::new()?),
         };
         launch_page_decode_kernel(
             runtime,
@@ -197,7 +197,7 @@ fn page_decode_template_arguments(
 /// its single decoded BF16 output.
 ///
 /// The kernel owner is passed in already compiled, because the thread-local
-/// cache — not this function — owns compilation; splitting that
+/// page decode kernel memo — not this function — owns compilation; splitting that
 /// responsibility keeps the `.with` closure at the call site down to
 /// get-or-insert plus one named call.
 fn launch_page_decode_kernel(

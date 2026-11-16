@@ -292,7 +292,7 @@ fn should_accept_every_setting_the_schema_describes() {
         serde_json::from_slice(config_schema_bytes()).expect("the bundled schema parses");
     let state_directory = tempfile::tempdir().expect("a scratch directory");
     let mut document = valid_document();
-    for section in ["runtime", "prompt_cache", "chunking", "diagnostics"] {
+    for section in ["runtime", "ssd_prompt_cache", "chunking", "diagnostics"] {
         document[section] = serde_json::Value::Object(every_setting_set(
             &schema,
             schema_definition(&schema, &schema["properties"][section]),

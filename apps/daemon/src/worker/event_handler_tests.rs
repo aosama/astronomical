@@ -10,7 +10,8 @@ use astronomical_ipc_protocol::{
 use tokio::sync::{Semaphore, mpsc};
 
 use crate::worker::event_handler::{
-    handle_worker_event, outside_cache_clear_wait_violation, outside_model_swap_wait_violation,
+    handle_worker_event, outside_astro_ssd_prompt_cache_clear_wait_violation,
+    outside_model_swap_wait_violation,
 };
 use crate::worker::loop_types::{ActiveGeneration, ActiveWorkerRequest};
 use crate::{
@@ -21,7 +22,7 @@ fn standalone_sample(peak_memory_bytes: u64) -> WorkerMlxMemorySnapshot {
     WorkerMlxMemorySnapshot {
         source: MlxMemorySnapshotSource::DecodeSubmitted,
         active_memory_bytes: peak_memory_bytes / 2,
-        allocator_cache_memory_bytes: 0,
+        mlx_buffer_cache_bytes: 0,
         peak_memory_bytes,
         expert_payload_bytes: 0,
         model_core_payload_bytes: 0,
@@ -158,20 +159,22 @@ fn should_report_a_fallback_violation_for_an_unrouted_event() {
 }
 
 #[test]
-fn should_report_the_violation_for_a_cache_clear_acknowledgement_outside_wait() {
-    let cache_clear_acknowledgement = WorkerEvent::PromptCacheCleared {
+fn should_report_the_violation_for_an_astro_ssd_prompt_cache_clear_acknowledgement_outside_wait() {
+    let astro_ssd_prompt_cache_clear_acknowledgement = WorkerEvent::AstroSsdPromptCacheCleared {
         model_id: None,
         blocks_removed: 0,
         bytes_freed: 0,
     };
-    let violation = outside_cache_clear_wait_violation(&cache_clear_acknowledgement);
+    let violation = outside_astro_ssd_prompt_cache_clear_wait_violation(
+        &astro_ssd_prompt_cache_clear_acknowledgement,
+    );
     assert!(
         matches!(
             violation,
             crate::WorkerControlError::WorkerProtocolViolation { description }
-                if description == "prompt-cache clear acknowledgement outside cache-clear wait"
+                if description == "astro-ssd-prompt-cache clear acknowledgement outside astro-ssd-prompt-cache clear wait"
         ),
-        "a cache-clear acknowledgement outside cache-clear wait carries its own message"
+        "an astro-ssd-prompt-cache clear acknowledgement outside its clear wait carries its own message"
     );
 }
 

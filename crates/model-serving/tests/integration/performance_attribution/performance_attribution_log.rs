@@ -17,7 +17,7 @@ fn model_loading_metadata(
         resident_model_payload_bytes: Some(2_539_550_976),
         model_shard_count: Some(5),
         mlx_active_memory_bytes: Some(2_539_550_976),
-        mlx_allocator_cache_memory_bytes: Some(0),
+        mlx_buffer_cache_bytes: Some(0),
         mlx_peak_memory_bytes: Some(2_539_550_976),
         failure_description: None,
     }

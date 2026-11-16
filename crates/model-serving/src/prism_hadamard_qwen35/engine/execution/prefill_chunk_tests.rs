@@ -18,7 +18,7 @@ fn should_anchor_a_later_chunk_on_the_block_boundary_after_its_start() {
 }
 
 #[test]
-fn should_keep_the_requested_chunk_end_without_a_persistent_prompt_cache() {
+fn should_keep_the_requested_chunk_end_without_a_astro_ssd_prompt_cache() {
     assert_eq!(super::prefill_chunk_length(0, 100, 100, None), 100);
 }
 
@@ -64,7 +64,7 @@ fn should_report_only_the_chunk_own_token_count_as_progress() {
                 target_eligible_token_count: 128,
                 target_restored_token_count: 64,
             },
-            persistent_prompt_cache_diagnostics: None,
+            astro_ssd_prompt_cache_diagnostics: None,
             neural_engine_chunk: None,
             prompt_layer_progress: None,
         }

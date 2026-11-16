@@ -15,10 +15,10 @@ pub enum WorkerLogLevel {
     Trace,
 }
 
-/// Internal decode-cache arm selected only by controlled benchmarks.
+/// Internal `astro_expert_cache` decode-policy arm selected only by controlled benchmarks.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkerDecodeExpertCachePolicy {
+pub enum WorkerDecodeAstroExpertCachePolicy {
     #[default]
     Baseline,
     Candidate,
@@ -51,9 +51,9 @@ pub struct WorkerRuntimeFeatureConfiguration {
     /// Semantic generation applied by this exact worker process.
     pub configuration_generation: String,
     /// Whether the worker will persist and restore ordinary prompt state.
-    pub persistent_prompt_cache_enabled: bool,
-    /// Effective global cache capacity, without disclosing its local directory.
-    pub prompt_cache_maximum_size_bytes: u64,
+    pub astro_ssd_prompt_cache_enabled: bool,
+    /// Effective global `astro_ssd_prompt_cache` capacity, without disclosing its local directory.
+    pub astro_ssd_prompt_cache_maximum_size_bytes: u64,
     /// Present only after a swap binds one concrete model policy.
     pub loaded_model: Option<WorkerLoadedModelRuntimeConfiguration>,
 }
@@ -63,16 +63,16 @@ pub struct WorkerRuntimeFeatureConfiguration {
 #[serde(deny_unknown_fields)]
 pub struct WorkerStartupConfiguration {
     pub configuration_generation: String,
-    pub global_prompt_cache_root_directory: PathBuf,
-    pub global_prompt_cache_maximum_size_bytes: u64,
+    pub global_astro_ssd_prompt_cache_root_directory: PathBuf,
+    pub global_astro_ssd_prompt_cache_maximum_size_bytes: u64,
     /// The declared home of compiled Neural Engine programs.
     pub neural_engine_program_directory: PathBuf,
-    pub persistent_prompt_cache_enabled: bool,
+    pub astro_ssd_prompt_cache_enabled: bool,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub performance_attribution_enabled: bool,
     /// Benchmark-only policy selector; never read from the user configuration.
     #[serde(default)]
-    pub decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     /// Diagnostic-only engine override; never read from the user configuration.
     #[serde(default)]
     pub diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,

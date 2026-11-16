@@ -1,7 +1,7 @@
 //! The Qwen-Image-2.1 text-to-image render pipeline.
 //!
 //! Port of the reference `QwenImage21Pipeline.__call__` for the default configuration:
-//! text-only prompt, no classifier-free guidance, no KV cache, no tiling. Every component is
+//! text-only prompt, no classifier-free guidance, no `astro_image_prefix_key_value_cache`, no tiling. Every component is
 //! the family's proven MLX port: the artifact tokenizer, the Qwen3-VL text encoder, the
 //! block-causal denoising transformer, the flow-matching schedule, and the VAE decoder.
 //!

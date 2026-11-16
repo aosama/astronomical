@@ -1,7 +1,10 @@
-use crate::decoder_cache::{DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheTensorDtype};
+use crate::astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheTensorDtype,
+};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::decoder::cache_layout::{
-    Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout,
+use crate::qwen3_5_core::decoder::astro_decoder_state_cache_layout::{
+    Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
 };
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config;
 
@@ -10,53 +13,55 @@ use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::{RequestDecoderStateStack, composite_first_use_bytes};
-use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
+use crate::astro_decoder_state_cache::{ConvolutionState, GatedDeltaRecurrentState};
 
 const KV_SLAB_TOKENS: usize = 256;
 
-fn ornith_decoder_cache_layout() -> DecoderCacheLayout {
+fn ornith_astro_decoder_state_cache_layout() -> AstroDecoderStateCacheLayout {
     let ornith_config = frozen_ornith_1_0_config();
-    qwen3_5_decoder_cache_layout(
+    qwen3_5_astro_decoder_state_cache_layout(
         &ornith_config,
         KV_SLAB_TOKENS,
-        &bfloat16_decoder_layer_cache_dtypes(&ornith_config),
+        &bfloat16_astro_decoder_state_cache_layer_dtypes(&ornith_config),
     )
-    .expect("the frozen configuration builds a decoder-cache layout")
+    .expect("the frozen configuration builds an astro-decoder-state-cache layout")
 }
 
-fn bfloat16_decoder_layer_cache_dtypes(
+fn bfloat16_astro_decoder_state_cache_layer_dtypes(
     ornith_config: &Qwen3_5Config,
-) -> Vec<Qwen3_5DecoderLayerCacheDtypes> {
-    let mut decoder_layer_cache_dtypes = Vec::new();
+) -> Vec<Qwen3_5AstroDecoderStateCacheLayerDtypes> {
+    let mut astro_decoder_state_cache_layer_dtypes = Vec::new();
     for decoder_layer_index in 0..ornith_config.layer_count() as usize {
-        decoder_layer_cache_dtypes.push(
+        astro_decoder_state_cache_layer_dtypes.push(
             if ornith_config.decoder_layer_is_full_attention(decoder_layer_index) {
-                Qwen3_5DecoderLayerCacheDtypes::FullAttention {
-                    keys: DecoderCacheTensorDtype::BFloat16,
-                    values: DecoderCacheTensorDtype::BFloat16,
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::FullAttention {
+                    keys: AstroDecoderStateCacheTensorDtype::BFloat16,
+                    values: AstroDecoderStateCacheTensorDtype::BFloat16,
                 }
             } else {
-                Qwen3_5DecoderLayerCacheDtypes::LinearAttention {
-                    convolution: DecoderCacheTensorDtype::BFloat16,
+                Qwen3_5AstroDecoderStateCacheLayerDtypes::LinearAttention {
+                    convolution: AstroDecoderStateCacheTensorDtype::BFloat16,
                 }
             },
         );
     }
-    decoder_layer_cache_dtypes
+    astro_decoder_state_cache_layer_dtypes
 }
 
 /// Independent expectation for an empty stack: every full-attention layer
 /// allocates whole slabs covering the update, and every linear-attention
 /// layer allocates its fixed convolution and recurrent state once.
 fn expected_first_forward_bytes(
-    decoder_cache_layout: &DecoderCacheLayout,
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
     update_token_count: usize,
 ) -> usize {
     let slab_count = update_token_count.div_ceil(KV_SLAB_TOKENS);
     let mut expected_bytes = 0;
-    for decoder_layer_index in 0..decoder_cache_layout.layer_count() {
-        expected_bytes += match decoder_cache_layout.layer(decoder_layer_index) {
-            Some(DecoderCacheLayerLayout::AppendOnlyAttention { keys, values, .. }) => {
+    for decoder_layer_index in 0..astro_decoder_state_cache_layout.layer_count() {
+        expected_bytes += match astro_decoder_state_cache_layout.layer(decoder_layer_index) {
+            Some(AstroDecoderStateCacheLayerLayout::AppendOnlyAttention {
+                keys, values, ..
+            }) => {
                 slab_count
                     * KV_SLAB_TOKENS
                     * (keys
@@ -66,7 +71,7 @@ fn expected_first_forward_bytes(
                             .sequence_payload_byte_count_per_token()
                             .expect("value bytes"))
             }
-            Some(DecoderCacheLayerLayout::Composite { components }) => {
+            Some(AstroDecoderStateCacheLayerLayout::Composite { components }) => {
                 components.iter().map(fixed_component_bytes).sum()
             }
             unexpected_layout => panic!("unexpected Ornith layer layout {unexpected_layout:?}"),
@@ -75,41 +80,45 @@ fn expected_first_forward_bytes(
     expected_bytes
 }
 
-fn fixed_component_bytes(component_layout: &DecoderCacheLayerLayout) -> usize {
+fn fixed_component_bytes(component_layout: &AstroDecoderStateCacheLayerLayout) -> usize {
     match component_layout {
-        DecoderCacheLayerLayout::RecurrentTensor { tensor } => {
+        AstroDecoderStateCacheLayerLayout::RecurrentTensor { tensor } => {
             tensor.fixed_payload_byte_count().expect("fixed bytes")
         }
         unexpected_component => panic!("unexpected composite component {unexpected_component:?}"),
     }
 }
 
-fn layout_layers(decoder_cache_layout: &DecoderCacheLayout) -> Vec<DecoderCacheLayerLayout> {
-    let mut decoder_cache_layer_layouts = Vec::new();
-    for decoder_layer_index in 0..decoder_cache_layout.layer_count() {
-        decoder_cache_layer_layouts.push(
-            decoder_cache_layout
+fn layout_layers(
+    astro_decoder_state_cache_layout: &AstroDecoderStateCacheLayout,
+) -> Vec<AstroDecoderStateCacheLayerLayout> {
+    let mut astro_decoder_state_cache_layer_layouts = Vec::new();
+    for decoder_layer_index in 0..astro_decoder_state_cache_layout.layer_count() {
+        astro_decoder_state_cache_layer_layouts.push(
+            astro_decoder_state_cache_layout
                 .layer(decoder_layer_index)
                 .expect("a declared layer")
                 .clone(),
         );
     }
-    decoder_cache_layer_layouts
+    astro_decoder_state_cache_layer_layouts
 }
 
 fn projected_growth_bytes(update_token_count: usize) -> usize {
-    let decoder_cache_layout = ornith_decoder_cache_layout();
-    RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
-        .expect("an empty stack")
-        .projected_persistent_state_growth_bytes(&decoder_cache_layout, update_token_count)
-        .expect("a projection for an empty stack")
+    let astro_decoder_state_cache_layout = ornith_astro_decoder_state_cache_layout();
+    RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
+        &astro_decoder_state_cache_layout,
+    )
+    .expect("an empty stack")
+    .projected_persistent_state_growth_bytes(&astro_decoder_state_cache_layout, update_token_count)
+    .expect("a projection for an empty stack")
 }
 
 #[test]
 fn should_project_one_slab_and_every_fixed_state_for_a_first_token() {
     assert_eq!(
         projected_growth_bytes(1),
-        expected_first_forward_bytes(&ornith_decoder_cache_layout(), 1)
+        expected_first_forward_bytes(&ornith_astro_decoder_state_cache_layout(), 1)
     );
 }
 
@@ -121,20 +130,24 @@ fn should_project_the_same_growth_up_to_a_full_slab_and_more_one_token_past_it()
     assert!(two_slab_bytes > one_slab_bytes);
     assert_eq!(
         two_slab_bytes,
-        expected_first_forward_bytes(&ornith_decoder_cache_layout(), KV_SLAB_TOKENS + 1)
+        expected_first_forward_bytes(
+            &ornith_astro_decoder_state_cache_layout(),
+            KV_SLAB_TOKENS + 1
+        )
     );
 }
 
 #[test]
 fn should_refuse_a_layout_with_a_different_layer_count() {
-    let decoder_cache_layout = ornith_decoder_cache_layout();
-    let empty_stack =
-        RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
-            .expect("an empty stack");
-    let mut shorter_layers = layout_layers(&decoder_cache_layout);
+    let astro_decoder_state_cache_layout = ornith_astro_decoder_state_cache_layout();
+    let empty_stack = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
+        &astro_decoder_state_cache_layout,
+    )
+    .expect("an empty stack");
+    let mut shorter_layers = layout_layers(&astro_decoder_state_cache_layout);
     shorter_layers.pop();
-    let shorter_layout =
-        DecoderCacheLayout::new(shorter_layers).expect("a shorter layout is itself valid");
+    let shorter_layout = AstroDecoderStateCacheLayout::new(shorter_layers)
+        .expect("a shorter layout is itself valid");
     let refusal = empty_stack
         .projected_persistent_state_growth_bytes(&shorter_layout, 1)
         .expect_err("a mismatched layout must be refused");
@@ -143,14 +156,15 @@ fn should_refuse_a_layout_with_a_different_layer_count() {
 
 #[test]
 fn should_refuse_a_layout_whose_layer_families_are_swapped() {
-    let decoder_cache_layout = ornith_decoder_cache_layout();
-    let empty_stack =
-        RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
-            .expect("an empty stack");
-    let mut reversed_layers = layout_layers(&decoder_cache_layout);
+    let astro_decoder_state_cache_layout = ornith_astro_decoder_state_cache_layout();
+    let empty_stack = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
+        &astro_decoder_state_cache_layout,
+    )
+    .expect("an empty stack");
+    let mut reversed_layers = layout_layers(&astro_decoder_state_cache_layout);
     reversed_layers.reverse();
-    let reversed_layout =
-        DecoderCacheLayout::new(reversed_layers).expect("a reversed layout is itself valid");
+    let reversed_layout = AstroDecoderStateCacheLayout::new(reversed_layers)
+        .expect("a reversed layout is itself valid");
     let refusal = empty_stack
         .projected_persistent_state_growth_bytes(&reversed_layout, 1)
         .expect_err("swapped families must be refused");
@@ -159,9 +173,13 @@ fn should_refuse_a_layout_whose_layer_families_are_swapped() {
 
 /// The convolution and recurrent components of the first linear-attention
 /// layer of the Ornith layout.
-fn first_composite_components() -> Vec<DecoderCacheLayerLayout> {
-    for decoder_cache_layer_layout in layout_layers(&ornith_decoder_cache_layout()) {
-        if let DecoderCacheLayerLayout::Composite { components } = decoder_cache_layer_layout {
+fn first_composite_components() -> Vec<AstroDecoderStateCacheLayerLayout> {
+    for astro_decoder_state_cache_layer_layout in
+        layout_layers(&ornith_astro_decoder_state_cache_layout())
+    {
+        if let AstroDecoderStateCacheLayerLayout::Composite { components } =
+            astro_decoder_state_cache_layer_layout
+        {
             return components;
         }
     }

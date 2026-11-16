@@ -5,15 +5,13 @@ use astronomical_runtime_integration::{
 };
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
-const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
+const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 256 * 1024 * 1024;
 
 #[test]
 fn should_install_the_runtime_and_expose_enforced_memory_limits() {
-    let memory_limits = MlxMemoryLimits::new(
-        ACTIVE_MEMORY_LIMIT_BYTES,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-    )
-    .expect("positive ordered memory limits should be valid");
+    let memory_limits =
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
+            .expect("positive ordered memory limits should be valid");
 
     let mut runtime = MlxRuntime::initialize(memory_limits)
         .expect("the pinned MLX runtime should initialize without terminating the process");
@@ -33,7 +31,7 @@ fn should_install_the_runtime_and_expose_enforced_memory_limits() {
 
     let lowered_memory_limits = MlxMemoryLimits::new(
         ACTIVE_MEMORY_LIMIT_BYTES - 1,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES - 1,
+        MLX_BUFFER_CACHE_LIMIT_BYTES - 1,
     )
     .expect("the lowered memory limits should be valid");
     runtime
@@ -52,16 +50,14 @@ fn should_install_the_runtime_and_expose_enforced_memory_limits() {
         .expect("the runtime should raise all MLX memory limits");
     assert_eq!(runtime.memory_limits(), memory_limits);
 
-    let conflicting_limits = MlxMemoryLimits::new(
-        ACTIVE_MEMORY_LIMIT_BYTES - 1,
-        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
-    )
-    .expect("the conflicting limits should be independently valid");
+    let conflicting_limits =
+        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES - 1, MLX_BUFFER_CACHE_LIMIT_BYTES)
+            .expect("the conflicting limits should be independently valid");
     assert!(matches!(
         MlxRuntime::initialize(conflicting_limits),
         Err(MlxRuntimeError::RuntimeAlreadyConfigured {
             active_memory_limit_bytes: ACTIVE_MEMORY_LIMIT_BYTES,
-            allocator_cache_memory_limit_bytes: ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            mlx_buffer_cache_limit_bytes: MLX_BUFFER_CACHE_LIMIT_BYTES,
         })
     ));
 }
@@ -69,7 +65,7 @@ fn should_install_the_runtime_and_expose_enforced_memory_limits() {
 #[test]
 fn should_reject_a_zero_active_memory_limit() {
     assert!(matches!(
-        MlxMemoryLimits::new(0, ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES),
+        MlxMemoryLimits::new(0, MLX_BUFFER_CACHE_LIMIT_BYTES),
         Err(MlxRuntimeError::InvalidMemoryLimits {
             description: "active memory limit must be positive"
         })
@@ -77,23 +73,23 @@ fn should_reject_a_zero_active_memory_limit() {
 }
 
 #[test]
-fn should_allow_a_zero_allocator_cache_limit_to_disable_allocator_caching() {
+fn should_allow_a_zero_mlx_buffer_cache_limit_to_disable_the_mlx_buffer_cache() {
     let memory_limits = MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, 0)
-        .expect("MLX defines zero as disabling its allocator cache");
+        .expect("MLX defines zero as disabling its MLX buffer cache");
 
     assert_eq!(
         memory_limits.active_memory_limit_bytes(),
         ACTIVE_MEMORY_LIMIT_BYTES
     );
-    assert_eq!(memory_limits.allocator_cache_memory_limit_bytes(), 0);
+    assert_eq!(memory_limits.mlx_buffer_cache_limit_bytes(), 0);
 }
 
 #[test]
-fn should_reject_an_allocator_cache_limit_above_the_active_memory_limit() {
+fn should_reject_an_mlx_buffer_cache_limit_above_the_active_memory_limit() {
     assert!(matches!(
         MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, ACTIVE_MEMORY_LIMIT_BYTES + 1),
         Err(MlxRuntimeError::InvalidMemoryLimits {
-            description: "allocator cache memory limit cannot exceed the active memory limit"
+            description: "MLX buffer cache memory limit cannot exceed the active memory limit"
         })
     ));
 }

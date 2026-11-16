@@ -1,40 +1,40 @@
 use super::RequestDecoderStateStack;
-use crate::DecoderCacheState;
+use crate::AstroDecoderStateCacheState;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::MlxArray;
 use std::collections::HashMap;
-/// Bridges persistent prompt-cache block tensors and the live in-memory
+/// Bridges persistent astro SSD prompt cache block tensors and the live in-memory
 /// request decoder state. The in-memory owners decide how restored tensors
 /// become live state; this module owns only SSD block extraction and assembly.
 impl RequestDecoderStateStack {
     /// Extracts one full-attention key/value block into the persistent tensor map.
-    pub fn extract_persistent_prompt_cache_kv_block_tensors(
+    pub fn extract_astro_ssd_prompt_cache_kv_block_tensors(
         &self,
         runtime: &MlxRuntime,
         block_start_tokens: usize,
         block_end_tokens: usize,
-        persistent_prompt_cache_block_token_count: usize,
-    ) -> Result<HashMap<String, MlxArray>, PersistentPromptCacheStateBridgeError> {
-        validate_persistent_prompt_cache_block_range(
+        astro_ssd_prompt_cache_block_token_count: usize,
+    ) -> Result<HashMap<String, MlxArray>, AstroSsdPromptCacheStateBridgeError> {
+        validate_astro_ssd_prompt_cache_block_range(
             block_start_tokens,
             block_end_tokens,
-            persistent_prompt_cache_block_token_count,
+            astro_ssd_prompt_cache_block_token_count,
         )?;
         // Sequence state slices may cover a complete block boundary or a partial
-        // prefix-cache tail; both produce tensors that participate in the hash
+        // `astro_ssd_prompt_cache` prefix tail; both produce tensors that participate in the hash
         // chain and concatenate with other blocks during a later restore.
         let mut kv_block_tensors = HashMap::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                     let attention_keys = attention.keys_state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "keys",
                         },
                     )?;
                     let attention_values = attention.values_state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "values",
                         },
@@ -62,11 +62,9 @@ impl RequestDecoderStateStack {
                         )?,
                     );
                 }
-                Some(DecoderCacheState::Composite { .. }) => {}
+                Some(AstroDecoderStateCacheState::Composite { .. }) => {}
                 None => {
-                    return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
-                        layer_index,
-                    });
+                    return Err(AstroSsdPromptCacheStateBridgeError::MissingLayer { layer_index });
                 }
             }
         }
@@ -74,25 +72,25 @@ impl RequestDecoderStateStack {
     }
 
     /// Extracts the current gated-delta recurrent and convolution snapshots.
-    pub fn extract_persistent_prompt_cache_recurrent_snapshot_tensors(
+    pub fn extract_astro_ssd_prompt_cache_recurrent_snapshot_tensors(
         &self,
-    ) -> Result<HashMap<String, MlxArray>, PersistentPromptCacheStateBridgeError> {
+    ) -> Result<HashMap<String, MlxArray>, AstroSsdPromptCacheStateBridgeError> {
         let mut recurrent_snapshot_tensors = HashMap::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { .. }) => {}
-                Some(DecoderCacheState::Composite {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { .. }) => {}
+                Some(AstroDecoderStateCacheState::Composite {
                     convolution,
                     recurrent,
                 }) => {
                     let convolution = convolution.state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "convolution",
                         },
                     )?;
                     let recurrent = recurrent.state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "recurrent",
                         },
@@ -107,9 +105,7 @@ impl RequestDecoderStateStack {
                     );
                 }
                 None => {
-                    return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
-                        layer_index,
-                    });
+                    return Err(AstroSsdPromptCacheStateBridgeError::MissingLayer { layer_index });
                 }
             }
         }
@@ -117,28 +113,28 @@ impl RequestDecoderStateStack {
     }
 
     /// Installs the newest complete recurrent snapshot after KV blocks are live.
-    pub fn absorb_persistent_prompt_cache_recurrent_snapshot(
+    pub fn absorb_astro_ssd_prompt_cache_recurrent_snapshot(
         &mut self,
         runtime: &MlxRuntime,
-        persistent_prompt_cache_recurrent_snapshot_tensors: &mut HashMap<String, MlxArray>,
-    ) -> Result<(), PersistentPromptCacheStateBridgeError> {
+        astro_ssd_prompt_cache_recurrent_snapshot_tensors: &mut HashMap<String, MlxArray>,
+    ) -> Result<(), AstroSsdPromptCacheStateBridgeError> {
         for layer_index in 0..self.layer_count() {
             match self.layer_mut(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { .. }) => {}
-                Some(DecoderCacheState::Composite {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { .. }) => {}
+                Some(AstroDecoderStateCacheState::Composite {
                     convolution,
                     recurrent,
                 }) => {
                     let convolution_tensor_name = format!("layer_{layer_index}_linear.convolution");
                     let loaded_convolution = take_named_block_tensor(
-                        persistent_prompt_cache_recurrent_snapshot_tensors,
+                        astro_ssd_prompt_cache_recurrent_snapshot_tensors,
                         layer_index,
                         convolution_tensor_name,
                     )?;
                     let recurrent_tensor_name =
                         format!("layer_{layer_index}_linear.gated_delta_recurrent");
                     let loaded_recurrent = take_named_block_tensor(
-                        persistent_prompt_cache_recurrent_snapshot_tensors,
+                        astro_ssd_prompt_cache_recurrent_snapshot_tensors,
                         layer_index,
                         recurrent_tensor_name,
                     )?;
@@ -154,9 +150,7 @@ impl RequestDecoderStateStack {
                     )?;
                 }
                 None => {
-                    return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
-                        layer_index,
-                    });
+                    return Err(AstroSsdPromptCacheStateBridgeError::MissingLayer { layer_index });
                 }
             }
         }
@@ -164,48 +158,46 @@ impl RequestDecoderStateStack {
     }
 
     /// Materializes all restored state before the first new prefill chunk.
-    pub fn materialize_restored_persistent_prompt_cache_state(
+    pub fn materialize_restored_astro_ssd_prompt_cache_state(
         &self,
         runtime: &MlxRuntime,
-    ) -> Result<(), PersistentPromptCacheStateBridgeError> {
+    ) -> Result<(), AstroSsdPromptCacheStateBridgeError> {
         let mut restored_tensors = Vec::with_capacity(self.layer_count() * 2);
         for layer_index in 0..self.layer_count() {
             match self.layer(layer_index) {
-                Some(DecoderCacheState::AppendOnlyAttention { attention }) => {
+                Some(AstroDecoderStateCacheState::AppendOnlyAttention { attention }) => {
                     restored_tensors.push(attention.keys_state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "keys",
                         },
                     )?);
                     restored_tensors.push(attention.values_state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "values",
                         },
                     )?);
                 }
-                Some(DecoderCacheState::Composite {
+                Some(AstroDecoderStateCacheState::Composite {
                     convolution,
                     recurrent,
                 }) => {
                     restored_tensors.push(convolution.state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "convolution",
                         },
                     )?);
                     restored_tensors.push(recurrent.state().ok_or(
-                        PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+                        AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
                             layer_index,
                             tensor_role: "recurrent",
                         },
                     )?);
                 }
                 None => {
-                    return Err(PersistentPromptCacheStateBridgeError::MissingLayer {
-                        layer_index,
-                    });
+                    return Err(AstroSsdPromptCacheStateBridgeError::MissingLayer { layer_index });
                 }
             }
         }
@@ -216,7 +208,7 @@ impl RequestDecoderStateStack {
         runtime
             .evaluate_arrays(&restored_tensors)
             .map_err(|captured_error| {
-                PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState(
+                AstroSsdPromptCacheStateBridgeError::EvaluateRestoredAstroSsdPromptCacheState(
                     MlxRuntimeError::from(captured_error),
                 )
             })
@@ -227,9 +219,9 @@ pub(super) fn take_named_block_tensor(
     block_tensors: &mut HashMap<String, MlxArray>,
     layer_index: usize,
     tensor_name: String,
-) -> Result<MlxArray, PersistentPromptCacheStateBridgeError> {
+) -> Result<MlxArray, AstroSsdPromptCacheStateBridgeError> {
     block_tensors.remove(&tensor_name).ok_or(
-        PersistentPromptCacheStateBridgeError::MissingBlockTensor {
+        AstroSsdPromptCacheStateBridgeError::MissingBlockTensor {
             layer_index,
             tensor_name,
         },
@@ -243,42 +235,42 @@ fn materialize_restored_layer_tensors(
     second_tensor: Option<&MlxArray>,
     first_tensor_role: &'static str,
     second_tensor_role: &'static str,
-) -> Result<(), PersistentPromptCacheStateBridgeError> {
+) -> Result<(), AstroSsdPromptCacheStateBridgeError> {
     let first_tensor =
-        first_tensor.ok_or(PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+        first_tensor.ok_or(AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
             layer_index,
             tensor_role: first_tensor_role,
         })?;
     let second_tensor =
-        second_tensor.ok_or(PersistentPromptCacheStateBridgeError::MissingLayerTensor {
+        second_tensor.ok_or(AstroSsdPromptCacheStateBridgeError::MissingLayerTensor {
             layer_index,
             tensor_role: second_tensor_role,
         })?;
     runtime
         .evaluate_arrays(&[first_tensor, second_tensor])
         .map_err(|captured_error| {
-            PersistentPromptCacheStateBridgeError::EvaluateRestoredPersistentPromptCacheState(
+            AstroSsdPromptCacheStateBridgeError::EvaluateRestoredAstroSsdPromptCacheState(
                 MlxRuntimeError::from(captured_error),
             )
         })
 }
 
-fn validate_persistent_prompt_cache_block_range(
+fn validate_astro_ssd_prompt_cache_block_range(
     block_start_tokens: usize,
     block_end_tokens: usize,
-    persistent_prompt_cache_block_token_count: usize,
-) -> Result<(), PersistentPromptCacheStateBridgeError> {
+    astro_ssd_prompt_cache_block_token_count: usize,
+) -> Result<(), AstroSsdPromptCacheStateBridgeError> {
     let block_token_count = block_end_tokens.checked_sub(block_start_tokens).ok_or(
-        PersistentPromptCacheStateBridgeError::InvalidBlockRange {
+        AstroSsdPromptCacheStateBridgeError::InvalidBlockRange {
             block_start_tokens,
             block_end_tokens,
         },
     )?;
-    // Partial blocks (prefix-cache tails) hold fewer tokens than a full block
+    // Partial blocks (`astro_ssd_prompt_cache` prefix tails) hold fewer tokens than a full block
     // while remaining valid restorable state, so only the contract bound and
     // non-emptiness are enforced here.
-    if block_token_count == 0 || block_token_count > persistent_prompt_cache_block_token_count {
-        return Err(PersistentPromptCacheStateBridgeError::InvalidBlockRange {
+    if block_token_count == 0 || block_token_count > astro_ssd_prompt_cache_block_token_count {
+        return Err(AstroSsdPromptCacheStateBridgeError::InvalidBlockRange {
             block_start_tokens,
             block_end_tokens,
         });
@@ -293,11 +285,11 @@ pub(super) fn slice_full_attention_block(
     tensor_role: &'static str,
     block_start_tokens: usize,
     block_end_tokens: usize,
-) -> Result<MlxArray, PersistentPromptCacheStateBridgeError> {
+) -> Result<MlxArray, AstroSsdPromptCacheStateBridgeError> {
     let tensor_shape = tensor.shape();
     if tensor_shape.len() != 4 {
         return Err(
-            PersistentPromptCacheStateBridgeError::InvalidLayerTensorShape {
+            AstroSsdPromptCacheStateBridgeError::InvalidLayerTensorShape {
                 layer_index,
                 tensor_role,
                 actual_shape: tensor_shape,
@@ -305,20 +297,20 @@ pub(super) fn slice_full_attention_block(
         );
     }
     let block_start_tokens_i32 = i32::try_from(block_start_tokens).map_err(|_| {
-        PersistentPromptCacheStateBridgeError::InvalidBlockRange {
+        AstroSsdPromptCacheStateBridgeError::InvalidBlockRange {
             block_start_tokens,
             block_end_tokens,
         }
     })?;
     let block_end_tokens_i32 = i32::try_from(block_end_tokens).map_err(|_| {
-        PersistentPromptCacheStateBridgeError::InvalidBlockRange {
+        AstroSsdPromptCacheStateBridgeError::InvalidBlockRange {
             block_start_tokens,
             block_end_tokens,
         }
     })?;
     if tensor_shape[2] < block_end_tokens_i32 {
         return Err(
-            PersistentPromptCacheStateBridgeError::BlockRangeExceedsLayerTensor {
+            AstroSsdPromptCacheStateBridgeError::BlockRangeExceedsLayerTensor {
                 layer_index,
                 tensor_role,
                 requested_end_tokens: block_end_tokens_i32,
@@ -336,7 +328,7 @@ pub(super) fn slice_full_attention_block(
             &[1, 1, 1, 1],
         )
         .map_err(
-            |source| PersistentPromptCacheStateBridgeError::SliceLayerTensor {
+            |source| AstroSsdPromptCacheStateBridgeError::SliceLayerTensor {
                 layer_index,
                 tensor_role,
                 source: MlxRuntimeError::from(source),
@@ -347,21 +339,21 @@ pub(super) fn retain_layer_tensor(
     layer_index: usize,
     tensor_role: &'static str,
     tensor: &MlxArray,
-) -> Result<MlxArray, PersistentPromptCacheStateBridgeError> {
+) -> Result<MlxArray, AstroSsdPromptCacheStateBridgeError> {
     tensor.retain().map_err(
-        |source| PersistentPromptCacheStateBridgeError::RetainLayerTensor {
+        |source| AstroSsdPromptCacheStateBridgeError::RetainLayerTensor {
             layer_index,
             tensor_role,
             source: MlxRuntimeError::from(source),
         },
     )
 }
-/// Persistent prompt-cache block extraction or restoration could not bridge
+/// Persistent astro SSD prompt cache block extraction or restoration could not bridge
 /// to the live in-memory request decoder state.
 #[derive(Debug, thiserror::Error)]
-pub enum PersistentPromptCacheStateBridgeError {
+pub enum AstroSsdPromptCacheStateBridgeError {
     #[error(
-        "qwen3.5-moe persistent prompt-cache block range [{block_start_tokens}, {block_end_tokens}) is invalid"
+        "qwen3.5-moe persistent astro-ssd-prompt-cache block range [{block_start_tokens}, {block_end_tokens}) is invalid"
     )]
     InvalidBlockRange {
         block_start_tokens: usize,
@@ -375,7 +367,7 @@ pub enum PersistentPromptCacheStateBridgeError {
         tensor_role: &'static str,
     },
     #[error(
-        "qwen3.5-moe persistent prompt-cache block tensor {tensor_name} for layer {layer_index} is missing"
+        "qwen3.5-moe persistent astro-ssd-prompt-cache block tensor {tensor_name} for layer {layer_index} is missing"
     )]
     MissingBlockTensor {
         layer_index: usize,
@@ -415,11 +407,11 @@ pub enum PersistentPromptCacheStateBridgeError {
         source: MlxRuntimeError,
     },
     #[error(
-        "qwen3.5-moe persistent prompt-cache KV restore token count {restored_token_count} is invalid"
+        "qwen3.5-moe persistent astro-ssd-prompt-cache KV restore token count {restored_token_count} is invalid"
     )]
     InvalidRestoredSequenceTokenCount { restored_token_count: usize },
     #[error(
-        "qwen3.5-moe persistent prompt-cache blocks concatenated to {concatenated_token_count} tokens for layer {layer_index}, expected the restored {restored_token_count}"
+        "qwen3.5-moe persistent astro-ssd-prompt-cache blocks concatenated to {concatenated_token_count} tokens for layer {layer_index}, expected the restored {restored_token_count}"
     )]
     ConcatenatedTokenCountMismatch {
         layer_index: usize,
@@ -427,7 +419,7 @@ pub enum PersistentPromptCacheStateBridgeError {
         restored_token_count: usize,
     },
     #[error(
-        "failed to concatenate qwen3.5-moe persistent prompt-cache block tensors {tensor_name} into the restored destination for layer {layer_index}"
+        "failed to concatenate qwen3.5-moe persistent astro-ssd-prompt-cache block tensors {tensor_name} into the restored destination for layer {layer_index}"
     )]
     ConcatenateRestoreDestination {
         layer_index: usize,
@@ -441,6 +433,6 @@ pub enum PersistentPromptCacheStateBridgeError {
         #[source]
         source: MlxRuntimeError,
     },
-    #[error("failed to materialize restored qwen3.5-moe persistent prompt-cache state")]
-    EvaluateRestoredPersistentPromptCacheState(#[source] MlxRuntimeError),
+    #[error("failed to materialize restored qwen3.5-moe persistent astro SSD prompt cache state")]
+    EvaluateRestoredAstroSsdPromptCacheState(#[source] MlxRuntimeError),
 }

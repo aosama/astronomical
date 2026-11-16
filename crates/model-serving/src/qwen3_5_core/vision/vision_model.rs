@@ -36,7 +36,7 @@ pub struct Qwen3_5VisionModel {
     config: Qwen3_5VisionConfig,
     weights: Qwen3_5VisionWeights,
     weights_have_been_used: Cell<bool>,
-    padding_zero_cache: Qwen3_5VisionPaddingZeroCache,
+    vision_padding_zero_cache: Qwen3_5VisionPaddingZeroCache,
 }
 
 impl Qwen3_5VisionModel {
@@ -67,7 +67,7 @@ impl Qwen3_5VisionModel {
             config,
             weights,
             weights_have_been_used: Cell::new(false),
-            padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
+            vision_padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
         }))
     }
 
@@ -94,7 +94,7 @@ impl Qwen3_5VisionModel {
             config: vision_config.clone(),
             weights,
             weights_have_been_used: Cell::new(false),
-            padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
+            vision_padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
         })
     }
 
@@ -107,7 +107,7 @@ impl Qwen3_5VisionModel {
     /// Releases the tower's evaluated weights once an image request no longer
     /// needs them, so text requests carry none of the tower's memory.
     ///
-    /// Visual embeddings are evaluated and cached before this runs, and the
+    /// Visual embeddings are evaluated and saved to the `astro_ssd_prompt_cache` before this runs, and the
     /// next image request reads the weights from the SSD again. Returns
     /// whether anything was released.
     pub(crate) fn release_used_weights(
@@ -330,7 +330,7 @@ impl Qwen3_5VisionModel {
             attention_sequence_boundaries,
             rotary_cosines,
             rotary_sines,
-            &self.padding_zero_cache,
+            &self.vision_padding_zero_cache,
         )?;
         // Pre-normalization transformer block:
         // x = x + Attention(LayerNorm(x)); x = x + MLP(LayerNorm(x)).

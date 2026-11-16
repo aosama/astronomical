@@ -4,7 +4,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5ResidentModel;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
-use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
+use crate::qwen3_5_core::decoder::Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector;
 use mlx_bridge::{MlxArray, MlxDtype};
 
 /// Target-model graph outputs retained for specialized consumers.
@@ -84,7 +84,7 @@ impl Qwen3_5ResidentModel {
 
     /// Builds decoder-state prefill without the vocabulary head.
     ///
-    /// Intermediate chunks only need cache tensors; no `lm_head` runs until
+    /// Intermediate chunks only need astro SSD prompt cache tensors; no `lm_head` runs until
     /// sampling. Building then dropping logits was host-side waste on every
     /// 2,048-token chunk.
     pub(super) fn build_prefill_decoder_state_graph(
@@ -94,7 +94,7 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
@@ -119,7 +119,7 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
@@ -140,7 +140,7 @@ impl Qwen3_5ResidentModel {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
@@ -201,7 +201,7 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
@@ -226,7 +226,7 @@ impl Qwen3_5ResidentModel {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,
@@ -251,7 +251,7 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -274,7 +274,7 @@ impl Qwen3_5ResidentModel {
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
         boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
@@ -299,7 +299,7 @@ impl Qwen3_5ResidentModel {
         token_position_offsets: Option<&MlxArray>,
         request_decoder_state: &mut RequestDecoderStateStack,
         mut boundary_checkpoint_collector: Option<
-            &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,

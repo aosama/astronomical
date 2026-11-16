@@ -51,7 +51,7 @@ fn should_refuse_a_forwarded_token_count_beyond_the_position_range() {
 fn should_run_a_measured_operation_directly_while_attribution_is_disabled() {
     let mut engine_request = test_engine_request(());
     let observed_position = engine_request.measure_operation_with_request(
-        PerformanceOperation::PersistentPromptCacheStateExtraction,
+        PerformanceOperation::AstroSsdPromptCacheStateExtraction,
         observe_next_position,
     );
     assert_eq!(observed_position, 0);

@@ -31,7 +31,9 @@ use astronomical_model_serving::{KokoroSpeechEngine, KokoroSpeechTrace, SpeechEn
 use astronomical_test_harness::test_run::TestRunContext;
 use serde_json::Value;
 
-use super::speech_audio_checks::{TEST_ALLOCATOR_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES};
+use super::speech_audio_checks::{
+    TEST_MLX_BUFFER_CACHE_LIMIT_BYTES, TEST_MLX_MEMORY_CEILING_BYTES,
+};
 
 const REFERENCE_SPEECH_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -81,7 +83,7 @@ fn should_speak_like_the_pytorch_reference_without_excitation_noise() {
         "Kokoro-82M-bf16",
         context.required_model_directory(),
         TEST_MLX_MEMORY_CEILING_BYTES,
-        TEST_ALLOCATOR_CACHE_LIMIT_BYTES,
+        TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
     );
     engine.load().expect("Kokoro loads");
     let reference_cases = reference_speech["cases"].as_array().expect("cases");

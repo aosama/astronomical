@@ -3,7 +3,7 @@
 //!
 //! Decode's first touch of an expert is always a storage miss, so a session
 //! starts cold no matter how large the warm tables are. This store persists
-//! the per-layer expert demand counts the cache already records during
+//! the per-layer expert demand counts the `astro_expert_cache` already records during
 //! forwards — kept as two disjoint records, one for prompt prefill evidence
 //! and one for decode evidence — beside the model artifact, and reloads them
 //! at engine construction so historically hot experts are admitted warm and
@@ -167,7 +167,7 @@ fn usage_file_matches_layer_shape(usage_file: &ExpertUsageFile, layer_count: usi
 }
 
 /// Densifies every layer's sparse maps into the `[layer][expert]` layout the
-/// cache records demand in, with each phase densified to its own capacity.
+/// `astro_expert_cache` records demand in, with each phase densified to its own capacity.
 fn densified_persisted_usage(
     usage_file: &ExpertUsageFile,
     layer_count: usize,
@@ -205,8 +205,8 @@ fn largest_expert_id_plus_one(demand_counts_by_expert_id: &BTreeMap<usize, u64>)
     }
 }
 
-/// Densifies one layer's sparse map into the `[expert]` layout the cache
-/// records demand in.
+/// Densifies one layer's sparse map into the `[expert]` layout the
+/// `astro_expert_cache` records demand in.
 fn densified_demand_counts(
     demand_counts_by_expert_id: &BTreeMap<usize, u64>,
     expert_capacity: usize,

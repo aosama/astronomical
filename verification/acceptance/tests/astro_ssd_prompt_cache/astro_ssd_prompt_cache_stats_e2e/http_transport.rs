@@ -1,0 +1,65 @@
+use super::*;
+
+pub(super) fn log_astro_ssd_prompt_cache_directory_contents(
+    astro_ssd_prompt_cache_directory: &std::path::Path,
+    context: &str,
+) {
+    let blocks_directory = astro_ssd_prompt_cache_directory.join("blocks");
+    let block_directories = std::fs::read_dir(&blocks_directory)
+        .map(|directory_entries| {
+            directory_entries
+                .filter_map(Result::ok)
+                .map(|directory_entry| directory_entry.file_name().to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    eprintln!(
+        "{context}: blocks={} ({} directories: {:?})",
+        blocks_directory.display(),
+        block_directories.len(),
+        block_directories,
+    );
+}
+
+pub(super) async fn get_endpoint(server_address: SocketAddr, endpoint_path: &str) -> String {
+    send_http_request(
+        server_address,
+        format!(
+            "GET {endpoint_path} HTTP/1.1\r\nHost: {server_address}\r\nConnection: close\r\n\r\n"
+        ),
+    )
+    .await
+}
+
+pub(super) async fn get_astro_ssd_prompt_cache_stats_json(
+    server_address: SocketAddr,
+) -> serde_json::Value {
+    let astro_ssd_prompt_cache_stats_response =
+        get_endpoint(server_address, "/v1/ssd-prompt-cache/stats").await;
+    assert!(
+        astro_ssd_prompt_cache_stats_response.starts_with("HTTP/1.1 200 OK"),
+        "the astro SSD prompt cache stats endpoint should return 200 OK, got: {astro_ssd_prompt_cache_stats_response}"
+    );
+    let response_body = astro_ssd_prompt_cache_stats_response
+        .split("\r\n\r\n")
+        .nth(1)
+        .expect("the astro SSD prompt cache stats response should have a body");
+    serde_json::from_str(response_body)
+        .expect("the astro SSD prompt cache stats response body should be valid JSON")
+}
+
+async fn send_http_request(server_address: SocketAddr, request_text: String) -> String {
+    let mut server_connection = TcpStream::connect(server_address)
+        .await
+        .expect("the E2E server should accept a local connection");
+    server_connection
+        .write_all(request_text.as_bytes())
+        .await
+        .expect("the E2E HTTP request should be written");
+    let mut response_text = String::new();
+    server_connection
+        .read_to_string(&mut response_text)
+        .await
+        .expect("the bounded E2E HTTP response should be readable");
+    response_text
+}

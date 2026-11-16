@@ -8,7 +8,7 @@ use super::{
 
 /// Plans where each layer's experts live while a reply is written: a
 /// deterministic complete foundation plus a routed overlay. No plan is made
-/// while a prompt is read; the cache's capacity is the only rule there.
+/// while a prompt is read; the `astro_expert_cache` capacity is the only rule there.
 pub fn plan_expert_residency(
     retained_expert_ceiling_bytes: u64,
     layer_geometries: &[ExpertLayerGeometry],

@@ -5,8 +5,18 @@ import { IDLE_DOWNLOAD_STATUS, parseLibraryDownloadStatus, refusalCodeFromErrorD
 test("should_read_a_running_download", () => {
   const downloadText = JSON.stringify({ state: "downloading", huggingface_id: "example-org/model", bytes_completed: 40, bytes_total: 100, error_code: null });
   assert.deepEqual(parseLibraryDownloadStatus(downloadText), {
-    state: "downloading", huggingfaceID: "example-org/model", bytesCompleted: 40, bytesTotal: 100, errorCode: null,
+    state: "downloading", huggingfaceID: "example-org/model", bytesCompleted: 40, bytesTotal: 100, errorCode: null, waitingHuggingfaceIDs: [],
   });
+});
+
+test("should_read_the_waiting_models_and_skip_unreadable_entries", () => {
+  const downloadText = JSON.stringify({
+    state: "downloading",
+    huggingface_id: "example-org/model",
+    queue: { waiting: [{ huggingface_id: "example-org/next" }, { huggingface_id: 3 }, null, { huggingface_id: "example-org/last" }], failed: [] },
+  });
+  assert.deepEqual(parseLibraryDownloadStatus(downloadText).waitingHuggingfaceIDs, ["example-org/next", "example-org/last"]);
+  assert.deepEqual(parseLibraryDownloadStatus(JSON.stringify({ state: "idle", queue: "nonsense" })).waitingHuggingfaceIDs, []);
 });
 
 test("should_read_a_failed_download_with_its_code", () => {

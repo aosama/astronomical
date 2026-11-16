@@ -10,7 +10,7 @@ pub(crate) mod generation;
 pub(crate) mod memory;
 pub(crate) mod process;
 
-pub(crate) mod cache_clear;
+pub(crate) mod astro_ssd_prompt_cache_clear;
 pub(crate) mod control_error;
 pub(crate) mod decisions_event;
 pub(crate) mod decisions_request;
@@ -93,7 +93,7 @@ pub(crate) async fn run_worker(
         completion_log,
         model_policy_catalog,
         pending_mlx_memory_limit_update: None,
-        pending_prompt_cache_clear: None,
+        pending_astro_ssd_prompt_cache_clear: None,
         active_generation_permits,
         generation_queue_permits,
         model_load_timeout,

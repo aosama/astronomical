@@ -4,7 +4,7 @@
 //! without images, on a dense or an expert model. One layer runs over every
 //! span of the prompt before the next layer is read (issues #1985 and
 //! #2221). The
-//! whole prompt is one forward as far as the prompt cache and the request's
+//! whole prompt is one forward as far as the `astro_ssd_prompt_cache` and the request's
 //! cursor are concerned, so no token is finished until the last layer has
 //! run. Advancing one layer per step lets the engine report how many layers
 //! are done after each one, and lets a request be cancelled between layers
@@ -81,9 +81,9 @@ pub(super) struct PromptPrefillChunkOutcome {
     pub(super) active_memory_bytes_before_forward: usize,
     pub(super) forward_chunk_elapsed_millis: u64,
     /// The tokens the forward's memory is measured under: one span's,
-    /// whose working memory the peak is.
+    /// whose MLX working buffers the peak is.
     pub(super) measured_forward_token_count: usize,
-    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    pub(super) boundary_checkpoints: Vec<crate::Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// What one step of a layer-at-a-time prompt left.
@@ -126,9 +126,11 @@ impl Qwen3_5EngineState {
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let spans = plan.layer_major_span_plan.spans.as_slice();
         let checkpoint_contract =
-            plan.persistent_prompt_cache_block_token_count
+            plan.astro_ssd_prompt_cache_block_token_count
                 .map(|block_token_count| LayerMajorCheckpointContract {
-                    boundary_tensor_count: model.decoder_cache_layout().boundary_tensor_count(),
+                    boundary_tensor_count: model
+                        .astro_decoder_state_cache_layout()
+                        .boundary_tensor_count(),
                     block_token_count,
                 });
         let prompt_token_ids = &active_request.input_token_ids[prefill_start..prefill_end];
@@ -230,7 +232,7 @@ impl Qwen3_5EngineState {
             ..
         } = prefill_in_flight;
         let mut boundary_checkpoints = layer_major_prefill_outcome.boundary_checkpoints;
-        crate::qwen3_5_core::prompt_cache_capture::record_persistent_prompt_cache_boundary_checkpoint(
+        crate::qwen3_5_core::astro_ssd_prompt_cache_capture::record_astro_ssd_prompt_cache_boundary_checkpoint(
             active_request,
             plan.prefill_token_count,
             &plan.all_completed_prefill_chunk_tokens,
@@ -325,8 +327,8 @@ impl Qwen3_5EngineState {
             expert_residency_telemetry,
             expert_memory_mode: Some(model.observed_expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
-            persistent_prompt_cache_diagnostics: active_request
-                .persistent_prompt_cache_diagnostics
+            astro_ssd_prompt_cache_diagnostics: active_request
+                .astro_ssd_prompt_cache_diagnostics
                 .clone(),
             neural_engine_chunk: None,
             prompt_layer_progress: Some(prompt_layer_progress),

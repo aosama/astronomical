@@ -40,6 +40,11 @@ pub struct OpenAiResponsesRequest {
     user: Option<String>,
     #[serde(default)]
     safety_identifier: Option<String>,
+    /// OpenAI's own request field names, kept exactly as OpenAI spells them:
+    /// clients such as GitHub Copilot send `prompt_cache_key` on every
+    /// request, and any other spelling makes them fail as an unknown field.
+    /// The key is accepted and not used; `astro_ssd_prompt_cache` matches
+    /// prompts by their content instead.
     #[serde(default)]
     prompt_cache_key: Option<String>,
     #[serde(default)]
@@ -438,3 +443,6 @@ fn validate_sampling_parameter(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod prompt_cache_fields;

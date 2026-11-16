@@ -16,7 +16,7 @@ pub(crate) mod affine_quantized_linear;
 
 mod attention;
 
-mod decoder_cache;
+mod astro_decoder_state_cache;
 
 mod embedding_engine;
 
@@ -59,7 +59,7 @@ pub(crate) mod speech_models;
 
 pub(crate) mod performance_attribution;
 
-pub(crate) mod persistent_cache;
+pub(crate) mod astro_ssd_prompt_cache;
 
 // The folded ternary family ships its loader and straight text model as
 // crate API ahead of the serving-path integration; the acceptance crate
@@ -97,6 +97,10 @@ pub(crate) mod qwen_image_21;
 // the serving crate resolving without touching their many consumers.
 pub(crate) use astronomical_memory_policy::{safetensors, strict_json};
 
+pub mod row_batched_matmul;
+
+pub mod speculative_decoding;
+
 mod sampling_seed;
 
 mod sparse_experts;
@@ -127,16 +131,17 @@ pub use attention::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use decoder_cache::{
-    ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, DecoderCacheState,
-    DecoderCacheStateAllocationCheckpoint, FullAttentionKeyValueState,
+pub use astro_decoder_state_cache::{
+    AstroDecoderStateCacheState, AstroDecoderStateCacheStateAllocationCheckpoint, ConvolutionState,
+    ConvolutionStateBoundaryCheckpointUpdate, FullAttentionKeyValueState,
     FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
     RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
 };
 
-pub use decoder_cache::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheLayoutError,
-    DecoderCachePersistedTensorLayout, DecoderCacheTensorDtype, DecoderCacheTensorLayout,
+pub use astro_decoder_state_cache::{
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheLayout,
+    AstroDecoderStateCacheLayoutError, AstroDecoderStateCachePersistedTensorLayout,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout,
 };
 
 pub use decision_engine::{
@@ -163,8 +168,8 @@ pub use engine_backed_worker::{
 pub use expert_paging::load_quantized_expert_page;
 
 pub use expert_paging::{
-    ExpertManifestError, ExpertPageRoutePartition, ExpertWeightMemoryCacheStatistics,
-    ExpertWeightPage, QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
+    AstroExpertCacheStatistics, ExpertManifestError, ExpertPageRoutePartition, ExpertWeightPage,
+    QuantizationMode, QuantizedExpertLayerPlan, QuantizedExpertPageManifest,
     QuantizedExpertShardManifest, QuantizedExpertSourceInterval, QuantizedExpertTensorRange,
     QuantizedTensorSource, RetainedExpertReclamation, SafetensorsDtype, SafetensorsHeader,
     SafetensorsHeaderError, TensorHeaderEntry, build_quantized_expert_page_manifest_from_plan,
@@ -292,25 +297,25 @@ pub use performance_attribution::{
     PerformanceOperationMeasurement, process_io_delta_between_samples,
 };
 
-pub use persistent_cache::{
-    PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError,
-    PersistentPromptCacheLookupDiagnostics, PersistentPromptCacheMissReason,
-    PersistentPromptCacheModelContract, PersistentPromptCacheModelContractError,
-    PersistentPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
+pub use astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheBlockKey, AstroSsdPromptCacheBlockKeyError,
+    AstroSsdPromptCacheLookupDiagnostics, AstroSsdPromptCacheMissReason,
+    AstroSsdPromptCacheModelContract, AstroSsdPromptCacheModelContractError,
+    AstroSsdPromptCachePrefixLookupResult, PersistentVisualEmbeddingFileError,
     PersistentVisualEmbeddingKey, PersistentVisualEmbeddingModelContract,
-    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
-    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
-    persistent_prompt_cache_clamped_prefill_chunk_end,
-    persistent_prompt_cache_partial_tail_capture_end,
+    astro_ssd_prompt_cache_boundary_clamped_prefill_chunk_end,
+    astro_ssd_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    astro_ssd_prompt_cache_clamped_prefill_chunk_end,
+    astro_ssd_prompt_cache_partial_tail_capture_end,
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use persistent_cache::{
-    PersistentPromptCacheClearOutcome, PersistentPromptCacheDiskStore,
-    PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheDiskStoreError,
-    PersistentPromptCachePublicationOutcome, PersistentPromptCacheStartupCleanupCategory,
-    PersistentPromptCacheStartupCleanupEvidence, build_persistent_prompt_cache_stats_event,
-    clear_persistent_prompt_cache_directory,
+pub use astro_ssd_prompt_cache::{
+    AstroSsdPromptCacheClearOutcome, AstroSsdPromptCacheDiskStore,
+    AstroSsdPromptCacheDiskStoreConfig, AstroSsdPromptCacheDiskStoreError,
+    AstroSsdPromptCachePublicationOutcome, AstroSsdPromptCacheStartupCleanupCategory,
+    AstroSsdPromptCacheStartupCleanupEvidence, build_astro_ssd_prompt_cache_stats_event,
+    clear_astro_ssd_prompt_cache_directory,
 };
 
 pub use qwen3_5_core::artifacts::{
@@ -375,17 +380,17 @@ pub use crate::model_generation_processor::{
 
 pub use crate::performance_attribution::macos_process_io::MacosProcessIoError;
 
-pub use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+pub use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 
-pub use crate::persistent_cache::block_format::PersistentPromptCacheBlockHeader;
+pub use crate::astro_ssd_prompt_cache::block_format::AstroSsdPromptCacheBlockHeader;
 
-pub use crate::persistent_cache::block_format_error::PersistentPromptCacheBlockError;
+pub use crate::astro_ssd_prompt_cache::block_format_error::AstroSsdPromptCacheBlockError;
 
-pub use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;
+pub use crate::astro_ssd_prompt_cache::prefix_lookup::AstroSsdPromptCachePrefixLookup;
 
-pub use crate::persistent_cache::visual_embedding_format::PersistentVisualEmbeddingFileHeader;
+pub use crate::astro_ssd_prompt_cache::visual_embedding_format::PersistentVisualEmbeddingFileHeader;
 
-pub use crate::persistent_cache::visual_embedding_key::PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION;
+pub use crate::astro_ssd_prompt_cache::visual_embedding_key::PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION;
 
 pub use crate::qwen_image_21::artifact::QwenImage21ArtifactValidator;
 
@@ -409,7 +414,9 @@ pub use qwen3_5_core::configuration::{
     Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
 };
 
-pub use qwen3_5_core::decoder::{Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout};
+pub use qwen3_5_core::decoder::{
+    Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
+};
 
 pub use qwen3_5_core::quantizations::producers::optiq::{
     OptiQMetadata, OptiQMetadataError, resolve_optiq_metadata_relative_path,
@@ -434,10 +441,10 @@ pub use qwen3_5_core::text::{
 
 pub use qwen3_5_core::vision::{
     Qwen3_5ImageProcessor, Qwen3_5ProcessedImage, Qwen3_5VisionConfig,
-    Qwen3_5VisualEmbeddingSuffixPlan, Qwen3_5VisualEmbeddingSuffixPlanError,
-    Qwen3_5VisualPromptCacheIdentityPlan, Qwen3_5VisualPromptCacheIdentityPlanError,
-    plan_qwen3_5_visual_embedding_suffix, plan_qwen3_5_visual_prompt_cache_block_inputs,
-    qwen3_5_vision_tensor_profiles,
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlan,
+    Qwen3_5VisualAstroSsdPromptCacheIdentityPlanError, Qwen3_5VisualEmbeddingSuffixPlan,
+    Qwen3_5VisualEmbeddingSuffixPlanError, plan_qwen3_5_visual_astro_ssd_prompt_cache_block_inputs,
+    plan_qwen3_5_visual_embedding_suffix, qwen3_5_vision_tensor_profiles,
 };
 
 #[cfg(any(test, feature = "direct-mlx"))]
@@ -448,23 +455,24 @@ pub use qwen3_5_core::vision::vision_input_plan::Qwen3_5VisionInputPlanError;
 // MLX components (text encoder, transformer, VAE decoder, pipeline) follow below under `direct-mlx`.
 
 pub use qwen_image_21::{
-    CacheMode, FlowMatchSchedule, QWEN_IMAGE_21_LATENT_CHANNEL_COUNT,
+    AstroImagePrefixKeyValueCacheMode, FlowMatchSchedule, QWEN_IMAGE_21_LATENT_CHANNEL_COUNT,
     QWEN_IMAGE_21_LICENSE_IDENTIFIER, QWEN_IMAGE_21_OFFICIAL_MODEL_ID,
     QWEN_IMAGE_21_OUTPUT_CHANNEL_COUNT, QWEN_IMAGE_21_PROVIDER_MODEL_ID,
     QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH, QWEN_IMAGE_21_VAE_SCALE_FACTOR,
     QwenImage21ArtifactProvenance, QwenImage21ConfigError, QwenImage21License,
     QwenImage21PipelineConfig, QwenImage21RetainedArtifactFiles, QwenImage21SchedulerConfig,
     QwenImage21TensorDescriptor, QwenImage21TensorInventory, QwenImage21VaeError,
-    ValidatedQwenImage21Artifact, build_block_causal_mask, build_image_ids,
-    build_prompt_conditioning, build_schedule, build_target_token_mask, cache_is_valid,
-    cache_query_slice, cache_write_slice, calculate_dimensions, calculate_shift,
-    causal_modulation_row_map, decoded_pixel_dimensions, default_shift, euler_step,
-    frequencies_for_tests, latent_spatial_dimensions, normalize_empty_prompt, pack_latents_seq_len,
-    prefix_length, prefix_segments, quantized_group_count, quantized_row_count,
-    render_t2i_prompt_template, render_ti2i_prompt_template,
-    render_ti2i_prompt_template_with_image_count, resolve_generation_dimensions,
-    round_half_to_even, round_to_nearest_multiple, special_tokens, text_encoder_tensor_profiles,
-    transformer_tensor_profiles, unpack_spatial_dims, vae_tensor_profiles, zero_center_rms_norm,
+    ValidatedQwenImage21Artifact, astro_image_prefix_key_value_cache_is_valid,
+    astro_image_prefix_key_value_cache_query_slice, astro_image_prefix_key_value_cache_write_slice,
+    build_block_causal_mask, build_image_ids, build_prompt_conditioning, build_schedule,
+    build_target_token_mask, calculate_dimensions, calculate_shift, causal_modulation_row_map,
+    decoded_pixel_dimensions, default_shift, euler_step, frequencies_for_tests,
+    latent_spatial_dimensions, normalize_empty_prompt, pack_latents_seq_len, prefix_length,
+    prefix_segments, quantized_group_count, quantized_row_count, render_t2i_prompt_template,
+    render_ti2i_prompt_template, render_ti2i_prompt_template_with_image_count,
+    resolve_generation_dimensions, round_half_to_even, round_to_nearest_multiple, special_tokens,
+    text_encoder_tensor_profiles, transformer_tensor_profiles, unpack_spatial_dims,
+    vae_tensor_profiles, zero_center_rms_norm,
 };
 
 pub use qwen_image_21::{
@@ -486,8 +494,8 @@ pub use qwen3_5_core::artifacts::{
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::decoder::{
-    Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
-    Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector, RequestDecoderStateStack,
     RequestDecoderStateStackAllocationCheckpoint, RequestDecoderStateStackCheckpoint,
 };
 
@@ -545,31 +553,9 @@ pub use qwen3_5_resident::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_configuration::{
-    DFlashDraftConfiguration, DFlashDraftConfigurationError, DFlashDraftLayerAttentionKind,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_weights::{
-    DFlashDraftLayerWeights, DFlashDraftWeights,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_weights_loading::DFlashDraftLoadedWeights;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states;
-
-#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
-    SpeculationRoundOutcome, SpeculationRoundRequest, VerificationLogitsMode,
-    VerificationTokenChoice, run_speculative_round,
+    Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
+    Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode, VerificationTokenChoice,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -579,7 +565,7 @@ pub use qwen3_5_resident::{
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
-    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoECachedPlusStreamedPageRoute,
+    ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoEAstroExpertCachePlusStreamedPageRoute,
     Qwen3_5MoEPagedExecutionMode, build_source_manifests, contiguous_selected_runs,
     qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
@@ -599,7 +585,7 @@ pub use qwen3_5_streaming::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_core::prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
+pub use qwen3_5_core::astro_ssd_prompt_cache_capture::astro_ssd_prompt_cache_publication_advances_parent_chain;
 
 pub use qwen3_5_streaming::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,

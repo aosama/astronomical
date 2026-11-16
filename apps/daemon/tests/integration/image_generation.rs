@@ -3,9 +3,9 @@
 use std::time::Duration;
 
 use astronomical_daemon::{
-    ChatGenerationExecutor, GenerationQueueDepth, GenerationStartError,
-    ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationTimeouts,
-    MlxMemoryLimitUpdateOutcome, PromptCacheClearOutcome, WorkerControlError, WorkerHealthStatus,
+    AstroSsdPromptCacheClearOutcome, ChatGenerationExecutor, GenerationQueueDepth,
+    GenerationStartError, ImageGenerationExecutionError, ImageGenerationExecutor,
+    ImageGenerationTimeouts, MlxMemoryLimitUpdateOutcome, WorkerControlError, WorkerHealthStatus,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice,
@@ -467,10 +467,10 @@ async fn should_keep_memory_cache_and_replacement_controls_busy_until_image_fina
     );
     assert_eq!(
         worker_handle
-            .clear_prompt_cache(None)
+            .clear_astro_ssd_prompt_cache(None)
             .await
-            .expect("cache clear should queue"),
-        PromptCacheClearOutcome::Queued,
+            .expect("astro SSD prompt cache clear should queue"),
+        AstroSsdPromptCacheClearOutcome::Queued,
     );
     assert!(matches!(
         worker_handle

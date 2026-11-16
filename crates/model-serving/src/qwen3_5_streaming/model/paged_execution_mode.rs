@@ -12,7 +12,7 @@ mod tests;
 pub enum Qwen3_5MoEPagedExecutionMode {
     /// Uses adaptive direct layer pages for normal inference.
     ProductionDefault,
-    /// Executes sparse MoE separately for each prompt token through the decode cache.
+    /// Executes sparse MoE separately for each prompt token through the decode `astro_expert_cache` path.
     TokenLocalDiagnostic,
     /// Forces one compact selected-expert page for all prompt tokens.
     CompactPromptDiagnostic,

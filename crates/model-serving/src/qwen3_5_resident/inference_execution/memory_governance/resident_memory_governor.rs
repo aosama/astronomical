@@ -4,7 +4,7 @@
 //! every weight in memory, so its ledger has no streamable weights and the
 //! capacity the governor answers with is always zero: there is nothing to
 //! give back. The engine uses the governor for the question it asks before
-//! each forward (`forward_memory`), for the working memory it measures, and
+//! each forward (`forward_memory`), for the MLX working buffers it measures, and
 //! for comparing its accounts with what MLX reports.
 
 use astronomical_memory_policy::ledger::{
@@ -24,7 +24,7 @@ pub(super) fn nothing_to_give_back(_capacity_for_streamable_weights: KeptWeightC
 
 impl Qwen3_5EngineState {
     /// Opens the governor for the model just loaded: every weight is fixed,
-    /// and the working memory of one prompt chunk and one reply token is
+    /// and the MLX working buffers of one prompt chunk and one reply token is
     /// measured now.
     ///
     /// A probe the limit cannot hold does not fail the load. The working
@@ -50,37 +50,37 @@ impl Qwen3_5EngineState {
             .prompt_processing_chunk_sizer
             .prompt_processing_operation_bound_tokens();
         let probe_started_at = std::time::Instant::now();
-        match model.measure_forward_working_memory(
+        match model.measure_forward_mlx_working_buffers(
             prompt_chunk_token_count,
             self.full_attention_kv_state_growth_tokens,
         ) {
-            Ok(probed_working_memory) => {
+            Ok(probed_mlx_working_buffers) => {
                 tracing::info!(
                     probe_elapsed_millis = probe_started_at.elapsed().as_millis(),
                     prompt_chunk_token_count,
-                    prompt_chunk_working_memory_bytes =
-                        probed_working_memory.prompt_chunk_working_memory_bytes,
-                    reply_token_working_memory_bytes =
-                        probed_working_memory.reply_token_working_memory_bytes,
-                    "measured one forward's working memory at load"
+                    prompt_chunk_mlx_working_buffer_bytes =
+                        probed_mlx_working_buffers.prompt_chunk_mlx_working_buffer_bytes,
+                    reply_token_mlx_working_buffer_bytes =
+                        probed_mlx_working_buffers.reply_token_mlx_working_buffer_bytes,
+                    "measured one forward's MLX working buffers at load"
                 );
                 nothing_to_give_back(memory_governor.record_probe(
                     reading_prompt_phase(prompt_chunk_token_count),
-                    probed_working_memory.prompt_chunk_working_memory_bytes,
+                    probed_mlx_working_buffers.prompt_chunk_mlx_working_buffer_bytes,
                 ));
                 nothing_to_give_back(memory_governor.record_probe(
                     LedgerPhase::WritingReply,
-                    probed_working_memory.reply_token_working_memory_bytes,
+                    probed_mlx_working_buffers.reply_token_mlx_working_buffer_bytes,
                 ));
             }
             Err(probe_error) => {
                 tracing::warn!(
                     error = %probe_error,
-                    "could not measure a forward's working memory at load"
+                    "could not measure a forward's MLX working buffers at load"
                 );
                 if let Err(cleanup_error) = model
                     .runtime()
-                    .synchronize_gpu_stream_and_clear_allocator_cache()
+                    .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
                 {
                     tracing::warn!(error = %cleanup_error, "could not clear MLX after the probe");
                 }
@@ -116,9 +116,9 @@ impl Qwen3_5EngineState {
         }
     }
 
-    /// The working memory set aside for a prompt chunk of the size this
+    /// The MLX working buffers set aside for a prompt chunk of the size this
     /// engine serves; `None` while nothing has measured one.
-    pub(in crate::qwen3_5_resident::inference_execution) fn measured_prompt_chunk_working_memory_bytes(
+    pub(in crate::qwen3_5_resident::inference_execution) fn measured_prompt_chunk_mlx_working_buffer_bytes(
         &self,
     ) -> Option<u64> {
         let model = self.model.as_ref()?;
@@ -127,8 +127,8 @@ impl Qwen3_5EngineState {
             .as_ref()?
             .accounts_while(self.serving_prompt_chunk_phase(), 0);
         prompt_chunk_accounts
-            .working_memory_is_measured
-            .then_some(prompt_chunk_accounts.working_memory_bytes)
+            .mlx_working_buffers_are_measured
+            .then_some(prompt_chunk_accounts.mlx_working_buffer_bytes)
     }
 
     /// The phase of a prompt chunk of the size this engine serves.

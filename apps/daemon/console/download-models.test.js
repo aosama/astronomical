@@ -165,17 +165,68 @@ test("should_explain_each_failure_that_trying_again_cannot_fix_and_fall_back_for
     assert.match(explanationFor(undefined), /picks up where it left off/);
 });
 
-test("should_keep_get_usable_after_a_failure_and_busy_during_any_other_download_state", () => {
+test("should_keep_the_download_list_when_a_pause_answers_with_the_download_alone", async () => {
     const scriptContext = createDownloadModelsContext();
-    const isSlotBusyIn = (downloadState) => vm.runInContext(
-        `downloadModelsCurrentDownload = { state: ${JSON.stringify(downloadState)} }; isDownloadModelsDownloadSlotBusy()`,
+    scriptContext.renderDownloadModelsCatalogDocument = () => "ready";
+    scriptContext.fetch = async () => ({ ok: true, json: async () => ({ state: "paused", huggingface_id: "a/one" }) });
+    vm.runInContext(`downloadModelsCurrentDownload = {
+        state: "downloading", huggingface_id: "a/one",
+        queue: { waiting: [{ huggingface_id: "a/two", approximate_size_bytes: 1 }], failed: [] }
+    };`, scriptContext);
+
+    await vm.runInContext(`performDownloadModelsAction("pause")`, scriptContext);
+
+    assert.equal(vm.runInContext("downloadModelsCurrentDownload.state", scriptContext), "paused");
+    assert.equal(vm.runInContext("downloadModelsCurrentDownload.queue.waiting[0].huggingface_id", scriptContext), "a/two");
+});
+
+test("should_name_places_in_the_download_line_as_people_say_them", () => {
+    const scriptContext = createDownloadModelsContext();
+    const spokenPlaces = vm.runInContext(
+        "[1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111].map(formatDownloadModelsLinePlace)",
         scriptContext
     );
 
-    assert.equal(isSlotBusyIn("idle"), false);
-    assert.equal(isSlotBusyIn("failed"), false, "the daemon discards a failed download when another starts");
-    assert.equal(isSlotBusyIn("downloading"), true);
-    assert.equal(isSlotBusyIn("paused"), true);
+    assert.deepEqual(
+        Array.from(spokenPlaces),
+        ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "101st", "111th"]
+    );
+});
+
+test("should_add_the_wait_after_this_one_to_the_list_summary_only_once_the_rate_is_measured", () => {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.waitingModels = [
+        { huggingface_id: "a/one", approximate_size_bytes: 2 * 1073741824 },
+        { huggingface_id: "a/two", approximate_size_bytes: 3 * 1073741824 }
+    ];
+
+    const unmeasuredSummary = vm.runInContext("downloadModelsQueueSummaryText(waitingModels)", scriptContext);
+    const measuredSummary = vm.runInContext(
+        `downloadModelsMeasuredBytesPerSecond = 5 * 1073741824 / 600;
+         downloadModelsQueueSummaryText(waitingModels)`,
+        scriptContext
+    );
+
+    assert.equal(unmeasuredSummary, "2 models waiting · 5.0 GB");
+    assert.equal(measuredSummary, "2 models waiting · 5.0 GB · about 10 minutes after this one");
+});
+
+test("should_keep_the_running_download_and_show_the_reason_when_get_is_refused", async () => {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.refreshDownloadModelsDownloadState = async () => {};
+    scriptContext.fetch = async () => ({
+        ok: false,
+        json: async () => ({ error: { code: "insufficient_disk", message: "Not enough room on the disk: 61 GB needed, 48 GB is free." } })
+    });
+    vm.runInContext(`downloadModelsCurrentDownload = { huggingface_id: "a/one", state: "downloading" };`, scriptContext);
+
+    await vm.runInContext(`startDownloadModelsDownload("a/two")`, scriptContext);
+
+    assert.equal(vm.runInContext("downloadModelsCurrentDownload.state", scriptContext), "downloading");
+    assert.equal(
+        vm.runInContext("downloadModelsQueueNotice", scriptContext),
+        "Not enough room on the disk: 61 GB needed, 48 GB is free."
+    );
 });
 
 test("should_word_transfer_progress_with_time_left_only_once_the_rate_is_measured", () => {
@@ -192,7 +243,32 @@ test("should_word_transfer_progress_with_time_left_only_once_the_rate_is_measure
     );
 
     assert.equal(unmeasuredText, "2.0 of 10.0 GB");
-    assert.equal(measuredText, "2.0 of 10.0 GB · about 10 minutes left");
+    assert.equal(measuredText, "2.0 of 10.0 GB · 14 MB/s · about 10 minutes left");
+});
+
+test("should_word_the_transfer_rate_in_megabytes_per_second_with_a_decimal_only_when_slow", () => {
+    const scriptContext = createDownloadModelsContext();
+    const rateTexts = vm.runInContext(
+        "[41 * 1048576, 10 * 1048576, 9.96 * 1048576, 2.5 * 1048576, 50 * 1024].map(formatDownloadModelsTransferRate)",
+        scriptContext
+    );
+
+    assert.deepEqual(Array.from(rateTexts), ["41 MB/s", "10 MB/s", "10.0 MB/s", "2.5 MB/s", "0.0 MB/s"]);
+});
+
+test("should_leave_out_speed_and_time_while_the_download_is_paused", () => {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.activeDownload = {
+        state: "paused", bytes_completed: 2 * 1073741824, bytes_total: 10 * 1073741824
+    };
+
+    const pausedText = vm.runInContext(
+        `downloadModelsMeasuredBytesPerSecond = 40 * 1048576;
+         downloadModelsTransferProgressText(activeDownload)`,
+        scriptContext
+    );
+
+    assert.equal(pausedText, "2.0 of 10.0 GB");
 });
 
 test("should_read_the_model_id_and_summary_and_ignore_a_blank_summary", () => {

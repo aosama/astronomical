@@ -4,13 +4,17 @@
 //! decode provides today: a multi-token forward whose outputs are logits at
 //! the positions the caller needs (to verify drafted tokens against the
 //! target distribution) plus hidden states captured at the DFlash draft's
-//! conditioning taps (to grow the draft's context key-value cache). This
+//! conditioning taps (to grow the draft's context key-value state). This
 //! entry reuses the exact per-layer forward, normalization, and
 //! language-model head of the ordinary graph; the differences are the tap
 //! captures and the caller-selected head scope.
 
 use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
+use crate::qwen3_5_core::decoder::{
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint,
+    Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
@@ -29,6 +33,16 @@ pub enum VerificationLogitsMode {
     LastRowOnly,
     /// Head on every position: `[1, token count, vocabulary]`.
     AllPositions,
+}
+
+/// One drafted block's verification: logits for every row, the taps, and the
+/// DeltaNet state after each row but the last.
+pub struct Qwen3_5DraftedRowsVerification {
+    /// `[1, rows, vocabulary]` float32.
+    pub per_position_logits: MlxArray,
+    pub hidden_state_taps: Vec<MlxArray>,
+    /// Entry `n - 1` holds the DeltaNet state after the first `n` rows.
+    pub row_boundaries: Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
 }
 
 /// One verification forward's outputs.
@@ -64,6 +78,95 @@ impl Qwen3_5ResidentModel {
         logits_mode: VerificationLogitsMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5SpeculativeVerificationOutput, Qwen3_5ExecutionError> {
+        self.speculative_verification_forward(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            target_hidden_state_tap_layer_ids,
+            logits_mode,
+            None,
+            performance_attribution,
+        )
+    }
+
+    /// Runs one prompt chunk of a drafting session: the tap-capturing
+    /// forward, evaluated before it returns, with the decoder state captured
+    /// at every `astro_ssd_prompt_cache` block boundary the chunk completes
+    /// (`completed_prefill_chunk_tokens`, empty when the chunk completes
+    /// none) so a later request that starts the same way restores it.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prefill_chunk_with_taps_and_boundary_checkpoints(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        target_hidden_state_tap_layer_ids: &[i32],
+        logits_mode: VerificationLogitsMode,
+        completed_prefill_chunk_tokens: &[usize],
+        checkpoint_interval_token_count: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<
+        (
+            Qwen3_5SpeculativeVerificationOutput,
+            Vec<Qwen3_5AstroSsdPromptCacheBoundaryCheckpoint>,
+        ),
+        Qwen3_5ExecutionError,
+    > {
+        let mut boundary_checkpoint_collector = if completed_prefill_chunk_tokens.is_empty() {
+            None
+        } else {
+            Some(Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+                completed_prefill_chunk_tokens.to_vec(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
+                checkpoint_interval_token_count,
+            )?)
+        };
+        let chunk_output = self.speculative_verification_forward(
+            token_ids,
+            starting_position_tokens,
+            request_decoder_state,
+            target_hidden_state_tap_layer_ids,
+            logits_mode,
+            boundary_checkpoint_collector.as_mut(),
+            performance_attribution,
+        )?;
+        match chunk_output.per_position_logits.as_ref() {
+            Some(terminal_logits) => self
+                .evaluate_terminal_prefill_state_with_performance_attribution(
+                    terminal_logits,
+                    request_decoder_state,
+                    boundary_checkpoint_collector.as_ref(),
+                    performance_attribution,
+                )?,
+            None => self.evaluate_decoder_state_with_performance_attribution(
+                request_decoder_state,
+                boundary_checkpoint_collector.as_ref(),
+                performance_attribution,
+            )?,
+        }
+        let tap_references: Vec<&MlxArray> = chunk_output.hidden_state_taps.iter().collect();
+        self.runtime.evaluate_arrays(&tap_references)?;
+        let boundary_checkpoints = match boundary_checkpoint_collector {
+            Some(boundary_checkpoint_collector) => boundary_checkpoint_collector.complete()?,
+            None => Vec::new(),
+        };
+        Ok((chunk_output, boundary_checkpoints))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn speculative_verification_forward(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        target_hidden_state_tap_layer_ids: &[i32],
+        logits_mode: VerificationLogitsMode,
+        boundary_checkpoint_collector: Option<
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+        >,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Qwen3_5SpeculativeVerificationOutput, Qwen3_5ExecutionError> {
         let SpeculativeVerificationInputs {
             rope_offset_tokens,
             token_count,
@@ -74,13 +177,45 @@ impl Qwen3_5ResidentModel {
             target_hidden_state_tap_layer_ids,
         )?;
 
-        let mut hidden_states = self.embedding_lookup(&token_indices)?;
+        let hidden_states = self.embedding_lookup(&token_indices)?;
+        let (hidden_states, hidden_state_taps) = self.run_verification_layers(
+            hidden_states,
+            token_count,
+            rope_offset_tokens,
+            request_decoder_state,
+            target_hidden_state_tap_layer_ids,
+            boundary_checkpoint_collector,
+            performance_attribution,
+        )?;
+        let per_position_logits =
+            self.verification_per_position_logits(&hidden_states, logits_mode, token_count)?;
+        Ok(Qwen3_5SpeculativeVerificationOutput {
+            per_position_logits,
+            hidden_state_taps,
+        })
+    }
+
+    /// Runs every decoder layer over the verification rows, capturing the
+    /// requested taps, and the DeltaNet state at each boundary the collector
+    /// names when one is passed. Returns the final hidden rows and the taps.
+    #[allow(clippy::too_many_arguments)]
+    fn run_verification_layers(
+        &self,
+        mut hidden_states: MlxArray,
+        token_count: i32,
+        rope_offset_tokens: i32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        target_hidden_state_tap_layer_ids: &[i32],
+        mut boundary_checkpoint_collector: Option<
+            &mut Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector,
+        >,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(MlxArray, Vec<MlxArray>), Qwen3_5ExecutionError> {
         let mut hidden_state_tap_slots: Vec<Option<MlxArray>> = (0
             ..target_hidden_state_tap_layer_ids.len())
             .map(|_| None)
             .collect();
-        let decoder_layer_count = self.config.layer_count() as usize;
-        for layer_index in 0..decoder_layer_count {
+        for layer_index in 0..self.config.layer_count() as usize {
             let decoder_layer_weights = self
                 .weights
                 .decoder_layer_weights
@@ -106,7 +241,7 @@ impl Qwen3_5ResidentModel {
                 decoder_layer_weights,
                 layer_model_state,
                 None,
-                None,
+                boundary_checkpoint_collector.as_deref_mut(),
                 performance_attribution,
             )?;
             let tap_order = target_hidden_state_tap_layer_ids
@@ -119,20 +254,71 @@ impl Qwen3_5ResidentModel {
                 hidden_state_tap_slots[tap_order] = Some(hidden_states.retain()?);
             }
         }
-        let hidden_state_taps = hidden_state_tap_slots
-            .into_iter()
-            .map(|tap_slot| {
-                tap_slot.ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "a requested DFlash target hidden-state tap was never captured",
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut hidden_state_taps = Vec::with_capacity(hidden_state_tap_slots.len());
+        for tap_slot in hidden_state_tap_slots {
+            hidden_state_taps.push(tap_slot.ok_or(Qwen3_5ExecutionError::InvalidInput {
+                description: "a requested DFlash target hidden-state tap was never captured",
+            })?);
+        }
+        Ok((hidden_states, hidden_state_taps))
+    }
 
-        let per_position_logits =
-            self.verification_per_position_logits(&hidden_states, logits_mode, token_count)?;
-        Ok(Qwen3_5SpeculativeVerificationOutput {
+    /// Verifies one drafted block: the target's logits for every row, its
+    /// taps, and the DeltaNet state after each row but the last, so a round
+    /// that keeps only some rows rewinds without running the target again
+    /// (`RequestDecoderStateStack::rewind_to_kept_row_boundary`). Keeping
+    /// every row needs no boundary: the live state is already there.
+    pub fn verify_drafted_rows(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        target_hidden_state_tap_layer_ids: &[i32],
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Qwen3_5DraftedRowsVerification, Qwen3_5ExecutionError> {
+        let SpeculativeVerificationInputs {
+            rope_offset_tokens,
+            token_count,
+            token_indices,
+        } = self.validated_speculative_verification_inputs(
+            token_ids,
+            starting_position_tokens,
+            target_hidden_state_tap_layer_ids,
+        )?;
+        if token_count < 2 {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "a drafted block verifies the anchor and at least one draft",
+            });
+        }
+        let mut row_boundary_collector =
+            Qwen3_5AstroSsdPromptCacheBoundaryCheckpointCollector::new(
+                (1..token_ids.len()).collect(),
+                self.astro_decoder_state_cache_layout
+                    .boundary_tensor_count(),
+                1,
+            )?;
+        let (hidden_states, hidden_state_taps) = self.run_verification_layers(
+            self.embedding_lookup(&token_indices)?,
+            token_count,
+            rope_offset_tokens,
+            request_decoder_state,
+            target_hidden_state_tap_layer_ids,
+            Some(&mut row_boundary_collector),
+            performance_attribution,
+        )?;
+        let per_position_logits = self
+            .verification_per_position_logits(
+                &hidden_states,
+                VerificationLogitsMode::AllPositions,
+                token_count,
+            )?
+            .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                description: "a drafted block must produce logits",
+            })?;
+        Ok(Qwen3_5DraftedRowsVerification {
             per_position_logits,
             hidden_state_taps,
+            row_boundaries: row_boundary_collector.complete()?,
         })
     }
 
@@ -190,7 +376,7 @@ impl Qwen3_5ResidentModel {
     /// AllPositions reads every row because each position's logits are the
     /// target's distribution over its next token. The head output is widened
     /// to float32 for deterministic verification comparisons.
-    fn verification_per_position_logits(
+    pub(super) fn verification_per_position_logits(
         &self,
         hidden_states: &MlxArray,
         logits_mode: VerificationLogitsMode,

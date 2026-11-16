@@ -27,12 +27,12 @@ use std::time::{Duration, Instant};
 
 use astronomical_daemon::{ChatGenerationExecutor, WorkerHealthSnapshot};
 use astronomical_ipc_protocol::{
-    ChatImageInput, WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+    ChatImageInput, WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
 };
 
 pub(crate) use crate::performance_throughput::completion::{
-    drive_completion, dump_worker_logging_directory, read_decode_cache_diagnostic_evidence,
-    read_measured_completion, wait_until_idle,
+    drive_completion, dump_worker_logging_directory,
+    read_decode_astro_expert_cache_diagnostic_evidence, read_measured_completion, wait_until_idle,
 };
 
 // The evidence lane composes the same measurement type, so it stays reachable
@@ -85,7 +85,7 @@ pub(crate) fn assert_measurement_shape(measured_throughput: &ThroughputMeasureme
     );
     assert_eq!(
         measured_throughput.cached_tokens, 0,
-        "the measured completion must not reuse the persistent prompt cache",
+        "the measured completion must not reuse the astro SSD prompt cache",
     );
 }
 
@@ -95,7 +95,7 @@ pub(crate) const READY_ATTEMPT_LIMIT: u8 = 70;
 const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
 
 /// The test case for one throughput journey: the journey family recorded in
-/// the durable history line, the internal decode-cache policy arm, the short
+/// the durable history line, the internal decode astro expert cache policy arm, the short
 /// warmup completion (its prompt, images, and output cap), the measured
 /// completion (its prompt, images, and output cap), the sampling temperature,
 /// the per-cell MLX ceiling override, whether the worker runs with performance
@@ -106,7 +106,7 @@ const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
 pub(crate) struct ThroughputJourney {
     pub(crate) journey_kind: ThroughputJourneyKind,
     /// Internal experiment selector passed to the worker, never a user setting.
-    pub(crate) decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    pub(crate) decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     pub(crate) warmup_input_prompt: String,
     pub(crate) warmup_images: Vec<ChatImageInput>,
     pub(crate) warmup_output_tokens: u16,
@@ -144,7 +144,7 @@ impl ThroughputJourney {
     ) -> Self {
         Self {
             journey_kind,
-            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+            decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             warmup_input_prompt,
             warmup_images,
             warmup_output_tokens,
@@ -260,7 +260,7 @@ pub(crate) async fn run_throughput_journey(
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: journey.journey_kind,
-        decode_expert_cache_policy: measurement.decode_expert_cache_policy,
+        decode_astro_expert_cache_policy: measurement.decode_astro_expert_cache_policy,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: recorded_git_commit(),
@@ -321,7 +321,7 @@ fn measured_completion_measurement(
     let mut measurement = match read_measured_completion(
         &logging_directory.join("performance.jsonl"),
         model_id,
-        journey.decode_expert_cache_policy,
+        journey.decode_astro_expert_cache_policy,
         measured_completion_ordinal_in_worker,
     ) {
         Some(measurement) => measurement,
@@ -329,8 +329,11 @@ fn measured_completion_measurement(
         None => panic!("the measured completion should produce a performance sample"),
     };
     if journey.attribution_enabled {
-        measurement.decode_cache_diagnostic_evidence =
-            read_decode_cache_diagnostic_evidence(logging_directory, MEASURED_REQUEST_ID);
+        measurement.decode_astro_expert_cache_diagnostic_evidence =
+            read_decode_astro_expert_cache_diagnostic_evidence(
+                logging_directory,
+                MEASURED_REQUEST_ID,
+            );
     }
     measurement
 }
@@ -452,4 +455,76 @@ pub(crate) async fn measure_throughput(
         last_observed_active_request_progress,
         logging_directory,
     }
+}
+
+/// The Romeo and Juliet source token-bounded prompts are cut from, word by word.
+const ROMEO_AND_JULIET_SOURCE: &str =
+    include_str!("../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
+
+/// The model id discovery derives for the snapshot: the leaf of the decoded
+/// `models--org--repo` Hugging Face hub cache entry the snapshot lives under.
+pub(crate) fn discovered_model_id(pack_directory: &std::path::Path) -> String {
+    let huggingface_hub_cache_entry_name = pack_directory
+        .ancestors()
+        .find_map(|ancestor| {
+            ancestor
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| name.starts_with("models--"))
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "model_directory must point inside a Hugging Face hub cache entry \
+                 (models--org--repo/snapshots/<revision>)"
+            )
+        });
+    huggingface_hub_cache_entry_name
+        .trim_start_matches("models--")
+        .rsplit("--")
+        .next()
+        .expect("a Hugging Face hub cache entry name always has at least one segment")
+        .to_owned()
+}
+
+/// Cuts the Romeo and Juliet source at the fewest words whose prompt encodes
+/// to at least `minimum_token_count` tokens under the tokenizer in
+/// `model_directory`, so a measured prompt clears its token floor by at most
+/// a word.
+pub(crate) fn romeo_and_juliet_prompt_of_at_least(
+    model_directory: &std::path::Path,
+    instruction: &str,
+    minimum_token_count: usize,
+) -> String {
+    let tokenizer = tokenizers::Tokenizer::from_file(model_directory.join("tokenizer.json"))
+        .expect("the pack tokenizer should load");
+    let render = |word_count: usize| {
+        let excerpt = ROMEO_AND_JULIET_SOURCE
+            .split_whitespace()
+            .take(word_count)
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!("{instruction}\n\n{excerpt}")
+    };
+    let encoded_length = |word_count: usize| {
+        tokenizer
+            .encode(render(word_count).as_str(), false)
+            .expect("the prompt should encode")
+            .get_ids()
+            .len()
+    };
+    let total_word_count = ROMEO_AND_JULIET_SOURCE.split_whitespace().count();
+    assert!(
+        encoded_length(total_word_count) >= minimum_token_count,
+        "the Romeo and Juliet source must encode to at least {minimum_token_count} tokens"
+    );
+    let (mut low, mut high) = (1_usize, total_word_count);
+    while low < high {
+        let middle = low + (high - low) / 2;
+        if encoded_length(middle) >= minimum_token_count {
+            high = middle;
+        } else {
+            low = middle + 1;
+        }
+    }
+    render(low)
 }

@@ -13,8 +13,8 @@ use crate::{
     RuntimeModelPolicy,
 };
 use astronomical_config::{
-    ChatModelCapabilities, ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities,
-    PromptCacheConfig,
+    AstroSsdPromptCacheConfig, ChatModelCapabilities, ImageGenerationCapabilities, LogLevel,
+    LoggingConfig, ModelCapabilities,
 };
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
@@ -402,34 +402,34 @@ fn should_restart_worker_when_empty_configured_model_root_changes() {
 }
 
 #[test]
-fn should_classify_prompt_cache_capacity_change_as_worker_restart() {
+fn should_classify_astro_ssd_prompt_cache_capacity_change_as_worker_restart() {
     let mut current = sample_resolved_config();
-    current.prompt_cache_config =
-        PromptCacheConfig::new(PathBuf::from("/tmp/prompt-cache"), 1_000_000_000);
+    current.astro_ssd_prompt_cache_config =
+        AstroSsdPromptCacheConfig::new(PathBuf::from("/tmp/astro-ssd-prompt-cache"), 1_000_000_000);
     let mut candidate = sample_resolved_config();
-    candidate.prompt_cache_config =
-        PromptCacheConfig::new(PathBuf::from("/tmp/prompt-cache"), 2_000_000_000);
+    candidate.astro_ssd_prompt_cache_config =
+        AstroSsdPromptCacheConfig::new(PathBuf::from("/tmp/astro-ssd-prompt-cache"), 2_000_000_000);
 
     let decision = ConfigReloadDiff::compare(&current, &candidate);
 
     assert!(
-        matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. } if reloaded_fields.contains(&"prompt_cache".to_owned())),
-        "a prompt-cache capacity change must restart the worker, got {decision:?}"
+        matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. } if reloaded_fields.contains(&"ssd_prompt_cache".to_owned())),
+        "an astro-ssd-prompt-cache capacity change must restart the worker, got {decision:?}"
     );
 }
 
 #[test]
-fn should_restart_worker_when_persistent_prompt_cache_flag_changes() {
+fn should_restart_worker_when_astro_ssd_prompt_cache_flag_changes() {
     let current = sample_resolved_config();
     let mut candidate = sample_resolved_config();
-    candidate.persistent_prompt_cache_enabled = false;
+    candidate.astro_ssd_prompt_cache_enabled = false;
 
     let decision = ConfigReloadDiff::compare(&current, &candidate);
 
     assert!(
         matches!(decision, ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
-            if reloaded_fields.contains(&"persistent_prompt_cache_enabled".to_owned())),
-        "changing the persistent prompt-cache flag must restart the worker, got {decision:?}"
+            if reloaded_fields.contains(&"astro_ssd_prompt_cache_enabled".to_owned())),
+        "changing the persistent astro-ssd-prompt-cache flag must restart the worker, got {decision:?}"
     );
 }
 
@@ -448,14 +448,14 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         )])),
         unmatched_model_config_ids: Vec::new(),
         maximum_mlx_memory_bytes: None,
-        persistent_prompt_cache_enabled: true,
-        configured_persistent_prompt_cache_enabled: None,
+        astro_ssd_prompt_cache_enabled: true,
+        configured_astro_ssd_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
         idle_model_unload_seconds: 0,
-        configured_prompt_cache_maximum_size_bytes: None,
+        configured_astro_ssd_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
-        prompt_cache_config: PromptCacheConfig::new(
-            PathBuf::from("/tmp/prompt-cache"),
+        astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig::new(
+            PathBuf::from("/tmp/astro-ssd-prompt-cache"),
             50_000_000_000,
         ),
         bind_address: "127.0.0.1:6733".to_owned(),
@@ -491,8 +491,8 @@ fn sample_runtime_model_policy() -> RuntimeModelPolicy {
                     full_attention_key_value_growth_tokens: 256,
                     prefill_graph_submission_layer_interval: 0,
                     experimental_ssd_paging_generation_graph_submission_layer_interval: 3,
-                    prompt_cache_block_tokens: None,
-                    prompt_cache_common_prefix_stride_blocks: 4,
+                    ssd_prompt_cache_block_tokens: None,
+                    ssd_prompt_cache_common_prefix_stride_blocks: 4,
                     experimental_decode_stage_attribution_enabled: false,
                     experimental_prefill_stage_attribution_enabled: false,
                     experimental_in_memory_prefix_adoption_enabled: false,

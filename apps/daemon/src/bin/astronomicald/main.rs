@@ -421,6 +421,9 @@ async fn assemble_daemon_services(
         .recover_startup_state()
         .await
         .map_err(DaemonError::RecoverLibraryDownload)?;
+    // After recovery, so a list left from before the restart carries on only
+    // once the recovered download's state is known.
+    library_download_coordinator.start_queue_driver();
     Ok(DaemonServices {
         reloadable_config,
         next_chat_request_id,

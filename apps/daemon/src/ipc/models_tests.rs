@@ -1,7 +1,7 @@
 //! Unit tests for the pure `DownloadStart` decision: every state the daemon's
 //! existing job can be in, for the same model and for a different one.
 
-use super::{DownloadStartAction, busy_refusal_reason, download_start_action};
+use super::{DownloadStartAction, download_start_action, paused_refusal_reason, running_state_of};
 use crate::library::DownloadJobState;
 
 const MODEL: &str = "black-forest-labs/FLUX.2-klein-4B";
@@ -123,16 +123,37 @@ fn should_treat_model_ids_that_differ_only_in_case_as_different_models() {
 }
 
 #[test]
-fn should_point_the_cli_at_the_library_and_not_ask_it_to_wait_on_a_paused_download() {
-    let paused_reason = busy_refusal_reason(OTHER_MODEL, true, MODEL);
-    let running_reason = busy_refusal_reason(OTHER_MODEL, false, MODEL);
+fn should_point_the_cli_at_the_models_page_and_not_ask_it_to_wait_on_a_paused_download() {
+    let paused_reason = paused_refusal_reason(OTHER_MODEL, MODEL);
 
     assert!(paused_reason.contains("is paused; resume or cancel it on Observatory's Models page"));
     assert!(!paused_reason.contains("wait"));
-    assert!(running_reason.contains(
-        "is already active; wait for it to finish, or cancel it on Observatory's Models page"
-    ));
-    for refusal_reason in [paused_reason, running_reason] {
-        assert!(refusal_reason.contains(OTHER_MODEL) && refusal_reason.contains(MODEL));
+    assert!(paused_reason.contains(OTHER_MODEL) && paused_reason.contains(MODEL));
+}
+
+#[test]
+fn should_count_a_paused_job_as_downloading_while_its_task_runs() {
+    assert_eq!(
+        running_state_of(DownloadJobState::Paused, true),
+        DownloadJobState::Downloading
+    );
+}
+
+#[test]
+fn should_keep_a_paused_job_paused_when_no_task_runs() {
+    assert_eq!(
+        running_state_of(DownloadJobState::Paused, false),
+        DownloadJobState::Paused
+    );
+}
+
+#[test]
+fn should_leave_every_other_state_as_saved_whether_or_not_a_task_runs() {
+    for saved_state in EVERY_STATE
+        .into_iter()
+        .filter(|saved_state| *saved_state != DownloadJobState::Paused)
+    {
+        assert_eq!(running_state_of(saved_state, true), saved_state);
+        assert_eq!(running_state_of(saved_state, false), saved_state);
     }
 }

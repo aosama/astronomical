@@ -1,7 +1,7 @@
 name: 'Assert pinned Xcode toolchain'
 description: 'Resolves the pinned Xcode version to an installed Xcode on the macOS runner image, exports DEVELOPER_DIR for every later step of the calling job, and fails loudly with the installed inventory when the image no longer ships the pin.'
 
-# One definition for every macOS job: the native-build and SwiftPM cache
+# One definition for every macOS job: the native-build and SwiftPM `github_actions_cache`
 # identities hash toolchain outputs, so every job that compiles against the
 # SDK must resolve the pin identically, which per-job copies of this script
 # cannot guarantee once one copy is edited. The caller must check out the

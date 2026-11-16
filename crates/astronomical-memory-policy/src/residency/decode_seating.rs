@@ -10,7 +10,7 @@ use super::{
     CurrentExpertLayerResidency, ExpertLayerState, ExpertResidencyPlan, RetainedExpertPageClass,
 };
 
-/// Layers the plan keeps whole that the cache does not hold whole yet.
+/// Layers the plan keeps whole that the `astro_expert_cache` does not hold whole yet.
 ///
 /// Empty means the reply may proceed without a seating pass.
 #[must_use]

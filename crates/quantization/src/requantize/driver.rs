@@ -70,7 +70,7 @@ impl ShardFlush<MlxArray> for MlxShardFlush<'_> {
         drop(evaluated_arrays);
         drop(named_arrays);
         drop(tensors);
-        self.runtime.clear_allocator_cache()?;
+        self.runtime.clear_mlx_buffer_cache()?;
         Ok(write_outcome.written_byte_count())
     }
 }
@@ -80,7 +80,7 @@ impl ShardFlush<MlxArray> for MlxShardFlush<'_> {
 /// source, assemble fused halves and expert stacks, encode with
 /// [`quantize_best`] or pass through at bfloat16 (integer tensors stay
 /// as-is), and hand the result to the shard writer. Between source shards
-/// the allocator cache is drained.
+/// the MLX buffer cache is drained.
 ///
 /// Peak memory is one source tensor plus the encoder's float32 working
 /// copy, independent of how many tensors the source holds.
@@ -355,7 +355,7 @@ impl RequantizeWalk<'_> {
             .add(tensor_key, tensor, tensor_bytes, &mut self.flush)
     }
 
-    /// Closes the previous source shard and drains the allocator cache when
+    /// Closes the previous source shard and drains the MLX buffer cache when
     /// the plan moves to a new one.
     fn enter_shard(&mut self, shard_file_name: &str) -> Result<(), QuantizationError> {
         if self.current_shard_file_name.as_deref() == Some(shard_file_name) {
@@ -363,7 +363,7 @@ impl RequantizeWalk<'_> {
         }
         self.shard_maps.retain_only(shard_file_name);
         self.current_shard_file_name = Some(shard_file_name.to_owned());
-        self.runtime.clear_allocator_cache()?;
+        self.runtime.clear_mlx_buffer_cache()?;
         Ok(())
     }
 

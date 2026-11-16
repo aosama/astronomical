@@ -11,7 +11,7 @@ const NATIVE_BUILD_PARALLELISM_MODULE: &str =
 
 /// Collects the literal file and directory paths the build script watches
 /// through rerun-if-changed inside emit_native_source_rerun_contracts.
-/// The dynamic dependency cache directory is environment-dependent and
+/// The dynamic `astro_native_build_cache` directory is environment-dependent and
 /// intentionally excluded.
 fn watched_paths_from_rerun_contracts() -> Vec<String> {
     let contracts_section_start = NATIVE_BUILD_SCRIPT

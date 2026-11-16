@@ -1,4 +1,4 @@
-//! Finds experts whose bytes are not in the file cache and plans disjoint
+//! Finds experts whose bytes are not in the macOS file cache and plans disjoint
 //! routed pages of them, so every measured read reaches the SSD.
 
 use std::collections::HashMap;
@@ -12,8 +12,8 @@ use astronomical_model_serving::{
 };
 
 use super::atlas_conversion::AtlasTestFile;
+use super::macos_file_cache_bypassing_io::{any_vm_page_resident, open_bypassing_macos_file_cache};
 use super::progress_report::ProgressReporter;
-use super::uncached_file_io::{any_vm_page_resident, open_uncached};
 
 pub(super) struct PlannedPage {
     /// Position in `AtlasTestFile::layer_indexes`, not a model layer index.
@@ -32,10 +32,10 @@ impl ResidencyChecker {
     fn file(&mut self, path: &PathBuf) -> &File {
         self.open_files_by_path
             .entry(path.clone())
-            .or_insert_with(|| open_uncached(path))
+            .or_insert_with(|| open_bypassing_macos_file_cache(path))
     }
 
-    pub(super) fn stock_page_is_cached(
+    pub(super) fn stock_page_is_in_macos_file_cache(
         &mut self,
         page_manifest: &QuantizedExpertPageManifest,
     ) -> bool {
@@ -54,7 +54,7 @@ impl ResidencyChecker {
         false
     }
 
-    pub(super) fn atlas_page_is_cached(
+    pub(super) fn atlas_page_is_in_macos_file_cache(
         &mut self,
         atlas: &AtlasTestFile,
         atlas_layer_position: usize,
@@ -71,7 +71,7 @@ impl ResidencyChecker {
     }
 }
 
-/// For every model layer, the experts whose stock bytes are entirely uncached.
+/// For every model layer, the experts whose stock bytes are entirely absent from the macOS file cache.
 pub(super) fn cold_stock_expert_ids_by_layer(
     layer_plans: &[QuantizedExpertLayerPlan],
     expert_count: usize,
@@ -86,7 +86,7 @@ pub(super) fn cold_stock_expert_ids_by_layer(
             let single_expert_manifest =
                 build_quantized_expert_page_manifest_from_plan(layer_plan, &[expert_id])
                     .expect("a one-expert manifest builds");
-            if !residency_checker.stock_page_is_cached(&single_expert_manifest) {
+            if !residency_checker.stock_page_is_in_macos_file_cache(&single_expert_manifest) {
                 cold_expert_ids.push(expert_id);
             }
         }

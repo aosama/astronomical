@@ -26,10 +26,10 @@ use crate::{
     worker::generation::preparation::handle_generation_preparation_started,
     worker::health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
-        publish_expert_memory_mode, publish_expert_streaming_stats, publish_health,
-        publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
-        publish_mlx_memory_limit_rejection, publish_model_load_in_flight,
-        publish_neural_engine_prefill, publish_persistent_prompt_cache_stats,
+        publish_astro_ssd_prompt_cache_stats, publish_expert_memory_mode,
+        publish_expert_streaming_stats, publish_health, publish_latest_mlx_memory_snapshot,
+        publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
+        publish_model_load_in_flight, publish_neural_engine_prefill,
         publish_worker_expert_residency,
     },
     worker::loop_types::{ActiveGeneration, ActiveWorkerRequest},
@@ -88,7 +88,7 @@ pub(super) fn handle_worker_event(
         }
         waited_for_event @ (WorkerEvent::ModelSwapped { .. }
         | WorkerEvent::ModelSwapFailed { .. }
-        | WorkerEvent::PromptCacheCleared { .. }) => {
+        | WorkerEvent::AstroSsdPromptCacheCleared { .. }) => {
             return Err(outside_its_wait_violation(&waited_for_event));
         }
         generation_finalized_event @ WorkerEvent::GenerationFinalized { .. } => {
@@ -118,7 +118,7 @@ pub(super) fn handle_worker_event(
         generation_failed_event @ WorkerEvent::Failed { .. } => {
             apply_generation_failed(generation_failed_event, health_snapshot, active_request)?;
         }
-        observability_event @ (WorkerEvent::PersistentPromptCacheStats { .. }
+        observability_event @ (WorkerEvent::AstroSsdPromptCacheStats { .. }
         | WorkerEvent::ExpertStreamingStats { .. }) => {
             dispatch_observability_worker_event(observability_event, health_snapshot);
         }
@@ -151,15 +151,15 @@ pub(super) fn handle_worker_event(
     Ok(())
 }
 
-/// Publishes prompt-cache and expert-streaming snapshots that ride alongside
+/// Publishes astro SSD prompt cache and expert-streaming snapshots that ride alongside
 /// generation. They are observations, so they stay out of the generation match
 /// and do not change request ownership.
 pub(in crate::worker) fn dispatch_observability_worker_event(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
 ) {
-    if matches!(worker_event, WorkerEvent::PersistentPromptCacheStats { .. }) {
-        publish_persistent_prompt_cache_stats(health_snapshot, worker_event);
+    if matches!(worker_event, WorkerEvent::AstroSsdPromptCacheStats { .. }) {
+        publish_astro_ssd_prompt_cache_stats(health_snapshot, worker_event);
         return;
     }
     if matches!(worker_event, WorkerEvent::ExpertStreamingStats { .. }) {
@@ -551,8 +551,8 @@ fn apply_worker_completed(
         prompt_token_count,
         generated_token_count,
         reasoning_token_count,
-        cached_token_count,
-        persistent_prompt_cache_diagnostics,
+        astro_ssd_prompt_cache_restored_token_count,
+        astro_ssd_prompt_cache_diagnostics,
         reason,
     } = worker_completed_event
     else {
@@ -563,8 +563,8 @@ fn apply_worker_completed(
         prompt_token_count,
         generated_token_count,
         reasoning_token_count,
-        cached_token_count,
-        persistent_prompt_cache_diagnostics,
+        astro_ssd_prompt_cache_restored_token_count,
+        astro_ssd_prompt_cache_diagnostics,
         reason,
         health_snapshot,
         active_request,
@@ -627,11 +627,13 @@ fn dispatch_chat_progress_event(
 }
 
 /// The protocol violation for an event only its own wait loop may receive
-/// (a model swap's or a prompt-cache clear's), arriving outside that wait.
+/// (a model swap's or an Astro SSD prompt-cache clear's), arriving outside
+/// that wait. One arm in `handle_worker_event` keeps that function inside
+/// the 100-line budget.
 fn outside_its_wait_violation(waited_for_event: &WorkerEvent) -> WorkerControlError {
     match waited_for_event {
-        WorkerEvent::PromptCacheCleared { .. } => {
-            outside_cache_clear_wait_violation(waited_for_event)
+        WorkerEvent::AstroSsdPromptCacheCleared { .. } => {
+            outside_astro_ssd_prompt_cache_clear_wait_violation(waited_for_event)
         }
         _ => outside_model_swap_wait_violation(waited_for_event),
     }
@@ -651,13 +653,15 @@ pub(super) fn outside_model_swap_wait_violation(
     protocol_violation(description)
 }
 
-/// The protocol violation for a prompt-cache clear acknowledgement outside
-/// cache-clear wait.
-pub(super) fn outside_cache_clear_wait_violation(
-    prompt_cache_cleared_event: &WorkerEvent,
+/// The protocol violation for an astro SSD prompt cache clear acknowledgement outside
+/// an astro SSD prompt cache clear wait.
+pub(super) fn outside_astro_ssd_prompt_cache_clear_wait_violation(
+    astro_ssd_prompt_cache_cleared_event: &WorkerEvent,
 ) -> WorkerControlError {
-    let _ = prompt_cache_cleared_event;
-    protocol_violation("prompt-cache clear acknowledgement outside cache-clear wait")
+    let _ = astro_ssd_prompt_cache_cleared_event;
+    protocol_violation(
+        "astro-ssd-prompt-cache clear acknowledgement outside astro-ssd-prompt-cache clear wait",
+    )
 }
 
 fn active_chat_request_mut(

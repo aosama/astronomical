@@ -22,7 +22,7 @@ use crate::{PerformanceAttribution, PerformanceCounter};
 pub(crate) struct OptimisticServingHistory {
     /// Whether the token before this one was served without reading any
     /// expert from storage. It starts false: the first token of a model has
-    /// no token before it to vouch for the cache.
+    /// no token before it to vouch for the astro expert cache.
     previous_token_was_served_from_memory: Cell<bool>,
     /// Reply tokens served optimistically since the model loaded, and how
     /// many of them had to be run again.
@@ -54,11 +54,11 @@ impl Qwen3_5Model {
             return Ok(None);
         }
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             missing_route_collector.abandon_optimistic_serving();
             return Ok(None);
         };
-        let table_page = retained_experts
+        let table_page = astro_expert_cache
             .borrow()
             .optimistic_table_page(layer_index, expert_capacity);
         let Some(table_page) = table_page else {
@@ -227,7 +227,7 @@ impl Qwen3_5Model {
                     history
                         .rerun_token_count
                         .set(history.rerun_token_count.get() + 1);
-                    // A warming cache can miss on many tokens of one reply,
+                    // A warming astro expert cache can miss on many tokens of one reply,
                     // so this stays out of the default log.
                     tracing::debug!(
                         optimistic_token_count = history.optimistic_token_count.get(),
@@ -264,7 +264,7 @@ impl Qwen3_5Model {
     }
 
     /// A reply token is served optimistically only after a token that read nothing from
-    /// storage: misses come in runs while a cache warms, and serving optimistically
+    /// storage: misses come in runs while an astro expert cache warms, and serving optimistically
     /// through a run would pay for two forwards on every token of it.
     fn should_serve_optimistically(&self, token_count: i32) -> bool {
         if token_count != 1
@@ -284,18 +284,18 @@ impl Qwen3_5Model {
     /// checkpoint for nothing (measured: 57.3 against 58.9 tokens per second
     /// on a 40-layer model held whole).
     fn has_a_partly_held_layer_and_no_empty_one(&self) -> bool {
-        let (Some(retained_experts), Some(expert_pager)) =
-            (self.retained_experts.as_ref(), self.expert_pager.as_ref())
+        let (Some(astro_expert_cache), Some(expert_pager)) =
+            (self.astro_expert_cache.as_ref(), self.expert_pager.as_ref())
         else {
             return false;
         };
-        let retained_experts = retained_experts.borrow();
+        let astro_expert_cache = astro_expert_cache.borrow();
         let mut has_partly_held_layer = false;
         for layer_index in 0..expert_pager.layer_count() {
             let Ok(layer_plan) = expert_pager.layer_plan(layer_index) else {
                 return false;
             };
-            let held_expert_count = retained_experts.occupied_slot_count(layer_index);
+            let held_expert_count = astro_expert_cache.occupied_slot_count(layer_index);
             if held_expert_count == 0 {
                 return false;
             }

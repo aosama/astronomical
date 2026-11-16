@@ -3,8 +3,8 @@
 //! fail-closed macOS authority, bounded timeouts, integration-lane compile
 //! contract, and attributable timing. The verdict fan-in that owns the
 //! merge gate is pinned by the companion `workflow_verdict_contract` test;
-//! cache-ownership structure lives in the companion
-//! `workflow_cache_owner_contract` test; both replace the Ruby-in-shell
+//! `github_actions_cache` ownership structure lives in the companion
+//! `workflow_github_actions_cache_owner_contract` test; both replace the Ruby-in-shell
 //! section of `scripts/ci/tests/test-ci-native-cache-coordination.sh`
 //! (issue #1250). The macOS Xcode pin and its shared resolution action are
 //! pinned by the companion `workflow_xcode_pin_contract` test.
@@ -453,15 +453,14 @@ fn packaging_contracts_run_on_required_checks() {
         required_job(&workflow, "config-contracts"),
         "config-contracts",
     );
-    let contracts_step =
-        find_step_by_name(&config_contracts_steps, "Run workflow and cache contracts");
+    let contracts_step = find_step_by_name(&config_contracts_steps, "Run workflow contracts");
     let contracts_text = run_text_of(contracts_step, "config-contracts");
     for contract_binary in [
         "--test workflow_structural_contract",
         "--test workflow_verdict_contract",
         "--test workflow_lane_split_contract",
-        "--test workflow_cache_owner_contract",
-        "--test workflow_verification_tools_cache_contract",
+        "--test workflow_github_actions_cache_owner_contract",
+        "--test workflow_verification_tools_github_actions_cache_contract",
         "--test workflow_xcode_pin_contract",
         "--test workflow_macos_packaging_contract",
         "--test workflow_xtask_binary_contract",

@@ -121,7 +121,7 @@ fn measure_page_load(
 #[test]
 #[ignore = "streams one routed page from the installed large sparse MoE streaming model and attributes read latency"]
 #[serial]
-fn should_attribute_one_routed_page_load_cold_then_page_cache_warm() {
+fn should_attribute_one_routed_page_load_cold_then_macos_file_cache_warm() {
     let fixture = installed_large_sparse_moe_streaming_fixture();
     let runtime = probe_runtime();
     let experts_per_token = fixture.config.experts_per_token() as usize;
@@ -130,7 +130,7 @@ fn should_attribute_one_routed_page_load_cold_then_page_cache_warm() {
     let cold = measure_page_load(&runtime, &fixture, 0, &routed_expert_ids);
     cold.report("routed-cold");
     cold.assert_within_ceiling("routed-cold");
-    // The immediately repeated load answers whether the macOS page cache, not
+    // The immediately repeated load answers whether the macOS file cache, not
     // the SSD, serves subsequent requests for the same ranges — separating
     // storage bandwidth from code overhead.
     let warm = measure_page_load(&runtime, &fixture, 0, &routed_expert_ids);

@@ -6,8 +6,8 @@
 //! budgets, tool markers, and output translation all come from the shared
 //! text processor.
 
+mod astro_ssd_prompt_cache;
 mod execution;
-mod prompt_cache;
 mod startup;
 
 pub use execution::{PrismHadamardQwen35InferenceExecution, PrismHadamardQwen35PendingStartup};

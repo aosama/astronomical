@@ -40,10 +40,9 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use super::base::Qwen3_5ModelBase;
-use crate::decoder_cache::FullAttentionKeyValueState;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
-    Qwen3_5AffineWeights, Qwen3_5FullAttentionWeights,
-};
+use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5FullAttentionWeights;
+use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::tensor_slicing;
 
@@ -56,7 +55,7 @@ const FULL_ATTENTION_OPERATION: &str = "apply one Qwen3.5 full-attention step";
 ///
 /// `active_keys` and `active_values` are the views over `[0..offset]` returned
 /// by `FullAttentionKeyValueState::update_and_fetch`. They already contain the
-/// newly rotated keys and transposed values appended to the cached prefix.
+/// newly rotated keys and transposed values appended to the astro decoder state cache prefix.
 /// `rotated_queries` are the post-RoPE queries ready for the attention call.
 ///
 /// The MLX attention calls in this function execute the complete formula from
@@ -102,7 +101,7 @@ pub fn qwen3_5_full_attention_step(
             attention_scale,
         )?
     } else {
-        // A generated token supplies one query against every cached key. That
+        // A generated token supplies one query against every astro decoder state cache key. That
         // is O(active_tokens) for this individual decode step. Reusing stored
         // K and V is the important optimization over recomputing the prefix.
         runtime.scaled_dot_product_attention(
@@ -147,6 +146,17 @@ pub fn qwen3_5_full_attention_step(
         Ok(runtime.multiply(&attention_output, &gate_weights)?)
     }
 }
+/// One forward's rotated queries and keys, head-first values, and output gate.
+pub(super) struct RotatedAttentionInputs {
+    /// [batch, query heads, tokens, features]
+    pub(super) rotated_queries: MlxArray,
+    /// [batch, key-value heads, tokens, features]
+    pub(super) rotated_keys: MlxArray,
+    pub(super) transposed_values: MlxArray,
+    /// [batch, tokens, query heads x features]
+    pub(super) output_gate: MlxArray,
+}
+
 #[derive(Clone, Copy)]
 struct FullAttentionShape {
     // Independent examples processed together. Text serving currently uses one
@@ -263,6 +273,53 @@ impl Qwen3_5ModelBase {
         kv_state: &mut FullAttentionKeyValueState,
         token_position_offsets: Option<&MlxArray>,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let RotatedAttentionInputs {
+            rotated_queries,
+            rotated_keys,
+            transposed_values,
+            output_gate,
+        } = self.rotated_attention_inputs(
+            hidden_states,
+            token_count,
+            rope_offset_tokens,
+            full_attention_weights,
+            token_position_offsets,
+        )?;
+        let attention_head_dimension = self.config.head_dimension() as i32;
+
+        // Store only the new K and V tensors in the append-only KV state. The
+        // owner returns views over the complete used prefix, including this
+        // forward's new positions, and grows storage in fixed steps to avoid
+        // repeatedly copying all prior context for each generated token.
+        let (active_keys, active_values) =
+            self.append_rotated_tensors_to_kv_state(kv_state, &rotated_keys, &transposed_values)?;
+
+        // Execute the foundational attention formula against the active prefix,
+        // then project the gated output back into the decoder's hidden-size
+        // space. 1 / sqrt(features_per_head) is the conventional score scale.
+        // The caller adds this result to the residual stream before continuing
+        // with the rest of the layer.
+        self.run_full_attention_computation(
+            &rotated_queries,
+            &active_keys,
+            &active_values,
+            &output_gate,
+            (attention_head_dimension as f32).sqrt().recip(),
+            &full_attention_weights.output_projection,
+        )
+    }
+
+    /// Q, K and V for `token_count` new rows, projected, normalized, moved
+    /// head-first and rotated to their positions, with Qwen's output gate:
+    /// everything attention needs before the KV state is touched.
+    pub(super) fn rotated_attention_inputs(
+        &self,
+        hidden_states: &MlxArray,
+        token_count: i32,
+        rope_offset_tokens: i32,
+        full_attention_weights: &Qwen3_5FullAttentionWeights,
+        token_position_offsets: Option<&MlxArray>,
+    ) -> Result<RotatedAttentionInputs, Qwen3_5ExecutionError> {
         // The model configuration supplies the dimensions for this layer. Qwen
         // has more Q heads than K/V heads, which is grouped-query attention.
         // Every head still uses the same number of features.
@@ -318,7 +375,7 @@ impl Qwen3_5ModelBase {
 
         // RoPE and RMS-norm are applied to the new keys before concatenation,
         // exactly as the model expects. The owner then appends these rotated
-        // tensors to the cached slab and returns views over the full prefix.
+        // tensors to the astro decoder state cache slab and returns views over the full prefix.
         // RMS normalization rescales each Q vector before it participates in a
         // dot product. It is a model-defined preparation step, not softmax.
         let normalized_queries = self.rms_normalize_attention_tensor(
@@ -355,26 +412,12 @@ impl Qwen3_5ModelBase {
             rope_offset_tokens,
         )?;
 
-        // Store only the new K and V tensors in the append-only KV state. The
-        // owner returns views over the complete used prefix, including this
-        // forward's new positions, and grows storage in fixed steps to avoid
-        // repeatedly copying all prior context for each generated token.
-        let (active_keys, active_values) =
-            self.append_rotated_tensors_to_kv_state(kv_state, &rotated_keys, &transposed_values)?;
-
-        // Execute the foundational attention formula against the active prefix,
-        // then project the gated output back into the decoder's hidden-size
-        // space. 1 / sqrt(features_per_head) is the conventional score scale.
-        // The caller adds this result to the residual stream before continuing
-        // with the rest of the layer.
-        self.run_full_attention_computation(
-            &rotated_queries,
-            &active_keys,
-            &active_values,
-            &output_gate,
-            (attention_head_dimension as f32).sqrt().recip(),
-            &full_attention_weights.output_projection,
-        )
+        Ok(RotatedAttentionInputs {
+            rotated_queries,
+            rotated_keys,
+            transposed_values,
+            output_gate,
+        })
     }
 
     /// Appends this step's rotated keys and transposed values to the append-only
@@ -411,7 +454,7 @@ impl Qwen3_5ModelBase {
         active_values: &MlxArray,
         output_gate: &MlxArray,
         score_scale: f32,
-        output_projection_weights: &Qwen3_5AffineWeights,
+        output_projection_weights: &Qwen3_5DenseProjection,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let gated_output = qwen3_5_full_attention_step(
             &self.runtime,
@@ -515,7 +558,7 @@ impl Qwen3_5ModelBase {
     fn prepare_query_vectors_and_output_gate(
         &self,
         hidden_states: &MlxArray,
-        query_projection_weight: &Qwen3_5AffineWeights,
+        query_projection_weight: &Qwen3_5DenseProjection,
         token_count: i32,
         query_head_count: i32,
         attention_head_dimension: i32,
@@ -574,7 +617,7 @@ impl Qwen3_5ModelBase {
     fn project_key_value_tensors(
         &self,
         hidden_states: &MlxArray,
-        projection_weights: &Qwen3_5AffineWeights,
+        projection_weights: &Qwen3_5DenseProjection,
         token_count: i32,
         key_value_head_count: i32,
         attention_head_dimension: i32,

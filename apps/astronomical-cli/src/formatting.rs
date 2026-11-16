@@ -87,3 +87,15 @@ fn render_remaining_time(remaining_ms: u64) -> String {
 #[cfg(test)]
 #[path = "formatting_tests.rs"]
 mod tests;
+
+/// "2nd", "3rd", "11th": a place in the download line as people say it.
+pub(crate) fn ordinal_place(place: usize) -> String {
+    let suffix = match (place % 10, place % 100) {
+        (_, 11..=13) => "th",
+        (1, _) => "st",
+        (2, _) => "nd",
+        (3, _) => "rd",
+        _ => "th",
+    };
+    format!("{place}{suffix}")
+}

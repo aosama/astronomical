@@ -10,7 +10,7 @@ fn should_remove_path_like_text_at_any_depth_and_keep_everything_else() {
         "cls_token": "[CLS]",
         "model_max_length": 8192,
         "nested": {
-            "cache_dir": "~/fictional-cache",
+            "cache_dir": "~/fictional-hub-folder",
             "kept": "plain text",
             "windows": "C:\\fictional\\models"
         },

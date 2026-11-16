@@ -1,7 +1,7 @@
-//! Unit tests for speculative session admission and draft-target pairing.
+//! Unit tests for speculative session admission.
 
 use super::speculation_session_admission::{
-    SpeculationSessionRequestProperties, VerificationTokenChoice, draft_pairs_with_target,
+    SpeculationSessionRequestProperties, VerificationTokenChoice, drafting_survives_prompt_restore,
     should_admit_speculation_for_session, verification_token_choice_for_strategy,
 };
 
@@ -100,78 +100,17 @@ fn should_map_request_strategies_onto_verification_token_choices() {
 }
 
 #[test]
-fn should_pair_the_shipped_draft_with_its_target_geometry() {
-    assert!(draft_pairs_with_target(
-        PAIRED_DRAFT.0,
-        &PAIRED_TAPS,
-        PAIRED_DRAFT.1,
-        PAIRED_DRAFT.2,
-        PAIRED_TARGET.0,
-        PAIRED_TARGET.1,
-        PAIRED_TARGET.2,
-    ));
+fn should_keep_drafting_when_prefill_still_computes_a_prompt_suffix() {
+    assert!(drafting_survives_prompt_restore(true, 4_096, 4_500));
+    assert!(drafting_survives_prompt_restore(true, 0, 1));
 }
 
 #[test]
-fn should_reject_a_draft_distilled_for_a_different_layer_count() {
-    assert!(!draft_pairs_with_target(
-        PAIRED_DRAFT.0,
-        &PAIRED_TAPS,
-        PAIRED_DRAFT.1,
-        PAIRED_DRAFT.2,
-        48,
-        PAIRED_TARGET.1,
-        PAIRED_TARGET.2,
-    ));
+fn should_stop_drafting_when_the_whole_prompt_was_restored() {
+    assert!(!drafting_survives_prompt_restore(true, 4_096, 4_096));
 }
 
 #[test]
-fn should_reject_a_draft_with_a_mismatched_shared_vocabulary() {
-    assert!(!draft_pairs_with_target(
-        PAIRED_DRAFT.0,
-        &PAIRED_TAPS,
-        PAIRED_DRAFT.1 - 1,
-        PAIRED_DRAFT.2,
-        PAIRED_TARGET.0,
-        PAIRED_TARGET.1,
-        PAIRED_TARGET.2,
-    ));
-}
-
-#[test]
-fn should_reject_a_conditioning_width_built_for_another_hidden_size() {
-    assert!(!draft_pairs_with_target(
-        PAIRED_DRAFT.0,
-        &PAIRED_TAPS,
-        PAIRED_DRAFT.1,
-        PAIRED_DRAFT.2 + 2048,
-        PAIRED_TARGET.0,
-        PAIRED_TARGET.1,
-        PAIRED_TARGET.2,
-    ));
-}
-
-#[test]
-fn should_reject_unsorted_or_out_of_range_taps() {
-    let mut unsorted_taps = PAIRED_TAPS;
-    unsorted_taps[0] = 6;
-    assert!(!draft_pairs_with_target(
-        PAIRED_DRAFT.0,
-        &unsorted_taps,
-        PAIRED_DRAFT.1,
-        PAIRED_DRAFT.2,
-        PAIRED_TARGET.0,
-        PAIRED_TARGET.1,
-        PAIRED_TARGET.2,
-    ));
-    let out_of_range_taps = [1, 6, 11, 16, 22, 27, 32, 40];
-    assert!(!draft_pairs_with_target(
-        PAIRED_DRAFT.0,
-        &out_of_range_taps,
-        PAIRED_DRAFT.1,
-        PAIRED_DRAFT.2,
-        PAIRED_TARGET.0,
-        PAIRED_TARGET.1,
-        PAIRED_TARGET.2,
-    ));
+fn should_not_start_drafting_for_a_session_that_was_never_admitted() {
+    assert!(!drafting_survives_prompt_restore(false, 0, 4_096));
 }

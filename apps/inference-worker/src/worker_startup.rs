@@ -7,7 +7,7 @@
 //! memory-ceiling sampling (`gpu_memory`), rolling diagnostics (`logging`), and
 //! the Metal wired-residency claim (`wired_claim`).
 
-use astronomical_config::PromptCacheConfig;
+use astronomical_config::AstroSsdPromptCacheConfig;
 use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
@@ -80,10 +80,10 @@ where
     let derived_worker_configuration =
         worker_startup_derived_configuration(&worker_startup_configuration);
     let WorkerStartupDerivedConfiguration {
-        prompt_cache_config,
+        astro_ssd_prompt_cache_config,
         performance_attribution_enabled,
         performance_attribution_log_path,
-        persistent_prompt_cache_enabled,
+        astro_ssd_prompt_cache_enabled,
         worker_runtime_feature_configuration,
     } = derived_worker_configuration;
     let configured_maximum_mlx_memory_bytes =
@@ -98,14 +98,14 @@ where
         claimed_wired_residency_budget_bytes,
     } = effective_mlx_memory_ceiling;
     tracing::info!(
-        global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
+        global_astro_ssd_prompt_cache_maximum_size_bytes = ?astro_ssd_prompt_cache_config.global_astro_ssd_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
-        decode_expert_cache_policy = ?worker_startup_configuration.decode_expert_cache_policy,
+        decode_astro_expert_cache_policy = ?worker_startup_configuration.decode_astro_expert_cache_policy,
         diagnostic_qwen3_5_engine_override = ?worker_startup_configuration.diagnostic_qwen3_5_engine_override,
         machine_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
-        persistent_prompt_cache_enabled,
+        astro_ssd_prompt_cache_enabled,
         configuration_generation = %worker_startup_configuration.configuration_generation,
         "starting idle inference worker"
     );
@@ -119,11 +119,11 @@ where
     let model_factory = ModelFamilyFactory::new(
         effective_mlx_memory_ceiling_bytes,
         effective_mlx_memory_ceiling_bytes,
-        prompt_cache_config,
+        astro_ssd_prompt_cache_config,
         performance_attribution_enabled,
-        worker_startup_configuration.decode_expert_cache_policy,
+        worker_startup_configuration.decode_astro_expert_cache_policy,
         performance_attribution_log_path,
-        persistent_prompt_cache_enabled,
+        astro_ssd_prompt_cache_enabled,
     )
     .with_neural_engine_program_directory(
         worker_startup_configuration
@@ -151,47 +151,47 @@ where
 
 /// The startup values derived once from the daemon's InitializeWorker command
 /// and reused by the diagnostics log, the model factory, and the worker
-/// acknowledgement: the prompt-cache configuration, attribution settings, the
-/// persistent prompt-cache decision, and the runtime feature configuration the
+/// acknowledgement: the astro SSD prompt cache configuration, attribution settings, the
+/// persistent astro SSD prompt cache decision, and the runtime feature configuration the
 /// worker later echoes back when it acknowledges a configuration generation.
 struct WorkerStartupDerivedConfiguration {
-    prompt_cache_config: PromptCacheConfig,
+    astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: std::path::PathBuf,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
     worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration,
 }
 
 fn worker_startup_derived_configuration(
     worker_startup_configuration: &WorkerStartupConfiguration,
 ) -> WorkerStartupDerivedConfiguration {
-    let prompt_cache_config = PromptCacheConfig::new(
+    let astro_ssd_prompt_cache_config = AstroSsdPromptCacheConfig::new(
         worker_startup_configuration
-            .global_prompt_cache_root_directory
+            .global_astro_ssd_prompt_cache_root_directory
             .clone(),
-        worker_startup_configuration.global_prompt_cache_maximum_size_bytes,
+        worker_startup_configuration.global_astro_ssd_prompt_cache_maximum_size_bytes,
     );
     let performance_attribution_enabled =
         worker_startup_configuration.performance_attribution_enabled;
     let performance_attribution_log_path = worker_startup_configuration
         .logging_directory
         .join(PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME);
-    let persistent_prompt_cache_enabled =
-        worker_startup_configuration.persistent_prompt_cache_enabled;
+    let astro_ssd_prompt_cache_enabled =
+        worker_startup_configuration.astro_ssd_prompt_cache_enabled;
     let worker_runtime_feature_configuration = WorkerRuntimeFeatureConfiguration {
         configuration_generation: worker_startup_configuration
             .configuration_generation
             .clone(),
-        persistent_prompt_cache_enabled,
-        prompt_cache_maximum_size_bytes: worker_startup_configuration
-            .global_prompt_cache_maximum_size_bytes,
+        astro_ssd_prompt_cache_enabled,
+        astro_ssd_prompt_cache_maximum_size_bytes: worker_startup_configuration
+            .global_astro_ssd_prompt_cache_maximum_size_bytes,
         loaded_model: None,
     };
     WorkerStartupDerivedConfiguration {
-        prompt_cache_config,
+        astro_ssd_prompt_cache_config,
         performance_attribution_enabled,
         performance_attribution_log_path,
-        persistent_prompt_cache_enabled,
+        astro_ssd_prompt_cache_enabled,
         worker_runtime_feature_configuration,
     }
 }

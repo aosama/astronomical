@@ -159,7 +159,7 @@ fn should_render_json_report_for_scripts() {
         "configuration_file_path",
         "generation",
         "daemon_bind_address",
-        "persistent_prompt_cache_enabled",
+        "astro_ssd_prompt_cache_enabled",
         "maximum_mlx_memory_bytes",
         "performance_attribution_enabled",
     ] {

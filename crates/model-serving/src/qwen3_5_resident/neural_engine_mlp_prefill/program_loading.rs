@@ -14,13 +14,16 @@ use astronomical_neural_engine::documents::contraction_split::contraction_part_w
 use astronomical_neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp};
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::program_shape::ProgramShape;
+
+use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxDtype;
 
 use super::{NeuralEngineMlpPrefill, neural_engine_tokens_for_chunk};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
-    Qwen3_5AffineWeights, Qwen3_5DecoderFeedForwardWeights,
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderFeedForwardWeights;
+use crate::qwen3_5_resident::astro_neural_engine_program_cache::{
+    AstroNeuralEngineProgramSetCache, kept_program_path,
 };
 use crate::qwen3_5_resident::host_description::current_host_environment;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
@@ -30,7 +33,6 @@ use crate::qwen3_5_resident::neural_engine_chunk_comparison::{
 use crate::qwen3_5_resident::neural_engine_output_gate_prefill::{
     OUTPUT_GATE_PROGRAM_FORMAT_VERSION, least_output_gate_bytes,
 };
-use crate::qwen3_5_resident::neural_engine_program_cache::{ProgramSetCache, kept_program_path};
 use crate::qwen3_5_resident::neural_engine_program_memory_record::{
     record_program_memory_bytes, recorded_program_memory_bytes,
 };
@@ -77,7 +79,7 @@ pub(crate) struct MlpProgramPlan {
     weight_bytes_per_program: u64,
     surface_bytes_per_program: u64,
     decoder_layer_count: usize,
-    program_cache: Option<ProgramSetCache>,
+    astro_neural_engine_program_cache: Option<AstroNeuralEngineProgramSetCache>,
     speed_record: Option<ProgramSpeedRecord>,
 }
 
@@ -88,7 +90,7 @@ pub(crate) struct MlpProgramPlan {
 pub(crate) fn plan_neural_engine_mlp_programs(
     model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
-    program_cache_directory: Option<&Path>,
+    astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
 ) -> Result<MlpProgramPlan, NeuralEnginePrefillStatus> {
     if !chunking.experimental_neural_engine_prefill_enabled {
@@ -133,12 +135,12 @@ pub(crate) fn plan_neural_engine_mlp_programs(
     ) {
         return Err(refused_status);
     }
-    let program_cache = open_program_cache(
-        program_cache_directory,
+    let astro_neural_engine_program_cache = open_astro_neural_engine_program_cache(
+        astro_neural_engine_program_cache_directory,
         neural_engine_token_count,
         chunk_token_count,
     );
-    let speed_record = program_speed_record_of(program_cache.as_ref());
+    let speed_record = program_speed_record_of(astro_neural_engine_program_cache.as_ref());
     if let Some(ChunkComparisonVerdict::NotWorthwhile { gain }) = speed_record
         .as_ref()
         .and_then(ProgramSpeedRecord::recorded_verdict)
@@ -154,7 +156,7 @@ pub(crate) fn plan_neural_engine_mlp_programs(
         weight_bytes_per_program: mlp_weight_bytes_per_layer(model),
         surface_bytes_per_program,
         decoder_layer_count: layer_weights.len(),
-        program_cache,
+        astro_neural_engine_program_cache,
         speed_record,
     })
 }
@@ -175,7 +177,7 @@ fn memory_requirements_of(
 ) -> NeuralEnginePrefillMemoryRequirements {
     let context_state_bytes_per_token = model
         .base
-        .decoder_cache_layout()
+        .astro_decoder_state_cache_layout()
         .sequence_state_payload_byte_count_per_token()
         .unwrap_or(0);
     NeuralEnginePrefillMemoryRequirements {
@@ -253,18 +255,21 @@ impl MlpProgramPlan {
     /// What this set wired on an earlier load here, when it can be trusted.
     pub(crate) fn recorded_wired_bytes(&self, weight_bytes: u64) -> Option<u64> {
         recorded_program_memory_bytes(
-            self.program_cache.as_ref()?.set_directory(),
+            self.astro_neural_engine_program_cache
+                .as_ref()?
+                .set_directory(),
             &measured_for(current_host_environment()?),
             weight_bytes,
         )
     }
 
     pub(crate) fn record_wired_bytes(&self, weight_bytes: u64, wired_bytes: u64) {
-        if let (Some(program_cache), Some(host_environment)) =
-            (self.program_cache.as_ref(), current_host_environment())
-        {
+        if let (Some(astro_neural_engine_program_cache), Some(host_environment)) = (
+            self.astro_neural_engine_program_cache.as_ref(),
+            current_host_environment(),
+        ) {
             record_program_memory_bytes(
-                program_cache.set_directory(),
+                astro_neural_engine_program_cache.set_directory(),
                 &measured_for(host_environment),
                 weight_bytes,
                 wired_bytes,
@@ -282,7 +287,7 @@ impl MlpProgramPlan {
                 },
                 shape: self.shape,
                 kept_program_path: kept_program_path(
-                    self.program_cache.as_ref(),
+                    self.astro_neural_engine_program_cache.as_ref(),
                     decoder_layer_index,
                 ),
             });
@@ -327,8 +332,8 @@ impl MlpProgramPlan {
         measured_program_bytes: u64,
         surface_bytes: u64,
     ) -> NeuralEnginePrefillStatus {
-        if let Some(program_cache) = &self.program_cache {
-            program_cache.record_finished_set(layer_programs.len() as u64);
+        if let Some(astro_neural_engine_program_cache) = &self.astro_neural_engine_program_cache {
+            astro_neural_engine_program_cache.record_finished_set(layer_programs.len() as u64);
         }
         let layer_program_count = u32::try_from(layer_programs.len()).unwrap_or(u32::MAX);
         let recorded_verdict = self
@@ -364,22 +369,24 @@ impl MlpProgramPlan {
     }
 }
 
-fn program_speed_record_of(program_cache: Option<&ProgramSetCache>) -> Option<ProgramSpeedRecord> {
+fn program_speed_record_of(
+    astro_neural_engine_program_cache: Option<&AstroNeuralEngineProgramSetCache>,
+) -> Option<ProgramSpeedRecord> {
     Some(ProgramSpeedRecord::new(
-        program_cache?.set_directory(),
+        astro_neural_engine_program_cache?.set_directory(),
         measured_for(current_host_environment()?),
     ))
 }
 
 /// The set is named by everything a compiled program's contents depend on besides
 /// the model revision, which names the folder above it.
-fn open_program_cache(
-    program_cache_directory: Option<&Path>,
+fn open_astro_neural_engine_program_cache(
+    astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count: u32,
     chunk_token_count: u32,
-) -> Option<ProgramSetCache> {
-    ProgramSetCache::open(
-        program_cache_directory?,
+) -> Option<AstroNeuralEngineProgramSetCache> {
+    AstroNeuralEngineProgramSetCache::open(
+        astro_neural_engine_program_cache_directory?,
         PROGRAM_FAMILY,
         &format!("v{PROGRAM_FORMAT_VERSION}-{neural_engine_token_count}-of-{chunk_token_count}"),
     )
@@ -426,28 +433,12 @@ fn mlp_weight_bytes_per_layer(model: &Qwen3_5ResidentModel) -> u64 {
 /// 0.3 percent of the weight RMS.
 pub(crate) fn weight_as_fp16_bits(
     runtime: &MlxRuntime,
-    affine_weights: &Qwen3_5AffineWeights,
+    projection: &Qwen3_5DenseProjection,
 ) -> Result<Vec<u16>, &'static str> {
-    let dequantized = match affine_weights {
-        Qwen3_5AffineWeights::NativeBfloat16 { weight } => runtime.copy(weight),
-        Qwen3_5AffineWeights::Quantized {
-            packed_weight,
-            quantization_scales,
-            quantization_biases,
-            quantization_group_size,
-            quantization_bits,
-        } => runtime.dequantize_affine(
-            packed_weight,
-            quantization_scales,
-            quantization_biases,
-            *quantization_group_size,
-            *quantization_bits,
-        ),
-        Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
-            return Err(WEIGHT_READ_FAILURE);
-        }
-    };
-    let dequantized = dequantized.map_err(read_failure)?;
+    let dequantized = projection
+        .dequantized(runtime)
+        .ok_or(WEIGHT_READ_FAILURE)?
+        .map_err(runtime_read_failure)?;
     let half_precision = runtime
         .astype(&dequantized, MlxDtype::Float16)
         .map_err(read_failure)?;
@@ -455,6 +446,12 @@ pub(crate) fn weight_as_fp16_bits(
         .evaluate_arrays(&[&half_precision])
         .map_err(read_failure)?;
     half_precision.to_vec_f16_bits().map_err(read_failure)
+}
+
+fn runtime_read_failure(
+    _runtime_error: astronomical_runtime_integration::MlxRuntimeError,
+) -> &'static str {
+    WEIGHT_READ_FAILURE
 }
 
 fn read_failure(_mlx_error: mlx_bridge::MlxCError) -> &'static str {

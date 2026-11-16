@@ -112,3 +112,24 @@ fn should_show_the_measured_speed_once_it_is_known() {
         Some("engaged, 32 layer programs, measured 1.18x the GPU alone")
     );
 }
+
+#[test]
+fn should_name_places_in_the_download_line_as_people_say_them() {
+    let spoken_places: Vec<String> = [1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111]
+        .into_iter()
+        .map(super::ordinal_place)
+        .collect();
+
+    assert_eq!(
+        spoken_places,
+        [
+            "1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "101st",
+            "111th"
+        ]
+    );
+}
+
+#[test]
+fn should_name_place_zero_without_a_special_suffix() {
+    assert_eq!(super::ordinal_place(0), "0th");
+}

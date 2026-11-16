@@ -59,8 +59,8 @@ pub(in crate::worker) fn handle_worker_prefill_progress(
             completed_prefill_chunk_tokens,
             mlx_active_memory_bytes: mlx_memory_snapshot
                 .map(|snapshot| snapshot.active_memory_bytes),
-            mlx_allocator_cache_memory_bytes: mlx_memory_snapshot
-                .map(|snapshot| snapshot.allocator_cache_memory_bytes),
+            mlx_buffer_cache_bytes: mlx_memory_snapshot
+                .map(|snapshot| snapshot.mlx_buffer_cache_bytes),
             mlx_peak_memory_bytes: mlx_memory_snapshot.map(|snapshot| snapshot.peak_memory_bytes),
         },
     )?;

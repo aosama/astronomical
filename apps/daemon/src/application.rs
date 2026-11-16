@@ -259,17 +259,17 @@ async fn readiness_check(State(application_state): State<ApplicationState>) -> R
     (StatusCode::SERVICE_UNAVAILABLE, readiness_body).into_response()
 }
 
-async fn cache_stats(State(application_state): State<ApplicationState>) -> Response {
+async fn astro_ssd_prompt_cache_stats(
+    State(application_state): State<ApplicationState>,
+) -> Response {
     let worker_health_snapshot = application_state
         .generation_executor
         .worker_health_snapshot();
-    let persistent_prompt_cache_summary = crate::PersistentPromptCacheSummary::from_worker_event(
-        worker_health_snapshot
-            .persistent_prompt_cache_stats
-            .as_ref(),
+    let astro_ssd_prompt_cache_summary = crate::AstroSsdPromptCacheSummary::from_worker_event(
+        worker_health_snapshot.astro_ssd_prompt_cache_stats.as_ref(),
     );
-    let pending_cache_clear = worker_health_snapshot
-        .pending_prompt_cache_clear
+    let pending_astro_ssd_prompt_cache_clear = worker_health_snapshot
+        .pending_astro_ssd_prompt_cache_clear
         .as_ref()
         .map(|pending_clear| {
             serde_json::json!({
@@ -277,22 +277,22 @@ async fn cache_stats(State(application_state): State<ApplicationState>) -> Respo
             })
         });
     Json(serde_json::json!({
-        "persistent_prompt_cache_hits": persistent_prompt_cache_summary.hits,
-        "persistent_prompt_cache_misses": persistent_prompt_cache_summary.misses,
-        "persistent_prompt_cache_tokens_saved": persistent_prompt_cache_summary.tokens_saved,
-        "persistent_prompt_cache_block_token_count": persistent_prompt_cache_summary.block_token_count,
-        "persistent_prompt_cache_sequence_state_block_count": persistent_prompt_cache_summary.sequence_state_block_count,
-        "persistent_prompt_cache_boundary_state_snapshot_count": persistent_prompt_cache_summary.boundary_state_snapshot_count,
-        "persistent_prompt_cache_visual_embedding_count": persistent_prompt_cache_summary.visual_embedding_count,
-        "persistent_prompt_cache_total_size_bytes": persistent_prompt_cache_summary.total_size_bytes,
-        "persistent_prompt_cache_visual_embedding_total_size_bytes": persistent_prompt_cache_summary.visual_embedding_total_size_bytes,
-        "persistent_prompt_cache_maximum_size_bytes": persistent_prompt_cache_summary.maximum_size_bytes,
-        "persistent_prompt_cache_hit_rate": persistent_prompt_cache_summary.hit_rate(),
-        "persistent_prompt_cache_visual_embedding_hits": persistent_prompt_cache_summary.visual_embedding_hits,
-        "persistent_prompt_cache_visual_embedding_misses": persistent_prompt_cache_summary.visual_embedding_misses,
-        "persistent_prompt_cache_visual_embedding_rows_loaded": persistent_prompt_cache_summary.visual_embedding_rows_loaded,
-        "persistent_prompt_cache_partial_tail_hits": persistent_prompt_cache_summary.partial_tail_hits,
-        "pending_cache_clear": pending_cache_clear,
+        "astro_ssd_prompt_cache_hits": astro_ssd_prompt_cache_summary.hits,
+        "astro_ssd_prompt_cache_misses": astro_ssd_prompt_cache_summary.misses,
+        "astro_ssd_prompt_cache_tokens_saved": astro_ssd_prompt_cache_summary.tokens_saved,
+        "astro_ssd_prompt_cache_block_token_count": astro_ssd_prompt_cache_summary.block_token_count,
+        "astro_ssd_prompt_cache_sequence_state_block_count": astro_ssd_prompt_cache_summary.sequence_state_block_count,
+        "astro_ssd_prompt_cache_boundary_state_snapshot_count": astro_ssd_prompt_cache_summary.boundary_state_snapshot_count,
+        "astro_ssd_prompt_cache_visual_embedding_count": astro_ssd_prompt_cache_summary.visual_embedding_count,
+        "astro_ssd_prompt_cache_total_size_bytes": astro_ssd_prompt_cache_summary.total_size_bytes,
+        "astro_ssd_prompt_cache_visual_embedding_total_size_bytes": astro_ssd_prompt_cache_summary.visual_embedding_total_size_bytes,
+        "astro_ssd_prompt_cache_maximum_size_bytes": astro_ssd_prompt_cache_summary.maximum_size_bytes,
+        "astro_ssd_prompt_cache_hit_rate": astro_ssd_prompt_cache_summary.hit_rate(),
+        "astro_ssd_prompt_cache_visual_embedding_hits": astro_ssd_prompt_cache_summary.visual_embedding_hits,
+        "astro_ssd_prompt_cache_visual_embedding_misses": astro_ssd_prompt_cache_summary.visual_embedding_misses,
+        "astro_ssd_prompt_cache_visual_embedding_rows_loaded": astro_ssd_prompt_cache_summary.visual_embedding_rows_loaded,
+        "astro_ssd_prompt_cache_partial_tail_hits": astro_ssd_prompt_cache_summary.partial_tail_hits,
+        "pending_astro_ssd_prompt_cache_clear": pending_astro_ssd_prompt_cache_clear,
     }))
     .into_response()
 }
@@ -375,7 +375,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     let supports_config_reload = application_state.reloadable_config.is_some()
         && application_state.runtime_config_resolver.is_some();
     let supports_shutdown = application_state.shutdown_controller.is_some();
-    let supports_cache_clear = application_state.worker_control.is_some();
+    let supports_astro_ssd_prompt_cache_clear = application_state.worker_control.is_some();
     let supports_live_mlx_memory_control =
         supports_config_reload && application_state.worker_control.is_some();
     let router = core_api_routes();
@@ -383,7 +383,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     let router = capability_conditional_routes(
         router,
         supports_config_reload,
-        supports_cache_clear,
+        supports_astro_ssd_prompt_cache_clear,
         supports_live_mlx_memory_control,
         supports_shutdown,
     );
@@ -393,7 +393,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
 }
 
 /// The always-present routes: console/catalog/telemetry merges plus the
-/// health, readiness, status, cache-stats, model listing, and the three
+/// health, readiness, status, astro SSD prompt cache stats, model listing, and the three
 /// body-budgeted text endpoints (OpenAI chat completions and responses, and
 /// Anthropic messages).
 fn core_api_routes() -> Router<ApplicationState> {
@@ -408,7 +408,10 @@ fn core_api_routes() -> Router<ApplicationState> {
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))
         .route("/v1/status", get(status_check))
-        .route("/v1/cache/stats", get(cache_stats))
+        .route(
+            "/v1/ssd-prompt-cache/stats",
+            get(astro_ssd_prompt_cache_stats),
+        )
         .route("/v1/experts/stats", get(crate::rest::experts::expert_stats))
         .route("/v1/models", get(list_models))
         .route("/v1/models/{*model}", get(retrieve_model))
@@ -473,13 +476,13 @@ fn openai_generation_routes(router: Router<ApplicationState>) -> Router<Applicat
 
 /// Adds each control-plane route only when the daemon was built with the
 /// capability it exercises: config reload needs the reloadable config and
-/// resolver, cache clear needs a worker, the live MLX memory ceiling needs
+/// resolver, an astro SSD prompt cache clear needs a worker, the live MLX memory ceiling needs
 /// both reload and worker control, and shutdown needs the shutdown
 /// controller.
 fn capability_conditional_routes(
     router: Router<ApplicationState>,
     supports_config_reload: bool,
-    supports_cache_clear: bool,
+    supports_astro_ssd_prompt_cache_clear: bool,
     supports_live_mlx_memory_control: bool,
     supports_shutdown: bool,
 ) -> Router<ApplicationState> {
@@ -503,8 +506,11 @@ fn capability_conditional_routes(
     } else {
         router
     };
-    let router = if supports_cache_clear {
-        router.route("/v1/cache", delete(crate::rest::cache_clear::clear_cache))
+    let router = if supports_astro_ssd_prompt_cache_clear {
+        router.route(
+            "/v1/ssd-prompt-cache",
+            delete(crate::rest::astro_ssd_prompt_cache_clear::clear_cache),
+        )
     } else {
         router
     };

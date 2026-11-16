@@ -18,7 +18,7 @@ pub fn configuration_document(model_directory: &Path) -> Value {
             "model_directories": [model_directory],
             "maximum_mlx_memory_gb": 37
         },
-        "prompt_cache": {"enabled": false},
+        "ssd_prompt_cache": {"enabled": false},
         "diagnostics": {"performance_attribution_enabled": true, "log_level": "info"},
         "chunking": {
             "fixed_prompt_processing_chunk_size_tokens": 2048,

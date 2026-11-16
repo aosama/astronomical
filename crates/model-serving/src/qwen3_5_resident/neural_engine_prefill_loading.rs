@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
 use astronomical_neural_engine::core_ml::CoreMlProgram;
 
+use super::astro_neural_engine_program_cache::CoreMlProgramBuilder;
 use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_idle_watch::IdleWatch;
 use super::neural_engine_mlp_prefill::{
@@ -20,7 +21,6 @@ use super::neural_engine_mlp_prefill::{
 use super::neural_engine_output_gate_prefill::{
     OutputGateProgramPlan, plan_neural_engine_output_gate_programs,
 };
-use super::neural_engine_program_cache::CoreMlProgramBuilder;
 use super::neural_engine_program_measurement::{
     FinishedMeasurement, MeasurementAction, MeasurementOutcome, ProgramMeasurement,
     ProgramsToMeasure, SystemWiredMemory, action_after_measurement,
@@ -100,7 +100,7 @@ pub(crate) struct NeuralEnginePrefillPreparation {
 pub(crate) fn begin_neural_engine_prefill_preparation(
     model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
-    program_cache_directory: Option<&Path>,
+    astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
 ) -> (
     NeuralEnginePrefillStatus,
@@ -109,14 +109,17 @@ pub(crate) fn begin_neural_engine_prefill_preparation(
     let mlp_plan = match plan_neural_engine_mlp_programs(
         model,
         chunking,
-        program_cache_directory,
+        astro_neural_engine_program_cache_directory,
         neural_engine_token_count_override,
     ) {
         Ok(mlp_plan) => mlp_plan,
         Err(settled_status) => return (settled_status, None),
     };
-    let output_gate_plan =
-        plan_output_gates_or_stay_on_the_gpu(model, chunking, program_cache_directory);
+    let output_gate_plan = plan_output_gates_or_stay_on_the_gpu(
+        model,
+        chunking,
+        astro_neural_engine_program_cache_directory,
+    );
     let mut planned_programs = mlp_plan.planned_programs();
     if let Some(output_gate_plan) = &output_gate_plan {
         planned_programs.extend(output_gate_plan.planned_programs());
@@ -148,9 +151,13 @@ pub(crate) fn begin_neural_engine_prefill_preparation(
 fn plan_output_gates_or_stay_on_the_gpu(
     model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
-    program_cache_directory: Option<&Path>,
+    astro_neural_engine_program_cache_directory: Option<&Path>,
 ) -> Option<OutputGateProgramPlan> {
-    match plan_neural_engine_output_gate_programs(model, chunking, program_cache_directory) {
+    match plan_neural_engine_output_gate_programs(
+        model,
+        chunking,
+        astro_neural_engine_program_cache_directory,
+    ) {
         Ok(output_gate_plan) => Some(output_gate_plan),
         Err(reason) => {
             warn_output_gates_stay_on_the_gpu(reason);
@@ -406,7 +413,7 @@ impl NeuralEnginePrefillPreparation {
         if has_written_package
             && let Err(release_error) = model
                 .runtime()
-                .synchronize_gpu_stream_and_clear_allocator_cache()
+                .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
         {
             tracing::warn!(error = %release_error, "could not release Neural Engine weight copies");
         }
@@ -559,13 +566,13 @@ fn estimated_remaining_ms(
 pub(crate) fn prepare_neural_engine_prefill(
     model: &mut Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
-    program_cache_directory: Option<&Path>,
+    astro_neural_engine_program_cache_directory: Option<&Path>,
     neural_engine_token_count_override: Option<u32>,
 ) -> NeuralEnginePrefillStatus {
     let (settled_status, preparation) = begin_neural_engine_prefill_preparation(
         model,
         chunking,
-        program_cache_directory,
+        astro_neural_engine_program_cache_directory,
         neural_engine_token_count_override,
     );
     let Some(mut preparation) = preparation else {

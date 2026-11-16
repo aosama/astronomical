@@ -1,4 +1,4 @@
-//! Layer-major span plans: the chunk path's spans with the prompt cache on
+//! Layer-major span plans: the chunk path's spans with the astro SSD prompt cache on
 //! and off, a prompt one span long, a block-aligned prompt, and a cursor
 //! that does not start at zero.
 
@@ -23,7 +23,7 @@ fn span(
 }
 
 #[test]
-fn should_run_the_cached_chunks_and_leave_the_tail_token_alone() {
+fn should_run_the_astro_ssd_prompt_cache_block_chunks_and_leave_the_tail_token_alone() {
     // The engine ran this 4,350-token prompt as 1,792 + 2,557 + 1 tokens.
     let span_plan = layer_major_span_plan(0, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS))
         .expect("two spans should make a layer-major plan");
@@ -39,7 +39,7 @@ fn should_run_the_cached_chunks_and_leave_the_tail_token_alone() {
 }
 
 #[test]
-fn should_run_configured_chunks_to_the_end_without_the_cache() {
+fn should_run_configured_chunks_to_the_end_without_the_astro_ssd_prompt_cache() {
     let span_plan = layer_major_span_plan(0, 10_000, CHUNK_TOKENS, None)
         .expect("three spans should make a layer-major plan");
 
@@ -134,7 +134,7 @@ fn should_plan_the_one_span_left_from_a_block_cursor_up_to_the_tail_capture() {
 }
 
 #[test]
-fn should_treat_a_zero_block_as_no_prompt_cache() {
+fn should_treat_a_zero_block_as_no_astro_ssd_prompt_cache() {
     assert_eq!(
         layer_major_span_plan(0, 10_000, CHUNK_TOKENS, Some(0)),
         layer_major_span_plan(0, 10_000, CHUNK_TOKENS, None)

@@ -182,7 +182,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
 
     // --- Measured assertion 8: the reply phase keeps more experts than the
     // prompt phase could (issue #512). Reading a prompt needs one layer's
-    // working memory for a whole chunk and writing a reply needs it for one
+    // MLX working buffers for a whole chunk and writing a reply needs them for one
     // token, so the handoff has room to seat more. The handoff used to seat
     // against a conservative no-evidence fallback and grow as decode
     // forwards were measured, and this assertion watched that growth. Since

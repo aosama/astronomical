@@ -22,7 +22,7 @@ pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str =
 /// The one runner image every macOS job uses. Xcode 27, the major version
 /// that builds releases, ships only on this image; a job left on another
 /// label would compile with a different Xcode, so its results would say
-/// nothing about the app that ships and its caches would never be shared.
+/// nothing about the app that ships and its `github_actions_cache` entries would never be shared.
 pub(crate) const MACOS_RUNNER_LABEL: &str = "xcode-27";
 
 pub(crate) fn repository_root() -> PathBuf {

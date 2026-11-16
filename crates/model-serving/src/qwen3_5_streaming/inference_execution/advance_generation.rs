@@ -342,7 +342,7 @@ impl Qwen3_5EngineState {
             "starting first decode forward after prompt processing"
         );
         *first_decode_forward_started_at = Some(Instant::now());
-        model.begin_decode_expert_cache_forward();
+        model.begin_decode_astro_expert_cache_forward();
         let decode_forward_started_at = active_request
             .performance_attribution
             .is_enabled()
@@ -358,7 +358,7 @@ impl Qwen3_5EngineState {
                 .performance_attribution
                 .record_decode_token_forward_elapsed(decode_forward_started_at.elapsed());
         }
-        model.end_decode_expert_cache_forward();
+        model.end_decode_astro_expert_cache_forward();
         let final_prompt_logits = final_prompt_logits_result.map_err(InferenceEngineError::from)?;
         active_request.advance_position(1)?;
         let first_generated_token =
@@ -382,7 +382,7 @@ impl Qwen3_5EngineState {
 
     /// Records the decode-phase memory ceiling utilization. Hot-expert
     /// warming (issue #372) stays inside the capacity the memory governor
-    /// gives the cache, which already leaves a reply step its working
+    /// gives the astro expert cache, which already leaves a reply step its working
     /// memory.
     fn warm_hot_experts_and_record_utilization(
         &self,
@@ -418,8 +418,10 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let (memory_served_routes_before, storage_read_routes_before) =
+            model.session_route_assignment_counts();
         let next_generated_token = {
-            model.begin_decode_expert_cache_forward();
+            model.begin_decode_astro_expert_cache_forward();
             let decode_forward_started_at = active_request
                 .performance_attribution
                 .is_enabled()
@@ -436,7 +438,7 @@ impl Qwen3_5EngineState {
                     .performance_attribution
                     .record_decode_token_forward_elapsed(decode_forward_started_at.elapsed());
             }
-            model.end_decode_expert_cache_forward();
+            model.end_decode_astro_expert_cache_forward();
             let next_logits = next_logits_result.map_err(InferenceEngineError::from)?;
             active_request.advance_position(1)?;
             let next_generated_token = active_request.build_generated_token(model, &next_logits)?;
@@ -455,6 +457,26 @@ impl Qwen3_5EngineState {
             memory_baseline.active_memory_bytes,
             &mut active_request.performance_attribution,
         )?;
+        let (memory_served_routes_after, storage_read_routes_after) =
+            model.session_route_assignment_counts();
+        active_request
+            .engine_extension
+            .reply_expert_route_record
+            .record_token(
+                memory_served_routes_after.saturating_sub(memory_served_routes_before),
+                storage_read_routes_after.saturating_sub(storage_read_routes_before),
+            );
+        active_request
+            .engine_extension
+            .mlx_buffer_cache_reply_record
+            .record_token(
+                u64::try_from(
+                    completed_forward_memory
+                        .mlx_memory_snapshot
+                        .mlx_buffer_cache_bytes(),
+                )
+                .unwrap_or(u64::MAX),
+            );
         Ok((next_generated_token, completed_forward_memory))
     }
 }

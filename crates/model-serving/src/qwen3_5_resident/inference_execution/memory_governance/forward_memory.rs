@@ -3,10 +3,10 @@
 //! This engine keeps every weight in memory, so the memory governor has
 //! nothing to give back on its behalf. The engine asks it one question
 //! before each forward: do the weights, the stored state after the forward,
-//! the forward's working memory and the margin fit the limit? A forward
+//! the forward's MLX working buffers and the margin fit the limit? A forward
 //! that does not fit is never made smaller; the request moves to the
 //! streaming engine. After the forward the engine reports what MLX
-//! measured, which is where the working-memory figure comes from.
+//! measured, which is where the MLX working-buffer figure comes from.
 
 use astronomical_memory_policy::ledger::{
     HeldMemory, LedgerAccounts, LedgerPhase, MeasuredStep, MemoryGovernor,
@@ -123,7 +123,7 @@ impl Qwen3_5EngineState {
     /// stored state as it will be after the forward.
     ///
     /// `temporary_workspace_bytes` is room the forward needs only while it
-    /// runs and whose size is known exactly, such as prompt-cache blocks
+    /// runs and whose size is known exactly, such as astro SSD prompt cache blocks
     /// being captured. It counts against the forward's peak, not against
     /// what stays afterwards.
     pub(in crate::qwen3_5_resident) fn admit_forward(
@@ -140,7 +140,7 @@ impl Qwen3_5EngineState {
             .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let stored_state_growth_bytes = request_decoder_state
             .projected_persistent_state_growth_bytes(
-                model.decoder_cache_layout(),
+                model.astro_decoder_state_cache_layout(),
                 forward_shape.token_count,
             )
             .map_err(qwen3_5_runtime_error)?
@@ -259,14 +259,14 @@ impl ForwardFit {
                 shortfall_bytes,
                 prefill_chunk_token_count,
             } => format!(
-                "a prompt chunk of {prefill_chunk_token_count} tokens needs {} bytes of working memory, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
-                self.accounts_after_forward.working_memory_bytes
+                "a prompt chunk of {prefill_chunk_token_count} tokens needs {} bytes of MLX working buffers, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
+                self.accounts_after_forward.mlx_working_buffer_bytes
             ),
             StreamingEngineRequirement::TransientPeakShortfallWithoutPrefillChunk {
                 shortfall_bytes,
             } => format!(
-                "one reply step needs {} bytes of working memory, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
-                self.accounts_after_forward.working_memory_bytes
+                "one reply step needs {} bytes of MLX working buffers, {shortfall_bytes} bytes more than the {limit_bytes} byte limit leaves",
+                self.accounts_after_forward.mlx_working_buffer_bytes
             ),
             // The causes below are raised elsewhere: before any forward for
             // the request's context, and after a forward that failed.

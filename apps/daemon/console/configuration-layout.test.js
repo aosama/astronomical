@@ -104,15 +104,15 @@ test("should_build_a_path_below_the_model_entry_or_leave_it_alone_for_all_models
 });
 
 test("should_inherit_the_all_models_value_when_the_file_sets_one", () => {
-    const descriptor = { path: ["chunking", "prompt_cache_common_prefix_stride_blocks"], defaultValue: 4 };
-    const document = { ...baseDocument, chunking: { prompt_cache_common_prefix_stride_blocks: 8 } };
+    const descriptor = { path: ["chunking", "ssd_prompt_cache_common_prefix_stride_blocks"], defaultValue: 4 };
+    const document = { ...baseDocument, chunking: { ssd_prompt_cache_common_prefix_stride_blocks: 8 } };
     assert.deepEqual(call("configurationBaselineValue", bundledSchema, document, "some-model", descriptor),
         { value: 8, isInherited: true });
 });
 
 test("should_fall_back_to_the_schema_default_for_all_models_and_for_a_model_without_a_default_layer", () => {
-    const descriptor = { path: ["chunking", "prompt_cache_common_prefix_stride_blocks"], defaultValue: 4 };
-    const document = { ...baseDocument, chunking: { prompt_cache_common_prefix_stride_blocks: 8 } };
+    const descriptor = { path: ["chunking", "ssd_prompt_cache_common_prefix_stride_blocks"], defaultValue: 4 };
+    const document = { ...baseDocument, chunking: { ssd_prompt_cache_common_prefix_stride_blocks: 8 } };
     assert.deepEqual(call("configurationBaselineValue", bundledSchema, document, null, descriptor), { value: 4, isInherited: false });
     const temperature = { path: ["generation_defaults", "temperature"], defaultValue: undefined };
     assert.equal(call("configurationBaselineValue", bundledSchema, document, "some-model", temperature).isInherited, false);

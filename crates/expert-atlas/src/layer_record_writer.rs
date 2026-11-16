@@ -14,8 +14,11 @@ use std::path::Path;
 use sha2::{Digest, Sha256};
 
 use crate::atlas_manifest::{AtlasDeclaredFile, AtlasExpertLayer};
+use crate::macos_file_cache_bypassing_io::{
+    AlignedSpan, PageAlignedBuffer, create_bypassing_macos_file_cache,
+    open_bypassing_macos_file_cache,
+};
 use crate::source_checkpoint::{SourceExpertLayer, SourceTensor};
-use crate::uncached_file_io::{AlignedSpan, PageAlignedBuffer, create_uncached, open_uncached};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LayerRecordWriteError {
@@ -48,7 +51,8 @@ impl SourceShardFiles {
         shard_file_name: &str,
     ) -> std::io::Result<&File> {
         if !self.open_files_by_name.contains_key(shard_file_name) {
-            let shard_file = open_uncached(&model_directory.join(shard_file_name))?;
+            let shard_file =
+                open_bypassing_macos_file_cache(&model_directory.join(shard_file_name))?;
             self.open_files_by_name
                 .insert(shard_file_name.to_owned(), shard_file);
         }
@@ -145,7 +149,7 @@ fn write_and_read_back(
         path: path.clone(),
         source,
     };
-    let layer_file = create_uncached(layer_path).map_err(io_error)?;
+    let layer_file = create_bypassing_macos_file_cache(layer_path).map_err(io_error)?;
     layer_file.write_all_at(layer_bytes, 0).map_err(io_error)?;
     layer_file.sync_all().map_err(io_error)?;
     let written_bytes =

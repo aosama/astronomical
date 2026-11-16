@@ -4,7 +4,7 @@
 //! the engine does (a request starts, the reply begins, a forward was
 //! measured, a forward hit the limit, the limit moved, the request ended)
 //! and applies the capacity each answer carries. `apply_kept_weight_capacity`
-//! is the only place the expert cache is told how much it may keep.
+//! is the only place the astro expert cache is told how much it may keep.
 
 use astronomical_memory_policy::ledger::{
     HeldMemory, KeptWeightCapacity, LedgerPhase, LedgerReading, MeasuredStep, MemoryGovernor,
@@ -39,11 +39,11 @@ pub(crate) struct GovernedMemory {
     /// the retried forward is measured or the request ends.
     pub(super) pending_redo_attempt:
         std::cell::RefCell<Option<astronomical_memory_policy::ledger::RedoAttempt>>,
-    /// Room leased for publishing prompt-cache blocks, until the next
+    /// Room leased for publishing astro SSD prompt cache blocks, until the next
     /// forward completes.
     pub(super) publication_workspace_lease:
         std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
-    /// Room leased for blocks read back from the prompt cache, until they
+    /// Room leased for blocks read back from the `astro_ssd_prompt_cache`, until they
     /// have joined the request's stored state.
     pub(super) restore_workspace_lease:
         std::cell::Cell<Option<astronomical_memory_policy::ledger::LeaseId>>,
@@ -75,7 +75,7 @@ impl Qwen3_5Model {
     }
 
     /// Opens the governor once loading has measured what it can, and gives
-    /// the cache its first capacity.
+    /// the astro expert cache its first capacity.
     pub(crate) fn open_memory_governor(&self) {
         let limit_bytes = self.memory_facts().mlx_active_memory_ceiling_bytes();
         let Ok(mut memory_governor) = MemoryGovernor::new(limit_bytes, self.memory_ledger_shape())
@@ -83,16 +83,17 @@ impl Qwen3_5Model {
             tracing::warn!("the memory governor could not open under a zero limit");
             return;
         };
-        if let Some(probed_working_memory) = self.probed_prompt_layer_working_memory.get() {
+        if let Some(probed_mlx_working_buffers) = self.probed_prompt_layer_mlx_working_buffers.get()
+        {
             let _ = memory_governor.record_probe(
                 LedgerPhase::ReadingPrompt {
-                    span_token_count: probed_working_memory.span_token_count,
+                    span_token_count: probed_mlx_working_buffers.span_token_count,
                 },
-                probed_working_memory.working_memory_bytes,
+                probed_mlx_working_buffers.mlx_working_buffer_bytes,
             );
             let _ = memory_governor.record_probe(
                 LedgerPhase::WritingReply,
-                probed_working_memory.reply_token_working_memory_bytes,
+                probed_mlx_working_buffers.reply_token_mlx_working_buffer_bytes,
             );
         }
         let idle_capacity = memory_governor.kept_weight_capacity();
@@ -115,9 +116,9 @@ impl Qwen3_5Model {
         if !matches!(memory_governor.phase(), LedgerPhase::Idle) {
             return None;
         }
-        let probed_working_memory = self.probed_prompt_layer_working_memory.get()?;
+        let probed_mlx_working_buffers = self.probed_prompt_layer_mlx_working_buffers.get()?;
         let capacity_while_reading = memory_governor.capacity_while(LedgerPhase::ReadingPrompt {
-            span_token_count: probed_working_memory.span_token_count,
+            span_token_count: probed_mlx_working_buffers.span_token_count,
         });
         Some(
             memory_governor
@@ -127,17 +128,17 @@ impl Qwen3_5Model {
         )
     }
 
-    /// The one place the expert cache is told how much it may keep. The
-    /// cache gives back, in its own order, whatever no longer fits.
+    /// The one place the astro expert cache is told how much it may keep. The
+    /// astro expert cache gives back, in its own order, whatever no longer fits.
     ///
     /// A dense model's kept layers are its kept weights: trailing layers
     /// are given back until what is kept fits.
     pub(super) fn apply_kept_weight_capacity(&self, capacity: KeptWeightCapacity) {
         self.give_back_kept_dense_layers_beyond(capacity);
-        let Some(retained_experts) = self.retained_experts.as_ref() else {
+        let Some(astro_expert_cache) = self.astro_expert_cache.as_ref() else {
             return;
         };
-        let released_expert_bytes = retained_experts
+        let released_expert_bytes = astro_expert_cache
             .borrow_mut()
             .set_capacity(capacity.bytes())
             .released_payload_bytes();
@@ -145,17 +146,17 @@ impl Qwen3_5Model {
             tracing::info!(
                 kept_weight_capacity_bytes = capacity.bytes(),
                 released_expert_bytes,
-                "the expert cache gave back what its new capacity no longer holds"
+                "the astro expert cache gave back what its new capacity no longer holds"
             );
         }
     }
 
-    /// The capacity the expert cache has now.
+    /// The capacity the astro expert cache has now.
     pub(crate) fn kept_expert_capacity_bytes(&self) -> u64 {
-        self.retained_experts
+        self.astro_expert_cache
             .as_ref()
-            .map_or(0, |retained_experts| {
-                retained_experts.borrow().capacity_bytes()
+            .map_or(0, |astro_expert_cache| {
+                astro_expert_cache.borrow().capacity_bytes()
             })
     }
 
@@ -187,7 +188,7 @@ impl Qwen3_5Model {
     }
 
     /// The prompt is read and the reply begins: one token per step needs far
-    /// less working memory, so the capacity rises.
+    /// fewer MLX working buffers, so the capacity rises.
     pub(crate) fn govern_reply_start(&self) {
         let capacity = {
             let mut memory_governor = self.governed_memory.governor.borrow_mut();
@@ -205,7 +206,7 @@ impl Qwen3_5Model {
     pub(crate) fn begin_prompt_layer_measurement(&self) {
         let governed_memory = &self.governed_memory;
         governed_memory.prompt_layer_boundary_active_bytes.set(None);
-        if self.retained_experts.is_none() || governed_memory.governor.borrow().is_none() {
+        if self.astro_expert_cache.is_none() || governed_memory.governor.borrow().is_none() {
             return;
         }
         let Ok(memory_snapshot) = self.runtime.memory_snapshot() else {
@@ -396,7 +397,7 @@ impl Qwen3_5Model {
 
     /// A forward hit the limit. Leases room for another attempt, at least
     /// `known_shortfall_bytes` when the failure said how far over it went,
-    /// and has the cache give back just the experts that room displaces.
+    /// and has the astro expert cache give back just the experts that room displaces.
     /// `false` once the attempts are spent: the limit cannot hold the
     /// forward.
     pub(crate) fn govern_redo_after_memory_failure(
@@ -531,19 +532,19 @@ impl Qwen3_5Model {
         Some(budget_snapshot)
     }
 
-    /// The working memory one prompt step needs, as far as it has been
+    /// The MLX working buffers one prompt step needs, as far as it has been
     /// measured: the larger of the probe at load and the largest prompt step
     /// of the latest request. `None` until either exists.
-    pub(crate) fn measured_prompt_working_memory_bytes(&self) -> Option<u64> {
-        let probed_working_memory_bytes = self
-            .probed_prompt_layer_working_memory
+    pub(crate) fn measured_prompt_mlx_working_buffer_bytes(&self) -> Option<u64> {
+        let probed_mlx_working_buffer_bytes = self
+            .probed_prompt_layer_mlx_working_buffers
             .get()
-            .map(|probed_working_memory| probed_working_memory.working_memory_bytes);
+            .map(|probed_mlx_working_buffers| probed_mlx_working_buffers.mlx_working_buffer_bytes);
         let largest_measured_step_bytes = self
             .latest_memory_ledger_reading()
             .map(|ledger_reading| ledger_reading.largest_reading_step_peak_beyond_held_bytes)
             .filter(|largest_step_bytes| *largest_step_bytes > 0);
-        larger_of_what_was_measured(probed_working_memory_bytes, largest_measured_step_bytes)
+        larger_of_what_was_measured(probed_mlx_working_buffer_bytes, largest_measured_step_bytes)
     }
 
     /// Steps that hit the limit and redo attempts made since the model
@@ -637,7 +638,7 @@ fn log_ledger_reading(ledger_phase: LedgerPhase, ledger_reading: &LedgerReading)
         ?ledger_phase,
         limit_bytes = ledger_reading.accounts.limit_bytes,
         context_bytes = ledger_reading.accounts.context_bytes,
-        working_memory_bytes = ledger_reading.accounts.working_memory_bytes,
+        mlx_working_buffer_bytes = ledger_reading.accounts.mlx_working_buffer_bytes,
         stream_slot_bytes = ledger_reading.accounts.stream_slot_bytes,
         margin_bytes = ledger_reading.accounts.margin_bytes,
         kept_weight_capacity_bytes = ledger_reading.accounts.kept_weight_capacity_bytes,

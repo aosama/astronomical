@@ -160,10 +160,10 @@ impl Flux2KleinMlxComponents {
                 .take()
                 .ok_or_else(|| "the validated VAE descriptor is unavailable".to_owned())?;
             performance_attribution.measure_operation(
-                PerformanceOperation::MlxAllocatorCacheCleanup,
+                PerformanceOperation::MlxBufferCacheCleanup,
                 |_| {
                     self.runtime()?
-                        .synchronize_gpu_stream_and_clear_allocator_cache()
+                        .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
                         .map_err(|error| error.to_string())
                 },
             )?;
@@ -216,10 +216,10 @@ impl Flux2KleinMlxComponents {
                 self.latents = None;
                 self.vae_decoder = None;
                 performance_attribution.measure_operation(
-                    PerformanceOperation::MlxAllocatorCacheCleanup,
+                    PerformanceOperation::MlxBufferCacheCleanup,
                     |_| {
                         self.runtime()?
-                            .synchronize_gpu_stream_and_clear_allocator_cache()
+                            .synchronize_gpu_stream_and_clear_mlx_buffer_cache()
                             .map_err(|error| error.to_string())
                     },
                 )?;
@@ -267,7 +267,7 @@ impl Flux2KleinMlxComponents {
             attribution
                 .measure_operation(cleanup_operation, |_| {
                     runtime.synchronize_gpu_stream()?;
-                    runtime.clear_allocator_cache()
+                    runtime.clear_mlx_buffer_cache()
                 })
                 .map_err(|error| error.to_string())?;
             runtime.memory_snapshot().ok()
@@ -275,7 +275,7 @@ impl Flux2KleinMlxComponents {
         self.post_cleanup_memory_telemetry = memory_snapshot.as_ref().map(|snapshot| {
             let mut telemetry = MlxMemoryTelemetry::new(
                 snapshot.active_memory_bytes() as u64,
-                snapshot.allocator_cache_memory_bytes() as u64,
+                snapshot.mlx_buffer_cache_bytes() as u64,
                 snapshot.peak_memory_bytes() as u64,
                 crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
             );
@@ -292,7 +292,7 @@ impl Flux2KleinMlxComponents {
         let final_memory = memory_snapshot.map_or((None, None, None), |snapshot| {
             (
                 Some(snapshot.active_memory_bytes() as u64),
-                Some(snapshot.allocator_cache_memory_bytes() as u64),
+                Some(snapshot.mlx_buffer_cache_bytes() as u64),
                 Some(snapshot.peak_memory_bytes() as u64),
             )
         });

@@ -203,9 +203,10 @@ fn measure_line_coverage(
         .current_dir(repository_root)
         .stdout(Stdio::from(summary_file))
         .stderr(Stdio::inherit());
-    // sccache cache hits were built without coverage instrumentation, so a
-    // hit would silently understate coverage and could fail this gate on a
-    // warm cache: measure with an unwrapped rustc instead.
+    // Objects restored from `sccache` were built without coverage
+    // instrumentation, so a restored object would silently understate
+    // coverage and could fail this gate on a warm `sccache`: measure with an
+    // unwrapped rustc instead.
     coverage_child_command
         .env_remove("RUSTC_WRAPPER")
         .env_remove("CARGO_BUILD_RUSTC_WRAPPER");

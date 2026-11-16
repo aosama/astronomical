@@ -1,6 +1,6 @@
-//! `cargo xtask save-sccache` — decides whether the sccache-trimmed
-//! directory may be uploaded as a new cache generation, and clears stored
-//! copies of the primary key that can never serve within budget. The
+//! `cargo xtask save-sccache` — decides whether the `sccache`-trimmed
+//! directory may be uploaded to the `github_actions_cache` as a new
+//! generation, and clears stored copies of the primary key that can never serve within budget. The
 //! decision policy is pure and unit-tested beside this source; the
 //! directory walk and `gh` calls stay thin edges (issue #1250). Directory
 //! and stored-entry budgets are repository policy, not environment inputs.
@@ -8,9 +8,9 @@
 use std::path::Path;
 use std::process::Command;
 
-/// 600M binary sccache cap = 629,145,600 tracked bytes; the directory trim
+/// 600M binary `sccache` cap = 629,145,600 tracked bytes; the directory trim
 /// and the stored-entry refusal share a decimal 680 MB ceiling so the saved
-/// entry plus cache-archive overhead stays under the prune's family ceiling.
+/// entry plus `github_actions_cache` archive overhead stays under the prune's family ceiling.
 const MAX_DIRECTORY_BYTES: u64 = 680_000_000;
 const MAX_ENTRY_BYTES: u64 = 680_000_000;
 
@@ -25,7 +25,7 @@ pub enum SccacheSaveDecision {
     FreshEntryWithinBudget,
     DirectoryOverBudget,
     ReplaceBlocked,
-    CacheListUnavailable,
+    GithubActionsCacheListUnavailable,
 }
 
 impl SccacheSaveDecision {
@@ -40,7 +40,7 @@ impl SccacheSaveDecision {
             Self::FreshEntryWithinBudget => "fresh-entry-within-budget",
             Self::DirectoryOverBudget => "directory-over-budget",
             Self::ReplaceBlocked => "replace-blocked",
-            Self::CacheListUnavailable => "cache-list-unavailable",
+            Self::GithubActionsCacheListUnavailable => "cache-list-unavailable",
         }
     }
 }
@@ -71,8 +71,8 @@ pub fn save_decision(
     }
 }
 
-/// Apparent-size accounting, not allocated blocks: the GitHub cache entry is
-/// billed by archive bytes, so block-rounding slack would bias the decision.
+/// Apparent-size accounting, not allocated blocks: the `github_actions_cache`
+/// entry is billed by archive bytes, so block-rounding slack would bias the decision.
 pub fn directory_size_bytes(directory_path: &Path) -> u64 {
     let mut total_bytes = 0u64;
     let mut stack = vec![directory_path.to_path_buf()];
@@ -102,15 +102,15 @@ struct StoredEntry {
 }
 
 fn stored_entries_for_primary_key(
-    cache_list_text: &str,
-    primary_cache_key: &str,
+    github_actions_cache_list_text: &str,
+    primary_github_actions_cache_key: &str,
 ) -> Vec<StoredEntry> {
-    cache_list_text
+    github_actions_cache_list_text
         .lines()
         .filter(|line| !line.is_empty())
         .filter_map(|line| {
             let fields: Vec<&str> = line.split('\t').collect();
-            if fields.len() < 5 || fields[1] != primary_cache_key {
+            if fields.len() < 5 || fields[1] != primary_github_actions_cache_key {
                 return None;
             }
             Some(StoredEntry {
@@ -124,7 +124,7 @@ fn stored_entries_for_primary_key(
 
 pub fn run(arguments: &[String]) -> Result<(), String> {
     let started_at = std::time::Instant::now();
-    let [primary_cache_key] = arguments else {
+    let [primary_github_actions_cache_key] = arguments else {
         return Err("usage: cargo xtask save-sccache <primary-cache-key>".to_owned());
     };
     let github_repository = require_environment_value("GITHUB_REPOSITORY")?;
@@ -136,27 +136,30 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     let directory_bytes = directory_size_bytes(Path::new(&sccache_directory));
     eprintln!("[sccache-save] directory_bytes={directory_bytes}");
 
-    let cache_list_text = match gh_output(&[
+    let github_actions_cache_list_text = match gh_output(&[
         "api",
         "--paginate",
         &format!("repos/{github_repository}/actions/caches"),
         "--jq",
         ".actions_caches[] | [.id, .key, .ref, .created_at, .size_in_bytes] | @tsv",
     ]) {
-        Ok(cache_list_text) => cache_list_text,
+        Ok(github_actions_cache_list_text) => github_actions_cache_list_text,
         Err(_) => {
-            // Read-only fork tokens cannot list caches; the save is
+            // Read-only fork tokens cannot list the `github_actions_cache`; the save is
             // default-branch-only anyway, so a degraded listing skips the
             // save instead of failing the job.
             return finish_with_decision(
-                SccacheSaveDecision::CacheListUnavailable,
+                SccacheSaveDecision::GithubActionsCacheListUnavailable,
                 directory_bytes,
                 started_at,
             );
         }
     };
 
-    let stored_entries = stored_entries_for_primary_key(&cache_list_text, primary_cache_key);
+    let stored_entries = stored_entries_for_primary_key(
+        &github_actions_cache_list_text,
+        primary_github_actions_cache_key,
+    );
     eprintln!(
         "[sccache-save] stored_exact_key_entries={}",
         stored_entries.len()

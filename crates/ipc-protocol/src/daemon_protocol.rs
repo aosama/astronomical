@@ -183,7 +183,12 @@ pub enum DaemonResponse {
     /// Terminal frame for an admitted [`DaemonRequest::DownloadStart`].
     DownloadStarted { huggingface_id: String },
     /// Answer to [`DaemonRequest::DownloadStatus`].
-    DownloadStatus { job: Option<DaemonDownloadJob> },
+    DownloadStatus {
+        job: Option<DaemonDownloadJob>,
+        /// Models waiting to download after `job`, oldest request first.
+        #[serde(default)]
+        waiting_huggingface_ids: Vec<String>,
+    },
     /// Terminal frame for an admitted [`DaemonRequest::DefaultModelSet`].
     DefaultModelSet { default_model_id: String },
     /// Terminal refusal when the daemon declines a model-management request.
@@ -203,7 +208,7 @@ pub enum DaemonResponse {
         prompt_token_count: u32,
         generated_token_count: u16,
         reasoning_token_count: u16,
-        cached_token_count: u32,
+        astro_ssd_prompt_cache_restored_token_count: u32,
         reason: ChatGenerationCompletionReason,
     },
     /// Terminal frame for a failed generation.

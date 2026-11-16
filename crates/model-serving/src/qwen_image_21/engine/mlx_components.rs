@@ -47,7 +47,7 @@ pub struct QwenImage21MlxComponents {
     /// user's own limit, or unbounded when they set none. Zero until the
     /// factory reports it, which keeps the load refusing below its floor.
     floor_raise_limit_bytes: u64,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
     minimum_mlx_memory_ceiling_bytes: Option<u64>,
     performance_attribution_enabled: bool,
     performance_attribution_log_path: PathBuf,
@@ -78,7 +78,7 @@ impl QwenImage21MlxComponents {
         model_directory: impl Into<PathBuf>,
         provenance: QwenImage21ArtifactProvenance,
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
+        mlx_buffer_cache_limit_bytes: usize,
         performance_attribution_enabled: bool,
         performance_attribution_log_path: PathBuf,
     ) -> Self {
@@ -87,7 +87,7 @@ impl QwenImage21MlxComponents {
             provenance,
             effective_mlx_memory_ceiling_bytes,
             floor_raise_limit_bytes: 0,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
             minimum_mlx_memory_ceiling_bytes: None,
             performance_attribution_enabled,
             performance_attribution_log_path,
@@ -138,7 +138,7 @@ impl QwenImage21MlxComponents {
         }
         let memory_limits = MlxMemoryLimits::new(
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         )
         .map_err(|error| error.to_string())?;
         self.runtime =
@@ -150,7 +150,7 @@ impl QwenImage21MlxComponents {
         let snapshot = self.runtime.as_ref()?.memory_snapshot().ok()?;
         Some(MlxMemoryTelemetry::new(
             snapshot.active_memory_bytes() as u64,
-            snapshot.allocator_cache_memory_bytes() as u64,
+            snapshot.mlx_buffer_cache_bytes() as u64,
             snapshot.peak_memory_bytes() as u64,
             MlxActiveMemoryBreakdown::default(),
         ))
@@ -208,7 +208,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
                         resident_model_payload_bytes: Some(0),
                         model_shard_count: None,
                         mlx_active_memory_bytes: None,
-                        mlx_allocator_cache_memory_bytes: None,
+                        mlx_buffer_cache_bytes: None,
                         mlx_peak_memory_bytes: None,
                         failure_description: Some(bounded_failure),
                     },
@@ -251,7 +251,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
                 resident_model_payload_bytes: Some(0),
                 model_shard_count,
                 mlx_active_memory_bytes: None,
-                mlx_allocator_cache_memory_bytes: None,
+                mlx_buffer_cache_bytes: None,
                 mlx_peak_memory_bytes: None,
                 failure_description: None,
             })
@@ -372,7 +372,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
             };
             attribution
                 .measure_operation(cleanup_operation, |_| {
-                    runtime.synchronize_gpu_stream_and_clear_allocator_cache()
+                    runtime.synchronize_gpu_stream_and_clear_mlx_buffer_cache()
                 })
                 .map_err(|error| error.to_string())?;
             runtime.memory_snapshot().ok()
@@ -382,7 +382,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
         self.post_cleanup_memory_telemetry = memory_snapshot.as_ref().map(|snapshot| {
             MlxMemoryTelemetry::new(
                 snapshot.active_memory_bytes() as u64,
-                snapshot.allocator_cache_memory_bytes() as u64,
+                snapshot.mlx_buffer_cache_bytes() as u64,
                 snapshot.peak_memory_bytes() as u64,
                 MlxActiveMemoryBreakdown::default(),
             )
@@ -415,7 +415,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
                 memory_snapshot.map_or((None, None, None), |snapshot| {
                     (
                         Some(snapshot.active_memory_bytes() as u64),
-                        Some(snapshot.allocator_cache_memory_bytes() as u64),
+                        Some(snapshot.mlx_buffer_cache_bytes() as u64),
                         Some(snapshot.peak_memory_bytes() as u64),
                     )
                 }),
@@ -462,7 +462,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
             ));
         }
         let memory_limits =
-            MlxMemoryLimits::new(requested_ceiling, self.allocator_cache_memory_limit_bytes)
+            MlxMemoryLimits::new(requested_ceiling, self.mlx_buffer_cache_limit_bytes)
                 .map_err(|error| error.to_string())?;
         if let Some(runtime) = self.runtime.as_mut() {
             runtime
@@ -473,7 +473,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
         self.effective_mlx_memory_ceiling_bytes = requested_ceiling;
         Ok(MlxMemoryLimitAdjustment::new(
             requested_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes as u64,
+            self.mlx_buffer_cache_limit_bytes as u64,
             minimum_mlx_memory_ceiling_bytes,
             ExpertMemoryMode::Resident,
             self.collect_mlx_memory_telemetry(),

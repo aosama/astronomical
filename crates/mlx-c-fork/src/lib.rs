@@ -25,7 +25,7 @@ unsafe extern "C" {
 /// realized buffer.
 ///
 /// MLX retains every input of an array's graph for the array's lifetime, so
-/// a retained cache built from row-writes pins each source buffer — streamed
+/// a retained `astro_expert_cache` table built from row-writes pins each source buffer — streamed
 /// pages and retired tables — in active memory forever. Callers must
 /// evaluate first: detaching before evaluation discards the unrealized graph
 /// and leaves the buffer unwritten.

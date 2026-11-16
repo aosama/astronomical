@@ -10,12 +10,12 @@
 use std::path::PathBuf;
 
 use astronomical_config::{
-    ModelFamily, PromptCacheConfig, classify_model_directory, verify_flux2_klein_model_directory,
-    verify_qwen_image_21_model_directory,
+    AstroSsdPromptCacheConfig, ModelFamily, classify_model_directory,
+    verify_flux2_klein_model_directory, verify_qwen_image_21_model_directory,
 };
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
     WorkerEmbeddingModelConfiguration, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
     WorkerQwenImage21ModelConfiguration,
@@ -45,14 +45,14 @@ use self::qwen3_5_model_startup::Qwen3_5EngineSelection;
 #[doc(hidden)]
 pub struct ModelFamilyFactory {
     effective_mlx_memory_ceiling_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
-    prompt_cache_config: PromptCacheConfig,
-    /// `None` leaves programs uncached, which costs a slower load and nothing else.
+    mlx_buffer_cache_limit_bytes: usize,
+    astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
+    /// `None` keeps programs out of the `astro_neural_engine_program_cache`, which costs a slower load and nothing else.
     neural_engine_program_directory: Option<PathBuf>,
     performance_attribution_enabled: bool,
-    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
     diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     /// The highest ceiling an image engine may plan its load at to reach its
     /// floor (#1902): the user's own limit, or unbounded when they set none.
@@ -97,22 +97,22 @@ impl ModelFamilyFactory {
     #[must_use]
     pub fn new(
         effective_mlx_memory_ceiling_bytes: usize,
-        allocator_cache_memory_limit_bytes: usize,
-        prompt_cache_config: PromptCacheConfig,
+        mlx_buffer_cache_limit_bytes: usize,
+        astro_ssd_prompt_cache_config: AstroSsdPromptCacheConfig,
         performance_attribution_enabled: bool,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
         performance_attribution_log_path: PathBuf,
-        persistent_prompt_cache_enabled: bool,
+        astro_ssd_prompt_cache_enabled: bool,
     ) -> Self {
         Self {
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
-            prompt_cache_config,
+            mlx_buffer_cache_limit_bytes,
+            astro_ssd_prompt_cache_config,
             neural_engine_program_directory: None,
             performance_attribution_enabled,
-            decode_expert_cache_policy,
+            decode_astro_expert_cache_policy,
             performance_attribution_log_path,
-            persistent_prompt_cache_enabled,
+            astro_ssd_prompt_cache_enabled,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             floor_raise_limit_bytes: 0,
         }
@@ -166,7 +166,7 @@ impl ModelFamilyFactory {
             (other_family, other_configuration) => {
                 let memory_grant = speech_engine_creation::SpeechMemoryGrant {
                     effective_mlx_memory_ceiling_bytes: self.effective_mlx_memory_ceiling_bytes,
-                    allocator_cache_memory_limit_bytes: self.allocator_cache_memory_limit_bytes,
+                    mlx_buffer_cache_limit_bytes: self.mlx_buffer_cache_limit_bytes,
                 };
                 speech_engine_creation::unloaded_speech_engine(
                     other_family,
@@ -193,27 +193,27 @@ impl ModelFamilyFactory {
         String,
     > {
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
-        let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
-        let prompt_cache_config = self.prompt_cache_config.clone();
+        let mlx_buffer_cache_limit_bytes = self.mlx_buffer_cache_limit_bytes;
+        let astro_ssd_prompt_cache_config = self.astro_ssd_prompt_cache_config.clone();
         let neural_engine_program_directory = self.neural_engine_program_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
-        let decode_expert_cache_policy = self.decode_expert_cache_policy;
+        let decode_astro_expert_cache_policy = self.decode_astro_expert_cache_policy;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
+        let astro_ssd_prompt_cache_enabled = self.astro_ssd_prompt_cache_enabled;
         tokio::task::spawn_blocking(move || {
             let chunking = model_configuration.chunking.clone();
             qwen3_5_model_startup::initialize_qwen3_5_model(
                 model_directory_path,
                 effective_mlx_memory_ceiling_bytes,
-                allocator_cache_memory_limit_bytes,
-                prompt_cache_config,
+                mlx_buffer_cache_limit_bytes,
+                astro_ssd_prompt_cache_config,
                 neural_engine_program_directory,
                 model_configuration.model_id,
                 model_configuration.maximum_context_tokens,
                 model_configuration.maximum_output_tokens,
-                persistent_prompt_cache_enabled,
+                astro_ssd_prompt_cache_enabled,
                 performance_attribution_enabled,
-                decode_expert_cache_policy,
+                decode_astro_expert_cache_policy,
                 performance_attribution_log_path,
                 chunking,
                 engine_selection,
@@ -367,24 +367,24 @@ impl
     fn update_mlx_memory_limits(
         &mut self,
         effective_mlx_memory_ceiling_bytes: u64,
-        allocator_cache_memory_limit_bytes: u64,
+        mlx_buffer_cache_limit_bytes: u64,
     ) {
         self.effective_mlx_memory_ceiling_bytes =
             usize::try_from(effective_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
         // MLX limits are process-global, so every replacement runtime must reuse the exact
-        // policy acknowledged by the loaded engine rather than derive a fresh cache limit.
-        self.allocator_cache_memory_limit_bytes =
-            usize::try_from(allocator_cache_memory_limit_bytes).unwrap_or(usize::MAX);
+        // policy acknowledged by the loaded engine rather than derive a fresh MLX buffer cache limit.
+        self.mlx_buffer_cache_limit_bytes =
+            usize::try_from(mlx_buffer_cache_limit_bytes).unwrap_or(usize::MAX);
     }
 
     fn update_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
         self.floor_raise_limit_bytes = floor_raise_limit_bytes;
     }
 
-    fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
+    fn global_astro_ssd_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
         Some(
-            self.prompt_cache_config
-                .global_prompt_cache_root_directory()
+            self.astro_ssd_prompt_cache_config
+                .global_astro_ssd_prompt_cache_root_directory()
                 .as_path(),
         )
     }
@@ -455,7 +455,7 @@ impl ModelFamilyFactory {
                     model_directory_path,
                     provenance,
                     self.effective_mlx_memory_ceiling_bytes,
-                    self.allocator_cache_memory_limit_bytes,
+                    self.mlx_buffer_cache_limit_bytes,
                     self.performance_attribution_enabled,
                     self.performance_attribution_log_path.clone(),
                 )
@@ -503,7 +503,7 @@ impl ModelFamilyFactory {
                     model_directory_path,
                     provenance,
                     self.effective_mlx_memory_ceiling_bytes,
-                    self.allocator_cache_memory_limit_bytes,
+                    self.mlx_buffer_cache_limit_bytes,
                     self.performance_attribution_enabled,
                     self.performance_attribution_log_path.clone(),
                 )
@@ -522,17 +522,17 @@ impl ModelFamilyFactory {
         model_configuration: WorkerAutoregressiveModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
-        let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
+        let mlx_buffer_cache_limit_bytes = self.mlx_buffer_cache_limit_bytes;
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
-        let prompt_cache_config = self.prompt_cache_config.clone();
+        let astro_ssd_prompt_cache_enabled = self.astro_ssd_prompt_cache_enabled;
+        let astro_ssd_prompt_cache_config = self.astro_ssd_prompt_cache_config.clone();
         let initialization_task_result = tokio::task::spawn_blocking(move || {
             let (generation_processor, prism_engine) =
                 initialize_prism_hadamard_qwen35_model_with_serving_settings(
                     &model_directory_path,
                     effective_mlx_memory_ceiling_bytes,
-                    allocator_cache_memory_limit_bytes,
+                    mlx_buffer_cache_limit_bytes,
                     performance_attribution_enabled,
                     PrismHadamardQwen35ServingSettings {
                         maximum_context_tokens: Some(model_configuration.maximum_context_tokens),
@@ -545,9 +545,9 @@ impl ModelFamilyFactory {
                         // per-request thinking budgets.
                         enable_thinking: true,
                         chunking: Some(model_configuration.chunking.clone()),
-                        persistent_prompt_cache_enabled,
-                        prompt_cache_config: persistent_prompt_cache_enabled
-                            .then_some(prompt_cache_config),
+                        astro_ssd_prompt_cache_enabled,
+                        astro_ssd_prompt_cache_config: astro_ssd_prompt_cache_enabled
+                            .then_some(astro_ssd_prompt_cache_config),
                         performance_attribution_log_path: Some(performance_attribution_log_path),
                     },
                 )
@@ -579,7 +579,7 @@ impl ModelFamilyFactory {
             model_configuration.model_id,
             model_directory_path,
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
         );
         match decision_engine {
             Ok(decision_engine) => Ok(ModelFactoryRuntime::Decisions(decision_engine)),
@@ -618,7 +618,7 @@ impl ModelFamilyFactory {
             model_configuration.model_id,
             &model_directory_path,
             self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
+            self.mlx_buffer_cache_limit_bytes,
             self.performance_attribution_enabled,
             self.performance_attribution_log_path.clone(),
         )
@@ -637,28 +637,28 @@ fn unloaded_decision_engine(
     model_id: String,
     model_directory_path: &std::path::Path,
     effective_mlx_memory_ceiling_bytes: usize,
-    allocator_cache_memory_limit_bytes: usize,
+    mlx_buffer_cache_limit_bytes: usize,
 ) -> Result<Box<dyn DecisionEngine>, String> {
     let engine_outcome = match decision_family {
         ModelFamily::Kev => KevDecisionEngine::new(
             model_id,
             model_directory_path,
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
         )
         .map(boxed_decision_engine),
         ModelFamily::Clef => ClefDecisionEngine::new(
             model_id,
             model_directory_path,
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
         )
         .map(boxed_decision_engine),
         _ => LayaDecisionEngine::new(
             model_id,
             model_directory_path,
             effective_mlx_memory_ceiling_bytes,
-            allocator_cache_memory_limit_bytes,
+            mlx_buffer_cache_limit_bytes,
         )
         .map(boxed_decision_engine),
     };

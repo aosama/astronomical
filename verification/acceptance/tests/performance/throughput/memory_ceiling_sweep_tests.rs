@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronomical_daemon::ChatGenerationExecutor;
-use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy;
 use serde_json::Value;
 
 use super::*;
@@ -97,7 +97,7 @@ async fn should_persist_the_stage_of_a_budget_exhausted_cell() {
                 timestamp: "test-timestamp".to_owned(),
                 model_id: "test-model".to_owned(),
                 journey: ThroughputJourneyKind::MemoryCeilingSweep,
-                decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+                decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
                 prefill_tokens_per_second: 0,
                 decode_tokens_per_second: 0,
                 git_commit: None,
@@ -207,7 +207,7 @@ fn journey_run_outcome_with_budget_stage(
     JourneyRunOutcome {
         measurement: throughput_support::ThroughputMeasurement {
             model_id: "test-model".to_owned(),
-            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+            decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Baseline,
             total_input_tokens: 0,
             total_output_tokens: 0,
             cached_tokens: 0,
@@ -217,7 +217,7 @@ fn journey_run_outcome_with_budget_stage(
             decode_tokens_per_second: 0.0,
             mlx_peak_memory_bytes: None,
             measured_output_text: None,
-            decode_cache_diagnostic_evidence: None,
+            decode_astro_expert_cache_diagnostic_evidence: None,
             completion_ordinal_in_worker: 2,
         },
         measured_budget_exhausted: budget_exhausted_stage.is_some(),

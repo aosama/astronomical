@@ -9,7 +9,7 @@
 //! request is not slower than the first.
 //!
 //! A limit just above the model's size is its own case. The whole model fits,
-//! so it is loaded into memory, and then a prompt's working memory does not.
+//! so it is loaded into memory, and then a prompt's MLX working buffers do not.
 //! On 2026-11-14 a 9B model at 5 GiB answered every chat with an error
 //! there, because only a model with experts was moved to the streaming
 //! engine when a step did not fit. The second journey sends a short and a

@@ -22,19 +22,19 @@ use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
 
+use super::astro_neural_engine_program_cache::{
+    AstroNeuralEngineProgramSetCache, kept_program_path,
+};
 use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_mlp_prefill::{
     FP16_BYTES_PER_WEIGHT, NEURAL_ENGINE_FINISH_TIMEOUT, NEURAL_ENGINE_TOKEN_GRANULARITY,
     program_surface_bytes, weight_as_fp16_bits,
 };
-use super::neural_engine_program_cache::{ProgramSetCache, kept_program_path};
 use super::neural_engine_program_preparation::{
     NeuralEngineProgramFamily, PlannedProgram, ProgramIdentity,
 };
 use crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::{
-    Qwen3_5AffineWeights, Qwen3_5AttentionWeights,
-};
+use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeights;
 
 const PROGRAM_FAMILY: &str = "output-gate";
 // Names the kept programs' set. Raise it whenever the encoded program changes, so
@@ -174,7 +174,8 @@ fn chunk_fits_surface_rows(chunk_token_count: u32) -> bool {
 /// One linear-attention layer's output gate projection as its own program.
 struct OutputGateProgramSource<'model> {
     runtime: &'model MlxRuntime,
-    output_gate_projection: &'model Qwen3_5AffineWeights,
+    output_gate_projection:
+        &'model crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection,
     shape: ProgramShape,
     contraction_part_count: usize,
 }
@@ -264,13 +265,13 @@ pub(crate) struct OutputGateProgramPlan {
     weight_bytes_per_program: u64,
     decoder_layer_count: usize,
     linear_attention_layer_indices: Vec<usize>,
-    program_cache: Option<ProgramSetCache>,
+    astro_neural_engine_program_cache: Option<AstroNeuralEngineProgramSetCache>,
 }
 
 pub(crate) fn plan_neural_engine_output_gate_programs(
     model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
-    program_cache_directory: Option<&Path>,
+    astro_neural_engine_program_cache_directory: Option<&Path>,
 ) -> Result<OutputGateProgramPlan, &'static str> {
     let chunk_token_count = chunking.fixed_prompt_processing_chunk_size_tokens;
     if !chunk_fits_surface_rows(chunk_token_count) {
@@ -292,10 +293,12 @@ pub(crate) fn plan_neural_engine_output_gate_programs(
     if linear_attention_layer_indices.is_empty() {
         return Err("the model has no linear-attention layers");
     }
-    let mut program_cache = None;
-    if let Some(program_cache_directory) = program_cache_directory {
-        program_cache = ProgramSetCache::open(
-            program_cache_directory,
+    let mut astro_neural_engine_program_cache = None;
+    if let Some(astro_neural_engine_program_cache_directory) =
+        astro_neural_engine_program_cache_directory
+    {
+        astro_neural_engine_program_cache = AstroNeuralEngineProgramSetCache::open(
+            astro_neural_engine_program_cache_directory,
             PROGRAM_FAMILY,
             &format!("v{OUTPUT_GATE_PROGRAM_FORMAT_VERSION}-{chunk_token_count}"),
         );
@@ -307,7 +310,7 @@ pub(crate) fn plan_neural_engine_output_gate_programs(
         weight_bytes_per_program: weight_bytes_per_output_gate(model),
         decoder_layer_count: model.base.weights.decoder_layer_weights.len(),
         linear_attention_layer_indices,
-        program_cache,
+        astro_neural_engine_program_cache,
     })
 }
 
@@ -332,7 +335,7 @@ impl OutputGateProgramPlan {
                 },
                 shape: self.shape,
                 kept_program_path: kept_program_path(
-                    self.program_cache.as_ref(),
+                    self.astro_neural_engine_program_cache.as_ref(),
                     decoder_layer_index,
                 ),
             });
@@ -374,21 +377,22 @@ impl OutputGateProgramPlan {
         built_programs: Vec<(usize, CoreMlProgram)>,
     ) -> u32 {
         let layer_program_count = u32::try_from(built_programs.len()).unwrap_or(u32::MAX);
-        if let Some(program_cache) = &self.program_cache {
-            program_cache.record_finished_set(u64::from(layer_program_count));
+        if let Some(astro_neural_engine_program_cache) = &self.astro_neural_engine_program_cache {
+            astro_neural_engine_program_cache.record_finished_set(u64::from(layer_program_count));
         }
         let mut layer_programs = Vec::with_capacity(self.decoder_layer_count);
         layer_programs.resize_with(self.decoder_layer_count, none_program);
         for (decoder_layer_index, program) in built_programs {
             layer_programs[decoder_layer_index] = Some(program);
         }
-        model.base.output_gate_engine = Some(Box::new(NeuralEngineOutputGatePrefill {
-            layer_programs: RefCell::new(layer_programs),
-            chunk_token_count: self.chunk_token_count,
-            has_failed: Cell::new(false),
-            is_paused: Cell::new(false),
-            does_chunk_use_programs: Cell::new(true),
-        }));
+        model.base.optional_accelerators.output_gate_engine =
+            Some(Box::new(NeuralEngineOutputGatePrefill {
+                layer_programs: RefCell::new(layer_programs),
+                chunk_token_count: self.chunk_token_count,
+                has_failed: Cell::new(false),
+                is_paused: Cell::new(false),
+                does_chunk_use_programs: Cell::new(true),
+            }));
         layer_program_count
     }
 }

@@ -16,7 +16,7 @@ const MODEL_SHAPE: ModelMemoryShape = ModelMemoryShape {
 };
 
 /// A prompt step that kept `kept_weight_bytes`, read two gibibytes of
-/// weights and needed one more of working memory.
+/// weights and needed one more of MLX working buffers.
 fn measured_prompt_step(kept_weight_bytes: u64, unaccounted_bytes: u64) -> MeasuredStep {
     let held_bytes = 3 * GIBIBYTE + GIBIBYTE / 2 + kept_weight_bytes;
     MeasuredStep {
@@ -54,7 +54,15 @@ fn should_publish_the_accounts_the_held_memory_and_the_comparison_unchanged() {
     let snapshot = worker_memory_ledger_snapshot(ledger_reading);
     assert_eq!(snapshot.limit_bytes, 16 * GIBIBYTE);
     assert_eq!(snapshot.core_weight_bytes, 3 * GIBIBYTE);
-    assert_eq!(snapshot.working_memory_bytes, GIBIBYTE);
+    assert_eq!(snapshot.mlx_working_buffer_bytes, GIBIBYTE);
+    assert_eq!(
+        snapshot.mlx_buffer_cache_bytes,
+        ledger_reading.accounts.mlx_buffer_cache_bytes
+    );
+    assert_eq!(
+        snapshot.system_wired_reserve_bytes,
+        ledger_reading.accounts.system_wired_reserve_bytes
+    );
     assert_eq!(
         snapshot.kept_weight_capacity_bytes,
         ledger_reading.accounts.kept_weight_capacity_bytes
@@ -70,7 +78,7 @@ fn should_publish_the_accounts_the_held_memory_and_the_comparison_unchanged() {
     );
     assert_eq!(snapshot.largest_writing_step_peak_beyond_held_bytes, 0);
     assert_eq!(snapshot.observed_step_count, 1);
-    assert!(snapshot.working_memory_is_measured);
+    assert!(snapshot.mlx_working_buffers_are_measured);
 }
 
 #[test]
@@ -102,4 +110,21 @@ fn should_publish_a_full_share_when_the_engine_keeps_all_the_ledger_allows() {
         Some(1_000)
     );
     assert_eq!(snapshot.kept_over_capacity_bytes, 0);
+}
+
+#[test]
+fn should_publish_zero_system_wired_figures_before_any_reading() {
+    let ledger_reading = reading_after_one_prompt_step(16 * GIBIBYTE, 8 * GIBIBYTE, 0);
+    let snapshot = worker_memory_ledger_snapshot(ledger_reading);
+    assert_eq!(snapshot.system_wired_bytes, 0);
+    assert_eq!(snapshot.system_wire_limit_bytes, 0);
+}
+
+#[test]
+fn should_publish_the_latest_system_wired_reading_and_its_limit() {
+    let mut ledger_reading = reading_after_one_prompt_step(16 * GIBIBYTE, 8 * GIBIBYTE, 0);
+    ledger_reading.system_wired_reading = Some((30 * GIBIBYTE, 38 * GIBIBYTE));
+    let snapshot = worker_memory_ledger_snapshot(ledger_reading);
+    assert_eq!(snapshot.system_wired_bytes, 30 * GIBIBYTE);
+    assert_eq!(snapshot.system_wire_limit_bytes, 38 * GIBIBYTE);
 }

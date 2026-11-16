@@ -1,10 +1,14 @@
 #[cfg(feature = "performance-measurement")]
+mod k_row_fused_projection_cost;
+#[cfg(feature = "performance-measurement")]
+mod k_row_verify_cost;
+#[cfg(feature = "performance-measurement")]
+mod model_astro_ssd_prompt_cache_benchmark_case;
+#[cfg(feature = "performance-measurement")]
+mod model_astro_ssd_prompt_cache_warmup;
+#[cfg(feature = "performance-measurement")]
+mod model_astro_ssd_prompt_cache_warmup_worker;
+#[cfg(feature = "performance-measurement")]
 mod model_load_to_prefill;
-#[cfg(feature = "performance-measurement")]
-mod model_persistent_prompt_cache_benchmark_case;
-#[cfg(feature = "performance-measurement")]
-mod model_persistent_prompt_cache_warmup;
-#[cfg(feature = "performance-measurement")]
-mod model_persistent_prompt_cache_warmup_worker;
 #[cfg(feature = "performance-measurement")]
 pub(crate) mod model_process_metrics;

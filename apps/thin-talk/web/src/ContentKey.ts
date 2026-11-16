@@ -3,7 +3,7 @@
  *
  * Two layers ask the same question — "is this the same block as before?" — and
  * they must agree on the answer: transcript diffing decides whether a rendered
- * node may be reused, and the diagram cache decides whether a finished SVG can
+ * node may be reused, and the diagram SVG memo decides whether a finished SVG can
  * be re-installed instead of parsed again. One hash function keeps those two
  * answers consistent, which is why it lives here rather than beside either caller.
  */

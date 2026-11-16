@@ -110,7 +110,7 @@ pub fn requestable_model_id(model_directory: &Path) -> Option<String> {
             continue;
         };
         if let Some(decoded_model_id) =
-            crate::decode_huggingface_cache_directory_name(directory_name)
+            crate::decode_huggingface_hub_cache_directory_name(directory_name)
         {
             return Some(crate::leaf_model_id(&decoded_model_id).to_owned());
         }
@@ -129,7 +129,7 @@ fn model_identity(model_directory: &Path) -> Option<String> {
         else {
             continue;
         };
-        if let Some(model_id) = crate::decode_huggingface_cache_directory_name(directory_name) {
+        if let Some(model_id) = crate::decode_huggingface_hub_cache_directory_name(directory_name) {
             return Some(model_id);
         }
     }
@@ -227,7 +227,7 @@ pub(super) fn immutable_file_revision(
             ancestor
                 .file_name()
                 .and_then(|file_name| file_name.to_str())
-                .and_then(crate::decode_huggingface_cache_directory_name)
+                .and_then(crate::decode_huggingface_hub_cache_directory_name)
                 .is_some()
         })
         .then(|| model_directory.file_name()?.to_str().map(str::to_owned))

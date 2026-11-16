@@ -466,7 +466,7 @@ async fn read_candidate_acknowledgement(
             event @ (WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
-            | WorkerEvent::PersistentPromptCacheStats { .. }) => {
+            | WorkerEvent::AstroSsdPromptCacheStats { .. }) => {
                 if deferred_process_events.len() >= MAXIMUM_DEFERRED_DEMOTION_PROCESS_EVENTS {
                     return Err(WorkerControlError::CandidateProtocolViolation {
                         description: "demotion candidate emitted too many process events before acknowledgement",

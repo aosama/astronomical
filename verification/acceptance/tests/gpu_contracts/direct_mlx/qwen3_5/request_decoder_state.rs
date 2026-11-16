@@ -1,16 +1,14 @@
 use astronomical_model_serving::{
-    ConvolutionState, DecoderCacheLayerLayout, DecoderCacheState, DecoderCacheTensorDtype,
-    DecoderCacheTensorLayout, FullAttentionKeyValueState, GatedDeltaRecurrentState,
-    RequestDecoderStateStack,
+    AstroDecoderStateCacheLayerLayout, AstroDecoderStateCacheState,
+    AstroDecoderStateCacheTensorDtype, AstroDecoderStateCacheTensorLayout, ConvolutionState,
+    FullAttentionKeyValueState, GatedDeltaRecurrentState, RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use tokio::sync::MutexGuard;
 
-use crate::common::qwen3_5_moe::{
-    frozen_ornith_1_0_config, persistent_prompt_cache_model_contract,
-};
+use crate::common::qwen3_5_moe::{astro_ssd_prompt_cache_model_contract, frozen_ornith_1_0_config};
 use crate::common::{
-    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
 };
 
 async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
@@ -18,7 +16,7 @@ async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(
             DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
-            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_MLX_BUFFER_CACHE_LIMIT_BYTES,
         )
         .expect("the in-memory state test memory limits should be valid"),
     )
@@ -89,27 +87,28 @@ async fn should_grow_full_attention_kv_capacity_in_256_token_steps() {
 }
 
 #[test]
-fn should_create_qwen_request_state_from_the_shared_decoder_cache_layout() {
-    let persistent_prompt_cache_model_contract = persistent_prompt_cache_model_contract();
+fn should_create_qwen_request_state_from_the_shared_astro_decoder_state_cache_layout() {
+    let astro_ssd_prompt_cache_model_contract = astro_ssd_prompt_cache_model_contract();
 
-    let request_decoder_state = RequestDecoderStateStack::empty_from_decoder_cache_layout(
-        persistent_prompt_cache_model_contract.decoder_cache_layout(),
-    )
-    .expect("the frozen Qwen decoder-cache layout should create request state");
+    let request_decoder_state =
+        RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
+            astro_ssd_prompt_cache_model_contract.astro_decoder_state_cache_layout(),
+        )
+        .expect("the frozen Qwen astro decoder state cache layout should create request state");
 
     assert_eq!(
         request_decoder_state.layer_count(),
-        persistent_prompt_cache_model_contract
-            .decoder_cache_layout()
+        astro_ssd_prompt_cache_model_contract
+            .astro_decoder_state_cache_layout()
             .layer_count()
     );
     assert!(matches!(
         request_decoder_state.layer(3),
-        Some(DecoderCacheState::AppendOnlyAttention { .. })
+        Some(AstroDecoderStateCacheState::AppendOnlyAttention { .. })
     ));
     assert!(matches!(
         request_decoder_state.layer(0),
-        Some(DecoderCacheState::Composite { .. })
+        Some(AstroDecoderStateCacheState::Composite { .. })
     ));
 }
 
@@ -187,27 +186,34 @@ async fn should_restore_full_attention_allocation_checkpoint_after_failed_growth
 
 #[test]
 fn should_project_first_use_composite_state_from_validated_tensor_layout() {
-    let decoder_cache_layout = astronomical_model_serving::DecoderCacheLayout::new(vec![
-        DecoderCacheLayerLayout::composite(vec![
-            DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                "linear.convolution",
-                DecoderCacheTensorDtype::BFloat16,
-                vec![1, 3, 2],
-            )),
-            DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                "linear.gated_delta_recurrent",
-                DecoderCacheTensorDtype::Float32,
-                vec![1, 2, 2, 3],
-            )),
-        ]),
-    ])
-    .expect("the synthetic composite decoder-cache layout should validate");
+    let astro_decoder_state_cache_layout =
+        astronomical_model_serving::AstroDecoderStateCacheLayout::new(vec![
+            AstroDecoderStateCacheLayerLayout::composite(vec![
+                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                    AstroDecoderStateCacheTensorLayout::fixed(
+                        "linear.convolution",
+                        AstroDecoderStateCacheTensorDtype::BFloat16,
+                        vec![1, 3, 2],
+                    ),
+                ),
+                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                    AstroDecoderStateCacheTensorLayout::fixed(
+                        "linear.gated_delta_recurrent",
+                        AstroDecoderStateCacheTensorDtype::Float32,
+                        vec![1, 2, 2, 3],
+                    ),
+                ),
+            ]),
+        ])
+        .expect("the synthetic composite astro decoder state cache layout should validate");
     let request_decoder_state =
-        RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
-            .expect("the synthetic composite decoder state should be constructible");
+        RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
+            &astro_decoder_state_cache_layout,
+        )
+        .expect("the synthetic composite decoder state should be constructible");
 
     let first_use_growth_bytes = request_decoder_state
-        .projected_persistent_state_growth_bytes(&decoder_cache_layout, 1)
+        .projected_persistent_state_growth_bytes(&astro_decoder_state_cache_layout, 1)
         .expect("first-use composite state growth should be projectable");
 
     assert_eq!(first_use_growth_bytes, 60);
@@ -215,27 +221,34 @@ fn should_project_first_use_composite_state_from_validated_tensor_layout() {
 
 #[test]
 fn should_project_zero_fixed_state_growth_after_composite_state_is_materialized() {
-    let decoder_cache_layout = astronomical_model_serving::DecoderCacheLayout::new(vec![
-        DecoderCacheLayerLayout::composite(vec![
-            DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                "linear.convolution",
-                DecoderCacheTensorDtype::BFloat16,
-                vec![1, 3, 2],
-            )),
-            DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                "linear.gated_delta_recurrent",
-                DecoderCacheTensorDtype::Float32,
-                vec![1, 2, 2, 3],
-            )),
-        ]),
-    ])
-    .expect("the synthetic composite decoder-cache layout should validate");
+    let astro_decoder_state_cache_layout =
+        astronomical_model_serving::AstroDecoderStateCacheLayout::new(vec![
+            AstroDecoderStateCacheLayerLayout::composite(vec![
+                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                    AstroDecoderStateCacheTensorLayout::fixed(
+                        "linear.convolution",
+                        AstroDecoderStateCacheTensorDtype::BFloat16,
+                        vec![1, 3, 2],
+                    ),
+                ),
+                AstroDecoderStateCacheLayerLayout::recurrent_tensor(
+                    AstroDecoderStateCacheTensorLayout::fixed(
+                        "linear.gated_delta_recurrent",
+                        AstroDecoderStateCacheTensorDtype::Float32,
+                        vec![1, 2, 2, 3],
+                    ),
+                ),
+            ]),
+        ])
+        .expect("the synthetic composite astro decoder state cache layout should validate");
     let request_decoder_state =
-        RequestDecoderStateStack::empty_from_decoder_cache_layout(&decoder_cache_layout)
-            .expect("the synthetic composite decoder state should be constructible");
+        RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout(
+            &astro_decoder_state_cache_layout,
+        )
+        .expect("the synthetic composite decoder state should be constructible");
 
     let warm_state_growth_bytes = request_decoder_state
-        .projected_persistent_state_growth_bytes(&decoder_cache_layout, 0)
+        .projected_persistent_state_growth_bytes(&astro_decoder_state_cache_layout, 0)
         .expect("warm composite state growth should be projectable");
 
     assert_eq!(warm_state_growth_bytes, 60);
@@ -284,7 +297,7 @@ async fn should_restore_decoder_state_stack_to_checkpoint_after_later_attention_
     let initial_values = runtime
         .array_from_f32(&[2.0], &[1, 1, 1, 1])
         .expect("the initial values tensor should be valid");
-    let DecoderCacheState::AppendOnlyAttention { attention } = decoder_state_stack
+    let AstroDecoderStateCacheState::AppendOnlyAttention { attention } = decoder_state_stack
         .layer_mut(full_attention_layer_index)
         .expect("the selected full-attention layer should exist")
     else {
@@ -304,7 +317,7 @@ async fn should_restore_decoder_state_stack_to_checkpoint_after_later_attention_
     let later_values = runtime
         .array_from_f32(&[4.0], &[1, 1, 1, 1])
         .expect("the later values tensor should be valid");
-    let DecoderCacheState::AppendOnlyAttention { attention } = decoder_state_stack
+    let AstroDecoderStateCacheState::AppendOnlyAttention { attention } = decoder_state_stack
         .layer_mut(full_attention_layer_index)
         .expect("the selected full-attention layer should still exist")
     else {
@@ -322,7 +335,7 @@ async fn should_restore_decoder_state_stack_to_checkpoint_after_later_attention_
     decoder_state_stack
         .restore_checkpoint(decoder_state_checkpoint)
         .expect("restoring the decoder checkpoint should discard post-checkpoint state");
-    let DecoderCacheState::AppendOnlyAttention { attention } = decoder_state_stack
+    let AstroDecoderStateCacheState::AppendOnlyAttention { attention } = decoder_state_stack
         .layer(full_attention_layer_index)
         .expect("the selected full-attention layer should remain available after restore")
     else {
@@ -413,13 +426,16 @@ async fn should_create_empty_decoder_state_stack_in_config_layer_order() {
             .expect("every decoder layer should own one model-state entry");
         if ornith_config.decoder_layer_is_full_attention(layer_index) {
             assert!(
-                matches!(layer_state, DecoderCacheState::AppendOnlyAttention { .. }),
+                matches!(
+                    layer_state,
+                    AstroDecoderStateCacheState::AppendOnlyAttention { .. }
+                ),
                 "layer {} should be full-attention",
                 layer_index
             );
         } else {
             assert!(
-                matches!(layer_state, DecoderCacheState::Composite { .. }),
+                matches!(layer_state, AstroDecoderStateCacheState::Composite { .. }),
                 "layer {} should be linear-attention",
                 layer_index
             );
@@ -444,10 +460,13 @@ async fn should_expose_decoder_state_stack_mutably_in_the_same_decoder_order() {
         if ornith_config.decoder_layer_is_full_attention(layer_index) {
             assert!(matches!(
                 layer_state,
-                DecoderCacheState::AppendOnlyAttention { .. }
+                AstroDecoderStateCacheState::AppendOnlyAttention { .. }
             ));
         } else {
-            assert!(matches!(layer_state, DecoderCacheState::Composite { .. }));
+            assert!(matches!(
+                layer_state,
+                AstroDecoderStateCacheState::Composite { .. }
+            ));
         }
     }
     assert!(
@@ -466,7 +485,7 @@ async fn should_report_inconsistent_linear_layer_tensor_allocation() {
         .expect("layer 0 should exist in the decoder stack");
 
     match linear_layer_state {
-        DecoderCacheState::Composite {
+        AstroDecoderStateCacheState::Composite {
             convolution,
             recurrent,
         } => {
@@ -480,7 +499,7 @@ async fn should_report_inconsistent_linear_layer_tensor_allocation() {
                 "the test fixture must leave recurrent state absent"
             );
         }
-        DecoderCacheState::AppendOnlyAttention { .. } => {
+        AstroDecoderStateCacheState::AppendOnlyAttention { .. } => {
             panic!("layer 0 should be linear-attention")
         }
     }

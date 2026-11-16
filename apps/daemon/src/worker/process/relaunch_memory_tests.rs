@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use astronomical_ipc_protocol::{
-    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
+    WorkerDecodeAstroExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,
     WorkerStartupConfiguration,
 };
 
@@ -26,12 +26,12 @@ fn boot_startup_configuration() -> WorkerStartupConfiguration {
     WorkerStartupConfiguration {
         neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: BOOT_CONFIGURATION_GENERATION.to_owned(),
-        global_prompt_cache_root_directory: PathBuf::from("prompt-cache"),
-        global_prompt_cache_maximum_size_bytes: 50_000_000_000,
-        persistent_prompt_cache_enabled: true,
+        global_astro_ssd_prompt_cache_root_directory: PathBuf::from("astro-ssd-prompt-cache"),
+        global_astro_ssd_prompt_cache_maximum_size_bytes: 50_000_000_000,
+        astro_ssd_prompt_cache_enabled: true,
         configured_maximum_mlx_memory_bytes: Some(BOOT_CONFIGURED_CEILING_BYTES),
         performance_attribution_enabled: true,
-        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Candidate,
+        decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy::Candidate,
         diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Streaming,
         logging_directory: PathBuf::from("logs"),
         logging_level: WorkerLogLevel::Debug,

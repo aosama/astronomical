@@ -4,7 +4,7 @@
 //! decoder layer comes off the SSD through the bounded-range reader, then
 //! what one streamed layer costs read and run, before a whole prompt. These
 //! entry points do exactly that work and nothing else; the measurement
-//! harness owns the clock and the cold file cache.
+//! harness owns the clock and the cold macOS file cache.
 
 use mlx_bridge::MlxArray;
 
@@ -61,8 +61,8 @@ impl Qwen3_5Model {
                 description: "the measured token count exceeds the MLX range",
             })?;
         let mut request_decoder_state =
-            RequestDecoderStateStack::empty_from_decoder_cache_layout_with_full_attention_kv_state_growth_tokens(
-                &self.decoder_cache_layout,
+            RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
+                &self.astro_decoder_state_cache_layout,
                 signed_token_count.max(1),
             )?;
         let layer_input: MlxArray = self.runtime.full(

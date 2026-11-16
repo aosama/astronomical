@@ -98,7 +98,7 @@ struct EffectiveConfigurationValues {
     /// What each `models` entry does against the installed models, or why that could not be
     /// checked. Validation never fails on this: a missing model is not a configuration error.
     model_entries_check: model_entries::ModelEntriesCheck,
-    persistent_prompt_cache_enabled: bool,
+    astro_ssd_prompt_cache_enabled: bool,
     maximum_mlx_memory_bytes: Option<u64>,
     logging_level: String,
     logging_retained_files: usize,
@@ -131,7 +131,7 @@ fn effective_values_from_loaded_config(
         daemon_bind_address,
         model_directories: loaded_config.model_directories().to_vec(),
         model_entries_check,
-        persistent_prompt_cache_enabled: loaded_config.persistent_prompt_cache_enabled(),
+        astro_ssd_prompt_cache_enabled: loaded_config.astro_ssd_prompt_cache_enabled(),
         maximum_mlx_memory_bytes,
         logging_level: logging_values.level().as_str().to_owned(),
         logging_retained_files: logging_values.retained_files(),
@@ -169,7 +169,7 @@ fn render_text_report(
     model_entries::push_text_lines(&effective_values.model_entries_check, &mut report_lines);
     report_lines.push(format!(
         "Persistent prompt cache: {}",
-        enabled_word(effective_values.persistent_prompt_cache_enabled)
+        enabled_word(effective_values.astro_ssd_prompt_cache_enabled)
     ));
     report_lines.push(format!(
         "Maximum MLX memory: {}",
@@ -211,7 +211,7 @@ fn render_json_report(
             .map(|model_directory| model_directory.display().to_string())
             .collect::<Vec<_>>(),
         "model_settings": model_entries::json_document(&effective_values.model_entries_check),
-        "persistent_prompt_cache_enabled": effective_values.persistent_prompt_cache_enabled,
+        "astro_ssd_prompt_cache_enabled": effective_values.astro_ssd_prompt_cache_enabled,
         "maximum_mlx_memory_bytes": effective_values.maximum_mlx_memory_bytes,
         "logging": {
             "level": effective_values.logging_level,

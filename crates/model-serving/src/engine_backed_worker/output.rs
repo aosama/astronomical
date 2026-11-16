@@ -383,25 +383,27 @@ where
                 prompt_token_count: active_generation.prompt_token_count,
                 generated_token_count: active_generation.generated_token_count,
                 reasoning_token_count: active_generation.reasoning_token_count,
-                cached_token_count: active_generation.cached_token_count,
-                persistent_prompt_cache_diagnostics: active_generation
-                    .persistent_prompt_cache_diagnostics
+                astro_ssd_prompt_cache_restored_token_count: active_generation
+                    .astro_ssd_prompt_cache_restored_token_count,
+                astro_ssd_prompt_cache_diagnostics: active_generation
+                    .astro_ssd_prompt_cache_diagnostics
                     .clone(),
                 reason: completion_reason,
             })
             .await?;
-        self.emit_persistent_prompt_cache_stats(event_writer)
-            .await?;
+        self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
         Ok(())
     }
 
-    /// Emits a `WorkerEvent::PersistentPromptCacheStats` event when the engine
-    /// has a persistent prompt cache. Silently skips when the engine returns
-    /// `None` (no cache open) or when collection fails.
+    /// Emits a `WorkerEvent::AstroSsdPromptCacheStats` event when the engine
+    /// has an open `astro_ssd_prompt_cache`. Silently skips when the engine returns
+    /// `None` (no `astro_ssd_prompt_cache` open) or when collection fails.
     /// The last events of a model load. The Neural Engine status comes after the
     /// runtime configuration because the daemon clears it when it completes a swap,
     /// which happens on that configuration.
-    pub(crate) async fn emit_cache_stats_then_neural_engine_status<WriteTransport>(
+    pub(crate) async fn emit_astro_ssd_prompt_cache_stats_then_neural_engine_status<
+        WriteTransport,
+    >(
         &mut self,
         event_writer: &mut ProtocolWriter<WriteTransport>,
         neural_engine_prefill_event: Option<&WorkerEvent>,
@@ -409,8 +411,7 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        self.emit_persistent_prompt_cache_stats(event_writer)
-            .await?;
+        self.emit_astro_ssd_prompt_cache_stats(event_writer).await?;
         self.is_neural_engine_preparation_running = matches!(
             neural_engine_prefill_event,
             Some(WorkerEvent::NeuralEnginePrefillChanged {
@@ -423,21 +424,21 @@ where
         Ok(())
     }
 
-    pub(crate) async fn emit_persistent_prompt_cache_stats<WriteTransport>(
+    pub(crate) async fn emit_astro_ssd_prompt_cache_stats<WriteTransport>(
         &self,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<(), WorkerRuntimeError>
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        // Disabled persistent caching is an ownership cut at worker startup,
+        // A disabled `astro_ssd_prompt_cache` is an ownership cut at worker startup,
         // not merely an engine that happens to report no entries. Avoid even
-        // crossing the engine command channel for cache statistics so disabled
-        // requests perform no cache-specific collection or event work.
+        // crossing the engine command channel for `astro_ssd_prompt_cache` statistics so disabled
+        // requests perform no `astro_ssd_prompt_cache` collection or event work.
         if self
             .worker_runtime_feature_configuration
             .as_ref()
-            .is_some_and(|configuration| !configuration.persistent_prompt_cache_enabled)
+            .is_some_and(|configuration| !configuration.astro_ssd_prompt_cache_enabled)
         {
             return Ok(());
         }
@@ -446,18 +447,18 @@ where
         };
         match loaded_model
             .engine
-            .collect_persistent_prompt_cache_stats()
+            .collect_astro_ssd_prompt_cache_stats()
             .await
         {
-            Ok(Some(persistent_prompt_cache_stats_event)) => {
+            Ok(Some(astro_ssd_prompt_cache_stats_event)) => {
                 event_writer
-                    .send_event(&persistent_prompt_cache_stats_event)
+                    .send_event(&astro_ssd_prompt_cache_stats_event)
                     .await?;
             }
             Ok(None) => {}
             Err(collection_error) => {
                 tracing::warn!(
-                    "persistent prompt-cache stats collection failed: {collection_error}"
+                    "persistent astro-ssd-prompt-cache stats collection failed: {collection_error}"
                 );
             }
         }
@@ -604,6 +605,7 @@ pub(super) fn worker_expert_streaming_stats(
         mandatory_decode_source_bytes: expert_streaming_stats.mandatory_decode_source_bytes,
         prompt_token_count: expert_streaming_stats.prompt_token_count,
         generated_token_count: expert_streaming_stats.generated_token_count,
+        last_reply_memory_record: expert_streaming_stats.last_reply_memory_record.clone(),
     }
 }
 
@@ -628,7 +630,7 @@ pub(crate) fn worker_memory_snapshot(
     WorkerMlxMemorySnapshot {
         source: mlx_memory_snapshot_source,
         active_memory_bytes: mlx_memory_telemetry.active_memory_bytes,
-        allocator_cache_memory_bytes: mlx_memory_telemetry.allocator_cache_memory_bytes,
+        mlx_buffer_cache_bytes: mlx_memory_telemetry.mlx_buffer_cache_bytes,
         peak_memory_bytes: mlx_memory_telemetry.peak_memory_bytes,
         expert_payload_bytes: mlx_active_memory_breakdown.expert_payload_bytes,
         model_core_payload_bytes: mlx_active_memory_breakdown.model_core_payload_bytes,

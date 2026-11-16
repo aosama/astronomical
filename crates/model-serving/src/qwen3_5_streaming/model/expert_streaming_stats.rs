@@ -1,7 +1,7 @@
 //! Observatory-facing session statistics assembled from pager-owned counters.
 //!
 //! The pager owns always-on counters and the always-on positional-read
-//! aggregate; this module composes them with the warm-cache topology and the
+//! aggregate; this module composes them with the astro expert cache topology and the
 //! finalization residency claim into one `ExpertStreamingStats` snapshot. The
 //! composition is read-only over model state and performs no MLX work, so it
 //! stays safe to call at every generation finalization.
@@ -55,6 +55,20 @@ impl Qwen3_5Model {
         }
     }
 
+    /// Routed experts served from memory and read from storage since the
+    /// model loaded, in that order; zeros for a model that streams no
+    /// experts. A reply token's own routes are the difference across its
+    /// forward.
+    pub(crate) fn session_route_assignment_counts(&self) -> (u64, u64) {
+        self.expert_pager.as_ref().map_or((0, 0), |expert_pager| {
+            let session_counters = expert_pager.session_counter_snapshot();
+            (
+                session_counters.retained_route_assignment_count,
+                session_counters.storage_route_assignment_count,
+            )
+        })
+    }
+
     /// Composes the session snapshot; `None` when this model has no pager.
     fn expert_streaming_session_stats(
         &self,
@@ -74,14 +88,14 @@ impl Qwen3_5Model {
         // layer shares, the same source the decode warm handoff trusts.
         let (complete_expert_payload_byte_count, expert_capacity) =
             expert_library_facts(expert_pager);
-        let layer_topology = match self.retained_experts.as_ref() {
-            Some(retained_experts) => {
+        let layer_topology = match self.astro_expert_cache.as_ref() {
+            Some(astro_expert_cache) => {
                 // The observatory contract stores the uniform expert count as
                 // u32. The warm-slot table still keys slots by usize, and
                 // every supported target can hold that count.
                 let topology_expert_capacity =
                     usize::try_from(expert_capacity).unwrap_or(usize::MAX);
-                let topology_residencies = retained_experts
+                let topology_residencies = astro_expert_cache
                     .borrow()
                     .topology_snapshot(topology_expert_capacity);
                 expert_pager.session_layer_topology(&topology_residencies)
@@ -123,6 +137,7 @@ impl Qwen3_5Model {
             // emission boundary; the model itself does not track them.
             prompt_token_count: 0,
             generated_token_count: 0,
+            last_reply_memory_record: None,
         })
     }
 }

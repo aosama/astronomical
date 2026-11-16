@@ -20,6 +20,9 @@ const DOWNLOAD_MODELS_LINKED_JS: &str = include_str!("../../console/download-mod
 const DOWNLOAD_MODELS_INSTALLED_JS: &str =
     include_str!("../../console/download-models-installed.js");
 const DOWNLOAD_MODELS_REMOVAL_JS: &str = include_str!("../../console/download-models-removal.js");
+const DOWNLOAD_MODELS_QUEUE_JS: &str = include_str!("../../console/download-models-queue.js");
+const DOWNLOAD_MODELS_SELECTION_JS: &str =
+    include_str!("../../console/download-models-selection.js");
 const OVERVIEW_JS: &str = include_str!("../../console/overview.js");
 const OVERVIEW_CSS: &str = include_str!("../../console/overview.css");
 const NEURAL_ENGINE_PANEL_JS: &str = include_str!("../../console/neural-engine-panel.js");
@@ -36,6 +39,9 @@ const CONFIGURATION_CSS: &str = include_str!("../../console/configuration.css");
 const CONSOLE_CSS: &str = include_str!("../../console/console.css");
 const DOWNLOAD_MODELS_CSS: &str = include_str!("../../console/download-models.css");
 const EXPERTS_CSS: &str = include_str!("../../console/experts.css");
+const MEMORY_PAGE_JS: &str = include_str!("../../console/memory-page.js");
+const MEMORY_PAGE_IMAGE_JS: &str = include_str!("../../console/memory-page-image.js");
+const MEMORY_PAGE_CSS: &str = include_str!("../../console/memory-page.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
@@ -55,6 +61,7 @@ where
         // the shell, and console.js opens Overview from it.
         .route("/model", get(console_index))
         .route("/experts", get(console_index))
+        .route("/memory", get(console_index))
         .route("/download-models", get(console_index))
         // The page was renamed Download Models; its old address still serves
         // the shell, and console.js opens the renamed page from it.
@@ -98,6 +105,14 @@ where
             "/download-models-removal.js",
             get(download_models_removal_script),
         )
+        .route(
+            "/download-models-queue.js",
+            get(download_models_queue_script),
+        )
+        .route(
+            "/download-models-selection.js",
+            get(download_models_selection_script),
+        )
         .route("/overview.js", get(overview_script))
         .route("/overview.css", get(overview_stylesheet))
         .route("/neural-engine-panel.js", get(neural_engine_panel_script))
@@ -108,6 +123,9 @@ where
         .route("/console.css", get(console_stylesheet))
         .route("/download-models.css", get(download_models_stylesheet))
         .route("/experts.css", get(experts_stylesheet))
+        .route("/memory-page.js", get(memory_page_script))
+        .route("/memory-page-image.js", get(memory_page_image_script))
+        .route("/memory-page.css", get(memory_page_stylesheet))
 }
 
 /// `GET /` — the Observatory single-page shell. References the per-view scripts and
@@ -154,6 +172,17 @@ pub(crate) async fn download_models_installed_script() -> Response {
 
 pub(crate) async fn download_models_removal_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_REMOVAL_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-selection.js` — keeps the Models page's text
+/// selectable while a download runs.
+pub(crate) async fn download_models_selection_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_SELECTION_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /download-models-queue.js` — the Models page's download list.
+pub(crate) async fn download_models_queue_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_QUEUE_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn overview_script() -> Response {
@@ -219,6 +248,22 @@ pub(crate) async fn experts_stylesheet() -> Response {
     embedded_text_response(EXPERTS_CSS, CSS_CONTENT_TYPE)
 }
 
+/// `GET /memory-page.js` — the Memory view: the Mac's memory bar with the
+/// kernel wire limit, the reply facts and the per-token strip.
+pub(crate) async fn memory_page_script() -> Response {
+    embedded_text_response(MEMORY_PAGE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /memory-page-image.js` — draws the Memory view as one picture for
+/// Copy as image.
+pub(crate) async fn memory_page_image_script() -> Response {
+    embedded_text_response(MEMORY_PAGE_IMAGE_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn memory_page_stylesheet() -> Response {
+    embedded_text_response(MEMORY_PAGE_CSS, CSS_CONTENT_TYPE)
+}
+
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.
 pub(crate) async fn console_stylesheet() -> Response {
     embedded_text_response(CONSOLE_CSS, CSS_CONTENT_TYPE)
@@ -234,8 +279,8 @@ fn embedded_text_response(body: &'static str, content_type: &'static str) -> Res
         header::CONTENT_TYPE,
         header::HeaderValue::from_static(content_type),
     );
-    // Embedded assets change with every released binary, so a cached copy always
-    // shows stale UI; forbid caching outright rather than managing revalidation.
+    // Embedded assets change with every released binary, so a browser-held copy always
+    // shows stale UI; forbid HTTP caching outright rather than managing revalidation.
     response.headers_mut().insert(
         header::CACHE_CONTROL,
         header::HeaderValue::from_static("no-store"),
@@ -308,7 +353,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn embedded_responses_forbid_caching() {
+    async fn embedded_responses_forbid_http_caching() {
         let response = console_stylesheet().await;
         let cache_control = response
             .headers()
