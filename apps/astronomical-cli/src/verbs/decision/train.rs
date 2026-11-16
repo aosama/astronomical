@@ -22,12 +22,13 @@ use astronomical_config::ModelFamily;
 use astronomical_decision_contract::calibration_file::{
     CalibrationOverride, DECISION_CALIBRATION_FILE_NAME, parse_calibration_document,
 };
-use astronomical_decision_contract::decision_adapters_file::{DecisionAdapters, LinearAdapter};
+use astronomical_decision_contract::decision_adapters_file::DecisionAdapters;
 use astronomical_decision_contract::decision_training_job::{
-    DecisionTrainingOutcome, TrainedTensor, TrainingScope,
+    DecisionTrainingOutcome, TrainingScope,
 };
-use astronomical_decision_contract::head_tuning_file::{
-    HeadTuning, TunableHeadFamily, TunedTensor,
+use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
+use astronomical_decision_contract::trained_tensors::{
+    UnpairedAddOns, decision_adapters_of, head_tuning_of,
 };
 use astronomical_decision_training::calibrated_model_folder::FolderAdditions;
 use astronomical_decision_training::holdout_split::state_group_key;
@@ -220,71 +221,15 @@ fn judge_and_report(
     }
     Ok(KeptTraining {
         head_tuning: head_tuning_of(&outcome.trained_tensors),
-        decision_adapters: decision_adapters_of(&outcome.adapter_tensors)?,
+        decision_adapters: decision_adapters_of(&outcome.adapter_tensors)
+            .map_err(unpaired_add_ons)?,
         verdict,
         judging_pairs: training_scores.judging,
     })
 }
 
-/// The trained tensors as the 32-bit file beside the originals holds them.
-fn head_tuning_of(trained_tensors: &[TrainedTensor]) -> HeadTuning {
-    let mut tuned_tensors = Vec::with_capacity(trained_tensors.len());
-    for trained_tensor in trained_tensors {
-        tuned_tensors.push(TunedTensor {
-            name: trained_tensor.name.clone(),
-            shape: trained_tensor.shape.clone(),
-            values: trained_tensor.values.0.clone(),
-        });
-    }
-    HeadTuning {
-        tensors: tuned_tensors,
-    }
-}
-
-/// The add-on tensors as the file beside the originals holds them: the
-/// worker sends each layer's `down` then its `up`. `None` when there are
-/// none, as after a final-layer training.
-fn decision_adapters_of(
-    adapter_tensors: &[TrainedTensor],
-) -> Result<Option<DecisionAdapters>, DecisionToolError> {
-    if adapter_tensors.is_empty() {
-        return Ok(None);
-    }
-    let mut adapters = Vec::with_capacity(adapter_tensors.len() / 2);
-    for adapter_pair in adapter_tensors.chunks(2) {
-        let [down_tensor, up_tensor] = adapter_pair else {
-            return Err(unpaired_add_ons());
-        };
-        let (Some(target), Some(up_target)) = (
-            down_tensor.name.strip_suffix(".adapter_down"),
-            up_tensor.name.strip_suffix(".adapter_up"),
-        ) else {
-            return Err(unpaired_add_ons());
-        };
-        let ([rank, input_width], [output_width, up_rank]) =
-            (down_tensor.shape.as_slice(), up_tensor.shape.as_slice())
-        else {
-            return Err(unpaired_add_ons());
-        };
-        if target != up_target || rank != up_rank {
-            return Err(unpaired_add_ons());
-        }
-        adapters.push(LinearAdapter {
-            target: target.to_owned(),
-            rank: *rank,
-            input_width: *input_width,
-            output_width: *output_width,
-            down_values: down_tensor.values.0.clone(),
-            up_values: up_tensor.values.0.clone(),
-        });
-    }
-    Ok(Some(DecisionAdapters { adapters }))
-}
-
-fn unpaired_add_ons() -> DecisionToolError {
-    DecisionToolError::TrainingFailed(
-        "the worker returned add-on weights that do not pair up; nothing was written".to_owned(),
-    )
+fn unpaired_add_ons(unpaired: UnpairedAddOns) -> DecisionToolError {
+    DecisionToolError::TrainingFailed(format!("{unpaired}; nothing was written"))
 }
 
 /// What writing and proving the trained folder reads.

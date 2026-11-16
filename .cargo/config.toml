@@ -173,9 +173,14 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # float32 reference recorded in tests/fixtures/laya_reference_decisions.json
 # (regenerate with the script beside it). `test-laya-engine-requests` covers
 # refusals and a request that spans several forward passes. A few seconds each.
+# `test-laya-whole-model-training` trains Laya's whole model on a few dozen
+# Romeo states and proves the trainable copy scores exactly as serving does,
+# that a folder with zeroed add-ons serves the shipped scores bit for bit, and
+# that a folder with the trained add-ons serves the trained scores.
 test-laya = "test -p astronomical-model-serving --features direct-mlx --lib decision_models"
 test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
 test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
+test-laya-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_whole_model_training"
 # Text to speech: Kokoro-82M and Phonon 31M on MLX. `test-speech` runs the
 # speech lib tests (shared layers, both families' layers on small weights from
 # the Shakespeare fixture, the engines' request checks); about a second, no

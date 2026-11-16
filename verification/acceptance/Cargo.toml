@@ -113,6 +113,7 @@ too_many_lines = "deny"
 astronomical-cli = { path = "../../apps/astronomical-cli" }
 astronomical-config = { path = "../../crates/config" }
 astronomical-decision-contract = { path = "../../crates/decision-contract" }
+astronomical-decision-training = { path = "../../crates/decision-training" }
 astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
