@@ -6,9 +6,10 @@
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
 
+use super::vocabulary_top_k::MAXIMUM_TOP_K;
 use super::{
     apply_top_p_mask, sampling_failure, sampling_runtime_error, softmax_last_axis,
-    validate_sampled_logits,
+    validate_sampled_logits, vocabulary_top_k,
 };
 use crate::InferenceEngineError;
 
@@ -58,6 +59,34 @@ pub(crate) fn sampling_distribution_rows(
     Ok((kept.token_ids, probabilities))
 }
 
+/// Each row's `kept_count` largest-logit ids: the one-pass top-k kernel for
+/// the sampler's usual few tokens, MLX's argpartition for a larger top-k.
+fn largest_logit_ids(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    kept_count: i32,
+) -> Result<MlxArray, InferenceEngineError> {
+    if kept_count <= MAXIMUM_TOP_K {
+        return vocabulary_top_k(runtime, logits, kept_count);
+    }
+    let row_count = logits.shape()[1];
+    let partitioned = runtime
+        .argpartition_axis(
+            &runtime.negative(logits).map_err(sampling_runtime_error)?,
+            kept_count - 1,
+            -1,
+        )
+        .map_err(sampling_runtime_error)?;
+    runtime
+        .slice(
+            &partitioned,
+            &[0, 0, 0],
+            &[1, row_count, kept_count],
+            &[1, 1, 1],
+        )
+        .map_err(sampling_runtime_error)
+}
+
 /// One row's `top_k` most likely tokens, chosen as the law chooses them.
 struct KeptTopK {
     token_ids: MlxArray,
@@ -71,23 +100,8 @@ fn kept_top_k(
     logits: &MlxArray,
     kept_count: i32,
 ) -> Result<KeptTopK, InferenceEngineError> {
-    let row_count = logits.shape()[1];
     let probabilities = softmax_last_axis(runtime, logits)?;
-    let partitioned = runtime
-        .argpartition_axis(
-            &runtime.negative(logits).map_err(sampling_runtime_error)?,
-            kept_count - 1,
-            -1,
-        )
-        .map_err(sampling_runtime_error)?;
-    let token_ids = runtime
-        .slice(
-            &partitioned,
-            &[0, 0, 0],
-            &[1, row_count, kept_count],
-            &[1, 1, 1],
-        )
-        .map_err(sampling_runtime_error)?;
+    let token_ids = largest_logit_ids(runtime, logits, kept_count)?;
     Ok(KeptTopK {
         logits: runtime
             .take_along_axis(logits, &token_ids, -1)

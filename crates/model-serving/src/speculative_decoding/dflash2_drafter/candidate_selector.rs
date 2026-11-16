@@ -98,22 +98,26 @@ struct SelectorInputs {
     projected_hidden: MlxArray,
 }
 
-/// The `selector_top_k` highest-logit ids at every slot, [1, proposals, candidates].
+/// The `selector_top_k` highest-logit ids at every slot, best first,
+/// [1, proposals, candidates], from one top-k pass over the vocabulary.
 pub(super) fn kept_candidate_ids(
     runtime: &MlxRuntime,
     configuration: &DFlash2DrafterConfiguration,
     proposal_logits: &MlxArray,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    let proposal_count = proposal_logits.shape()[1];
-    let vocabulary_size = proposal_logits.shape()[2];
-    let first_kept_rank = vocabulary_size - configuration.selector_candidate_count;
-    let partitioned = runtime.argpartition_axis(proposal_logits, first_kept_rank, -1)?;
-    Ok(runtime.slice(
-        &partitioned,
-        &[0, 0, first_kept_rank],
-        &[1, proposal_count, vocabulary_size],
-        &[1, 1, 1],
-    )?)
+    crate::gpu_token_sampling::vocabulary_top_k(
+        runtime,
+        proposal_logits,
+        configuration.selector_candidate_count,
+    )
+    .map_err(top_k_failure)
+}
+
+fn top_k_failure(top_k_error: crate::InferenceEngineError) -> MlxRuntimeError {
+    MlxRuntimeError::RuntimeOperation {
+        operation: "keep the drafter's candidates at each slot",
+        description: top_k_error.to_string(),
+    }
 }
 
 /// One slot's pick, and `q` over its candidates when sampled.
