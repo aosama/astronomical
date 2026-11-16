@@ -40,14 +40,21 @@ const GATED_DELTA_TREE_SOURCE: &str = r#"
                 input_state[key_segment_index + 8 * fragment_index];
         }
     }
+    // The state after the previous row: a row that continues it (a chain,
+    // such as a copied run) takes one step from there instead of replaying.
+    float4 carried_fragment[4];
     for (int tree_row = 0; tree_row < tree_row_count; ++tree_row) {
+        const int chain_length = chain_lengths[tree_row];
+        const bool continues_previous_row = tree_row > 0 && chain_length > 1 &&
+            row_chains[tree_row * MAXIMUM_CHAIN + chain_length - 2] == tree_row - 1;
         float4 state_fragment[4];
         for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            state_fragment[fragment_index] = starting_fragment[fragment_index];
+            state_fragment[fragment_index] = continues_previous_row
+                ? carried_fragment[fragment_index] : starting_fragment[fragment_index];
         }
-        const int chain_length = chain_lengths[tree_row];
         float reduced_query_partial = 0.0f;
-        for (int chain_step = 0; chain_step < chain_length; ++chain_step) {
+        for (int chain_step = continues_previous_row ? chain_length - 1 : 0;
+             chain_step < chain_length; ++chain_step) {
             const int row = row_chains[tree_row * MAXIMUM_CHAIN + chain_step];
             auto key_row = keys + ((size_t)row * Hk + key_head_index) * Dk;
             auto query_row = queries + ((size_t)row * Hk + key_head_index) * Dk;
@@ -98,6 +105,9 @@ const GATED_DELTA_TREE_SOURCE: &str = r#"
             outputs[((size_t)tree_row * Hv + value_head_index) * Dv + value_row] =
                 (InT)reduced_query_partial;
         }
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            carried_fragment[fragment_index] = state_fragment[fragment_index];
+        }
     }
 "#;
 
@@ -145,6 +155,9 @@ impl TreeRowChains {
         for chain in &chains {
             maximum_chain = maximum_chain.max(chain.len());
         }
+        // MLX compiles one kernel per template value; whole powers of two
+        // keep that to a handful however deep copies reach.
+        let maximum_chain = maximum_chain.next_power_of_two();
         let mut row_chains = Vec::with_capacity(chains.len() * maximum_chain);
         let mut chain_lengths = Vec::with_capacity(chains.len());
         for chain in &chains {

@@ -6,11 +6,14 @@
 //! rows, output head and tapped hidden rows; nothing here knows which model
 //! family that is.
 
+pub mod context_copy;
 pub mod dflash2_drafter;
 pub mod keyed_sampling;
 pub mod tree_rows;
 pub mod verification_decision;
 
+#[cfg(test)]
+mod context_copy_tests;
 #[cfg(test)]
 mod keyed_sampling_tests;
 #[cfg(test)]

@@ -51,6 +51,33 @@ impl TreeRows {
         rows
     }
 
+    /// Hangs `copied` (tokens proposed to follow the anchor, in order) under
+    /// the anchor: it shares the tree's rows while they agree, and the rest
+    /// becomes a chain below the last shared row. Returns the rows added.
+    pub fn add_copied_chain(&mut self, copied: &[u32]) -> usize {
+        let first_new_row = self.row_count();
+        let mut row = 0;
+        for token_id in copied {
+            let mut matching_child = None;
+            for (child_row, parent_row) in self.parent_rows.iter().enumerate() {
+                if *parent_row == Some(row) && self.token_ids[child_row] == *token_id {
+                    matching_child = Some(child_row);
+                    break;
+                }
+            }
+            row = match matching_child {
+                Some(child_row) => child_row,
+                None => {
+                    self.token_ids.push(*token_id);
+                    self.parent_rows.push(Some(row));
+                    self.depths.push(self.depths[row] + 1);
+                    self.row_count() - 1
+                }
+            };
+        }
+        self.row_count() - first_new_row
+    }
+
     pub fn row_count(&self) -> usize {
         self.token_ids.len()
     }

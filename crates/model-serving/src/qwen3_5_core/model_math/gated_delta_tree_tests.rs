@@ -182,9 +182,45 @@ fn should_give_every_branch_row_what_its_chain_alone_would_give() {
 }
 
 #[test]
+#[serial]
+fn should_give_a_copied_chain_below_a_branch_what_its_chain_alone_gives() {
+    let runtime = test_runtime();
+    let inputs = recurrence_inputs(&runtime, 8, 7);
+    // A small tree, then a copied run continuing row 3 for four rows.
+    let parents = [
+        None,
+        Some(0),
+        Some(0),
+        Some(1),
+        Some(3),
+        Some(4),
+        Some(5),
+        Some(6),
+    ];
+    let tree = bits(&runtime, &tree_outputs(&runtime, &inputs, &parents));
+    let row_width = (VALUE_HEAD_COUNT * VALUE_HEAD_DIMENSION) as usize;
+    let chains: [&[i32]; 3] = [&[0, 2], &[0, 1, 3, 4, 5], &[0, 1, 3, 4, 5, 6, 7]];
+    for (row, chain) in [(2, chains[0]), (5, chains[1]), (7, chains[2])] {
+        let alone = bits(
+            &runtime,
+            &sequence_outputs(&runtime, &gathered(&runtime, &inputs, chain)),
+        );
+        assert_eq!(
+            &tree[row * row_width..(row + 1) * row_width],
+            &alone[(chain.len() - 1) * row_width..],
+            "row {row}"
+        );
+    }
+}
+
+#[test]
 fn should_pad_every_chain_to_the_longest_and_list_it_from_the_anchor() {
     let chains = TreeRowChains::from_parent_rows(&[None, Some(0), Some(0), Some(1)]);
-    assert_eq!(chains.maximum_chain, 3);
+    // The longest chain (3) is padded to a power of two.
+    assert_eq!(chains.maximum_chain, 4);
     assert_eq!(chains.chain_lengths, vec![1, 2, 2, 3]);
-    assert_eq!(chains.row_chains, vec![0, 0, 0, 0, 1, 0, 0, 2, 0, 0, 1, 3]);
+    assert_eq!(
+        chains.row_chains,
+        vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 3, 0]
+    );
 }

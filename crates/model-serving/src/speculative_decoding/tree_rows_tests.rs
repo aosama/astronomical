@@ -96,3 +96,28 @@ fn should_treat_an_empty_tree_as_the_anchor_alone() {
     assert_eq!(rows.convolution_window_sources(4), vec![0, 1, 2, 3]);
     assert_eq!(rows.kept_chain(&[8]).rows, vec![0]);
 }
+
+#[test]
+fn should_share_agreeing_rows_with_a_copy_and_chain_the_rest_below_them() {
+    let mut rows = branching_tree();
+    // 10 and 20 are already rows 1 and 3; 40 and 50 hang below row 3.
+    assert_eq!(rows.add_copied_chain(&[10, 20, 40, 50]), 2);
+    assert_eq!(rows.token_ids[5..], [40, 50]);
+    assert_eq!(rows.parent_rows[5..], [Some(3), Some(5)]);
+    assert_eq!(rows.depths[5..], [3, 4]);
+}
+
+#[test]
+fn should_add_a_copy_that_disagrees_at_once_as_a_new_branch_under_the_anchor() {
+    let mut rows = branching_tree();
+    assert_eq!(rows.add_copied_chain(&[99, 98]), 2);
+    assert_eq!(rows.parent_rows[5..], [Some(0), Some(5)]);
+}
+
+#[test]
+fn should_add_no_rows_for_a_copy_the_tree_already_holds_or_an_empty_one() {
+    let mut rows = branching_tree();
+    assert_eq!(rows.add_copied_chain(&[10, 20, 30]), 0);
+    assert_eq!(rows.add_copied_chain(&[]), 0);
+    assert_eq!(rows.row_count(), 5);
+}
