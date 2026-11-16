@@ -11,10 +11,20 @@
 //! so those sessions stay classic. Everything here is values in, values
 //! out, so every rule is unit testable without a graphics processor.
 
-/// The request sampling strategies token-equality verification supports,
-/// carrying the parameters the verifier needs to reproduce the classic
-/// per-token choice.
-pub use super::verification_decisions::VerificationTokenChoice;
+/// How the target picks one token after every verified row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerificationTokenChoice {
+    /// The argmax: emitted tokens are exactly the classic greedy decode.
+    HighestLogit,
+    /// The keyed sample from the sampler's own distribution at these
+    /// settings (top-k and top-p on the untempered logits, then the
+    /// temperature): an exact draw from the classic sampled law.
+    TopKTopP {
+        temperature_thousandths: u16,
+        top_k: u16,
+        top_p_thousandths: u16,
+    },
+}
 
 /// Properties of one generation request that speculation admission reads.
 #[derive(Debug, Clone, PartialEq)]
@@ -75,39 +85,16 @@ pub fn verification_token_choice_for_strategy(
     }
 }
 
-/// The pairing contract between one draft configuration and one target
-/// model geometry. All four rules must hold or the draft cannot run beside
-/// this target: the taps must land inside the target's layers, the trunk
-/// widths must match the conditioning projection, and the shared vocabulary
-/// must match exactly (the draft ships no embedding or head of its own).
+/// Whether an admitted session still drafts once its prompt prefix has been
+/// restored from the `astro_ssd_prompt_cache`. The drafter conditions on
+/// hidden rows the target taps while prefill computes the prompt's suffix; a
+/// prompt restored to its last token leaves no row to tap, so that session
+/// decodes classically.
 #[must_use]
-pub fn draft_pairs_with_target(
-    draft_target_layer_count: i32,
-    draft_target_layer_ids: &[i32],
-    draft_vocabulary_size: i32,
-    draft_conditioning_input_width: i32,
-    target_layer_count: usize,
-    target_hidden_size: usize,
-    target_vocabulary_size: u32,
+pub fn drafting_survives_prompt_restore(
+    speculative_session_admitted: bool,
+    restored_prompt_token_count: usize,
+    prompt_token_count: usize,
 ) -> bool {
-    let target_layer_count_i32 = i32::try_from(target_layer_count).unwrap_or(i32::MAX);
-    if draft_target_layer_count != target_layer_count_i32 {
-        return false;
-    }
-    let mut previous_tap_layer_id = -1_i32;
-    for &tap_layer_id in draft_target_layer_ids {
-        if tap_layer_id < 0 || tap_layer_id >= target_layer_count_i32 {
-            return false;
-        }
-        if tap_layer_id <= previous_tap_layer_id {
-            return false;
-        }
-        previous_tap_layer_id = tap_layer_id;
-    }
-    if draft_vocabulary_size != i32::try_from(target_vocabulary_size).unwrap_or(i32::MIN) {
-        return false;
-    }
-    let expected_conditioning_width =
-        i32::try_from(target_hidden_size).unwrap_or(i32::MAX) * draft_target_layer_ids.len() as i32;
-    draft_conditioning_input_width == expected_conditioning_width
+    speculative_session_admitted && restored_prompt_token_count < prompt_token_count
 }

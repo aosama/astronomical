@@ -1,5 +1,6 @@
 use astronomical_runtime_integration::MlxRuntimeError;
 
+use super::dense_projection::Qwen3_5DenseProjection;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
 use mlx_bridge::MlxArray;
@@ -238,15 +239,15 @@ impl Qwen3_5AffineWeights {
 /// Pre-bound weights for one Qwen3.5 GatedDeltaNet attention layer.
 #[derive(Debug)]
 pub(crate) struct Qwen3_5LinearAttentionWeights {
-    pub(crate) input_queries_keys_values_projection: Qwen3_5AffineWeights,
-    pub(crate) output_gate_projection: Qwen3_5AffineWeights,
-    pub(crate) update_rate_projection: Qwen3_5AffineWeights,
-    pub(crate) decay_interval_projection: Qwen3_5AffineWeights,
+    pub(crate) input_queries_keys_values_projection: Qwen3_5DenseProjection,
+    pub(crate) output_gate_projection: Qwen3_5DenseProjection,
+    pub(crate) update_rate_projection: Qwen3_5DenseProjection,
+    pub(crate) decay_interval_projection: Qwen3_5DenseProjection,
     pub(crate) convolution_weight: MlxArray,
     pub(crate) decay_interval_bias: MlxArray,
     pub(crate) decay_rate_logarithm: MlxArray,
     pub(crate) normalization_weight: MlxArray,
-    pub(crate) output_projection: Qwen3_5AffineWeights,
+    pub(crate) output_projection: Qwen3_5DenseProjection,
 }
 
 impl Qwen3_5LinearAttentionWeights {
@@ -271,10 +272,10 @@ impl Qwen3_5LinearAttentionWeights {
 /// Pre-bound weights for one Qwen3.5 full-attention layer.
 #[derive(Debug)]
 pub(crate) struct Qwen3_5FullAttentionWeights {
-    pub(crate) query_projection: Qwen3_5AffineWeights,
-    pub(crate) key_projection: Qwen3_5AffineWeights,
-    pub(crate) value_projection: Qwen3_5AffineWeights,
-    pub(crate) output_projection: Qwen3_5AffineWeights,
+    pub(crate) query_projection: Qwen3_5DenseProjection,
+    pub(crate) key_projection: Qwen3_5DenseProjection,
+    pub(crate) value_projection: Qwen3_5DenseProjection,
+    pub(crate) output_projection: Qwen3_5DenseProjection,
     pub(crate) query_normalization_weight: MlxArray,
     pub(crate) key_normalization_weight: MlxArray,
 }

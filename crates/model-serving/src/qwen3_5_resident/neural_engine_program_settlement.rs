@@ -72,11 +72,11 @@ pub(crate) fn settle_neural_engine_programs(
     model: &mut Qwen3_5ResidentModel,
     current_status: &NeuralEnginePrefillStatus,
 ) -> Option<NeuralEnginePrefillStatus> {
-    if let Some(output_gate_engine) = model.base.output_gate_engine.as_ref()
+    if let Some(output_gate_engine) = model.base.optional_accelerators.output_gate_engine.as_ref()
         && output_gate_engine.has_failed()
     {
         tracing::warn!("releasing the Neural Engine output gate programs after a failure");
-        model.base.output_gate_engine = None;
+        model.base.optional_accelerators.output_gate_engine = None;
     }
     let prefill = model.neural_engine_mlp_prefill.as_ref()?;
     let settlement = program_settlement_of(
@@ -107,7 +107,7 @@ pub(crate) fn settle_neural_engine_programs(
 
 fn release_programs(model: &mut Qwen3_5ResidentModel) {
     model.neural_engine_mlp_prefill = None;
-    model.base.output_gate_engine = None;
+    model.base.optional_accelerators.output_gate_engine = None;
 }
 
 #[cfg(test)]

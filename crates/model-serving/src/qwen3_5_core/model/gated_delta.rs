@@ -130,7 +130,7 @@ impl Qwen3_5ModelBase {
 
     /// Runs the four input projections under one evaluation section and
     /// reshapes the output gate to per-head layout.
-    fn project_linear_attention_inputs(
+    pub(super) fn project_linear_attention_inputs(
         &self,
         hidden_states: &MlxArray,
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
@@ -198,7 +198,7 @@ impl Qwen3_5ModelBase {
         decoder_layer_index: usize,
         gpu_work: &[&MlxArray],
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        if let Some(output_gate_engine) = self.output_gate_engine.as_ref()
+        if let Some(output_gate_engine) = self.optional_accelerators.output_gate_engine.as_ref()
             && output_gate_engine.handles(token_count)
         {
             match output_gate_engine.project_beside_gpu_work(
@@ -391,12 +391,7 @@ impl Qwen3_5ModelBase {
         convolution_weight: &MlxArray,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
-        let linear_key_head_count = self.config.linear_key_head_count() as i32;
-        let linear_value_head_count = self.config.linear_value_head_count() as i32;
-        let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
-        let linear_key_dimension = self.config.linear_key_dimension() as i32;
         let linear_convolution_dimension = self.config.linear_convolution_dimension() as i32;
-        let rms_norm_epsilon = f32::from_bits(self.config.rms_norm_epsilon_bits());
         let convolution_output = self.runtime.conv1d(
             convolution_input,
             convolution_weight,
@@ -405,12 +400,34 @@ impl Qwen3_5ModelBase {
             1,
             linear_convolution_dimension,
         )?;
+        self.normalized_heads_from_convolution(
+            &convolution_output,
+            token_count,
+            performance_attribution,
+        )
+    }
+
+    /// Everything after the depthwise convolution: SiLU, the q/k/v split,
+    /// and both scaled RMS norms. A draft tree convolves each row's own
+    /// window and shares this tail, so its rows go through the same steps.
+    pub(super) fn normalized_heads_from_convolution(
+        &self,
+        convolution_output: &MlxArray,
+        token_count: i32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+        let linear_key_head_count = self.config.linear_key_head_count() as i32;
+        let linear_value_head_count = self.config.linear_value_head_count() as i32;
+        let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
+        let linear_key_dimension = self.config.linear_key_dimension() as i32;
+        let linear_convolution_dimension = self.config.linear_convolution_dimension() as i32;
+        let rms_norm_epsilon = f32::from_bits(self.config.rms_norm_epsilon_bits());
         // The shapeless fused-silu compilation matches stock MLX `nn.silu`:
         // one kernel reading the input once, instead of a sigmoid kernel plus
         // a multiply kernel with roughly 2.5x the memory traffic.
         let convolution_output = self
             .runtime
-            .apply_compiled_silu(&self.compiled_elementwise_graphs, &convolution_output)?;
+            .apply_compiled_silu(&self.compiled_elementwise_graphs, convolution_output)?;
         evaluate_linear_attention_section(
             &self.runtime,
             performance_attribution,
@@ -474,7 +491,7 @@ impl Qwen3_5ModelBase {
     }
 }
 
-fn normalize_linear_attention_convolution_weight(
+pub(super) fn normalize_linear_attention_convolution_weight(
     runtime: &MlxRuntime,
     convolution_weight: &MlxArray,
     output_channel_count: i32,

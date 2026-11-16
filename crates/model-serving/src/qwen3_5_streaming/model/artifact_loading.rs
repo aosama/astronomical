@@ -159,7 +159,7 @@ impl Qwen3_5Model {
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
-                output_gate_engine: None,
+                optional_accelerators: Default::default(),
                 sorted_expert_weighted_sum_kernel,
                 compiled_swiglu,
                 compiled_elementwise_graphs,

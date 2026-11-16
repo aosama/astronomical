@@ -453,6 +453,74 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # back-to-back residency churn on the large sparse model; issues #1716 and
 # #1717). Each case loads the real model, so run them only when comparing
 # strategies; append --filter NAME to pick cases.
+# A drafted block rewound to its kept rows leaves the target exactly where
+# forwarding only those rows would (small dense Qwen3.5 from the Development
+# library, every kept count 1 to 7, plus a control without the rewind). Seconds.
+test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter drafted_rewind"
+# A draft tree verified in one pass on the small dense Qwen3.5: every row's
+# logits match feeding its chain alone, committing a branch leaves the state
+# feeding that branch leaves, and a control that commits the other branch
+# differs. Seconds.
+test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter draft_tree_verification"
+# Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
+# real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
+# beside a plain one-row step. Each stage is timed alone. Asserts nothing;
+# about 10 seconds after the pair loads. Same downloads as the Gate 1 alias.
+measure-dflash2-round-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_round_cost"
+# Gate 1 of speculative decoding on the dense Qwen3.8 27B: tokens kept per
+# verify round by the DFlash2 drafter on the real pair (TensorFold/Qwen3.8-27B-
+# MLX-4bit and z-lab/Qwen3.8-27B-DFlash2, read from the Hugging Face hub folder;
+# `hf download` both first). Code at 0.7, chat at 1.0, greedy as a diagnostic;
+# floors sit about 10% under z-lab's reference (6.07 and 3.00). Needs about
+# 22 GB of free memory; about one minute.
+measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
+# Gate 4's first measurement: kept per round if each round verified
+# TensorFold's draft tree (15 nodes, 4 children) instead of one path, on the
+# code-completion and chat cells, greedy and keyed-sampled (0.7 and 1.0).
+# Replays a recorded single-path reference, so it needs no tree forward. It
+# also forces TensorFold's own greedy code text (a fixture) through this
+# drafter and tree, the one count that is on the same text as its 5.95.
+# Same pair and memory as above; about a minute.
+measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_oracle"
+# Gate 4 end to end on the 27B pair: every round verifies TensorFold's draft
+# tree in one target pass and commits the kept chain; prints kept per round,
+# decode tok/s and ms a round for the code-completion and chat cells, greedy
+# and keyed-sampled, then where a round's time goes (each stage synced, after
+# a short and a long prompt, and by layer stage). Same pair and memory as
+# above; about three minutes, or one test with --filter NAME.
+measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_round"
+# The same pair through the real worker: 10,000 Romeo and Juliet tokens in,
+# 500 out at temperature 1.0, over the daemon IPC boundary, with the worker
+# finding the drafter beside the target. Append --configuration PATH with
+# model_directory set to the target's snapshot directory (and
+# throughput_history_path to keep the durable history untouched). About two
+# minutes.
+measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter dflash2_draft_tree --ignored"
+# The DFlash2 drafter against z-lab's own MLX reference: a tiny random
+# drafter run through dflash/model_mlx.py for two rounds (fixture and its
+# generator in verification/acceptance/tests/fixtures/dflash2_reference); hidden
+# rows, logits, greedy path and kept candidates must match. Seconds.
+test-dflash2-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_drafter_reference"
+# The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
+# every 27B shape at 1 to 32 rows, gives each row the same bits alone and
+# inside a 16-row block, and refuses packings it cannot read. Seconds.
+test-row-batched-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter row_batched_matmul"
+# The register-ordered kernel's GPU contracts: its one-time conversion
+# matches a CPU transcription of TensorFold's regBlock word for word, its
+# values match MLX's quantized matmul on every 27B shape at 1 to 128 rows,
+# and each row gets the same bits alone and inside a 128-row dispatch. Seconds.
+test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter register_ordered_matmul"
+# Speculative decoding: what a verify pass over K drafted rows costs against
+# one row. Times the dense Qwen3.8 27B's real 4-bit projection shapes for
+# K = 1 to 128, through MLX's quantized matmul, the row-batched kernel reading
+# MLX's layout, and the register-ordered kernel reading weights converted
+# into TensorFold's order (crates/model-serving/src/row_batched_matmul), over
+# 16 distinct layers
+# so every pass reads DRAM, plus the 248,320-row output head, then each
+# projection shape on its own. Prints each K's cost against one row and the
+# read rate; asserts nothing. Needs about 6 GB of free GPU memory and no
+# model; runs in about 15 seconds.
+measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --filter k_row_verify_cost"
 measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
 # Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the

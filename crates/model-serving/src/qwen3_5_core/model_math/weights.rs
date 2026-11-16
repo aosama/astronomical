@@ -8,19 +8,24 @@ use crate::qwen3_5_core::artifacts::{
 use crate::qwen3_5_core::configuration::{Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
+mod attention_binding;
 #[cfg(test)]
 mod tests;
+
+use attention_binding::{take_full_attention_weights, take_linear_attention_weights};
 
 use super::weights_validation;
 use super::{
     decoder_layer_weights::{
         Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
-        Qwen3_5DecoderLayerWeights, Qwen3_5FullAttentionWeights, Qwen3_5LinearAttentionWeights,
+        Qwen3_5DecoderLayerWeights,
     },
     error::Qwen3_5ExecutionError,
     feed_forward_weights,
 };
 use mlx_bridge::MlxArray;
+
+use super::dense_projection::Qwen3_5DenseProjection;
 
 /// Whether a model keeps its embedding table resident or reads its rows from
 /// the SSD per forward.
@@ -44,7 +49,7 @@ pub struct Qwen3_5Weights {
     pub(crate) embedding_weights: Qwen3_5AffineWeights,
     pub(crate) decoder_layer_weights: Vec<Qwen3_5DecoderLayerWeights>,
     pub(crate) final_normalization_weight: MlxArray,
-    pub(crate) language_model_head_weights: Qwen3_5AffineWeights,
+    pub(crate) language_model_head_weights: Qwen3_5DenseProjection,
     has_tied_embeddings: bool,
     /// Whether the shards are a raw Hugging Face checkpoint whose RMSNorm
     /// weights are stored as `gamma - 1`; layers bound later, such as streamed
@@ -56,6 +61,21 @@ pub struct Qwen3_5Weights {
 }
 
 impl Qwen3_5Weights {
+    /// Drops the loaded shard maps' own references to every tensor. A shard
+    /// map holds each tensor it loaded for as long as it lives, so a weight
+    /// replaced after load (a projection converted into register order) would
+    /// otherwise keep its original bytes resident beside the new ones. Call
+    /// only once every bound tensor is materialized: nothing is read from the
+    /// maps afterwards.
+    pub(crate) fn release_model_shard_maps(&mut self) {
+        self.model_shards.clear();
+    }
+
+    /// Whether the output head is the embedding table, held twice by reference.
+    pub(crate) fn has_tied_embeddings(&self) -> bool {
+        self.has_tied_embeddings
+    }
+
     /// Loads and binds model weights without diagnostic performance attribution.
     pub fn load(
         runtime: &MlxRuntime,
@@ -195,7 +215,8 @@ impl Qwen3_5Weights {
                 qwen3_5_config,
                 "language_model.lm_head",
             )?
-        };
+        }
+        .into();
         if let Some(unassigned_tensor_name) = bound_tensors.keys().next() {
             return Err(Qwen3_5ExecutionError::UnassignedTensor {
                 tensor_name: unassigned_tensor_name.clone(),
@@ -376,95 +397,6 @@ pub(super) fn take_decoder_layer_weights(
         attention_weights,
         post_attention_normalization_weight,
         mlp_weights,
-    })
-}
-
-fn take_linear_attention_weights(
-    bound_tensors: &mut HashMap<String, MlxArray>,
-    qwen3_5_config: &Qwen3_5Config,
-    decoder_layer_prefix: &str,
-) -> Result<Qwen3_5LinearAttentionWeights, Qwen3_5ExecutionError> {
-    let linear_attention_prefix = format!("{decoder_layer_prefix}.linear_attn");
-    Ok(Qwen3_5LinearAttentionWeights {
-        input_queries_keys_values_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{linear_attention_prefix}.in_proj_qkv"),
-        )?,
-        output_gate_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{linear_attention_prefix}.in_proj_z"),
-        )?,
-        update_rate_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{linear_attention_prefix}.in_proj_b"),
-        )?,
-        decay_interval_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{linear_attention_prefix}.in_proj_a"),
-        )?,
-        convolution_weight: take_tensor(
-            bound_tensors,
-            format!("{linear_attention_prefix}.conv1d.weight"),
-        )?,
-        decay_interval_bias: take_tensor(
-            bound_tensors,
-            format!("{linear_attention_prefix}.dt_bias"),
-        )?,
-        decay_rate_logarithm: take_tensor(
-            bound_tensors,
-            format!("{linear_attention_prefix}.A_log"),
-        )?,
-        normalization_weight: take_tensor(
-            bound_tensors,
-            format!("{linear_attention_prefix}.norm.weight"),
-        )?,
-        output_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{linear_attention_prefix}.out_proj"),
-        )?,
-    })
-}
-
-pub(crate) fn take_full_attention_weights(
-    bound_tensors: &mut HashMap<String, MlxArray>,
-    qwen3_5_config: &Qwen3_5Config,
-    decoder_layer_prefix: &str,
-) -> Result<Qwen3_5FullAttentionWeights, Qwen3_5ExecutionError> {
-    let full_attention_prefix = format!("{decoder_layer_prefix}.self_attn");
-    Ok(Qwen3_5FullAttentionWeights {
-        query_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{full_attention_prefix}.q_proj"),
-        )?,
-        key_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{full_attention_prefix}.k_proj"),
-        )?,
-        value_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{full_attention_prefix}.v_proj"),
-        )?,
-        output_projection: take_quantized_affine_weights(
-            bound_tensors,
-            qwen3_5_config,
-            &format!("{full_attention_prefix}.o_proj"),
-        )?,
-        query_normalization_weight: take_tensor(
-            bound_tensors,
-            format!("{full_attention_prefix}.q_norm.weight"),
-        )?,
-        key_normalization_weight: take_tensor(
-            bound_tensors,
-            format!("{full_attention_prefix}.k_norm.weight"),
-        )?,
     })
 }
 

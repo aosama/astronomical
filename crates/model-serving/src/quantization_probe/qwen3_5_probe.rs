@@ -377,7 +377,7 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
             .swapped_out_weights
             .remove(&tied_head_key(&restore_token.module_name))
         {
-            self.model.base.weights.language_model_head_weights = previous_head;
+            self.model.base.weights.language_model_head_weights = previous_head.into();
         }
         Ok(())
     }
