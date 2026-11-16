@@ -39,7 +39,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "astronomical-acceptance"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-cli",
  "astronomical-config",
@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-cli"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-config"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-expert-atlas",
  "astronomical-lowercase-hex",
@@ -117,7 +117,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-daemon"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
@@ -152,7 +152,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-decision-contract"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "base64 0.23.1",
  "safetensors",
@@ -163,7 +163,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-decision-training"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-decision-contract",
  "safetensors",
@@ -174,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-download-catalog"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-config",
  "astronomical-lowercase-hex",
@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-e2e"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-config",
  "astronomical-daemon",
@@ -202,11 +202,11 @@ dependencies = [
 
 [[package]]
 name = "astronomical-english-number-words"
-version = "0.2.110"
+version = "0.2.111"
 
 [[package]]
 name = "astronomical-english-phonemes"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-english-number-words",
  "serde_json",
@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-expert-atlas"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-lowercase-hex",
  "libc",
@@ -227,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-inference-worker"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-config",
  "astronomical-daemon",
@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-ipc-protocol"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-decision-contract",
  "astronomical-lowercase-hex",
@@ -268,7 +268,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-jangtq2-qwen35"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-mlx-c-fork",
  "astronomical-runtime-integration",
@@ -281,11 +281,11 @@ dependencies = [
 
 [[package]]
 name = "astronomical-lowercase-hex"
-version = "0.2.110"
+version = "0.2.111"
 
 [[package]]
 name = "astronomical-memory-policy"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-ipc-protocol",
  "serde",
@@ -295,14 +295,14 @@ dependencies = [
 
 [[package]]
 name = "astronomical-mlx-c-fork"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "mlx-bridge",
 ]
 
 [[package]]
 name = "astronomical-model-serving"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-config",
  "astronomical-decision-contract",
@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-native-build-orchestration"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-native-identity",
  "fs4",
@@ -347,21 +347,21 @@ dependencies = [
 
 [[package]]
 name = "astronomical-native-build-tool"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-native-build-orchestration",
 ]
 
 [[package]]
 name = "astronomical-native-identity"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "astronomical-neural-engine"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-test-harness",
  "cc",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-neural-engine-research"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-neural-engine",
  "astronomical-runtime-integration",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-quantization"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-runtime-integration",
  "minijinja",
@@ -404,7 +404,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-rest-contract"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-speech-contract",
  "base64 0.23.1",
@@ -416,7 +416,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-runtime-integration"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-lowercase-hex",
  "astronomical-mlx-c-fork",
@@ -432,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-speech-contract"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "serde",
  "serde_json",
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-test-harness"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-lowercase-hex",
  "base64 0.23.1",
@@ -455,7 +455,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-vision-tower"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-lowercase-hex",
  "reqwest",
@@ -2925,7 +2925,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "xtask"
-version = "0.2.110"
+version = "0.2.111"
 dependencies = [
  "astronomical-lowercase-hex",
  "astronomical-native-identity",
