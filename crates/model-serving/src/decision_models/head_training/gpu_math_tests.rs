@@ -55,18 +55,15 @@ fn should_multiply_matrices_to_float32_accuracy_where_a_plain_product_may_not() 
     let precise_gap = largest_relative_gap(&precise, &reference);
     // Float32 itself, summing 1024 products, is good to a few 1e-6 here;
     // TF32 is about 1e-3.
+    // The plain product is not compared with: whether it rounds depends on
+    // the GPU. On one with TF32 this case measured 2.1e-6 precise against
+    // 6.5e-4 plain; on CI's GPU, without TF32, the plain product is already
+    // full float32 and can beat the precise one's dropped low-by-low term.
+    // What training relies on holds everywhere: float32 accuracy.
     assert!(
         precise_gap < 1e-5,
         "precise product off by {precise_gap:e} relative"
     );
-    let plain = math
-        .download(&runtime.matmul(&left, &right).unwrap())
-        .unwrap();
-    let plain_gap = largest_relative_gap(&plain, &reference);
-    // Whether the plain product rounds depends on the GPU: on one with TF32
-    // this case measured 2.1e-6 precise against 6.5e-4 plain. It is never
-    // meaningfully closer.
-    assert!(precise_gap <= plain_gap * 2.0 + 1e-6);
 }
 
 #[test]
