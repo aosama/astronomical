@@ -310,3 +310,51 @@ fn should_refuse_to_restore_a_row_outside_the_weight() {
     assert!(weight.restored_rows(&runtime, &[64]).is_err());
     assert!(weight.restored_rows(&runtime, &[-1]).is_err());
 }
+
+#[test]
+#[ignore = "runs custom Metal kernels on the GPU"]
+#[serial]
+fn should_pad_a_48_wide_projection_to_a_whole_tile_and_return_only_its_48_columns() {
+    let runtime = initialize_runtime();
+    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
+    let random_key = runtime.random_key(43).expect("a key builds");
+    let fixture = shape_fixture(&runtime, &random_key, 48, 5120);
+    let weight = converted(&runtime, &kernels, &fixture);
+    assert_eq!((weight.output_width, weight.logical_output_width), (64, 48));
+    let rows = runtime
+        .random_normal(&[16, 5120], MlxDtype::BFloat16, 0.0, 1.0, &random_key)
+        .expect("rows build");
+    let kernel_output =
+        register_ordered_matmul(&runtime, &kernels, &rows, &weight).expect("the kernel runs");
+    assert_eq!(kernel_output.shape(), vec![16, 48]);
+    let mlx_output = runtime
+        .quantized_matmul_affine(
+            &rows,
+            &fixture.packed_weight,
+            &fixture.scales,
+            &fixture.biases,
+            true,
+            64,
+            4,
+        )
+        .expect("MLX's matmul builds");
+    let similarity = cosine_similarity(
+        &values(&runtime, &kernel_output),
+        &values(&runtime, &mlx_output),
+    );
+    assert!(
+        similarity >= MINIMUM_COSINE_SIMILARITY,
+        "cosine {similarity}"
+    );
+    let restored = weight
+        .restored_mlx_layout(&runtime)
+        .expect("the weight restores");
+    assert_eq!(
+        words_of(&runtime, &restored.packed_weight),
+        words_of(&runtime, &fixture.packed_weight)
+    );
+    assert_eq!(
+        bf16_bits(&runtime, &restored.scales),
+        bf16_bits(&runtime, &fixture.scales)
+    );
+}

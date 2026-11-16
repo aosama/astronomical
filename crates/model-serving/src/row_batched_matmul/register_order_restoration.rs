@@ -20,6 +20,22 @@ pub struct RestoredMlxRows {
     pub biases: MlxArray,
 }
 
+impl RestoredMlxRows {
+    /// The given rows of all three arrays, in that order.
+    fn rows(
+        &self,
+        runtime: &MlxRuntime,
+        row_ids: &[i32],
+    ) -> Result<Self, RowBatchedProjectionError> {
+        let row_indices = runtime.array_from_i32(row_ids, &[row_ids.len() as i32])?;
+        Ok(Self {
+            packed_weight: runtime.take_axis(&self.packed_weight, &row_indices, 0)?,
+            scales: runtime.take_axis(&self.scales, &row_indices, 0)?,
+            biases: runtime.take_axis(&self.biases, &row_indices, 0)?,
+        })
+    }
+}
+
 impl RegisterOrderedWeight {
     /// The whole weight back in MLX's layout. Lazy; it holds a second copy
     /// of the weight while it lives, so callers drop it once used.
@@ -29,7 +45,12 @@ impl RegisterOrderedWeight {
     ) -> Result<RestoredMlxRows, RowBatchedProjectionError> {
         let tile_count = self.output_width / OUTPUT_COLUMNS_PER_SIMDGROUP;
         let tile_ids: Vec<i32> = (0..tile_count).collect();
-        self.restored_tiles(runtime, &tile_ids)
+        let restored = self.restored_tiles(runtime, &tile_ids)?;
+        if self.logical_output_width == self.output_width {
+            return Ok(restored);
+        }
+        let logical_row_ids: Vec<i32> = (0..self.logical_output_width).collect();
+        restored.rows(runtime, &logical_row_ids)
     }
 
     /// The output rows `row_ids` (output columns of the projection) in MLX's
@@ -43,9 +64,12 @@ impl RegisterOrderedWeight {
         let mut tile_ids = Vec::with_capacity(row_ids.len());
         let mut rows_within_restored = Vec::with_capacity(row_ids.len());
         for (listed_index, row_id) in (0_i32..).zip(row_ids) {
-            if !(0..self.output_width).contains(row_id) {
+            if !(0..self.logical_output_width).contains(row_id) {
                 return Err(RowBatchedProjectionError::UnsupportedQuantization {
-                    description: format!("row {row_id} is outside {} rows", self.output_width),
+                    description: format!(
+                        "row {row_id} is outside {} rows",
+                        self.logical_output_width
+                    ),
                 });
             }
             tile_ids.push(row_id / OUTPUT_COLUMNS_PER_SIMDGROUP);
@@ -53,14 +77,8 @@ impl RegisterOrderedWeight {
                 listed_index * OUTPUT_COLUMNS_PER_SIMDGROUP + row_id % OUTPUT_COLUMNS_PER_SIMDGROUP,
             );
         }
-        let restored_tiles = self.restored_tiles(runtime, &tile_ids)?;
-        let row_indices =
-            runtime.array_from_i32(&rows_within_restored, &[rows_within_restored.len() as i32])?;
-        Ok(RestoredMlxRows {
-            packed_weight: runtime.take_axis(&restored_tiles.packed_weight, &row_indices, 0)?,
-            scales: runtime.take_axis(&restored_tiles.scales, &row_indices, 0)?,
-            biases: runtime.take_axis(&restored_tiles.biases, &row_indices, 0)?,
-        })
+        self.restored_tiles(runtime, &tile_ids)?
+            .rows(runtime, &rows_within_restored)
     }
 
     fn restored_tiles(

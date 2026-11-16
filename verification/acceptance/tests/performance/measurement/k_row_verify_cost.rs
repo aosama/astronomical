@@ -22,21 +22,21 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
-const HIDDEN_WIDTH: i32 = 5120;
-const MLP_WIDTH: i32 = 17408;
+pub(super) const HIDDEN_WIDTH: i32 = 5120;
+pub(super) const MLP_WIDTH: i32 = 17408;
 /// Gated DeltaNet value width and the attention output width share 6144.
-const MIXER_OUTPUT_WIDTH: i32 = 6144;
+pub(super) const MIXER_OUTPUT_WIDTH: i32 = 6144;
 const VOCABULARY_SIZE: i32 = 248_320;
 const QUANTIZATION_GROUP_SIZE: i32 = 64;
 const QUANTIZATION_BITS: i32 = 4;
 /// The 27B repeats three DeltaNet layers and one attention layer; 16 distinct
 /// layers (3.19 GB) is far past the GPU's system-level memory, so every pass
 /// reads DRAM. Both kernels read the same arrays, so each layer is held once.
-const MEASURED_LAYER_COUNT: usize = 16;
-const MODEL_LAYER_COUNT: f64 = 64.0;
+pub(super) const MEASURED_LAYER_COUNT: usize = 16;
+pub(super) const MODEL_LAYER_COUNT: f64 = 64.0;
 const ROW_COUNTS: [i32; 9] = [1, 2, 4, 8, 12, 16, 32, 64, 128];
-const WARM_UP_PASS_COUNT: usize = 2;
-const MEASURED_PASS_COUNT: usize = 5;
+pub(super) const WARM_UP_PASS_COUNT: usize = 2;
+pub(super) const MEASURED_PASS_COUNT: usize = 5;
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 12 * 1024 * 1024 * 1024;
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const BYTES_PER_GB: f64 = 1_073_741_824.0;
@@ -82,7 +82,7 @@ struct MeasuredLayer {
     mlp_down: PackedProjection,
 }
 
-fn initialize_runtime() -> MlxRuntime {
+pub(super) fn initialize_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
             .expect("memory limits are valid"),
@@ -286,7 +286,7 @@ fn pack_projection(
 /// Quantizing builds float32 temporaries of the whole weight, which for the
 /// 248,320-row head would be about 5 GB, so large weights are quantized a
 /// slice of rows at a time and the packed slices joined; rows are independent.
-fn quantize_random_weight_in_row_slices(
+pub(super) fn quantize_random_weight_in_row_slices(
     runtime: &MlxRuntime,
     random_key: &MlxArray,
     output_width: i32,
@@ -331,7 +331,7 @@ fn join_row_slices(runtime: &MlxRuntime, row_slices: &[MlxArray]) -> MlxArray {
         .expect("the slices join")
 }
 
-fn random_rows(
+pub(super) fn random_rows(
     runtime: &MlxRuntime,
     random_key: &MlxArray,
     row_count: i32,
@@ -554,4 +554,59 @@ fn report_row_count(
         head.0.as_secs_f64() * 1000.0,
         head.0.as_secs_f64() / head.1.as_secs_f64(),
     );
+}
+
+const SWEPT_SLICE_COUNTS: [i32; 4] = [1, 2, 4, 8];
+const SWEPT_ROW_COUNTS: [i32; 2] = [1, 16];
+
+/// The register-ordered kernel's input slices per shape: the table in
+/// `register_ordered_plan` came from TensorFold's measurements on an M5
+/// Ultra, so this times every slice count on this chip, at one row (plain
+/// decode) and 16 (a draft tree), over 16 distinct copies of each shape.
+#[test]
+#[ignore = "performance measurement on the GPU; run through cargo measure-k-row-verify-cost"]
+#[serial]
+fn should_sweep_register_ordered_slice_counts_for_each_projection_shape() {
+    let runtime = initialize_runtime();
+    let kernels = RowBatchedMatmulKernels::declare().expect("the kernels are declared");
+    let random_key = runtime.random_key(1234).expect("a key builds");
+    for (output_width, input_width) in PROJECTION_SHAPES {
+        let mut shape_copies = Vec::with_capacity(MEASURED_LAYER_COUNT);
+        for _ in 0..MEASURED_LAYER_COUNT {
+            shape_copies.push(pack_projection(
+                &runtime,
+                &kernels,
+                &random_key,
+                output_width,
+                input_width,
+            ));
+        }
+        let shipped_slice_count = match &shape_copies[0].register_ordered {
+            Some(converted) => converted.input_slice_count,
+            None => 0,
+        };
+        let mut sweep_line =
+            format!("[k-row] slices {output_width}x{input_width} (shipped {shipped_slice_count}):");
+        for slice_count in SWEPT_SLICE_COUNTS {
+            for shape_copy in &mut shape_copies {
+                if let Some(converted) = shape_copy.register_ordered.as_mut() {
+                    converted.input_slice_count = slice_count;
+                }
+            }
+            for row_count in SWEPT_ROW_COUNTS {
+                let pass_time = median_pass_time(
+                    &runtime,
+                    &random_key,
+                    row_count,
+                    &MeasuredPass::ShapeCopies(&shape_copies, input_width),
+                    MatmulPath::RegisterOrdered(&kernels),
+                );
+                sweep_line.push_str(&format!(
+                    " SK={slice_count} K={row_count} {:.2} ms",
+                    pass_time.as_secs_f64() * 1000.0
+                ));
+            }
+        }
+        eprintln!("{sweep_line}");
+    }
 }

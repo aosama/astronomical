@@ -184,11 +184,12 @@ fn kept_tap_rows(pair: &JourneyPair, layer_taps: &[MlxArray], kept_rows: &[usize
 
 const BREAKDOWN_ROUND_COUNT: usize = 24;
 const BREAKDOWN_WARM_UP_ROUNDS: usize = 4;
-const BREAKDOWN_STAGES: [&str; 6] = [
+const BREAKDOWN_STAGES: [&str; 7] = [
     "drafter pass (4-bit, 8 rows)",
     "draft head + lattice readback",
     "tree search (CPU)",
-    "target tree verify (16 rows)",
+    "tree verify graph build (CPU)",
+    "tree verify GPU wait",
     "picks readback (keyed sample)",
     "commit kept chain",
 ];
@@ -251,6 +252,7 @@ fn timed_tree_round(
             &pair.drafter_configuration.target_tap_layer_ids,
         )
         .expect("the tree verifies");
+    stage_started_at = restart(&mut stage_times, stage_started_at, true);
     let mut verified_arrays: Vec<&MlxArray> = verification.hidden_state_taps.iter().collect();
     verified_arrays.push(&verification.per_row_logits);
     runtime
@@ -322,4 +324,82 @@ fn evaluate_decoder_state(
         .runtime()
         .evaluate_arrays(&references)
         .expect("the committed state evaluates");
+}
+
+const CHAIN_COMPARISON_ROUNDS: usize = 12;
+
+/// Whether the tree pass costs more than a plain forward over as many rows:
+/// a chain-shaped 16-row tree against the plain 16-row forward, alternating
+/// in one process so drift hits both alike, each from a fresh prefill.
+#[test]
+#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows() {
+    use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
+    use astronomical_model_serving::{PerformanceAttribution, VerificationLogitsMode};
+    let mut pair = load_pair();
+    pair.target
+        .enable_draft_tree_verification()
+        .expect("the tree kernel declares");
+    let cell = &ORACLE_CELLS[2];
+    let mut row_tokens = Vec::with_capacity(16);
+    let mut chain = DraftTree::default();
+    for row in 0..16_usize {
+        row_tokens.push(1_000 + row as u32);
+        if row > 0 {
+            chain.token_ids.push(1_000 + row as u32);
+            chain.parent_indices.push((row - 1).checked_sub(1));
+            chain.depths.push(row - 1);
+        }
+    }
+    let rows = TreeRows::from_draft_tree(row_tokens[0], &chain);
+    let (mut plain_times, mut tree_times) = (Vec::new(), Vec::new());
+    for _ in 0..CHAIN_COMPARISON_ROUNDS {
+        let (round, mut state, _) = prefill(&pair, cell);
+        let started_at = Instant::now();
+        let plain = pair
+            .target
+            .build_speculative_verification_forward(
+                &row_tokens,
+                round.fed_token_count,
+                &mut state,
+                &pair.drafter_configuration.target_tap_layer_ids,
+                VerificationLogitsMode::AllPositions,
+                &mut PerformanceAttribution::disabled(),
+            )
+            .expect("the plain forward runs");
+        let mut plain_arrays: Vec<&MlxArray> = plain.hidden_state_taps.iter().collect();
+        let plain_logits = plain.per_position_logits.expect("the rows have logits");
+        plain_arrays.push(&plain_logits);
+        pair.target
+            .runtime()
+            .evaluate_arrays(&plain_arrays)
+            .expect("evaluates");
+        plain_times.push(started_at.elapsed().as_secs_f64() * 1000.0);
+        let (round, mut state, _) = prefill(&pair, cell);
+        let started_at = Instant::now();
+        let tree = pair
+            .target
+            .verify_draft_tree(
+                &rows,
+                round.fed_token_count,
+                &mut state,
+                &pair.drafter_configuration.target_tap_layer_ids,
+            )
+            .expect("the chain tree verifies");
+        let mut tree_arrays: Vec<&MlxArray> = tree.hidden_state_taps.iter().collect();
+        tree_arrays.push(&tree.per_row_logits);
+        pair.target
+            .runtime()
+            .evaluate_arrays(&tree_arrays)
+            .expect("evaluates");
+        tree_times.push(started_at.elapsed().as_secs_f64() * 1000.0);
+    }
+    plain_times.sort_by(f64::total_cmp);
+    tree_times.sort_by(f64::total_cmp);
+    eprintln!(
+        "[dflash2-tree-round-cost] 16 rows: plain forward {:.1} ms, chain tree {:.1} ms (medians of {CHAIN_COMPARISON_ROUNDS})",
+        plain_times[plain_times.len() / 2],
+        tree_times[tree_times.len() / 2],
+    );
 }

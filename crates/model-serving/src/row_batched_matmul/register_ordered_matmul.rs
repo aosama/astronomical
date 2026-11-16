@@ -29,7 +29,11 @@ pub struct RegisterOrderedWeight {
     /// `[input / 64, output]` uint32: the bf16 scale in the low half, the bf16
     /// bias in the high half.
     pub scale_bias_words: MlxArray,
+    /// Columns the kernel computes: a whole number of 32-column tiles.
     pub output_width: i32,
+    /// Columns the projection really has; fewer than `output_width` when a
+    /// narrow projection was padded with zero rows to fill its last tile.
+    pub logical_output_width: i32,
     pub input_width: i32,
     pub input_slice_count: i32,
 }
@@ -45,6 +49,9 @@ impl RegisterOrderedWeight {
         scales: &MlxArray,
         biases: &MlxArray,
     ) -> Result<Self, RowBatchedProjectionError> {
+        let logical_output_width = packed_weight.shape().first().copied().unwrap_or(0);
+        let tiled = TiledRows::padded(runtime, [packed_weight, scales, biases])?;
+        let [packed_weight, scales, biases] = [&tiled.packed_weight, &tiled.scales, &tiled.biases];
         let (output_width, input_width) = check_quantization(packed_weight, scales, biases)?;
         let group_count = input_width / QUANTIZATION_GROUP_SIZE;
         let block_count = (output_width / OUTPUT_COLUMNS_PER_SIMDGROUP) * group_count;
@@ -73,8 +80,118 @@ impl RegisterOrderedWeight {
             codes,
             scale_bias_words,
             output_width,
+            logical_output_width,
             input_width,
             input_slice_count: register_ordered_slice_count(output_width, input_width),
+        })
+    }
+}
+
+/// MLX's three arrays with zero rows appended up to whole 32-column tiles.
+/// A zero code with a zero scale and bias yields a zero output, so the padded
+/// columns are cut off after the product and never read. The 27B's 48-wide
+/// DeltaNet gates are the narrow case: through MLX's matmul at 16 rows the
+/// two of them cost about 6 ms a verify over 48 layers; padded to 64 columns
+/// they take this kernel like every other projection.
+struct TiledRows {
+    packed_weight: MlxArray,
+    scales: MlxArray,
+    biases: MlxArray,
+}
+
+impl TiledRows {
+    fn padded(
+        runtime: &MlxRuntime,
+        arrays: [&MlxArray; 3],
+    ) -> Result<Self, RowBatchedProjectionError> {
+        let row_count = arrays[0].shape().first().copied().unwrap_or(0);
+        let missing_rows = (OUTPUT_COLUMNS_PER_SIMDGROUP
+            - row_count % OUTPUT_COLUMNS_PER_SIMDGROUP)
+            % OUTPUT_COLUMNS_PER_SIMDGROUP;
+        let mut padded = Vec::with_capacity(3);
+        for array in arrays {
+            if missing_rows == 0 || array.shape().len() != 2 {
+                padded.push(array.retain()?);
+                continue;
+            }
+            let zero_rows = runtime.zeros(&[missing_rows, array.shape()[1]], array.dtype())?;
+            padded.push(runtime.concatenate_axis(&[array, &zero_rows], 0)?);
+        }
+        let biases = padded
+            .pop()
+            .ok_or(RowBatchedProjectionError::MissingOutput)?;
+        let scales = padded
+            .pop()
+            .ok_or(RowBatchedProjectionError::MissingOutput)?;
+        let packed_weight = padded
+            .pop()
+            .ok_or(RowBatchedProjectionError::MissingOutput)?;
+        Ok(Self {
+            packed_weight,
+            scales,
+            biases,
+        })
+    }
+}
+
+/// One input's rows, flattened, with their per-group sums: what every
+/// register-ordered projection of that input reads. Projections that share
+/// an input (a layer's q, k and v; its gate and up) share one of these, so
+/// the sums are computed once.
+pub struct ProjectionInput {
+    flat_rows: MlxArray,
+    group_sums: MlxArray,
+    row_dimensions: MlxArray,
+    /// The rows' leading shape, `[..., input]` without the input width.
+    leading_shape: Vec<i32>,
+    row_count: i32,
+    input_width: i32,
+}
+
+impl ProjectionInput {
+    /// `rows` [..., input] bf16, 1 to 128 rows.
+    pub fn prepare(
+        runtime: &MlxRuntime,
+        kernels: &RowBatchedMatmulKernels,
+        rows: &MlxArray,
+    ) -> Result<Self, RowBatchedProjectionError> {
+        let rows_shape = rows.shape();
+        let input_width = *rows_shape.last().unwrap_or(&0);
+        if rows.dtype() != MlxDtype::BFloat16 || input_width <= 0 {
+            return Err(RowBatchedProjectionError::UnsupportedQuantization {
+                description: format!(
+                    "rows are {:?} {rows_shape:?}, expected bf16 rows",
+                    rows.dtype()
+                ),
+            });
+        }
+        let leading_shape = rows_shape[..rows_shape.len() - 1].to_vec();
+        let row_count: i32 = leading_shape.iter().product();
+        // The sums' layout depends on the rows and input width only, so any
+        // output width that tiles plans them the same.
+        let sums_plan = RegisterOrderedDispatchPlan::plan(row_count, 32, input_width, 1)?;
+        let flat_rows = runtime.reshape(rows, &[row_count, input_width])?;
+        let row_dimensions =
+            runtime.array_from_i32(&[row_count, sums_plan.padded_row_count], &[2])?;
+        let group_sums = group_sums(
+            runtime,
+            kernels,
+            &flat_rows,
+            &row_dimensions,
+            GroupSumLayout {
+                padded_row_count: sums_plan.padded_row_count,
+                grid: sums_plan.group_sum_grid,
+                threadgroup: sums_plan.group_sum_threadgroup,
+            },
+            input_width,
+        )?;
+        Ok(Self {
+            flat_rows,
+            group_sums,
+            row_dimensions,
+            leading_shape,
+            row_count,
+            input_width,
         })
     }
 }
@@ -88,49 +205,42 @@ pub fn register_ordered_matmul(
     rows: &MlxArray,
     weight: &RegisterOrderedWeight,
 ) -> Result<MlxArray, RowBatchedProjectionError> {
-    let rows_shape = rows.shape();
-    if rows_shape.last() != Some(&weight.input_width) || rows.dtype() != MlxDtype::BFloat16 {
+    let input = ProjectionInput::prepare(runtime, kernels, rows)?;
+    register_ordered_projection(runtime, kernels, &input, weight)
+}
+
+/// A prepared input projected through `weight`: [..., output] bf16.
+pub fn register_ordered_projection(
+    runtime: &MlxRuntime,
+    kernels: &RowBatchedMatmulKernels,
+    input: &ProjectionInput,
+    weight: &RegisterOrderedWeight,
+) -> Result<MlxArray, RowBatchedProjectionError> {
+    if input.input_width != weight.input_width {
         return Err(RowBatchedProjectionError::UnsupportedQuantization {
             description: format!(
-                "rows are {:?} {rows_shape:?}, expected bf16 rows {} wide",
-                rows.dtype(),
-                weight.input_width
+                "rows are {} wide, the weight reads {}",
+                input.input_width, weight.input_width
             ),
         });
     }
-    let row_count: i32 = rows_shape[..rows_shape.len() - 1].iter().product();
     let dispatch_plan = RegisterOrderedDispatchPlan::plan(
-        row_count,
+        input.row_count,
         weight.output_width,
         weight.input_width,
         weight.input_slice_count,
     )?;
-    let flat_rows = runtime.reshape(rows, &[row_count, weight.input_width])?;
-    let row_dimensions =
-        runtime.array_from_i32(&[row_count, dispatch_plan.padded_row_count], &[2])?;
-    let row_group_sums = group_sums(
-        runtime,
-        kernels,
-        &flat_rows,
-        &row_dimensions,
-        GroupSumLayout {
-            padded_row_count: dispatch_plan.padded_row_count,
-            grid: dispatch_plan.group_sum_grid,
-            threadgroup: dispatch_plan.group_sum_threadgroup,
-        },
-        weight.input_width,
-    )?;
     let mut outputs = runtime.apply_metal_kernel(
         &kernels.register_ordered_matmul,
         &[
-            &flat_rows,
-            &row_group_sums,
+            &input.flat_rows,
+            &input.group_sums,
             &weight.codes,
             &weight.scale_bias_words,
-            &row_dimensions,
+            &input.row_dimensions,
         ],
         &[MlxMetalKernelOutput::new(
-            vec![row_count, weight.output_width],
+            vec![input.row_count, weight.output_width],
             MlxDtype::BFloat16,
         )],
         dispatch_plan.grid,
@@ -144,7 +254,17 @@ pub fn register_ordered_matmul(
     let projected = outputs
         .pop()
         .ok_or(RowBatchedProjectionError::MissingOutput)?;
-    let mut output_shape = rows_shape;
-    *output_shape.last_mut().expect("rows have a width") = weight.output_width;
+    let projected = if weight.logical_output_width < weight.output_width {
+        runtime.slice(
+            &projected,
+            &[0, 0],
+            &[input.row_count, weight.logical_output_width],
+            &[1, 1],
+        )?
+    } else {
+        projected
+    };
+    let mut output_shape = input.leading_shape.clone();
+    output_shape.push(weight.logical_output_width);
     Ok(runtime.reshape(&projected, &output_shape)?)
 }
