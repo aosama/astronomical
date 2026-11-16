@@ -15,7 +15,7 @@
 
 use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
-    best_first_draft_tree, draft_lattice, drafted_hidden_rows,
+    best_first_draft_tree, draft_lattice, drafted_hidden_rows, tree_block_row_count,
 };
 use astronomical_model_serving::speculative_decoding::keyed_sampling::{
     RequestKeyedNoise, keyed_sample,
@@ -106,6 +106,8 @@ pub(super) struct DecodeOutcome {
     pub(super) rounds: usize,
     /// The prefill's pick, then every token the rounds kept.
     pub(super) emitted_token_ids: Vec<u32>,
+    /// Tokens each round kept, the target's own pick included.
+    kept_by_round: Vec<usize>,
     reference_divergences: usize,
 }
 
@@ -133,9 +135,10 @@ pub(super) fn decode(
     let mut outcome = DecodeOutcome {
         rounds: 0,
         emitted_token_ids: vec![first_token_id],
+        kept_by_round: Vec::new(),
         reference_divergences: 0,
     };
-    let reach = pair.drafter_configuration.proposal_count() as usize;
+    let reach = tree_block_row_count(DraftTreeOptions::default().node_budget) - 1;
     while outcome.emitted_token_ids.len() <= OUTPUT_TOKENS {
         let emitted_count = outcome.emitted_token_ids.len();
         if drafting != Drafting::SinglePath && emitted_count + reach + 1 > reference.len() {
@@ -164,6 +167,7 @@ pub(super) fn decode(
         {
             outcome.reference_divergences += 1;
         }
+        outcome.kept_by_round.push(kept.len());
         outcome.emitted_token_ids.extend(kept);
         outcome.rounds += 1;
     }
@@ -377,13 +381,11 @@ pub(super) fn staged_draft_tree(
 fn drafted_block(pair: &JourneyPair, round: &mut RoundState) -> (MlxArray, MlxArray) {
     let runtime = pair.target.runtime();
     let configuration = &pair.drafter_configuration;
-    let mut block_ids = vec![round.last_token_id];
-    block_ids.extend(std::iter::repeat_n(
-        configuration.mask_token_id,
-        configuration.proposal_count() as usize,
-    ));
+    let block_row_count = tree_block_row_count(DraftTreeOptions::default().node_budget);
+    let mut block_ids = vec![configuration.mask_token_id; block_row_count];
+    block_ids[0] = round.last_token_id;
     let block = runtime
-        .array_from_u32(&block_ids, &[1, configuration.block_size])
+        .array_from_u32(&block_ids, &[1, block_row_count as i32])
         .expect("the block builds");
     let target: &dyn DFlash2DraftTarget = &pair.target;
     let hidden = drafted_hidden_rows(
@@ -492,5 +494,9 @@ fn should_count_the_rounds_this_tree_needs_for_tensorfolds_own_greedy_text() {
         reference.len(),
         forced.kept_per_round(),
         forced.rounds,
+    );
+    eprintln!(
+        "[dflash2-tree-oracle] kept by round: {:?}",
+        forced.kept_by_round
     );
 }

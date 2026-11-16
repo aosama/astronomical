@@ -110,6 +110,7 @@ fn additive_mask(
         block_row_count,
         sliding_window,
         configuration.block_is_causal,
+        configuration.block_size,
     );
     let mut additive_values = Vec::with_capacity(visibility.len());
     for is_visible in visibility {

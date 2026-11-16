@@ -133,3 +133,11 @@ fn should_return_an_empty_tree_for_no_budget_or_no_slots() {
         DraftTree::default()
     );
 }
+
+#[test]
+fn should_draft_a_block_as_deep_as_the_node_budget_up_to_sixteen_rows() {
+    assert_eq!(super::draft_tree::tree_block_row_count(15), 16);
+    assert_eq!(super::draft_tree::tree_block_row_count(40), 16);
+    assert_eq!(super::draft_tree::tree_block_row_count(3), 4);
+    assert_eq!(super::draft_tree::tree_block_row_count(0), 1);
+}

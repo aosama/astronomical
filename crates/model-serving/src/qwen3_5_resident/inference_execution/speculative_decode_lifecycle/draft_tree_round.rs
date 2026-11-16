@@ -18,7 +18,7 @@ use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
 use crate::qwen3_5_resident::model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
 use crate::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DraftTreeOptions, DrafterContextStates, KeyedNoise, best_first_draft_tree,
-    draft_lattice, drafted_hidden_rows,
+    draft_lattice, drafted_hidden_rows, tree_block_row_count,
 };
 use crate::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
 use crate::speculative_decoding::tree_rows::TreeRows;
@@ -191,12 +191,11 @@ fn drafted_tree_rows(
             description: "the drafter's context states were not created",
         });
     };
-    let mut block_ids = vec![round_request.bonus_token_id];
-    block_ids.resize(
-        configuration.block_size as usize,
-        configuration.mask_token_id,
-    );
-    let block = runtime.array_from_u32(&block_ids, &[1, configuration.block_size])?;
+    let tree_options = DraftTreeOptions::default();
+    let block_row_count = tree_block_row_count(tree_options.node_budget);
+    let mut block_ids = vec![configuration.mask_token_id; block_row_count];
+    block_ids[0] = round_request.bonus_token_id;
+    let block = runtime.array_from_u32(&block_ids, &[1, block_row_count as i32])?;
     let target: &dyn DFlash2DraftTarget = model;
     let hidden_rows = drafted_hidden_rows(
         runtime,
@@ -235,7 +234,7 @@ fn drafted_tree_rows(
         u64::from(round_request.context_length_tokens),
         &DraftTreeOptions {
             sampling_temperature,
-            ..DraftTreeOptions::default()
+            ..tree_options
         },
         noise,
     );
