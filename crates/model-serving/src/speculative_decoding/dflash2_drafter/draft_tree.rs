@@ -70,19 +70,23 @@ pub trait KeyedNoise {
     fn draw(&self, absolute_position: u64, token_id: u32) -> f64;
 }
 
-/// Rows the longest block a tree round drafts holds, the anchor included:
-/// TensorFold's `tree_block`.
-const LONGEST_TREE_BLOCK_ROW_COUNT: usize = 16;
+/// Rows of the block TensorFold drafts for a tree, the anchor included: its
+/// `tree_block`, twice the 8 rows the 27B's drafter trained on.
+pub const TENSORFOLD_TREE_BLOCK_ROW_COUNT: usize = 16;
 
-/// Rows a tree round's drafted block holds, the anchor included. A tree of
-/// `node_budget` nodes is at most that many proposals deep, and the block
-/// goes past the checkpoint's trained size to reach it: on TensorFold's own
-/// greedy code completion this engine kept 5.62 tokens a round from the
-/// trained 8-row block, where TensorFold's 16-row block kept 5.95 with
-/// rounds of up to 16 tokens.
+/// Rows a tree round's drafted block holds, the anchor included: as deep as
+/// a tree of `node_budget` nodes can reach, up to `longest_block_row_count`.
+///
+/// The engine serves with the checkpoint's trained block. TensorFold's
+/// 16-row block reproduces its rounds one for one on its own greedy code
+/// completion (5.81 tokens kept a round against 5.62) and lifted raw code
+/// completion from 65.7 to 72.0 tok/s on the 27B, but through the real
+/// worker it kept 2.96 tokens a round instead of 3.73 on sampled prose after
+/// a 10,011-token prompt (28.3 against 35.6 tok/s), a loss the model-level
+/// journeys do not show and that is not yet explained.
 #[must_use]
-pub fn tree_block_row_count(node_budget: usize) -> usize {
-    LONGEST_TREE_BLOCK_ROW_COUNT.min(node_budget + 1)
+pub fn tree_block_row_count(node_budget: usize, longest_block_row_count: usize) -> usize {
+    longest_block_row_count.min(node_budget + 1)
 }
 
 /// A tree of drafted tokens in the order they were chosen: every node comes

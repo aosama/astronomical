@@ -431,3 +431,94 @@ fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
         );
     }
 }
+
+/// A tree round drafts a block twice as long as the checkpoint trained on.
+/// The trained rows must come out exactly as the trained block gives them,
+/// after a short prompt and after one longer than the drafter's window:
+/// only then is the longer block a pure addition.
+#[test]
+#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
+    use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
+        DFlash2DraftTarget, DrafterContextStates, drafted_hidden_rows,
+    };
+    let pair = load_pair();
+    let runtime = pair.target.runtime();
+    let configuration = &pair.drafter_configuration;
+    let long_prompt: &'static str = Box::leak(
+        LONG_PROMPT_SOURCE
+            .split_whitespace()
+            .take(2_000)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .into_boxed_str(),
+    );
+    let mut long_cell = ORACLE_CELLS[2];
+    long_cell.prompt = long_prompt;
+    for (label, cell) in [
+        ("short prompt", ORACLE_CELLS[2]),
+        ("long prompt", long_cell),
+    ] {
+        let (round, _state, first_token_id) = prefill(&pair, &cell);
+        let trained_row_count = configuration.block_size as usize;
+        let mut trained_rows_by_block = Vec::new();
+        for block_row_count in [trained_row_count, 2 * trained_row_count] {
+            let mut block_ids = vec![configuration.mask_token_id; block_row_count];
+            block_ids[0] = first_token_id;
+            let block = runtime
+                .array_from_u32(&block_ids, &[1, block_row_count as i32])
+                .expect("the block builds");
+            let mut context_states = DrafterContextStates::new(configuration, 0);
+            let target: &dyn DFlash2DraftTarget = &pair.target;
+            let hidden_rows = drafted_hidden_rows(
+                runtime,
+                &pair.drafter_weights,
+                configuration,
+                target,
+                &mut context_states,
+                &block,
+                &round.pending_tap_rows,
+            )
+            .expect("the drafter runs");
+            let trained_rows = runtime
+                .slice(
+                    &hidden_rows,
+                    &[0, 0, 0],
+                    &[1, trained_row_count as i32 - 1, configuration.hidden_size],
+                    &[1, 1, 1],
+                )
+                .expect("the trained rows slice");
+            trained_rows_by_block.push(
+                runtime
+                    .array_to_vec_f32(
+                        &runtime
+                            .astype(&trained_rows, mlx_bridge::MlxDtype::Float32)
+                            .expect("widen"),
+                    )
+                    .expect("the rows read back"),
+            );
+        }
+        // The attention and convolution kernels round differently for a
+        // different row count, so equal means a difference far below the
+        // rows' own size: root mean square against root mean square.
+        let (mut squared_values, mut squared_differences) = (0.0_f64, 0.0_f64);
+        for (trained, longer) in trained_rows_by_block[0]
+            .iter()
+            .zip(trained_rows_by_block[1].iter())
+        {
+            squared_values += f64::from(*trained).powi(2);
+            squared_differences += f64::from(trained - longer).powi(2);
+        }
+        let relative_difference = (squared_differences / squared_values).sqrt();
+        eprintln!(
+            "[dflash2-tree-block] {label} ({} context rows): the trained rows differ by \
+             {relative_difference:.4} of their size",
+            round.fed_token_count
+        );
+        assert!(
+            relative_difference <= 0.02,
+            "{label}: the trained rows changed when the block grew"
+        );
+    }
+}

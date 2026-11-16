@@ -22,6 +22,8 @@ pub use speculation_session_admission::{
 };
 
 #[cfg(test)]
+mod draft_tree_round_tests;
+#[cfg(test)]
 mod drafter_discovery_tests;
 #[cfg(test)]
 mod speculation_session_admission_tests;

@@ -111,9 +111,23 @@ impl DFlash2DrafterConfiguration {
         self.hidden_size * self.target_tap_layer_ids.len() as i32
     }
 
-    /// Proposals one pass drafts: every block row after the anchor.
+    /// Proposals the trained block holds: every block row after the anchor.
+    /// A tree round drafts a longer block (`tree_block_row_count`).
     pub fn proposal_count(&self) -> i32 {
         self.block_size - 1
+    }
+
+    /// Context rows the drafter can ever attend to, or `None` when a layer
+    /// attends to the whole context. With every layer on a sliding window,
+    /// rows older than the window are never read, so a caller holding
+    /// target taps for the drafter needs only this many of the newest.
+    pub fn context_row_limit(&self) -> Option<i32> {
+        for layer_attention in &self.layer_attention {
+            if *layer_attention == DrafterLayerAttention::Full {
+                return None;
+            }
+        }
+        Some(self.sliding_window - 1)
     }
 
     /// Convolution groups across the hidden width.

@@ -135,9 +135,11 @@ fn should_return_an_empty_tree_for_no_budget_or_no_slots() {
 }
 
 #[test]
-fn should_draft_a_block_as_deep_as_the_node_budget_up_to_sixteen_rows() {
-    assert_eq!(super::draft_tree::tree_block_row_count(15), 16);
-    assert_eq!(super::draft_tree::tree_block_row_count(40), 16);
-    assert_eq!(super::draft_tree::tree_block_row_count(3), 4);
-    assert_eq!(super::draft_tree::tree_block_row_count(0), 1);
+fn should_draft_a_block_as_deep_as_the_node_budget_up_to_the_longest_block() {
+    use super::draft_tree::tree_block_row_count;
+    assert_eq!(tree_block_row_count(15, 16), 16);
+    assert_eq!(tree_block_row_count(15, 8), 8);
+    assert_eq!(tree_block_row_count(40, 16), 16);
+    assert_eq!(tree_block_row_count(3, 8), 4);
+    assert_eq!(tree_block_row_count(0, 8), 1);
 }

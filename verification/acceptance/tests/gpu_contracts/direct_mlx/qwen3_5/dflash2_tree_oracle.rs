@@ -15,7 +15,8 @@
 
 use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
-    best_first_draft_tree, draft_lattice, drafted_hidden_rows, tree_block_row_count,
+    TENSORFOLD_TREE_BLOCK_ROW_COUNT, best_first_draft_tree, draft_lattice, drafted_hidden_rows,
+    tree_block_row_count,
 };
 use astronomical_model_serving::speculative_decoding::keyed_sampling::{
     RequestKeyedNoise, keyed_sample,
@@ -138,7 +139,7 @@ pub(super) fn decode(
         kept_by_round: Vec::new(),
         reference_divergences: 0,
     };
-    let reach = tree_block_row_count(DraftTreeOptions::default().node_budget) - 1;
+    let reach = block_row_count(pair, drafting) - 1;
     while outcome.emitted_token_ids.len() <= OUTPUT_TOKENS {
         let emitted_count = outcome.emitted_token_ids.len();
         if drafting != Drafting::SinglePath && emitted_count + reach + 1 > reference.len() {
@@ -323,7 +324,7 @@ pub(super) fn draft_tree(
     round: &mut RoundState,
     drafting: Drafting,
 ) -> DraftTree {
-    let (hidden, draft_logits) = drafted_block(pair, round);
+    let (hidden, draft_logits) = drafted_block(pair, round, drafting);
     let lattice = draft_lattice(
         pair.target.runtime(),
         &pair.drafter_weights.candidate_selector,
@@ -351,7 +352,7 @@ pub(super) fn staged_draft_tree(
 ) -> StagedDraftTree {
     let runtime = pair.target.runtime();
     let started_at = std::time::Instant::now();
-    let (hidden, draft_logits) = drafted_block(pair, round);
+    let (hidden, draft_logits) = drafted_block(pair, round, Drafting::Tree);
     runtime
         .evaluate_arrays(&[&hidden])
         .expect("the drafter evaluates");
@@ -377,11 +378,30 @@ pub(super) fn staged_draft_tree(
     }
 }
 
+/// Rows the drafted block holds: the checkpoint's trained block, as the
+/// engine serves, or TensorFold's 16 rows when its own text is replayed, so
+/// the rounds are compared like for like.
+fn block_row_count(pair: &JourneyPair, drafting: Drafting) -> usize {
+    let longest_block_row_count = if drafting == Drafting::TreeOnForcedText {
+        TENSORFOLD_TREE_BLOCK_ROW_COUNT
+    } else {
+        pair.drafter_configuration.block_size as usize
+    };
+    tree_block_row_count(
+        DraftTreeOptions::default().node_budget,
+        longest_block_row_count,
+    )
+}
+
 /// The drafter's hidden rows for one block and the target head's logits.
-fn drafted_block(pair: &JourneyPair, round: &mut RoundState) -> (MlxArray, MlxArray) {
+fn drafted_block(
+    pair: &JourneyPair,
+    round: &mut RoundState,
+    drafting: Drafting,
+) -> (MlxArray, MlxArray) {
     let runtime = pair.target.runtime();
     let configuration = &pair.drafter_configuration;
-    let block_row_count = tree_block_row_count(DraftTreeOptions::default().node_budget);
+    let block_row_count = block_row_count(pair, drafting);
     let mut block_ids = vec![configuration.mask_token_id; block_row_count];
     block_ids[0] = round.last_token_id;
     let block = runtime

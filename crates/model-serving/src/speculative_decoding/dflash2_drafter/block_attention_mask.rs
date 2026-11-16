@@ -7,10 +7,10 @@
 //! row `i` sits at index `context_rows + i`, and sees context row `j` when
 //! `context_rows + i - j < window`.
 //!
-//! A tree round drafts a block longer than the one the checkpoint trained
-//! on (TensorFold's `tree_block`: 16 rows on an 8-row checkpoint), so one
-//! pass proposes 15 tokens deep. The rows of the trained block then see no
-//! later row, which leaves them exactly what the trained block computes;
+//! A block may be longer than the one the checkpoint trained on
+//! (TensorFold's `tree_block`: 16 rows on an 8-row checkpoint), so one pass
+//! proposes 15 tokens deep. The rows of the trained block then see no later
+//! row, which leaves them what the trained block computes up to rounding;
 //! the rows after it see every row.
 
 /// Row-major `[block_rows, context_rows + block_rows]`; true where the query

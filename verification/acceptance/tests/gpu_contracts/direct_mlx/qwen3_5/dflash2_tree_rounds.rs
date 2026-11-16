@@ -37,7 +37,7 @@ const MAXIMUM_COPY_ROWS: usize = 48;
 #[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
-    decode_cells_with_trees(&ORACLE_CELLS[..3]);
+    decode_cells_with_trees(&ORACLE_CELLS[..3], SAMPLED_SEED_COUNT);
 }
 
 /// The chat cells on their own: a run heats the GPU, and rounds late in a
@@ -48,10 +48,34 @@ fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
 #[serial]
 fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
     // Sampled first: it is the cell compared with TensorFold's 44.0.
-    decode_cells_with_trees(&[ORACLE_CELLS[4], ORACLE_CELLS[3]]);
+    decode_cells_with_trees(&[ORACLE_CELLS[4], ORACLE_CELLS[3]], SAMPLED_SEED_COUNT);
 }
 
-fn decode_cells_with_trees(cells: &[Cell]) {
+/// Prose continued after a long prompt, sampled: the cell a long chat or a
+/// document question lands in, where few drafted tokens are kept a round
+/// and every verified row attends to the whole prompt.
+#[test]
+#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_decode_prose_after_a_long_prompt_with_draft_trees() {
+    let long_prompt: &'static str = Box::leak(
+        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
+            .split_whitespace()
+            .take(2_000)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .into_boxed_str(),
+    );
+    let mut cell = ORACLE_CELLS[2];
+    cell.label = "prose after a long prompt, 1.0";
+    cell.prompt = long_prompt;
+    // One seed: every decode prefills the long prompt again.
+    decode_cells_with_trees(&[cell], 1);
+}
+
+/// Decodes every cell with and without context copies; a sampled cell
+/// pools up to `sampled_seed_limit` seeds.
+fn decode_cells_with_trees(cells: &[Cell], sampled_seed_limit: u64) {
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()
@@ -60,7 +84,7 @@ fn decode_cells_with_trees(cells: &[Cell]) {
         let seed_count = if cell.temperature_thousandths == 0 {
             1
         } else {
-            SAMPLED_SEED_COUNT
+            SAMPLED_SEED_COUNT.min(sampled_seed_limit)
         };
         // Alternating the two in one process keeps drift out of the comparison.
         let mut pooled = [PooledTreeDecode::default(), PooledTreeDecode::default()];

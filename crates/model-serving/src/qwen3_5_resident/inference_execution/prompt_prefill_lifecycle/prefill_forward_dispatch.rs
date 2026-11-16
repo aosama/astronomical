@@ -126,6 +126,7 @@ fn dispatch_speculative_forward(
     hand_chunk_taps_to_drafter(
         active_request,
         model,
+        draft_runtime.drafter_configuration.context_row_limit(),
         &chunk_output.hidden_state_taps,
         chunk_first_position as i32,
     )?;
@@ -154,6 +155,7 @@ fn dispatch_speculative_forward(
 fn hand_chunk_taps_to_drafter(
     active_request: &mut Qwen3_5EngineRequest,
     model: &Qwen3_5ResidentModel,
+    context_row_limit: Option<i32>,
     chunk_hidden_state_taps: &[mlx_bridge::MlxArray],
     chunk_first_position: i32,
 ) -> Result<(), Qwen3_5ExecutionError> {
@@ -164,7 +166,12 @@ fn hand_chunk_taps_to_drafter(
         .ok_or(Qwen3_5ExecutionError::InvalidInput {
             description: "speculative prefill requires the request's draft session",
         })?;
-    draft_session.append_tap_rows(model, chunk_hidden_state_taps, chunk_first_position)?;
+    draft_session.append_tap_rows(
+        model,
+        context_row_limit,
+        chunk_hidden_state_taps,
+        chunk_first_position,
+    )?;
     draft_session.evaluate_pending_tap_rows(model)
 }
 

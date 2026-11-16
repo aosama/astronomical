@@ -489,6 +489,13 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # a short and a long prompt, and by layer stage). Same pair and memory as
 # above; about three minutes, or one test with --filter NAME.
 measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_round"
+# The same pair through the real worker: 10,000 Romeo and Juliet tokens in,
+# 500 out at temperature 1.0, over the daemon IPC boundary, with the worker
+# finding the drafter beside the target. Append --configuration PATH with
+# model_directory set to the target's snapshot directory (and
+# throughput_history_path to keep the durable history untouched). About two
+# minutes.
+measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter dflash2_draft_tree --ignored"
 # The DFlash2 drafter against z-lab's own MLX reference: a tiny random
 # drafter run through dflash/model_mlx.py for two rounds (fixture and its
 # generator in verification/acceptance/tests/fixtures/dflash2_reference); hidden

@@ -49,23 +49,39 @@ impl DraftSession {
     }
 
     /// Hands the drafter the target's taps (one [1, rows, hidden] array per
-    /// tapped layer) for rows committed from `first_position` on.
+    /// tapped layer) for rows committed from `first_position` on. Rows the
+    /// drafter's window will never show are dropped as they fall out of it:
+    /// a long prompt would otherwise hold about 50 MB of taps per thousand
+    /// tokens until the first round, for rows no drafter layer reads.
     pub fn append_tap_rows(
         &mut self,
         model: &Qwen3_5ResidentModel,
+        context_row_limit: Option<i32>,
         layer_taps: &[MlxArray],
         first_position: i32,
     ) -> Result<(), Qwen3_5ExecutionError> {
+        let runtime = model.runtime();
         let tap_references: Vec<&MlxArray> = layer_taps.iter().collect();
-        let joined_taps = model.runtime().concatenate_axis(&tap_references, -1)?;
-        self.pending_tap_rows = Some(match self.pending_tap_rows.take() {
-            Some(pending) => model
-                .runtime()
-                .concatenate_axis(&[&pending, &joined_taps], 1)?,
+        let joined_taps = runtime.concatenate_axis(&tap_references, -1)?;
+        let pending_tap_rows = match self.pending_tap_rows.take() {
+            Some(pending) => runtime.concatenate_axis(&[&pending, &joined_taps], 1)?,
             None => {
                 self.first_pending_position = first_position;
                 joined_taps
             }
+        };
+        let pending_shape = pending_tap_rows.shape();
+        let dropped_row_count = rows_beyond_the_context_limit(pending_shape[1], context_row_limit);
+        self.pending_tap_rows = Some(if dropped_row_count > 0 {
+            self.first_pending_position += dropped_row_count;
+            runtime.slice(
+                &pending_tap_rows,
+                &[0, dropped_row_count, 0],
+                &pending_shape,
+                &[1, 1, 1],
+            )?
+        } else {
+            pending_tap_rows
         });
         Ok(())
     }
@@ -80,6 +96,18 @@ impl DraftSession {
             model.runtime().evaluate_arrays(&[pending_tap_rows])?;
         }
         Ok(())
+    }
+}
+
+/// How many of the oldest `pending_row_count` rows lie beyond what the
+/// drafter can attend to.
+pub(crate) fn rows_beyond_the_context_limit(
+    pending_row_count: i32,
+    context_row_limit: Option<i32>,
+) -> i32 {
+    match context_row_limit {
+        Some(row_limit) => (pending_row_count - row_limit).max(0),
+        None => 0,
     }
 }
 
@@ -152,7 +180,12 @@ pub fn run_draft_tree_round(
     for layer_tap in &verification.hidden_state_taps {
         kept_taps.push(model.runtime().take_axis(layer_tap, &kept_row_array, 1)?);
     }
-    draft_session.append_tap_rows(model, &kept_taps, anchor_position)?;
+    draft_session.append_tap_rows(
+        model,
+        draft_runtime.drafter_configuration.context_row_limit(),
+        &kept_taps,
+        anchor_position,
+    )?;
     model.commit_draft_tree(request_decoder_state, verification, &kept.rows)?;
     Ok(DraftTreeRoundOutcome {
         emitted_token_ids,
@@ -192,7 +225,8 @@ fn drafted_tree_rows(
         });
     };
     let tree_options = DraftTreeOptions::default();
-    let block_row_count = tree_block_row_count(tree_options.node_budget);
+    let block_row_count =
+        tree_block_row_count(tree_options.node_budget, configuration.block_size as usize);
     let mut block_ids = vec![configuration.mask_token_id; block_row_count];
     block_ids[0] = round_request.bonus_token_id;
     let block = runtime.array_from_u32(&block_ids, &[1, block_row_count as i32])?;

@@ -40,8 +40,8 @@ pub use candidate_selector::{PathChoice, ProposedPath, select_path};
 #[cfg(feature = "direct-mlx")]
 pub use draft_lattice::draft_lattice;
 pub use draft_tree::{
-    DraftLattice, DraftTree, DraftTreeOptions, KeyedNoise, best_first_draft_tree,
-    tree_block_row_count,
+    DraftLattice, DraftTree, DraftTreeOptions, KeyedNoise, TENSORFOLD_TREE_BLOCK_ROW_COUNT,
+    best_first_draft_tree, tree_block_row_count,
 };
 pub use drafter_configuration::{
     DFlash2DrafterConfiguration, DFlash2DrafterConfigurationError, DrafterLayerAttention,
