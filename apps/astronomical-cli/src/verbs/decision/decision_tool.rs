@@ -8,11 +8,13 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use astronomical_config::{
+    AstronomicalInstancePaths, AstronomicalRuntimeInstance, is_discoverable_model_folder,
+};
 use astronomical_decision_contract::head_training_job::TrainingScope;
 use astronomical_decision_training::calibrated_model_folder::{
-    CalibratedFolderError, FolderAdditions, SourceModelFolder, check_output_location,
-    write_calibrated_model_folder,
+    CalibratedFolderError, FolderAdditions, SourceModelFolder, canonical_output_path,
+    check_output_location, write_calibrated_model_folder,
 };
 use astronomical_decision_training::calibration_plan::CalibrationPlanError;
 use astronomical_decision_training::labelled_example::{
@@ -104,8 +106,18 @@ pub enum DecisionToolError {
         question_name: String,
         largest_gap: f32,
     },
-    #[error("the written model could not be checked: {0}")]
+    #[error(
+        "the written model could not be checked ({0}); the new folder is kept, so ask it a question to try it"
+    )]
     SavedModelUnchecked(String),
+    #[error(
+        "{}",
+        output_not_discoverable_text(output_directory, scanned_model_roots)
+    )]
+    OutputNotDiscoverable {
+        output_directory: PathBuf,
+        scanned_model_roots: Vec<PathBuf>,
+    },
     #[error("the built-in check set cannot be read: {0}")]
     CheckSetUnreadable(String),
     #[error("the model folder's earlier calibration cannot be read: {0}")]
@@ -145,6 +157,7 @@ impl DecisionToolError {
             | Self::TooLittleData(_)
             | Self::NotTrainable { .. }
             | Self::WholeModelNotTrainable { .. }
+            | Self::OutputNotDiscoverable { .. }
             | Self::ModelFolder(ModelFolderLookupError::ModelNotFound { .. })
             | Self::Folder(
                 CalibratedFolderError::OutputExists { .. }
@@ -218,11 +231,57 @@ pub(super) fn check_output_is_new(
     output_directory: &Path,
 ) -> Result<(), DecisionToolError> {
     check_output_location(&model_folder.model_directory, output_directory)?;
+    check_output_is_discoverable(&model_folder.scanned_model_roots, output_directory)?;
     let output_name = output_model_id(output_directory);
     if model_folder.installed_model_ids.contains(&output_name) {
         return Err(DecisionToolError::OutputNameTaken { output_name });
     }
     Ok(())
+}
+
+/// Refuses an output folder Astronomical would not find, before any example
+/// is read. The written folder is served and checked at the end, so one that
+/// discovery never finds would cost the whole run and then fail its check.
+pub(super) fn check_output_is_discoverable(
+    scanned_model_roots: &[PathBuf],
+    output_directory: &Path,
+) -> Result<(), DecisionToolError> {
+    let canonical_output = canonical_output_path(output_directory)?;
+    for model_root in scanned_model_roots {
+        // A configured folder that does not exist yet holds no models.
+        let Ok(canonical_root) = std::fs::canonicalize(model_root) else {
+            continue;
+        };
+        if is_discoverable_model_folder(&canonical_root, &canonical_output) {
+            return Ok(());
+        }
+    }
+    Err(DecisionToolError::OutputNotDiscoverable {
+        output_directory: output_directory.to_path_buf(),
+        scanned_model_roots: scanned_model_roots.to_vec(),
+    })
+}
+
+fn output_not_discoverable_text(
+    output_directory: &Path,
+    scanned_model_roots: &[PathBuf],
+) -> String {
+    let mut root_list = String::new();
+    for model_root in scanned_model_roots {
+        root_list.push_str(&format!("\n  {}", model_root.display()));
+    }
+    let suggested_name = output_model_id(output_directory);
+    let suggested_root = scanned_model_roots
+        .first()
+        .map_or_else(|| PathBuf::from("MODELS"), PathBuf::clone);
+    format!(
+        "Astronomical would not find a model in {}, so the new model could not be served or checked. Choose a folder inside one of the folders it looks in, at most 4 folders down and not inside another model, for example --output {}:{root_list}",
+        output_directory.display(),
+        suggested_root
+            .join("calibrated")
+            .join(suggested_name)
+            .display()
+    )
 }
 
 /// The ID the daemon serves a folder under: its name.

@@ -100,3 +100,96 @@ fn should_take_the_output_folder_name_as_the_model_id() {
     );
     assert_eq!(output_model_id(Path::new("/")), "");
 }
+
+/// A canonical, existing models folder with one installed model in it.
+fn models_root_with_one_model() -> (tempfile::TempDir, PathBuf) {
+    let root_directory = tempfile::tempdir().unwrap();
+    let canonical_root = std::fs::canonicalize(root_directory.path()).unwrap();
+    let installed_model = canonical_root.join("laya-MLX-8bit");
+    std::fs::create_dir_all(&installed_model).unwrap();
+    std::fs::write(installed_model.join("config.json"), "{}").unwrap();
+    (root_directory, canonical_root)
+}
+
+#[test]
+fn should_accept_an_output_folder_astronomical_looks_in_even_before_its_parents_exist() {
+    let (_root_directory, models_root) = models_root_with_one_model();
+
+    assert!(
+        check_output_is_discoverable(
+            std::slice::from_ref(&models_root),
+            &models_root.join("calibrated/laya-moods")
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn should_refuse_an_output_folder_outside_every_models_folder_and_name_them() {
+    let (_root_directory, models_root) = models_root_with_one_model();
+    let elsewhere = tempfile::tempdir().unwrap();
+
+    let refusal = check_output_is_discoverable(
+        std::slice::from_ref(&models_root),
+        &elsewhere.path().join("laya-moods"),
+    )
+    .unwrap_err();
+
+    assert!(refusal.is_usage_error());
+    let message = refusal.to_string();
+    assert!(message.contains("would not find a model"), "{message}");
+    assert!(
+        message.contains(&models_root.display().to_string()),
+        "{message}"
+    );
+    assert!(message.contains("calibrated/laya-moods"), "{message}");
+}
+
+#[test]
+fn should_refuse_an_output_folder_inside_an_installed_model_or_too_deep() {
+    let (_root_directory, models_root) = models_root_with_one_model();
+    let roots = std::slice::from_ref(&models_root);
+
+    assert!(check_output_is_discoverable(roots, &models_root.join("laya-MLX-8bit/moods")).is_err());
+    assert!(check_output_is_discoverable(roots, &models_root.join("a/b/c/d/moods")).is_err());
+}
+
+#[test]
+fn should_skip_a_configured_models_folder_that_does_not_exist() {
+    let (_root_directory, models_root) = models_root_with_one_model();
+    let missing_root = models_root.join("not-yet-created-root");
+
+    assert!(
+        check_output_is_discoverable(
+            &[missing_root, models_root.clone()],
+            &models_root.join("laya-moods")
+        )
+        .is_ok()
+    );
+    assert!(check_output_is_discoverable(&[], &models_root.join("laya-moods")).is_err());
+}
+
+#[test]
+fn should_accept_an_output_named_through_a_link_to_the_models_folder() {
+    let (_root_directory, models_root) = models_root_with_one_model();
+    let link_directory = tempfile::tempdir().unwrap();
+    let linked_root = link_directory.path().join("models-link");
+    std::os::unix::fs::symlink(&models_root, &linked_root).unwrap();
+
+    // The configured folder is the link; the output is named through it.
+    assert!(
+        check_output_is_discoverable(
+            std::slice::from_ref(&linked_root),
+            &linked_root.join("calibrated/laya-moods")
+        )
+        .is_ok()
+    );
+    // The configured folder is the link; the output is named by the real path.
+    assert!(
+        check_output_is_discoverable(
+            std::slice::from_ref(&linked_root),
+            &models_root.join("laya-moods")
+        )
+        .is_ok()
+    );
+}
