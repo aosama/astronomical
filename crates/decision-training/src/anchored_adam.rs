@@ -29,7 +29,7 @@ pub struct AdamSettings {
 /// What the stage 2 runs use. A head learning rate of 1e-4 and a gradient
 /// clip of 1.0 are Laya's own training defaults; the anchor pull is a
 /// conservative choice for a few hundred examples.
-pub const HEAD_TRAINING_ADAM_SETTINGS: AdamSettings = AdamSettings {
+pub const TRAINING_ADAM_SETTINGS: AdamSettings = AdamSettings {
     learning_rate: 1e-4,
     first_moment_decay: 0.9,
     second_moment_decay: 0.999,

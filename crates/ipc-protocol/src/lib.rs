@@ -79,7 +79,7 @@ pub use daemon_protocol::{
 };
 pub use daemon_transport_error::DaemonTransportError;
 pub use decisions::{
-    DecisionHeadTrainingCommand, DecisionsCommand, DecisionsValidationError,
+    DecisionTrainingCommand, DecisionsCommand, DecisionsValidationError,
     MINIMUM_DECISION_TOKENS_PER_QUESTION, WorkerDecisionCapabilities,
 };
 pub use embeddings::{

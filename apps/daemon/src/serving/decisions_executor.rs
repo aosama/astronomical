@@ -5,14 +5,16 @@
 //! kind of request, and a second trait would force every test executor to
 //! grow another impl.
 
-use astronomical_decision_contract::head_training_job::{HeadTrainingOutcome, HeadTrainingStage};
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingOutcome, DecisionTrainingStage,
+};
 use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
 use astronomical_ipc_protocol::{
-    DecisionHeadTrainingCommand, DecisionsCommand, RequestId, WorkerCommand,
+    DecisionTrainingCommand, DecisionsCommand, RequestId, WorkerCommand,
 };
 use tokio::sync::mpsc;
 
-/// What a decisions request delivers: its answers, or for a head training,
+/// What a decisions request delivers: its answers, or for a training,
 /// progress messages and then the trained head.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DecisionsOutput {
@@ -24,15 +26,15 @@ pub enum DecisionsOutput {
         input_token_count: u32,
         elapsed_millis: u64,
     },
-    /// How far a head training has got; it continues.
+    /// How far a training has got; it continues.
     TrainingProgress {
-        stage: HeadTrainingStage,
+        stage: DecisionTrainingStage,
         completed: u64,
         total: u64,
     },
-    /// A finished head training.
-    HeadTrained {
-        outcome: Box<HeadTrainingOutcome>,
+    /// A finished training.
+    ModelTrained {
+        outcome: Box<DecisionTrainingOutcome>,
         elapsed_millis: u64,
     },
 }
@@ -41,7 +43,7 @@ pub enum DecisionsOutput {
 #[derive(Clone, Debug, PartialEq)]
 pub enum DecisionsWork {
     Answer(DecisionsCommand),
-    TrainHead(DecisionHeadTrainingCommand),
+    TrainHead(DecisionTrainingCommand),
 }
 
 impl DecisionsWork {
@@ -65,7 +67,9 @@ impl DecisionsWork {
     pub fn into_worker_command(self) -> WorkerCommand {
         match self {
             Self::Answer(decisions_command) => WorkerCommand::GenerateDecisions(decisions_command),
-            Self::TrainHead(training_command) => WorkerCommand::TrainDecisionHead(training_command),
+            Self::TrainHead(training_command) => {
+                WorkerCommand::TrainDecisionModel(training_command)
+            }
         }
     }
 }

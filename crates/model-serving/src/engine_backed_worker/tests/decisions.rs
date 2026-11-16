@@ -18,13 +18,13 @@ use tokio::io::{duplex, split};
 use tokio::task::JoinHandle;
 
 use super::chat::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
-use crate::decision_engine::HeadTrainingStep;
+use crate::decision_engine::DecisionTrainingStep;
 use crate::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, EmbeddingUnavailableEngine,
     EngineBackedWorker, ImageGenerationUnavailableEngine, MlxActiveMemoryBreakdown,
     MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
 };
-use astronomical_decision_contract::head_training_job::HeadTrainingJob;
+use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
 
 pub(super) const DECISION_MODEL_ID: &str = "scripted-decision-model";
 const MAXIMUM_TOKENS_PER_QUESTION: u32 = 512;
@@ -57,9 +57,9 @@ pub(super) struct ScriptedDecisionEngine {
     scripted_outcomes: VecDeque<Result<(), DecisionFailure>>,
     asked_question_names: Arc<Mutex<Vec<String>>>,
     has_unreported_cleanup: bool,
-    /// One step per `advance_head_training`; a model with none scripted
+    /// One step per `advance_training`; a model with none scripted
     /// refuses to train, as an untrainable model does.
-    scripted_training_steps: VecDeque<Result<HeadTrainingStep, DecisionFailure>>,
+    scripted_training_steps: VecDeque<Result<DecisionTrainingStep, DecisionFailure>>,
     /// Whether the worker dropped the training state after a failure.
     was_training_cancelled: Arc<Mutex<bool>>,
 }
@@ -103,7 +103,7 @@ impl DecisionEngine for ScriptedDecisionEngine {
         })
     }
 
-    fn start_head_training(&mut self, job: HeadTrainingJob) -> Result<(), DecisionFailure> {
+    fn start_training(&mut self, job: DecisionTrainingJob) -> Result<(), DecisionFailure> {
         let _ = job;
         if self.scripted_training_steps.is_empty() {
             return Err(DecisionFailure::invalid_request(
@@ -113,17 +113,17 @@ impl DecisionEngine for ScriptedDecisionEngine {
         Ok(())
     }
 
-    fn advance_head_training(&mut self) -> Result<HeadTrainingStep, DecisionFailure> {
+    fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
         self.has_unreported_cleanup = true;
         match self.scripted_training_steps.pop_front() {
             Some(scripted_step) => scripted_step,
             None => Err(DecisionFailure::fatal_execution(
-                "no head training is in progress",
+                "no training is in progress",
             )),
         }
     }
 
-    fn cancel_head_training(&mut self) {
+    fn cancel_training(&mut self) {
         self.scripted_training_steps.clear();
         *self
             .was_training_cancelled
@@ -219,7 +219,7 @@ async fn start_worker_and_swap_in_a_decision_model(
 /// Like [`start_worker_and_swap_in_a_decision_model`], for a model whose
 /// training takes `scripted_training_steps`, one per advance.
 pub(super) async fn start_worker_and_swap_in_a_trainable_model(
-    scripted_training_steps: Vec<Result<HeadTrainingStep, DecisionFailure>>,
+    scripted_training_steps: Vec<Result<DecisionTrainingStep, DecisionFailure>>,
 ) -> DecisionsWorkerHarness {
     start_worker_with_scripts(DECISION_MODEL_ID, Vec::new(), scripted_training_steps).await
 }
@@ -227,7 +227,7 @@ pub(super) async fn start_worker_and_swap_in_a_trainable_model(
 async fn start_worker_with_scripts(
     loaded_model_id: &str,
     scripted_outcomes: Vec<Result<(), DecisionFailure>>,
-    scripted_training_steps: Vec<Result<HeadTrainingStep, DecisionFailure>>,
+    scripted_training_steps: Vec<Result<DecisionTrainingStep, DecisionFailure>>,
 ) -> DecisionsWorkerHarness {
     let asked_question_names = Arc::new(Mutex::new(Vec::new()));
     let was_training_cancelled = Arc::new(Mutex::new(false));

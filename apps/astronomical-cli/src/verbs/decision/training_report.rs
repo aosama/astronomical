@@ -10,7 +10,7 @@
 use std::fmt::Write as _;
 
 use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::head_training_job::{RunEnding, RunSummary, TrainingScope};
+use astronomical_decision_contract::decision_training_job::{RunEnding, RunSummary, TrainingScope};
 use astronomical_decision_training::calibration_metrics::CalibrationMetrics;
 use astronomical_decision_training::training_verdict::{TrainingRefusal, TrainingVerdict};
 

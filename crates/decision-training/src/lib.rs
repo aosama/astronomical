@@ -39,7 +39,6 @@ pub mod clef_trainable;
 pub mod dense_math;
 pub mod gelu;
 pub mod head_parameters;
-pub mod head_training;
 pub mod holdout_split;
 pub mod kev_trainable;
 pub mod labelled_example;
@@ -52,6 +51,7 @@ pub mod temperature_fit;
 pub mod temperature_softmax;
 pub mod trainable_head;
 pub mod training_losses;
+pub mod training_settings;
 pub mod training_split;
 pub mod training_verdict;
 

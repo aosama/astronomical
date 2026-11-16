@@ -39,7 +39,7 @@ pub(super) fn handle_worker_decisions_event(
                 }),
             )
         }
-        WorkerEvent::DecisionHeadTrainingProgress {
+        WorkerEvent::DecisionTrainingProgress {
             request_id,
             stage,
             completed,
@@ -56,13 +56,13 @@ pub(super) fn handle_worker_decisions_event(
             );
             Ok(())
         }
-        WorkerEvent::DecisionHeadTrained {
+        WorkerEvent::DecisionModelTrained {
             request_id,
             outcome,
             elapsed_millis,
         } => record_terminal_outcome(
             matching_active_decisions(active_worker_request, request_id)?,
-            Ok(DecisionsOutput::HeadTrained {
+            Ok(DecisionsOutput::ModelTrained {
                 outcome,
                 elapsed_millis,
             }),

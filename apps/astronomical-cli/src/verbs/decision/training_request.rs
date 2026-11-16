@@ -1,4 +1,4 @@
-//! Sending one head training to the daemon and following it to its end.
+//! Sending one training to the daemon and following it to its end.
 //!
 //! The worker reads every example and trains on the GPU; this side only
 //! sends the job, turns each progress frame into a timed progress line, and
@@ -9,8 +9,8 @@
 use std::io::Write;
 use std::time::Duration;
 
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingJob, HeadTrainingOutcome, HeadTrainingStage,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage,
 };
 use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse};
 use tokio::time::timeout;
@@ -26,31 +26,31 @@ use crate::verbs::decide::DecideError;
 /// One progress frame's numbers.
 #[derive(Clone, Copy, Debug)]
 struct StageReport {
-    stage: HeadTrainingStage,
+    stage: DecisionTrainingStage,
     completed: u64,
     total: u64,
 }
 
 /// The progress line of the stage the worker last reported.
 struct StageProgress {
-    stage: HeadTrainingStage,
+    stage: DecisionTrainingStage,
     timed_progress: TimedProgress,
 }
 
 /// Has the daemon train `decision_model_id` on `job`, printing progress, and
 /// returns what the training produced.
-pub(super) async fn request_head_training(
+pub(super) async fn request_training(
     decision_model_id: &str,
-    job: HeadTrainingJob,
+    job: DecisionTrainingJob,
     daemon_probe: &DaemonProbe,
     dependencies: &mut DecisionToolDependencies<'_>,
-) -> Result<HeadTrainingOutcome, DecisionToolError> {
+) -> Result<DecisionTrainingOutcome, DecisionToolError> {
     let wait_bounds = dependencies.wait_bounds;
     let mut daemon_client = match daemon_probe.connect().await {
         Ok(daemon_client) => daemon_client,
         Err(probe_error) => return Err(DecideError::from(probe_error).into()),
     };
-    let training_request = DaemonRequest::TrainDecisionHead {
+    let training_request = DaemonRequest::TrainDecisionModel {
         model: Some(decision_model_id.to_owned()),
         job,
     };
@@ -85,7 +85,7 @@ pub(super) async fn request_head_training(
                 return Err(DecideError::DaemonStoppedResponding.into());
             }
         };
-        if let DaemonResponse::DecisionHeadTrainingProgress {
+        if let DaemonResponse::DecisionTrainingProgress {
             stage,
             completed,
             total,
@@ -139,21 +139,21 @@ fn report_stage_progress(
 /// How each stage's progress line reads. A training's total is the most
 /// steps every run could take; runs that stop improving early jump the
 /// count forward, so the time left shrinks rather than grows.
-fn stage_wording(stage: HeadTrainingStage) -> (&'static str, &'static str) {
+fn stage_wording(stage: DecisionTrainingStage) -> (&'static str, &'static str) {
     match stage {
-        HeadTrainingStage::Reading => ("Reading examples", "examples"),
-        HeadTrainingStage::Checking => ("Checking the starting point", "questions"),
-        HeadTrainingStage::Training => ("Training", "steps"),
-        HeadTrainingStage::Scoring => ("Scoring the trained model", "questions"),
+        DecisionTrainingStage::Reading => ("Reading examples", "examples"),
+        DecisionTrainingStage::Checking => ("Checking the starting point", "questions"),
+        DecisionTrainingStage::Training => ("Training", "steps"),
+        DecisionTrainingStage::Scoring => ("Scoring the trained model", "questions"),
     }
 }
 
 /// The outcome the one terminal frame carries, or why there is none.
 fn training_outcome(
     terminal_response: DaemonResponse,
-) -> Result<HeadTrainingOutcome, DecisionToolError> {
+) -> Result<DecisionTrainingOutcome, DecisionToolError> {
     match terminal_response {
-        DaemonResponse::DecisionHeadTrained { outcome, .. } => Ok(*outcome),
+        DaemonResponse::DecisionModelTrained { outcome, .. } => Ok(*outcome),
         DaemonResponse::DecisionsFailed { reason } => {
             Err(DecisionToolError::TrainingFailed(reason.to_string()))
         }
@@ -167,5 +167,5 @@ fn training_outcome(
 }
 
 #[cfg(test)]
-#[path = "head_training_request_tests.rs"]
+#[path = "training_request_tests.rs"]
 mod tests;

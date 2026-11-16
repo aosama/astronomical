@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use astronomical_decision_contract::calibration_file::CalibrationOverride;
 use astronomical_decision_contract::decision_adapters_file::DecisionAdapters;
-use astronomical_decision_contract::head_training_job::{HeadTrainingJob, TrainingExample};
+use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
 use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
 use astronomical_decision_contract::laya_sequence::LayaQuestionSequence;
 use astronomical_decision_contract::{
@@ -25,16 +25,11 @@ use astronomical_decision_training::head_parameters::ParameterLayout;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use mlx_bridge::MlxArray;
 
-use crate::decision_engine::HeadTrainingStep;
+use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
 use crate::decision_models::decision_adapters::{
     check_adapter_targets, read_decision_adapters, unusable_adapters,
-};
-use crate::decision_models::head_training::question_selection::RowSource;
-use crate::decision_models::head_training::training_session::{
-    HeadTrainingHost, HeadTrainingSession, WholeModelScorer, keep_session_if_running,
-    read_through_decide, start_session,
 };
 use crate::decision_models::head_tuning::{check_tuned_shape, read_head_tuning, unusable_tuning};
 use crate::decision_models::laya::adapter_targets::laya_adapter_targets;
@@ -46,6 +41,11 @@ use crate::decision_models::laya::loaded_state::LoadedLayaState;
 use crate::decision_models::laya::loaded_state::sequence_failure;
 use crate::decision_models::laya::tokenizer::LayaTokenizer;
 use crate::decision_models::laya::whole_model_scorer::LayaWholeModelScorer;
+use crate::decision_models::training::question_selection::RowSource;
+use crate::decision_models::training::training_session::{
+    DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
+    read_through_decide, start_session,
+};
 use crate::linear_adapters::LinearAdapters;
 use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
@@ -59,7 +59,7 @@ const QUANTIZED_EMBEDDING_SCALES_TENSOR: &str = "encoder.embeddings.tok_embeddin
 /// A Laya runtime bound to one artifact directory.
 pub struct LayaDecisionEngine {
     model_id: String,
-    /// The model folder, which head training reads the shipped scorer from.
+    /// The model folder, which training reads the shipped scorer from.
     model_directory: PathBuf,
     effective_mlx_memory_ceiling_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
@@ -77,7 +77,7 @@ pub struct LayaDecisionEngine {
     loaded_state: Option<Rc<LoadedLayaState>>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
     /// A training of the final layers in progress, if any.
-    head_training: Option<HeadTrainingSession>,
+    training_session: Option<DecisionTrainingSession>,
 }
 
 impl LayaDecisionEngine {
@@ -111,7 +111,7 @@ impl LayaDecisionEngine {
             preloaded_artifact: Some(artifact),
             loaded_state: None,
             post_cleanup_memory_telemetry: None,
-            head_training: None,
+            training_session: None,
         })
     }
 
@@ -260,28 +260,28 @@ impl DecisionEngine for LayaDecisionEngine {
         })
     }
 
-    fn start_head_training(&mut self, job: HeadTrainingJob) -> Result<(), DecisionFailure> {
+    fn start_training(&mut self, job: DecisionTrainingJob) -> Result<(), DecisionFailure> {
         if self.loaded_state.is_none() {
             return Err(DecisionFailure::fatal_execution(
                 "the decision engine was asked to train before load",
             ));
         }
-        start_session(&mut self.head_training, job)
+        start_session(&mut self.training_session, job)
     }
 
-    fn advance_head_training(&mut self) -> Result<HeadTrainingStep, DecisionFailure> {
-        let Some(mut session) = self.head_training.take() else {
+    fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
+        let Some(mut session) = self.training_session.take() else {
             return Err(DecisionFailure::fatal_execution(
-                "no head training is in progress",
+                "no training is in progress",
             ));
         };
         let step = session.advance(self);
-        keep_session_if_running(&mut self.head_training, session, &step);
+        keep_session_if_running(&mut self.training_session, session, &step);
         step
     }
 
-    fn cancel_head_training(&mut self) {
-        self.head_training = None;
+    fn cancel_training(&mut self) {
+        self.training_session = None;
     }
 
     fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
@@ -468,8 +468,8 @@ fn detect_weight_layout(tensors: &MlxSafetensors) -> ModernBertWeightLayout {
     ModernBertWeightLayout::new(ENCODER_TENSOR_PREFIX, token_embedding_storage)
 }
 
-/// What a head training needs from this engine.
-impl HeadTrainingHost for LayaDecisionEngine {
+/// What a training needs from this engine.
+impl DecisionTrainingHost for LayaDecisionEngine {
     fn read_answers(
         &mut self,
         state: &OrderedJsonValue,

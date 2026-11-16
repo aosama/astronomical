@@ -3,7 +3,9 @@
 //! train to at least 80% on questions it never saw.
 
 use astronomical_decision_training::anchored_adam::AdamSettings;
-use astronomical_decision_training::head_training::{HEAD_TRAINING_SETTINGS, TrainingSettings};
+use astronomical_decision_training::training_settings::{
+    FINAL_LAYERS_TRAINING_SETTINGS, TrainingSettings,
+};
 use serial_test::serial;
 
 use super::super::gpu_test_support::{RankedTask, ranked_task};
@@ -33,10 +35,10 @@ fn accuracy(scores: &[Vec<f32>], correct: &[usize]) -> f64 {
 const FAST_SETTINGS: TrainingSettings = TrainingSettings {
     adam: AdamSettings {
         learning_rate: 1e-2,
-        ..HEAD_TRAINING_SETTINGS.adam
+        ..FINAL_LAYERS_TRAINING_SETTINGS.adam
     },
     seeds: &[1],
-    ..HEAD_TRAINING_SETTINGS
+    ..FINAL_LAYERS_TRAINING_SETTINGS
 };
 
 #[test]

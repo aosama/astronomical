@@ -24,7 +24,7 @@ where
             scripted_worker_decisions::answer_decisions_command(event_writer, decisions_command)
                 .await
         }
-        WorkerCommand::TrainDecisionHead(training_command) => {
+        WorkerCommand::TrainDecisionModel(training_command) => {
             // The scripted worker serves no real model, so it cannot train.
             event_writer
                 .send_event(&WorkerEvent::DecisionsFailed {

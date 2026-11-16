@@ -1,7 +1,7 @@
 //! One loss and its gradient with respect to the trainable arrays, worked out
 //! by MLX itself.
 //!
-//! Head training wrote each family's backward pass by hand because a head is
+//! Final-layer training wrote each family's backward pass by hand because a head is
 //! a few small layers. Training add-on weights inside every layer of a
 //! backbone means differentiating through attention, rotary embeddings,
 //! normalization and 8-bit matrix products, so this asks MLX for the

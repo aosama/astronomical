@@ -4,29 +4,27 @@
 //! the training and drops its state.
 
 use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingJob, HeadTrainingOutcome, HeadTrainingStage, RunEnding, RunSummary,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage, RunEnding, RunSummary,
 };
-use astronomical_ipc_protocol::{
-    DecisionHeadTrainingCommand, RequestId, WorkerCommand, WorkerEvent,
-};
+use astronomical_ipc_protocol::{DecisionTrainingCommand, RequestId, WorkerCommand, WorkerEvent};
 
 use super::decisions::{
     DECISION_MODEL_ID, DecisionsWorkerHarness, close, next_event,
     start_worker_and_swap_in_a_trainable_model,
 };
-use crate::decision_engine::HeadTrainingStep;
+use crate::decision_engine::DecisionTrainingStep;
 
-fn progress(stage: HeadTrainingStage, completed: u64, total: u64) -> HeadTrainingStep {
-    HeadTrainingStep::Progress {
+fn progress(stage: DecisionTrainingStage, completed: u64, total: u64) -> DecisionTrainingStep {
+    DecisionTrainingStep::Progress {
         stage,
         completed,
         total,
     }
 }
 
-fn trained_outcome() -> HeadTrainingOutcome {
-    HeadTrainingOutcome {
+fn trained_outcome() -> DecisionTrainingOutcome {
+    DecisionTrainingOutcome {
         examples: Vec::new(),
         trained_tensors: Vec::new(),
         adapter_tensors: Vec::new(),
@@ -46,11 +44,11 @@ fn trained_outcome() -> HeadTrainingOutcome {
 async fn send_training(harness: &mut DecisionsWorkerHarness, request_number: u64) {
     harness
         .commands
-        .send_command(&WorkerCommand::TrainDecisionHead(
-            DecisionHeadTrainingCommand {
+        .send_command(&WorkerCommand::TrainDecisionModel(
+            DecisionTrainingCommand {
                 request_id: RequestId::new(request_number),
                 model: DECISION_MODEL_ID.to_owned(),
-                job: HeadTrainingJob::default(),
+                job: DecisionTrainingJob::default(),
             },
         ))
         .await
@@ -58,7 +56,7 @@ async fn send_training(harness: &mut DecisionsWorkerHarness, request_number: u64
 }
 
 async fn swapped_trainable_model(
-    scripted_training_steps: Vec<Result<HeadTrainingStep, DecisionFailure>>,
+    scripted_training_steps: Vec<Result<DecisionTrainingStep, DecisionFailure>>,
 ) -> DecisionsWorkerHarness {
     let mut harness = start_worker_and_swap_in_a_trainable_model(scripted_training_steps).await;
     assert!(matches!(
@@ -71,9 +69,9 @@ async fn swapped_trainable_model(
 #[tokio::test]
 async fn should_report_each_step_then_the_trained_result_then_finalize() {
     let mut harness = swapped_trainable_model(vec![
-        Ok(progress(HeadTrainingStage::Reading, 1, 1)),
-        Ok(progress(HeadTrainingStage::Training, 40, 120)),
-        Ok(HeadTrainingStep::Completed(Box::new(trained_outcome()))),
+        Ok(progress(DecisionTrainingStage::Reading, 1, 1)),
+        Ok(progress(DecisionTrainingStage::Training, 40, 120)),
+        Ok(DecisionTrainingStep::Completed(Box::new(trained_outcome()))),
     ])
     .await;
     send_training(&mut harness, 61).await;
@@ -81,7 +79,7 @@ async fn should_report_each_step_then_the_trained_result_then_finalize() {
     let mut reported_steps = Vec::new();
     for _ in 0..2 {
         let progress_event = next_event(&mut harness.events).await;
-        let WorkerEvent::DecisionHeadTrainingProgress {
+        let WorkerEvent::DecisionTrainingProgress {
             request_id,
             stage,
             completed,
@@ -96,12 +94,12 @@ async fn should_report_each_step_then_the_trained_result_then_finalize() {
     assert_eq!(
         reported_steps,
         [
-            (HeadTrainingStage::Reading, 1, 1),
-            (HeadTrainingStage::Training, 40, 120)
+            (DecisionTrainingStage::Reading, 1, 1),
+            (DecisionTrainingStage::Training, 40, 120)
         ]
     );
     let trained_event = next_event(&mut harness.events).await;
-    let WorkerEvent::DecisionHeadTrained { outcome, .. } = trained_event else {
+    let WorkerEvent::DecisionModelTrained { outcome, .. } = trained_event else {
         panic!("the training should end with its result: {trained_event:?}");
     };
     assert_eq!(*outcome, trained_outcome());
@@ -132,7 +130,7 @@ async fn should_refuse_to_train_a_model_whose_final_layers_cannot_be_trained() {
 #[tokio::test]
 async fn should_end_a_training_whose_step_fails_and_drop_its_state() {
     let mut harness = swapped_trainable_model(vec![
-        Ok(progress(HeadTrainingStage::Reading, 1, 2)),
+        Ok(progress(DecisionTrainingStage::Reading, 1, 2)),
         Err(DecisionFailure::fatal_execution(
             "the GPU copy of the final layers scores 0.00876 away from the model",
         )),
@@ -142,7 +140,7 @@ async fn should_end_a_training_whose_step_fails_and_drop_its_state() {
 
     assert!(matches!(
         next_event(&mut harness.events).await,
-        WorkerEvent::DecisionHeadTrainingProgress { completed: 1, .. }
+        WorkerEvent::DecisionTrainingProgress { completed: 1, .. }
     ));
     let failure_event = next_event(&mut harness.events).await;
     let WorkerEvent::DecisionsFailed { reason, .. } = failure_event else {

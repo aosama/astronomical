@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::head_training_job::HeadTrainingJob;
+use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
 use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
 use astronomical_decision_contract::kev_answers::kev_answer_from_probabilities;
 use astronomical_decision_contract::{
@@ -24,15 +24,15 @@ use super::sequence::{KEV_MAXIMUM_ROW_TOKENS, KevQuestionRow, KevRowLayout, buil
 use super::settings::KevSettings;
 use super::tokenizer::KevTokenizer;
 use crate::RequestDecoderStateStack;
-use crate::decision_engine::HeadTrainingStep;
+use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
-use crate::decision_models::head_training::training_session::{
-    HeadTrainingHost, HeadTrainingSession, keep_session_if_running, read_through_decide,
-    start_session,
-};
 use crate::decision_models::head_tuning::read_head_tuning;
 use crate::decision_models::qwen_backbone::QwenDecisionBackbone;
+use crate::decision_models::training::training_session::{
+    DecisionTrainingHost, DecisionTrainingSession, keep_session_if_running, read_through_decide,
+    start_session,
+};
 use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 
@@ -46,7 +46,7 @@ pub struct KevDecisionEngine {
     loaded_state: Option<LoadedKevState>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
     /// A training of the final layers in progress, if any.
-    head_training: Option<HeadTrainingSession>,
+    training_session: Option<DecisionTrainingSession>,
 }
 
 struct LoadedKevState {
@@ -79,7 +79,7 @@ impl KevDecisionEngine {
             resident_weight_bytes: weight_file_bytes(model_directory),
             loaded_state: None,
             post_cleanup_memory_telemetry: None,
-            head_training: None,
+            training_session: None,
         })
     }
 
@@ -181,28 +181,28 @@ impl DecisionEngine for KevDecisionEngine {
         })
     }
 
-    fn start_head_training(&mut self, job: HeadTrainingJob) -> Result<(), DecisionFailure> {
+    fn start_training(&mut self, job: DecisionTrainingJob) -> Result<(), DecisionFailure> {
         if self.loaded_state.is_none() {
             return Err(DecisionFailure::fatal_execution(
                 "the decision engine was asked to train before load",
             ));
         }
-        start_session(&mut self.head_training, job)
+        start_session(&mut self.training_session, job)
     }
 
-    fn advance_head_training(&mut self) -> Result<HeadTrainingStep, DecisionFailure> {
-        let Some(mut session) = self.head_training.take() else {
+    fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
+        let Some(mut session) = self.training_session.take() else {
             return Err(DecisionFailure::fatal_execution(
-                "no head training is in progress",
+                "no training is in progress",
             ));
         };
         let step = session.advance(self);
-        keep_session_if_running(&mut self.head_training, session, &step);
+        keep_session_if_running(&mut self.training_session, session, &step);
         step
     }
 
-    fn cancel_head_training(&mut self) {
-        self.head_training = None;
+    fn cancel_training(&mut self) {
+        self.training_session = None;
     }
 
     fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
@@ -399,8 +399,8 @@ fn weight_file_bytes(model_directory: &Path) -> u64 {
     total_bytes
 }
 
-/// What a head training needs from this engine.
-impl HeadTrainingHost for KevDecisionEngine {
+/// What a training needs from this engine.
+impl DecisionTrainingHost for KevDecisionEngine {
     fn read_answers(
         &mut self,
         state: &OrderedJsonValue,

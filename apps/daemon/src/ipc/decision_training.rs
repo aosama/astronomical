@@ -1,11 +1,11 @@
-//! Head-training routing for the daemon IPC service: resolves the decision
+//! Training routing for the daemon IPC service: resolves the decision
 //! model, queues the training like any decisions request, and streams its
 //! progress frames, then exactly one terminal frame.
 
 use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::head_training_job::HeadTrainingJob;
+use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
 use astronomical_ipc_protocol::{
-    DaemonResponse, DaemonTransportError, DecisionHeadTrainingCommand, RequestId,
+    DaemonResponse, DaemonTransportError, DecisionTrainingCommand, RequestId,
     StreamingResponseWriter,
 };
 
@@ -14,11 +14,11 @@ use crate::{
     ipc::decisions::resolved_decisions_target, ipc::service::generation_start_rejection_reason,
 };
 
-/// Runs one IPC head-training request.
+/// Runs one IPC training request.
 pub(crate) async fn run_decision_training(
     generation_context: &DaemonIpcGenerationContext,
     requested_model: Option<String>,
-    job: HeadTrainingJob,
+    job: DecisionTrainingJob,
     mut streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
     let (resolved_model_id, request_identifier) =
@@ -31,14 +31,14 @@ pub(crate) async fn run_decision_training(
                 return streaming_response_writer.close().await;
             }
         };
-    let training_command = DecisionHeadTrainingCommand {
+    let training_command = DecisionTrainingCommand {
         request_id: RequestId::new(request_identifier),
         model: resolved_model_id.clone(),
         job,
     };
     let mut training_receiver = match generation_context
         .executor
-        .start_head_training(training_command)
+        .start_training(training_command)
         .await
     {
         Ok(training_receiver) => training_receiver,
@@ -57,7 +57,7 @@ pub(crate) async fn run_decision_training(
                 total,
             })) => {
                 streaming_response_writer
-                    .send_response(&DaemonResponse::DecisionHeadTrainingProgress {
+                    .send_response(&DaemonResponse::DecisionTrainingProgress {
                         stage,
                         completed,
                         total,
@@ -79,8 +79,8 @@ fn trained_response(
     resolved_model_id: String,
 ) -> DaemonResponse {
     match worker_result {
-        Some(Ok(DecisionsOutput::HeadTrained { outcome, .. })) => {
-            DaemonResponse::DecisionHeadTrained {
+        Some(Ok(DecisionsOutput::ModelTrained { outcome, .. })) => {
+            DaemonResponse::DecisionModelTrained {
                 model: resolved_model_id,
                 outcome,
             }

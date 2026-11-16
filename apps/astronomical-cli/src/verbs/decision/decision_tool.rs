@@ -11,7 +11,7 @@ use std::time::Duration;
 use astronomical_config::{
     AstronomicalInstancePaths, AstronomicalRuntimeInstance, is_discoverable_model_folder,
 };
-use astronomical_decision_contract::head_training_job::TrainingScope;
+use astronomical_decision_contract::decision_training_job::TrainingScope;
 use astronomical_decision_training::calibrated_model_folder::{
     CalibratedFolderError, FolderAdditions, SourceModelFolder, canonical_output_path,
     check_output_location, write_calibrated_model_folder,

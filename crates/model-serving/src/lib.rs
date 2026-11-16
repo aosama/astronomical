@@ -148,8 +148,8 @@ pub use astro_decoder_state_cache::{
 };
 
 pub use decision_engine::{
-    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionUnavailableEngine,
-    HeadTrainingStep,
+    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionTrainingStep,
+    DecisionUnavailableEngine,
 };
 
 #[cfg(feature = "direct-mlx")]

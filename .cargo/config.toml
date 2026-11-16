@@ -81,14 +81,15 @@ test-decision-contract = "test -p astronomical-decision-contract"
 # `astronomical decision calibrate` and `decision train` verbs drive it end
 # to end.
 test-decision-training = "test -p astronomical-decision-training"
-# The GPU head trainer that runs inside the inference worker: each family's
-# forward and backward pass, the precise (TF32-safe) matrix product, the
-# objective and the anchored optimizer, all against the CPU oracle, plus a
-# synthetic positive control. Needs MLX and the graphics processor (the
+# The GPU training loop that runs inside the inference worker: the stepped
+# job (check, train, score), runs and early stopping, each family's final
+# layers' forward and backward pass, the precise (TF32-safe) matrix product,
+# the objective and the anchored optimizer, all against the CPU oracle, plus
+# a synthetic positive control. Needs MLX and the graphics processor (the
 # tests are #[serial]); under a second once built. The whole journey runs
 # live with `astronomical decision train EXAMPLES --output DIR --model ID`
 # against the Development instance.
-test-decision-head-training = "test -p astronomical-model-serving --features direct-mlx --lib head_training"
+test-decision-gpu-training = "test -p astronomical-model-serving --features direct-mlx --lib decision_models::training"
 # Whole-model training (`decision train --whole-model`): MLX's own gradients
 # through every operation Laya's forward pass uses (an 8-bit projection with
 # an add-on, rotary embedding, masked attention, exact GELU), the micro-batch

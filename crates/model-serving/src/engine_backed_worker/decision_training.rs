@@ -7,18 +7,18 @@ use std::time::Instant;
 
 use astronomical_decision_contract::DecisionFailure;
 use astronomical_ipc_protocol::{
-    DecisionHeadTrainingCommand, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
+    DecisionTrainingCommand, ProtocolReader, ProtocolWriter, RequestId, WorkerEvent,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::stepped_request::CommandDuringRequest;
 use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedRuntime};
-use crate::decision_engine::HeadTrainingStep;
+use crate::decision_engine::DecisionTrainingStep;
 use crate::model_generation_processor::ModelGenerationProcessor;
 use crate::{ImageGenerationEngine, InferenceEngine};
 
-/// A head training the worker is running.
+/// A training the worker is running.
 pub(crate) struct ActiveDecisionTraining {
     pub(crate) request_id: RequestId,
     started_at: Instant,
@@ -65,7 +65,7 @@ where
     /// Starts a training on the loaded decision model, or answers why it cannot.
     pub(crate) async fn start_decision_training<WriteTransport>(
         &mut self,
-        training_command: DecisionHeadTrainingCommand,
+        training_command: DecisionTrainingCommand,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<Option<ActiveDecisionTraining>, WorkerRuntimeError>
     where
@@ -74,7 +74,7 @@ where
         let request_id = training_command.request_id;
         let start_outcome = match self.loaded_runtime.as_mut() {
             Some(LoadedRuntime::Decisions(decision_engine)) => {
-                decision_engine.start_head_training(training_command.job)
+                decision_engine.start_training(training_command.job)
             }
             Some(_) | None => Err(DecisionFailure::fatal_execution(
                 "the loaded model does not answer decision requests",
@@ -105,15 +105,13 @@ where
         let request_id = active_training.request_id;
         let step_started_at = Instant::now();
         let step = match self.loaded_runtime.as_mut() {
-            Some(LoadedRuntime::Decisions(decision_engine)) => {
-                decision_engine.advance_head_training()
-            }
+            Some(LoadedRuntime::Decisions(decision_engine)) => decision_engine.advance_training(),
             Some(_) | None => Err(DecisionFailure::fatal_execution(
                 "the decision model was unloaded during its training",
             )),
         };
         match step {
-            Ok(HeadTrainingStep::Progress {
+            Ok(DecisionTrainingStep::Progress {
                 stage,
                 completed,
                 total,
@@ -129,7 +127,7 @@ where
                     "decision training step"
                 );
                 event_writer
-                    .send_event(&WorkerEvent::DecisionHeadTrainingProgress {
+                    .send_event(&WorkerEvent::DecisionTrainingProgress {
                         request_id,
                         stage,
                         completed,
@@ -138,9 +136,9 @@ where
                     .await?;
                 Ok(Some(active_training))
             }
-            Ok(HeadTrainingStep::Completed(outcome)) => {
+            Ok(DecisionTrainingStep::Completed(outcome)) => {
                 event_writer
-                    .send_event(&WorkerEvent::DecisionHeadTrained {
+                    .send_event(&WorkerEvent::DecisionModelTrained {
                         request_id,
                         outcome,
                         elapsed_millis: active_training.elapsed_millis(),
@@ -227,7 +225,7 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         if let Some(LoadedRuntime::Decisions(decision_engine)) = self.loaded_runtime.as_mut() {
-            decision_engine.cancel_head_training();
+            decision_engine.cancel_training();
         }
         event_writer
             .send_event(&WorkerEvent::DecisionsFailed {

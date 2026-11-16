@@ -1,4 +1,4 @@
-//! The two losses head training minimizes, with their gradients with respect
+//! The two losses final-layer training minimizes, with their gradients with respect
 //! to the logits.
 //!
 //! - **Label-smoothed cross-entropy** on the person's labels: the right

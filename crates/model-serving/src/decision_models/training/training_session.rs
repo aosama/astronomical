@@ -16,21 +16,21 @@
 use std::path::Path;
 use std::rc::Rc;
 
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingJob, HeadTrainingStage, TrainingExample, TrainingScope,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingJob, DecisionTrainingStage, TrainingExample, TrainingScope,
 };
 use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
 use astronomical_decision_contract::{
     DecisionFailure, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
 };
 use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_decision_training::head_training::{
-    HEAD_TRAINING_SETTINGS, WHOLE_MODEL_TRAINING_SETTINGS,
-};
 use astronomical_decision_training::shipped_head::{ShippedHead, read_shipped_head};
+use astronomical_decision_training::training_settings::{
+    FINAL_LAYERS_TRAINING_SETTINGS, WHOLE_MODEL_TRAINING_SETTINGS,
+};
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::decision_engine::HeadTrainingStep;
+use crate::decision_engine::DecisionTrainingStep;
 use mlx_bridge::MlxArray;
 
 use super::gpu_math::GpuMath;
@@ -43,7 +43,7 @@ use super::training_phase::{PreparedTraining, TrainedLayout, TrainingPhase, gpu_
 use crate::decision_models::adapter_training::whole_model_layout::WholeModelLayout;
 
 /// What a session needs from the engine it runs in.
-pub(crate) trait HeadTrainingHost {
+pub(crate) trait DecisionTrainingHost {
     /// The model's answers to `questions` about `state`; with
     /// [`HeadInputRequest::Include`], also what the final layers read.
     fn read_answers(
@@ -87,14 +87,14 @@ struct PreparedScorer {
 }
 
 /// A training job in progress.
-pub(crate) struct HeadTrainingSession {
-    job: HeadTrainingJob,
+pub(crate) struct DecisionTrainingSession {
+    job: DecisionTrainingJob,
     read_examples: Vec<Vec<QuestionOutcome>>,
     training: Option<TrainingPhase>,
 }
 
-impl HeadTrainingSession {
-    pub(crate) fn new(job: HeadTrainingJob) -> Result<Self, DecisionFailure> {
+impl DecisionTrainingSession {
+    pub(crate) fn new(job: DecisionTrainingJob) -> Result<Self, DecisionFailure> {
         if job.examples.is_empty() {
             return Err(DecisionFailure::invalid_request(
                 "a training needs at least one example",
@@ -111,8 +111,8 @@ impl HeadTrainingSession {
     /// Takes one step.
     pub(crate) fn advance(
         &mut self,
-        host: &mut dyn HeadTrainingHost,
-    ) -> Result<HeadTrainingStep, DecisionFailure> {
+        host: &mut dyn DecisionTrainingHost,
+    ) -> Result<DecisionTrainingStep, DecisionFailure> {
         let example_count = self.job.examples.len();
         if self.read_examples.len() < example_count {
             return self.read_next_example(host);
@@ -130,8 +130,8 @@ impl HeadTrainingSession {
 
     fn read_next_example(
         &mut self,
-        host: &mut dyn HeadTrainingHost,
-    ) -> Result<HeadTrainingStep, DecisionFailure> {
+        host: &mut dyn DecisionTrainingHost,
+    ) -> Result<DecisionTrainingStep, DecisionFailure> {
         let example = &self.job.examples[self.read_examples.len()];
         let head_input_request = match self.job.scope {
             TrainingScope::FinalLayers => HeadInputRequest::Include,
@@ -148,8 +148,8 @@ impl HeadTrainingSession {
             )));
         }
         self.read_examples.push(question_outcomes);
-        Ok(HeadTrainingStep::Progress {
-            stage: HeadTrainingStage::Reading,
+        Ok(DecisionTrainingStep::Progress {
+            stage: DecisionTrainingStage::Reading,
             completed: self.read_examples.len() as u64,
             total: self.job.examples.len() as u64,
         })
@@ -157,7 +157,7 @@ impl HeadTrainingSession {
 
     fn prepare_training(
         &self,
-        host: &mut dyn HeadTrainingHost,
+        host: &mut dyn DecisionTrainingHost,
     ) -> Result<TrainingPhase, DecisionFailure> {
         let family = host.tunable_family();
         let shipped_head = match read_shipped_head(host.model_directory(), family) {
@@ -178,7 +178,7 @@ impl HeadTrainingSession {
             }
         };
         let settings = match self.job.scope {
-            TrainingScope::FinalLayers => HEAD_TRAINING_SETTINGS,
+            TrainingScope::FinalLayers => FINAL_LAYERS_TRAINING_SETTINGS,
             TrainingScope::WholeModel => WHOLE_MODEL_TRAINING_SETTINGS,
         };
         TrainingPhase::new(
@@ -206,7 +206,7 @@ impl HeadTrainingSession {
 /// A final-layer training: what the final layers read, uploaded once, and
 /// the layers as served.
 fn final_layers_scorer(
-    host: &dyn HeadTrainingHost,
+    host: &dyn DecisionTrainingHost,
     shipped_head: &ShippedHead,
     selection: &QuestionSelection<'_>,
 ) -> Result<PreparedScorer, DecisionFailure> {
@@ -233,7 +233,7 @@ fn final_layers_scorer(
 /// A whole-model training: the engine's whole model with add-ons in every
 /// layer, the final layers as served and every add-on switched off.
 fn whole_model_scorer(
-    host: &mut dyn HeadTrainingHost,
+    host: &mut dyn DecisionTrainingHost,
     examples: &[TrainingExample],
     shipped_head: &ShippedHead,
     selection: &QuestionSelection<'_>,
@@ -261,25 +261,25 @@ fn whole_model_scorer(
 
 /// Starts a session in an engine's slot, refusing a second one.
 pub(crate) fn start_session(
-    session_slot: &mut Option<HeadTrainingSession>,
-    job: HeadTrainingJob,
+    session_slot: &mut Option<DecisionTrainingSession>,
+    job: DecisionTrainingJob,
 ) -> Result<(), DecisionFailure> {
     if session_slot.is_some() {
         return Err(DecisionFailure::invalid_request(
-            "a head training is already in progress",
+            "a training is already in progress",
         ));
     }
-    *session_slot = Some(HeadTrainingSession::new(job)?);
+    *session_slot = Some(DecisionTrainingSession::new(job)?);
     Ok(())
 }
 
 /// Puts a session back in its slot after a step unless the step ended it.
 pub(crate) fn keep_session_if_running(
-    session_slot: &mut Option<HeadTrainingSession>,
-    session: HeadTrainingSession,
-    step: &Result<HeadTrainingStep, DecisionFailure>,
+    session_slot: &mut Option<DecisionTrainingSession>,
+    session: DecisionTrainingSession,
+    step: &Result<DecisionTrainingStep, DecisionFailure>,
 ) {
-    if matches!(step, Ok(HeadTrainingStep::Progress { .. })) {
+    if matches!(step, Ok(DecisionTrainingStep::Progress { .. })) {
         *session_slot = Some(session);
     }
 }

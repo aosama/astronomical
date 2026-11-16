@@ -107,7 +107,7 @@ where
                 .start_speech(speech_command, event_writer)
                 .await?
                 .map(ActiveWorkerRequest::Speech)),
-            WorkerCommand::TrainDecisionHead(training_command) => Ok(self
+            WorkerCommand::TrainDecisionModel(training_command) => Ok(self
                 .start_decision_training(training_command, event_writer)
                 .await?
                 .map(ActiveWorkerRequest::DecisionTraining)),
@@ -230,7 +230,7 @@ where
                 self.refuse_decisions_while_busy(decisions_command.request_id, event_writer)
                     .await
             }
-            WorkerCommand::TrainDecisionHead(training_command) => {
+            WorkerCommand::TrainDecisionModel(training_command) => {
                 self.refuse_decisions_while_busy(training_command.request_id, event_writer)
                     .await
             }

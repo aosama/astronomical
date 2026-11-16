@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use astronomical_decision_contract::head_training_job::TrainingScope;
+use astronomical_decision_contract::decision_training_job::TrainingScope;
 
 /// Out of every this many distinct states (ordered by their stable hash),
 /// the first three are judged and the next three choose.

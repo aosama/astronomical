@@ -1,7 +1,7 @@
 //! The built-in check set: questions nobody labels, whose shipped answers
 //! training must keep.
 //!
-//! Head training changes layers every question passes through, so a run
+//! Training changes layers every question passes through, so a run
 //! that fits a person's questions could quietly change answers to questions
 //! they never asked about. These 24 Romeo and Juliet lines, each asked five
 //! questions covering every question kind and 2, 3, 4, 7 and 12 options, are

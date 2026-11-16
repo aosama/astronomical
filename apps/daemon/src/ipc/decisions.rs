@@ -84,7 +84,7 @@ fn answered_response(
         },
         // An answer request never trains; the worker broke the protocol.
         Some(Ok(
-            DecisionsOutput::TrainingProgress { .. } | DecisionsOutput::HeadTrained { .. },
+            DecisionsOutput::TrainingProgress { .. } | DecisionsOutput::ModelTrained { .. },
         )) => DaemonResponse::DecisionsFailed {
             reason: DecisionFailure::fatal_execution(
                 "the worker answered a decision request with training results",

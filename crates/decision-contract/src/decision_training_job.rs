@@ -1,4 +1,4 @@
-//! A head-training job as it crosses the process boundaries: what the
+//! A training job as it crosses the process boundaries: what the
 //! command-line tool asks the worker to train on, and what comes back.
 //!
 //! The worker owns the model and the GPU, so it reads every example and
@@ -68,7 +68,7 @@ pub enum TrainingScope {
 /// Everything one training reads.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct HeadTrainingJob {
+pub struct DecisionTrainingJob {
     pub examples: Vec<TrainingExample>,
     pub scope: TrainingScope,
 }
@@ -76,7 +76,7 @@ pub struct HeadTrainingJob {
 /// Which stage a training is in, for progress lines.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum HeadTrainingStage {
+pub enum DecisionTrainingStage {
     /// The model reads the examples: `completed` of `total` examples.
     Reading,
     /// The trainable copy is checked against the model's own scores before
@@ -132,7 +132,7 @@ pub struct TrainedQuestion {
 /// add-ons too), and the runs.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct HeadTrainingOutcome {
+pub struct DecisionTrainingOutcome {
     pub examples: Vec<Vec<TrainedQuestion>>,
     pub trained_tensors: Vec<TrainedTensor>,
     /// The add-on weights, each named `<target>.adapter_down` or
@@ -149,5 +149,5 @@ pub struct HeadTrainingOutcome {
 }
 
 #[cfg(test)]
-#[path = "head_training_job_tests.rs"]
+#[path = "decision_training_job_tests.rs"]
 mod tests;

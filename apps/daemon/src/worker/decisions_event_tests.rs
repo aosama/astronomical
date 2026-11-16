@@ -4,8 +4,8 @@
 
 use std::sync::{Arc, RwLock};
 
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingOutcome, HeadTrainingStage, RunEnding, RunSummary,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingOutcome, DecisionTrainingStage, RunEnding, RunSummary,
 };
 use astronomical_decision_contract::{
     DecisionAnswer, DecisionFailure, NoulAnswer, QuestionInputCoverage, QuestionOutcome,
@@ -270,16 +270,16 @@ async fn should_reject_an_event_when_no_request_is_active() {
 }
 
 fn training_progress_event(completed: u64) -> WorkerEvent {
-    WorkerEvent::DecisionHeadTrainingProgress {
+    WorkerEvent::DecisionTrainingProgress {
         request_id: RequestId::new(ACTIVE_REQUEST_ID),
-        stage: HeadTrainingStage::Training,
+        stage: DecisionTrainingStage::Training,
         completed,
         total: 120,
     }
 }
 
-fn trained_outcome() -> HeadTrainingOutcome {
-    HeadTrainingOutcome {
+fn trained_outcome() -> DecisionTrainingOutcome {
+    DecisionTrainingOutcome {
         examples: Vec::new(),
         trained_tensors: Vec::new(),
         adapter_tensors: Vec::new(),
@@ -325,7 +325,7 @@ async fn should_forward_training_progress_and_move_the_stuck_engine_deadline() {
     assert!(matches!(
         decisions_result_receiver.try_recv(),
         Ok(Ok(DecisionsOutput::TrainingProgress {
-            stage: HeadTrainingStage::Training,
+            stage: DecisionTrainingStage::Training,
             completed: 7,
             total: 120,
         }))
@@ -344,7 +344,7 @@ async fn should_drop_progress_rather_than_fill_the_slot_the_result_needs() {
     )
     .expect("progress for the active training should be accepted");
     handle_worker_decisions_event(
-        WorkerEvent::DecisionHeadTrained {
+        WorkerEvent::DecisionModelTrained {
             request_id: RequestId::new(ACTIVE_REQUEST_ID),
             outcome: Box::new(trained_outcome()),
             elapsed_millis: 900,
@@ -360,7 +360,8 @@ async fn should_drop_progress_rather_than_fill_the_slot_the_result_needs() {
     )
     .expect("the finalization should be accepted");
 
-    let Ok(Ok(DecisionsOutput::HeadTrained { outcome, .. })) = decisions_result_receiver.try_recv()
+    let Ok(Ok(DecisionsOutput::ModelTrained { outcome, .. })) =
+        decisions_result_receiver.try_recv()
     else {
         panic!("the trained result must be the first and only delivery");
     };
