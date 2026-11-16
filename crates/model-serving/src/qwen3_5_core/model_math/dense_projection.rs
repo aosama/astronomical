@@ -16,8 +16,19 @@ use crate::row_batched_matmul::{RegisterOrderedWeight, RestoredMlxRows};
 const REGISTER_ORDERED_BITS: i32 = 4;
 const REGISTER_ORDERED_GROUP_SIZE: i32 = 64;
 
+/// A dense projection: its weights, and the module name the artifact
+/// ships them under (`language_model.model.layers.3.linear_attn.in_proj_qkv`).
+/// The name is what a decision model's add-on for this projection is filed
+/// under, so the projection itself can find its add-on in the forward pass.
 #[derive(Debug)]
-pub(crate) enum Qwen3_5DenseProjection {
+pub(crate) struct Qwen3_5DenseProjection {
+    pub(crate) module_name: String,
+    pub(crate) storage: Qwen3_5ProjectionStorage,
+}
+
+/// How a dense projection's weights are held.
+#[derive(Debug)]
+pub(crate) enum Qwen3_5ProjectionStorage {
     /// The module as bound: bf16, MLX's affine packing, or a codebook.
     Bound(Qwen3_5AffineWeights),
     /// A 4-bit, group-64 module converted into register order. It replaces
@@ -26,27 +37,29 @@ pub(crate) enum Qwen3_5DenseProjection {
     RegisterOrdered(RegisterOrderedWeight),
 }
 
-impl From<Qwen3_5AffineWeights> for Qwen3_5DenseProjection {
-    fn from(bound_weights: Qwen3_5AffineWeights) -> Self {
-        Self::Bound(bound_weights)
-    }
-}
-
 impl Qwen3_5DenseProjection {
+    /// The module `module_name` as bound from the artifact.
+    pub(crate) fn named(module_name: &str, bound_weights: Qwen3_5AffineWeights) -> Self {
+        Self {
+            module_name: module_name.to_owned(),
+            storage: Qwen3_5ProjectionStorage::Bound(bound_weights),
+        }
+    }
+
     /// The bound weights, unless the projection was converted.
     pub(crate) fn bound(&self) -> Option<&Qwen3_5AffineWeights> {
-        match self {
-            Self::Bound(bound_weights) => Some(bound_weights),
-            Self::RegisterOrdered(_) => None,
+        match &self.storage {
+            Qwen3_5ProjectionStorage::Bound(bound_weights) => Some(bound_weights),
+            Qwen3_5ProjectionStorage::RegisterOrdered(_) => None,
         }
     }
 
     /// The bound weights to swap in place, unless the projection was
     /// converted (the quantization probe only ever swaps bound modules).
     pub(crate) fn bound_mut(&mut self) -> Option<&mut Qwen3_5AffineWeights> {
-        match self {
-            Self::Bound(bound_weights) => Some(bound_weights),
-            Self::RegisterOrdered(_) => None,
+        match &mut self.storage {
+            Qwen3_5ProjectionStorage::Bound(bound_weights) => Some(bound_weights),
+            Qwen3_5ProjectionStorage::RegisterOrdered(_) => None,
         }
     }
 
@@ -54,9 +67,11 @@ impl Qwen3_5DenseProjection {
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,
     ) {
-        match self {
-            Self::Bound(bound_weights) => bound_weights.append_array_references(arrays),
-            Self::RegisterOrdered(converted) => {
+        match &self.storage {
+            Qwen3_5ProjectionStorage::Bound(bound_weights) => {
+                bound_weights.append_array_references(arrays)
+            }
+            Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
                 arrays.push(&converted.codes);
                 arrays.push(&converted.scale_bias_words);
             }
@@ -69,9 +84,13 @@ impl Qwen3_5DenseProjection {
         &self,
         runtime: &MlxRuntime,
     ) -> Option<Result<MlxArray, MlxRuntimeError>> {
-        match self {
-            Self::Bound(bound_weights) => bound_weights_dequantized(runtime, bound_weights),
-            Self::RegisterOrdered(converted) => Some(converted_dequantized(runtime, converted)),
+        match &self.storage {
+            Qwen3_5ProjectionStorage::Bound(bound_weights) => {
+                bound_weights_dequantized(runtime, bound_weights)
+            }
+            Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
+                Some(converted_dequantized(runtime, converted))
+            }
         }
     }
 
@@ -82,9 +101,11 @@ impl Qwen3_5DenseProjection {
         runtime: &MlxRuntime,
         row_ids: &[i32],
     ) -> Option<Result<MlxArray, MlxRuntimeError>> {
-        match self {
-            Self::Bound(bound_weights) => bound_rows_dequantized(runtime, bound_weights, row_ids),
-            Self::RegisterOrdered(converted) => {
+        match &self.storage {
+            Qwen3_5ProjectionStorage::Bound(bound_weights) => {
+                bound_rows_dequantized(runtime, bound_weights, row_ids)
+            }
+            Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
                 Some(converted_rows_dequantized(runtime, converted, row_ids))
             }
         }

@@ -1,6 +1,6 @@
 //! Unit tests for grouping question sequences into bounded forward passes.
 
-use super::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
+use super::{LAYA_SERVING_PADDED_TOKENS_PER_PASS, plan_forward_passes, training_tokens_per_pass};
 
 fn covered_indices(forward_passes: &[Vec<usize>]) -> Vec<usize> {
     let mut covered_indices = Vec::new();
@@ -13,7 +13,7 @@ fn covered_indices(forward_passes: &[Vec<usize>]) -> Vec<usize> {
 
 #[test]
 fn should_plan_no_passes_for_no_sequences() {
-    assert!(plan_forward_passes(&[], PADDED_TOKENS_PER_PASS).is_empty());
+    assert!(plan_forward_passes(&[], LAYA_SERVING_PADDED_TOKENS_PER_PASS).is_empty());
 }
 
 #[test]
@@ -52,7 +52,8 @@ fn should_place_every_sequence_in_exactly_one_pass() {
     for sequence_index in 0..257 {
         sequence_lengths.push(1 + (sequence_index * 37) % 512);
     }
-    let forward_passes = plan_forward_passes(&sequence_lengths, PADDED_TOKENS_PER_PASS);
+    let forward_passes =
+        plan_forward_passes(&sequence_lengths, LAYA_SERVING_PADDED_TOKENS_PER_PASS);
     let expected_indices: Vec<usize> = (0..257).collect();
     assert_eq!(covered_indices(&forward_passes), expected_indices);
     for forward_pass in &forward_passes {
@@ -60,6 +61,47 @@ fn should_place_every_sequence_in_exactly_one_pass() {
         for sequence_index in forward_pass {
             longest_length = longest_length.max(sequence_lengths[*sequence_index]);
         }
-        assert!(longest_length * forward_pass.len() <= PADDED_TOKENS_PER_PASS);
+        assert!(longest_length * forward_pass.len() <= LAYA_SERVING_PADDED_TOKENS_PER_PASS);
     }
+}
+
+const GIGABYTE: usize = 1 << 30;
+/// Laya's measured activation cost per padded token.
+const LAYA_BYTES_PER_TOKEN: usize = 3_800_000;
+
+#[test]
+fn should_use_the_largest_training_micro_batch_on_a_mac_with_room() {
+    // A 48 GB Mac's runtime limit is about 35 GB.
+    assert_eq!(
+        training_tokens_per_pass(35 * GIGABYTE, LAYA_BYTES_PER_TOKEN),
+        1_024
+    );
+}
+
+#[test]
+fn should_shrink_training_micro_batches_on_a_mac_with_little_memory() {
+    // An 8 GB Mac's runtime limit is about 5 GB: a quarter of it holds
+    // about 350 of Laya's tokens.
+    let tokens_per_pass = training_tokens_per_pass(5 * GIGABYTE, LAYA_BYTES_PER_TOKEN);
+
+    assert!(tokens_per_pass < 400, "{tokens_per_pass}");
+    assert!(tokens_per_pass * LAYA_BYTES_PER_TOKEN <= 5 * GIGABYTE / 4);
+}
+
+#[test]
+fn should_give_a_larger_model_smaller_training_micro_batches() {
+    // Clef's 9B keeps about 16 MB per token: a 35 GB limit holds 546.
+    let clef_tokens = training_tokens_per_pass(35 * GIGABYTE, 17_000_000);
+
+    assert!((512..1_024).contains(&clef_tokens), "{clef_tokens}");
+}
+
+#[test]
+fn should_never_go_below_one_long_question_however_small_the_limit() {
+    assert_eq!(training_tokens_per_pass(0, LAYA_BYTES_PER_TOKEN), 128);
+    assert_eq!(
+        training_tokens_per_pass(GIGABYTE / 8, LAYA_BYTES_PER_TOKEN),
+        128
+    );
+    assert_eq!(training_tokens_per_pass(GIGABYTE, 0), 1_024);
 }

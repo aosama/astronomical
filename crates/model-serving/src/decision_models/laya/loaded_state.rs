@@ -20,7 +20,9 @@ use astronomical_decision_contract::{
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::MlxArray;
 
-use crate::decision_models::laya::batching::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
+use crate::decision_models::forward_pass_planning::{
+    LAYA_SERVING_PADDED_TOKENS_PER_PASS, plan_forward_passes,
+};
 use crate::decision_models::laya::configuration::LayaConfiguration;
 use crate::decision_models::laya::head::{HeadPassRows, LayaDecisionHead, ScoredHeadRow};
 use crate::decision_models::laya::tokenizer::LayaTokenizer;
@@ -86,7 +88,8 @@ impl LoadedLayaState {
         for _ in questions {
             scored_rows_by_question.push(None);
         }
-        for pass_question_indices in plan_forward_passes(&sequence_lengths, PADDED_TOKENS_PER_PASS)
+        for pass_question_indices in
+            plan_forward_passes(&sequence_lengths, LAYA_SERVING_PADDED_TOKENS_PER_PASS)
         {
             let pass_rows = self.run_forward_pass(
                 questions,

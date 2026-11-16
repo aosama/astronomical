@@ -181,8 +181,8 @@ impl Qwen3_5ModelBase {
         let projected_output = self.gated_linear_attention_output(
             &recurrent_output,
             &output_gate,
-            weights,
             tree.row_count,
+            weights,
         )?;
         Ok((
             projected_output,
@@ -232,31 +232,6 @@ impl Qwen3_5ModelBase {
         Ok(self
             .runtime
             .reshape(&convolved, &[1, tree.row_count, channel_count])?)
-    }
-
-    /// The DeltaNet layer's epilogue: gated RMS norm and output projection.
-    fn gated_linear_attention_output(
-        &self,
-        recurrent_output: &MlxArray,
-        output_gate: &MlxArray,
-        weights: &Qwen3_5LinearAttentionWeights,
-        row_count: i32,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let normalized_output = self.runtime.rms_norm(
-            recurrent_output,
-            &weights.normalization_weight,
-            f32::from_bits(self.config.rms_norm_epsilon_bits()),
-        )?;
-        let gated_output = self.runtime.apply_compiled_precise_swiglu(
-            &self.compiled_elementwise_graphs,
-            &normalized_output,
-            output_gate,
-        )?;
-        let gated_output = self.runtime.reshape(
-            &gated_output,
-            &[1, row_count, self.config.linear_value_dimension() as i32],
-        )?;
-        self.quantized_linear(&gated_output, &weights.output_projection)
     }
 
     fn tree_full_attention(

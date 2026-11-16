@@ -17,7 +17,9 @@ use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
 };
-use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
+use crate::qwen3_5_core::model_math::dense_projection::{
+    Qwen3_5DenseProjection, Qwen3_5ProjectionStorage,
+};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,
@@ -143,7 +145,7 @@ fn convert_one(
         Err(conversion_error) => return Err(projection_failure(conversion_error)),
     };
     runtime.evaluate_arrays(&[&converted.codes, &converted.scale_bias_words])?;
-    *projection = Qwen3_5DenseProjection::RegisterOrdered(converted);
+    projection.storage = Qwen3_5ProjectionStorage::RegisterOrdered(converted);
     Ok(1)
 }
 
@@ -160,11 +162,14 @@ impl Qwen3_5LinearWeights for Qwen3_5DenseProjection {
         model: &Qwen3_5ModelBase,
         activations: &MlxArray,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        match self {
-            Self::Bound(bound_weights) => model.bound_linear(activations, bound_weights),
-            Self::RegisterOrdered(converted) => {
-                model.register_ordered_projection(activations, converted)
+        let base_output = match &self.storage {
+            Qwen3_5ProjectionStorage::Bound(bound_weights) => {
+                model.bound_linear(activations, bound_weights)?
             }
-        }
+            Qwen3_5ProjectionStorage::RegisterOrdered(converted) => {
+                model.register_ordered_projection(activations, converted)?
+            }
+        };
+        model.with_layer_add_on(&self.module_name, activations, base_output)
     }
 }

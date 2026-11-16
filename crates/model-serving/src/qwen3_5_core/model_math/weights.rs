@@ -207,16 +207,18 @@ impl Qwen3_5Weights {
             &mut bound_tensors,
             "language_model.model.norm.weight".to_owned(),
         )?;
-        let language_model_head_weights = if qwen3_5_config.has_tied_embeddings() {
-            embedding_weights.retained_reference()?
-        } else {
-            take_quantized_affine_weights(
-                &mut bound_tensors,
-                qwen3_5_config,
-                "language_model.lm_head",
-            )?
-        }
-        .into();
+        let language_model_head_weights = Qwen3_5DenseProjection::named(
+            "language_model.lm_head",
+            if qwen3_5_config.has_tied_embeddings() {
+                embedding_weights.retained_reference()?
+            } else {
+                take_quantized_affine_weights(
+                    &mut bound_tensors,
+                    qwen3_5_config,
+                    "language_model.lm_head",
+                )?
+            },
+        );
         if let Some(unassigned_tensor_name) = bound_tensors.keys().next() {
             return Err(Qwen3_5ExecutionError::UnassignedTensor {
                 tensor_name: unassigned_tensor_name.clone(),
@@ -567,6 +569,19 @@ fn is_language_rms_norm_weight_tensor(tensor_name: &str) -> bool {
         || tensor_name.ends_with(".self_attn.q_norm.weight")
         || tensor_name.ends_with(".self_attn.k_norm.weight")
         || tensor_name.ends_with(".linear_attn.norm.weight")
+}
+
+/// A dense projection's weights under their shipped module name, which is
+/// what a decision model's add-on for the projection is filed under.
+pub(crate) fn take_dense_projection(
+    bound_tensors: &mut HashMap<String, MlxArray>,
+    qwen3_5_config: &Qwen3_5Config,
+    module_name: &str,
+) -> Result<Qwen3_5DenseProjection, Qwen3_5ExecutionError> {
+    Ok(Qwen3_5DenseProjection::named(
+        module_name,
+        take_quantized_affine_weights(bound_tensors, qwen3_5_config, module_name)?,
+    ))
 }
 
 pub(crate) fn take_quantized_affine_weights(

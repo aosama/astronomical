@@ -111,3 +111,26 @@ fn should_stop_a_training_whose_memory_keeps_growing_and_say_by_how_much() {
 
     assert!(refusal.to_string().contains("5.0 GB more"), "{refusal}");
 }
+
+#[test]
+fn should_check_every_row_of_a_small_job() {
+    assert_eq!(parity_sample_rows(5), vec![0, 1, 2, 3, 4]);
+    assert!(parity_sample_rows(0).is_empty());
+}
+
+#[test]
+fn should_check_a_spread_of_a_large_job_from_its_first_row_to_its_last() {
+    let sampled_rows = parity_sample_rows(1_320);
+
+    assert_eq!(sampled_rows.len(), PARITY_SAMPLE_QUESTION_COUNT);
+    assert_eq!(sampled_rows[0], 0);
+    assert_eq!(sampled_rows[PARITY_SAMPLE_QUESTION_COUNT - 1], 1_319);
+    assert!(sampled_rows.windows(2).all(|pair| pair[0] < pair[1]));
+}
+
+#[test]
+fn should_judge_every_row_but_the_training_rows() {
+    assert_eq!(judged_rows(6, &[0, 2, 3]), vec![1, 4, 5]);
+    assert_eq!(judged_rows(3, &[]), vec![0, 1, 2]);
+    assert!(judged_rows(2, &[0, 1]).is_empty());
+}

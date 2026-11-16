@@ -50,6 +50,30 @@ struct OptionTerms {
     field_and_option_rows: Option<FieldAndOptionRows>,
 }
 
+impl OptionTermArrays {
+    /// `[options, 4·width]`: `[field, option, field · option, |field − option|]`,
+    /// what the residual scorer reads.
+    pub(crate) fn residual_features(
+        &self,
+        runtime: &astronomical_runtime_integration::MlxRuntime,
+    ) -> Result<MlxArray, DecisionFailure> {
+        let (field_per_option, options) = (&self.field_per_option, &self.options);
+        let product = runtime
+            .multiply(field_per_option, options)
+            .map_err(head_math)?;
+        let distance = runtime
+            .abs(
+                &runtime
+                    .subtract(field_per_option, options)
+                    .map_err(head_math)?,
+            )
+            .map_err(head_math)?;
+        runtime
+            .concatenate_axis(&[field_per_option, options, &product, &distance], 1)
+            .map_err(head_math)
+    }
+}
+
 /// One question's per-option head inputs, in the order Clef scored them.
 pub(crate) struct ClefQuestionReadout {
     pub(crate) field_vectors: Vec<Vec<f32>>,
@@ -64,6 +88,22 @@ pub(crate) struct JointHeadScores {
     pub(crate) question_readouts: Option<Vec<ClefQuestionReadout>>,
 }
 
+/// Everything the final mix reads, per option in scoring order, as lazy
+/// arrays: what serving reads back to the host, and what a whole-model
+/// training mixes on the GPU with its trainable final layers.
+pub(crate) struct OptionTermArrays {
+    /// `[options]`.
+    pub(crate) lexical_prior: MlxArray,
+    /// `[options]`.
+    pub(crate) cosine: MlxArray,
+    /// `[options, width]` each option's field, after the field norm.
+    pub(crate) field_per_option: MlxArray,
+    /// `[options, width]` each routed option, after the option norm.
+    pub(crate) options: MlxArray,
+    /// How many options each question has, in question order.
+    pub(crate) option_counts: Vec<usize>,
+}
+
 impl ClefHeadLayers<'_> {
     /// One logit per option, per question, in scoring order; with
     /// [`HeadInputRequest::Include`] also what the residual scorer and the
@@ -75,8 +115,71 @@ impl ClefHeadLayers<'_> {
         decoder_layer_count: usize,
         head_input_request: HeadInputRequest,
     ) -> Result<JointHeadScores, DecisionFailure> {
+        let term_arrays =
+            self.option_term_arrays(head_inputs, routing_layer_count, decoder_layer_count)?;
+        let option_terms = self.option_terms(&term_arrays, head_input_request)?;
+        let question_logits = self.combined_logits(&option_terms, &term_arrays.option_counts)?;
+        let question_readouts = match &option_terms.field_and_option_rows {
+            Some(feature_rows) => Some(question_readouts(
+                &option_terms,
+                &feature_rows.field_rows,
+                &feature_rows.option_rows,
+                &term_arrays.option_counts,
+            )),
+            None => None,
+        };
+        Ok(JointHeadScores {
+            question_logits,
+            question_readouts,
+        })
+    }
+
+    /// The head up to the final mix, lazily: pooling, evidence routing, the
+    /// field decoder, and each option's lexical prior, cosine, field and
+    /// normalized option.
+    pub(crate) fn option_term_arrays(
+        &self,
+        head_inputs: &ClefHeadInputs<'_>,
+        routing_layer_count: usize,
+        decoder_layer_count: usize,
+    ) -> Result<OptionTermArrays, DecisionFailure> {
         let pooled = self.pooled_inputs(head_inputs)?;
-        let mut routed_options = self.option_queries(&pooled)?;
+        let (routed_options, fields) =
+            self.routed_options_and_fields(&pooled, routing_layer_count, decoder_layer_count)?;
+        let runtime = self.runtime;
+        let anchors = self.unit_rows(
+            &runtime
+                .add(&pooled.question_vectors, &pooled.global_vector)
+                .map_err(head_math)?,
+        )?;
+        let anchor_per_option = runtime
+            .take_axis(&anchors, &pooled.question_of_option, 0)
+            .map_err(head_math)?;
+        let lexical_anchors = self.unit_rows(&pooled.lexical_options)?;
+        let lexical_prior = self.row_dot(&lexical_anchors, &anchor_per_option)?;
+        let options = self.layer_norm("option_norm", &routed_options)?;
+        let field_per_option = runtime
+            .take_axis(&fields, &pooled.question_of_option, 0)
+            .map_err(head_math)?;
+        let cosine = self.row_cosine(&field_per_option, &options)?;
+        Ok(OptionTermArrays {
+            lexical_prior,
+            cosine,
+            field_per_option,
+            options,
+            option_counts: pooled.option_counts,
+        })
+    }
+
+    /// The options after evidence routing, and each question's field after
+    /// the field decoder and its norm.
+    fn routed_options_and_fields(
+        &self,
+        pooled: &PooledInputs,
+        routing_layer_count: usize,
+        decoder_layer_count: usize,
+    ) -> Result<(MlxArray, MlxArray), DecisionFailure> {
+        let mut routed_options = self.option_queries(pooled)?;
         for routing_layer_index in 0..routing_layer_count {
             routed_options = self.evidence_routing_layer(
                 &format!("evidence_layers.{routing_layer_index}"),
@@ -85,7 +188,7 @@ impl ClefHeadLayers<'_> {
             )?;
         }
         let routed_options = self.rows_of(&routed_options)?;
-        let mut fields = self.initial_fields(&pooled, &routed_options)?;
+        let mut fields = self.initial_fields(pooled, &routed_options)?;
         for decoder_layer_index in 0..decoder_layer_count {
             fields = self.decoder_layer(
                 &format!("layers.{decoder_layer_index}"),
@@ -94,22 +197,7 @@ impl ClefHeadLayers<'_> {
             )?;
         }
         let fields = self.layer_norm("field_norm", &self.rows_of(&fields)?)?;
-        let option_terms =
-            self.option_terms(&pooled, &routed_options, &fields, head_input_request)?;
-        let question_logits = self.combined_logits(&option_terms, &pooled.option_counts)?;
-        let question_readouts = match &option_terms.field_and_option_rows {
-            Some(feature_rows) => Some(question_readouts(
-                &option_terms,
-                &feature_rows.field_rows,
-                &feature_rows.option_rows,
-                &pooled.option_counts,
-            )),
-            None => None,
-        };
-        Ok(JointHeadScores {
-            question_logits,
-            question_readouts,
-        })
+        Ok((routed_options, fields))
     }
 
     fn pooled_inputs(
@@ -283,63 +371,31 @@ impl ClefHeadLayers<'_> {
     /// The three per-option terms, read back to the host.
     fn option_terms(
         &self,
-        pooled: &PooledInputs,
-        routed_options: &MlxArray,
-        fields: &MlxArray,
+        term_arrays: &OptionTermArrays,
         head_input_request: HeadInputRequest,
     ) -> Result<OptionTerms, DecisionFailure> {
-        let runtime = self.runtime;
-        let anchors = self.unit_rows(
-            &runtime
-                .add(&pooled.question_vectors, &pooled.global_vector)
-                .map_err(head_math)?,
+        let residual = self.residual_scores(&term_arrays.residual_features(self.runtime)?)?;
+        self.runtime
+            .evaluate_arrays(&[&term_arrays.lexical_prior, &term_arrays.cosine, &residual])
+            .map_err(head_math)?;
+        let field_and_option_rows = field_and_option_rows(
+            &term_arrays.field_per_option,
+            &term_arrays.options,
+            head_input_request,
         )?;
-        let anchor_per_option = runtime
-            .take_axis(&anchors, &pooled.question_of_option, 0)
-            .map_err(head_math)?;
-        let lexical_anchors = self.unit_rows(&pooled.lexical_options)?;
-        let lexical_prior = self.row_dot(&lexical_anchors, &anchor_per_option)?;
-        let options = self.layer_norm("option_norm", routed_options)?;
-        let field_per_option = runtime
-            .take_axis(fields, &pooled.question_of_option, 0)
-            .map_err(head_math)?;
-        let cosine = self.row_cosine(&field_per_option, &options)?;
-        let residual = self.residual_scores(&field_per_option, &options)?;
-        runtime
-            .evaluate_arrays(&[&lexical_prior, &cosine, &residual])
-            .map_err(head_math)?;
-        let field_and_option_rows =
-            field_and_option_rows(&field_per_option, &options, head_input_request)?;
         Ok(OptionTerms {
-            lexical_prior: lexical_prior.to_vec_f32().map_err(head_math)?,
-            cosine: cosine.to_vec_f32().map_err(head_math)?,
+            lexical_prior: term_arrays.lexical_prior.to_vec_f32().map_err(head_math)?,
+            cosine: term_arrays.cosine.to_vec_f32().map_err(head_math)?,
             residual: residual.to_vec_f32().map_err(head_math)?,
             field_and_option_rows,
         })
     }
 
-    /// `residual_scorer` over `[field, option, field · option, |field − option|]`.
-    fn residual_scores(
-        &self,
-        field_per_option: &MlxArray,
-        options: &MlxArray,
-    ) -> Result<MlxArray, DecisionFailure> {
+    /// `residual_scorer` over the residual features.
+    fn residual_scores(&self, features: &MlxArray) -> Result<MlxArray, DecisionFailure> {
         let runtime = self.runtime;
-        let product = runtime
-            .multiply(field_per_option, options)
-            .map_err(head_math)?;
-        let distance = runtime
-            .abs(
-                &runtime
-                    .subtract(field_per_option, options)
-                    .map_err(head_math)?,
-            )
-            .map_err(head_math)?;
-        let features = runtime
-            .concatenate_axis(&[field_per_option, options, &product, &distance], 1)
-            .map_err(head_math)?;
         let hidden = runtime
-            .gelu(&self.linear("residual_scorer.0", &features, true)?)
+            .gelu(&self.linear("residual_scorer.0", features, true)?)
             .map_err(head_math)?;
         let single_score = self.linear("residual_scorer.3", &hidden, true)?;
         let option_count = single_score.shape()[0];

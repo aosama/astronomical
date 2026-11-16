@@ -76,6 +76,11 @@ impl MicroBatchTargets {
         })
     }
 
+    /// The batch's widest option count: every row's scores are padded to it.
+    pub(crate) fn widest_option_count(&self) -> usize {
+        self.widest_option_count
+    }
+
     /// `Σ weight · −Σ target · log softmax(score / T)` over the rows, a scalar,
     /// from `[rows, options]` logits whose padding slots hold any value.
     pub(crate) fn weighted_cross_entropy(

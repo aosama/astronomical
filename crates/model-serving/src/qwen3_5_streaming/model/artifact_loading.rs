@@ -9,7 +9,7 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::model::disk_embedding_rows::Qwen3_5DiskEmbeddingRows;
 use crate::qwen3_5_core::model::loading_pipeline::{
-    BoundLanguageArtifact, InvariantLinearScales, ModelKernelVerdicts, bind_language_artifact,
+    BoundLanguageArtifact, InvariantLinearScales, bind_language_artifact,
     load_invariant_linear_scales, load_model_kernel_verdicts,
 };
 use crate::qwen3_5_streaming;
@@ -124,11 +124,8 @@ impl Qwen3_5Model {
             expert_pager.as_ref(),
             performance_attribution,
         )?;
-        let ModelKernelVerdicts {
-            gated_delta_kernel,
-            gated_delta_checkpoint_kernel,
-            gdn_decode_prework_kernel,
-        } = load_model_kernel_verdicts(&runtime, &config, performance_attribution)?;
+        let kernel_verdicts =
+            load_model_kernel_verdicts(&runtime, &config, performance_attribution)?;
         let (compiled_swiglu, compiled_elementwise_graphs) = compiled_model_graphs()?;
         let InvariantLinearScales {
             inverse_linear_head_dimension_scale,
@@ -156,9 +153,9 @@ impl Qwen3_5Model {
                 disk_embedding_rows,
                 vision_model,
                 memory_facts: RefCell::new(streaming_expert_budget.memory_facts),
-                gated_delta_kernel,
-                gated_delta_checkpoint_kernel,
-                gdn_decode_prework_kernel,
+                gated_delta_kernel: kernel_verdicts.gated_delta_kernel,
+                gated_delta_checkpoint_kernel: kernel_verdicts.gated_delta_checkpoint_kernel,
+                gdn_decode_prework_kernel: kernel_verdicts.gdn_decode_prework_kernel,
                 optional_accelerators: Default::default(),
                 sorted_expert_weighted_sum_kernel,
                 compiled_swiglu,
@@ -168,6 +165,7 @@ impl Qwen3_5Model {
                 inverse_square_root_linear_head_dimension_scale,
                 query_normalization_scale_weight,
                 key_normalization_scale_weight,
+                layer_additions: RefCell::new(None),
             },
             expert_pager,
             dense_layer_streamer,

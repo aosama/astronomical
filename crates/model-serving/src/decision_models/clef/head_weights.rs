@@ -173,6 +173,22 @@ impl ClefHeadWeights {
         Ok(())
     }
 
+    /// A copy with `head_tuning` applied: the tensors share their buffers,
+    /// and only the tuned ones are new. A whole-model training scores with
+    /// it the head its current weights make.
+    pub(crate) fn with_tuning(&self, head_tuning: &HeadTuning) -> Result<Self, DecisionFailure> {
+        let mut tensors_by_name = BTreeMap::new();
+        for (tensor_name, tensor) in &self.tensors_by_name {
+            let shared_tensor = tensor
+                .retain()
+                .map_err(|retain_error| unusable_head(&retain_error.to_string()))?;
+            tensors_by_name.insert(tensor_name.clone(), shared_tensor);
+        }
+        let mut tuned_weights = Self { tensors_by_name };
+        tuned_weights.apply_tuning(head_tuning)?;
+        Ok(tuned_weights)
+    }
+
     pub(crate) fn tensor(&self, tensor_name: &str) -> Result<&MlxArray, DecisionFailure> {
         self.tensors_by_name
             .get(tensor_name)

@@ -100,20 +100,14 @@ fn should_train_only_the_decision_families() {
 
 #[test]
 fn should_count_distinct_states_not_lines_when_checking_for_enough_data() {
-    let final_layers = TrainingScope::FinalLayers;
-    assert!(check_enough_data(&examples_about(30, 7), final_layers).is_ok());
+    assert!(check_enough_data(&examples_about(30, 7)).is_ok());
     // 210 questions, but only 10 different states.
     assert!(matches!(
-        check_enough_data(&examples_about(10, 21), final_layers),
+        check_enough_data(&examples_about(10, 21)),
         Err(DecisionToolError::TooLittleData(_))
     ));
     assert!(matches!(
-        check_enough_data(&examples_about(40, 1), final_layers),
-        Err(DecisionToolError::TooLittleData(_))
-    ));
-    // Enough for the final layers is too little for the whole model.
-    assert!(matches!(
-        check_enough_data(&examples_about(30, 7), TrainingScope::WholeModel),
+        check_enough_data(&examples_about(40, 1)),
         Err(DecisionToolError::TooLittleData(_))
     ));
 }
@@ -139,36 +133,4 @@ fn should_tell_the_person_an_unchecked_folder_is_kept() {
     let unchecked = DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned());
 
     assert!(unchecked.to_string().contains("the new folder is kept"));
-}
-
-#[test]
-fn should_train_the_final_layers_of_every_decision_family() {
-    for family in [
-        TunableHeadFamily::Kev,
-        TunableHeadFamily::Laya,
-        TunableHeadFamily::Clef,
-    ] {
-        assert!(check_scope_is_trainable(family, TrainingScope::FinalLayers, "model").is_ok());
-    }
-}
-
-#[test]
-fn should_train_laya_as_a_whole() {
-    assert!(
-        check_scope_is_trainable(TunableHeadFamily::Laya, TrainingScope::WholeModel, "laya")
-            .is_ok()
-    );
-}
-
-#[test]
-fn should_refuse_a_whole_model_training_of_kev_or_clef_before_reading_any_example() {
-    for family in [TunableHeadFamily::Kev, TunableHeadFamily::Clef] {
-        let refusal =
-            check_scope_is_trainable(family, TrainingScope::WholeModel, "kev-0.8b").unwrap_err();
-        assert!(refusal.is_usage_error());
-        assert!(
-            refusal.to_string().contains("without --whole-model"),
-            "{refusal}"
-        );
-    }
 }

@@ -110,7 +110,17 @@ impl LinearAdapters {
             &context.transpose_axes(&adapter.down, &[1, 0])?,
         )?;
         let widened = context.matmul(&narrowed, &context.transpose_axes(&adapter.up, &[1, 0])?)?;
-        context.add(&base_output, &widened)
+        // The add-on is computed in 32-bit floats, but the layer's output
+        // keeps its own dtype: a bf16 backbone (Kev, Clef) widened to 32 bits
+        // here would run every later operation at another precision, and a
+        // folder whose add-ons are zero would no longer serve the shipped
+        // scores bit for bit. Laya's layers are already 32-bit.
+        let layer_dtype_add_on = if widened.dtype() == base_output.dtype() {
+            widened
+        } else {
+            context.astype(&widened, base_output.dtype())?
+        };
+        context.add(&base_output, &layer_dtype_add_on)
     }
 }
 

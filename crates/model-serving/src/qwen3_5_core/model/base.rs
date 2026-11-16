@@ -81,6 +81,9 @@ pub struct Qwen3_5ModelBase {
     /// scale into one `fast_rms_norm` launch on the prefill composed path
     /// (issue #915 item 5); per-channel values equal the scalar scale exactly.
     pub(crate) key_normalization_scale_weight: MlxArray,
+    /// What a decision model adds to the forward pass; empty for chat.
+    pub(crate) layer_additions:
+        RefCell<Option<std::rc::Rc<super::layer_additions::Qwen3_5LayerAdditions>>>,
 }
 
 impl Qwen3_5ModelBase {

@@ -88,6 +88,62 @@ impl Qwen3_5ResidentModel {
         Ok(readout_rows)
     }
 
+    /// The final normalized hidden states of several token sequences at
+    /// once, each read from its first token with nothing before it, as a
+    /// lazy float32 graph `[rows, longest, hidden_size]`: what a decision
+    /// model's training differentiates (`empty_state_forward` says why).
+    /// Shorter rows are padded at the end with token 0; every layer is
+    /// causal, so a real position's states never see the padding.
+    pub(crate) fn final_normalized_hidden_states_of_rows(
+        &self,
+        token_rows: &[&[u32]],
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let mut longest_row = 0;
+        for token_row in token_rows {
+            longest_row = longest_row.max(token_row.len());
+        }
+        if token_rows.is_empty() || longest_row == 0 {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "a batched readout needs at least one token",
+            });
+        }
+        let mut padded_token_ids = vec![0_i32; token_rows.len() * longest_row];
+        for (row_index, token_row) in token_rows.iter().enumerate() {
+            for (position, token_id) in token_row.iter().enumerate() {
+                if *token_id >= self.config.vocabulary_size() {
+                    return Err(Qwen3_5ExecutionError::InvalidInput {
+                        description: "token ID is outside the vocabulary",
+                    });
+                }
+                // Below the vocabulary size, which fits an i32.
+                padded_token_ids[row_index * longest_row + position] = *token_id as i32;
+            }
+        }
+        let token_count = longest_row as i32;
+        let token_indices = self
+            .runtime
+            .array_from_i32(&padded_token_ids, &[token_rows.len() as i32, token_count])?;
+        let mut hidden_states = self.embedding_lookup(&token_indices)?;
+        for (layer_index, decoder_layer_weights) in
+            self.weights.decoder_layer_weights.iter().enumerate()
+        {
+            hidden_states = self.decoder_layer_from_empty_state(
+                &hidden_states,
+                token_count,
+                layer_index,
+                decoder_layer_weights,
+            )?;
+        }
+        let normalized_hidden_states = self.runtime.rms_norm(
+            &hidden_states,
+            &self.weights.final_normalization_weight,
+            f32::from_bits(self.config.rms_norm_epsilon_bits()),
+        )?;
+        Ok(self
+            .runtime
+            .astype(&normalized_hidden_states, MlxDtype::Float32)?)
+    }
+
     /// The rows of the output projection for `token_ids`, as float32
     /// `[token_ids.len(), hidden_size]`, dequantized when the projection is
     /// stored quantized. With tied embeddings the projection is the

@@ -30,7 +30,7 @@ pub(crate) fn evaluate_linear_attention_section(
 
 /// Applies one ops-based Qwen3.5 gated-delta recurrence while retaining state in float32.
 pub fn qwen3_5_gated_delta_step(
-    runtime: &MlxRuntime,
+    runtime: &mlx_bridge::MlxBindingsContext,
     queries: &MlxArray,
     keys: &MlxArray,
     values: &MlxArray,

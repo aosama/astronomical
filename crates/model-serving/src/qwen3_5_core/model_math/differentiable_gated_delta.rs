@@ -1,0 +1,191 @@
+//! Qwen3.5's Gated DeltaNet recurrence in a form MLX can differentiate, for
+//! training add-ons inside Kev and Clef.
+//!
+//! Serving runs the recurrence through Astronomical's fused Metal kernel,
+//! which has no backward pass of its own. Training needs two things from
+//! it: scores that equal serving's exactly, so the parity check before
+//! training and the proof of the written folder can compare them, and a
+//! gradient that is merely accurate. So the recurrence here runs serving's
+//! own kernel forward and borrows its backward pass from MLX's
+//! `gated_delta_update`, attached as a custom vector-Jacobian product.
+//!
+//! The two other routes were measured on one Clef-shaped layer
+//! (16 key heads, 32 value heads of 128) and not taken:
+//! - MLX's `gated_delta_update` on its own: a backward pass of 0.10 GiB and
+//!   0.07 s over 512 tokens, but its forward differs from serving's kernel
+//!   by about 8e-4 relative per layer, so a trainable copy built on it could
+//!   never score as the served model does;
+//! - serving's one-token plain-op route: identical to the kernel (1.5e-8)
+//!   and differentiable, but its backward pass keeps every token's state,
+//!   2.48 GiB and 0.34 s per layer over 512 tokens, about 60 GiB across
+//!   Clef's 24 such layers.
+//!
+//! The borrowed backward pass is MLX's derivative of a recurrence that
+//! differs from the forward by those 8e-4, so the gradient is off by about
+//! as much; that changes the size of a training step in the fourth decimal,
+//! which no training notices.
+//!
+//! The inputs are serving's: `decays` are the per-token multiplicative
+//! forgetting factors already exponentiated, `update_rates` are the delta
+//! rule's write strengths, and the state is laid out
+//! `(batch, value heads, value dims, key dims)` as serving keeps it.
+
+use mlx_bridge::{
+    MlxArray, MlxArrayVector, MlxBindingsContext, MlxCError, MlxClosure, MlxClosureCustom,
+    vjp_of_closure,
+};
+
+use crate::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
+
+/// The recurrence's six inputs, in the order both routes take them.
+const RECURRENCE_INPUT_COUNT: usize = 6;
+
+/// Serving's recurrence with MLX's backward pass attached.
+pub(crate) struct DifferentiableGatedDelta {
+    recurrence: MlxClosure,
+}
+
+impl DifferentiableGatedDelta {
+    /// Builds the recurrence once; every layer and pass reuses it.
+    ///
+    /// # Errors
+    /// Returns the MLX description when the kernel or a closure cannot be made.
+    pub(crate) fn new() -> Result<Self, MlxCError> {
+        let served_forward = served_forward_closure()?;
+        let borrowed_backward = MlxClosureCustom::from_fn(borrowed_backward_pass)?;
+        Ok(Self {
+            recurrence: served_forward.with_custom_vjp(&borrowed_backward)?,
+        })
+    }
+
+    /// The recurrence's outputs, then the state after the last token.
+    ///
+    /// # Errors
+    /// Returns the MLX description when the graph cannot be built.
+    pub(crate) fn sequence(
+        &self,
+        queries: &MlxArray,
+        keys: &MlxArray,
+        values: &MlxArray,
+        decays: &MlxArray,
+        update_rates: &MlxArray,
+        recurrent_state: &MlxArray,
+    ) -> Result<(MlxArray, MlxArray), MlxCError> {
+        let recurrence_outputs = self.recurrence.apply(&MlxArrayVector::new(&[
+            queries,
+            keys,
+            values,
+            decays,
+            update_rates,
+            recurrent_state,
+        ])?)?;
+        Ok((
+            recurrence_outputs.array_at(0, "read the gated-delta outputs")?,
+            recurrence_outputs.array_at(1, "read the gated-delta state")?,
+        ))
+    }
+}
+
+/// Serving's fused kernel as an MLX closure. MLX's transforms take a
+/// function, not a graph, so this is one of the closures MLX's calling
+/// convention requires; it owns its kernel and bindings context.
+fn served_forward_closure() -> Result<MlxClosure, MlxCError> {
+    let forward_context = MlxBindingsContext::new()?;
+    let served_kernel = qwen3_5_gated_delta_kernel().map_err(recurrence_failure)?;
+    MlxClosure::from_fn(move |recurrence_inputs: &[MlxArray]| {
+        let [queries, keys, values, decays, update_rates, recurrent_state] = recurrence_inputs
+        else {
+            return Err(input_count_failure(recurrence_inputs.len()));
+        };
+        let (sequence_outputs, next_recurrent_state) = qwen3_5_gated_delta_sequence(
+            &forward_context,
+            Some(&served_kernel),
+            queries,
+            keys,
+            values,
+            decays,
+            update_rates,
+            recurrent_state,
+        )
+        .map_err(recurrence_failure)?;
+        Ok(vec![sequence_outputs, next_recurrent_state])
+    })
+}
+
+/// The cotangents of the six inputs, from MLX's own derivative of
+/// `gated_delta_update` at the same inputs.
+///
+/// MLX calls a custom backward pass with the inputs, then the outputs'
+/// cotangents, then the outputs (MLX's `custom_vjp` order); the bridge's
+/// trampoline forwards them in that order whatever its parameter names say.
+fn borrowed_backward_pass(
+    recurrence_inputs: &[MlxArray],
+    output_cotangents: &[MlxArray],
+    _served_outputs: &[MlxArray],
+) -> Result<Vec<MlxArray>, MlxCError> {
+    if recurrence_inputs.len() != RECURRENCE_INPUT_COUNT {
+        return Err(input_count_failure(recurrence_inputs.len()));
+    }
+    let mlx_recurrence = MlxClosure::from_fn(mlx_gated_delta_update)?;
+    let mut borrowed_inputs = Vec::with_capacity(RECURRENCE_INPUT_COUNT);
+    for recurrence_input in recurrence_inputs {
+        borrowed_inputs.push(recurrence_input);
+    }
+    let mut borrowed_cotangents = Vec::with_capacity(output_cotangents.len());
+    for output_cotangent in output_cotangents {
+        borrowed_cotangents.push(output_cotangent);
+    }
+    let (_mlx_outputs, input_cotangents) = vjp_of_closure(
+        &mlx_recurrence,
+        &MlxArrayVector::new(&borrowed_inputs)?,
+        &MlxArrayVector::new(&borrowed_cotangents)?,
+    )?;
+    let mut cotangents = Vec::with_capacity(RECURRENCE_INPUT_COUNT);
+    for input_position in 0..input_cotangents.len() {
+        cotangents.push(input_cotangents.array_at(input_position, "read an input cotangent")?);
+    }
+    Ok(cotangents)
+}
+
+/// MLX's `gated_delta_update` over the six inputs, as a closure body.
+fn mlx_gated_delta_update(recurrence_inputs: &[MlxArray]) -> Result<Vec<MlxArray>, MlxCError> {
+    let [queries, keys, values, decays, update_rates, recurrent_state] = recurrence_inputs else {
+        return Err(input_count_failure(recurrence_inputs.len()));
+    };
+    let mlx_context = MlxBindingsContext::new()?;
+    let recurrence_outputs = mlx_context.gated_delta_update(
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        Some(recurrent_state),
+        None,
+    )?;
+    Ok(vec![
+        recurrence_outputs.array_at(0, "read the gated-delta outputs")?,
+        recurrence_outputs.array_at(1, "read the gated-delta state")?,
+    ])
+}
+
+/// MLX's transforms carry `MlxCError`, so the served recurrence's runtime
+/// error is restated as one.
+fn recurrence_failure(
+    recurrence_error: astronomical_runtime_integration::MlxRuntimeError,
+) -> MlxCError {
+    MlxCError {
+        operation: "apply the gated-delta recurrence",
+        description: recurrence_error.to_string(),
+    }
+}
+
+fn input_count_failure(input_count: usize) -> MlxCError {
+    MlxCError {
+        operation: "apply the gated-delta recurrence",
+        description: format!("expected {RECURRENCE_INPUT_COUNT} inputs, got {input_count}"),
+    }
+}
+
+#[cfg(test)]
+#[path = "differentiable_gated_delta_tests.rs"]
+mod tests;

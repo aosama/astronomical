@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use mlx_bridge::MlxArray;
 
-use super::{take_quantized_affine_weights, take_tensor};
+use super::{take_dense_projection, take_tensor};
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5FullAttentionWeights, Qwen3_5LinearAttentionWeights,
@@ -20,30 +20,26 @@ pub(super) fn take_linear_attention_weights(
 ) -> Result<Qwen3_5LinearAttentionWeights, Qwen3_5ExecutionError> {
     let linear_attention_prefix = format!("{decoder_layer_prefix}.linear_attn");
     Ok(Qwen3_5LinearAttentionWeights {
-        input_queries_keys_values_projection: take_quantized_affine_weights(
+        input_queries_keys_values_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{linear_attention_prefix}.in_proj_qkv"),
-        )?
-        .into(),
-        output_gate_projection: take_quantized_affine_weights(
+        )?,
+        output_gate_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{linear_attention_prefix}.in_proj_z"),
-        )?
-        .into(),
-        update_rate_projection: take_quantized_affine_weights(
+        )?,
+        update_rate_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{linear_attention_prefix}.in_proj_b"),
-        )?
-        .into(),
-        decay_interval_projection: take_quantized_affine_weights(
+        )?,
+        decay_interval_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{linear_attention_prefix}.in_proj_a"),
-        )?
-        .into(),
+        )?,
         convolution_weight: take_tensor(
             bound_tensors,
             format!("{linear_attention_prefix}.conv1d.weight"),
@@ -60,12 +56,11 @@ pub(super) fn take_linear_attention_weights(
             bound_tensors,
             format!("{linear_attention_prefix}.norm.weight"),
         )?,
-        output_projection: take_quantized_affine_weights(
+        output_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{linear_attention_prefix}.out_proj"),
-        )?
-        .into(),
+        )?,
     })
 }
 
@@ -76,30 +71,26 @@ pub(super) fn take_full_attention_weights(
 ) -> Result<Qwen3_5FullAttentionWeights, Qwen3_5ExecutionError> {
     let full_attention_prefix = format!("{decoder_layer_prefix}.self_attn");
     Ok(Qwen3_5FullAttentionWeights {
-        query_projection: take_quantized_affine_weights(
+        query_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{full_attention_prefix}.q_proj"),
-        )?
-        .into(),
-        key_projection: take_quantized_affine_weights(
+        )?,
+        key_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{full_attention_prefix}.k_proj"),
-        )?
-        .into(),
-        value_projection: take_quantized_affine_weights(
+        )?,
+        value_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{full_attention_prefix}.v_proj"),
-        )?
-        .into(),
-        output_projection: take_quantized_affine_weights(
+        )?,
+        output_projection: take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{full_attention_prefix}.o_proj"),
-        )?
-        .into(),
+        )?,
         query_normalization_weight: take_tensor(
             bound_tensors,
             format!("{full_attention_prefix}.q_norm.weight"),

@@ -35,7 +35,6 @@ impl Qwen3_5ModelBase {
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let linear_value_dimension = self.config.linear_value_dimension() as i32;
         let (mixed_queries_keys_values, output_gate, update_logits, decay_inputs) = self
             .project_linear_attention_inputs(
                 hidden_states,
@@ -102,22 +101,13 @@ impl Qwen3_5ModelBase {
                 boundary_recurrent_states,
             )?;
         }
-        let normalized_output = self.runtime.rms_norm(
-            &recurrent_output,
-            &linear_attention_weights.normalization_weight,
-            f32::from_bits(self.config.rms_norm_epsilon_bits()),
-        )?;
-        let gated_output = self.runtime.apply_compiled_precise_swiglu(
-            &self.compiled_elementwise_graphs,
-            &normalized_output,
-            &output_gate,
-        )?;
-        let gated_output = self
-            .runtime
-            .reshape(&gated_output, &[1, token_count, linear_value_dimension])?;
         recurrent_state.set_next(next_recurrent_state);
-        let projected_output =
-            self.quantized_linear(&gated_output, &linear_attention_weights.output_projection)?;
+        let projected_output = self.gated_linear_attention_output(
+            &recurrent_output,
+            &output_gate,
+            token_count,
+            linear_attention_weights,
+        )?;
         evaluate_linear_attention_section(
             &self.runtime,
             performance_attribution,
@@ -126,6 +116,33 @@ impl Qwen3_5ModelBase {
             token_count,
         )?;
         Ok(projected_output)
+    }
+
+    /// The layer's epilogue: the per-head norm, the output gate, and the
+    /// output projection. Serving, the draft tree and a training's
+    /// empty-state forward all end the layer here.
+    pub(super) fn gated_linear_attention_output(
+        &self,
+        recurrent_output: &MlxArray,
+        output_gate: &MlxArray,
+        token_count: i32,
+        linear_attention_weights: &Qwen3_5LinearAttentionWeights,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let linear_value_dimension = self.config.linear_value_dimension() as i32;
+        let normalized_output = self.runtime.rms_norm(
+            recurrent_output,
+            &linear_attention_weights.normalization_weight,
+            f32::from_bits(self.config.rms_norm_epsilon_bits()),
+        )?;
+        let gated_output = self.runtime.apply_compiled_precise_swiglu(
+            &self.compiled_elementwise_graphs,
+            &normalized_output,
+            output_gate,
+        )?;
+        let gated_output = self
+            .runtime
+            .reshape(&gated_output, &[-1, token_count, linear_value_dimension])?;
+        self.quantized_linear(&gated_output, &linear_attention_weights.output_projection)
     }
 
     /// Runs the four input projections under one evaluation section and
@@ -162,7 +179,7 @@ impl Qwen3_5ModelBase {
         let output_gate = self.runtime.reshape(
             &output_gate,
             &[
-                1,
+                -1,
                 token_count,
                 linear_value_head_count,
                 linear_head_dimension,
@@ -384,7 +401,7 @@ impl Qwen3_5ModelBase {
     /// check and the bit-exactness contract in the direct-MLX numerics test
     /// keep this the fallback that must stay identical, never a divergent
     /// second formula.
-    fn convolution_to_normalized_heads(
+    pub(super) fn convolution_to_normalized_heads(
         &self,
         convolution_input: &MlxArray,
         token_count: i32,
@@ -443,7 +460,12 @@ impl Qwen3_5ModelBase {
         )?;
         let queries = self.runtime.reshape(
             &queries,
-            &[1, token_count, linear_key_head_count, linear_head_dimension],
+            &[
+                -1,
+                token_count,
+                linear_key_head_count,
+                linear_head_dimension,
+            ],
         )?;
         let keys = tensor_slicing::slice_last_dimension(
             &self.runtime,
@@ -453,7 +475,12 @@ impl Qwen3_5ModelBase {
         )?;
         let keys = self.runtime.reshape(
             &keys,
-            &[1, token_count, linear_key_head_count, linear_head_dimension],
+            &[
+                -1,
+                token_count,
+                linear_key_head_count,
+                linear_head_dimension,
+            ],
         )?;
         let values = tensor_slicing::slice_last_dimension(
             &self.runtime,
@@ -464,7 +491,7 @@ impl Qwen3_5ModelBase {
         let values = self.runtime.reshape(
             &values,
             &[
-                1,
+                -1,
                 token_count,
                 linear_value_head_count,
                 linear_head_dimension,

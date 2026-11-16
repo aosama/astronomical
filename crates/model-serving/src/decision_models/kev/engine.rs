@@ -7,31 +7,35 @@
 //! question, so no question sees another.
 
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::Instant;
 
 use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
+use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
 use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
 use astronomical_decision_contract::kev_answers::kev_answer_from_probabilities;
 use astronomical_decision_contract::{
     DecisionFailure, DecisionQuestion, FloatVector, HeadInputRequest, HeadInputs, OrderedJsonValue,
     QuestionInputCoverage, QuestionOutcome, calibrated_probabilities,
 };
+use astronomical_decision_training::head_parameters::ParameterLayout;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use super::pointer_head::{KevPointerHead, kev_probabilities};
 use super::sequence::{KEV_MAXIMUM_ROW_TOKENS, KevQuestionRow, KevRowLayout, build_kev_sequence};
 use super::settings::KevSettings;
 use super::tokenizer::KevTokenizer;
+use super::whole_model_scorer::KevWholeModelScorer;
 use crate::RequestDecoderStateStack;
 use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
 use crate::decision_models::head_tuning::read_head_tuning;
 use crate::decision_models::qwen_backbone::QwenDecisionBackbone;
+use crate::decision_models::training::question_selection::RowSource;
 use crate::decision_models::training::training_session::{
-    DecisionTrainingHost, DecisionTrainingSession, keep_session_if_running, read_through_decide,
-    start_session,
+    DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
+    read_through_decide, start_session,
 };
 use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
@@ -43,16 +47,18 @@ pub struct KevDecisionEngine {
     effective_mlx_memory_ceiling_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
     resident_weight_bytes: u64,
-    loaded_state: Option<LoadedKevState>,
+    /// Shared with a whole-model training's scorer, which reads the
+    /// backbone and the head from inside MLX's gradient closures.
+    loaded_state: Option<Rc<LoadedKevState>>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
     /// A training of the final layers in progress, if any.
     training_session: Option<DecisionTrainingSession>,
 }
 
-struct LoadedKevState {
-    backbone: QwenDecisionBackbone,
-    tokenizer: KevTokenizer,
-    pointer_head: KevPointerHead,
+pub(super) struct LoadedKevState {
+    pub(super) backbone: QwenDecisionBackbone,
+    pub(super) tokenizer: KevTokenizer,
+    pub(super) pointer_head: KevPointerHead,
     settings: KevSettings,
     /// Temperatures fitted on the person's own examples, for the kinds it names.
     calibration_override: CalibrationOverride,
@@ -98,9 +104,12 @@ impl KevDecisionEngine {
     }
 
     fn loaded_state(&self) -> Result<&LoadedKevState, DecisionFailure> {
-        self.loaded_state.as_ref().ok_or_else(|| {
-            DecisionFailure::fatal_execution("the Kev engine was asked to decide before load")
-        })
+        match self.loaded_state.as_deref() {
+            Some(loaded_state) => Ok(loaded_state),
+            None => Err(DecisionFailure::fatal_execution(
+                "the Kev engine was asked to decide before load",
+            )),
+        }
     }
 }
 
@@ -133,13 +142,13 @@ impl DecisionEngine for KevDecisionEngine {
                 "Kev's head was trained for a different backbone width",
             ));
         }
-        self.loaded_state = Some(LoadedKevState {
+        self.loaded_state = Some(Rc::new(LoadedKevState {
             backbone,
             tokenizer,
             pointer_head,
             settings,
             calibration_override,
-        });
+        }));
         Ok(DecisionEngineLoadResult {
             model_id: self.model_id.clone(),
             maximum_tokens_per_question: KEV_MAXIMUM_ROW_TOKENS as u32,
@@ -273,7 +282,8 @@ fn answer_every_question(
             option_logits,
             head_inputs,
         } = question_scores(
-            loaded_state,
+            &loaded_state.backbone,
+            &loaded_state.pointer_head,
             question_row,
             state_length,
             &mut decoder_state,
@@ -305,15 +315,19 @@ fn answer_every_question(
 }
 
 /// One question's option logits and, when asked, what the pointer head read.
-struct QuestionScores {
-    option_logits: Vec<f32>,
+pub(super) struct QuestionScores {
+    pub(super) option_logits: Vec<f32>,
     head_inputs: Option<HeadInputs>,
 }
 
-/// Runs one question's row from the shared state and scores its options;
-/// the state is restored afterwards, whatever the outcome.
-fn question_scores(
-    loaded_state: &LoadedKevState,
+/// Runs one question's row from the shared state and scores its options
+/// with `pointer_head`; the state is restored afterwards, whatever the
+/// outcome. A whole-model training scores with this very function, its
+/// add-ons in force and its head's current weights, so what it judges is
+/// what the trained folder serves.
+pub(super) fn question_scores(
+    backbone: &QwenDecisionBackbone,
+    pointer_head: &KevPointerHead,
     question_row: &KevQuestionRow,
     state_length: usize,
     decoder_state: &mut RequestDecoderStateStack,
@@ -322,11 +336,8 @@ fn question_scores(
     let state_checkpoint = decoder_state.checkpoint().map_err(|state_error| {
         DecisionFailure::fatal_execution(&format!("the state checkpoint failed: {state_error}"))
     })?;
-    let row_reading = loaded_state.backbone.read_hidden_states(
-        &question_row.token_ids,
-        state_length as u32,
-        decoder_state,
-    );
+    let row_reading =
+        backbone.read_hidden_states(&question_row.token_ids, state_length as u32, decoder_state);
     decoder_state
         .restore_checkpoint(state_checkpoint)
         .map_err(|state_error| {
@@ -335,7 +346,7 @@ fn question_scores(
     let row_hidden_states = row_reading?.to_vec_f32().map_err(|read_error| {
         DecisionFailure::fatal_execution(&format!("the readout failed: {read_error}"))
     })?;
-    let hidden_size = loaded_state.pointer_head.hidden_size();
+    let hidden_size = pointer_head.hidden_size();
     let mut option_hidden_states = Vec::with_capacity(question_row.option_closing_offsets.len());
     for option_closing_offset in &question_row.option_closing_offsets {
         option_hidden_states.push(hidden_state_at(
@@ -349,9 +360,7 @@ fn question_scores(
         question_row.decision_offset(),
         hidden_size,
     );
-    let option_logits = loaded_state
-        .pointer_head
-        .option_logits(decision_hidden_state, &option_hidden_states);
+    let option_logits = pointer_head.option_logits(decision_hidden_state, &option_hidden_states);
     let head_inputs = match head_input_request {
         HeadInputRequest::Omit => None,
         HeadInputRequest::Include => Some(kev_head_inputs(
@@ -425,5 +434,19 @@ impl DecisionTrainingHost for KevDecisionEngine {
 
     fn tunable_family(&self) -> TunableHeadFamily {
         TunableHeadFamily::Kev
+    }
+
+    fn whole_model_scorer(
+        &mut self,
+        examples: &[TrainingExample],
+        row_sources: &[RowSource],
+        scorer_layout: &ParameterLayout,
+    ) -> Result<WholeModelScorer, DecisionFailure> {
+        let Some(loaded_state) = self.loaded_state.as_ref() else {
+            return Err(DecisionFailure::fatal_execution(
+                "the decision engine was asked to train before load",
+            ));
+        };
+        KevWholeModelScorer::for_rows(loaded_state, examples, row_sources, scorer_layout)
     }
 }

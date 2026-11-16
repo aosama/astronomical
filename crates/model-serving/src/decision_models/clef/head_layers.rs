@@ -13,11 +13,24 @@ use super::head_weights::ClefHeadWeights;
 /// PyTorch's `LayerNorm` default, which the head was trained with.
 const HEAD_LAYER_NORM_EPSILON: f32 = 1e-5;
 
+/// How the head's attention is computed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ClefAttentionRoute {
+    /// MLX's fused attention, as serving runs it.
+    Fused,
+    /// The same formula in plain operations, for a training's gradient
+    /// graph: with a few options as queries MLX picks its vector attention
+    /// kernel, which has no backward pass. Scores a training compares with
+    /// serving never take this route.
+    PlainOperations,
+}
+
 /// The runtime, the weights and the head count every layer needs.
 pub(crate) struct ClefHeadLayers<'head> {
     pub(crate) runtime: &'head MlxRuntime,
     pub(crate) weights: &'head ClefHeadWeights,
     pub(crate) attention_head_count: usize,
+    pub(crate) attention_route: ClefAttentionRoute,
 }
 
 impl ClefHeadLayers<'_> {
@@ -69,15 +82,12 @@ impl ClefHeadLayers<'_> {
             self.packed_projection(attention_prefix, "value", keys_and_values)?;
         let width = queries.shape()[2];
         let head_width = width / self.attention_head_count as i32;
-        let attended = self
-            .runtime
-            .scaled_dot_product_attention(
-                &self.split_heads(&projected_queries)?,
-                &self.split_heads(&projected_keys)?,
-                &self.split_heads(&projected_values)?,
-                (head_width as f32).powf(-0.5),
-            )
-            .map_err(head_math)?;
+        let attended = self.attended(
+            &self.split_heads(&projected_queries)?,
+            &self.split_heads(&projected_keys)?,
+            &self.split_heads(&projected_values)?,
+            (head_width as f32).powf(-0.5),
+        )?;
         let merged_heads = self
             .runtime
             .transpose_axes(&attended, &[0, 2, 1, 3])
@@ -88,6 +98,37 @@ impl ClefHeadLayers<'_> {
             .reshape(&merged_heads, &[1, query_length, width])
             .map_err(head_math)?;
         self.linear(&format!("{attention_prefix}.out_proj"), &joined, true)
+    }
+
+    /// `softmax(Q·Kᵀ · scale) · V` over `[1, heads, length, head width]`.
+    fn attended(
+        &self,
+        queries: &MlxArray,
+        keys: &MlxArray,
+        values: &MlxArray,
+        score_scale: f32,
+    ) -> Result<MlxArray, DecisionFailure> {
+        let runtime = self.runtime;
+        match self.attention_route {
+            ClefAttentionRoute::Fused => runtime
+                .scaled_dot_product_attention(queries, keys, values, score_scale)
+                .map_err(head_math),
+            ClefAttentionRoute::PlainOperations => {
+                let transposed_keys = runtime
+                    .transpose_axes(keys, &[0, 1, 3, 2])
+                    .map_err(head_math)?;
+                let scores = runtime
+                    .multiply_scalar(
+                        &runtime
+                            .matmul(queries, &transposed_keys)
+                            .map_err(head_math)?,
+                        score_scale,
+                    )
+                    .map_err(head_math)?;
+                let weights = runtime.softmax_axis(&scores, -1).map_err(head_math)?;
+                runtime.matmul(&weights, values).map_err(head_math)
+            }
+        }
     }
 
     /// `EvidenceRoutingLayer`: queries attend to the normalized memory, then
