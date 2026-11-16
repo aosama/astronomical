@@ -17,20 +17,20 @@ use serial_test::serial;
 
 use crate::common::{configured_installed_model_directory_by_id, small_dense_model_id};
 
-const PROMPT: &str =
+pub(super) const PROMPT: &str =
     "Two households, both alike in dignity, In fair Verona, where we lay our scene,";
-const BLOCK: [u32; 8] = [279, 3_822, 315, 264, 1_550, 11, 323, 279];
+pub(super) const BLOCK: [u32; 8] = [279, 3_822, 315, 264, 1_550, 11, 323, 279];
 /// Both sides run the same layers over the same tokens; a few bf16 units of
 /// difference can come only from MLX choosing a different matmul for a
 /// different row count. A missed rewind moves logits by whole units.
-const MAXIMUM_LOGIT_DIFFERENCE: f32 = 0.25;
+pub(super) const MAXIMUM_LOGIT_DIFFERENCE: f32 = 0.25;
 
-struct SmallTarget {
-    model: Qwen3_5ResidentModel,
-    prompt_token_ids: Vec<u32>,
+pub(super) struct SmallTarget {
+    pub(super) model: Qwen3_5ResidentModel,
+    pub(super) prompt_token_ids: Vec<u32>,
 }
 
-fn load_small_target() -> SmallTarget {
+pub(super) fn load_small_target() -> SmallTarget {
     let model_directory = configured_installed_model_directory_by_id(small_dense_model_id());
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(6 * 1024 * 1024 * 1024, 512 * 1024 * 1024)
@@ -63,7 +63,7 @@ fn load_small_target() -> SmallTarget {
     }
 }
 
-fn prefilled_state(target: &SmallTarget) -> RequestDecoderStateStack {
+pub(super) fn prefilled_state(target: &SmallTarget) -> RequestDecoderStateStack {
     let mut state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
         &target.model.astro_decoder_state_cache_layout(),
         256,
@@ -73,7 +73,7 @@ fn prefilled_state(target: &SmallTarget) -> RequestDecoderStateStack {
     state
 }
 
-fn forward(
+pub(super) fn forward(
     target: &SmallTarget,
     token_ids: &[u32],
     first_position: u32,
@@ -94,7 +94,7 @@ fn forward(
         .expect("the last row has logits")
 }
 
-fn largest_difference(target: &SmallTarget, left: &MlxArray, right: &MlxArray) -> f32 {
+pub(super) fn largest_difference(target: &SmallTarget, left: &MlxArray, right: &MlxArray) -> f32 {
     let runtime = target.model.runtime();
     let left_values = runtime
         .array_to_vec_f32(&runtime.astype(left, MlxDtype::Float32).expect("convert"))

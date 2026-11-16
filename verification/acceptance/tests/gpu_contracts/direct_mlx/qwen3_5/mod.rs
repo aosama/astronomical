@@ -11,6 +11,7 @@ mod dflash2_round_cost;
 mod dflash2_tree_oracle;
 mod dflash_proof_scenario;
 mod dflash_speculative_proof;
+mod draft_tree_verification;
 mod drafted_rewind;
 mod elementwise_fusion_probe;
 mod error_logging;

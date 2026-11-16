@@ -575,9 +575,9 @@ pub use qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condit
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
-    Qwen3_5DraftedRowsVerification, Qwen3_5SpeculativeVerificationOutput, SpeculationRoundOutcome,
-    SpeculationRoundRequest, VerificationLogitsMode, VerificationTokenChoice,
-    run_speculative_round,
+    Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
+    Qwen3_5SpeculativeVerificationOutput, SpeculationRoundOutcome, SpeculationRoundRequest,
+    VerificationLogitsMode, VerificationTokenChoice, run_speculative_round,
 };
 
 #[cfg(feature = "direct-mlx")]

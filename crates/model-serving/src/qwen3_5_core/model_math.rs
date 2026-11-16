@@ -33,6 +33,10 @@ pub(crate) mod gated_delta_sequence_contract;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_step;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod gated_delta_tree;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod gated_delta_tree_tests;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod gdn_decode_prework_kernel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod output_combination;

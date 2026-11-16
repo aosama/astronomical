@@ -457,6 +457,11 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # forwarding only those rows would (small dense Qwen3.5 from the Development
 # library, every kept count 1 to 7, plus a control without the rewind). Seconds.
 test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter drafted_rewind"
+# A draft tree verified in one pass on the small dense Qwen3.5: every row's
+# logits match feeding its chain alone, committing a branch leaves the state
+# feeding that branch leaves, and a control that commits the other branch
+# differs. Seconds.
+test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter draft_tree_verification"
 # Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
 # real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
 # beside a plain one-row step. Each stage is timed alone. Asserts nothing;

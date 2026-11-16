@@ -146,6 +146,17 @@ pub fn qwen3_5_full_attention_step(
         Ok(runtime.multiply(&attention_output, &gate_weights)?)
     }
 }
+/// One forward's rotated queries and keys, head-first values, and output gate.
+pub(super) struct RotatedAttentionInputs {
+    /// [batch, query heads, tokens, features]
+    pub(super) rotated_queries: MlxArray,
+    /// [batch, key-value heads, tokens, features]
+    pub(super) rotated_keys: MlxArray,
+    pub(super) transposed_values: MlxArray,
+    /// [batch, tokens, query heads x features]
+    pub(super) output_gate: MlxArray,
+}
+
 #[derive(Clone, Copy)]
 struct FullAttentionShape {
     // Independent examples processed together. Text serving currently uses one
@@ -262,6 +273,53 @@ impl Qwen3_5ModelBase {
         kv_state: &mut FullAttentionKeyValueState,
         token_position_offsets: Option<&MlxArray>,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let RotatedAttentionInputs {
+            rotated_queries,
+            rotated_keys,
+            transposed_values,
+            output_gate,
+        } = self.rotated_attention_inputs(
+            hidden_states,
+            token_count,
+            rope_offset_tokens,
+            full_attention_weights,
+            token_position_offsets,
+        )?;
+        let attention_head_dimension = self.config.head_dimension() as i32;
+
+        // Store only the new K and V tensors in the append-only KV state. The
+        // owner returns views over the complete used prefix, including this
+        // forward's new positions, and grows storage in fixed steps to avoid
+        // repeatedly copying all prior context for each generated token.
+        let (active_keys, active_values) =
+            self.append_rotated_tensors_to_kv_state(kv_state, &rotated_keys, &transposed_values)?;
+
+        // Execute the foundational attention formula against the active prefix,
+        // then project the gated output back into the decoder's hidden-size
+        // space. 1 / sqrt(features_per_head) is the conventional score scale.
+        // The caller adds this result to the residual stream before continuing
+        // with the rest of the layer.
+        self.run_full_attention_computation(
+            &rotated_queries,
+            &active_keys,
+            &active_values,
+            &output_gate,
+            (attention_head_dimension as f32).sqrt().recip(),
+            &full_attention_weights.output_projection,
+        )
+    }
+
+    /// Q, K and V for `token_count` new rows, projected, normalized, moved
+    /// head-first and rotated to their positions, with Qwen's output gate:
+    /// everything attention needs before the KV state is touched.
+    pub(super) fn rotated_attention_inputs(
+        &self,
+        hidden_states: &MlxArray,
+        token_count: i32,
+        rope_offset_tokens: i32,
+        full_attention_weights: &Qwen3_5FullAttentionWeights,
+        token_position_offsets: Option<&MlxArray>,
+    ) -> Result<RotatedAttentionInputs, Qwen3_5ExecutionError> {
         // The model configuration supplies the dimensions for this layer. Qwen
         // has more Q heads than K/V heads, which is grouped-query attention.
         // Every head still uses the same number of features.
@@ -354,26 +412,12 @@ impl Qwen3_5ModelBase {
             rope_offset_tokens,
         )?;
 
-        // Store only the new K and V tensors in the append-only KV state. The
-        // owner returns views over the complete used prefix, including this
-        // forward's new positions, and grows storage in fixed steps to avoid
-        // repeatedly copying all prior context for each generated token.
-        let (active_keys, active_values) =
-            self.append_rotated_tensors_to_kv_state(kv_state, &rotated_keys, &transposed_values)?;
-
-        // Execute the foundational attention formula against the active prefix,
-        // then project the gated output back into the decoder's hidden-size
-        // space. 1 / sqrt(features_per_head) is the conventional score scale.
-        // The caller adds this result to the residual stream before continuing
-        // with the rest of the layer.
-        self.run_full_attention_computation(
-            &rotated_queries,
-            &active_keys,
-            &active_values,
-            &output_gate,
-            (attention_head_dimension as f32).sqrt().recip(),
-            &full_attention_weights.output_projection,
-        )
+        Ok(RotatedAttentionInputs {
+            rotated_queries,
+            rotated_keys,
+            transposed_values,
+            output_gate,
+        })
     }
 
     /// Appends this step's rotated keys and transposed values to the append-only

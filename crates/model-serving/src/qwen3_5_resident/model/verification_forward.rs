@@ -287,7 +287,7 @@ impl Qwen3_5ResidentModel {
     /// AllPositions reads every row because each position's logits are the
     /// target's distribution over its next token. The head output is widened
     /// to float32 for deterministic verification comparisons.
-    fn verification_per_position_logits(
+    pub(super) fn verification_per_position_logits(
         &self,
         hidden_states: &MlxArray,
         logits_mode: VerificationLogitsMode,

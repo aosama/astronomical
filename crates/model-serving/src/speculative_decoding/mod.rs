@@ -8,9 +8,12 @@
 
 pub mod dflash2_drafter;
 pub mod keyed_sampling;
+pub mod tree_rows;
 pub mod verification_decision;
 
 #[cfg(test)]
 mod keyed_sampling_tests;
+#[cfg(test)]
+mod tree_rows_tests;
 #[cfg(test)]
 mod verification_decision_tests;

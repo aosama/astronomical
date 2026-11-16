@@ -34,6 +34,9 @@ pub struct Qwen3_5OptionalAccelerators {
     /// dense projections, which then multiply through it.
     pub(crate) register_ordered_matmul_kernels:
         Option<crate::row_batched_matmul::RowBatchedMatmulKernels>,
+    /// The gated-delta recurrence over a draft tree's rows; set by
+    /// `enable_draft_tree_verification`.
+    pub(crate) gated_delta_tree_kernel: Option<mlx_bridge::MlxMetalKernel>,
 }
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.
