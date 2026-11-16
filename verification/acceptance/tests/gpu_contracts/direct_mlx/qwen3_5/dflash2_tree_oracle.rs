@@ -35,7 +35,8 @@ use super::dflash2_kept_per_round::{
     TOP_P_THOUSANDTHS, completion_token_ids, load_pair, prompt_token_ids, settle_round,
 };
 
-const KEYED_SEED: u64 = 1234;
+/// TensorFold's community benchmark seeds its repetitions from 1234.
+pub(super) const FIRST_KEYED_SEED: u64 = 1234;
 
 pub(super) const ORACLE_CELLS: [Cell; 4] = [
     oracle_cell("code completion greedy", true, CODE_PROMPT, 0),
@@ -56,6 +57,7 @@ const fn oracle_cell(
         prompt,
         temperature_thousandths,
         minimum_kept_per_round: 0.0,
+        keyed_seed: FIRST_KEYED_SEED,
     }
 }
 
@@ -90,10 +92,10 @@ pub(super) enum Drafting {
     Tree,
 }
 
-struct DecodeOutcome {
-    rounds: usize,
+pub(super) struct DecodeOutcome {
+    pub(super) rounds: usize,
     /// The prefill's pick, then every token the rounds kept.
-    emitted_token_ids: Vec<u32>,
+    pub(super) emitted_token_ids: Vec<u32>,
     reference_divergences: usize,
 }
 
@@ -105,7 +107,12 @@ impl DecodeOutcome {
 
 /// Decodes one cell. With `Drafting::Tree`, `reference` is the single-path
 /// run's output, whose continuation each round verifies.
-fn decode(pair: &JourneyPair, cell: &Cell, drafting: Drafting, reference: &[u32]) -> DecodeOutcome {
+pub(super) fn decode(
+    pair: &JourneyPair,
+    cell: &Cell,
+    drafting: Drafting,
+    reference: &[u32],
+) -> DecodeOutcome {
     let (mut round, mut decoder_state, first_token_id) = prefill(pair, cell);
     round.last_token_id = first_token_id;
     let mut outcome = DecodeOutcome {
@@ -272,7 +279,7 @@ pub(super) fn target_picks(
             probabilities: &kept_probabilities[row_range],
         };
         picks.push(
-            keyed_sample(KEYED_SEED, pick_positions[row_index], &distribution)
+            keyed_sample(cell.keyed_seed, pick_positions[row_index], &distribution)
                 .expect("a row keeps at least one token"),
         );
     }
@@ -389,7 +396,9 @@ fn search_tree(
         options.node_budget = pair.drafter_configuration.proposal_count() as usize;
         options.children_per_node = 1;
     }
-    let keyed_noise = RequestKeyedNoise { seed: KEYED_SEED };
+    let keyed_noise = RequestKeyedNoise {
+        seed: cell.keyed_seed,
+    };
     let noise: Option<&dyn KeyedNoise> = if cell.temperature_thousandths == 0 {
         None
     } else {

@@ -55,6 +55,7 @@ const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
 /// One measured cell: the prompt, the temperature (0 = greedy diagnostic), and
 /// the least kept-per-round that passes.
+#[derive(Clone, Copy)]
 pub(crate) struct Cell {
     pub(crate) label: &'static str,
     pub(crate) prompt: &'static str,
@@ -63,6 +64,8 @@ pub(crate) struct Cell {
     pub(crate) is_raw_completion: bool,
     pub(crate) temperature_thousandths: u16,
     pub(crate) minimum_kept_per_round: f64,
+    /// The keyed sampler's seed, for journeys that sample with it.
+    pub(crate) keyed_seed: u64,
 }
 
 const CELLS: [Cell; 4] = [
@@ -72,6 +75,7 @@ const CELLS: [Cell; 4] = [
         prompt: CODE_PROMPT,
         temperature_thousandths: 700,
         minimum_kept_per_round: 5.5,
+        keyed_seed: SAMPLING_SEED,
     },
     Cell {
         label: "chat",
@@ -79,6 +83,7 @@ const CELLS: [Cell; 4] = [
         prompt: CHAT_PROMPT,
         temperature_thousandths: 1_000,
         minimum_kept_per_round: 2.7,
+        keyed_seed: SAMPLING_SEED,
     },
     // TensorFold's community code cell: the same prompt as a raw completion.
     // No z-lab figure exists for it, so it reports without a floor.
@@ -88,6 +93,7 @@ const CELLS: [Cell; 4] = [
         prompt: CODE_PROMPT,
         temperature_thousandths: 700,
         minimum_kept_per_round: 0.0,
+        keyed_seed: SAMPLING_SEED,
     },
     Cell {
         label: "chat greedy (diagnostic)",
@@ -95,6 +101,7 @@ const CELLS: [Cell; 4] = [
         prompt: CHAT_PROMPT,
         temperature_thousandths: 0,
         minimum_kept_per_round: 2.8,
+        keyed_seed: SAMPLING_SEED,
     },
 ];
 

@@ -16,7 +16,12 @@ use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::dflash2_kept_per_round::{Cell, JourneyPair, OUTPUT_TOKENS, RoundState, load_pair};
-use super::dflash2_tree_oracle::{Drafting, ORACLE_CELLS, draft_tree, prefill, target_picks};
+use super::dflash2_tree_oracle::{
+    Drafting, FIRST_KEYED_SEED, ORACLE_CELLS, decode, draft_tree, prefill, target_picks,
+};
+
+/// Seeds pooled for a sampled cell, as TensorFold's three repetitions.
+const SAMPLED_SEED_COUNT: u64 = 3;
 
 #[test]
 #[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
@@ -27,30 +32,90 @@ fn should_decode_with_draft_trees_verified_in_one_target_pass() {
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
     for (cell_index, cell) in ORACLE_CELLS.iter().enumerate() {
-        let (rounds, emitted, decode_seconds) = decode_with_trees(&pair, cell);
+        let seed_count = if cell.temperature_thousandths == 0 {
+            1
+        } else {
+            SAMPLED_SEED_COUNT
+        };
+        let mut pooled = PooledTreeDecode::default();
+        for seed_offset in 0..seed_count {
+            let seeded_cell = Cell {
+                keyed_seed: FIRST_KEYED_SEED + seed_offset,
+                ..*cell
+            };
+            pooled.add(&pair, &seeded_cell);
+        }
         eprintln!(
-            "[dflash2-tree-rounds {}/{}] {}: {:.2} kept per round, {:.1} tok/s decode \
-             ({emitted} tokens in {rounds} rounds, {:.1} ms a round)",
+            "[dflash2-tree-rounds {}/{}] {} ({seed_count} seeds): {:.2} kept per round, \
+             {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round); first \
+             divergences from the single-path keyed output: {:?}",
             cell_index + 1,
             ORACLE_CELLS.len(),
             cell.label,
-            emitted as f64 / rounds as f64,
-            emitted as f64 / decode_seconds,
-            decode_seconds * 1000.0 / rounds as f64,
+            pooled.emitted as f64 / pooled.rounds as f64,
+            pooled.emitted as f64 / pooled.decode_seconds,
+            pooled.emitted,
+            pooled.rounds,
+            pooled.decode_seconds * 1000.0 / pooled.rounds as f64,
+            pooled.first_divergences,
         );
     }
 }
 
-/// Returns (rounds, tokens emitted by them, decode seconds).
-fn decode_with_trees(pair: &JourneyPair, cell: &Cell) -> (usize, usize, f64) {
-    let (mut round, mut decoder_state, _first_token_id) = prefill(pair, cell);
+/// Tree decodes pooled over seeds.
+#[derive(Default)]
+struct PooledTreeDecode {
+    rounds: usize,
+    emitted: usize,
+    decode_seconds: f64,
+    /// Per seed, the first token where the tree's output left the
+    /// single-path keyed output (None when the two agree throughout).
+    first_divergences: Vec<Option<usize>>,
+}
+
+impl PooledTreeDecode {
+    fn add(&mut self, pair: &JourneyPair, cell: &Cell) {
+        let single_path = decode(pair, cell, Drafting::SinglePath, &[]);
+        let tree = decode_with_trees(pair, cell);
+        self.rounds += tree.rounds;
+        self.emitted += tree.emitted_token_ids.len() - 1;
+        self.decode_seconds += tree.decode_seconds;
+        let compared = single_path
+            .emitted_token_ids
+            .len()
+            .min(tree.emitted_token_ids.len());
+        let mut first_divergence = None;
+        for token_index in 0..compared {
+            if single_path.emitted_token_ids[token_index] != tree.emitted_token_ids[token_index] {
+                first_divergence = Some(token_index);
+                break;
+            }
+        }
+        self.first_divergences.push(first_divergence);
+    }
+}
+
+struct TreeDecode {
+    rounds: usize,
+    /// The prefill's pick, then every token the rounds kept.
+    emitted_token_ids: Vec<u32>,
+    decode_seconds: f64,
+}
+
+fn decode_with_trees(pair: &JourneyPair, cell: &Cell) -> TreeDecode {
+    let (mut round, mut decoder_state, first_token_id) = prefill(pair, cell);
     let decode_started_at = Instant::now();
-    let (mut rounds, mut emitted) = (0, 0);
-    while emitted < OUTPUT_TOKENS {
-        emitted += tree_round(pair, cell, &mut round, &mut decoder_state);
+    let mut emitted_token_ids = vec![first_token_id];
+    let mut rounds = 0;
+    while emitted_token_ids.len() <= OUTPUT_TOKENS {
+        emitted_token_ids.extend(tree_round(pair, cell, &mut round, &mut decoder_state));
         rounds += 1;
     }
-    (rounds, emitted, decode_started_at.elapsed().as_secs_f64())
+    TreeDecode {
+        rounds,
+        emitted_token_ids,
+        decode_seconds: decode_started_at.elapsed().as_secs_f64(),
+    }
 }
 
 /// Drafts a tree, verifies it, keeps the chain the target's picks follow and
@@ -60,7 +125,7 @@ fn tree_round(
     cell: &Cell,
     round: &mut RoundState,
     decoder_state: &mut RequestDecoderStateStack,
-) -> usize {
+) -> Vec<u32> {
     let tree = draft_tree(pair, cell, round, Drafting::Tree);
     let rows = TreeRows::from_draft_tree(round.last_token_id, &tree);
     let verification = pair
@@ -83,9 +148,14 @@ fn tree_round(
     pair.target
         .commit_draft_tree(decoder_state, verification, &kept.rows)
         .expect("the kept chain commits");
+    let mut emitted = Vec::with_capacity(kept.rows.len());
+    for kept_row in &kept.rows[1..] {
+        emitted.push(rows.token_ids[*kept_row]);
+    }
+    emitted.push(kept.next_token_id);
     round.fed_token_count += kept.rows.len() as u32;
     round.last_token_id = kept.next_token_id;
-    kept.rows.len()
+    emitted
 }
 
 /// The drafter's next input: every tap's kept rows, in chain order, joined.
