@@ -69,6 +69,18 @@ impl DraftSession {
         });
         Ok(())
     }
+
+    /// Runs the pending tap rows so they hold no graph of the forward that
+    /// produced them.
+    pub fn evaluate_pending_tap_rows(
+        &self,
+        model: &Qwen3_5ResidentModel,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        if let Some(pending_tap_rows) = self.pending_tap_rows.as_ref() {
+            model.runtime().evaluate_arrays(&[pending_tap_rows])?;
+        }
+        Ok(())
+    }
 }
 
 /// Everything one round needs besides the owners it mutates.

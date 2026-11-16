@@ -112,20 +112,12 @@ fn dispatch_speculative_forward(
         logits_mode,
         &mut active_request.performance_attribution,
     )?;
-    // The drafter conditions on the target's tapped hidden rows; it absorbs
-    // them when the first round runs.
-    active_request
-        .engine_extension
-        .speculative_draft_session
-        .as_mut()
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
-            description: "speculative prefill requires the request's draft session",
-        })?
-        .append_tap_rows(
-            model,
-            &chunk_output.hidden_state_taps,
-            chunk_first_position as i32,
-        )?;
+    hand_chunk_taps_to_drafter_and_run_chunk(
+        active_request,
+        model,
+        &chunk_output.hidden_state_taps,
+        chunk_first_position as i32,
+    )?;
     if chunk_includes_final_prompt_token {
         let terminal_logits =
             chunk_output
@@ -143,6 +135,35 @@ fn dispatch_speculative_forward(
     Ok(ChunkForwardOutcome {
         boundary_checkpoints: Vec::new(),
     })
+}
+
+/// Hands one chunk's tapped hidden rows to the request's draft session (the
+/// drafter absorbs them when the first round runs) and runs the chunk.
+///
+/// Each chunk runs before the next is built, as on the classic path: left
+/// lazy, the whole prompt would run as one graph at the first round,
+/// holding every chunk's workspace at once and booking prompt processing
+/// time as generation preparation.
+fn hand_chunk_taps_to_drafter_and_run_chunk(
+    active_request: &mut Qwen3_5EngineRequest,
+    model: &Qwen3_5ResidentModel,
+    chunk_hidden_state_taps: &[mlx_bridge::MlxArray],
+    chunk_first_position: i32,
+) -> Result<(), Qwen3_5ExecutionError> {
+    let draft_session = active_request
+        .engine_extension
+        .speculative_draft_session
+        .as_mut()
+        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            description: "speculative prefill requires the request's draft session",
+        })?;
+    draft_session.append_tap_rows(model, chunk_hidden_state_taps, chunk_first_position)?;
+    model.evaluate_decoder_state_with_performance_attribution(
+        &active_request.request_decoder_state,
+        None,
+        &mut active_request.performance_attribution,
+    )?;
+    draft_session.evaluate_pending_tap_rows(model)
 }
 
 /// What either prefill dispatch path produced for one chunk. Named for the
