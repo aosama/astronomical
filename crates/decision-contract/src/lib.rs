@@ -51,6 +51,7 @@ pub mod question;
 pub mod system_one_questions;
 pub mod system_one_response;
 pub mod token_encoder;
+pub mod trained_tensors;
 
 pub use answer::{
     AnswerError, ChoiceAnswer, DecisionAnswer, NoulAnswer, OptionProbability, ScoreAnswer,

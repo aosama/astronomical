@@ -118,86 +118,27 @@ fn should_count_distinct_states_not_lines_when_checking_for_enough_data() {
     ));
 }
 
-fn trained_tensor(name: &str, shape: Vec<usize>, values: Vec<f32>) -> TrainedTensor {
-    TrainedTensor {
-        name: name.to_owned(),
-        shape,
-        values: astronomical_decision_contract::FloatVector(values),
-    }
+#[test]
+fn should_remove_a_written_folder_only_when_its_answers_disagree() {
+    assert!(disproves_written_folder(
+        &DecisionToolError::SavedModelDisagrees {
+            question_name: "mood".to_owned(),
+            largest_gap: 0.5,
+        }
+    ));
+    assert!(!disproves_written_folder(
+        &DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned())
+    ));
+    assert!(!disproves_written_folder(
+        &DecisionToolError::TrainingFailed("the daemon stopped".to_owned())
+    ));
 }
 
 #[test]
-fn should_pair_each_layers_down_and_up_into_one_add_on() {
-    let adapter_tensors = vec![
-        trained_tensor(
-            "encoder.layers.0.attn.Wo.adapter_down",
-            vec![1, 2],
-            vec![0.5, -0.5],
-        ),
-        trained_tensor(
-            "encoder.layers.0.attn.Wo.adapter_up",
-            vec![3, 1],
-            vec![1.0, 2.0, 3.0],
-        ),
-    ];
+fn should_tell_the_person_an_unchecked_folder_is_kept() {
+    let unchecked = DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned());
 
-    let Some(decision_adapters) = decision_adapters_of(&adapter_tensors).unwrap() else {
-        panic!("two halves of one layer make one add-on");
-    };
-
-    assert_eq!(decision_adapters.adapters.len(), 1);
-    let adapter = &decision_adapters.adapters[0];
-    assert_eq!(adapter.target, "encoder.layers.0.attn.Wo");
-    assert_eq!(
-        (adapter.rank, adapter.input_width, adapter.output_width),
-        (1, 2, 3)
-    );
-    assert_eq!(adapter.up_values, vec![1.0, 2.0, 3.0]);
-}
-
-#[test]
-fn should_write_no_add_ons_after_a_final_layer_training() {
-    assert!(decision_adapters_of(&[]).unwrap().is_none());
-}
-
-#[test]
-fn should_refuse_add_ons_that_do_not_pair_up() {
-    let other_layers = vec![
-        trained_tensor(
-            "encoder.layers.0.attn.Wo.adapter_down",
-            vec![1, 2],
-            vec![0.5, -0.5],
-        ),
-        trained_tensor(
-            "encoder.layers.1.attn.Wo.adapter_up",
-            vec![3, 1],
-            vec![1.0, 2.0, 3.0],
-        ),
-    ];
-    let lone_half = vec![trained_tensor(
-        "encoder.layers.0.attn.Wo.adapter_down",
-        vec![1, 2],
-        vec![0.5, -0.5],
-    )];
-    let different_ranks = vec![
-        trained_tensor(
-            "encoder.layers.0.attn.Wo.adapter_down",
-            vec![1, 2],
-            vec![0.5, -0.5],
-        ),
-        trained_tensor(
-            "encoder.layers.0.attn.Wo.adapter_up",
-            vec![1, 2],
-            vec![1.0, 2.0],
-        ),
-    ];
-
-    for unpaired in [other_layers, lone_half, different_ranks] {
-        assert!(matches!(
-            decision_adapters_of(&unpaired),
-            Err(DecisionToolError::TrainingFailed(_))
-        ));
-    }
+    assert!(unchecked.to_string().contains("the new folder is kept"));
 }
 
 #[test]
@@ -230,27 +171,4 @@ fn should_refuse_a_whole_model_training_of_kev_or_clef_before_reading_any_exampl
             "{refusal}"
         );
     }
-}
-
-#[test]
-fn should_remove_a_written_folder_only_when_its_answers_disagree() {
-    assert!(disproves_written_folder(
-        &DecisionToolError::SavedModelDisagrees {
-            question_name: "mood".to_owned(),
-            largest_gap: 0.5,
-        }
-    ));
-    assert!(!disproves_written_folder(
-        &DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned())
-    ));
-    assert!(!disproves_written_folder(
-        &DecisionToolError::TrainingFailed("the daemon stopped".to_owned())
-    ));
-}
-
-#[test]
-fn should_tell_the_person_an_unchecked_folder_is_kept() {
-    let unchecked = DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned());
-
-    assert!(unchecked.to_string().contains("the new folder is kept"));
 }

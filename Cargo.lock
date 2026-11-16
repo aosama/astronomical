@@ -45,6 +45,7 @@ dependencies = [
  "astronomical-config",
  "astronomical-daemon",
  "astronomical-decision-contract",
+ "astronomical-decision-training",
  "astronomical-inference-worker",
  "astronomical-ipc-protocol",
  "astronomical-lowercase-hex",
