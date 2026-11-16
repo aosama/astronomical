@@ -37,6 +37,9 @@ struct StageTimes {
     verify_eight_rows: Vec<Duration>,
     verify_logits_readback: Vec<Duration>,
     rewind_restore_and_rerun: Vec<Duration>,
+    /// Diagnostic: the same verify without the per-row DeltaNet states, the
+    /// share of the verify that row-state capture costs.
+    verify_without_row_states: Vec<Duration>,
 }
 
 #[test]
@@ -63,7 +66,7 @@ fn should_measure_where_a_drafted_round_spends_its_time_on_the_27b() {
 }
 
 impl StageTimes {
-    fn all_mut(&mut self) -> [&mut Vec<Duration>; 7] {
+    fn all_mut(&mut self) -> [&mut Vec<Duration>; 8] {
         [
             &mut self.plain_decode_step,
             &mut self.drafter_pass,
@@ -72,13 +75,14 @@ impl StageTimes {
             &mut self.verify_eight_rows,
             &mut self.verify_logits_readback,
             &mut self.rewind_restore_and_rerun,
+            &mut self.verify_without_row_states,
         ]
     }
 }
 
 /// One fresh request: prefill, then one plain step and one drafted round,
-/// each stage evaluated and timed. Returns the seven stage times in order.
-fn time_one_round(pair: &JourneyPair, prompt: &[u32]) -> [Duration; 7] {
+/// each stage evaluated and timed. Returns the eight stage times in order.
+fn time_one_round(pair: &JourneyPair, prompt: &[u32]) -> [Duration; 8] {
     let runtime = pair.target.runtime();
     let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
         &pair.target.astro_decoder_state_cache_layout(),
@@ -105,6 +109,10 @@ fn time_one_round(pair: &JourneyPair, prompt: &[u32]) -> [Duration; 7] {
         verify_logits_readback,
         rewind_restore_and_rerun,
     ] = time_verify_and_rewind(pair, &mut decoder_state, fed, &drafted_ids);
+    // Last, since it advances the state with nothing to rewind to; each
+    // round is a fresh request.
+    let verify_without_row_states =
+        time_verify_without_row_states(pair, &mut decoder_state, fed + 4, &drafted_ids);
     [
         plain_decode_step,
         drafter_pass,
@@ -113,7 +121,33 @@ fn time_one_round(pair: &JourneyPair, prompt: &[u32]) -> [Duration; 7] {
         verify_eight_rows,
         verify_logits_readback,
         rewind_restore_and_rerun,
+        verify_without_row_states,
     ]
+}
+
+fn time_verify_without_row_states(
+    pair: &JourneyPair,
+    decoder_state: &mut RequestDecoderStateStack,
+    fed: u32,
+    drafted_ids: &[u32],
+) -> Duration {
+    let mut verified_ids = vec![ANCHOR_TOKEN_ID];
+    verified_ids.extend_from_slice(drafted_ids);
+    let started = Instant::now();
+    let verification = forward(
+        pair,
+        &verified_ids,
+        fed,
+        decoder_state,
+        &pair.drafter_configuration.target_tap_layer_ids,
+        VerificationLogitsMode::AllPositions,
+    );
+    let mut evaluated_arrays: Vec<&MlxArray> = verification.hidden_state_taps.iter().collect();
+    if let Some(logits) = &verification.per_position_logits {
+        evaluated_arrays.push(logits);
+    }
+    evaluate(pair.target.runtime(), &evaluated_arrays);
+    started.elapsed()
 }
 
 fn forward(
@@ -296,5 +330,12 @@ fn report(times: &mut StageTimes) {
         "[dflash2-round-cost] {:<38} {:7.1} ms",
         "drafted round total",
         round_total.as_secs_f64() * 1000.0
+    );
+    let diagnostic_times = &mut times.verify_without_row_states;
+    diagnostic_times.sort();
+    eprintln!(
+        "[dflash2-round-cost] {:<38} {:7.1} ms (diagnostic, not in the total)",
+        "target verify, 8 rows, no row states",
+        diagnostic_times[diagnostic_times.len() / 2].as_secs_f64() * 1000.0
     );
 }

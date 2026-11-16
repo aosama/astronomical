@@ -7,9 +7,12 @@
 //! 6.07 on the code prompt at temperature 0.7 and 3.00 on the chat prompt at
 //! 1.0 on this pair (single path, 256 tokens, thinking off), so the floors
 //! below sit about 10% under those. Greedy runs only as a labelled diagnostic.
+//! A third cell follows TensorFold's community benchmark, which sends the
+//! code prompt as a raw completion (its chat cell is the chat cell here), with
+//! its top-k 20 and top-p 0.95, so its speed compares like for like.
 //!
-//! This measures acceptance, not speed: every stage syncs with the GPU and
-//! reads full probability rows back; `dflash2_round_cost` times the stages.
+//! It also prints each cell's decode speed (prefill excluded); every stage
+//! still syncs with the GPU, so `dflash2_round_cost` is where stages are timed.
 
 use std::time::Instant;
 
@@ -55,6 +58,9 @@ const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 pub(crate) struct Cell {
     label: &'static str,
     prompt: &'static str,
+    /// The prompt as a raw completion rather than a chat turn: TensorFold's
+    /// community benchmark sends its code cell this way, its chat cell as chat.
+    is_raw_completion: bool,
     temperature_thousandths: u16,
     minimum_kept_per_round: f64,
 }
@@ -62,24 +68,30 @@ pub(crate) struct Cell {
 const CELLS: [Cell; 4] = [
     Cell {
         label: "code",
+        is_raw_completion: false,
         prompt: CODE_PROMPT,
         temperature_thousandths: 700,
         minimum_kept_per_round: 5.5,
     },
     Cell {
         label: "chat",
+        is_raw_completion: false,
         prompt: CHAT_PROMPT,
         temperature_thousandths: 1_000,
         minimum_kept_per_round: 2.7,
     },
+    // TensorFold's community code cell: the same prompt as a raw completion.
+    // No z-lab figure exists for it, so it reports without a floor.
     Cell {
-        label: "code greedy (diagnostic)",
+        label: "code completion (TensorFold cell)",
+        is_raw_completion: true,
         prompt: CODE_PROMPT,
-        temperature_thousandths: 0,
-        minimum_kept_per_round: 5.7,
+        temperature_thousandths: 700,
+        minimum_kept_per_round: 0.0,
     },
     Cell {
         label: "chat greedy (diagnostic)",
+        is_raw_completion: false,
         prompt: CHAT_PROMPT,
         temperature_thousandths: 0,
         minimum_kept_per_round: 2.8,
@@ -220,6 +232,13 @@ pub(crate) fn load_pair() -> JourneyPair {
     }
 }
 
+/// The prompt's tokens with no chat template, as a completion request sends it.
+fn completion_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
+    pair.tokenizer
+        .encode_prompt(prompt)
+        .expect("the completion prompt tokenizes")
+}
+
 pub(crate) fn prompt_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
     let command = astronomical_ipc_protocol::ChatGenerationCommand {
         request_id: RequestId::new(0),
@@ -259,7 +278,11 @@ pub(crate) struct CellOutcome {
 
 pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> CellOutcome {
     let tap_layer_ids = &pair.drafter_configuration.target_tap_layer_ids;
-    let prompt = prompt_token_ids(pair, cell.prompt);
+    let prompt = if cell.is_raw_completion {
+        completion_token_ids(pair, cell.prompt)
+    } else {
+        prompt_token_ids(pair, cell.prompt)
+    };
     let mut decoder_state = RequestDecoderStateStack::empty_from_astro_decoder_state_cache_layout_with_full_attention_kv_state_growth_tokens(
         &pair.target.astro_decoder_state_cache_layout(),
         256,
