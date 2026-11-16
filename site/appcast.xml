@@ -4,30 +4,52 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.109</title>
-            <pubDate>Sun, 15 Nov 2026 14:58:53 -0500</pubDate>
-            <sparkle:version>2351</sparkle:version>
-            <sparkle:shortVersionString>0.2.109</sparkle:shortVersionString>
+            <title>0.2.110</title>
+            <pubDate>Mon, 16 Nov 2026 05:49:33 -0500</pubDate>
+            <sparkle:version>2354</sparkle:version>
+            <sparkle:shortVersionString>0.2.110</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.110
 
-- **GitHub Copilot works with Astronomical again.** Since 0.2.106 the Responses API refused OpenAI's standard `prompt_cache_key` request field, which GitHub Copilot sends with every request, so Copilot answered every message with "request field 'prompt_cache_key' is unknown". Astronomical accepts OpenAI's spelling of `prompt_cache_key` again, and reports `prompt_cache_options` and `prompt_cache_retention` as unsupported under OpenAI's names.
-- **Download speed on the Models page.** A download in progress now shows its speed in MB/s next to the amount received and the time left, for example "2.8 of 8.0 GB · 55 MB/s · about 2 minutes left".
-- **Accurate live download progress.** The progress and speed now count every byte that has arrived, not only the bytes that are already in order on disk, so a fast download no longer appears to slow down while its pieces arrive out of order.
+### Faster decoding for the dense Qwen 27B
 
-## Compatibility
+A dense Qwen 27B (4-bit) now decodes with DFlash2 draft trees when its DFlash2 drafter is installed in the same model library. A small drafter model proposes several tokens at a time, and the 27B checks a whole tree of proposals in one pass, so every token in the reply is still the 27B's own choice.
 
-No settings, models or conversations change. Chat Completions, Anthropic Messages and every other endpoint behave as in 0.2.108.
+Measured on an M5 Pro with the 27B and its drafter:
 
-## Distribution
+| Request | Before | Now |
+|---|---|---|
+| Coding request, temperature 0.7 | about 13 tok/s | 67 to 71 tok/s |
+| Chat request, temperature 1.0 | about 13 tok/s | 47 to 48 tok/s |
+| Reply after a 10,000-token prompt, temperature 1.0 | about 13 tok/s | about 35 tok/s |
 
-Astronomical 0.2.109 is signed with a Developer ID, notarized by Apple, and offered through the signed Sparkle update feed.
+Prompt processing speed is unchanged, and a follow-up turn in a conversation still reuses the work of the earlier turns.
+
+What to know:
+
+- It needs a Mac whose GPU has the M5 matrix units. On other Macs, and for models without a matching drafter, decoding is unchanged.
+- Requests with images, JSON-constrained output or a repetition penalty use ordinary decoding, as before.
+- Greedy replies are the same text ordinary decoding gives. Sampled replies are drawn from the same distribution, with a sampler keyed to the request's seed, so a seeded request repeats exactly.
+- The drafter is loaded beside the 27B at 4 bits, so the pair uses somewhat more memory than the 27B alone.
+
+### Compatibility
+
+- Settings, conversations, downloaded models and the `astro_ssd_prompt_cache` are preserved.
+- No configuration changes are required.
+
+### Distribution
+
+The disk image is signed with a Developer ID certificate and notarized by Apple. Existing installs receive this version through the built-in update check.
+
+### Acknowledgements
+
+Draft-tree decoding follows the approach of the TensorFold engine and uses the DFlash2 drafter published by Z Lab; both are credited in the third-party notices.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.109/Astronomical-0.2.109-macOS-arm64.dmg" length="23786538" type="application/octet-stream" sparkle:edSignature="jgBV6sG223iUiQAecoAksTsK/UnfBOTNw9kaE+vqrpOjAKVTPVVe1i4LR2jhz8K5cQDT9U1i6MvHVQpMfB6SAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.110/Astronomical-0.2.110-macOS-arm64.dmg" length="23885252" type="application/octet-stream" sparkle:edSignature="PKaCuObBwrXkeRwzFw2S9PFGBIZ6l6Q11krUJ2+OW9VTqJYOnrfO67qOW34OqEPYziEnOHUPBj2xTreQfyrRDA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: MJoNtfpWvAPeopGxNtqdI4UD9l6qiP8QkQxwip98rIfXnixPP9LHxhaA1KSVfwuTqFigpSFOYB3lxmfI3GYTAg==
-length: 2429
+edSignature: 0VSXtEGjELa/LwQoemd+ItVteFLlO9pBhHaLailXUoscH8hoEvWMCuNxYRVKa5CkG4TAnRm84gbfXIsmQoXSAA==
+length: 3116
 -->
