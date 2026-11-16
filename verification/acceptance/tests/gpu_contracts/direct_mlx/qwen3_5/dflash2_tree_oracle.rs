@@ -37,7 +37,7 @@ use super::dflash2_kept_per_round::{
 
 const KEYED_SEED: u64 = 1234;
 
-const ORACLE_CELLS: [Cell; 4] = [
+pub(super) const ORACLE_CELLS: [Cell; 4] = [
     oracle_cell("code completion greedy", true, CODE_PROMPT, 0),
     oracle_cell("code completion 0.7", true, CODE_PROMPT, 700),
     oracle_cell("chat greedy", false, CHAT_PROMPT, 0),
@@ -85,7 +85,7 @@ fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_refer
 /// How each round drafts: one chain verified as drafted, or the tree with the
 /// recorded reference's continuation verified in its place.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Drafting {
+pub(super) enum Drafting {
     SinglePath,
     Tree,
 }
@@ -145,7 +145,10 @@ fn decode(pair: &JourneyPair, cell: &Cell, drafting: Drafting, reference: &[u32]
 
 /// Prefills the prompt: the drafter's starting state, the target's decoder
 /// state, and the target's first pick.
-fn prefill(pair: &JourneyPair, cell: &Cell) -> (RoundState, RequestDecoderStateStack, u32) {
+pub(super) fn prefill(
+    pair: &JourneyPair,
+    cell: &Cell,
+) -> (RoundState, RequestDecoderStateStack, u32) {
     let prompt = if cell.is_raw_completion {
         completion_token_ids(pair, cell.prompt)
     } else {
@@ -170,7 +173,7 @@ fn prefill(pair: &JourneyPair, cell: &Cell) -> (RoundState, RequestDecoderStateS
     let last_logits = prefill
         .per_position_logits
         .expect("the last row has logits");
-    let first_token_id = target_picks(pair, cell, &last_logits, prompt.len() as u64)[0];
+    let first_token_id = target_picks(pair, cell, &last_logits, &[prompt.len() as u64])[0];
     let round = RoundState {
         last_token_id: first_token_id,
         fed_token_count: prompt.len() as u32,
@@ -207,11 +210,15 @@ fn verify_round(
         )
         .expect("the target verifies the continuation");
     // Row `i` holds the anchor's position plus `i`; its pick takes the next.
+    let mut pick_positions = Vec::with_capacity(verified_ids.len());
+    for row_index in 0..verified_ids.len() as u64 {
+        pick_positions.push(u64::from(round.fed_token_count) + 1 + row_index);
+    }
     let picks = target_picks(
         pair,
         cell,
         &verification.per_position_logits,
-        u64::from(round.fed_token_count) + 1,
+        &pick_positions,
     );
     let kept_draft_count = depth_reached(tree, &picks, continuation);
     let mut kept = continuation[..kept_draft_count].to_vec();
@@ -225,13 +232,13 @@ fn verify_round(
 }
 
 /// The target's pick from every row of `logits` [1, rows, vocabulary]: the
-/// argmax for greedy cells, else the keyed sample at `first_position` plus
-/// the row's index.
-fn target_picks(
+/// argmax for greedy cells, else the keyed sample at the position each
+/// row's pick takes, `pick_positions[row]`.
+pub(super) fn target_picks(
     pair: &JourneyPair,
     cell: &Cell,
     logits: &MlxArray,
-    first_position: u64,
+    pick_positions: &[u64],
 ) -> Vec<u32> {
     let runtime = pair.target.runtime();
     if cell.temperature_thousandths == 0 {
@@ -265,7 +272,7 @@ fn target_picks(
             probabilities: &kept_probabilities[row_range],
         };
         picks.push(
-            keyed_sample(KEYED_SEED, first_position + row_index as u64, &distribution)
+            keyed_sample(KEYED_SEED, pick_positions[row_index], &distribution)
                 .expect("a row keeps at least one token"),
         );
     }
@@ -275,7 +282,7 @@ fn target_picks(
 /// Drafts a block and searches its lattice: TensorFold's tree, or a single
 /// chain (one child a node) as deep as the block. Sampled cells add the
 /// request's keyed draws, as the target samples with them.
-fn draft_tree(
+pub(super) fn draft_tree(
     pair: &JourneyPair,
     cell: &Cell,
     round: &mut RoundState,
