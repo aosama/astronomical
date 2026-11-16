@@ -17,14 +17,13 @@
 use astronomical_ipc_protocol::RequestId;
 
 use crate::GeneratedToken;
-use crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates;
 use crate::qwen3_5_resident::inference_execution::decode_lifecycle::advance_generation::ActiveRequestAdvance;
 use crate::qwen3_5_resident::inference_execution::decode_lifecycle::generated_token_emission;
 use crate::qwen3_5_resident::inference_execution::memory_governance::completed_forward_memory::capture_completed_forward_memory_observation;
 
 use super::super::engine_request::Qwen3_5EngineRequest;
 use super::super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
-use super::speculation_round::{SpeculationRoundRequest, run_speculative_round};
+use super::draft_tree_round::{DraftTreeRoundRequest, run_draft_tree_round};
 
 impl Qwen3_5EngineState {
     /// One speculative advance step: drains one queued committed token, or
@@ -143,29 +142,16 @@ impl Qwen3_5EngineState {
         ) {
             active_request.first_decode_forward_elapsed_millis = Some(0);
         }
-        // A block never drafts past the session's output budget minus the
-        // bonus: the terminal checks below own the final tokens.
-        let remaining_output_tokens = active_request
-            .maximum_output_tokens
-            .saturating_sub(active_request.generated_token_count);
-        let speculation_token_count = draft_runtime
-            .speculation_block_length
-            .min(remaining_output_tokens.saturating_sub(1) as usize)
-            .max(1);
         let context_length_tokens = active_request.next_position_tokens;
-        let mut draft_key_value_states: DFlashDraftKeyValueStates = active_request
+        let mut draft_session = active_request
             .engine_extension
-            .speculative_draft_key_value_states
+            .speculative_draft_session
             .take()
             .ok_or_else(|| {
-                fatal_engine_error(
-                    "a speculative round requires the request's draft key-value states",
-                )
+                fatal_engine_error("a speculative round requires the request's draft session")
             })?;
-        let round_request = SpeculationRoundRequest {
-            request_id,
+        let round_request = DraftTreeRoundRequest {
             bonus_token_id,
-            speculation_token_count,
             context_length_tokens,
             // Admission guarantees the strategy is reproducible; the error
             // arm is the defensive boundary if a future strategy lands.
@@ -179,19 +165,15 @@ impl Qwen3_5EngineState {
                     )
                 })?,
         };
-        let round_outcome = run_speculative_round(
+        let round_outcome = run_draft_tree_round(
             model,
             &mut active_request.request_decoder_state,
-            &draft_runtime.draft.weights,
-            &draft_runtime.draft_configuration,
-            &mut draft_key_value_states,
+            draft_runtime,
+            &mut draft_session,
             &round_request,
-            &mut active_request.random_state,
-            &mut active_request.performance_attribution,
-        )?;
-        active_request
-            .engine_extension
-            .speculative_draft_key_value_states = Some(draft_key_value_states);
+        )
+        .map_err(qwen3_5_runtime_error)?;
+        active_request.engine_extension.speculative_draft_session = Some(draft_session);
         let accepted_context_growth = round_outcome
             .context_length_after_round
             .saturating_sub(context_length_tokens) as usize;
@@ -201,7 +183,7 @@ impl Qwen3_5EngineState {
             .record_counter(crate::PerformanceCounter::SpeculativeRoundCount, 1);
         active_request.performance_attribution.record_counter(
             crate::PerformanceCounter::SpeculativeProposedTokenCount,
-            speculation_token_count as u64,
+            round_outcome.drafted_token_count as u64,
         );
         active_request.performance_attribution.record_counter(
             crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
@@ -210,8 +192,8 @@ impl Qwen3_5EngineState {
         tracing::debug!(
             request_id = request_id.value(),
             accepted_proposal_count = round_outcome.accepted_proposal_count,
-            speculation_token_count,
-            "speculative round accepted its drafted block prefix"
+            drafted_token_count = round_outcome.drafted_token_count,
+            "speculative round kept a chain of its draft tree"
         );
         // Queue every round token except the bonus, which emits now. The
         // tail entry is the round's correction token: the target's own next

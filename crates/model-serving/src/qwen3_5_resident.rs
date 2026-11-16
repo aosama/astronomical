@@ -2,7 +2,6 @@
 #![allow(unused_imports)]
 
 mod dflash2_draft_target;
-pub mod dflash_draft;
 // Crate-visible so the sensitivity probe can swap one routed-expert
 // projection for a re-encoded copy and put the original back.
 mod astro_neural_engine_program_cache;
@@ -31,10 +30,7 @@ pub use experts::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };
 pub(crate) use inference_execution::Qwen3_5InferenceExecution;
-pub use inference_execution::speculative_decode_lifecycle::{
-    SpeculationRoundOutcome, SpeculationRoundRequest, VerificationTokenChoice,
-    run_speculative_round,
-};
+pub use inference_execution::speculative_decode_lifecycle::VerificationTokenChoice;
 pub use inference_execution::{
     Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,
     Qwen3_5ResidentPromptProcessingChunkSizerError,

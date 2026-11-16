@@ -12,7 +12,7 @@ use mlx_bridge::MlxArray;
 
 use crate::row_batched_matmul::{
     RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,
-    register_ordered_matmul,
+    register_ordered_matmul_any_rows,
 };
 
 const QUANTIZATION_GROUP_SIZE: i32 = 64;
@@ -69,7 +69,8 @@ impl DrafterLinear {
                 QUANTIZATION_BITS,
             )?),
             Self::RegisterOrdered { weight, kernels } => {
-                register_ordered_matmul(runtime, kernels, input, weight).map_err(projection_failure)
+                register_ordered_matmul_any_rows(runtime, kernels, input, weight)
+                    .map_err(projection_failure)
             }
         }
     }

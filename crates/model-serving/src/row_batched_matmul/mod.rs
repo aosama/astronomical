@@ -31,7 +31,8 @@ pub use dispatch_plan::{ROW_BATCHED_MATMUL_MAXIMUM_ROWS, RowBatchedDispatchRefus
 pub use register_order_restoration::RestoredMlxRows;
 #[cfg(feature = "direct-mlx")]
 pub use register_ordered_matmul::{
-    ProjectionInput, RegisterOrderedWeight, register_ordered_matmul, register_ordered_projection,
+    ProjectionInput, RegisterOrderedWeight, register_ordered_matmul,
+    register_ordered_matmul_any_rows, register_ordered_projection,
 };
 pub use register_ordered_plan::{REGISTER_ORDERED_ROWS_PER_DISPATCH, register_ordered_slice_count};
 #[cfg(feature = "direct-mlx")]

@@ -20,8 +20,8 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
 use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::row_batched_matmul::{
-    REGISTER_ORDERED_ROWS_PER_DISPATCH, RegisterOrderedWeight, RowBatchedMatmulKernels,
-    RowBatchedProjectionError, register_ordered_matmul,
+    RegisterOrderedWeight, RowBatchedMatmulKernels, RowBatchedProjectionError,
+    register_ordered_matmul_any_rows,
 };
 use astronomical_runtime_integration::MlxRuntimeError;
 
@@ -77,36 +77,8 @@ impl Qwen3_5ModelBase {
             .ok_or(Qwen3_5ExecutionError::InvalidInput {
                 description: "a register-ordered projection needs the kernels that converted it",
             })?;
-        let activation_shape = activations.shape();
-        let row_count: i32 = activation_shape[..activation_shape.len() - 1]
-            .iter()
-            .product();
-        if row_count <= REGISTER_ORDERED_ROWS_PER_DISPATCH {
-            return register_ordered_matmul(&self.runtime, kernels, activations, weight)
-                .map_err(projection_failure);
-        }
-        let flat_rows = self
-            .runtime
-            .reshape(activations, &[row_count, weight.input_width])?;
-        let mut projected_chunks = Vec::new();
-        for first_row in (0..row_count).step_by(REGISTER_ORDERED_ROWS_PER_DISPATCH as usize) {
-            let last_row = (first_row + REGISTER_ORDERED_ROWS_PER_DISPATCH).min(row_count);
-            let chunk_rows = self.runtime.slice(
-                &flat_rows,
-                &[first_row, 0],
-                &[last_row, weight.input_width],
-                &[1, 1],
-            )?;
-            projected_chunks.push(
-                register_ordered_matmul(&self.runtime, kernels, &chunk_rows, weight)
-                    .map_err(projection_failure)?,
-            );
-        }
-        let chunk_references: Vec<&MlxArray> = projected_chunks.iter().collect();
-        let projected = self.runtime.concatenate_axis(&chunk_references, 0)?;
-        let mut output_shape = activation_shape;
-        *output_shape.last_mut().expect("activations have a width") = weight.output_width;
-        Ok(self.runtime.reshape(&projected, &output_shape)?)
+        register_ordered_matmul_any_rows(&self.runtime, kernels, activations, weight)
+            .map_err(projection_failure)
     }
 }
 

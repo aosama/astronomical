@@ -6,10 +6,10 @@ pub(in crate::qwen3_5_resident) type Qwen3_5EngineRequest =
 
 /// Request state only the resident engine reads.
 pub(crate) struct ResidentRequestExtension {
-    /// Draft key-value states for the speculative session; present only
-    /// while the session was admitted for draft-and-verify decoding.
-    pub(in crate::qwen3_5_resident) speculative_draft_key_value_states: Option<
-        crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
+    /// The drafter's state for the speculative session; present only while
+    /// the session was admitted for draft-and-verify decoding.
+    pub(in crate::qwen3_5_resident) speculative_draft_session: Option<
+        crate::qwen3_5_resident::inference_execution::speculative_decode_lifecycle::draft_tree_round::DraftSession,
     >,
     /// Tokens one accepted speculative round still owes the caller, in
     /// emission order, as host token ids. The tail entry seeds the next
@@ -50,7 +50,7 @@ impl Qwen3_5EngineRequest {
         }
         self.engine_extension.speculative_session_admitted = false;
         self.engine_extension.speculative_emission_queue.clear();
-        self.engine_extension.speculative_draft_key_value_states = None;
+        self.engine_extension.speculative_draft_session = None;
         tracing::info!(
             request_id = self.request_id.value(),
             suspension_reason,

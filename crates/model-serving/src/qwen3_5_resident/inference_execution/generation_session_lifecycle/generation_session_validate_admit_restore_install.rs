@@ -617,8 +617,10 @@ impl Qwen3_5EngineState {
             generation_preparation_announced: false,
             structured_generation: inference_request.take_structured_generation(),
             engine_extension: ResidentRequestExtension {
-                speculative_draft_key_value_states: self
-                    .empty_speculative_draft_key_value_states(speculative_session_admitted),
+                speculative_draft_session: new_speculative_draft_session(
+                    speculative_session_admitted,
+                    sampling_strategy,
+                ),
                 speculative_emission_queue: std::collections::VecDeque::new(),
                 speculative_session_admitted,
             },
@@ -636,24 +638,6 @@ impl Qwen3_5EngineState {
             initial_prompt_processing_phase,
             generation_position.astro_ssd_prompt_cache_diagnostics,
         )
-    }
-
-    /// The empty per-session draft key-value states an admitted speculative
-    /// session starts from; a non-admitted session carries none.
-    fn empty_speculative_draft_key_value_states(
-        &self,
-        speculative_session_admitted: bool,
-    ) -> Option<
-        crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
-    > {
-        self.speculative_draft_runtime
-            .as_ref()
-            .filter(|_| speculative_session_admitted)
-            .map(|draft_runtime| {
-                crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates::empty(
-                    draft_runtime.draft_configuration.layer_count() as usize,
-                )
-            })
     }
 
     /// Builds the caller-visible generation-start contract: the restored
@@ -680,4 +664,33 @@ impl Qwen3_5EngineState {
         .with_prompt_processing_phase(initial_prompt_processing_phase)
         .with_astro_ssd_prompt_cache_diagnostics(astro_ssd_prompt_cache_diagnostics))
     }
+}
+
+/// The drafter state an admitted speculative session starts from; a
+/// non-admitted session carries none. A sampled session's key comes from the
+/// request's seed (or the clock, as its sampler's does), so a seeded request
+/// samples the same reply every time.
+fn new_speculative_draft_session(
+    speculative_session_admitted: bool,
+    sampling_strategy: Qwen3_5SamplingStrategy,
+) -> Option<
+    crate::qwen3_5_resident::inference_execution::speculative_decode_lifecycle::draft_tree_round::DraftSession,
+>{
+    if !speculative_session_admitted {
+        return None;
+    }
+    let keyed_seed = match sampling_strategy {
+        Qwen3_5SamplingStrategy::HighestLogit => 0,
+        Qwen3_5SamplingStrategy::TopKTopP { seed, .. } => {
+            crate::qwen3_5_core::text::resolve_sampling_seed(
+                seed,
+                current_time_millis_since_unix_epoch,
+            )
+        }
+    };
+    Some(
+        crate::qwen3_5_resident::inference_execution::speculative_decode_lifecycle::draft_tree_round::DraftSession::new(
+            keyed_seed,
+        ),
+    )
 }

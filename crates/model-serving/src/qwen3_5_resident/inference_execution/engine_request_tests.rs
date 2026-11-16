@@ -5,7 +5,7 @@ use crate::qwen3_5_core::engine_request_test_support::test_engine_request;
 
 fn speculative_extension(queued_token_ids: &[u32]) -> ResidentRequestExtension {
     ResidentRequestExtension {
-        speculative_draft_key_value_states: None,
+        speculative_draft_session: None,
         speculative_emission_queue: queued_token_ids.iter().copied().collect::<VecDeque<u32>>(),
         speculative_session_admitted: true,
     }

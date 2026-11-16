@@ -77,8 +77,7 @@ impl Qwen3_5EngineState {
 
 /// The speculative counterpart of the non-speculative dispatch: every
 /// admitted text chunk runs through the tap-capturing verification forward
-/// so the draft's context key-value state grows from the target's hidden
-/// states chunk by chunk. The terminal chunk additionally seeds the first
+/// so the drafter receives the target's tapped hidden rows chunk by chunk. The terminal chunk additionally seeds the first
 /// generated token exactly as the classic terminal path does. Boundary
 /// checkpoints are not produced: a speculative session forgoes astro SSD prompt cache
 /// capture in both directions by decision at admission.
@@ -104,41 +103,29 @@ fn dispatch_speculative_forward(
         VerificationLogitsMode::NoLogits
     };
     let chunk_token_ids = active_request.input_token_ids[prefill_start..prefill_end].to_vec();
+    let chunk_first_position = active_request.next_position_tokens;
     let chunk_output = model.build_speculative_verification_forward(
         &chunk_token_ids,
-        active_request.next_position_tokens,
+        chunk_first_position,
         &mut active_request.request_decoder_state,
-        draft_runtime.draft_configuration.target_layer_ids(),
+        &draft_runtime.drafter_configuration.target_tap_layer_ids,
         logits_mode,
         &mut active_request.performance_attribution,
     )?;
-    let mut draft_key_value_states = active_request
-        .engine_extension
-        .speculative_draft_key_value_states
-        .take()
-        .ok_or(Qwen3_5ExecutionError::InvalidInput {
-            description: "speculative prefill requires the request's draft key-value states",
-        })?;
-    let conditioned_states =
-        crate::qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states(
-            model.runtime(),
-            &draft_runtime.draft.weights,
-            &chunk_output.hidden_state_taps,
-            draft_runtime.draft_configuration.rms_norm_epsilon(),
-        )
-        .map_err(Qwen3_5ExecutionError::from)?;
-    crate::qwen3_5_resident::dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values(
-        model.runtime(),
-        &draft_runtime.draft.weights,
-        &draft_runtime.draft_configuration,
-        &mut draft_key_value_states,
-        &conditioned_states,
-        prefill_start as i32,
-    )
-    .map_err(Qwen3_5ExecutionError::from)?;
+    // The drafter conditions on the target's tapped hidden rows; it absorbs
+    // them when the first round runs.
     active_request
         .engine_extension
-        .speculative_draft_key_value_states = Some(draft_key_value_states);
+        .speculative_draft_session
+        .as_mut()
+        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            description: "speculative prefill requires the request's draft session",
+        })?
+        .append_tap_rows(
+            model,
+            &chunk_output.hidden_state_taps,
+            chunk_first_position as i32,
+        )?;
     if chunk_includes_final_prompt_token {
         let terminal_logits =
             chunk_output

@@ -12,8 +12,8 @@ use mlx_bridge::{MlxArray, MlxDtype, MlxMetalKernelOutput};
 
 use super::dispatch_plan::{OUTPUT_COLUMNS_PER_SIMDGROUP, QUANTIZATION_GROUP_SIZE};
 use super::register_ordered_plan::{
-    REGISTER_BLOCK_WORDS, RegisterOrderedDispatchPlan, register_order_conversion_grid,
-    register_ordered_slice_count,
+    REGISTER_BLOCK_WORDS, REGISTER_ORDERED_ROWS_PER_DISPATCH, RegisterOrderedDispatchPlan,
+    register_order_conversion_grid, register_ordered_slice_count,
 };
 use super::row_batched_quantized_matmul::{
     GroupSumLayout, RowBatchedMatmulKernels, RowBatchedProjectionError, check_quantization,
@@ -209,6 +209,47 @@ pub fn register_ordered_matmul(
 ) -> Result<MlxArray, RowBatchedProjectionError> {
     let input = ProjectionInput::prepare(runtime, kernels, rows)?;
     register_ordered_projection(runtime, kernels, &input, weight)
+}
+
+/// `register_ordered_matmul` for any number of rows: more than one dispatch
+/// takes (a prompt chunk) go 128 at a time, each reading the weight once.
+pub fn register_ordered_matmul_any_rows(
+    runtime: &MlxRuntime,
+    kernels: &RowBatchedMatmulKernels,
+    rows: &MlxArray,
+    weight: &RegisterOrderedWeight,
+) -> Result<MlxArray, RowBatchedProjectionError> {
+    let rows_shape = rows.shape();
+    let row_count: i32 = rows_shape[..rows_shape.len().saturating_sub(1)]
+        .iter()
+        .product();
+    if row_count <= REGISTER_ORDERED_ROWS_PER_DISPATCH {
+        return register_ordered_matmul(runtime, kernels, rows, weight);
+    }
+    let flat_rows = runtime.reshape(rows, &[row_count, weight.input_width])?;
+    let mut projected_chunks = Vec::new();
+    let mut first_row = 0;
+    while first_row < row_count {
+        let last_row = (first_row + REGISTER_ORDERED_ROWS_PER_DISPATCH).min(row_count);
+        let chunk_rows = runtime.slice(
+            &flat_rows,
+            &[first_row, 0],
+            &[last_row, weight.input_width],
+            &[1, 1],
+        )?;
+        projected_chunks.push(register_ordered_matmul(
+            runtime,
+            kernels,
+            &chunk_rows,
+            weight,
+        )?);
+        first_row = last_row;
+    }
+    let chunk_references: Vec<&MlxArray> = projected_chunks.iter().collect();
+    let projected = runtime.concatenate_axis(&chunk_references, 0)?;
+    let mut output_shape = rows_shape;
+    *output_shape.last_mut().expect("rows have a width") = weight.logical_output_width;
+    Ok(runtime.reshape(&projected, &output_shape)?)
 }
 
 /// A prepared input projected through `weight`: [..., output] bf16.

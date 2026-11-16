@@ -552,32 +552,9 @@ pub use qwen3_5_resident::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_configuration::{
-    DFlashDraftConfiguration, DFlashDraftConfigurationError, DFlashDraftLayerAttentionKind,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_weights::{
-    DFlashDraftLayerWeights, DFlashDraftWeights,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_weights_loading::DFlashDraftLoadedWeights;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states;
-
-#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
     Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
-    Qwen3_5SpeculativeVerificationOutput, SpeculationRoundOutcome, SpeculationRoundRequest,
-    VerificationLogitsMode, VerificationTokenChoice, run_speculative_round,
+    Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode, VerificationTokenChoice,
 };
 
 #[cfg(feature = "direct-mlx")]
