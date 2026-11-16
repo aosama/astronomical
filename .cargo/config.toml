@@ -485,8 +485,10 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # Gate 4 end to end on the 27B pair: every round verifies TensorFold's draft
 # tree in one target pass and commits the kept chain; prints kept per round,
 # decode tok/s and ms a round for the code-completion and chat cells, greedy
-# and keyed-sampled. Same pair and memory as above; about a minute.
-measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_rounds"
+# and keyed-sampled, then where a round's time goes (each stage synced, after
+# a short and a long prompt, and by layer stage). Same pair and memory as
+# above; about three minutes, or one test with --filter NAME.
+measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_round"
 # The DFlash2 drafter against z-lab's own MLX reference: a tiny random
 # drafter run through dflash/model_mlx.py for two rounds (fixture and its
 # generator in verification/acceptance/tests/fixtures/dflash2_reference); hidden

@@ -9,6 +9,7 @@ mod dflash2_journey_support;
 mod dflash2_kept_per_round;
 mod dflash2_round_cost;
 mod dflash2_tree_oracle;
+mod dflash2_tree_round_stages;
 mod dflash2_tree_rounds;
 mod draft_tree_verification;
 mod drafted_rewind;
