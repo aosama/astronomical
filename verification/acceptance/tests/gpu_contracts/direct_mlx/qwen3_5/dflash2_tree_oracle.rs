@@ -2,81 +2,150 @@
 //! verified TensorFold's draft tree instead of one path, before any tree
 //! forward exists.
 //!
-//! Greedy output does not depend on drafting, so each cell first decodes its
-//! greedy reference with the single-path loop. The oracle then replays it:
-//! every round drafts a block, builds the tree from its lattice, and verifies
-//! the reference's own continuation as an ordinary path; the target's picks
-//! along it are the truth, and the round keeps as deep as that truth runs
-//! through the tree, plus the target's next token. The kept count is exactly
-//! what a tree verify of the same rows would give. TensorFold's own rounds
-//! on this pair kept 5.95 (code completion, greedy) and 4.2 (chat, greedy).
+//! Neither greedy nor keyed sampling depends on drafting: a keyed sample is
+//! fixed by (seed, position, token), as greedy is by the logits. So each cell
+//! first decodes its reference with a single drafted path, then the oracle
+//! replays it: every round drafts a block, builds the tree from its lattice,
+//! and verifies the reference's own continuation as an ordinary path. The
+//! target's picks along it are the truth, and the round keeps as deep as
+//! that truth runs through the tree, plus the target's next token: exactly
+//! what a tree verify of the same rows keeps. TensorFold's rounds on this
+//! pair kept 5.95 and 6.2 (code completion, greedy and 0.7) and 4.2 and 3.46
+//! (chat, greedy and 1.0).
 
 use astronomical_model_serving::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, best_first_draft_tree,
-    draft_lattice, drafted_hidden_rows,
+    DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
+    best_first_draft_tree, draft_lattice, drafted_hidden_rows,
 };
-use astronomical_model_serving::speculative_decoding::verification_decision::VerificationDecision;
+use astronomical_model_serving::speculative_decoding::keyed_sampling::{
+    RequestKeyedNoise, keyed_sample,
+};
+use astronomical_model_serving::speculative_decoding::verification_decision::{
+    TargetDistribution, VerificationDecision,
+};
 use astronomical_model_serving::{
     PerformanceAttribution, RequestDecoderStateStack, VerificationLogitsMode,
 };
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::dflash2_journey_support::{host_values, tap_rows};
 use super::dflash2_kept_per_round::{
-    CHAT_PROMPT, CODE_PROMPT, Cell, JourneyPair, OUTPUT_TOKENS, RoundState, completion_token_ids,
-    load_pair, prompt_token_ids, run_cell, settle_round,
+    CHAT_PROMPT, CODE_PROMPT, Cell, JourneyPair, OUTPUT_TOKENS, RoundState, TOP_K,
+    TOP_P_THOUSANDTHS, completion_token_ids, load_pair, prompt_token_ids, settle_round,
 };
 
-const ORACLE_CELLS: [Cell; 2] = [
-    Cell {
-        label: "code completion greedy",
-        is_raw_completion: true,
-        prompt: CODE_PROMPT,
-        temperature_thousandths: 0,
-        minimum_kept_per_round: 0.0,
-    },
-    Cell {
-        label: "chat greedy",
-        is_raw_completion: false,
-        prompt: CHAT_PROMPT,
-        temperature_thousandths: 0,
-        minimum_kept_per_round: 0.0,
-    },
+const KEYED_SEED: u64 = 1234;
+
+const ORACLE_CELLS: [Cell; 4] = [
+    oracle_cell("code completion greedy", true, CODE_PROMPT, 0),
+    oracle_cell("code completion 0.7", true, CODE_PROMPT, 700),
+    oracle_cell("chat greedy", false, CHAT_PROMPT, 0),
+    oracle_cell("chat 1.0", false, CHAT_PROMPT, 1_000),
 ];
+
+const fn oracle_cell(
+    label: &'static str,
+    is_raw_completion: bool,
+    prompt: &'static str,
+    temperature_thousandths: u16,
+) -> Cell {
+    Cell {
+        label,
+        is_raw_completion,
+        prompt,
+        temperature_thousandths,
+        minimum_kept_per_round: 0.0,
+    }
+}
 
 #[test]
 #[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-oracle"]
 #[serial]
-fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_greedy_references() {
+fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_references() {
     let pair = load_pair();
     for (cell_index, cell) in ORACLE_CELLS.iter().enumerate() {
-        let reference = run_cell(&pair, cell, 0);
-        let path_kept = reference.emitted_tokens as f64 / reference.rounds as f64;
-        let oracle = replay_with_tree(&pair, cell, &reference.emitted_token_ids);
+        let reference = decode(&pair, cell, Drafting::SinglePath, &[]);
+        let replay = decode(&pair, cell, Drafting::Tree, &reference.emitted_token_ids);
         eprintln!(
-            "[dflash2-tree-oracle {}/{}] {}: path {path_kept:.2} kept per round, tree {:.2} \
+            "[dflash2-tree-oracle {}/{}] {}: path {:.2} kept per round, tree {:.2} \
              ({} tokens in {} rounds, {} reference divergences)",
             cell_index + 1,
             ORACLE_CELLS.len(),
             cell.label,
-            oracle.kept_tokens as f64 / oracle.rounds as f64,
-            oracle.kept_tokens,
-            oracle.rounds,
-            oracle.reference_divergences,
+            reference.kept_per_round(),
+            replay.kept_per_round(),
+            replay.emitted_token_ids.len() - 1,
+            replay.rounds,
+            replay.reference_divergences,
         );
     }
 }
 
-struct OracleOutcome {
+/// How each round drafts: one chain verified as drafted, or the tree with the
+/// recorded reference's continuation verified in its place.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Drafting {
+    SinglePath,
+    Tree,
+}
+
+struct DecodeOutcome {
     rounds: usize,
-    kept_tokens: usize,
-    /// Rows where the target's pick differed from the recorded reference;
-    /// numerically identical runs give none.
+    /// The prefill's pick, then every token the rounds kept.
+    emitted_token_ids: Vec<u32>,
     reference_divergences: usize,
 }
 
-fn replay_with_tree(pair: &JourneyPair, cell: &Cell, reference: &[u32]) -> OracleOutcome {
-    let tap_layer_ids = &pair.drafter_configuration.target_tap_layer_ids;
+impl DecodeOutcome {
+    fn kept_per_round(&self) -> f64 {
+        (self.emitted_token_ids.len() - 1) as f64 / self.rounds as f64
+    }
+}
+
+/// Decodes one cell. With `Drafting::Tree`, `reference` is the single-path
+/// run's output, whose continuation each round verifies.
+fn decode(pair: &JourneyPair, cell: &Cell, drafting: Drafting, reference: &[u32]) -> DecodeOutcome {
+    let (mut round, mut decoder_state, first_token_id) = prefill(pair, cell);
+    round.last_token_id = first_token_id;
+    let mut outcome = DecodeOutcome {
+        rounds: 0,
+        emitted_token_ids: vec![first_token_id],
+        reference_divergences: 0,
+    };
+    let reach = pair.drafter_configuration.proposal_count() as usize;
+    while outcome.emitted_token_ids.len() <= OUTPUT_TOKENS {
+        let emitted_count = outcome.emitted_token_ids.len();
+        if drafting == Drafting::Tree && emitted_count + reach > reference.len() {
+            break;
+        }
+        let tree = draft_tree(pair, cell, &mut round, drafting);
+        let continuation = match drafting {
+            Drafting::SinglePath => tree.token_ids.clone(),
+            Drafting::Tree => reference[emitted_count..emitted_count + reach].to_vec(),
+        };
+        let kept = verify_round(
+            pair,
+            cell,
+            &mut round,
+            &mut decoder_state,
+            &tree,
+            &continuation,
+        );
+        if drafting == Drafting::Tree
+            && kept != reference[emitted_count..emitted_count + kept.len()]
+        {
+            outcome.reference_divergences += 1;
+        }
+        outcome.emitted_token_ids.extend(kept);
+        outcome.rounds += 1;
+    }
+    outcome
+}
+
+/// Prefills the prompt: the drafter's starting state, the target's decoder
+/// state, and the target's first pick.
+fn prefill(pair: &JourneyPair, cell: &Cell) -> (RoundState, RequestDecoderStateStack, u32) {
     let prompt = if cell.is_raw_completion {
         completion_token_ids(pair, cell.prompt)
     } else {
@@ -93,13 +162,17 @@ fn replay_with_tree(pair: &JourneyPair, cell: &Cell, reference: &[u32]) -> Oracl
             &prompt,
             0,
             &mut decoder_state,
-            tap_layer_ids,
+            &pair.drafter_configuration.target_tap_layer_ids,
             VerificationLogitsMode::LastRowOnly,
             &mut PerformanceAttribution::disabled(),
         )
         .expect("the prompt prefills with taps");
-    let mut round = RoundState {
-        last_token_id: reference[0],
+    let last_logits = prefill
+        .per_position_logits
+        .expect("the last row has logits");
+    let first_token_id = target_picks(pair, cell, &last_logits, prompt.len() as u64)[0];
+    let round = RoundState {
+        last_token_id: first_token_id,
         fed_token_count: prompt.len() as u32,
         pending_tap_rows: tap_rows(
             pair.target.runtime(),
@@ -108,39 +181,19 @@ fn replay_with_tree(pair: &JourneyPair, cell: &Cell, reference: &[u32]) -> Oracl
         ),
         context_states: DrafterContextStates::new(&pair.drafter_configuration, 0),
     };
-    let mut outcome = OracleOutcome {
-        rounds: 0,
-        kept_tokens: 0,
-        reference_divergences: 0,
-    };
-    let block_reach = pair.drafter_configuration.proposal_count() as usize;
-    let mut reference_index = 0;
-    while outcome.kept_tokens < OUTPUT_TOKENS && reference_index + block_reach < reference.len() {
-        let kept = oracle_round(
-            pair,
-            &mut round,
-            &mut decoder_state,
-            &reference[reference_index + 1..=reference_index + block_reach],
-            &mut outcome,
-        );
-        reference_index += kept;
-        outcome.kept_tokens += kept;
-        outcome.rounds += 1;
-    }
-    outcome
+    (round, decoder_state, first_token_id)
 }
 
-/// One replayed round: draft, build the tree, verify `continuation` (the
-/// reference's next tokens after the anchor), keep what the tree reaches.
-fn oracle_round(
+/// Verifies `continuation` after the anchor, keeps as deep as the target's
+/// picks run through `tree`, and returns the kept tokens.
+fn verify_round(
     pair: &JourneyPair,
+    cell: &Cell,
     round: &mut RoundState,
     decoder_state: &mut RequestDecoderStateStack,
+    tree: &DraftTree,
     continuation: &[u32],
-    outcome: &mut OracleOutcome,
-) -> usize {
-    let runtime = pair.target.runtime();
-    let tree = draft_tree(pair, round);
+) -> Vec<u32> {
     let mut verified_ids = vec![round.last_token_id];
     verified_ids.extend_from_slice(continuation);
     let verification = pair
@@ -153,25 +206,81 @@ fn oracle_round(
             &mut PerformanceAttribution::disabled(),
         )
         .expect("the target verifies the continuation");
-    let target_picks: Vec<u32> = host_values(
-        runtime,
-        &runtime
-            .argmax_axis(&verification.per_position_logits, -1)
-            .expect("argmax builds"),
-    )
-    .iter()
-    .map(|value| *value as u32)
-    .collect();
-    let kept_draft_count = depth_reached(&tree, &target_picks, continuation, outcome);
+    // Row `i` holds the anchor's position plus `i`; its pick takes the next.
+    let picks = target_picks(
+        pair,
+        cell,
+        &verification.per_position_logits,
+        u64::from(round.fed_token_count) + 1,
+    );
+    let kept_draft_count = depth_reached(tree, &picks, continuation);
+    let mut kept = continuation[..kept_draft_count].to_vec();
+    kept.push(picks[kept_draft_count]);
     let decision = VerificationDecision {
         kept_draft_count,
-        next_token_id: target_picks[kept_draft_count],
+        next_token_id: picks[kept_draft_count],
     };
     settle_round(pair, round, decoder_state, verification, decision);
-    kept_draft_count + 1
+    kept
 }
 
-fn draft_tree(pair: &JourneyPair, round: &mut RoundState) -> DraftTree {
+/// The target's pick from every row of `logits` [1, rows, vocabulary]: the
+/// argmax for greedy cells, else the keyed sample at `first_position` plus
+/// the row's index.
+fn target_picks(
+    pair: &JourneyPair,
+    cell: &Cell,
+    logits: &MlxArray,
+    first_position: u64,
+) -> Vec<u32> {
+    let runtime = pair.target.runtime();
+    if cell.temperature_thousandths == 0 {
+        let argmax = runtime.argmax_axis(logits, -1).expect("argmax builds");
+        return host_values(runtime, &argmax)
+            .iter()
+            .map(|value| *value as u32)
+            .collect();
+    }
+    let (distribution_ids, distribution_probabilities) = pair
+        .target
+        .sampling_distribution_rows(
+            logits,
+            cell.temperature_thousandths,
+            TOP_P_THOUSANDTHS,
+            TOP_K,
+        )
+        .expect("the target's sampling law applies");
+    let kept_ids: Vec<u32> = host_values(runtime, &distribution_ids)
+        .iter()
+        .map(|value| *value as u32)
+        .collect();
+    let kept_probabilities = host_values(runtime, &distribution_probabilities);
+    let row_count = logits.shape()[1] as usize;
+    let kept_per_row = kept_ids.len() / row_count;
+    let mut picks = Vec::with_capacity(row_count);
+    for row_index in 0..row_count {
+        let row_range = row_index * kept_per_row..(row_index + 1) * kept_per_row;
+        let distribution = TargetDistribution {
+            token_ids: &kept_ids[row_range.clone()],
+            probabilities: &kept_probabilities[row_range],
+        };
+        picks.push(
+            keyed_sample(KEYED_SEED, first_position + row_index as u64, &distribution)
+                .expect("a row keeps at least one token"),
+        );
+    }
+    picks
+}
+
+/// Drafts a block and searches its lattice: TensorFold's tree, or a single
+/// chain (one child a node) as deep as the block. Sampled cells add the
+/// request's keyed draws, as the target samples with them.
+fn draft_tree(
+    pair: &JourneyPair,
+    cell: &Cell,
+    round: &mut RoundState,
+    drafting: Drafting,
+) -> DraftTree {
     let runtime = pair.target.runtime();
     let configuration = &pair.drafter_configuration;
     let mut block_ids = vec![round.last_token_id];
@@ -205,27 +314,30 @@ fn draft_tree(pair: &JourneyPair, round: &mut RoundState) -> DraftTree {
         round.last_token_id,
     )
     .expect("the lattice reads back");
-    best_first_draft_tree(
-        &lattice,
-        u64::from(round.fed_token_count),
-        &DraftTreeOptions::default(),
-        None,
-    )
+    let mut options = DraftTreeOptions {
+        sampling_temperature: f64::from(cell.temperature_thousandths) / 1_000.0,
+        ..DraftTreeOptions::default()
+    };
+    if drafting == Drafting::SinglePath {
+        options.node_budget = configuration.proposal_count() as usize;
+        options.children_per_node = 1;
+    }
+    let keyed_noise = RequestKeyedNoise { seed: KEYED_SEED };
+    let noise: Option<&dyn KeyedNoise> = if cell.temperature_thousandths == 0 {
+        None
+    } else {
+        Some(&keyed_noise)
+    };
+    best_first_draft_tree(&lattice, u64::from(round.fed_token_count), &options, noise)
 }
 
 /// How many slots deep the target's picks run through the tree from its
-/// root. A pick that differs from the reference ends the walk too: the rows
-/// after it were computed on the reference, not on that pick.
-fn depth_reached(
-    tree: &DraftTree,
-    target_picks: &[u32],
-    continuation: &[u32],
-    outcome: &mut OracleOutcome,
-) -> usize {
+/// root, never past the verified `continuation`: rows after a pick that
+/// differs from it were computed on the continuation, not on that pick.
+fn depth_reached(tree: &DraftTree, target_picks: &[u32], continuation: &[u32]) -> usize {
     let mut parent: Option<usize> = None;
     for (depth, target_pick) in target_picks.iter().take(continuation.len()).enumerate() {
         if *target_pick != continuation[depth] {
-            outcome.reference_divergences += 1;
             return depth;
         }
         let mut matching_child = None;

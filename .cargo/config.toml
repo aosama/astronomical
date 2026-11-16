@@ -471,8 +471,9 @@ measure-dflash2-round-cost = "run -p xtask -- test-run --package astronomical-ac
 measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
 # Gate 4's first measurement: kept per round if each round verified
 # TensorFold's draft tree (15 nodes, 4 children) instead of one path, on the
-# greedy code-completion and chat cells. Replays a recorded greedy reference,
-# so it needs no tree forward. Same pair and memory as above; about a minute.
+# code-completion and chat cells, greedy and keyed-sampled (0.7 and 1.0).
+# Replays a recorded single-path reference, so it needs no tree forward. Same
+# pair and memory as above; about a minute.
 measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_oracle"
 # The DFlash2 drafter against z-lab's own MLX reference: a tiny random
 # drafter run through dflash/model_mlx.py for two rounds (fixture and its

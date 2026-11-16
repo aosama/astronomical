@@ -47,8 +47,8 @@ pub(crate) const OUTPUT_TOKENS: usize = 256;
 const SAMPLING_SEED: u64 = 1234;
 const SAMPLED_SEED_COUNT: u64 = 3;
 /// Qwen3.8's recommended sampling, as users run it and as the reference ran.
-const TOP_P_THOUSANDTHS: u16 = 950;
-const TOP_K: u16 = 20;
+pub(crate) const TOP_P_THOUSANDTHS: u16 = 950;
+pub(crate) const TOP_K: u16 = 20;
 /// 15 GiB of target weights, 3.6 GiB of bf16 drafter, and working room.
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 26 * 1024 * 1024 * 1024;
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
@@ -274,8 +274,6 @@ pub(crate) struct CellOutcome {
     pub(crate) rounds: usize,
     pub(crate) emitted_tokens: usize,
     pub(crate) decode_seconds: f64,
-    /// The first token the prefill picked, then every token the rounds kept.
-    pub(crate) emitted_token_ids: Vec<u32>,
 }
 
 pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> CellOutcome {
@@ -338,7 +336,6 @@ pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> C
         rounds,
         emitted_tokens: emitted_token_ids.len() - 1,
         decode_seconds: decode_started_at.elapsed().as_secs_f64(),
-        emitted_token_ids,
     }
 }
 
