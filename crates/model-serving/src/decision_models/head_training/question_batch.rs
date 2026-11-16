@@ -12,7 +12,7 @@ use mlx_bridge::MlxArray;
 use super::gpu_math::{GpuMath, GpuResult};
 
 /// The score a padding slot gets; far below any real score.
-const PADDING_SCORE: f32 = -1.0e30;
+pub(crate) const PADDING_SCORE: f32 = -1.0e30;
 
 /// Where every question's options sit among all the dataset's options.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -74,6 +74,8 @@ pub(crate) struct QuestionBatch {
     pub(crate) widest_option_count: usize,
     /// Each batch question's row among the dataset's questions.
     pub(crate) dataset_question_rows: MlxArray,
+    /// The same rows on the host, for scorers that run the model per question.
+    pub(crate) dataset_question_row_numbers: Vec<usize>,
     /// Each batch option's row among the dataset's options.
     pub(crate) dataset_option_rows: MlxArray,
     /// `[options, questions]`, one where an option belongs to a question:
@@ -110,6 +112,7 @@ impl QuestionBatch {
             question_count,
             widest_option_count: widest,
             dataset_question_rows: math.upload_indices(&batch_rows.dataset_question_rows)?,
+            dataset_question_row_numbers: batch_rows.dataset_question_rows.clone(),
             dataset_option_rows: math.upload_indices(&batch_rows.dataset_option_rows)?,
             option_assignment: math.upload(&assignment, &[option_total, question_count])?,
             padded_option_positions: math.upload_indices(&padded_positions)?,

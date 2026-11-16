@@ -44,6 +44,27 @@ pub const HEAD_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
     seeds: &[1, 2, 3],
 };
 
+/// The whole-model settings. Each pass runs the whole model backwards, so
+/// time is the cost to hold down: one run instead of three, and half the
+/// check-set questions in each step.
+///
+/// Measured on Laya with 1,200 questions: three runs of 12 passes took 29.5
+/// minutes, every run was still improving at its last pass, and all three
+/// reached the same answer, so the extra runs bought nothing. The final
+/// layers keep three runs because on a few hundred questions a run can
+/// stall on the starting plateau; add-ons in every layer on a thousand or
+/// more did not. A run that goes wrong is still caught: the gate judges it
+/// on questions it never saw and writes nothing unless it wins.
+pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
+    adam: HEAD_TRAINING_ADAM_SETTINGS,
+    batch_question_count: 16,
+    check_questions_per_batch: 8,
+    check_weight: 1.0,
+    maximum_epochs: 12,
+    patience_epochs: 3,
+    seeds: &[1],
+};
+
 /// How one run ended.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SeedEnding {
@@ -56,9 +77,9 @@ pub enum SeedEnding {
     },
 }
 
-/// Told how many passes are done, out of the most there can be.
+/// Told how many optimizer steps are done, out of the most there can be.
 pub trait TrainingProgress {
-    fn report(&mut self, completed_epochs: u64, total_epochs: u64);
+    fn report(&mut self, completed_batches: u64, total_batches: u64);
 }
 
 /// A Fisher-Yates shuffle of `0..length`, driven by a linear congruential

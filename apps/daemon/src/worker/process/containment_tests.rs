@@ -119,3 +119,81 @@ fn should_refuse_progress_of_another_request_during_a_cancellation() {
         .is_err()
     );
 }
+
+fn idle_health_snapshot() -> Arc<RwLock<WorkerHealthSnapshot>> {
+    Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
+        WorkerHealthStatus::Loading,
+    )))
+}
+
+fn training_progress_of(request_number: u64) -> WorkerEvent {
+    WorkerEvent::DecisionHeadTrainingProgress {
+        request_id: RequestId::new(request_number),
+        stage: astronomical_decision_contract::head_training_job::HeadTrainingStage::Training,
+        completed: 3,
+        total: 36,
+    }
+}
+
+#[test]
+fn should_drain_a_cancelled_trainings_progress_and_failure_then_take_its_finalization() {
+    let health_snapshot = idle_health_snapshot();
+    let cancelled_request = RequestId::new(7);
+    let drained_events = [
+        training_progress_of(7),
+        WorkerEvent::DecisionsFailed {
+            request_id: cancelled_request,
+            reason: astronomical_decision_contract::DecisionFailure::invalid_request(
+                "the training was cancelled",
+            ),
+        },
+    ];
+    for drained_event in drained_events {
+        let reaction =
+            react_to_cancellation_event(&health_snapshot, drained_event, cancelled_request, true)
+                .expect("a cancelled training's own events are expected");
+        assert!(matches!(reaction, CancellationEventReaction::KeepDraining));
+    }
+
+    let reaction = react_to_cancellation_event(
+        &health_snapshot,
+        WorkerEvent::DecisionsFinalized {
+            request_id: cancelled_request,
+            elapsed_millis: 12,
+            mlx_memory_snapshot: None,
+        },
+        cancelled_request,
+        true,
+    )
+    .expect("the finalization acknowledges the cancel");
+
+    assert!(matches!(reaction, CancellationEventReaction::Acknowledged));
+}
+
+#[test]
+fn should_refuse_another_requests_training_progress_during_a_cancellation() {
+    assert!(
+        react_to_cancellation_event(
+            &idle_health_snapshot(),
+            training_progress_of(8),
+            RequestId::new(7),
+            true,
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn should_refuse_training_progress_while_cancelling_a_chat_request() {
+    // A chat request has no stepped finalization, so a training's event
+    // there means the worker is answering something it was never asked.
+    assert!(
+        react_to_cancellation_event(
+            &idle_health_snapshot(),
+            training_progress_of(7),
+            RequestId::new(7),
+            false,
+        )
+        .is_err()
+    );
+}

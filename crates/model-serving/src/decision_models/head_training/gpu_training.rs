@@ -12,13 +12,15 @@
 use astronomical_decision_training::head_training::TrainingProgress;
 use astronomical_decision_training::head_training::{SeedEnding, TrainingSettings, shuffled_order};
 use astronomical_decision_training::training_losses::LABEL_SMOOTHING;
+use std::time::{Duration, Instant};
+
 use mlx_bridge::MlxArray;
 
 use super::gpu_adam::{GpuAdam, StepOutcome};
-use super::gpu_heads::{GpuHeadFamily, GpuHeadInputs};
 use super::gpu_math::{GpuMath, GpuResult};
 use super::question_batch::{OptionLayout, QuestionBatch};
-use super::row_objective::{HostRow, RowTargets, mean_cross_entropy, option_score_gradients};
+use super::row_objective::{HostRow, RowTargets, mean_cross_entropy};
+use super::trainable_scorer::TrainableScorer;
 
 /// What the host knows about one question row of a training.
 #[derive(Clone, Debug, PartialEq)]
@@ -37,8 +39,7 @@ pub(crate) enum TrainingRow {
 
 /// Every question of one training, uploaded once, and which part each is in.
 pub(crate) struct GpuTrainingSet {
-    pub(crate) family: GpuHeadFamily,
-    pub(crate) head_inputs: GpuHeadInputs,
+    pub(crate) scorer: Box<dyn TrainableScorer>,
     pub(crate) option_layout: OptionLayout,
     pub(crate) rows: Vec<TrainingRow>,
     pub(crate) training_rows: Vec<usize>,
@@ -59,10 +60,13 @@ pub(crate) struct GpuSeedRun {
 /// Where a stepped training stands after one step.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TrainerStep {
-    /// `completed` of at most `total` passes are done.
+    /// `completed` of at most `total` optimizer steps (batches) are done.
+    /// Steps, not passes: a whole-model pass takes most of a minute, and a
+    /// count that stands still that long leaves the caller's time-left
+    /// estimate drifting upward until the pass ends.
     Running {
-        completed_epochs: u64,
-        total_epochs: u64,
+        completed_batches: u64,
+        total_batches: u64,
     },
     /// Every run has ended.
     Finished,
@@ -73,32 +77,96 @@ struct SeedState {
     parameters: Vec<MlxArray>,
     optimizer: GpuAdam,
     run: GpuSeedRun,
+    /// Where the current pass stands, or `None` between passes.
+    pass: Option<PassCursor>,
 }
 
-/// A training advanced one pass at a time, so the worker can report
-/// progress and stay responsive between passes.
+/// How far one pass over the training questions has got.
+struct PassCursor {
+    question_order: Vec<usize>,
+    check_order: Vec<usize>,
+    next_batch: usize,
+    check_cursor: usize,
+}
+
+/// Where a pass stood when a step ended.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PassProgress {
+    Completed,
+    /// The step's time ran out; the pass continues next step.
+    Interrupted,
+    /// A batch's gradient held a non-finite number.
+    Refused,
+}
+
+/// How long one step may keep working before it returns to the worker.
+/// The worker looks for a cancel only between steps, so this is how long
+/// an interrupted training keeps the GPU, plus the batch in flight (about a
+/// second and a half for Laya's whole model, measured). The daemon also gives up on a step that sends
+/// no progress for a minute, and a whole-model pass over a thousand
+/// questions takes longer than that; a final-layer pass takes milliseconds
+/// and always finishes in one step.
+pub(crate) const STEP_TIME_BUDGET: Duration = Duration::from_secs(2);
+
+/// A training advanced a few seconds at a time, so the worker can report
+/// progress and stay responsive between steps.
 pub(crate) struct GpuTrainer {
     settings: TrainingSettings,
+    step_time_budget: Duration,
     next_seed_position: usize,
     current_seed: Option<SeedState>,
     finished_runs: Vec<GpuSeedRun>,
+    /// The choosing loss of the starting parameters, the same for every
+    /// run, so it is measured once.
+    starting_choosing_loss: Option<f64>,
 }
 
 impl GpuTrainer {
     pub(crate) fn new(settings: TrainingSettings) -> Self {
+        Self::with_step_time_budget(settings, STEP_TIME_BUDGET)
+    }
+
+    /// A trainer whose steps stop after `step_time_budget`; tests pass zero
+    /// to stop after every batch.
+    pub(crate) fn with_step_time_budget(
+        settings: TrainingSettings,
+        step_time_budget: Duration,
+    ) -> Self {
         Self {
             settings,
+            step_time_budget,
             next_seed_position: 0,
             current_seed: None,
             finished_runs: Vec::with_capacity(settings.seeds.len()),
+            starting_choosing_loss: None,
         }
     }
 
-    fn total_epochs(&self) -> u64 {
-        (self.settings.seeds.len() * self.settings.maximum_epochs) as u64
+    /// Batches in one pass over the training questions; at least one, so
+    /// the count still moves when there is nothing to train on.
+    fn batches_per_pass(&self, training_set: &GpuTrainingSet) -> u64 {
+        let batch_size = self.settings.batch_question_count.max(1);
+        (training_set.training_rows.len().div_ceil(batch_size)).max(1) as u64
     }
 
-    /// Starts the next run, or trains the current run one pass.
+    /// The batches done once `finished_run_count` runs have ended and the
+    /// current run has finished `finished_pass_count` passes.
+    fn batches_before(
+        &self,
+        training_set: &GpuTrainingSet,
+        finished_run_count: usize,
+        finished_pass_count: usize,
+    ) -> u64 {
+        (finished_run_count * self.settings.maximum_epochs + finished_pass_count) as u64
+            * self.batches_per_pass(training_set)
+    }
+
+    fn total_batches(&self, training_set: &GpuTrainingSet) -> u64 {
+        self.batches_before(training_set, self.settings.seeds.len(), 0)
+    }
+
+    /// Starts the next run, or trains the current run for up to
+    /// [`STEP_TIME_BUDGET`].
     pub(crate) fn advance(
         &mut self,
         math: GpuMath<'_>,
@@ -108,20 +176,57 @@ impl GpuTrainer {
         let Some(mut seed_state) = self.current_seed.take() else {
             return self.start_next_seed(math, training_set, served_parameters);
         };
-        let settings = self.settings;
-        let epoch = seed_state.run.epochs_run + 1;
-        seed_state.run.epochs_run = epoch;
-        let seed = seed_state.run.seed;
-        let pass_outcome = train_one_pass(
-            math,
-            (training_set, served_parameters, settings),
-            (&mut seed_state.parameters, &mut seed_state.optimizer),
-            (seed, epoch),
-        )?;
-        if pass_outcome == StepOutcome::RefusedNonFinite {
-            seed_state.run.ending = SeedEnding::NonFiniteStep { epoch };
-            return Ok(self.finish_seed(seed_state));
+        if seed_state.pass.is_none() {
+            seed_state.run.epochs_run += 1;
+            seed_state.pass = Some(PassCursor::new(
+                training_set,
+                seed_state.run.seed,
+                seed_state.run.epochs_run,
+            ));
         }
+        let epoch = seed_state.run.epochs_run;
+        let pass_progress = continue_pass(
+            math,
+            (training_set, served_parameters, self.settings),
+            &mut seed_state,
+            Instant::now() + self.step_time_budget,
+        )?;
+        match pass_progress {
+            PassProgress::Interrupted => {
+                let batches_into_pass = match &seed_state.pass {
+                    Some(pass_cursor) => pass_cursor.next_batch as u64,
+                    None => 0,
+                };
+                let completed_batches =
+                    self.batches_before(training_set, self.next_seed_position - 1, epoch - 1)
+                        + batches_into_pass;
+                self.current_seed = Some(seed_state);
+                Ok(TrainerStep::Running {
+                    completed_batches,
+                    total_batches: self.total_batches(training_set),
+                })
+            }
+            PassProgress::Refused => {
+                seed_state.run.ending = SeedEnding::NonFiniteStep { epoch };
+                Ok(self.finish_seed(training_set, seed_state))
+            }
+            PassProgress::Completed => {
+                seed_state.pass = None;
+                self.end_pass(math, training_set, seed_state)
+            }
+        }
+    }
+
+    /// Scores the finished pass on the choosing questions, keeps the best
+    /// weights, and decides whether the run goes on.
+    fn end_pass(
+        &mut self,
+        math: GpuMath<'_>,
+        training_set: &GpuTrainingSet,
+        mut seed_state: SeedState,
+    ) -> GpuResult<TrainerStep> {
+        let settings = self.settings;
+        let epoch = seed_state.run.epochs_run;
         let epoch_loss = choosing_loss(math, training_set, &seed_state.parameters)?;
         if epoch_loss < seed_state.run.best_choosing_loss {
             seed_state.run.best_choosing_loss = epoch_loss;
@@ -130,16 +235,19 @@ impl GpuTrainer {
         }
         if epoch - seed_state.run.best_epoch >= settings.patience_epochs {
             seed_state.run.ending = SeedEnding::StoppedImproving;
-            return Ok(self.finish_seed(seed_state));
+            return Ok(self.finish_seed(training_set, seed_state));
         }
         if epoch >= settings.maximum_epochs {
-            return Ok(self.finish_seed(seed_state));
+            return Ok(self.finish_seed(training_set, seed_state));
         }
-        let epoch_offset = ((self.next_seed_position - 1) * settings.maximum_epochs) as u64;
         self.current_seed = Some(seed_state);
         Ok(TrainerStep::Running {
-            completed_epochs: epoch_offset + epoch as u64,
-            total_epochs: self.total_epochs(),
+            completed_batches: self.batches_before(
+                training_set,
+                self.next_seed_position - 1,
+                epoch,
+            ),
+            total_batches: self.total_batches(training_set),
         })
     }
 
@@ -154,39 +262,49 @@ impl GpuTrainer {
         };
         let parameters = copied(math, served_parameters)?;
         let optimizer = GpuAdam::new(math, self.settings.adam, &parameters)?;
+        let starting_choosing_loss = match self.starting_choosing_loss {
+            Some(starting_choosing_loss) => starting_choosing_loss,
+            None => {
+                let measured_loss = choosing_loss(math, training_set, &parameters)?;
+                self.starting_choosing_loss = Some(measured_loss);
+                measured_loss
+            }
+        };
         let run = GpuSeedRun {
             seed,
-            best_choosing_loss: choosing_loss(math, training_set, &parameters)?,
+            best_choosing_loss: starting_choosing_loss,
             best_parameters: copied(math, &parameters)?,
             best_epoch: 0,
             epochs_run: 0,
             ending: SeedEnding::ReachedEpochLimit,
         };
-        let epoch_offset = (self.next_seed_position * self.settings.maximum_epochs) as u64;
+        let completed_batches = self.batches_before(training_set, self.next_seed_position, 0);
         self.next_seed_position += 1;
         self.current_seed = Some(SeedState {
             parameters,
             optimizer,
             run,
+            pass: None,
         });
         Ok(TrainerStep::Running {
-            completed_epochs: epoch_offset,
-            total_epochs: self.total_epochs(),
+            completed_batches,
+            total_batches: self.total_batches(training_set),
         })
     }
 
-    /// Ends the current run; the count jumps to the end of its passes, so
+    /// Ends the current run; the count jumps to the end of its steps, so
     /// the time left shrinks rather than grows when a run stops early.
-    fn finish_seed(&mut self, seed_state: SeedState) -> TrainerStep {
+    fn finish_seed(&mut self, training_set: &GpuTrainingSet, seed_state: SeedState) -> TrainerStep {
         self.finished_runs.push(seed_state.run);
         TrainerStep::Running {
-            completed_epochs: (self.next_seed_position * self.settings.maximum_epochs) as u64,
-            total_epochs: self.total_epochs(),
+            completed_batches: self.batches_before(training_set, self.next_seed_position, 0),
+            total_batches: self.total_batches(training_set),
         }
     }
 
-    pub(crate) fn into_runs(self) -> Vec<GpuSeedRun> {
-        self.finished_runs
+    /// The finished runs, leaving the trainer with none.
+    pub(crate) fn take_runs(&mut self) -> Vec<GpuSeedRun> {
+        std::mem::take(&mut self.finished_runs)
     }
 }
 
@@ -202,27 +320,43 @@ pub(crate) fn train_seeds_on_gpu(
 ) -> GpuResult<Vec<GpuSeedRun>> {
     let mut trainer = GpuTrainer::new(settings);
     while let TrainerStep::Running {
-        completed_epochs,
-        total_epochs,
+        completed_batches,
+        total_batches,
     } = trainer.advance(math, training_set, served_parameters)?
     {
-        training_progress.report(completed_epochs, total_epochs);
+        training_progress.report(completed_batches, total_batches);
     }
-    Ok(trainer.into_runs())
+    Ok(trainer.take_runs())
 }
 
-/// One shuffled pass over the training questions; stops at the first refused step.
-fn train_one_pass(
-    math: GpuMath<'_>,
-    (training_set, served_parameters, settings): (&GpuTrainingSet, &[MlxArray], TrainingSettings),
-    (parameters, optimizer): (&mut [MlxArray], &mut GpuAdam),
-    (seed, epoch): (u64, usize),
-) -> GpuResult<StepOutcome> {
-    let question_order = shuffled_order(training_set.training_rows.len(), seed, epoch as u64);
-    let check_order = shuffled_order(training_set.check_rows.len(), seed ^ 0x5eed, epoch as u64);
-    let check_count = settings.check_questions_per_batch.min(check_order.len());
-    let mut check_cursor = 0;
-    for batch_positions in question_order.chunks(settings.batch_question_count.max(1)) {
+impl PassCursor {
+    fn new(training_set: &GpuTrainingSet, seed: u64, epoch: usize) -> Self {
+        Self {
+            question_order: shuffled_order(training_set.training_rows.len(), seed, epoch as u64),
+            check_order: shuffled_order(training_set.check_rows.len(), seed ^ 0x5eed, epoch as u64),
+            next_batch: 0,
+            check_cursor: 0,
+        }
+    }
+
+    /// The next batch's question rows and weights: its training questions,
+    /// sharing a weight of one, then the check-set questions, sharing
+    /// `check_weight`. `None` once the pass has no batch left.
+    fn next_batch(
+        &mut self,
+        training_set: &GpuTrainingSet,
+        settings: TrainingSettings,
+    ) -> Option<(Vec<usize>, Vec<f64>)> {
+        let batch_size = settings.batch_question_count.max(1);
+        let batch_start = self.next_batch * batch_size;
+        if batch_start >= self.question_order.len() {
+            return None;
+        }
+        let batch_end = (batch_start + batch_size).min(self.question_order.len());
+        let batch_positions = &self.question_order[batch_start..batch_end];
+        let check_count = settings
+            .check_questions_per_batch
+            .min(self.check_order.len());
         let mut batch_question_rows = Vec::with_capacity(batch_positions.len() + check_count);
         let mut row_weights = Vec::with_capacity(batch_question_rows.capacity());
         for question_position in batch_positions {
@@ -230,11 +364,36 @@ fn train_one_pass(
             row_weights.push(1.0 / batch_positions.len() as f64);
         }
         for _ in 0..check_count {
-            batch_question_rows
-                .push(training_set.check_rows[check_order[check_cursor % check_order.len()]]);
+            let check_position = self.check_order[self.check_cursor % self.check_order.len()];
+            batch_question_rows.push(training_set.check_rows[check_position]);
             row_weights.push(settings.check_weight / check_count as f64);
-            check_cursor += 1;
+            self.check_cursor += 1;
         }
+        self.next_batch += 1;
+        Some((batch_question_rows, row_weights))
+    }
+}
+
+/// Trains the run's current pass batch by batch until the pass ends, a
+/// step is refused, or `step_deadline` passes.
+fn continue_pass(
+    math: GpuMath<'_>,
+    (training_set, served_parameters, settings): (&GpuTrainingSet, &[MlxArray], TrainingSettings),
+    seed_state: &mut SeedState,
+    step_deadline: Instant,
+) -> GpuResult<PassProgress> {
+    let SeedState {
+        parameters,
+        optimizer,
+        pass,
+        ..
+    } = seed_state;
+    let Some(pass_cursor) = pass.as_mut() else {
+        return Ok(PassProgress::Completed);
+    };
+    while let Some((batch_question_rows, row_weights)) =
+        pass_cursor.next_batch(training_set, settings)
+    {
         let gradients = batch_gradients(
             math,
             training_set,
@@ -245,10 +404,15 @@ fn train_one_pass(
         if optimizer.step(math, parameters, &gradients, served_parameters)?
             == StepOutcome::RefusedNonFinite
         {
-            return Ok(StepOutcome::RefusedNonFinite);
+            return Ok(PassProgress::Refused);
+        }
+        let pass_has_more = pass_cursor.next_batch * settings.batch_question_count.max(1)
+            < pass_cursor.question_order.len();
+        if pass_has_more && Instant::now() >= step_deadline {
+            return Ok(PassProgress::Interrupted);
         }
     }
-    Ok(StepOutcome::Taken)
+    Ok(PassProgress::Completed)
 }
 
 /// The batch loss's gradient with respect to every parameter.
@@ -274,18 +438,9 @@ fn batch_gradients(
         });
     }
     let row_targets = RowTargets::upload(math, &host_rows, question_batch.widest_option_count)?;
-    let family = training_set.family;
-    let option_scores =
-        family.option_scores(math, parameters, &training_set.head_inputs, &question_batch)?;
-    let score_gradients =
-        option_score_gradients(math, &option_scores, &question_batch, &row_targets)?;
-    family.parameter_gradients(
-        math,
-        parameters,
-        &training_set.head_inputs,
-        &question_batch,
-        &score_gradients,
-    )
+    training_set
+        .scorer
+        .parameter_gradients(math, parameters, &question_batch, &row_targets)
 }
 
 /// A row's target distribution and temperature: a labelled row's answer,
@@ -339,12 +494,9 @@ fn choosing_loss(
         });
     }
     let row_targets = RowTargets::upload(math, &host_rows, question_batch.widest_option_count)?;
-    let option_scores = training_set.family.option_scores(
-        math,
-        parameters,
-        &training_set.head_inputs,
-        &question_batch,
-    )?;
+    let option_scores = training_set
+        .scorer
+        .option_scores(math, parameters, &question_batch)?;
     let mean_loss = mean_cross_entropy(math, &option_scores, &question_batch, &row_targets)?;
     Ok(if mean_loss.is_finite() {
         mean_loss
@@ -365,12 +517,9 @@ pub(crate) fn question_scores(
     }
     let batch_rows = training_set.option_layout.batch_rows(question_rows);
     let question_batch = QuestionBatch::upload(math, &batch_rows)?;
-    let option_scores = training_set.family.option_scores(
-        math,
-        parameters,
-        &training_set.head_inputs,
-        &question_batch,
-    )?;
+    let option_scores = training_set
+        .scorer
+        .option_scores(math, parameters, &question_batch)?;
     let flat_scores = math.download(&option_scores)?;
     let mut per_question = Vec::with_capacity(question_rows.len());
     let mut next_option = 0;

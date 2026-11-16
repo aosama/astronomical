@@ -282,6 +282,7 @@ fn trained_outcome() -> HeadTrainingOutcome {
     HeadTrainingOutcome {
         examples: Vec::new(),
         trained_tensors: Vec::new(),
+        adapter_tensors: Vec::new(),
         runs: vec![RunSummary {
             seed: 1,
             best_choosing_loss: 0.4,

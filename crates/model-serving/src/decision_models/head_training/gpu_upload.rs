@@ -59,6 +59,7 @@ pub(crate) fn upload_parameters(
 }
 
 /// The parameters read back into one flat host vector in layout order.
+#[cfg(test)]
 pub(crate) fn download_parameters(
     math: GpuMath<'_>,
     parameters: &[MlxArray],

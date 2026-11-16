@@ -3,13 +3,15 @@
 //! 1. Check what needs no model: the examples file, that there is enough of
 //!    it, the model's folder and family, and the output folder.
 //! 2. Send one job to the daemon: the worker reads every example and the
-//!    built-in check set, proves its GPU copy of the final layers
-//!    reproduces the model's scores, and trains on the GPU in several runs.
-//!    It returns every answer beside the trained head's scores.
+//!    built-in check set, proves its trainable copy (the final layers, or
+//!    with `--whole-model` the whole model with add-on weights in every
+//!    layer) reproduces the model's scores, and trains on the GPU in several
+//!    runs. It returns every answer beside the trained model's scores.
 //! 3. Fit fresh temperatures and judge the result against the shipped model
 //!    recalibrated the same way, on questions training never saw.
 //! 4. Only if it is kept: write the new folder (originals copied byte for
-//!    byte, trained layers in a 32-bit file beside them), reload, and prove
+//!    byte, trained layers and any add-ons in 32-bit files beside them),
+//!    reload, and prove
 //!    the written folder answers as the trained model did; otherwise remove
 //!    it.
 
@@ -20,7 +22,10 @@ use astronomical_config::ModelFamily;
 use astronomical_decision_contract::calibration_file::{
     CalibrationOverride, DECISION_CALIBRATION_FILE_NAME, parse_calibration_document,
 };
-use astronomical_decision_contract::head_training_job::{HeadTrainingOutcome, TrainedTensor};
+use astronomical_decision_contract::decision_adapters_file::{DecisionAdapters, LinearAdapter};
+use astronomical_decision_contract::head_training_job::{
+    HeadTrainingOutcome, TrainedTensor, TrainingScope,
+};
 use astronomical_decision_contract::head_tuning_file::{
     HeadTuning, TunableHeadFamily, TunedTensor,
 };
@@ -52,6 +57,7 @@ use crate::DaemonProbe;
 /// What the worker's training produced, with what judging it needs.
 struct FinishedTraining<'finished> {
     decision_model_id: &'finished str,
+    scope: TrainingScope,
     labelled_examples: &'finished [LabelledExample],
     example_parts: &'finished [SplitPart],
     sent_example_count: usize,
@@ -62,6 +68,8 @@ struct FinishedTraining<'finished> {
 /// A head the gate kept, with what it was judged by.
 struct KeptTraining {
     head_tuning: HeadTuning,
+    /// The add-ons of a whole-model training; `None` for the final layers.
+    decision_adapters: Option<DecisionAdapters>,
     verdict: TrainingVerdict,
     judging_pairs: Vec<ScoredPair>,
 }
@@ -72,7 +80,7 @@ pub async fn run_train(
     dependencies: &mut DecisionToolDependencies<'_>,
 ) -> Result<(), DecisionToolError> {
     let labelled_examples = read_labelled_examples(&train_arguments.examples_file_path)?;
-    check_enough_data(&labelled_examples)?;
+    check_enough_data(&labelled_examples, train_arguments.training_scope)?;
     let model_lifecycle = model_lifecycle(dependencies);
     let decision_model_id = prepare_decision_model(
         train_arguments.model_id.as_deref(),
@@ -82,13 +90,18 @@ pub async fn run_train(
     .await?;
     let model_folder = find_model_folder(&dependencies.instance_paths, &decision_model_id)?;
     let family = tunable_family(model_folder.model_family, &decision_model_id)?;
+    check_scope_is_trainable(family, train_arguments.training_scope, &decision_model_id)?;
     let output_directory = &train_arguments.output_directory;
     check_output_is_new(&model_folder, output_directory)?;
     let check_examples = match built_in_check_examples() {
         Ok(check_examples) => check_examples,
         Err(check_set_error) => return Err(DecisionToolError::CheckSetUnreadable(check_set_error)),
     };
-    let prepared_job = training_job(&labelled_examples, &check_examples)?;
+    let prepared_job = training_job(
+        &labelled_examples,
+        &check_examples,
+        train_arguments.training_scope,
+    )?;
     let sent_example_count = prepared_job.sent_example_count();
     let daemon_probe = &model_lifecycle.daemon_probe;
     let outcome = request_head_training(
@@ -101,6 +114,7 @@ pub async fn run_train(
     let kept_training = judge_and_report(
         FinishedTraining {
             decision_model_id: &decision_model_id,
+            scope: train_arguments.training_scope,
             labelled_examples: &labelled_examples,
             example_parts: &prepared_job.example_parts,
             sent_example_count,
@@ -123,14 +137,17 @@ pub async fn run_train(
     .await
 }
 
-fn check_enough_data(labelled_examples: &[LabelledExample]) -> Result<(), DecisionToolError> {
+fn check_enough_data(
+    labelled_examples: &[LabelledExample],
+    scope: TrainingScope,
+) -> Result<(), DecisionToolError> {
     let mut distinct_states = HashSet::new();
     let mut labelled_question_count = 0;
     for labelled_example in labelled_examples {
         distinct_states.insert(state_group_key(&labelled_example.state));
         labelled_question_count += labelled_example.labelled_questions.len();
     }
-    match check_training_data(labelled_question_count, distinct_states.len()) {
+    match check_training_data(labelled_question_count, distinct_states.len(), scope) {
         Ok(()) => Ok(()),
         Err(too_little_data) => Err(DecisionToolError::TooLittleData(too_little_data)),
     }
@@ -150,6 +167,26 @@ fn tunable_family(
     }
 }
 
+/// Refuses a whole-model training of a family that has none yet, before
+/// any example is read: Laya trains as a whole; Kev and Clef train only
+/// their final layers so far.
+fn check_scope_is_trainable(
+    family: TunableHeadFamily,
+    scope: TrainingScope,
+    model_id: &str,
+) -> Result<(), DecisionToolError> {
+    match (scope, family) {
+        (TrainingScope::FinalLayers, _) | (TrainingScope::WholeModel, TunableHeadFamily::Laya) => {
+            Ok(())
+        }
+        (TrainingScope::WholeModel, TunableHeadFamily::Kev | TunableHeadFamily::Clef) => {
+            Err(DecisionToolError::WholeModelNotTrainable {
+                model_id: model_id.to_owned(),
+            })
+        }
+    }
+}
+
 /// Judges the trained head, prints the report, and returns the head only
 /// when the gate keeps it.
 fn judge_and_report(
@@ -166,6 +203,7 @@ fn judge_and_report(
     let verdict = judge_training(&training_scores)?;
     let report_text = training_report_text(&TrainingSummary {
         model_id: finished_training.decision_model_id,
+        scope: finished_training.scope,
         example_count: finished_training.labelled_examples.len(),
         part_counts: finished_training.part_counts,
         indistinguishable_question_count: outcome.indistinguishable_question_count,
@@ -182,6 +220,7 @@ fn judge_and_report(
     }
     Ok(KeptTraining {
         head_tuning: head_tuning_of(&outcome.trained_tensors),
+        decision_adapters: decision_adapters_of(&outcome.adapter_tensors)?,
         verdict,
         judging_pairs: training_scores.judging,
     })
@@ -200,6 +239,52 @@ fn head_tuning_of(trained_tensors: &[TrainedTensor]) -> HeadTuning {
     HeadTuning {
         tensors: tuned_tensors,
     }
+}
+
+/// The add-on tensors as the file beside the originals holds them: the
+/// worker sends each layer's `down` then its `up`. `None` when there are
+/// none, as after a final-layer training.
+fn decision_adapters_of(
+    adapter_tensors: &[TrainedTensor],
+) -> Result<Option<DecisionAdapters>, DecisionToolError> {
+    if adapter_tensors.is_empty() {
+        return Ok(None);
+    }
+    let mut adapters = Vec::with_capacity(adapter_tensors.len() / 2);
+    for adapter_pair in adapter_tensors.chunks(2) {
+        let [down_tensor, up_tensor] = adapter_pair else {
+            return Err(unpaired_add_ons());
+        };
+        let (Some(target), Some(up_target)) = (
+            down_tensor.name.strip_suffix(".adapter_down"),
+            up_tensor.name.strip_suffix(".adapter_up"),
+        ) else {
+            return Err(unpaired_add_ons());
+        };
+        let ([rank, input_width], [output_width, up_rank]) =
+            (down_tensor.shape.as_slice(), up_tensor.shape.as_slice())
+        else {
+            return Err(unpaired_add_ons());
+        };
+        if target != up_target || rank != up_rank {
+            return Err(unpaired_add_ons());
+        }
+        adapters.push(LinearAdapter {
+            target: target.to_owned(),
+            rank: *rank,
+            input_width: *input_width,
+            output_width: *output_width,
+            down_values: down_tensor.values.0.clone(),
+            up_values: up_tensor.values.0.clone(),
+        });
+    }
+    Ok(Some(DecisionAdapters { adapters }))
+}
+
+fn unpaired_add_ons() -> DecisionToolError {
+    DecisionToolError::TrainingFailed(
+        "the worker returned add-on weights that do not pair up; nothing was written".to_owned(),
+    )
 }
 
 /// What writing and proving the trained folder reads.
@@ -226,6 +311,7 @@ async fn write_and_prove(
     let folder_additions = FolderAdditions {
         calibration_override: calibration_override.as_ref(),
         head_tuning: Some((&kept_training.head_tuning, written_training.family)),
+        decision_adapters: kept_training.decision_adapters.as_ref(),
     };
     let output_directory = written_training.output_directory;
     write_model_folder(

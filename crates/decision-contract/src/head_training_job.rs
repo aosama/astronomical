@@ -52,11 +52,25 @@ pub struct TrainingExample {
     pub question_roles: Vec<QuestionRole>,
 }
 
+/// How much of the model a training changes.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrainingScope {
+    /// Only the final scoring layers, on what the rest of the model reads
+    /// once: fast, and limited to what the model already notices.
+    #[default]
+    FinalLayers,
+    /// Small add-on weights inside every layer plus the final scoring
+    /// layers, so the whole model learns to read the examples differently.
+    WholeModel,
+}
+
 /// Everything one training reads.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct HeadTrainingJob {
     pub examples: Vec<TrainingExample>,
+    pub scope: TrainingScope,
 }
 
 /// Which stage a training is in, for progress lines.
@@ -65,8 +79,14 @@ pub struct HeadTrainingJob {
 pub enum HeadTrainingStage {
     /// The model reads the examples: `completed` of `total` examples.
     Reading,
-    /// Training passes: `completed` of at most `total` passes over all runs.
+    /// The trainable copy is checked against the model's own scores before
+    /// any weight moves: `completed` of `total` questions.
+    Checking,
+    /// Training: `completed` of at most `total` optimizer steps over all
+    /// runs; a run that stops improving early jumps to the end of its steps.
     Training,
+    /// The best run scores every question: `completed` of `total` questions.
+    Scoring,
 }
 
 /// One trained tensor under its shipped name, in 32-bit floats.
@@ -108,17 +128,21 @@ pub struct TrainedQuestion {
 }
 
 /// What the worker returns: every example's questions in order, the best
-/// run's tensors, and the runs.
+/// run's tensors (the final layers, and for a whole-model training the
+/// add-ons too), and the runs.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct HeadTrainingOutcome {
     pub examples: Vec<Vec<TrainedQuestion>>,
     pub trained_tensors: Vec<TrainedTensor>,
+    /// The add-on weights, each named `<target>.adapter_down` or
+    /// `<target>.adapter_up`; empty unless the whole model was trained.
+    pub adapter_tensors: Vec<TrainedTensor>,
     pub runs: Vec<RunSummary>,
     /// The seed of the run whose tensors were returned.
     pub best_seed: u64,
-    /// The largest gap between the model's scores and the GPU copy of its
-    /// final layers, with the shipped weights, before training.
+    /// The largest gap between the model's scores and the trainable copy's,
+    /// with the shipped weights, before training.
     pub largest_parity_gap: f32,
     /// Questions left out because some of their options read the same.
     pub indistinguishable_question_count: usize,

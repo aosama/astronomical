@@ -27,6 +27,7 @@ fn should_parse_a_calibration_with_a_model_and_an_output() {
             examples_file_path: PathBuf::from("verona.jsonl"),
             model_id: Some("laya-MLX-8bit".to_owned()),
             output_directory: PathBuf::from("laya-verona"),
+            training_scope: TrainingScope::FinalLayers,
         })
     );
 }
@@ -124,10 +125,57 @@ fn should_parse_a_training_with_the_same_arguments_as_a_calibration() {
             examples_file_path: PathBuf::from("verona.jsonl"),
             model_id: Some("laya-MLX-8bit".to_owned()),
             output_directory: PathBuf::from("laya-trained"),
+            training_scope: TrainingScope::FinalLayers,
         })
     );
     assert_eq!(
         parse_decision_command(&arguments(&["train", "verona.jsonl"])),
         Err(UsageError::MissingValue("--output"))
+    );
+}
+
+#[test]
+fn should_train_the_whole_model_when_asked() {
+    let parsed = parse_decision_command(&arguments(&[
+        "train",
+        "verona.jsonl",
+        "--whole-model",
+        "--output",
+        "laya-whole",
+    ]))
+    .unwrap();
+    assert_eq!(
+        parsed,
+        DecisionCommand::Train(DecisionToolArguments {
+            examples_file_path: PathBuf::from("verona.jsonl"),
+            model_id: None,
+            output_directory: PathBuf::from("laya-whole"),
+            training_scope: TrainingScope::WholeModel,
+        })
+    );
+}
+
+#[test]
+fn should_refuse_whole_model_for_a_calibration_and_when_repeated() {
+    assert_eq!(
+        parse_decision_command(&arguments(&[
+            "calibrate",
+            "verona.jsonl",
+            "--whole-model",
+            "--output",
+            "laya-whole",
+        ])),
+        Err(UsageError::UnknownArgument("--whole-model".to_owned()))
+    );
+    assert_eq!(
+        parse_decision_command(&arguments(&[
+            "train",
+            "verona.jsonl",
+            "--whole-model",
+            "--whole-model",
+            "--output",
+            "laya-whole",
+        ])),
+        Err(UsageError::RepeatedArgument("--whole-model"))
     );
 }

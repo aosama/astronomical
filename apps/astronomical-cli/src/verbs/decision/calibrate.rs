@@ -67,6 +67,7 @@ pub async fn run_calibrate(
     let folder_additions = FolderAdditions {
         calibration_override: Some(&calibration_override),
         head_tuning: None,
+        decision_adapters: None,
     };
     write_model_folder(
         output_directory,

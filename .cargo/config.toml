@@ -89,6 +89,17 @@ test-decision-training = "test -p astronomical-decision-training"
 # live with `astronomical decision train EXAMPLES --output DIR --model ID`
 # against the Development instance.
 test-decision-head-training = "test -p astronomical-model-serving --features direct-mlx --lib head_training"
+# Whole-model training (`decision train --whole-model`): MLX's own gradients
+# through every operation Laya's forward pass uses (an 8-bit projection with
+# an add-on, rotary embedding, masked attention, exact GELU), the micro-batch
+# objective against final-layer training's hand-written gradient, the add-on
+# layout and starting values, the add-on path every linear layer takes, and
+# how serving's passes are regrouped so trained scores compare with served
+# ones. Needs MLX and the graphics processor (#[serial]); about a second.
+# The whole journey runs live with `astronomical decision train EXAMPLES
+# --whole-model --output DIR --model laya-MLX-8bit` against Development, on
+# at least 1000 labelled questions about 100 states.
+test-decision-whole-model-training = "test -p astronomical-model-serving --features direct-mlx --lib -- adapter_training linear_adapters decision_adapters laya::served_batches laya::batching"
 
 # Vision tower journeys against real public Hugging Face repositories: whether a
 # repository has a tower, and whether a tower shares a text model's base. They

@@ -52,6 +52,9 @@ pub(crate) mod synthetic_weights_test_support;
 pub(crate) mod decision_models;
 
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod linear_adapters;
+
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod modernbert;
 
 #[cfg(feature = "direct-mlx")]

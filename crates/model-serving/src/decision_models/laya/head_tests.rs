@@ -177,6 +177,7 @@ fn tuned_head_logits(
         option_marker_positions.push(test_row.option_marker_positions.as_slice());
     }
     let head = LayaDecisionHead {
+        adapters: None,
         runtime,
         tensors,
         tuned_tensors,

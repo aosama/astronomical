@@ -103,6 +103,7 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         let request_id = active_training.request_id;
+        let step_started_at = Instant::now();
         let step = match self.loaded_runtime.as_mut() {
             Some(LoadedRuntime::Decisions(decision_engine)) => {
                 decision_engine.advance_head_training()
@@ -117,6 +118,16 @@ where
                 completed,
                 total,
             }) => {
+                // How long a step holds the worker is how long a cancel
+                // waits, so each one is logged.
+                tracing::info!(
+                    request_id = ?request_id,
+                    ?stage,
+                    completed,
+                    total,
+                    step_millis = step_started_at.elapsed().as_millis() as u64,
+                    "decision training step"
+                );
                 event_writer
                     .send_event(&WorkerEvent::DecisionHeadTrainingProgress {
                         request_id,

@@ -49,6 +49,10 @@ fn seed_run(seed: u64, best_epoch: usize, epochs_run: usize, ending: RunEnding) 
 }
 
 fn report_for(verdict: &TrainingVerdict) -> String {
+    report_for_scope(verdict, TrainingScope::FinalLayers)
+}
+
+fn report_for_scope(verdict: &TrainingVerdict, scope: TrainingScope) -> String {
     let seed_runs = [
         seed_run(1, 8, 14, RunEnding::StoppedImproving),
         seed_run(2, 0, 6, RunEnding::StoppedImproving),
@@ -56,6 +60,7 @@ fn report_for(verdict: &TrainingVerdict) -> String {
     ];
     training_report_text(&TrainingSummary {
         model_id: "laya-MLX-8bit",
+        scope,
         example_count: 210,
         part_counts: PartCounts {
             training: 140,
@@ -113,4 +118,24 @@ fn should_name_every_reason_a_training_was_not_kept() {
     assert!(report_text.contains("it was right less often (65.0% -> 60.0%)"));
     assert!(report_text.contains("changed the answers to 20 of 120 questions nobody labelled"));
     assert!(report_text.contains("nearly every yes-or-no question the same answer"));
+}
+
+#[test]
+fn should_say_when_the_whole_model_trained_and_that_its_weights_were_kept() {
+    let report = report_for_scope(&verdict_with(Vec::new()), TrainingScope::WholeModel);
+
+    assert!(
+        report.starts_with("Training the whole of laya-MLX-8bit"),
+        "{report}"
+    );
+    assert!(report.contains("add-on weights"), "{report}");
+    assert!(
+        report.contains("original weights are never changed"),
+        "{report}"
+    );
+    assert!(
+        report.contains("the trainable copy of the whole model reproduced"),
+        "{report}"
+    );
+    assert!(!report.contains("final layers of"), "{report}");
 }

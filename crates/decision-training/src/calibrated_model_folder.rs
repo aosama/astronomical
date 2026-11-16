@@ -32,6 +32,9 @@ use std::path::{Path, PathBuf};
 use astronomical_decision_contract::calibration_file::{
     CalibrationOverride, DECISION_CALIBRATION_FILE_NAME, calibration_document_text,
 };
+use astronomical_decision_contract::decision_adapters_file::{
+    DECISION_ADAPTERS_FILE_NAME, DecisionAdapters, decision_adapters_bytes, parse_decision_adapters,
+};
 use astronomical_decision_contract::head_tuning_file::{
     DECISION_HEAD_TUNING_FILE_NAME, HeadTuning, TunableHeadFamily, head_tuning_bytes,
     parse_head_tuning,
@@ -65,6 +68,10 @@ pub enum CalibratedFolderError {
     TuningUnwritable(String),
     #[error("the trained head read back differently from what was written; nothing was kept")]
     TuningReadsBackDifferently,
+    #[error("the add-on weights could not be written: {0}")]
+    AdaptersUnwritable(String),
+    #[error("the add-on weights read back differently from what was written; nothing was kept")]
+    AdaptersReadBackDifferently,
 }
 
 /// What the new folder holds beside the copied model.
@@ -76,6 +83,9 @@ pub struct FolderAdditions<'a> {
     /// own trained head, if it has one, since that head is what the
     /// calibration was fitted to.
     pub head_tuning: Option<(&'a HeadTuning, TunableHeadFamily)>,
+    /// Add-on weights from a whole-model training; `None` keeps the copy's
+    /// own, if it has any.
+    pub decision_adapters: Option<&'a DecisionAdapters>,
 }
 
 impl FolderAdditions<'_> {
@@ -88,6 +98,9 @@ impl FolderAdditions<'_> {
         }
         if self.head_tuning.is_some() {
             replaced_file_names.push(DECISION_HEAD_TUNING_FILE_NAME);
+        }
+        if self.decision_adapters.is_some() {
+            replaced_file_names.push(DECISION_ADAPTERS_FILE_NAME);
         }
         replaced_file_names
     }
@@ -284,9 +297,9 @@ fn assemble_folder(
     Ok(())
 }
 
-/// Writes the calibration and the trained head, then reads the trained head
-/// back and requires exactly what was written: the file serving will read is
-/// checked, not the values held in memory.
+/// Writes the calibration, the trained head and the add-ons, then reads the
+/// trained files back and requires exactly what was written: the files
+/// serving will read are checked, not the values held in memory.
 fn write_additions(
     partial_directory: &Path,
     folder_additions: FolderAdditions<'_>,
@@ -299,9 +312,20 @@ fn write_additions(
         )
         .at_path(&calibration_path)?;
     }
-    let Some((head_tuning, family)) = folder_additions.head_tuning else {
-        return Ok(());
-    };
+    if let Some((head_tuning, family)) = folder_additions.head_tuning {
+        write_head_tuning(partial_directory, head_tuning, family)?;
+    }
+    if let Some(decision_adapters) = folder_additions.decision_adapters {
+        write_decision_adapters(partial_directory, decision_adapters)?;
+    }
+    Ok(())
+}
+
+fn write_head_tuning(
+    partial_directory: &Path,
+    head_tuning: &HeadTuning,
+    family: TunableHeadFamily,
+) -> Result<(), CalibratedFolderError> {
     let tuning_path = partial_directory.join(DECISION_HEAD_TUNING_FILE_NAME);
     let tuning_bytes = match head_tuning_bytes(head_tuning) {
         Ok(tuning_bytes) => tuning_bytes,
@@ -312,6 +336,25 @@ fn write_additions(
     match parse_head_tuning(&written_bytes, family) {
         Ok(read_back) if read_back == sorted_tuning(head_tuning) => Ok(()),
         _ => Err(CalibratedFolderError::TuningReadsBackDifferently),
+    }
+}
+
+fn write_decision_adapters(
+    partial_directory: &Path,
+    decision_adapters: &DecisionAdapters,
+) -> Result<(), CalibratedFolderError> {
+    let adapters_path = partial_directory.join(DECISION_ADAPTERS_FILE_NAME);
+    let adapters_bytes = match decision_adapters_bytes(decision_adapters) {
+        Ok(adapters_bytes) => adapters_bytes,
+        Err(write_error) => return Err(CalibratedFolderError::AdaptersUnwritable(write_error)),
+    };
+    fs::write(&adapters_path, &adapters_bytes).at_path(&adapters_path)?;
+    let written_bytes = fs::read(&adapters_path).at_path(&adapters_path)?;
+    let mut sorted_adapters = decision_adapters.clone();
+    sorted_adapters.adapters.sort_by(compare_adapter_targets);
+    match parse_decision_adapters(&written_bytes) {
+        Ok(read_back) if read_back == sorted_adapters => Ok(()),
+        _ => Err(CalibratedFolderError::AdaptersReadBackDifferently),
     }
 }
 
@@ -327,6 +370,13 @@ fn compare_tensor_names(
     right_tensor: &astronomical_decision_contract::head_tuning_file::TunedTensor,
 ) -> std::cmp::Ordering {
     left_tensor.name.cmp(&right_tensor.name)
+}
+
+fn compare_adapter_targets(
+    left_adapter: &astronomical_decision_contract::decision_adapters_file::LinearAdapter,
+    right_adapter: &astronomical_decision_contract::decision_adapters_file::LinearAdapter,
+) -> std::cmp::Ordering {
+    left_adapter.target.cmp(&right_adapter.target)
 }
 
 fn create_parent_directory(copy_path: &Path) -> Result<(), CalibratedFolderError> {

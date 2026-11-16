@@ -14,9 +14,11 @@
 //! by another. Shapes are checked against the shipped tensors when an engine
 //! substitutes them, because only the engine knows those.
 
-use safetensors::tensor::TensorView;
-use safetensors::{Dtype, SafeTensors};
 use thiserror::Error;
+
+use crate::float32_safetensors::{
+    Float32TensorsError, float32_tensors_bytes, read_float32_tensors,
+};
 
 /// The trained head of a decision model folder, beside its original weights.
 pub const DECISION_HEAD_TUNING_FILE_NAME: &str = "decision_head_tuning.safetensors";
@@ -63,14 +65,7 @@ impl TunableHeadFamily {
     }
 }
 
-/// One trained tensor, in 32-bit floats, under its shipped name.
-#[derive(Clone, Debug, PartialEq)]
-pub struct TunedTensor {
-    pub name: String,
-    /// Empty for a scalar, as the shipped scalars are stored.
-    pub shape: Vec<usize>,
-    pub values: Vec<f32>,
-}
+pub use crate::float32_safetensors::TunedTensor;
 
 /// Every trained tensor of one folder.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -115,65 +110,29 @@ pub fn parse_head_tuning(
     file_bytes: &[u8],
     family: TunableHeadFamily,
 ) -> Result<HeadTuning, HeadTuningFileError> {
-    let stored_tensors = match SafeTensors::deserialize(file_bytes) {
-        Ok(stored_tensors) => stored_tensors,
-        Err(parse_error) => {
-            return Err(HeadTuningFileError::NotSafetensors(parse_error.to_string()));
+    let tensors = read_float32_tensors(file_bytes).map_err(HeadTuningFileError::from)?;
+    for tuned_tensor in &tensors {
+        if !family
+            .tunable_tensor_names()
+            .contains(&tuned_tensor.name.as_str())
+        {
+            return Err(HeadTuningFileError::UntunableTensor(
+                tuned_tensor.name.clone(),
+            ));
         }
-    };
-    // The file's own index is a hash map, so its order changes from run to
-    // run; checking in name order makes a refusal name the same tensor
-    // every time.
-    let mut tensor_names = stored_tensors.names();
-    tensor_names.sort_unstable();
-    let mut tensors = Vec::with_capacity(tensor_names.len());
-    for tensor_name in tensor_names {
-        let tensor_view = match stored_tensors.tensor(tensor_name) {
-            Ok(tensor_view) => tensor_view,
-            Err(read_error) => {
-                return Err(HeadTuningFileError::NotSafetensors(read_error.to_string()));
-            }
-        };
-        tensors.push(checked_tensor(
-            tensor_name.to_owned(),
-            &tensor_view,
-            family,
-        )?);
-    }
-    if tensors.is_empty() {
-        return Err(HeadTuningFileError::NoTensors);
     }
     Ok(HeadTuning { tensors })
 }
 
-fn checked_tensor(
-    tensor_name: String,
-    tensor_view: &TensorView<'_>,
-    family: TunableHeadFamily,
-) -> Result<TunedTensor, HeadTuningFileError> {
-    if !family
-        .tunable_tensor_names()
-        .contains(&tensor_name.as_str())
-    {
-        return Err(HeadTuningFileError::UntunableTensor(tensor_name));
-    }
-    if tensor_view.dtype() != Dtype::F32 {
-        return Err(HeadTuningFileError::NotFloat32(tensor_name));
-    }
-    let (whole_floats, _) = tensor_view.data().as_chunks::<4>();
-    let mut values = Vec::with_capacity(whole_floats.len());
-    for float_bytes in whole_floats {
-        let float_value = f32::from_le_bytes(*float_bytes);
-        if !float_value.is_finite() {
-            return Err(HeadTuningFileError::NonFiniteValue(tensor_name));
+impl From<Float32TensorsError> for HeadTuningFileError {
+    fn from(read_error: Float32TensorsError) -> Self {
+        match read_error {
+            Float32TensorsError::NotSafetensors(reason) => Self::NotSafetensors(reason),
+            Float32TensorsError::NoTensors => Self::NoTensors,
+            Float32TensorsError::NotFloat32(tensor_name) => Self::NotFloat32(tensor_name),
+            Float32TensorsError::NonFiniteValue(tensor_name) => Self::NonFiniteValue(tensor_name),
         }
-        values.push(float_value);
     }
-    Ok(TunedTensor {
-        name: tensor_name,
-        shape: tensor_view.shape().to_vec(),
-        values,
-    })
 }
 
 /// The file's bytes for `head_tuning`, every tensor as little-endian
@@ -182,25 +141,7 @@ fn checked_tensor(
 /// # Errors
 /// Returns the serializer's reason when a tensor's values do not fill its shape.
 pub fn head_tuning_bytes(head_tuning: &HeadTuning) -> Result<Vec<u8>, String> {
-    let mut tensor_bytes = Vec::with_capacity(head_tuning.tensors.len());
-    for tuned_tensor in &head_tuning.tensors {
-        let mut little_endian_bytes = Vec::with_capacity(tuned_tensor.values.len() * 4);
-        for float_value in &tuned_tensor.values {
-            little_endian_bytes.extend_from_slice(&float_value.to_le_bytes());
-        }
-        tensor_bytes.push(little_endian_bytes);
-    }
-    let mut tensor_views = Vec::with_capacity(head_tuning.tensors.len());
-    for (tuned_tensor, little_endian_bytes) in head_tuning.tensors.iter().zip(&tensor_bytes) {
-        match TensorView::new(Dtype::F32, tuned_tensor.shape.clone(), little_endian_bytes) {
-            Ok(tensor_view) => tensor_views.push((tuned_tensor.name.as_str(), tensor_view)),
-            Err(view_error) => return Err(format!("{}: {view_error}", tuned_tensor.name)),
-        }
-    }
-    match safetensors::serialize(tensor_views, None) {
-        Ok(file_bytes) => Ok(file_bytes),
-        Err(serialize_error) => Err(serialize_error.to_string()),
-    }
+    float32_tensors_bytes(&head_tuning.tensors)
 }
 
 #[cfg(test)]

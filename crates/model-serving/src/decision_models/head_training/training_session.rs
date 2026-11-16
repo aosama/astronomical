@@ -1,58 +1,89 @@
-//! One head-training job inside the worker, advanced a step at a time.
+//! One training job inside the worker, advanced a step at a time.
 //!
 //! - **Reading:** one example per step: the engine answers it, keeping what
-//!   the final layers read.
-//! - **Preparing:** the shipped trainable layers are read from the model
-//!   folder, everything is uploaded to the GPU once, and the GPU copy of the
-//!   layers must reproduce the model's own scores (parity) before any
-//!   weight moves.
-//! - **Training:** one pass per step on the GPU, run after run.
-//! - **Finishing:** the best run's scores and tensors are read back.
+//!   the final layers read when only they train.
+//! - **Preparing:** the shipped final layers are read from the model
+//!   folder. A final-layer training uploads what they read once; a
+//!   whole-model training asks the engine for its whole model as a scorer,
+//!   with add-on weights in every layer.
+//! - **Checking, training, scoring:** the prepared training's own stages,
+//!   each advanced a couple of seconds at a time (`training_phase`).
+//!
+//! No step holds the worker for long: the worker looks for a cancel only
+//! between steps, so a step's length is how long an interrupted training
+//! keeps running.
 
 use std::path::Path;
+use std::rc::Rc;
 
 use astronomical_decision_contract::head_training_job::{
-    HeadTrainingJob, HeadTrainingOutcome, HeadTrainingStage, QuestionRole, RunEnding, RunSummary,
-    TrainedQuestion, TrainedTensor,
+    HeadTrainingJob, HeadTrainingStage, TrainingExample, TrainingScope,
 };
 use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
 use astronomical_decision_contract::{
-    DecisionFailure, FloatVector, OrderedJsonValue, QuestionOutcome,
+    DecisionFailure, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
 };
 use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_decision_training::head_training::{HEAD_TRAINING_SETTINGS, SeedEnding};
-use astronomical_decision_training::shipped_head::read_shipped_head;
-use astronomical_decision_training::training_losses::tempered_probabilities;
+use astronomical_decision_training::head_training::{
+    HEAD_TRAINING_SETTINGS, WHOLE_MODEL_TRAINING_SETTINGS,
+};
+use astronomical_decision_training::shipped_head::{ShippedHead, read_shipped_head};
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::decision_engine::HeadTrainingStep;
 use mlx_bridge::MlxArray;
 
-use super::gpu_math::{GpuMath, GpuTrainingError};
-use super::gpu_training::{
-    GpuSeedRun, GpuTrainer, GpuTrainingSet, TrainerStep, TrainingRow, question_scores,
-};
-use super::gpu_upload::{
-    download_parameters, gpu_head_family, upload_head_inputs, upload_parameters,
-};
-
-/// A gap this small between the model and the GPU copy of its final layers
-/// is float rounding from summing in another order; anything larger is a
-/// different computation, and training would start from the wrong place.
-const PARITY_ABSOLUTE_TOLERANCE: f32 = 2e-3;
-const PARITY_RELATIVE_TOLERANCE: f32 = 1e-3;
+use super::gpu_math::GpuMath;
+use super::gpu_training::GpuTrainingSet;
+use super::gpu_upload::{gpu_head_family, upload_head_inputs, upload_parameters};
+use super::question_batch::OptionLayout;
+use super::question_selection::{QuestionSelection, RowSource, select_questions};
+use super::trainable_scorer::{FinalLayersScorer, TrainableScorer};
+use super::training_phase::{PreparedTraining, TrainedLayout, TrainingPhase, gpu_failure};
+use crate::decision_models::adapter_training::whole_model_layout::WholeModelLayout;
 
 /// What a session needs from the engine it runs in.
 pub(crate) trait HeadTrainingHost {
-    /// The model's answers to `questions` about `state`, head inputs included.
-    fn read_with_head_inputs(
+    /// The model's answers to `questions` about `state`; with
+    /// [`HeadInputRequest::Include`], also what the final layers read.
+    fn read_answers(
         &mut self,
         state: &OrderedJsonValue,
         questions: &OrderedJsonValue,
+        head_input_request: HeadInputRequest,
     ) -> Result<Vec<QuestionOutcome>, DecisionFailure>;
     fn mlx_runtime(&self) -> Result<&MlxRuntime, DecisionFailure>;
     fn model_directory(&self) -> &Path;
     fn tunable_family(&self) -> TunableHeadFamily;
+
+    /// The whole model as a scorer over the questions at `row_sources`, one
+    /// per training row in row order, its final layers laid out as
+    /// `scorer_layout`. Families that cannot train their whole model yet
+    /// refuse.
+    fn whole_model_scorer(
+        &mut self,
+        _examples: &[TrainingExample],
+        _row_sources: &[RowSource],
+        _scorer_layout: &ParameterLayout,
+    ) -> Result<WholeModelScorer, DecisionFailure> {
+        Err(DecisionFailure::invalid_request(
+            "this model can train only its final layers so far; train without --whole-model",
+        ))
+    }
+}
+
+/// A family's whole model, ready to train.
+pub(crate) struct WholeModelScorer {
+    pub(crate) scorer: Box<dyn TrainableScorer>,
+    pub(crate) layout: Rc<WholeModelLayout>,
+}
+
+/// What preparing builds before the parity check.
+struct PreparedScorer {
+    scorer: Box<dyn TrainableScorer>,
+    option_layout: OptionLayout,
+    starting_parameters: Vec<MlxArray>,
+    trained_layout: TrainedLayout,
 }
 
 /// A training job in progress.
@@ -60,19 +91,6 @@ pub(crate) struct HeadTrainingSession {
     job: HeadTrainingJob,
     read_examples: Vec<Vec<QuestionOutcome>>,
     training: Option<TrainingPhase>,
-}
-
-/// Everything the training passes and the finish need.
-struct TrainingPhase {
-    layout: ParameterLayout,
-    training_set: GpuTrainingSet,
-    served_parameters: Vec<MlxArray>,
-    trainer: GpuTrainer,
-    /// For each example and question, its row in the training set, or
-    /// `None` when training left it out.
-    question_rows: Vec<Vec<Option<usize>>>,
-    largest_parity_gap: f32,
-    indistinguishable_question_count: usize,
 }
 
 impl HeadTrainingSession {
@@ -102,28 +120,12 @@ impl HeadTrainingSession {
         if self.training.is_none() {
             self.training = Some(self.prepare_training(host)?);
         }
-        let runtime = host.mlx_runtime()?;
-        let math = GpuMath { runtime };
         let Some(training) = self.training.as_mut() else {
             return Err(DecisionFailure::fatal_execution(
                 "the training was not prepared",
             ));
         };
-        match training
-            .trainer
-            .advance(math, &training.training_set, &training.served_parameters)
-            .map_err(gpu_failure)?
-        {
-            TrainerStep::Running {
-                completed_epochs,
-                total_epochs,
-            } => Ok(HeadTrainingStep::Progress {
-                stage: HeadTrainingStage::Training,
-                completed: completed_epochs,
-                total: total_epochs,
-            }),
-            TrainerStep::Finished => self.finish(math),
-        }
+        training.advance(host.mlx_runtime()?, &self.read_examples)
     }
 
     fn read_next_example(
@@ -131,7 +133,12 @@ impl HeadTrainingSession {
         host: &mut dyn HeadTrainingHost,
     ) -> Result<HeadTrainingStep, DecisionFailure> {
         let example = &self.job.examples[self.read_examples.len()];
-        let question_outcomes = host.read_with_head_inputs(&example.state, &example.questions)?;
+        let head_input_request = match self.job.scope {
+            TrainingScope::FinalLayers => HeadInputRequest::Include,
+            TrainingScope::WholeModel => HeadInputRequest::Omit,
+        };
+        let question_outcomes =
+            host.read_answers(&example.state, &example.questions, head_input_request)?;
         if question_outcomes.len() != example.question_roles.len() {
             return Err(DecisionFailure::invalid_request(&format!(
                 "example {} has {} questions but {} roles",
@@ -159,289 +166,97 @@ impl HeadTrainingSession {
                 return Err(DecisionFailure::fatal_execution(&read_error.to_string()));
             }
         };
-        let selection = select_questions(
-            &self.job,
-            &self.read_examples,
-            shipped_head.trainable_head.as_ref(),
-        )?;
-        let math = GpuMath {
-            runtime: host.mlx_runtime()?,
+        let final_layers = match self.job.scope {
+            TrainingScope::FinalLayers => Some(shipped_head.trainable_head.as_ref()),
+            TrainingScope::WholeModel => None,
         };
-        let (head_inputs, option_layout) =
-            upload_head_inputs(math, family, &selection.head_inputs).map_err(gpu_failure)?;
-        let layout = shipped_head.trainable_head.layout().clone();
-        let served_parameters = upload_parameters(math, &layout, &shipped_head.served_parameters)
-            .map_err(gpu_failure)?;
-        let training_set = GpuTrainingSet {
+        let selection = select_questions(&self.job, &self.read_examples, final_layers)?;
+        let prepared_scorer = match self.job.scope {
+            TrainingScope::FinalLayers => final_layers_scorer(host, &shipped_head, &selection)?,
+            TrainingScope::WholeModel => {
+                whole_model_scorer(host, &self.job.examples, &shipped_head, &selection)?
+            }
+        };
+        let settings = match self.job.scope {
+            TrainingScope::FinalLayers => HEAD_TRAINING_SETTINGS,
+            TrainingScope::WholeModel => WHOLE_MODEL_TRAINING_SETTINGS,
+        };
+        TrainingPhase::new(
+            PreparedTraining {
+                trained_layout: prepared_scorer.trained_layout,
+                training_set: GpuTrainingSet {
+                    scorer: prepared_scorer.scorer,
+                    option_layout: prepared_scorer.option_layout,
+                    rows: selection.rows,
+                    training_rows: selection.training_rows,
+                    choosing_rows: selection.choosing_rows,
+                    check_rows: selection.check_rows,
+                },
+                starting_parameters: prepared_scorer.starting_parameters,
+                served_logits: selection.served_logits,
+                question_rows: selection.question_rows,
+                indistinguishable_question_count: selection.indistinguishable_question_count,
+                settings,
+            },
+            host.mlx_runtime()?,
+        )
+    }
+}
+
+/// A final-layer training: what the final layers read, uploaded once, and
+/// the layers as served.
+fn final_layers_scorer(
+    host: &dyn HeadTrainingHost,
+    shipped_head: &ShippedHead,
+    selection: &QuestionSelection<'_>,
+) -> Result<PreparedScorer, DecisionFailure> {
+    let math = GpuMath {
+        runtime: host.mlx_runtime()?,
+    };
+    let family = shipped_head.family;
+    let (head_inputs, option_layout) =
+        upload_head_inputs(math, family, &selection.head_inputs).map_err(gpu_failure)?;
+    let layout = shipped_head.trainable_head.layout().clone();
+    let starting_parameters =
+        upload_parameters(math, &layout, &shipped_head.served_parameters).map_err(gpu_failure)?;
+    Ok(PreparedScorer {
+        scorer: Box::new(FinalLayersScorer {
             family: gpu_head_family(family, &layout),
             head_inputs,
-            option_layout,
-            rows: selection.rows,
-            training_rows: selection.training_rows,
-            choosing_rows: selection.choosing_rows,
-            check_rows: selection.check_rows,
-        };
-        let largest_parity_gap = check_parity(
-            math,
-            &training_set,
-            &served_parameters,
-            &selection.served_logits,
-        )?;
-        Ok(TrainingPhase {
-            layout,
-            training_set,
-            served_parameters,
-            trainer: GpuTrainer::new(HEAD_TRAINING_SETTINGS),
-            question_rows: selection.question_rows,
-            largest_parity_gap,
-            indistinguishable_question_count: selection.indistinguishable_question_count,
-        })
-    }
+        }),
+        option_layout,
+        starting_parameters,
+        trained_layout: TrainedLayout::FinalLayers(layout),
+    })
+}
 
-    fn finish(&mut self, math: GpuMath<'_>) -> Result<HeadTrainingStep, DecisionFailure> {
-        let Some(training) = self.training.take() else {
-            return Err(DecisionFailure::fatal_execution(
-                "the training was not prepared",
-            ));
-        };
-        let runs = training.trainer.into_runs();
-        let Some(best_run) = best_run(&runs) else {
-            return Err(DecisionFailure::fatal_execution("no training run finished"));
-        };
-        let all_rows: Vec<usize> = (0..training.training_set.rows.len()).collect();
-        let trained_scores = question_scores(
-            math,
-            &training.training_set,
-            &best_run.best_parameters,
-            &all_rows,
-        )
+/// A whole-model training: the engine's whole model with add-ons in every
+/// layer, the final layers as served and every add-on switched off.
+fn whole_model_scorer(
+    host: &mut dyn HeadTrainingHost,
+    examples: &[TrainingExample],
+    shipped_head: &ShippedHead,
+    selection: &QuestionSelection<'_>,
+) -> Result<PreparedScorer, DecisionFailure> {
+    let scorer_layout = shipped_head.trainable_head.layout();
+    let whole_model = host.whole_model_scorer(examples, &selection.row_sources, scorer_layout)?;
+    let math = GpuMath {
+        runtime: host.mlx_runtime()?,
+    };
+    let starting_parameters = whole_model
+        .layout
+        .starting_parameters(math, &shipped_head.served_parameters)
         .map_err(gpu_failure)?;
-        let trained_values =
-            download_parameters(math, &best_run.best_parameters).map_err(gpu_failure)?;
-        let outcome = HeadTrainingOutcome {
-            examples: trained_examples(
-                &self.read_examples,
-                &training.question_rows,
-                &trained_scores,
-            ),
-            trained_tensors: trained_tensors(&training.layout, &trained_values),
-            runs: run_summaries(&runs),
-            best_seed: best_run.seed,
-            largest_parity_gap: training.largest_parity_gap,
-            indistinguishable_question_count: training.indistinguishable_question_count,
-        };
-        Ok(HeadTrainingStep::Completed(Box::new(outcome)))
+    let mut option_counts = Vec::with_capacity(selection.served_logits.len());
+    for served_question_logits in &selection.served_logits {
+        option_counts.push(served_question_logits.len());
     }
-}
-
-/// The questions training uses, and the host-side facts about each.
-struct QuestionSelection<'read> {
-    head_inputs: Vec<&'read astronomical_decision_contract::HeadInputs>,
-    served_logits: Vec<Vec<f32>>,
-    rows: Vec<TrainingRow>,
-    training_rows: Vec<usize>,
-    choosing_rows: Vec<usize>,
-    check_rows: Vec<usize>,
-    question_rows: Vec<Vec<Option<usize>>>,
-    indistinguishable_question_count: usize,
-}
-
-fn select_questions<'read>(
-    job: &HeadTrainingJob,
-    read_examples: &'read [Vec<QuestionOutcome>],
-    trainable_head: &dyn astronomical_decision_training::trainable_head::TrainableHead,
-) -> Result<QuestionSelection<'read>, DecisionFailure> {
-    let mut selection = QuestionSelection {
-        head_inputs: Vec::new(),
-        served_logits: Vec::new(),
-        rows: Vec::new(),
-        training_rows: Vec::new(),
-        choosing_rows: Vec::new(),
-        check_rows: Vec::new(),
-        question_rows: Vec::with_capacity(read_examples.len()),
-        indistinguishable_question_count: 0,
-    };
-    for (example, question_outcomes) in job.examples.iter().zip(read_examples) {
-        let mut example_rows = Vec::with_capacity(question_outcomes.len());
-        for (role, outcome) in example.question_roles.iter().zip(question_outcomes) {
-            example_rows.push(select_question(
-                &mut selection,
-                *role,
-                outcome,
-                trainable_head,
-            )?);
-        }
-        selection.question_rows.push(example_rows);
-    }
-    Ok(selection)
-}
-
-/// Adds one question to the selection, or leaves it out when its options
-/// read alike; returns its row.
-fn select_question<'read>(
-    selection: &mut QuestionSelection<'read>,
-    role: QuestionRole,
-    outcome: &'read QuestionOutcome,
-    trainable_head: &dyn astronomical_decision_training::trainable_head::TrainableHead,
-) -> Result<Option<usize>, DecisionFailure> {
-    let option_count = outcome.option_logits.len();
-    if (outcome.input_coverage.distinguishable_option_count as usize) < option_count {
-        selection.indistinguishable_question_count += usize::from(role.correct_option().is_some());
-        return Ok(None);
-    }
-    let Some(head_inputs) = &outcome.head_inputs else {
-        return Err(DecisionFailure::fatal_execution(
-            "the engine returned no head inputs",
-        ));
-    };
-    if let Err(mismatch) = trainable_head.check_inputs(head_inputs) {
-        return Err(DecisionFailure::fatal_execution(&mismatch.to_string()));
-    }
-    if let Some(correct_option) = role.correct_option()
-        && correct_option >= option_count
-    {
-        return Err(DecisionFailure::invalid_request(&format!(
-            "question {} has {option_count} options, so option {correct_option} cannot be its right answer",
-            outcome.question_name
-        )));
-    }
-    let row = selection.rows.len();
-    let temperature = outcome.applied_temperature;
-    let training_row = match role {
-        QuestionRole::Check => TrainingRow::Check {
-            shipped_probabilities: narrowed(&tempered_probabilities(
-                &outcome.option_logits,
-                temperature,
-            )),
-            temperature,
-        },
-        labelled_role => TrainingRow::Labelled {
-            correct_option: labelled_role.correct_option().unwrap_or(0),
-            temperature,
-        },
-    };
-    match role {
-        QuestionRole::Training { .. } => selection.training_rows.push(row),
-        QuestionRole::Choosing { .. } => selection.choosing_rows.push(row),
-        QuestionRole::Check => selection.check_rows.push(row),
-        QuestionRole::Judging { .. } => {}
-    }
-    selection.rows.push(training_row);
-    selection.head_inputs.push(head_inputs);
-    selection.served_logits.push(outcome.option_logits.clone());
-    Ok(Some(row))
-}
-
-fn narrowed(probabilities: &[f64]) -> Vec<f32> {
-    let mut narrowed_values = Vec::with_capacity(probabilities.len());
-    for probability in probabilities {
-        narrowed_values.push(*probability as f32);
-    }
-    narrowed_values
-}
-
-/// The largest gap between the model's scores and the GPU copy's with the
-/// shipped weights; refuses a gap beyond rounding.
-fn check_parity(
-    math: GpuMath<'_>,
-    training_set: &GpuTrainingSet,
-    served_parameters: &[MlxArray],
-    served_logits: &[Vec<f32>],
-) -> Result<f32, DecisionFailure> {
-    let all_rows: Vec<usize> = (0..served_logits.len()).collect();
-    let gpu_scores =
-        question_scores(math, training_set, served_parameters, &all_rows).map_err(gpu_failure)?;
-    let mut largest_gap = 0.0_f32;
-    for (gpu_question, served_question) in gpu_scores.iter().zip(served_logits) {
-        for (gpu_score, served_score) in gpu_question.iter().zip(served_question) {
-            let gap = (gpu_score - served_score).abs();
-            let allowed =
-                PARITY_ABSOLUTE_TOLERANCE + PARITY_RELATIVE_TOLERANCE * served_score.abs();
-            let is_close = gap <= allowed;
-            if !is_close {
-                return Err(DecisionFailure::fatal_execution(&format!(
-                    "the GPU copy of the final layers scores {gap:.5} away from the model, so training would start from the wrong place; nothing was trained"
-                )));
-            }
-            largest_gap = largest_gap.max(gap);
-        }
-    }
-    Ok(largest_gap)
-}
-
-/// The run with the lowest choosing loss; the first on a tie.
-fn best_run(runs: &[GpuSeedRun]) -> Option<&GpuSeedRun> {
-    let mut best_so_far: Option<&GpuSeedRun> = None;
-    for run in runs {
-        let is_better = match best_so_far {
-            Some(current_best) => run.best_choosing_loss < current_best.best_choosing_loss,
-            None => true,
-        };
-        if is_better {
-            best_so_far = Some(run);
-        }
-    }
-    best_so_far
-}
-
-fn trained_examples(
-    read_examples: &[Vec<QuestionOutcome>],
-    question_rows: &[Vec<Option<usize>>],
-    trained_scores: &[Vec<f32>],
-) -> Vec<Vec<TrainedQuestion>> {
-    let mut examples = Vec::with_capacity(read_examples.len());
-    for (question_outcomes, example_rows) in read_examples.iter().zip(question_rows) {
-        let mut trained_questions = Vec::with_capacity(question_outcomes.len());
-        for (outcome, row) in question_outcomes.iter().zip(example_rows) {
-            let mut served = outcome.clone();
-            // The inputs stay in the worker; only answers and scores go back.
-            served.head_inputs = None;
-            let trained_logits = match row {
-                Some(row) => trained_scores[*row].clone(),
-                None => Vec::new(),
-            };
-            trained_questions.push(TrainedQuestion {
-                served,
-                trained_logits,
-            });
-        }
-        examples.push(trained_questions);
-    }
-    examples
-}
-
-fn trained_tensors(layout: &ParameterLayout, trained_values: &[f32]) -> Vec<TrainedTensor> {
-    let mut tensors = Vec::with_capacity(layout.tensors.len());
-    for tuned_tensor in layout.head_tuning(trained_values).tensors {
-        tensors.push(TrainedTensor {
-            name: tuned_tensor.name,
-            shape: tuned_tensor.shape,
-            values: FloatVector(tuned_tensor.values),
-        });
-    }
-    tensors
-}
-
-fn run_summaries(runs: &[GpuSeedRun]) -> Vec<RunSummary> {
-    let mut summaries = Vec::with_capacity(runs.len());
-    for run in runs {
-        summaries.push(RunSummary {
-            seed: run.seed,
-            best_choosing_loss: run.best_choosing_loss,
-            best_epoch: run.best_epoch,
-            epochs_run: run.epochs_run,
-            ending: match run.ending {
-                SeedEnding::StoppedImproving => RunEnding::StoppedImproving,
-                SeedEnding::ReachedEpochLimit => RunEnding::ReachedEpochLimit,
-                SeedEnding::NonFiniteStep { epoch } => RunEnding::NonFiniteStep { epoch },
-            },
-        });
-    }
-    summaries
-}
-
-fn gpu_failure(gpu_error: GpuTrainingError) -> DecisionFailure {
-    DecisionFailure::fatal_execution(&gpu_error.to_string())
+    Ok(PreparedScorer {
+        scorer: whole_model.scorer,
+        option_layout: OptionLayout::new(option_counts),
+        starting_parameters,
+        trained_layout: TrainedLayout::WholeModel(whole_model.layout),
+    })
 }
 
 /// Starts a session in an engine's slot, refusing a second one.
@@ -469,11 +284,12 @@ pub(crate) fn keep_session_if_running(
     }
 }
 
-/// Answers `questions` about `state` with head inputs, through `decide`.
+/// Answers `questions` about `state` through `decide`.
 pub(crate) fn read_through_decide(
     engine: &mut dyn crate::DecisionEngine,
     state: &OrderedJsonValue,
     questions: &OrderedJsonValue,
+    head_input_request: HeadInputRequest,
 ) -> Result<Vec<QuestionOutcome>, DecisionFailure> {
     let parsed_questions =
         match astronomical_decision_contract::parse_system_one_questions(questions) {
@@ -484,14 +300,6 @@ pub(crate) fn read_through_decide(
                 ));
             }
         };
-    let engine_output = engine.decide(
-        state,
-        &parsed_questions,
-        astronomical_decision_contract::HeadInputRequest::Include,
-    )?;
+    let engine_output = engine.decide(state, &parsed_questions, head_input_request)?;
     Ok(engine_output.question_outcomes)
 }
-
-#[cfg(test)]
-#[path = "training_session_tests.rs"]
-mod tests;

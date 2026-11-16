@@ -1,5 +1,8 @@
 //! Unit tests for the trained-head sidecar file.
 
+use safetensors::Dtype;
+use safetensors::tensor::TensorView;
+
 use super::*;
 
 fn kev_tuning() -> HeadTuning {

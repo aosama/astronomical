@@ -40,7 +40,9 @@ pub(in crate::worker) async fn cancel_active_generation(
         cancellation_acknowledgement_timeout,
         matches!(
             cancelled_request,
-            ActiveWorkerRequest::Image(_) | ActiveWorkerRequest::Speech(_)
+            ActiveWorkerRequest::Image(_)
+                | ActiveWorkerRequest::Speech(_)
+                | ActiveWorkerRequest::Decisions(_)
         ),
     )
     .await;
@@ -321,10 +323,16 @@ fn publish_observed_memory_facts(
     }
 }
 
-/// The request an image or speech event belongs to, or `None` for any other event.
+/// The request an image, speech or decisions event belongs to, or `None`
+/// for any other event.
 fn stepped_event_request_id(worker_event: &WorkerEvent) -> Option<RequestId> {
     match worker_event {
-        WorkerEvent::ImageGenerationProgress { request_id, .. }
+        WorkerEvent::DecisionHeadTrainingProgress { request_id, .. }
+        | WorkerEvent::DecisionHeadTrained { request_id, .. }
+        | WorkerEvent::DecisionsCompleted { request_id, .. }
+        | WorkerEvent::DecisionsFailed { request_id, .. }
+        | WorkerEvent::DecisionsFinalized { request_id, .. }
+        | WorkerEvent::ImageGenerationProgress { request_id, .. }
         | WorkerEvent::ImageGenerationCompleted { request_id, .. }
         | WorkerEvent::ImageGenerationFailed { request_id, .. }
         | WorkerEvent::ImageGenerationFinalized { request_id, .. }
@@ -336,29 +344,46 @@ fn stepped_event_request_id(worker_event: &WorkerEvent) -> Option<RequestId> {
     }
 }
 
-/// A cancelled image or speech request's progress and outcome are drained;
-/// its finalization acknowledges the cancel, and its cleanup snapshot obeys
-/// the same rules for both kinds.
+/// A cancelled image, speech or decisions request's progress and outcome
+/// are drained; its finalization acknowledges the cancel, and its cleanup
+/// snapshot obeys the rules of its kind.
+///
+/// A decision training reports progress every couple of seconds, so a
+/// progress event is nearly always in flight when its caller leaves. Until
+/// the drain knew these events, that event counted as a protocol violation
+/// and the worker was killed and replaced: the training stopped, but only
+/// by losing the loaded model, and only once the step in flight had ended.
 fn react_to_stepped_cancellation_event(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     stepped_event: WorkerEvent,
 ) -> Result<CancellationEventReaction, WorkerControlError> {
-    let (WorkerEvent::ImageGenerationFinalized {
-        mlx_memory_snapshot,
-        ..
+    match stepped_event {
+        WorkerEvent::ImageGenerationFinalized {
+            mlx_memory_snapshot,
+            ..
+        }
+        | WorkerEvent::SpeechFinalized {
+            mlx_memory_snapshot,
+            ..
+        } => {
+            crate::worker::image_event::publish_image_finalized_memory_snapshot(
+                health_snapshot,
+                mlx_memory_snapshot,
+            )?;
+            Ok(CancellationEventReaction::Acknowledged)
+        }
+        WorkerEvent::DecisionsFinalized {
+            mlx_memory_snapshot,
+            ..
+        } => {
+            crate::worker::embeddings_event::publish_single_shot_finalized_memory_snapshot(
+                health_snapshot,
+                mlx_memory_snapshot,
+            )?;
+            Ok(CancellationEventReaction::Acknowledged)
+        }
+        _ => Ok(CancellationEventReaction::KeepDraining),
     }
-    | WorkerEvent::SpeechFinalized {
-        mlx_memory_snapshot,
-        ..
-    }) = stepped_event
-    else {
-        return Ok(CancellationEventReaction::KeepDraining);
-    };
-    crate::worker::image_event::publish_image_finalized_memory_snapshot(
-        health_snapshot,
-        mlx_memory_snapshot,
-    )?;
-    Ok(CancellationEventReaction::Acknowledged)
 }
 
 /// A chat request's own progress, which simply stops mattering once it is cancelled.
@@ -404,8 +429,8 @@ fn react_to_cancellation_event(
         progress_event if is_progress_of_request(&progress_event, request_id) => {
             Ok(CancellationEventReaction::KeepDraining)
         }
-        // An image or speech request reports progress and its outcome
-        // before the finalization that acknowledges the cancel.
+        // An image, speech or decisions request reports progress and its
+        // outcome before the finalization that acknowledges the cancel.
         stepped_event
             if expects_stepped_finalization
                 && stepped_event_request_id(&stepped_event) == Some(request_id) =>

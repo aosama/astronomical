@@ -1,12 +1,16 @@
-//! The session's host-side steps: which questions training takes, which run
-//! wins, and how trained scores map back to the questions asked.
+//! Which questions a training takes, and what it keeps about each.
 
 use astronomical_decision_contract::{
-    DecisionAnswer, FloatVector, HeadInputs, NoulAnswer, QuestionInputCoverage,
+    DecisionAnswer, FloatVector, NoulAnswer, QuestionInputCoverage,
 };
 use astronomical_decision_training::kev_trainable::KevTrainableHead;
 
 use super::*;
+
+const SOURCE: RowSource = RowSource {
+    example_index: 4,
+    question_index: 1,
+};
 
 fn kev_outcome(question_name: &str, distinguishable_option_count: u32) -> QuestionOutcome {
     QuestionOutcome {
@@ -33,6 +37,7 @@ fn kev_outcome(question_name: &str, distinguishable_option_count: u32) -> Questi
 fn empty_selection<'read>() -> QuestionSelection<'read> {
     QuestionSelection {
         head_inputs: Vec::new(),
+        row_sources: Vec::new(),
         served_logits: Vec::new(),
         rows: Vec::new(),
         training_rows: Vec::new(),
@@ -50,14 +55,16 @@ fn should_take_a_labelled_question_into_its_part() {
     let mut selection = empty_selection();
     let row = select_question(
         &mut selection,
-        QuestionRole::Choosing { correct_option: 1 },
+        (QuestionRole::Choosing { correct_option: 1 }, SOURCE),
         &outcome,
-        &head,
+        Some(&head),
     )
     .unwrap();
     assert_eq!(row, Some(0));
     assert_eq!(selection.choosing_rows, [0]);
     assert!(selection.training_rows.is_empty());
+    assert_eq!(selection.row_sources, [SOURCE]);
+    assert_eq!(selection.head_inputs.len(), 1);
 }
 
 #[test]
@@ -68,9 +75,9 @@ fn should_refuse_a_right_answer_beyond_the_questions_options() {
     // Option 2 of a two-option question would index past its scores.
     let refusal = select_question(
         &mut selection,
-        QuestionRole::Training { correct_option: 2 },
+        (QuestionRole::Training { correct_option: 2 }, SOURCE),
         &outcome,
-        &head,
+        Some(&head),
     );
     assert!(matches!(
         refusal,
@@ -86,45 +93,54 @@ fn should_leave_out_a_question_whose_options_read_alike_and_count_only_labelled_
     let mut selection = empty_selection();
     let labelled = QuestionRole::Judging { correct_option: 0 };
     assert_eq!(
-        select_question(&mut selection, labelled, &outcome, &head).unwrap(),
+        select_question(&mut selection, (labelled, SOURCE), &outcome, Some(&head)).unwrap(),
         None
     );
     assert_eq!(
-        select_question(&mut selection, QuestionRole::Check, &outcome, &head).unwrap(),
+        select_question(
+            &mut selection,
+            (QuestionRole::Check, SOURCE),
+            &outcome,
+            Some(&head)
+        )
+        .unwrap(),
         None
     );
     assert_eq!(selection.indistinguishable_question_count, 1);
 }
 
-fn seed_run(seed: u64, best_choosing_loss: f64) -> GpuSeedRun {
-    GpuSeedRun {
-        seed,
-        best_parameters: Vec::new(),
-        best_choosing_loss,
-        best_epoch: 3,
-        epochs_run: 9,
-        ending: SeedEnding::StoppedImproving,
-    }
+#[test]
+fn should_take_a_question_without_head_inputs_for_a_whole_model_training() {
+    let mut outcome = kev_outcome("in_love", 2);
+    outcome.head_inputs = None;
+    let mut selection = empty_selection();
+    let row = select_question(
+        &mut selection,
+        (QuestionRole::Training { correct_option: 0 }, SOURCE),
+        &outcome,
+        None,
+    )
+    .unwrap();
+    assert_eq!(row, Some(0));
+    assert_eq!(selection.training_rows, [0]);
+    assert_eq!(selection.row_sources, [SOURCE]);
+    assert!(selection.head_inputs.is_empty());
 }
 
 #[test]
-fn should_pick_the_lowest_choosing_loss_and_the_first_run_on_a_tie() {
-    let runs = [seed_run(1, 0.5), seed_run(2, 0.25), seed_run(3, 0.25)];
-    let Some(winning_run) = best_run(&runs) else {
-        panic!("three finished runs must have a best");
-    };
-    assert_eq!(winning_run.seed, 2);
-    assert!(best_run(&[]).is_none());
-}
-
-#[test]
-fn should_map_trained_scores_back_and_leave_left_out_questions_empty() {
-    let read_examples = vec![vec![kev_outcome("in_love", 2), kev_outcome("grieving", 1)]];
-    let question_rows = vec![vec![Some(0), None]];
-    let trained_scores = vec![vec![-0.5, 1.5]];
-    let trained = trained_examples(&read_examples, &question_rows, &trained_scores);
-    assert_eq!(trained[0][0].trained_logits, [-0.5, 1.5]);
-    assert!(trained[0][1].trained_logits.is_empty());
-    // What the final layers read stays in the worker.
-    assert!(trained[0][0].served.head_inputs.is_none());
+fn should_refuse_a_final_layer_question_that_came_back_without_head_inputs() {
+    let head = KevTrainableHead::new(2, 3);
+    let mut outcome = kev_outcome("in_love", 2);
+    outcome.head_inputs = None;
+    let mut selection = empty_selection();
+    let refusal = select_question(
+        &mut selection,
+        (QuestionRole::Training { correct_option: 0 }, SOURCE),
+        &outcome,
+        Some(&head),
+    );
+    assert!(matches!(
+        refusal,
+        Err(DecisionFailure::FatalExecution { .. })
+    ));
 }

@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 use astronomical_decision_contract::head_training_job::{
     HeadTrainingJob, HeadTrainingOutcome, QuestionRole, TrainedQuestion, TrainingExample,
+    TrainingScope,
 };
 use astronomical_decision_contract::{QuestionOutcome, parse_system_one_questions};
 use astronomical_decision_training::holdout_split::state_group_key;
@@ -52,6 +53,7 @@ impl PreparedJob {
 pub(super) fn training_job(
     labelled_examples: &[LabelledExample],
     check_examples: &[CheckExample],
+    scope: TrainingScope,
 ) -> Result<PreparedJob, DecisionToolError> {
     let mut state_keys = Vec::with_capacity(labelled_examples.len());
     for labelled_example in labelled_examples {
@@ -61,6 +63,7 @@ pub(super) fn training_job(
     let mut prepared = PreparedJob {
         job: HeadTrainingJob {
             examples: Vec::with_capacity(labelled_examples.len() + check_examples.len()),
+            scope,
         },
         example_parts: Vec::with_capacity(labelled_examples.len()),
         part_counts: PartCounts::default(),

@@ -1,5 +1,7 @@
 //! Unit tests for assigning states to the parts of a training.
 
+use astronomical_decision_contract::head_training_job::TrainingScope;
+
 use super::*;
 
 /// `state_count` distinct keys spread far apart, as hashes are.
@@ -52,16 +54,44 @@ fn should_assign_nothing_without_states() {
 
 #[test]
 fn should_refuse_too_few_questions_or_states() {
+    let final_layers = TrainingScope::FinalLayers;
     assert_eq!(
-        check_training_data(199, 60),
+        check_training_data(199, 60, final_layers),
         Err(TooLittleData::TooFewQuestions {
             have: 199,
-            need: 200
+            need: 200,
+            scope: final_layers,
         })
     );
     assert_eq!(
-        check_training_data(500, 29),
-        Err(TooLittleData::TooFewStates { have: 29, need: 30 })
+        check_training_data(500, 29, final_layers),
+        Err(TooLittleData::TooFewStates {
+            have: 29,
+            need: 30,
+            scope: final_layers,
+        })
     );
-    assert_eq!(check_training_data(200, 30), Ok(()));
+    assert_eq!(check_training_data(200, 30, final_layers), Ok(()));
+}
+
+#[test]
+fn should_ask_more_of_a_whole_model_training() {
+    let whole_model = TrainingScope::WholeModel;
+    assert_eq!(
+        check_training_data(999, 400, whole_model),
+        Err(TooLittleData::TooFewQuestions {
+            have: 999,
+            need: 1_000,
+            scope: whole_model,
+        })
+    );
+    assert_eq!(
+        check_training_data(1_000, 99, whole_model),
+        Err(TooLittleData::TooFewStates {
+            have: 99,
+            need: 100,
+            scope: whole_model,
+        })
+    );
+    assert_eq!(check_training_data(1_000, 100, whole_model), Ok(()));
 }

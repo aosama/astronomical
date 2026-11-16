@@ -401,12 +401,13 @@ fn weight_file_bytes(model_directory: &Path) -> u64 {
 
 /// What a head training needs from this engine.
 impl HeadTrainingHost for KevDecisionEngine {
-    fn read_with_head_inputs(
+    fn read_answers(
         &mut self,
         state: &OrderedJsonValue,
         questions: &OrderedJsonValue,
+        head_input_request: HeadInputRequest,
     ) -> Result<Vec<QuestionOutcome>, DecisionFailure> {
-        read_through_decide(self, state, questions)
+        read_through_decide(self, state, questions, head_input_request)
     }
 
     fn mlx_runtime(&self) -> Result<&MlxRuntime, DecisionFailure> {

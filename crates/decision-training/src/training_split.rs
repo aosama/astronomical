@@ -13,6 +13,8 @@
 
 use std::collections::HashMap;
 
+use astronomical_decision_contract::head_training_job::TrainingScope;
+
 /// Out of every this many distinct states (ordered by their stable hash),
 /// the first three are judged and the next three choose.
 const STATE_POSITIONS_PER_CYCLE: usize = 20;
@@ -27,6 +29,14 @@ pub const MINIMUM_TRAINING_QUESTIONS: usize = 200;
 /// ... or fewer distinct states, which would leave each of the three parts
 /// only a handful of states to stand for everything.
 pub const MINIMUM_TRAINING_STATES: usize = 30;
+/// A whole-model training refuses fewer questions than this. Its add-ons
+/// let every layer change, so a few hundred questions are memorised rather
+/// than learned, and the judging part needs about 150 questions to tell
+/// the smaller gains of a sound training from luck.
+pub const MINIMUM_WHOLE_MODEL_TRAINING_QUESTIONS: usize = 1_000;
+/// ... or fewer distinct states, so no handful of texts dominates what
+/// every layer learns.
+pub const MINIMUM_WHOLE_MODEL_TRAINING_STATES: usize = 100;
 
 /// The part of a training a state's questions belong to.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -62,25 +72,44 @@ pub fn split_parts_by_state(state_keys: &[u64]) -> HashMap<u64, SplitPart> {
 /// Why there is too little data to train on.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TooLittleData {
-    TooFewQuestions { have: usize, need: usize },
-    TooFewStates { have: usize, need: usize },
+    TooFewQuestions {
+        have: usize,
+        need: usize,
+        scope: TrainingScope,
+    },
+    TooFewStates {
+        have: usize,
+        need: usize,
+        scope: TrainingScope,
+    },
 }
 
-/// Refuses to train on fewer questions or states than the gate can judge.
+/// Refuses to train on fewer questions or states than the gate can judge
+/// for a training of `scope`.
 pub fn check_training_data(
     labelled_question_count: usize,
     distinct_state_count: usize,
+    scope: TrainingScope,
 ) -> Result<(), TooLittleData> {
-    if labelled_question_count < MINIMUM_TRAINING_QUESTIONS {
+    let (minimum_questions, minimum_states) = match scope {
+        TrainingScope::FinalLayers => (MINIMUM_TRAINING_QUESTIONS, MINIMUM_TRAINING_STATES),
+        TrainingScope::WholeModel => (
+            MINIMUM_WHOLE_MODEL_TRAINING_QUESTIONS,
+            MINIMUM_WHOLE_MODEL_TRAINING_STATES,
+        ),
+    };
+    if labelled_question_count < minimum_questions {
         return Err(TooLittleData::TooFewQuestions {
             have: labelled_question_count,
-            need: MINIMUM_TRAINING_QUESTIONS,
+            need: minimum_questions,
+            scope,
         });
     }
-    if distinct_state_count < MINIMUM_TRAINING_STATES {
+    if distinct_state_count < minimum_states {
         return Err(TooLittleData::TooFewStates {
             have: distinct_state_count,
-            need: MINIMUM_TRAINING_STATES,
+            need: minimum_states,
+            scope,
         });
     }
     Ok(())

@@ -4,6 +4,7 @@ use astronomical_decision_contract::DecisionQuestionKind;
 use astronomical_decision_contract::calibration_file::{
     KindCalibration, parse_calibration_document,
 };
+use astronomical_decision_contract::decision_adapters_file::LinearAdapter;
 use astronomical_decision_contract::head_tuning_file::TunedTensor;
 
 use super::*;
@@ -68,6 +69,7 @@ fn calibration_only(calibration_override: &CalibrationOverride) -> FolderAdditio
     FolderAdditions {
         calibration_override: Some(calibration_override),
         head_tuning: None,
+        decision_adapters: None,
     }
 }
 
@@ -376,6 +378,7 @@ fn should_write_a_trained_head_that_reads_back_exactly() {
         FolderAdditions {
             calibration_override: None,
             head_tuning: Some((&scorer_bias_tuning(0.75), TunableHeadFamily::Laya)),
+            decision_adapters: None,
         },
         &mut RecordedProgress::default(),
     )
@@ -422,6 +425,7 @@ fn should_keep_an_earlier_trained_head_when_only_calibrating() {
         FolderAdditions {
             calibration_override: None,
             head_tuning: Some((&scorer_bias_tuning(2.0), TunableHeadFamily::Laya)),
+            decision_adapters: None,
         },
         &mut RecordedProgress::default(),
     )
@@ -451,6 +455,7 @@ fn should_refuse_a_trained_head_that_cannot_be_written_and_leave_nothing() {
         FolderAdditions {
             calibration_override: None,
             head_tuning: Some((&short_tensor, TunableHeadFamily::Laya)),
+            decision_adapters: None,
         },
         &mut RecordedProgress::default(),
     );
@@ -460,4 +465,102 @@ fn should_refuse_a_trained_head_that_cannot_be_written_and_leave_nothing() {
     ));
     assert!(!output_directory.exists());
     assert!(!partial_directory_for(&output_directory).exists());
+}
+
+/// Two add-ons, given out of name order, as a caller might build them.
+fn two_layer_adapters() -> DecisionAdapters {
+    DecisionAdapters {
+        adapters: vec![
+            LinearAdapter {
+                target: "head.layers.0.linear1".to_owned(),
+                rank: 1,
+                input_width: 2,
+                output_width: 2,
+                down_values: vec![0.5, -0.5],
+                up_values: vec![1.0e-3, -2.0e-3],
+            },
+            LinearAdapter {
+                target: "encoder.layers.0.attn.Wo".to_owned(),
+                rank: 1,
+                input_width: 2,
+                output_width: 1,
+                down_values: vec![0.25, 0.75],
+                up_values: vec![0.0],
+            },
+        ],
+    }
+}
+
+#[test]
+fn should_write_add_ons_beside_the_trained_head_that_read_back_exactly() {
+    let work_directory = tempfile::tempdir().unwrap();
+    let source_directory = source_model_folder(work_directory.path());
+    let output_directory = work_directory.path().join("laya-whole");
+
+    write_calibrated_model_folder(
+        &whole_folder(&source_directory),
+        &output_directory,
+        FolderAdditions {
+            calibration_override: None,
+            head_tuning: Some((&scorer_bias_tuning(0.75), TunableHeadFamily::Laya)),
+            decision_adapters: Some(&two_layer_adapters()),
+        },
+        &mut RecordedProgress::default(),
+    )
+    .unwrap();
+
+    let written = fs::read(output_directory.join(DECISION_ADAPTERS_FILE_NAME)).unwrap();
+    let read_back = parse_decision_adapters(&written).unwrap();
+    assert_eq!(read_back.adapters.len(), 2);
+    assert_eq!(read_back.adapters[0].target, "encoder.layers.0.attn.Wo");
+    assert_eq!(read_back.adapters[1].up_values, vec![1.0e-3, -2.0e-3]);
+    assert!(
+        output_directory
+            .join(DECISION_HEAD_TUNING_FILE_NAME)
+            .exists()
+    );
+}
+
+#[test]
+fn should_replace_earlier_add_ons_and_keep_them_when_only_calibrating() {
+    let work_directory = tempfile::tempdir().unwrap();
+    let source_directory = source_model_folder(work_directory.path());
+    let earlier_adapters = decision_adapters_bytes(&two_layer_adapters()).unwrap();
+    fs::write(
+        source_directory.join(DECISION_ADAPTERS_FILE_NAME),
+        &earlier_adapters,
+    )
+    .unwrap();
+    let calibrated_directory = work_directory.path().join("laya-calibrated");
+    write_calibrated_model_folder(
+        &whole_folder(&source_directory),
+        &calibrated_directory,
+        calibration_only(&noul_calibration()),
+        &mut RecordedProgress::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(calibrated_directory.join(DECISION_ADAPTERS_FILE_NAME)).unwrap(),
+        earlier_adapters
+    );
+
+    let mut retrained_adapters = two_layer_adapters();
+    retrained_adapters.adapters.truncate(1);
+    let retrained_directory = work_directory.path().join("laya-retrained");
+    write_calibrated_model_folder(
+        &whole_folder(&source_directory),
+        &retrained_directory,
+        FolderAdditions {
+            calibration_override: None,
+            head_tuning: None,
+            decision_adapters: Some(&retrained_adapters),
+        },
+        &mut RecordedProgress::default(),
+    )
+    .unwrap();
+    let written = fs::read(retrained_directory.join(DECISION_ADAPTERS_FILE_NAME)).unwrap();
+    assert_eq!(
+        parse_decision_adapters(&written).unwrap(),
+        retrained_adapters
+    );
 }

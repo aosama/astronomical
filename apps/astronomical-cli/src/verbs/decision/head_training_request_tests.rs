@@ -49,7 +49,7 @@ fn should_start_a_fresh_line_for_each_stage_and_finish_when_runs_stop_early() {
         120,
         &mut progress_text,
     );
-    // A run that stops improving jumps the count to the end of its passes.
+    // A run that stops improving jumps the count to the end of its steps.
     report(
         &mut stage_progress,
         HeadTrainingStage::Training,
@@ -63,11 +63,11 @@ fn should_start_a_fresh_line_for_each_stage_and_finish_when_runs_stop_early() {
         "{progress_lines}"
     );
     assert!(
-        progress_lines.contains("Training: 1 of 120 passes"),
+        progress_lines.contains("Training: 1 of 120 steps"),
         "{progress_lines}"
     );
     assert!(
-        progress_lines.ends_with("120 of 120 passes (100%), done\n"),
+        progress_lines.ends_with("120 of 120 steps (100%), done\n"),
         "{progress_lines}"
     );
 }
@@ -77,6 +77,7 @@ fn should_return_the_outcome_the_terminal_frame_carries() {
     let outcome = HeadTrainingOutcome {
         examples: Vec::new(),
         trained_tensors: Vec::new(),
+        adapter_tensors: Vec::new(),
         runs: vec![RunSummary {
             seed: 1,
             best_choosing_loss: 0.4,

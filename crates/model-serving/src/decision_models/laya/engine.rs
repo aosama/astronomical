@@ -1,49 +1,54 @@
 //! The Laya decision engine over direct MLX arrays.
 //!
-//! One request becomes one sequence per question. The sequences are grouped
-//! into forward passes of bounded size; each pass runs the ModernBERT trunk
-//! and the decision head as one lazy graph and reads back one logit per
-//! option. The contract crate then calibrates the logits into typed answers.
-
-use std::path::{Path, PathBuf};
-use std::time::Instant;
+//! The engine owns a model folder's lifecycle: what it reads at construction
+//! (calibration, a trained scorer, add-on weights), loading the artifact,
+//! answering requests through the loaded model's forward pass, and any
+//! training in progress. The contract crate turns the logits into typed
+//! answers.
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::time::Instant;
 
 use astronomical_decision_contract::calibration_file::CalibrationOverride;
-use astronomical_decision_contract::head_training_job::HeadTrainingJob;
+use astronomical_decision_contract::decision_adapters_file::DecisionAdapters;
+use astronomical_decision_contract::head_training_job::{HeadTrainingJob, TrainingExample};
 use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFamily};
-use astronomical_decision_contract::laya_rendering::{
-    laya_question_type_index, laya_truncates_state_from_the_left,
-};
-use astronomical_decision_contract::laya_sequence::{
-    LayaQuestionSequence, LayaSequenceError, build_laya_question_sequence, encode_laya_state,
-};
+use astronomical_decision_contract::laya_sequence::LayaQuestionSequence;
 use astronomical_decision_contract::{
     DecisionFailure, DecisionQuestion, DecisionQuestionKind, FloatVector, HeadInputRequest,
     HeadInputs, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
     answer_from_probabilities, calibrated_probabilities,
 };
+use astronomical_decision_training::head_parameters::ParameterLayout;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
 use mlx_bridge::MlxArray;
 
 use crate::decision_engine::HeadTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
+use crate::decision_models::decision_adapters::{
+    check_adapter_targets, read_decision_adapters, unusable_adapters,
+};
+use crate::decision_models::head_training::question_selection::RowSource;
 use crate::decision_models::head_training::training_session::{
-    HeadTrainingHost, HeadTrainingSession, keep_session_if_running, read_through_decide,
-    start_session,
+    HeadTrainingHost, HeadTrainingSession, WholeModelScorer, keep_session_if_running,
+    read_through_decide, start_session,
 };
 use crate::decision_models::head_tuning::{check_tuned_shape, read_head_tuning, unusable_tuning};
+use crate::decision_models::laya::adapter_targets::laya_adapter_targets;
 use crate::decision_models::laya::artifact::LayaArtifact;
-use crate::decision_models::laya::batching::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
 use crate::decision_models::laya::configuration::LayaConfiguration;
-use crate::decision_models::laya::head::{HeadPassRows, LayaDecisionHead, ScoredHeadRow};
+use crate::decision_models::laya::head::ScoredHeadRow;
+use crate::decision_models::laya::loaded_state::LoadedLayaState;
+#[cfg(test)]
+use crate::decision_models::laya::loaded_state::sequence_failure;
 use crate::decision_models::laya::tokenizer::LayaTokenizer;
+use crate::decision_models::laya::whole_model_scorer::LayaWholeModelScorer;
+use crate::linear_adapters::LinearAdapters;
 use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
-use crate::modernbert::token_batch::PaddedTokenBatch;
-use crate::modernbert::trunk::{ModernBertTrunk, ModernBertTrunkError};
 use crate::modernbert::weight_layout::{ModernBertWeightLayout, TokenEmbeddingStorage};
 
 /// The tensor-name prefix a Laya checkpoint keeps its encoder under.
@@ -65,20 +70,14 @@ pub struct LayaDecisionEngine {
     calibration_override: CalibrationOverride,
     /// The folder's trained scorer, read at construction for the same reason.
     head_tuning: HeadTuning,
-    loaded_state: Option<LoadedLayaState>,
+    /// The folder's add-on weights, read at construction for the same reason.
+    decision_adapters: DecisionAdapters,
+    /// Shared, because a whole-model training's loss is built inside an MLX
+    /// closure that must own everything it reads.
+    loaded_state: Option<Rc<LoadedLayaState>>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
     /// A training of the final layers in progress, if any.
     head_training: Option<HeadTrainingSession>,
-}
-
-struct LoadedLayaState {
-    runtime: MlxRuntime,
-    tensors: MlxSafetensors,
-    /// Trained scorer tensors in 32-bit, used in place of the shipped ones.
-    tuned_tensors: BTreeMap<String, MlxArray>,
-    configuration: LayaConfiguration,
-    weight_layout: ModernBertWeightLayout,
-    tokenizer: LayaTokenizer,
 }
 
 impl LayaDecisionEngine {
@@ -99,11 +98,13 @@ impl LayaDecisionEngine {
         };
         let calibration_override = read_calibration_override(model_directory)?;
         let head_tuning = read_head_tuning(model_directory, TunableHeadFamily::Laya)?;
+        let decision_adapters = read_decision_adapters(model_directory)?;
         Ok(Self {
             model_id: model_id.into(),
             model_directory: model_directory.to_path_buf(),
             calibration_override,
             head_tuning,
+            decision_adapters,
             effective_mlx_memory_ceiling_bytes,
             mlx_buffer_cache_limit_bytes,
             resident_weight_bytes: artifact.weights_file_bytes,
@@ -130,128 +131,6 @@ impl LayaDecisionEngine {
             ));
         };
         loaded_state.build_question_sequences(state, questions)
-    }
-}
-
-impl LoadedLayaState {
-    fn build_question_sequences(
-        &self,
-        state: &OrderedJsonValue,
-        questions: &[DecisionQuestion],
-    ) -> Result<Vec<LayaQuestionSequence>, DecisionFailure> {
-        let special_tokens = &self.tokenizer.special_tokens;
-        let state_token_ids = encode_laya_state(&self.tokenizer, special_tokens, state)
-            .map_err(LayaSequenceError::from)
-            .map_err(sequence_failure)?;
-        let truncate_state_from_the_left = laya_truncates_state_from_the_left(state);
-        let mut question_sequences = Vec::with_capacity(questions.len());
-        for question in questions {
-            question_sequences.push(
-                build_laya_question_sequence(
-                    &self.tokenizer,
-                    special_tokens,
-                    self.configuration.sequence_limits,
-                    question,
-                    &state_token_ids,
-                    truncate_state_from_the_left,
-                )
-                .map_err(sequence_failure)?,
-            );
-        }
-        Ok(question_sequences)
-    }
-
-    /// Runs every forward pass the request needs and returns each question's
-    /// option logits, in request order.
-    fn scored_rows_by_question(
-        &self,
-        questions: &[DecisionQuestion],
-        question_sequences: &[LayaQuestionSequence],
-        head_input_request: HeadInputRequest,
-    ) -> Result<Vec<ScoredHeadRow>, DecisionFailure> {
-        let mut sequence_lengths = Vec::with_capacity(question_sequences.len());
-        for question_sequence in question_sequences {
-            sequence_lengths.push(question_sequence.token_ids.len());
-        }
-        let mut scored_rows_by_question = Vec::with_capacity(questions.len());
-        for _ in questions {
-            scored_rows_by_question.push(None);
-        }
-        for pass_question_indices in plan_forward_passes(&sequence_lengths, PADDED_TOKENS_PER_PASS)
-        {
-            let pass_rows = self.run_forward_pass(
-                questions,
-                question_sequences,
-                &pass_question_indices,
-                head_input_request,
-            )?;
-            for (question_index, scored_row) in pass_question_indices.into_iter().zip(pass_rows) {
-                scored_rows_by_question[question_index] = Some(scored_row);
-            }
-        }
-        let mut scored_rows = Vec::with_capacity(questions.len());
-        for scored_row in scored_rows_by_question {
-            let Some(scored_row) = scored_row else {
-                return Err(DecisionFailure::fatal_execution(
-                    "a question was left out of every forward pass",
-                ));
-            };
-            scored_rows.push(scored_row);
-        }
-        Ok(scored_rows)
-    }
-
-    /// Runs one forward pass over the chosen questions and returns their option logits.
-    fn run_forward_pass(
-        &self,
-        questions: &[DecisionQuestion],
-        question_sequences: &[LayaQuestionSequence],
-        pass_question_indices: &[usize],
-        head_input_request: HeadInputRequest,
-    ) -> Result<Vec<ScoredHeadRow>, DecisionFailure> {
-        let mut token_sequences = Vec::with_capacity(pass_question_indices.len());
-        let mut question_type_indices = Vec::with_capacity(pass_question_indices.len());
-        let mut option_marker_positions = Vec::with_capacity(pass_question_indices.len());
-        for question_index in pass_question_indices {
-            let question_sequence = &question_sequences[*question_index];
-            token_sequences.push(question_sequence.token_ids.as_slice());
-            question_type_indices.push(laya_question_type_index(questions[*question_index].kind()));
-            option_marker_positions.push(question_sequence.option_marker_positions.as_slice());
-        }
-        let token_batch =
-            match PaddedTokenBatch::from_sequences(&token_sequences, self.tokenizer.pad_token_id) {
-                Ok(token_batch) => token_batch,
-                Err(batch_error) => {
-                    return Err(DecisionFailure::fatal_execution(&format!(
-                        "the question sequences could not be batched: {batch_error}"
-                    )));
-                }
-            };
-        let trunk = ModernBertTrunk {
-            runtime: &self.runtime,
-            tensors: &self.tensors,
-            configuration: &self.configuration.encoder,
-            weight_layout: &self.weight_layout,
-        };
-        let head = LayaDecisionHead {
-            runtime: &self.runtime,
-            tensors: &self.tensors,
-            tuned_tensors: &self.tuned_tensors,
-            configuration: &self.configuration,
-        };
-        let trunk_hidden_states = trunk
-            .encode_hidden_states(&token_batch)
-            .map_err(forward_failure)?;
-        head.scored_rows(
-            &trunk_hidden_states,
-            &HeadPassRows {
-                token_batch: &token_batch,
-                question_type_indices: &question_type_indices,
-                option_marker_positions: &option_marker_positions,
-            },
-            head_input_request,
-        )
-        .map_err(forward_failure)
     }
 }
 
@@ -299,14 +178,22 @@ impl DecisionEngine for LayaDecisionEngine {
             .sequence_limits
             .maximum_sequence_tokens as u32;
         let tuned_tensors = tuned_head_tensors(&tensors, &self.head_tuning)?;
-        self.loaded_state = Some(LoadedLayaState {
-            weight_layout: detect_weight_layout(&tensors),
+        let weight_layout = detect_weight_layout(&tensors);
+        let adapters = uploaded_adapters(
+            &runtime,
+            &tensors,
+            (&artifact.configuration, &weight_layout),
+            &self.decision_adapters,
+        )?;
+        self.loaded_state = Some(Rc::new(LoadedLayaState {
+            weight_layout,
             runtime,
             tensors,
             tuned_tensors,
+            adapters,
             configuration: artifact.configuration,
             tokenizer,
-        });
+        }));
         Ok(DecisionEngineLoadResult {
             model_id: self.model_id.clone(),
             maximum_tokens_per_question,
@@ -549,6 +436,25 @@ fn tuned_head_tensors(
     Ok(tuned_tensors)
 }
 
+/// The folder's add-ons on the GPU, each checked against the layer it
+/// belongs to; none when the folder has none.
+fn uploaded_adapters(
+    runtime: &MlxRuntime,
+    tensors: &MlxSafetensors,
+    (configuration, weight_layout): (&LayaConfiguration, &ModernBertWeightLayout),
+    decision_adapters: &DecisionAdapters,
+) -> Result<LinearAdapters, DecisionFailure> {
+    if decision_adapters.is_empty() {
+        return Ok(LinearAdapters::default());
+    }
+    let targets = laya_adapter_targets(tensors, configuration, weight_layout)?;
+    check_adapter_targets(decision_adapters, &targets)?;
+    match LinearAdapters::upload(runtime, decision_adapters) {
+        Ok(adapters) => Ok(adapters),
+        Err(upload_error) => Err(unusable_adapters(&upload_error.to_string())),
+    }
+}
+
 /// Reads how the artifact stores its token embeddings from which tensors it has.
 ///
 /// A quantized table comes with a `scales` tensor and a dense one does not.
@@ -562,31 +468,15 @@ fn detect_weight_layout(tensors: &MlxSafetensors) -> ModernBertWeightLayout {
     ModernBertWeightLayout::new(ENCODER_TENSOR_PREFIX, token_embedding_storage)
 }
 
-/// A question that cannot be laid out is the request's fault; a tokenizer
-/// that cannot encode is the model's.
-fn sequence_failure(sequence_error: LayaSequenceError) -> DecisionFailure {
-    match sequence_error {
-        LayaSequenceError::Rendering(_) | LayaSequenceError::OptionsDoNotFit { .. } => {
-            DecisionFailure::invalid_request(&sequence_error.to_string())
-        }
-        LayaSequenceError::TokenEncoding(_) => {
-            DecisionFailure::fatal_execution(&sequence_error.to_string())
-        }
-    }
-}
-
-fn forward_failure(forward_error: ModernBertTrunkError) -> DecisionFailure {
-    DecisionFailure::fatal_execution(&format!("decision forward pass failed: {forward_error}"))
-}
-
 /// What a head training needs from this engine.
 impl HeadTrainingHost for LayaDecisionEngine {
-    fn read_with_head_inputs(
+    fn read_answers(
         &mut self,
         state: &OrderedJsonValue,
         questions: &OrderedJsonValue,
+        head_input_request: HeadInputRequest,
     ) -> Result<Vec<QuestionOutcome>, DecisionFailure> {
-        read_through_decide(self, state, questions)
+        read_through_decide(self, state, questions, head_input_request)
     }
 
     fn mlx_runtime(&self) -> Result<&MlxRuntime, DecisionFailure> {
@@ -604,6 +494,20 @@ impl HeadTrainingHost for LayaDecisionEngine {
 
     fn tunable_family(&self) -> TunableHeadFamily {
         TunableHeadFamily::Laya
+    }
+
+    fn whole_model_scorer(
+        &mut self,
+        examples: &[TrainingExample],
+        row_sources: &[RowSource],
+        scorer_layout: &ParameterLayout,
+    ) -> Result<WholeModelScorer, DecisionFailure> {
+        let Some(loaded_state) = self.loaded_state.as_ref() else {
+            return Err(DecisionFailure::fatal_execution(
+                "the decision engine was asked to train before load",
+            ));
+        };
+        LayaWholeModelScorer::for_rows(loaded_state, examples, row_sources, scorer_layout)
     }
 }
 

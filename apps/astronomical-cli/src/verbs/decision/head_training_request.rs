@@ -137,12 +137,14 @@ fn report_stage_progress(
 }
 
 /// How each stage's progress line reads. A training's total is the most
-/// passes every run could take; runs that stop improving early jump the
+/// steps every run could take; runs that stop improving early jump the
 /// count forward, so the time left shrinks rather than grows.
 fn stage_wording(stage: HeadTrainingStage) -> (&'static str, &'static str) {
     match stage {
         HeadTrainingStage::Reading => ("Reading examples", "examples"),
-        HeadTrainingStage::Training => ("Training", "passes"),
+        HeadTrainingStage::Checking => ("Checking the starting point", "questions"),
+        HeadTrainingStage::Training => ("Training", "steps"),
+        HeadTrainingStage::Scoring => ("Scoring the trained model", "questions"),
     }
 }
 

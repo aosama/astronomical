@@ -10,7 +10,7 @@
 use std::fmt::Write as _;
 
 use astronomical_decision_contract::DecisionQuestionKind;
-use astronomical_decision_contract::head_training_job::{RunEnding, RunSummary};
+use astronomical_decision_contract::head_training_job::{RunEnding, RunSummary, TrainingScope};
 use astronomical_decision_training::calibration_metrics::CalibrationMetrics;
 use astronomical_decision_training::training_verdict::{TrainingRefusal, TrainingVerdict};
 
@@ -19,6 +19,7 @@ use super::training_job::PartCounts;
 /// Everything the report describes.
 pub(super) struct TrainingSummary<'summary> {
     pub(super) model_id: &'summary str,
+    pub(super) scope: TrainingScope,
     pub(super) example_count: usize,
     pub(super) part_counts: PartCounts,
     pub(super) indistinguishable_question_count: usize,
@@ -45,12 +46,21 @@ fn opening_text(training_summary: &TrainingSummary<'_>) -> String {
     let training_count = part_counts.training;
     let choosing_count = part_counts.choosing;
     let judging_count = part_counts.judging;
+    let (what_trains, trainable_copy) = match training_summary.scope {
+        TrainingScope::FinalLayers => ("the final layers of", "the GPU copy of the final layers"),
+        TrainingScope::WholeModel => ("the whole of", "the trainable copy of the whole model"),
+    };
     let mut opening = format!(
-        "Training the final layers of {} on {} examples: {} questions, {training_count} to train on, {choosing_count} to choose with and {judging_count} held back to judge.\n",
+        "Training {what_trains} {} on {} examples: {} questions, {training_count} to train on, {choosing_count} to choose with and {judging_count} held back to judge.\n",
         training_summary.model_id,
         training_summary.example_count,
         training_count + choosing_count + judging_count,
     );
+    if training_summary.scope == TrainingScope::WholeModel {
+        opening.push_str(
+            "Every layer gets small add-on weights that learn alongside the final layers; the original weights are never changed.\n",
+        );
+    }
     if training_summary.indistinguishable_question_count > 0 {
         let _ = writeln!(
             opening,
@@ -60,7 +70,7 @@ fn opening_text(training_summary: &TrainingSummary<'_>) -> String {
     }
     let _ = writeln!(
         opening,
-        "Before training, the GPU copy of the final layers reproduced the model's own scores to within {:.4}.\n",
+        "Before training, {trainable_copy} reproduced the model's own scores to within {:.4}.\n",
         training_summary.largest_parity_gap
     );
     opening

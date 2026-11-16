@@ -17,6 +17,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::decision_models::laya::configuration::LayaConfiguration;
+use crate::linear_adapters::{LinearAdapters, adapted_layer_output};
 use crate::modernbert::attention_mask::key_padding_mask_values;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::{ModernBertTrunkError, slice_stacked_projection};
@@ -31,6 +32,8 @@ pub(crate) struct LayaDecisionHead<'model> {
     pub(crate) tensors: &'model MlxSafetensors,
     /// Trained tensors read in place of the shipped tensors of the same name.
     pub(crate) tuned_tensors: &'model BTreeMap<String, MlxArray>,
+    /// Add-on weights on the head's own layers, or `None` for none.
+    pub(crate) adapters: Option<&'model LinearAdapters>,
     pub(crate) configuration: &'model LayaConfiguration,
 }
 
@@ -75,13 +78,7 @@ impl LayaDecisionHead<'_> {
         pass_rows: &HeadPassRows<'_>,
         head_input_request: HeadInputRequest,
     ) -> Result<Vec<ScoredHeadRow>, ModernBertTrunkError> {
-        let mut head_states = self.add_question_type(trunk_hidden_states, pass_rows)?;
-        let key_padding_mask = self.key_padding_mask(pass_rows.token_batch)?;
-        for head_layer_index in 0..self.configuration.head_layer_count {
-            head_states =
-                self.encode_head_layer(&head_states, head_layer_index, key_padding_mask.as_ref())?;
-        }
-        let marker_states = self.gather_marker_states(&head_states, pass_rows)?;
+        let marker_states = self.marker_states(trunk_hidden_states, pass_rows)?;
         let padded_logits = self.score_markers(&marker_states)?;
         let flat_logits = self
             .runtime
@@ -116,6 +113,32 @@ impl LayaDecisionHead<'_> {
             });
         }
         Ok(scored_rows)
+    }
+
+    /// `[rows, widest option count]` logits, left lazy. A row's slots past
+    /// its own options score position zero again and must be masked.
+    pub(crate) fn padded_option_logits(
+        &self,
+        trunk_hidden_states: &MlxArray,
+        pass_rows: &HeadPassRows<'_>,
+    ) -> Result<MlxArray, ModernBertTrunkError> {
+        let marker_states = self.marker_states(trunk_hidden_states, pass_rows)?;
+        self.score_markers(&marker_states)
+    }
+
+    /// The head layers' states at every option marker, `[rows, widest, hidden]`.
+    fn marker_states(
+        &self,
+        trunk_hidden_states: &MlxArray,
+        pass_rows: &HeadPassRows<'_>,
+    ) -> Result<MlxArray, ModernBertTrunkError> {
+        let mut head_states = self.add_question_type(trunk_hidden_states, pass_rows)?;
+        let key_padding_mask = self.key_padding_mask(pass_rows.token_batch)?;
+        for head_layer_index in 0..self.configuration.head_layer_count {
+            head_states =
+                self.encode_head_layer(&head_states, head_layer_index, key_padding_mask.as_ref())?;
+        }
+        self.gather_marker_states(&head_states, pass_rows)
     }
 
     /// Adds each row's question-type vector to every position of that row.
@@ -295,7 +318,7 @@ impl LayaDecisionHead<'_> {
         let quantized_weights = self.tensor(&format!("{linear_prefix}.weight"))?;
         let scales = self.tensor(&format!("{linear_prefix}.scales"))?;
         let biases = self.tensor(&format!("{linear_prefix}.biases"))?;
-        let projected = self.runtime.quantized_matmul_affine(
+        let shipped_projection = self.runtime.quantized_matmul_affine(
             activations,
             &quantized_weights,
             &scales,
@@ -303,6 +326,13 @@ impl LayaDecisionHead<'_> {
             true,
             self.configuration.encoder.quantization_group_size as i32,
             self.configuration.encoder.quantization_bits as i32,
+        )?;
+        let projected = adapted_layer_output(
+            self.adapters,
+            self.runtime,
+            linear_prefix,
+            activations,
+            shipped_projection,
         )?;
         let bias = self.float32_tensor(&format!("{linear_prefix}.bias"))?;
         Ok(self.runtime.add(&projected, &bias)?)

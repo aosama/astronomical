@@ -3,17 +3,21 @@
 //! - `decision calibrate EXAMPLES [--model MODEL_ID] --output DIR`: fit a
 //!   decision model's temperatures to labelled examples and write a
 //!   calibrated copy of the model to DIR.
-//! - `decision train EXAMPLES [--model MODEL_ID] --output DIR`: train the
-//!   model's final layers on labelled examples and write the trained copy
-//!   to DIR.
+//! - `decision train EXAMPLES [--model MODEL_ID] --output DIR [--whole-model]`:
+//!   train the model's final layers (or, with `--whole-model`, add-on weights
+//!   in every layer too) on labelled examples and write the trained copy to
+//!   DIR.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+
+use astronomical_decision_contract::head_training_job::TrainingScope;
 
 use crate::arguments::UsageError;
 
 const MODEL_FLAG: &str = "--model";
 const OUTPUT_FLAG: &str = "--output";
+const WHOLE_MODEL_FLAG: &str = "--whole-model";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DecisionCommand {
@@ -29,6 +33,9 @@ pub struct DecisionToolArguments {
     pub model_id: Option<String>,
     /// Where the new copy is written; must not exist yet.
     pub output_directory: PathBuf,
+    /// How much of the model `decision train` changes; calibration refuses
+    /// anything but the default.
+    pub training_scope: TrainingScope,
 }
 
 /// Parses everything after `astronomical decision`.
@@ -40,7 +47,12 @@ pub fn parse_decision_command(
     };
     match sub_verb.to_string_lossy().as_ref() {
         "calibrate" => {
-            parse_tool_arguments(&remaining_arguments[1..]).map(DecisionCommand::Calibrate)
+            let calibrate_arguments = parse_tool_arguments(&remaining_arguments[1..])?;
+            if calibrate_arguments.training_scope != TrainingScope::FinalLayers {
+                // Calibration never changes a weight, so it has no scope.
+                return Err(UsageError::UnknownArgument(WHOLE_MODEL_FLAG.to_owned()));
+            }
+            Ok(DecisionCommand::Calibrate(calibrate_arguments))
         }
         "train" => parse_tool_arguments(&remaining_arguments[1..]).map(DecisionCommand::Train),
         unknown_target => Err(UsageError::UnknownDecisionTarget(unknown_target.to_owned())),
@@ -51,6 +63,7 @@ fn parse_tool_arguments(arguments: &[OsString]) -> Result<DecisionToolArguments,
     let mut examples_file_path = None;
     let mut model_id = None;
     let mut output_directory = None;
+    let mut training_scope = None;
     let mut remaining_arguments = arguments.iter();
     while let Some(argument) = remaining_arguments.next() {
         let argument_text = argument.to_string_lossy().into_owned();
@@ -65,6 +78,13 @@ fn parse_tool_arguments(arguments: &[OsString]) -> Result<DecisionToolArguments,
                     &mut output_directory,
                     PathBuf::from(output_text),
                     OUTPUT_FLAG,
+                )?;
+            }
+            WHOLE_MODEL_FLAG => {
+                set_once(
+                    &mut training_scope,
+                    TrainingScope::WholeModel,
+                    WHOLE_MODEL_FLAG,
                 )?;
             }
             _ if argument_text.starts_with('-') || examples_file_path.is_some() => {
@@ -83,6 +103,7 @@ fn parse_tool_arguments(arguments: &[OsString]) -> Result<DecisionToolArguments,
         examples_file_path,
         model_id,
         output_directory,
+        training_scope: training_scope.unwrap_or_default(),
     })
 }
 

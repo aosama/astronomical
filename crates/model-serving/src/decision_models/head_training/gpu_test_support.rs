@@ -1,7 +1,16 @@
 //! Shared helpers for the GPU training tests: deterministic values, and
 //! small inputs for each family with questions of 2, 3 and 4 options.
 
+use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
 use astronomical_decision_contract::{FloatVector, HeadInputs};
+use astronomical_decision_training::kev_trainable::KevTrainableHead;
+use astronomical_decision_training::trainable_head::TrainableHead;
+use mlx_bridge::MlxArray;
+
+use super::gpu_math::GpuMath;
+use super::gpu_training::{GpuTrainingSet, TrainingRow};
+use super::gpu_upload::{gpu_head_family, upload_head_inputs, upload_parameters};
+use super::trainable_scorer::FinalLayersScorer;
 
 /// Values in [-1, 1] from a small linear congruential sequence.
 pub(crate) fn sequence_values(count: usize, seed: u64) -> Vec<f32> {
@@ -77,5 +86,86 @@ pub(crate) fn assert_all_close(gpu_values: &[f32], cpu_values: &[f32], what: &st
             (gpu_value - cpu_value).abs() <= allowed,
             "{what}[{value_index}]: GPU {gpu_value}, CPU {cpu_value}"
         );
+    }
+}
+
+/// The width of the ranked-option task's states.
+const RANKED_HIDDEN_SIZE: usize = 6;
+
+/// A Kev question whose right option is the one whose state starts highest.
+fn ranked_question(question_seed: u64) -> (HeadInputs, usize) {
+    let mut option_states = Vec::new();
+    let mut best_option = 0;
+    let mut best_lead = f32::NEG_INFINITY;
+    for option_index in 0..3 {
+        let option_state = sequence_values(RANKED_HIDDEN_SIZE, question_seed * 10 + option_index);
+        if option_state[0] > best_lead {
+            best_lead = option_state[0];
+            best_option = option_index as usize;
+        }
+        option_states.push(astronomical_decision_contract::FloatVector(option_state));
+    }
+    (
+        HeadInputs::Kev {
+            decision_state: astronomical_decision_contract::FloatVector(sequence_values(
+                RANKED_HIDDEN_SIZE,
+                question_seed + 7_000,
+            )),
+            option_states,
+        },
+        best_option,
+    )
+}
+
+/// The ranked-option task over 400 questions: 280 to train on, 60 to
+/// choose with, the rest to judge; a poor head that starts small.
+pub(crate) struct RankedTask {
+    pub(crate) training_set: GpuTrainingSet,
+    pub(crate) served: Vec<MlxArray>,
+    pub(crate) correct_options: Vec<usize>,
+}
+
+pub(crate) fn ranked_task(math: GpuMath<'_>) -> RankedTask {
+    let oracle = KevTrainableHead::new(4, RANKED_HIDDEN_SIZE);
+    let mut served_values = sequence_values(oracle.layout().parameter_count, 41);
+    for parameter in &mut served_values {
+        *parameter *= 0.1;
+    }
+    let mut questions = Vec::new();
+    let mut correct_options = Vec::new();
+    for question_seed in 0..400 {
+        let (head_inputs, correct_option) = ranked_question(question_seed);
+        questions.push(head_inputs);
+        correct_options.push(correct_option);
+    }
+    let mut borrowed = Vec::new();
+    for question in &questions {
+        borrowed.push(question);
+    }
+    let (head_inputs, option_layout) =
+        upload_head_inputs(math, TunableHeadFamily::Kev, &borrowed).unwrap();
+    let mut rows = Vec::new();
+    for correct_option in &correct_options {
+        rows.push(TrainingRow::Labelled {
+            correct_option: *correct_option,
+            temperature: 1.0,
+        });
+    }
+    let training_set = GpuTrainingSet {
+        scorer: Box::new(FinalLayersScorer {
+            family: gpu_head_family(TunableHeadFamily::Kev, oracle.layout()),
+            head_inputs,
+        }),
+        option_layout,
+        rows,
+        training_rows: (0..280).collect(),
+        choosing_rows: (280..340).collect(),
+        check_rows: Vec::new(),
+    };
+    let served = upload_parameters(math, oracle.layout(), &served_values).unwrap();
+    RankedTask {
+        training_set,
+        served,
+        correct_options,
     }
 }

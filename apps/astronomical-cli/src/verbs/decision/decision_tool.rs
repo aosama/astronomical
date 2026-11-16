@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+use astronomical_decision_contract::head_training_job::TrainingScope;
 use astronomical_decision_training::calibrated_model_folder::{
     CalibratedFolderError, FolderAdditions, SourceModelFolder, check_output_location,
     write_calibrated_model_folder,
@@ -18,7 +19,7 @@ use astronomical_decision_training::labelled_example::{
     LabelledExample, LabelledExampleError, parse_labelled_examples,
 };
 use astronomical_decision_training::scored_question::ScoredQuestionError;
-use astronomical_decision_training::training_split::TooLittleData;
+use astronomical_decision_training::training_split::{MINIMUM_TRAINING_QUESTIONS, TooLittleData};
 use thiserror::Error;
 
 use super::model_folder_lookup::{ModelFolderLookup, ModelFolderLookupError};
@@ -88,6 +89,10 @@ pub enum DecisionToolError {
     TooLittleData(TooLittleData),
     #[error("{model_id} is not a decision model training can change")]
     NotTrainable { model_id: String },
+    #[error(
+        "{model_id} can train only its final layers so far; run the same command without --whole-model"
+    )]
+    WholeModelNotTrainable { model_id: String },
     #[error("the training did not finish: {0}")]
     TrainingFailed(String),
     #[error("Training would not improve {model_id} on these examples, so nothing was written.")]
@@ -109,10 +114,21 @@ pub enum DecisionToolError {
 
 fn too_little_data_text(too_little_data: &TooLittleData) -> String {
     match too_little_data {
-        TooLittleData::TooFewQuestions { have, need } => format!(
+        TooLittleData::TooFewQuestions {
+            have,
+            need,
+            scope: TrainingScope::FinalLayers,
+        } => format!(
             "Training needs at least {need} labelled questions to judge itself fairly; the file has {have}. Calibration (`decision calibrate`) works with fewer."
         ),
-        TooLittleData::TooFewStates { have, need } => format!(
+        TooLittleData::TooFewQuestions {
+            have,
+            need,
+            scope: TrainingScope::WholeModel,
+        } => format!(
+            "Training the whole model needs at least {need} labelled questions, or it memorises them instead of learning; the file has {have}. Training only the final layers (leave out --whole-model) works with {MINIMUM_TRAINING_QUESTIONS}."
+        ),
+        TooLittleData::TooFewStates { have, need, .. } => format!(
             "Training needs examples about at least {need} different states; the file has {have}. Add examples about more different texts."
         ),
     }
@@ -128,6 +144,7 @@ impl DecisionToolError {
             | Self::OutputNameTaken { .. }
             | Self::TooLittleData(_)
             | Self::NotTrainable { .. }
+            | Self::WholeModelNotTrainable { .. }
             | Self::ModelFolder(ModelFolderLookupError::ModelNotFound { .. })
             | Self::Folder(
                 CalibratedFolderError::OutputExists { .. }
