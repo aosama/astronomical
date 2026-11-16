@@ -8,7 +8,8 @@ use serial_test::serial;
 
 use super::gated_delta_sequence::{qwen3_5_gated_delta_kernel, qwen3_5_gated_delta_sequence};
 use super::gated_delta_tree::{
-    TreeRowChains, qwen3_5_gated_delta_tree, qwen3_5_gated_delta_tree_kernel,
+    TreeRowChains, qwen3_5_gated_delta_replay, qwen3_5_gated_delta_replay_kernel,
+    qwen3_5_gated_delta_tree, qwen3_5_gated_delta_tree_kernel,
 };
 
 const KEY_HEAD_COUNT: i32 = 2;
@@ -116,7 +117,9 @@ fn tree_outputs(
         &inputs.decays,
         &inputs.update_rates,
         &inputs.recurrent_state,
-        &TreeRowChains::from_parent_rows(parents),
+        &TreeRowChains::from_parent_rows(parents)
+            .upload(runtime)
+            .expect("the chains upload"),
     )
     .expect("the tree recurrence runs")
 }
@@ -223,4 +226,47 @@ fn should_pad_every_chain_to_the_longest_and_list_it_from_the_anchor() {
         chains.row_chains,
         vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 3, 0]
     );
+}
+
+#[test]
+#[serial]
+fn should_replay_kept_rows_to_the_sequence_kernels_final_state_bit_for_bit() {
+    let runtime = test_runtime();
+    let inputs = recurrence_inputs(&runtime, 7, 11);
+    let replay_kernel = qwen3_5_gated_delta_replay_kernel().expect("the replay kernel declares");
+    let sequence_kernel = qwen3_5_gated_delta_kernel().expect("the sequence kernel declares");
+    for kept in [vec![0], vec![0, 2, 5], vec![0, 1, 3, 4, 6]] {
+        let kept_rows = runtime
+            .array_from_i32(&kept, &[kept.len() as i32])
+            .expect("kept rows build");
+        let replayed = qwen3_5_gated_delta_replay(
+            &runtime,
+            &replay_kernel,
+            &inputs.queries,
+            &inputs.keys,
+            &inputs.values,
+            &inputs.decays,
+            &inputs.update_rates,
+            &inputs.recurrent_state,
+            &kept_rows,
+        )
+        .expect("the replay runs");
+        let alone = gathered(&runtime, &inputs, &kept);
+        let (_outputs, expected_state) = qwen3_5_gated_delta_sequence(
+            &runtime,
+            Some(&sequence_kernel),
+            &alone.queries,
+            &alone.keys,
+            &alone.values,
+            &alone.decays,
+            &alone.update_rates,
+            &alone.recurrent_state,
+        )
+        .expect("the sequence recurrence runs");
+        assert_eq!(
+            bits(&runtime, &replayed),
+            bits(&runtime, &expected_state),
+            "kept rows {kept:?}"
+        );
+    }
 }

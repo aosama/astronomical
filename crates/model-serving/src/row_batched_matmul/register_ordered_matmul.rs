@@ -170,9 +170,11 @@ impl ProjectionInput {
         // The sums' layout depends on the rows and input width only, so any
         // output width that tiles plans them the same.
         let sums_plan = RegisterOrderedDispatchPlan::plan(row_count, 32, input_width, 1)?;
-        let flat_rows = runtime.reshape(rows, &[row_count, input_width])?;
+        // The kernels index the rows' memory directly, so the rows go in
+        // with whatever leading shape they have: no reshape node a call.
+        let flat_rows = rows.retain()?;
         let row_dimensions =
-            runtime.array_from_i32(&[row_count, sums_plan.padded_row_count], &[2])?;
+            kernels.row_dimensions(runtime, row_count, sums_plan.padded_row_count)?;
         let group_sums = group_sums(
             runtime,
             kernels,
@@ -230,6 +232,8 @@ pub fn register_ordered_projection(
         weight.input_width,
         weight.input_slice_count,
     )?;
+    let mut computed_shape = input.leading_shape.clone();
+    computed_shape.push(weight.output_width);
     let mut outputs = runtime.apply_metal_kernel(
         &kernels.register_ordered_matmul,
         &[
@@ -240,7 +244,7 @@ pub fn register_ordered_projection(
             &input.row_dimensions,
         ],
         &[MlxMetalKernelOutput::new(
-            vec![input.row_count, weight.output_width],
+            computed_shape.clone(),
             MlxDtype::BFloat16,
         )],
         dispatch_plan.grid,
@@ -254,17 +258,13 @@ pub fn register_ordered_projection(
     let projected = outputs
         .pop()
         .ok_or(RowBatchedProjectionError::MissingOutput)?;
-    let projected = if weight.logical_output_width < weight.output_width {
-        runtime.slice(
-            &projected,
-            &[0, 0],
-            &[input.row_count, weight.logical_output_width],
-            &[1, 1],
-        )?
-    } else {
-        projected
-    };
-    let mut output_shape = input.leading_shape.clone();
-    output_shape.push(weight.logical_output_width);
-    Ok(runtime.reshape(&projected, &output_shape)?)
+    if weight.logical_output_width == weight.output_width {
+        return Ok(projected);
+    }
+    // A padded narrow projection: cut the zero columns off the last axis.
+    let mut logical_shape = computed_shape;
+    *logical_shape.last_mut().expect("the output has a width") = weight.logical_output_width;
+    let starts = vec![0; logical_shape.len()];
+    let strides = vec![1; logical_shape.len()];
+    Ok(runtime.slice(&projected, &starts, &logical_shape, &strides)?)
 }

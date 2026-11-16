@@ -17,6 +17,12 @@ use crate::qwen3_5_core::model_math::gated_delta_tree::TreeRowChains;
 use crate::speculative_decoding::tree_rows::TreeRows;
 use crate::{PerformanceAttribution, RequestDecoderStateStack};
 
+/// Layers built between asynchronous starts. Building the pass's graph
+/// takes about 4 ms of CPU for the 27B's 64 layers (some 40 nodes a layer),
+/// during which the GPU would idle; starting it on each few layers as they
+/// are built lets the two overlap.
+const LAYERS_PER_ASYNCHRONOUS_START: usize = 4;
+
 /// One verified tree, held until the round decides which chain it keeps.
 pub struct Qwen3_5DraftTreeVerification {
     /// [1, rows, vocabulary] float32: the target's logits after every row.
@@ -42,14 +48,7 @@ impl Qwen3_5ResidentModel {
             i32::try_from(anchor_position).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
                 description: "the anchor position exceeds the MLX int32 range",
             })?;
-        let mut token_ids = Vec::with_capacity(tree_rows.row_count());
-        for token_id in &tree_rows.token_ids {
-            token_ids.push(*token_id as i32);
-        }
-        let token_indices = self
-            .runtime
-            .array_from_i32(&token_ids, &[1, token_ids.len() as i32])?;
-        let mut hidden_states = self.embedding_lookup(&token_indices)?;
+        let mut hidden_states = self.tree_row_embeddings(tree_rows)?;
         let tree = self.tree_row_inputs(tree_rows, context_offset, hidden_states.dtype())?;
         let mut tap_slots: Vec<Option<MlxArray>> = Vec::new();
         tap_slots.resize_with(target_hidden_state_tap_layer_ids.len(), Option::default);
@@ -59,6 +58,9 @@ impl Qwen3_5ResidentModel {
                 self.forward_tree_layer(&hidden_states, &tree, layer_index, request_decoder_state)?;
             hidden_states = next_hidden_states;
             layer_rows.push(rows);
+            if (layer_index + 1) % LAYERS_PER_ASYNCHRONOUS_START == 0 {
+                self.runtime.async_eval_arrays(&[&hidden_states])?;
+            }
             for (tap_order, tap_layer_id) in target_hidden_state_tap_layer_ids.iter().enumerate() {
                 if *tap_layer_id == layer_index as i32 {
                     tap_slots[tap_order] = Some(hidden_states.retain()?);
@@ -80,6 +82,17 @@ impl Qwen3_5ResidentModel {
             layer_rows,
             context_offset,
         })
+    }
+
+    fn tree_row_embeddings(&self, tree_rows: &TreeRows) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let mut token_ids = Vec::with_capacity(tree_rows.row_count());
+        for token_id in &tree_rows.token_ids {
+            token_ids.push(*token_id as i32);
+        }
+        let token_indices = self
+            .runtime
+            .array_from_i32(&token_ids, &[1, token_ids.len() as i32])?;
+        self.embedding_lookup(&token_indices)
     }
 
     /// Advances every layer over `kept_rows` (tree rows, anchor first), as if
@@ -174,7 +187,8 @@ impl Qwen3_5ResidentModel {
             convolution_windows: self
                 .runtime
                 .array_from_i32(&window_sources, &[window_sources.len() as i32])?,
-            row_chains: TreeRowChains::from_parent_rows(&tree_rows.parent_rows),
+            row_chains: TreeRowChains::from_parent_rows(&tree_rows.parent_rows)
+                .upload(&self.runtime)?,
         })
     }
 

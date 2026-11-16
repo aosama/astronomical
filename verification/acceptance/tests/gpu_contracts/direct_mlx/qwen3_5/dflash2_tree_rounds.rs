@@ -36,12 +36,26 @@ const MAXIMUM_COPY_ROWS: usize = 48;
 #[test]
 #[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
-fn should_decode_with_draft_trees_verified_in_one_target_pass() {
+fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
+    decode_cells_with_trees(&ORACLE_CELLS[..3]);
+}
+
+/// The chat cells on their own: a run heats the GPU, and rounds late in a
+/// 90-second run measured 6 to 10 ms slower than the same rounds from a
+/// cool start, so each family of cells gets its own process.
+#[test]
+#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
+    decode_cells_with_trees(&ORACLE_CELLS[3..]);
+}
+
+fn decode_cells_with_trees(cells: &[Cell]) {
     let mut pair = load_pair();
     pair.target
         .enable_draft_tree_verification()
         .expect("the tree kernel declares");
-    for (cell_index, cell) in ORACLE_CELLS.iter().enumerate() {
+    for (cell_index, cell) in cells.iter().enumerate() {
         let seed_count = if cell.temperature_thousandths == 0 {
             1
         } else {
@@ -63,7 +77,7 @@ fn should_decode_with_draft_trees_verified_in_one_target_pass() {
                 "[dflash2-tree-rounds {}/{}] {} ({seed_count} seeds), {label}: {:.2} kept per \
                  round, {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
                 cell_index + 1,
-                ORACLE_CELLS.len(),
+                cells.len(),
                 cell.label,
                 pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
                 pooled_decode.emitted as f64 / pooled_decode.decode_seconds,

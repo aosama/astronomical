@@ -37,6 +37,9 @@ pub struct Qwen3_5OptionalAccelerators {
     /// The gated-delta recurrence over a draft tree's rows; set by
     /// `enable_draft_tree_verification`.
     pub(crate) gated_delta_tree_kernel: Option<mlx_bridge::MlxMetalKernel>,
+    /// Advances a DeltaNet layer over a verified tree's kept rows; set with
+    /// the tree kernel.
+    pub(crate) gated_delta_replay_kernel: Option<mlx_bridge::MlxMetalKernel>,
 }
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.

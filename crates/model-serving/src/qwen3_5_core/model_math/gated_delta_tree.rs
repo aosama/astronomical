@@ -111,6 +111,138 @@ const GATED_DELTA_TREE_SOURCE: &str = r#"
     }
 "#;
 
+/// Inputs as the tree kernel's, plus `kept_rows` [n] int32. Output
+/// `next_recurrent_state`: the starting state advanced over the kept rows in
+/// order, by the same step, so it equals the sequence kernel's final state
+/// over those rows without gathering them first (five gathers a layer, 240 a
+/// round on the 27B).
+const GATED_DELTA_REPLAY_SOURCE: &str = r#"
+    constexpr int value_row_block_size = 16;
+    auto thread_index = thread_position_in_threadgroup.x;
+    auto value_head_index = threadgroup_position_in_grid.y;
+    auto key_head_index = value_head_index / (Hv / Hk);
+    auto value_row = threadgroup_position_in_grid.x * value_row_block_size + thread_index / 8;
+    auto key_segment_index = thread_index % 8;
+    const int kept_row_count = kept_rows_shape[0];
+    const size_t state_offset = ((size_t)value_head_index * Dv + value_row) * Dk;
+
+    float4 state_fragment[4];
+    {
+        auto input_state = (const device float4*)(recurrent_state + state_offset);
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            state_fragment[fragment_index] =
+                input_state[key_segment_index + 8 * fragment_index];
+        }
+    }
+    for (int kept_index = 0; kept_index < kept_row_count; ++kept_index) {
+        const int row = kept_rows[kept_index];
+        auto key_row = keys + ((size_t)row * Hk + key_head_index) * Dk;
+        float4 current_keys[4];
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            current_keys[fragment_index] = float4(*(const device vec<InT, 4>*)(
+                key_row + 4 * (key_segment_index + 8 * fragment_index)));
+        }
+        const float current_decay = decays[(size_t)row * Hv + value_head_index];
+        const float current_update_rate = update_rates[(size_t)row * Hv + value_head_index];
+        const float current_value =
+            float(values[((size_t)row * Hv + value_head_index) * Dv + value_row]);
+        float2 state_key_dot_partials = 0.0f;
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            state_fragment[fragment_index] *= current_decay;
+            state_key_dot_partials = fma(state_fragment[fragment_index].xy,
+                current_keys[fragment_index].xy, state_key_dot_partials);
+            state_key_dot_partials = fma(state_fragment[fragment_index].zw,
+                current_keys[fragment_index].zw, state_key_dot_partials);
+        }
+        float remembered_value = state_key_dot_partials.x + state_key_dot_partials.y;
+        remembered_value += simd_shuffle_xor(remembered_value, 4);
+        remembered_value += simd_shuffle_xor(remembered_value, 2);
+        remembered_value += simd_shuffle_xor(remembered_value, 1);
+        const float delta = (current_value - remembered_value) * current_update_rate;
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            state_fragment[fragment_index] = fma(current_keys[fragment_index],
+                float4(delta), state_fragment[fragment_index]);
+        }
+    }
+    {
+        auto output_state = (device float4*)(next_recurrent_state + state_offset);
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            output_state[key_segment_index + 8 * fragment_index] =
+                state_fragment[fragment_index];
+        }
+    }
+"#;
+
+/// The replay kernel, declared once per model beside the tree kernel.
+pub fn qwen3_5_gated_delta_replay_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
+    Ok(MlxMetalKernel::new(
+        "astronomical_qwen3_5_gated_delta_replay",
+        &[
+            "keys",
+            "values",
+            "decays",
+            "update_rates",
+            "recurrent_state",
+            "kept_rows",
+        ],
+        &["next_recurrent_state"],
+        GATED_DELTA_REPLAY_SOURCE,
+    )?)
+}
+
+/// The recurrent state after the kept rows (`kept_rows` int32 [n], in
+/// order) of a verified tree, from the round's starting state.
+#[allow(clippy::too_many_arguments)]
+pub fn qwen3_5_gated_delta_replay(
+    runtime: &MlxRuntime,
+    replay_kernel: &MlxMetalKernel,
+    queries: &MlxArray,
+    keys: &MlxArray,
+    values: &MlxArray,
+    decays: &MlxArray,
+    update_rates: &MlxArray,
+    recurrent_state: &MlxArray,
+    kept_rows: &MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let sequence_shape = validate_gated_delta_sequence_shapes(
+        queries,
+        keys,
+        values,
+        decays,
+        update_rates,
+        recurrent_state,
+    )?;
+    let mut outputs = runtime.apply_metal_kernel(
+        replay_kernel,
+        &[
+            keys,
+            values,
+            decays,
+            update_rates,
+            recurrent_state,
+            kept_rows,
+        ],
+        &[MlxMetalKernelOutput::new(
+            recurrent_state.shape(),
+            recurrent_state.dtype(),
+        )],
+        [
+            THREADGROUP_THREAD_COUNT as i32
+                * (sequence_shape.value_head_dimension / VALUE_ROW_BLOCK_SIZE as i32),
+            sequence_shape.value_head_count,
+            1,
+        ],
+        [THREADGROUP_THREAD_COUNT as i32, 1, 1],
+        &template_arguments(sequence_shape, queries.dtype(), recurrent_state.dtype()),
+    )?;
+    outputs
+        .pop()
+        .ok_or_else(|| MlxRuntimeError::RuntimeOperation {
+            operation: "replay the kept rows of the gated-delta recurrence",
+            description: "the kernel returned no output".to_owned(),
+        })
+}
+
 /// The tree kernel, declared once per model.
 pub fn qwen3_5_gated_delta_tree_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
     Ok(MlxMetalKernel::new(
@@ -173,6 +305,27 @@ impl TreeRowChains {
     }
 }
 
+/// A tree's chains on the GPU, uploaded once for every layer of a pass.
+pub struct UploadedTreeRowChains {
+    row_chains: MlxArray,
+    chain_lengths: MlxArray,
+    maximum_chain: i32,
+    row_count: i32,
+}
+
+impl TreeRowChains {
+    pub fn upload(&self, runtime: &MlxRuntime) -> Result<UploadedTreeRowChains, MlxRuntimeError> {
+        let row_count = self.chain_lengths.len() as i32;
+        Ok(UploadedTreeRowChains {
+            row_chains: runtime
+                .array_from_i32(&self.row_chains, &[row_count, self.maximum_chain])?,
+            chain_lengths: runtime.array_from_i32(&self.chain_lengths, &[row_count])?,
+            maximum_chain: self.maximum_chain,
+            row_count,
+        })
+    }
+}
+
 /// The recurrence's output for every tree row, `[1, rows, Hv, Dv]`. The
 /// starting `recurrent_state` is only read: the round commits the kept chain
 /// separately, through the sequence kernel over that chain's rows.
@@ -186,7 +339,7 @@ pub fn qwen3_5_gated_delta_tree(
     decays: &MlxArray,
     update_rates: &MlxArray,
     recurrent_state: &MlxArray,
-    row_chains: &TreeRowChains,
+    row_chains: &UploadedTreeRowChains,
 ) -> Result<MlxArray, MlxRuntimeError> {
     let sequence_shape = validate_gated_delta_sequence_shapes(
         queries,
@@ -196,12 +349,7 @@ pub fn qwen3_5_gated_delta_tree(
         update_rates,
         recurrent_state,
     )?;
-    let row_count = row_chains.chain_lengths.len() as i32;
-    let chain_array = runtime.array_from_i32(
-        &row_chains.row_chains,
-        &[row_count, row_chains.maximum_chain],
-    )?;
-    let length_array = runtime.array_from_i32(&row_chains.chain_lengths, &[row_count])?;
+    let row_count = row_chains.row_count;
     let mut template =
         template_arguments(sequence_shape, queries.dtype(), recurrent_state.dtype()).to_vec();
     template.push(MlxMetalKernelTemplateArgument::Integer {
@@ -217,8 +365,8 @@ pub fn qwen3_5_gated_delta_tree(
             decays,
             update_rates,
             recurrent_state,
-            &chain_array,
-            &length_array,
+            &row_chains.row_chains,
+            &row_chains.chain_lengths,
         ],
         &[MlxMetalKernelOutput::new(
             vec![

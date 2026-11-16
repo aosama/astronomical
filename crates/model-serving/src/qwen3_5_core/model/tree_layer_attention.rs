@@ -8,8 +8,8 @@
 //! and runs the recurrence from each row's ancestor chain (`gated_delta_tree`);
 //! it never advances the layer's state, because the kept chain is not known
 //! until every row has been verified. The commit then advances each layer
-//! over exactly the kept rows: the convolution window and the sequence
-//! kernel over those rows for DeltaNet, and the kept keys and values written
+//! over exactly the kept rows: the convolution window and a replay of the
+//! recurrence over those rows for DeltaNet, and the kept keys and values written
 //! back in order for attention.
 
 use astronomical_runtime_integration::MlxRuntime;
@@ -29,8 +29,9 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
 use crate::qwen3_5_core::model_math::error::{
     Qwen3_5ExecutionError, invalid_request_decoder_state,
 };
-use crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_sequence;
-use crate::qwen3_5_core::model_math::gated_delta_tree::{TreeRowChains, qwen3_5_gated_delta_tree};
+use crate::qwen3_5_core::model_math::gated_delta_tree::{
+    UploadedTreeRowChains, qwen3_5_gated_delta_replay, qwen3_5_gated_delta_tree,
+};
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution};
 
 /// The rows of one draft tree on the GPU, shared by every layer of a pass.
@@ -43,7 +44,7 @@ pub(crate) struct TreeRowInputs {
     /// int32 [rows x window]: each row's convolution inputs, as indices into
     /// the convolution state's rows followed by the tree's rows.
     pub(crate) convolution_windows: MlxArray,
-    pub(crate) row_chains: TreeRowChains,
+    pub(crate) row_chains: UploadedTreeRowChains,
 }
 
 /// What one layer's tree pass leaves for the round's commit.
@@ -71,6 +72,9 @@ impl Qwen3_5ModelBase {
     pub fn enable_draft_tree_verification(&mut self) -> Result<(), Qwen3_5ExecutionError> {
         self.optional_accelerators.gated_delta_tree_kernel = Some(
             crate::qwen3_5_core::model_math::gated_delta_tree::qwen3_5_gated_delta_tree_kernel()?,
+        );
+        self.optional_accelerators.gated_delta_replay_kernel = Some(
+            crate::qwen3_5_core::model_math::gated_delta_tree::qwen3_5_gated_delta_replay_kernel()?,
         );
         Ok(())
     }
@@ -336,7 +340,12 @@ impl Qwen3_5ModelBase {
                 },
             ) => commit_linear_attention(
                 &self.runtime,
-                self.gated_delta_kernel.as_ref(),
+                self.optional_accelerators
+                    .gated_delta_replay_kernel
+                    .as_ref()
+                    .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                        description: "a tree commit needs `enable_draft_tree_verification` first",
+                    })?,
                 linear_rows,
                 kept_rows,
                 (convolution, recurrent),
@@ -366,11 +375,11 @@ impl Qwen3_5ModelBase {
 }
 
 /// The DeltaNet layer after the kept rows: the convolution window slides
-/// over their inputs, and the sequence kernel runs over their recurrence
-/// inputs from the round's starting state, exactly as feeding them would.
+/// over their inputs, and the replay kernel steps the recurrence over them
+/// from the round's starting state, exactly as feeding them would.
 fn commit_linear_attention(
     runtime: &MlxRuntime,
-    sequence_kernel: Option<&MlxMetalKernel>,
+    replay_kernel: &MlxMetalKernel,
     linear_rows: TreeLayerRows,
     kept_rows: &MlxArray,
     (convolution_state, recurrent_state): (&mut ConvolutionState, &mut GatedDeltaRecurrentState),
@@ -395,16 +404,16 @@ fn commit_linear_attention(
         kept_count,
     )?;
     let starting_state = recurrent_state.current_or_zero(runtime)?;
-    let (_kept_outputs, next_state) = qwen3_5_gated_delta_sequence(
+    recurrent_state.set_next(qwen3_5_gated_delta_replay(
         runtime,
-        sequence_kernel,
-        &runtime.take_axis(&queries, kept_rows, 1)?,
-        &runtime.take_axis(&keys, kept_rows, 1)?,
-        &runtime.take_axis(&values, kept_rows, 1)?,
-        &runtime.take_axis(&decays, kept_rows, 1)?,
-        &runtime.take_axis(&update_rates, kept_rows, 1)?,
+        replay_kernel,
+        &queries,
+        &keys,
+        &values,
+        &decays,
+        &update_rates,
         &starting_state,
-    )?;
-    recurrent_state.set_next(next_state);
+        kept_rows,
+    )?);
     Ok(())
 }

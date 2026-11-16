@@ -28,6 +28,10 @@ pub struct RowBatchedMatmulKernels {
     matmul: MlxMetalKernel,
     pub(crate) register_order_conversion: MlxMetalKernel,
     pub(crate) register_ordered_matmul: MlxMetalKernel,
+    /// `[rows, padded rows]` int32 arrays already uploaded, by row count: a
+    /// pass makes hundreds of projection calls at one row count, and each
+    /// upload is a host-to-GPU round the CPU pays while the GPU waits.
+    row_dimension_arrays: std::cell::RefCell<std::collections::HashMap<(i32, i32), MlxArray>>,
 }
 
 /// The kernel handles are opaque MLX objects; a model that holds them only
@@ -71,7 +75,25 @@ impl RowBatchedMatmulKernels {
                 REGISTER_ORDERED_MATMUL_HEADER,
                 REGISTER_ORDERED_MATMUL_SOURCE,
             )?,
+            row_dimension_arrays: std::cell::RefCell::default(),
         })
+    }
+
+    /// The `[row_count, padded_row_count]` array the kernels read, uploaded
+    /// once per distinct pair.
+    pub(crate) fn row_dimensions(
+        &self,
+        runtime: &MlxRuntime,
+        row_count: i32,
+        padded_row_count: i32,
+    ) -> Result<MlxArray, MlxRuntimeError> {
+        let mut uploaded = self.row_dimension_arrays.borrow_mut();
+        if let Some(row_dimensions) = uploaded.get(&(row_count, padded_row_count)) {
+            return Ok(row_dimensions.retain()?);
+        }
+        let row_dimensions = runtime.array_from_i32(&[row_count, padded_row_count], &[2])?;
+        uploaded.insert((row_count, padded_row_count), row_dimensions.retain()?);
+        Ok(row_dimensions)
     }
 }
 
