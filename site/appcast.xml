@@ -4,52 +4,37 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.110</title>
-            <pubDate>Mon, 16 Nov 2026 05:49:33 -0500</pubDate>
-            <sparkle:version>2354</sparkle:version>
-            <sparkle:shortVersionString>0.2.110</sparkle:shortVersionString>
+            <title>0.2.111</title>
+            <pubDate>Mon, 16 Nov 2026 08:16:34 -0500</pubDate>
+            <sparkle:version>2358</sparkle:version>
+            <sparkle:shortVersionString>0.2.111</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.110
+            <description sparkle:format="markdown"><![CDATA[## Decision models learn from your own examples
 
-### Faster decoding for the dense Qwen 27B
+Astronomical's decision models (Laya, Kev and Clef) can now be fitted to your own labelled examples from the command line. Each command writes a new model folder and never changes the original:
 
-A dense Qwen 27B (4-bit) now decodes with DFlash2 draft trees when its DFlash2 drafter is installed in the same model library. A small drafter model proposes several tokens at a time, and the 27B checks a whole tree of proposals in one pass, so every token in the reply is still the 27B's own choice.
+- `astronomical decision calibrate EXAMPLES --output DIR` refits how confident the answers are, without changing which answer is picked.
+- `astronomical decision train EXAMPLES --output DIR` trains a decision model's final scoring layers on the graphics processor (200 labelled questions about 30 or more texts).
+- `astronomical decision train EXAMPLES --whole-model --output DIR` trains small add-on weights in every layer of Laya together with its final layers, so the whole model learns to read your examples differently (1,000 labelled questions about 100 or more texts; about 8 minutes for 1,200).
 
-Measured on an M5 Pro with the 27B and its drafter:
+A result is kept only when it beats the shipped model on examples held back from training and keeps its other answers. The original files are copied unchanged, the trained parts are stored beside them, and the written model is checked against the trained one before it is used. Training shows progress with the time left, adjusts to your Mac's memory, and stops within seconds when you press Ctrl-C.
 
-| Request | Before | Now |
-|---|---|---|
-| Coding request, temperature 0.7 | about 13 tok/s | 67 to 71 tok/s |
-| Chat request, temperature 1.0 | about 13 tok/s | 47 to 48 tok/s |
-| Reply after a 10,000-token prompt, temperature 1.0 | about 13 tok/s | about 35 tok/s |
+## Fixes
 
-Prompt processing speed is unchanged, and a follow-up turn in a conversation still reuses the work of the earlier turns.
+- Cancelling a decisions request or a training no longer restarts the engine.
+- Decision tools create a missing output folder's parent folders instead of refusing.
 
-What to know:
+## Compatibility
 
-- It needs a Mac whose GPU has the M5 matrix units. On other Macs, and for models without a matching drafter, decoding is unchanged.
-- Requests with images, JSON-constrained output or a repetition penalty use ordinary decoding, as before.
-- Greedy replies are the same text ordinary decoding gives. Sampled replies are drawn from the same distribution, with a sampler keyed to the request's seed, so a seeded request repeats exactly.
-- The drafter is loaded beside the 27B at 4 bits, so the pair uses somewhat more memory than the 27B alone.
+Your models, conversations and settings carry over unchanged, and the configuration format is the same as 0.2.110. Requires macOS 14 or later on Apple silicon.
 
-### Compatibility
-
-- Settings, conversations, downloaded models and the `astro_ssd_prompt_cache` are preserved.
-- No configuration changes are required.
-
-### Distribution
-
-The disk image is signed with a Developer ID certificate and notarized by Apple. Existing installs receive this version through the built-in update check.
-
-### Acknowledgements
-
-Draft-tree decoding follows the approach of the TensorFold engine and uses the DFlash2 drafter published by Z Lab; both are credited in the third-party notices.
+This release is signed with Developer ID, notarized by Apple, and delivered as a signed Sparkle update.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.110/Astronomical-0.2.110-macOS-arm64.dmg" length="23885252" type="application/octet-stream" sparkle:edSignature="PKaCuObBwrXkeRwzFw2S9PFGBIZ6l6Q11krUJ2+OW9VTqJYOnrfO67qOW34OqEPYziEnOHUPBj2xTreQfyrRDA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.111/Astronomical-0.2.111-macOS-arm64.dmg" length="24463192" type="application/octet-stream" sparkle:edSignature="tOnXtrEm3lvixpTXHZI7qg8iA+DagkgruD9+BXvUiJBopsTOAVXlUFw5GIK/emj389iJIHJ8Hx6wyaiY8OY/Dw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 0VSXtEGjELa/LwQoemd+ItVteFLlO9pBhHaLailXUoscH8hoEvWMCuNxYRVKa5CkG4TAnRm84gbfXIsmQoXSAA==
-length: 3116
+edSignature: X1eQH3ZHmC/ouzpDxmY4A3HE0x/G5WMx/p3zixmYc0wJgGHb6vmpNxEPXvCSelRu+SbE0k8vW+iCW0pO1W/sBA==
+length: 2939
 -->
