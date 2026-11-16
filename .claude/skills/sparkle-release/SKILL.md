@@ -176,7 +176,7 @@ Require all of the following before reporting success:
 - The Discord invite linked from the README and the website still works. Read the invite code from the README's Discord link and look it up: `curl -s "https://discord.com/api/v10/invites/CODE?with_expiration=true"` must name the server and show `"expires_at": null`. An invite made with Discord's defaults expires after 30 days, and an expired one fails silently for every newcomer; if it has expired, the server owner creates one set to never expire and the links are updated through a pull request.
 - Release issue is explicitly closed after the appcast PR merge, Pages deployment, and public-byte verification. A `Refs #N` maintenance PR does not close it automatically.
 - Local `main` equals remote `main` and the tracked worktree is clean.
-- The ignored `target/releases/${TAG}` evidence directory remains intact.
+- After every check above passes, move the ignored `target/releases/${TAG}` working folder to the Trash. It held only the bytes that were published, and the record is on GitHub: the tag, the release with its disk image and notes, the signed appcast merged on `main`, and the Pages feed that serves it. A local copy would duplicate that record, could go stale, and is lost with the next `target` cleanup anyway.
 - The real Astronomical release was not installed or launched locally; isolated temporary validation fixtures are allowed as described above.
 
 ### Download button checklist
@@ -206,7 +206,7 @@ This procedure ends at section 7. Shipping the same version to the Mac App Store
 
 ## Failure rules
 
-- Before tag push: fix the cause, remove only an invalid `target/releases/${TAG}` after explicit user approval, recreate the local tag only if its commit is wrong, and prepare again.
+- Before tag push: fix the cause, move only an invalid `target/releases/${TAG}` to the Trash after explicit user approval, recreate the local tag only if its commit is wrong, and prepare again.
 - After tag push: never move the tag; withhold appcast activation and fix forward with a new patch release.
 - Interrupted matching draft publication: rerun the same `--publish` command; it safely resumes the draft.
 - A GitHub HTTP 404 from `verify-remote-release-tag` means the reviewed tag has not been pushed yet; push that exact local tag, never recreate or move it.
