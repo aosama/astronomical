@@ -47,7 +47,8 @@ fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
 #[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
-    decode_cells_with_trees(&ORACLE_CELLS[3..]);
+    // Sampled first: it is the cell compared with TensorFold's 44.0.
+    decode_cells_with_trees(&[ORACLE_CELLS[4], ORACLE_CELLS[3]]);
 }
 
 fn decode_cells_with_trees(cells: &[Cell]) {

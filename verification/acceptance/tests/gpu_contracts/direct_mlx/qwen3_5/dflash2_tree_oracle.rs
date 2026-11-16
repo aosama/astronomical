@@ -70,7 +70,7 @@ fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_refer
     for (cell_index, cell) in ORACLE_CELLS.iter().enumerate() {
         let reference = decode(&pair, cell, Drafting::SinglePath, &[]);
         eprintln!(
-            "[dflash2-tree-oracle] {} reference begins: {:?}",
+            "[dflash2-tree-oracle] {} reference text: {:?}",
             cell.label,
             reference_text(&pair, &reference.emitted_token_ids)
         );
@@ -96,6 +96,10 @@ fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_refer
 pub(super) enum Drafting {
     SinglePath,
     Tree,
+    /// The tree against a text another engine wrote: the reference's tokens
+    /// stand in for the target's picks, so the count is how many rounds this
+    /// drafter and tree need for exactly that text.
+    TreeOnForcedText,
 }
 
 pub(super) struct DecodeOutcome {
@@ -120,6 +124,11 @@ pub(super) fn decode(
     reference: &[u32],
 ) -> DecodeOutcome {
     let (mut round, mut decoder_state, first_token_id) = prefill(pair, cell);
+    let first_token_id = if drafting == Drafting::TreeOnForcedText {
+        reference[0]
+    } else {
+        first_token_id
+    };
     round.last_token_id = first_token_id;
     let mut outcome = DecodeOutcome {
         rounds: 0,
@@ -129,21 +138,26 @@ pub(super) fn decode(
     let reach = pair.drafter_configuration.proposal_count() as usize;
     while outcome.emitted_token_ids.len() <= OUTPUT_TOKENS {
         let emitted_count = outcome.emitted_token_ids.len();
-        if drafting == Drafting::Tree && emitted_count + reach > reference.len() {
+        if drafting != Drafting::SinglePath && emitted_count + reach + 1 > reference.len() {
             break;
         }
         let tree = draft_tree(pair, cell, &mut round, drafting);
         let continuation = match drafting {
             Drafting::SinglePath => tree.token_ids.clone(),
-            Drafting::Tree => reference[emitted_count..emitted_count + reach].to_vec(),
+            _ => reference[emitted_count..emitted_count + reach].to_vec(),
+        };
+        let forced_picks = if drafting == Drafting::TreeOnForcedText {
+            Some(&reference[emitted_count..=emitted_count + reach])
+        } else {
+            None
         };
         let kept = verify_round(
             pair,
             cell,
-            &mut round,
-            &mut decoder_state,
+            (&mut round, &mut decoder_state),
             &tree,
             &continuation,
+            forced_picks,
         );
         if drafting == Drafting::Tree
             && kept != reference[emitted_count..emitted_count + kept.len()]
@@ -205,10 +219,10 @@ pub(super) fn prefill(
 fn verify_round(
     pair: &JourneyPair,
     cell: &Cell,
-    round: &mut RoundState,
-    decoder_state: &mut RequestDecoderStateStack,
+    (round, decoder_state): (&mut RoundState, &mut RequestDecoderStateStack),
     tree: &DraftTree,
     continuation: &[u32],
+    forced_picks: Option<&[u32]>,
 ) -> Vec<u32> {
     let mut verified_ids = vec![round.last_token_id];
     verified_ids.extend_from_slice(continuation);
@@ -233,6 +247,10 @@ fn verify_round(
         &verification.per_position_logits,
         &pick_positions,
     );
+    let picks = match forced_picks {
+        Some(forced_picks) => forced_picks.to_vec(),
+        None => picks,
+    };
     let kept_draft_count = depth_reached(tree, &picks, continuation);
     let mut kept = continuation[..kept_draft_count].to_vec();
     kept.push(picks[kept_draft_count]);
@@ -436,7 +454,8 @@ fn depth_reached(tree: &DraftTree, target_picks: &[u32], continuation: &[u32]) -
     continuation.len()
 }
 
-/// The first characters of a decoded reference, to see what the cell writes.
+/// The decoded reference, to see what the cell writes and compare it with
+/// another engine's output for the same prompt.
 fn reference_text(pair: &JourneyPair, token_ids: &[u32]) -> String {
     let mut decoder = pair.tokenizer.incremental_decoder();
     let mut text = String::new();
@@ -444,9 +463,34 @@ fn reference_text(pair: &JourneyPair, token_ids: &[u32]) -> String {
         if let Ok(Some(piece)) = decoder.push_token(*token_id) {
             text.push_str(&piece);
         }
-        if text.chars().count() > 240 {
-            break;
-        }
     }
-    text.chars().take(240).collect()
+    text
+}
+
+/// TensorFold's own greedy code completion (engine 1.2.0, this prompt, 256
+/// tokens), which it drafted in 43 rounds: 5.95 kept a round.
+const TENSORFOLD_GREEDY_CODE_COMPLETION: &str =
+    include_str!("../../../fixtures/dflash2_reference/tensorfold_greedy_code_completion.txt");
+
+/// The two engines' greedy outputs part after about a hundred tokens, where
+/// they round a near-tie differently, so their round counts are not on the
+/// same text. Forcing TensorFold's text through this drafter and tree is.
+#[test]
+#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-oracle"]
+#[serial]
+fn should_count_the_rounds_this_tree_needs_for_tensorfolds_own_greedy_text() {
+    let pair = load_pair();
+    let cell = &ORACLE_CELLS[0];
+    let reference = pair
+        .tokenizer
+        .encode_prompt(TENSORFOLD_GREEDY_CODE_COMPLETION)
+        .expect("the reference text tokenizes");
+    let forced = decode(&pair, cell, Drafting::TreeOnForcedText, &reference);
+    eprintln!(
+        "[dflash2-tree-oracle] TensorFold's greedy code text ({} tokens): {:.2} kept per round \
+         over {} rounds here; TensorFold drafted it at 5.95",
+        reference.len(),
+        forced.kept_per_round(),
+        forced.rounds,
+    );
 }

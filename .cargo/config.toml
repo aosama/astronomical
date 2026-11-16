@@ -477,8 +477,10 @@ measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomica
 # Gate 4's first measurement: kept per round if each round verified
 # TensorFold's draft tree (15 nodes, 4 children) instead of one path, on the
 # code-completion and chat cells, greedy and keyed-sampled (0.7 and 1.0).
-# Replays a recorded single-path reference, so it needs no tree forward. Same
-# pair and memory as above; about a minute.
+# Replays a recorded single-path reference, so it needs no tree forward. It
+# also forces TensorFold's own greedy code text (a fixture) through this
+# drafter and tree, the one count that is on the same text as its 5.95.
+# Same pair and memory as above; about a minute.
 measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_oracle"
 # Gate 4 end to end on the 27B pair: every round verifies TensorFold's draft
 # tree in one target pass and commits the kept chain; prints kept per round,
