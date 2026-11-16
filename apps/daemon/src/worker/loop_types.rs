@@ -88,7 +88,7 @@ pub(crate) enum WorkerLoopCommand {
     },
     GenerateDecisions {
         active_generation_permit: OwnedSemaphorePermit,
-        decisions_command: astronomical_ipc_protocol::DecisionsCommand,
+        decisions_work: crate::serving::decisions_executor::DecisionsWork,
         start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
         decisions_result_sender: DecisionsResultSender,
     },

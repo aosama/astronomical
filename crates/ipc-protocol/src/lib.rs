@@ -79,8 +79,8 @@ pub use daemon_protocol::{
 };
 pub use daemon_transport_error::DaemonTransportError;
 pub use decisions::{
-    DecisionsCommand, DecisionsValidationError, MINIMUM_DECISION_TOKENS_PER_QUESTION,
-    WorkerDecisionCapabilities,
+    DecisionHeadTrainingCommand, DecisionsCommand, DecisionsValidationError,
+    MINIMUM_DECISION_TOKENS_PER_QUESTION, WorkerDecisionCapabilities,
 };
 pub use embeddings::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, EmbeddingsValidationError,

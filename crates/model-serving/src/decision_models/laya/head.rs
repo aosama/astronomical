@@ -10,10 +10,14 @@
 //! act on an answer or escalate it. Upstream reports it carries no usable
 //! signal, so it is neither loaded nor reported.
 
+use std::collections::BTreeMap;
+
+use astronomical_decision_contract::HeadInputRequest;
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use crate::decision_models::laya::configuration::LayaConfiguration;
+use crate::linear_adapters::{LinearAdapters, adapted_layer_output};
 use crate::modernbert::attention_mask::key_padding_mask_values;
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::{ModernBertTrunkError, slice_stacked_projection};
@@ -26,6 +30,10 @@ const HEAD_LAYER_NORM_EPSILON: f32 = 1e-5;
 pub(crate) struct LayaDecisionHead<'model> {
     pub(crate) runtime: &'model MlxRuntime,
     pub(crate) tensors: &'model MlxSafetensors,
+    /// Trained tensors read in place of the shipped tensors of the same name.
+    pub(crate) tuned_tensors: &'model BTreeMap<String, MlxArray>,
+    /// Add-on weights on the head's own layers, or `None` for none.
+    pub(crate) adapters: Option<&'model LinearAdapters>,
     pub(crate) configuration: &'model LayaConfiguration,
 }
 
@@ -38,32 +46,99 @@ pub(crate) struct HeadPassRows<'pass> {
     pub(crate) option_marker_positions: &'pass [&'pass [usize]],
 }
 
+/// One row's option logits and, when asked, the marker states the scorer read.
+pub(crate) struct ScoredHeadRow {
+    pub(crate) option_logits: Vec<f32>,
+    /// One vector per option, in canonical order, as 32-bit floats.
+    pub(crate) marker_states: Option<Vec<Vec<f32>>>,
+}
+
 impl LayaDecisionHead<'_> {
     /// Scores every option of every row and returns the logits per row.
+    #[cfg(test)]
     pub(crate) fn option_logits(
         &self,
         trunk_hidden_states: &MlxArray,
         pass_rows: &HeadPassRows<'_>,
     ) -> Result<Vec<Vec<f32>>, ModernBertTrunkError> {
+        let scored_rows =
+            self.scored_rows(trunk_hidden_states, pass_rows, HeadInputRequest::Omit)?;
+        let mut row_logits = Vec::with_capacity(scored_rows.len());
+        for scored_row in scored_rows {
+            row_logits.push(scored_row.option_logits);
+        }
+        Ok(row_logits)
+    }
+
+    /// Scores every option of every row; with [`HeadInputRequest::Include`]
+    /// each row also carries the marker states its scorer read.
+    pub(crate) fn scored_rows(
+        &self,
+        trunk_hidden_states: &MlxArray,
+        pass_rows: &HeadPassRows<'_>,
+        head_input_request: HeadInputRequest,
+    ) -> Result<Vec<ScoredHeadRow>, ModernBertTrunkError> {
+        let marker_states = self.marker_states(trunk_hidden_states, pass_rows)?;
+        let padded_logits = self.score_markers(&marker_states)?;
+        let flat_logits = self
+            .runtime
+            .astype(&padded_logits, MlxDtype::Float32)?
+            .to_vec_f32()?;
+        let flat_marker_states = match head_input_request {
+            HeadInputRequest::Omit => None,
+            HeadInputRequest::Include => Some(
+                self.runtime
+                    .astype(&marker_states, MlxDtype::Float32)?
+                    .to_vec_f32()?,
+            ),
+        };
+        let widest_option_count = widest_option_count(pass_rows);
+        let hidden_size = self.configuration.encoder.hidden_size as usize;
+        let mut scored_rows = Vec::with_capacity(pass_rows.option_marker_positions.len());
+        for (row_index, marker_positions) in pass_rows.option_marker_positions.iter().enumerate() {
+            let row_start = row_index * widest_option_count;
+            let option_count = marker_positions.len();
+            let mut marker_states = None;
+            if let Some(all_marker_states) = flat_marker_states.as_deref() {
+                marker_states = Some(row_marker_states(
+                    all_marker_states,
+                    row_start,
+                    option_count,
+                    hidden_size,
+                ));
+            }
+            scored_rows.push(ScoredHeadRow {
+                option_logits: flat_logits[row_start..row_start + option_count].to_vec(),
+                marker_states,
+            });
+        }
+        Ok(scored_rows)
+    }
+
+    /// `[rows, widest option count]` logits, left lazy. A row's slots past
+    /// its own options score position zero again and must be masked.
+    pub(crate) fn padded_option_logits(
+        &self,
+        trunk_hidden_states: &MlxArray,
+        pass_rows: &HeadPassRows<'_>,
+    ) -> Result<MlxArray, ModernBertTrunkError> {
+        let marker_states = self.marker_states(trunk_hidden_states, pass_rows)?;
+        self.score_markers(&marker_states)
+    }
+
+    /// The head layers' states at every option marker, `[rows, widest, hidden]`.
+    fn marker_states(
+        &self,
+        trunk_hidden_states: &MlxArray,
+        pass_rows: &HeadPassRows<'_>,
+    ) -> Result<MlxArray, ModernBertTrunkError> {
         let mut head_states = self.add_question_type(trunk_hidden_states, pass_rows)?;
         let key_padding_mask = self.key_padding_mask(pass_rows.token_batch)?;
         for head_layer_index in 0..self.configuration.head_layer_count {
             head_states =
                 self.encode_head_layer(&head_states, head_layer_index, key_padding_mask.as_ref())?;
         }
-        let marker_states = self.gather_marker_states(&head_states, pass_rows)?;
-        let padded_logits = self.score_markers(&marker_states)?;
-        let flat_logits = self
-            .runtime
-            .astype(&padded_logits, MlxDtype::Float32)?
-            .to_vec_f32()?;
-        let widest_option_count = widest_option_count(pass_rows);
-        let mut row_logits = Vec::with_capacity(pass_rows.option_marker_positions.len());
-        for (row_index, marker_positions) in pass_rows.option_marker_positions.iter().enumerate() {
-            let row_start = row_index * widest_option_count;
-            row_logits.push(flat_logits[row_start..row_start + marker_positions.len()].to_vec());
-        }
-        Ok(row_logits)
+        self.gather_marker_states(&head_states, pass_rows)
     }
 
     /// Adds each row's question-type vector to every position of that row.
@@ -243,7 +318,7 @@ impl LayaDecisionHead<'_> {
         let quantized_weights = self.tensor(&format!("{linear_prefix}.weight"))?;
         let scales = self.tensor(&format!("{linear_prefix}.scales"))?;
         let biases = self.tensor(&format!("{linear_prefix}.biases"))?;
-        let projected = self.runtime.quantized_matmul_affine(
+        let shipped_projection = self.runtime.quantized_matmul_affine(
             activations,
             &quantized_weights,
             &scales,
@@ -251,6 +326,13 @@ impl LayaDecisionHead<'_> {
             true,
             self.configuration.encoder.quantization_group_size as i32,
             self.configuration.encoder.quantization_bits as i32,
+        )?;
+        let projected = adapted_layer_output(
+            self.adapters,
+            self.runtime,
+            linear_prefix,
+            activations,
+            shipped_projection,
         )?;
         let bias = self.float32_tensor(&format!("{linear_prefix}.bias"))?;
         Ok(self.runtime.add(&projected, &bias)?)
@@ -276,6 +358,9 @@ impl LayaDecisionHead<'_> {
     }
 
     fn tensor(&self, tensor_name: &str) -> Result<MlxArray, ModernBertTrunkError> {
+        if let Some(tuned_tensor) = self.tuned_tensors.get(tensor_name) {
+            return Ok(tuned_tensor.retain()?);
+        }
         match self.tensors.tensor(tensor_name) {
             Ok(tensor) => Ok(tensor),
             Err(tensor_error) => Err(ModernBertTrunkError::UnavailableTensor {
@@ -284,6 +369,22 @@ impl LayaDecisionHead<'_> {
             }),
         }
     }
+}
+
+/// One row's marker states, cut from the `[rows, widest options, hidden]`
+/// readout; padding options beyond the row's own are left behind.
+fn row_marker_states(
+    all_marker_states: &[f32],
+    row_start: usize,
+    option_count: usize,
+    hidden_size: usize,
+) -> Vec<Vec<f32>> {
+    let mut marker_states = Vec::with_capacity(option_count);
+    for option_index in 0..option_count {
+        let vector_start = (row_start + option_index) * hidden_size;
+        marker_states.push(all_marker_states[vector_start..vector_start + hidden_size].to_vec());
+    }
+    marker_states
 }
 
 fn widest_option_count(pass_rows: &HeadPassRows<'_>) -> usize {

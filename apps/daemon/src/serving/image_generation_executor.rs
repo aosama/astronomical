@@ -122,6 +122,16 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }
 
+    /// Starts training the decision model's final layers; progress and
+    /// then the trained head arrive on the returned channel. The default
+    /// leaves test executors compiling without a training impl.
+    fn start_head_training(
+        &self,
+        _training_command: astronomical_ipc_protocol::DecisionHeadTrainingCommand,
+    ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
+        Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
+    }
+
     /// Signals once a decisions request owns a place in the immutable FIFO queue.
     fn start_decisions_generation_with_admission_signal(
         &self,

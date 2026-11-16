@@ -1,5 +1,6 @@
 mod admission;
 mod chat;
+mod decision_training;
 mod decisions;
 mod image;
 mod speech;

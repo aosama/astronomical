@@ -84,6 +84,7 @@ pub(crate) struct LoadedModel<Processor, Engine> {
 }
 
 mod construction;
+mod decision_training;
 mod decisions;
 mod embeddings;
 mod fatal;

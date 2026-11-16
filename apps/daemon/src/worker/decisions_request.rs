@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use astronomical_ipc_protocol::{DecisionsCommand, RequestId};
+use astronomical_ipc_protocol::RequestId;
+
+use crate::serving::decisions_executor::DecisionsWork;
 use tokio::time::Instant;
 
 use crate::serving::decisions_executor::DecisionsResultSender;
@@ -23,7 +25,7 @@ use crate::{
 pub(super) async fn handle_generate_decisions_command(
     worker_process: &mut WorkerProcess,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,
-    decisions_command: DecisionsCommand,
+    decisions_work: DecisionsWork,
     start_sender: tokio::sync::oneshot::Sender<Result<(), GenerationStartError>>,
     decisions_result_sender: DecisionsResultSender,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -54,7 +56,7 @@ pub(super) async fn handle_generate_decisions_command(
     };
     match admit_decisions_command(
         &mut admission_context,
-        decisions_command,
+        decisions_work,
         &decisions_result_sender,
     )
     .await?
@@ -104,12 +106,12 @@ pub(super) async fn handle_generate_decisions_command(
 /// worker command dispatch.
 async fn admit_decisions_command(
     admission_context: &mut RequestAdmissionContext<'_>,
-    decisions_command: DecisionsCommand,
+    decisions_work: DecisionsWork,
     decisions_result_sender: &DecisionsResultSender,
 ) -> Result<RequestAdmissionOutcome, WorkerControlError> {
     if let Some(admission_ending_outcome) = make_requested_model_resident(
         admission_context,
-        &decisions_command.model,
+        decisions_work.model(),
         decisions_result_sender,
     )
     .await?
@@ -121,11 +123,11 @@ async fn admit_decisions_command(
             GenerationStartError::WorkerUnavailable,
         ));
     }
-    let request_id = decisions_command.request_id;
+    let request_id = decisions_work.request_id();
     let execution_started_at = Instant::now();
     let dispatch_result = admission_context
         .worker_process
-        .start_decisions_generation(decisions_command)
+        .start_decisions_work(decisions_work)
         .await;
     Ok(classify_dispatch_result(
         request_id,

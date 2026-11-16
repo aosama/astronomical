@@ -52,6 +52,9 @@ pub(crate) mod synthetic_weights_test_support;
 pub(crate) mod decision_models;
 
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod linear_adapters;
+
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod modernbert;
 
 #[cfg(feature = "direct-mlx")]
@@ -146,6 +149,7 @@ pub use astro_decoder_state_cache::{
 
 pub use decision_engine::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionUnavailableEngine,
+    HeadTrainingStep,
 };
 
 #[cfg(feature = "direct-mlx")]

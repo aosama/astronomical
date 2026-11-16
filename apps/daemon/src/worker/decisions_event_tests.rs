@@ -4,6 +4,9 @@
 
 use std::sync::{Arc, RwLock};
 
+use astronomical_decision_contract::head_training_job::{
+    HeadTrainingOutcome, HeadTrainingStage, RunEnding, RunSummary,
+};
 use astronomical_decision_contract::{
     DecisionAnswer, DecisionFailure, NoulAnswer, QuestionInputCoverage, QuestionOutcome,
 };
@@ -30,7 +33,14 @@ fn decision_health_snapshot() -> Arc<RwLock<WorkerHealthSnapshot>> {
 }
 
 fn active_decisions_request() -> (Option<ActiveWorkerRequest>, DecisionsResultReceiver) {
-    let (decisions_result_sender, decisions_result_receiver) = mpsc::channel(1);
+    active_decisions_request_with_room(1)
+}
+
+/// An active request whose result channel holds `channel_capacity` messages.
+fn active_decisions_request_with_room(
+    channel_capacity: usize,
+) -> (Option<ActiveWorkerRequest>, DecisionsResultReceiver) {
+    let (decisions_result_sender, decisions_result_receiver) = mpsc::channel(channel_capacity);
     let active_generation_permit = Arc::new(Semaphore::new(1))
         .try_acquire_owned()
         .expect("the test semaphore permit should be acquirable");
@@ -63,6 +73,7 @@ fn urgent_outcome() -> QuestionOutcome {
             option_token_cap: None,
             distinguishable_option_count: 2,
         },
+        head_inputs: None,
     }
 }
 
@@ -130,8 +141,16 @@ async fn should_deliver_the_answers_only_once_the_request_is_finalized() {
         .try_recv()
         .expect("the answers should be delivered at finalization")
         .expect("the delivered outcome should be the answers");
-    assert_eq!(delivered_output.question_outcomes, vec![urgent_outcome()]);
-    assert_eq!(delivered_output.input_token_count, 20);
+    let DecisionsOutput::Answered {
+        question_outcomes,
+        input_token_count,
+        ..
+    } = delivered_output
+    else {
+        panic!("an answer request delivered training results");
+    };
+    assert_eq!(question_outcomes, vec![urgent_outcome()]);
+    assert_eq!(input_token_count, 20);
 }
 
 #[tokio::test]
@@ -246,6 +265,119 @@ async fn should_reject_an_event_when_no_request_is_active() {
 
     assert_protocol_violation(
         handling_outcome,
+        "received a decisions event without an active request",
+    );
+}
+
+fn training_progress_event(completed: u64) -> WorkerEvent {
+    WorkerEvent::DecisionHeadTrainingProgress {
+        request_id: RequestId::new(ACTIVE_REQUEST_ID),
+        stage: HeadTrainingStage::Training,
+        completed,
+        total: 120,
+    }
+}
+
+fn trained_outcome() -> HeadTrainingOutcome {
+    HeadTrainingOutcome {
+        examples: Vec::new(),
+        trained_tensors: Vec::new(),
+        adapter_tensors: Vec::new(),
+        runs: vec![RunSummary {
+            seed: 1,
+            best_choosing_loss: 0.4,
+            best_epoch: 8,
+            epochs_run: 14,
+            ending: RunEnding::StoppedImproving,
+        }],
+        best_seed: 1,
+        largest_parity_gap: 0.0,
+        indistinguishable_question_count: 0,
+    }
+}
+
+fn execution_deadline(
+    active_worker_request: &mut Option<ActiveWorkerRequest>,
+) -> tokio::time::Instant {
+    active_worker_request
+        .as_mut()
+        .and_then(ActiveWorkerRequest::decisions_mut)
+        .expect("the training should still be active")
+        .execution_deadline
+}
+
+#[tokio::test(start_paused = true)]
+async fn should_forward_training_progress_and_move_the_stuck_engine_deadline() {
+    let health_snapshot = decision_health_snapshot();
+    let (mut active_worker_request, mut decisions_result_receiver) =
+        active_decisions_request_with_room(4);
+    let deadline_before = execution_deadline(&mut active_worker_request);
+    tokio::time::advance(std::time::Duration::from_secs(30)).await;
+
+    handle_worker_decisions_event(
+        training_progress_event(7),
+        &health_snapshot,
+        &mut active_worker_request,
+    )
+    .expect("progress for the active training should be accepted");
+
+    assert!(execution_deadline(&mut active_worker_request) > deadline_before);
+    assert!(matches!(
+        decisions_result_receiver.try_recv(),
+        Ok(Ok(DecisionsOutput::TrainingProgress {
+            stage: HeadTrainingStage::Training,
+            completed: 7,
+            total: 120,
+        }))
+    ));
+}
+
+#[tokio::test]
+async fn should_drop_progress_rather_than_fill_the_slot_the_result_needs() {
+    let health_snapshot = decision_health_snapshot();
+    let (mut active_worker_request, mut decisions_result_receiver) =
+        active_decisions_request_with_room(1);
+    handle_worker_decisions_event(
+        training_progress_event(1),
+        &health_snapshot,
+        &mut active_worker_request,
+    )
+    .expect("progress for the active training should be accepted");
+    handle_worker_decisions_event(
+        WorkerEvent::DecisionHeadTrained {
+            request_id: RequestId::new(ACTIVE_REQUEST_ID),
+            outcome: Box::new(trained_outcome()),
+            elapsed_millis: 900,
+        },
+        &health_snapshot,
+        &mut active_worker_request,
+    )
+    .expect("the trained result should be accepted");
+    handle_worker_decisions_event(
+        finalized_event(ACTIVE_REQUEST_ID),
+        &health_snapshot,
+        &mut active_worker_request,
+    )
+    .expect("the finalization should be accepted");
+
+    let Ok(Ok(DecisionsOutput::HeadTrained { outcome, .. })) = decisions_result_receiver.try_recv()
+    else {
+        panic!("the trained result must be the first and only delivery");
+    };
+    assert_eq!(*outcome, trained_outcome());
+    assert!(active_worker_request.is_none());
+}
+
+#[tokio::test]
+async fn should_reject_progress_for_a_training_that_is_not_running() {
+    let health_snapshot = decision_health_snapshot();
+    let mut active_worker_request = None;
+    assert_protocol_violation(
+        handle_worker_decisions_event(
+            training_progress_event(1),
+            &health_snapshot,
+            &mut active_worker_request,
+        ),
         "received a decisions event without an active request",
     );
 }

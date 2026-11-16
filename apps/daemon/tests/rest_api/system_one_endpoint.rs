@@ -25,7 +25,7 @@ const HAMLET_LINE: &str = "To be, or not to be, that is the question.";
 #[tokio::test]
 async fn should_answer_a_choice_question_through_the_public_http_journey() {
     let mut executor = ScriptedExecutor::ready(Vec::new());
-    executor.decisions_outcome = Ok(DecisionsOutput {
+    executor.decisions_outcome = Ok(DecisionsOutput::Answered {
         question_outcomes: vec![play_outcome()],
         input_token_count: 31,
         elapsed_millis: 4,
@@ -380,6 +380,7 @@ fn play_outcome() -> QuestionOutcome {
             option_token_cap: None,
             distinguishable_option_count: 2,
         },
+        head_inputs: None,
     }
 }
 

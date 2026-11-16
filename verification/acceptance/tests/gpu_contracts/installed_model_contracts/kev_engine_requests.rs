@@ -12,7 +12,8 @@
 //! output folder.
 
 use astronomical_decision_contract::{
-    DecisionAnswer, DecisionFailure, DecisionQuestion, OrderedJsonValue, parse_system_one_questions,
+    DecisionAnswer, DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue,
+    parse_system_one_questions,
 };
 use astronomical_model_serving::{DecisionEngine, KevDecisionEngine};
 use astronomical_test_harness::test_run::TestRunContext;
@@ -86,6 +87,7 @@ async fn should_answer_an_unambiguous_question_the_way_anyone_would() {
         .decide(
             &OrderedJsonValue::Text(PROLOGUE.to_owned()),
             &questions_from(THREE_QUESTIONS),
+            HeadInputRequest::Omit,
         )
         .expect("the request should be answered");
 
@@ -116,11 +118,15 @@ async fn should_answer_a_question_alone_exactly_as_among_others() {
     let all_questions = questions_from(THREE_QUESTIONS);
 
     let answered_together = decision_engine
-        .decide(&state, &all_questions)
+        .decide(&state, &all_questions, HeadInputRequest::Omit)
         .expect("the request should be answered");
     for (question_index, question) in all_questions.iter().enumerate() {
         let answered_alone = decision_engine
-            .decide(&state, std::slice::from_ref(question))
+            .decide(
+                &state,
+                std::slice::from_ref(question),
+                HeadInputRequest::Omit,
+            )
             .expect("the single question should be answered");
 
         assert_eq!(
@@ -143,6 +149,7 @@ async fn should_refuse_a_state_over_the_serving_limit_and_say_how_long_it_is() {
     let decide_outcome = decision_engine.decide(
         &OrderedJsonValue::Text(long_state),
         &questions_from(r#"{"q": {"type": "noul", "instructions": "Is it night?"}}"#),
+        HeadInputRequest::Omit,
     );
 
     let Err(DecisionFailure::InvalidRequest { reason }) = decide_outcome else {
@@ -170,6 +177,7 @@ async fn should_refuse_to_decide_before_it_is_loaded() {
         decision_engine.decide(
             &OrderedJsonValue::Text(PROLOGUE.to_owned()),
             &questions_from(r#"{"q": {"type": "noul", "instructions": "Is it night?"}}"#),
+            HeadInputRequest::Omit,
         ),
         Err(DecisionFailure::FatalExecution { .. })
     ));

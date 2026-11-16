@@ -21,7 +21,7 @@
 use std::path::Path;
 
 use astronomical_decision_contract::{
-    OrderedJsonValue, QuestionOutcome, parse_system_one_questions,
+    HeadInputRequest, OrderedJsonValue, QuestionOutcome, parse_system_one_questions,
 };
 use astronomical_model_serving::{DecisionEngine, KevDecisionEngine, KevRowLayout};
 use astronomical_test_harness::test_run::TestRunContext;
@@ -171,7 +171,7 @@ fn compare_case(
         assert_same_layout(case_name, row_layout, reference_row);
     }
     let decision_output = decision_engine
-        .decide(state, &questions)
+        .decide(state, &questions, HeadInputRequest::Omit)
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"));
     for (question_outcome, reference_row) in
         decision_output.question_outcomes.iter().zip(reference_rows)

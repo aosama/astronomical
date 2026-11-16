@@ -1,0 +1,97 @@
+//! Unit tests for assigning states to the parts of a training.
+
+use astronomical_decision_contract::head_training_job::TrainingScope;
+
+use super::*;
+
+/// `state_count` distinct keys spread far apart, as hashes are.
+fn spread_keys(state_count: u64) -> Vec<u64> {
+    let mut keys = Vec::new();
+    for state_number in 0..state_count {
+        keys.push(state_number.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+    }
+    keys
+}
+
+fn count_of(parts: &HashMap<u64, SplitPart>, wanted_part: SplitPart) -> usize {
+    let mut count = 0;
+    for part in parts.values() {
+        count += usize::from(*part == wanted_part);
+    }
+    count
+}
+
+#[test]
+fn should_divide_forty_states_fifteen_fifteen_seventy() {
+    let parts = split_parts_by_state(&spread_keys(40));
+    assert_eq!(count_of(&parts, SplitPart::Judging), 6);
+    assert_eq!(count_of(&parts, SplitPart::Choosing), 6);
+    assert_eq!(count_of(&parts, SplitPart::Training), 28);
+}
+
+#[test]
+fn should_give_every_repeat_of_a_state_one_part() {
+    let mut keys = spread_keys(25);
+    keys.extend(spread_keys(25));
+    let parts = split_parts_by_state(&keys);
+    assert_eq!(parts.len(), 25);
+}
+
+#[test]
+fn should_split_the_same_states_the_same_way_in_any_order() {
+    let mut reversed = spread_keys(33);
+    reversed.reverse();
+    assert_eq!(
+        split_parts_by_state(&spread_keys(33)),
+        split_parts_by_state(&reversed)
+    );
+}
+
+#[test]
+fn should_assign_nothing_without_states() {
+    assert!(split_parts_by_state(&[]).is_empty());
+}
+
+#[test]
+fn should_refuse_too_few_questions_or_states() {
+    let final_layers = TrainingScope::FinalLayers;
+    assert_eq!(
+        check_training_data(199, 60, final_layers),
+        Err(TooLittleData::TooFewQuestions {
+            have: 199,
+            need: 200,
+            scope: final_layers,
+        })
+    );
+    assert_eq!(
+        check_training_data(500, 29, final_layers),
+        Err(TooLittleData::TooFewStates {
+            have: 29,
+            need: 30,
+            scope: final_layers,
+        })
+    );
+    assert_eq!(check_training_data(200, 30, final_layers), Ok(()));
+}
+
+#[test]
+fn should_ask_more_of_a_whole_model_training() {
+    let whole_model = TrainingScope::WholeModel;
+    assert_eq!(
+        check_training_data(999, 400, whole_model),
+        Err(TooLittleData::TooFewQuestions {
+            have: 999,
+            need: 1_000,
+            scope: whole_model,
+        })
+    );
+    assert_eq!(
+        check_training_data(1_000, 99, whole_model),
+        Err(TooLittleData::TooFewStates {
+            have: 99,
+            need: 100,
+            scope: whole_model,
+        })
+    );
+    assert_eq!(check_training_data(1_000, 100, whole_model), Ok(()));
+}

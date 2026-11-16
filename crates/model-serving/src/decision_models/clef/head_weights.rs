@@ -12,10 +12,12 @@ use std::fs::File;
 use std::path::Path;
 
 use astronomical_decision_contract::DecisionFailure;
+use astronomical_decision_contract::head_tuning_file::HeadTuning;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::head_settings::ClefHeadSettings;
+use crate::decision_models::head_tuning::{check_tuned_shape, unusable_tuning};
 
 pub(crate) const CLEF_HEAD_WEIGHTS_FILE_NAME: &str = "joint_head.safetensors";
 /// The suffixes of an attention's packed input projection and its parts.
@@ -148,6 +150,29 @@ impl ClefHeadWeights {
         Ok(Self { tensors_by_name })
     }
 
+    /// Replaces each tensor the folder's training changed with its 32-bit
+    /// trained values. A trained tensor must have exactly the shape of the
+    /// widened shipped tensor it replaces; the trainable tensors are never
+    /// packed attention projections, so names match one to one.
+    pub(crate) fn apply_tuning(&mut self, head_tuning: &HeadTuning) -> Result<(), DecisionFailure> {
+        for tuned_tensor in &head_tuning.tensors {
+            let shipped_shape = self.tensor(&tuned_tensor.name)?.shape();
+            let mut shipped_dimensions = Vec::with_capacity(shipped_shape.len());
+            for dimension in &shipped_shape {
+                shipped_dimensions.push(*dimension as usize);
+            }
+            check_tuned_shape(tuned_tensor, &shipped_dimensions)?;
+            match MlxArray::from_f32(&tuned_tensor.values, &shipped_shape) {
+                Ok(tuned_array) => {
+                    self.tensors_by_name
+                        .insert(tuned_tensor.name.clone(), tuned_array);
+                }
+                Err(array_error) => return Err(unusable_tuning(&array_error.to_string())),
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn tensor(&self, tensor_name: &str) -> Result<&MlxArray, DecisionFailure> {
         self.tensors_by_name
             .get(tensor_name)
@@ -201,3 +226,7 @@ fn insert_split_projection(
 pub(crate) fn unusable_head(reason: &str) -> DecisionFailure {
     DecisionFailure::fatal_execution(&format!("Clef's joint head cannot be used: {reason}"))
 }
+
+#[cfg(test)]
+#[path = "head_weights_tests.rs"]
+mod tests;

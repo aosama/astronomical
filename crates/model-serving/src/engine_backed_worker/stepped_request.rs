@@ -82,6 +82,10 @@ where
                 self.serve_active_speech_request(active_speech, command_reader, event_writer)
                     .await
             }
+            ActiveWorkerRequest::DecisionTraining(active_training) => {
+                self.serve_active_decision_training(active_training, command_reader, event_writer)
+                    .await
+            }
         }
     }
 
@@ -103,7 +107,11 @@ where
                 .start_speech(speech_command, event_writer)
                 .await?
                 .map(ActiveWorkerRequest::Speech)),
-            // The idle dispatch routes only those two commands here; anything
+            WorkerCommand::TrainDecisionHead(training_command) => Ok(self
+                .start_decision_training(training_command, event_writer)
+                .await?
+                .map(ActiveWorkerRequest::DecisionTraining)),
+            // The idle dispatch routes only those commands here; anything
             // else would vanish without an answer, so it stops the worker.
             _ => Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
                 reason: "a command that is neither an image nor a speech request was routed as one"
@@ -220,6 +228,10 @@ where
             }
             WorkerCommand::GenerateDecisions(decisions_command) => {
                 self.refuse_decisions_while_busy(decisions_command.request_id, event_writer)
+                    .await
+            }
+            WorkerCommand::TrainDecisionHead(training_command) => {
+                self.refuse_decisions_while_busy(training_command.request_id, event_writer)
                     .await
             }
             WorkerCommand::GenerateSpeech(speech_command) => {

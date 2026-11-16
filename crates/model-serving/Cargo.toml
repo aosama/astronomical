@@ -21,6 +21,7 @@ astronomical-config = { path = "../config" }
 # each family's prompt layout. It has no graphics-processor dependency; the
 # decision backends in this crate add the forward pass.
 astronomical-decision-contract = { path = "../decision-contract" }
+astronomical-decision-training = { path = "../decision-training" }
 # English text to Kokoro phonemes, and the speech request, failures and audio
 # encoding every side of a speech request shares.
 astronomical-english-phonemes = { path = "../english-phonemes" }

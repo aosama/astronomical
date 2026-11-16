@@ -157,6 +157,7 @@ fn encode_rows(
         tensors,
         configuration: &configuration,
         weight_layout: &weight_layout,
+        adapters: None,
     };
     let token_batch = PaddedTokenBatch::from_sequences(token_sequences, PAD_TOKEN_ID)
         .expect("the test sequences form a batch");
@@ -376,6 +377,7 @@ fn should_name_the_tensor_an_artifact_is_missing() {
         tensors: &tensors,
         configuration: &configuration,
         weight_layout: &weight_layout,
+        adapters: None,
     };
     let token_batch =
         PaddedTokenBatch::from_sequences(&[&[3, 4]], PAD_TOKEN_ID).expect("a valid batch");

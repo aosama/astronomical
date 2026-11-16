@@ -50,6 +50,8 @@ pub(super) fn dispatch_single_shot_worker_event(
     if matches!(
         worker_event,
         WorkerEvent::DecisionsCompleted { .. }
+            | WorkerEvent::DecisionHeadTrainingProgress { .. }
+            | WorkerEvent::DecisionHeadTrained { .. }
             | WorkerEvent::DecisionsFailed { .. }
             | WorkerEvent::DecisionsFinalized { .. }
     ) {

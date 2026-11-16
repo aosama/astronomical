@@ -9,6 +9,7 @@ use astronomical_ipc_protocol::{
 use tokio::sync::oneshot;
 
 use crate::serving::GenerationOutcomeStartFuture;
+use crate::serving::decisions_executor::DecisionsWork;
 use crate::{
     DecisionsExecutionError, DecisionsOutput, EmbeddingsExecutionError, EmbeddingsOutput,
     ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,
@@ -58,7 +59,20 @@ impl ImageGenerationExecutor for WorkerHandle {
         &self,
         decisions_command: DecisionsCommand,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
-        self.start_decisions_generation_with_queue_admission(decisions_command, None)
+        self.start_decisions_generation_with_queue_admission(
+            DecisionsWork::Answer(decisions_command),
+            None,
+        )
+    }
+
+    fn start_head_training(
+        &self,
+        training_command: astronomical_ipc_protocol::DecisionHeadTrainingCommand,
+    ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
+        self.start_decisions_generation_with_queue_admission(
+            DecisionsWork::TrainHead(training_command),
+            None,
+        )
     }
 
     fn start_decisions_generation_with_admission_signal(
@@ -67,7 +81,7 @@ impl ImageGenerationExecutor for WorkerHandle {
         admission_sender: oneshot::Sender<()>,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         self.start_decisions_generation_with_queue_admission(
-            decisions_command,
+            DecisionsWork::Answer(decisions_command),
             Some(admission_sender),
         )
     }

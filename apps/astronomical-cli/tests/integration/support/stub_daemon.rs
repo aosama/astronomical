@@ -6,6 +6,7 @@
 //! chat or embeddings results. One connection serves a scripted exchange
 //! sequence, like the real daemon.
 
+use super::stub_decisions::{scripted_decisions_response, training_refusal};
 use crate::integration::support::stub_download_status::scripted_download_status;
 use std::{
     path::PathBuf,
@@ -465,6 +466,10 @@ pub fn spawn_stub_daemon(
                             let _ = protocol_writer.close().await;
                             return;
                         }
+                        DaemonRequest::TrainDecisionHead { .. } => {
+                            send_frames_and_close(protocol_writer, vec![training_refusal()]).await;
+                            return;
+                        }
                         helper_model_request @ (DaemonRequest::EmbedGenerate { .. }
                         | DaemonRequest::DecideGenerate { .. }
                         | DaemonRequest::SpeakGenerate(_)) => {
@@ -647,27 +652,6 @@ async fn scripted_helper_model_response(
                 actual_total_context_tokens: 5_000,
                 maximum_context_tokens: 2_048,
             },
-        },
-    }
-}
-
-/// The one terminal frame the scripted outcome stands for.
-fn scripted_decisions_response(
-    decisions_outcome: &StubDecisionsOutcome,
-    answering_model_id: String,
-) -> DaemonResponse {
-    match decisions_outcome {
-        StubDecisionsOutcome::Completed(question_outcomes) => DaemonResponse::DecisionsCompleted {
-            model: answering_model_id,
-            question_outcomes: question_outcomes.clone(),
-            input_token_count: 42,
-            elapsed_millis: 7,
-        },
-        StubDecisionsOutcome::Failed(failure_reason) => DaemonResponse::DecisionsFailed {
-            reason: failure_reason.clone(),
-        },
-        StubDecisionsOutcome::Rejected(reason) => DaemonResponse::GenerationRejected {
-            reason: reason.clone(),
         },
     }
 }

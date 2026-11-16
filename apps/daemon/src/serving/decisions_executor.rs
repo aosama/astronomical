@@ -5,17 +5,69 @@
 //! kind of request, and a second trait would force every test executor to
 //! grow another impl.
 
+use astronomical_decision_contract::head_training_job::{HeadTrainingOutcome, HeadTrainingStage};
 use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
+use astronomical_ipc_protocol::{
+    DecisionHeadTrainingCommand, DecisionsCommand, RequestId, WorkerCommand,
+};
 use tokio::sync::mpsc;
 
-/// Every answer of one decision request.
+/// What a decisions request delivers: its answers, or for a head training,
+/// progress messages and then the trained head.
 #[derive(Clone, Debug, PartialEq)]
-pub struct DecisionsOutput {
-    /// One outcome per question, in request order.
-    pub question_outcomes: Vec<QuestionOutcome>,
-    /// The tokens the model read across all questions.
-    pub input_token_count: u32,
-    pub elapsed_millis: u64,
+pub enum DecisionsOutput {
+    /// Every answer of one decision request.
+    Answered {
+        /// One outcome per question, in request order.
+        question_outcomes: Vec<QuestionOutcome>,
+        /// The tokens the model read across all questions.
+        input_token_count: u32,
+        elapsed_millis: u64,
+    },
+    /// How far a head training has got; it continues.
+    TrainingProgress {
+        stage: HeadTrainingStage,
+        completed: u64,
+        total: u64,
+    },
+    /// A finished head training.
+    HeadTrained {
+        outcome: Box<HeadTrainingOutcome>,
+        elapsed_millis: u64,
+    },
+}
+
+/// The work one decisions request asks of the worker.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DecisionsWork {
+    Answer(DecisionsCommand),
+    TrainHead(DecisionHeadTrainingCommand),
+}
+
+impl DecisionsWork {
+    #[must_use]
+    pub fn request_id(&self) -> RequestId {
+        match self {
+            Self::Answer(decisions_command) => decisions_command.request_id,
+            Self::TrainHead(training_command) => training_command.request_id,
+        }
+    }
+
+    #[must_use]
+    pub fn model(&self) -> &str {
+        match self {
+            Self::Answer(decisions_command) => &decisions_command.model,
+            Self::TrainHead(training_command) => &training_command.model,
+        }
+    }
+
+    #[must_use]
+    pub fn into_worker_command(self) -> WorkerCommand {
+        match self {
+            Self::Answer(decisions_command) => WorkerCommand::GenerateDecisions(decisions_command),
+            Self::TrainHead(training_command) => WorkerCommand::TrainDecisionHead(training_command),
+        }
+    }
 }
 
 /// Failure delivered after a decisions request was admitted to the worker.
@@ -25,7 +77,11 @@ pub enum DecisionsExecutionError {
     WorkerUnavailable,
 }
 
-/// The channel one decisions request's terminal outcome is delivered on.
+/// Messages one decisions request's channel holds: a training's progress
+/// ahead of its result.
+pub(crate) const DECISIONS_RESULT_CHANNEL_CAPACITY: usize = 8;
+
+/// The channel one decisions request's progress and terminal outcome are delivered on.
 pub(crate) type DecisionsResultSender =
     mpsc::Sender<Result<DecisionsOutput, DecisionsExecutionError>>;
 
