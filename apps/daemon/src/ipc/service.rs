@@ -244,7 +244,7 @@ async fn run_helper_request(
             )
             .await
         }
-        DaemonRequest::TrainDecisionHead { model, job } => {
+        DaemonRequest::TrainDecisionModel { model, job } => {
             crate::ipc::decision_training::run_decision_training(
                 generation_context,
                 model,
@@ -296,7 +296,7 @@ async fn handle_streaming_daemon_request(
             .await
         }
         helper_request @ (DaemonRequest::DecideGenerate { .. }
-        | DaemonRequest::TrainDecisionHead { .. }
+        | DaemonRequest::TrainDecisionModel { .. }
         | DaemonRequest::SpeakGenerate(_)) => {
             run_helper_request(
                 &generation_context,

@@ -1,4 +1,4 @@
-//! Unit tests for the shared pieces of head training.
+//! Unit tests for the shared pieces of training.
 
 use super::*;
 

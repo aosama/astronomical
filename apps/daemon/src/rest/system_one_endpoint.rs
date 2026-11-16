@@ -115,7 +115,7 @@ pub(crate) async fn create_decisions(
         .into_response(),
         // An answer request never trains; the worker broke the protocol.
         Some(Ok(
-            DecisionsOutput::TrainingProgress { .. } | DecisionsOutput::HeadTrained { .. },
+            DecisionsOutput::TrainingProgress { .. } | DecisionsOutput::ModelTrained { .. },
         )) => worker_unavailable_response(),
         Some(Err(decisions_error)) => {
             decisions_execution_error_response(request_identifier, decisions_error)

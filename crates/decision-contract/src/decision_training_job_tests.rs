@@ -1,10 +1,10 @@
-//! Unit tests for the head-training job's wire form.
+//! Unit tests for the training job's wire form.
 
 use super::*;
 
 #[test]
 fn should_carry_each_question_role_with_its_right_answer() {
-    let job = HeadTrainingJob {
+    let job = DecisionTrainingJob {
         examples: vec![TrainingExample {
             state: OrderedJsonValue::Text("O happy dagger!".to_owned()),
             questions: serde_json::from_str(r#"{"mood": {"type": "noul"}}"#).unwrap(),
@@ -22,7 +22,7 @@ fn should_carry_each_question_role_with_its_right_answer() {
         "{wire_text}"
     );
     assert_eq!(
-        serde_json::from_str::<HeadTrainingJob>(&wire_text).unwrap(),
+        serde_json::from_str::<DecisionTrainingJob>(&wire_text).unwrap(),
         job
     );
 }
@@ -61,7 +61,10 @@ fn should_round_trip_a_run_that_stopped_at_a_non_finite_step() {
 
 #[test]
 fn should_train_only_the_final_layers_unless_asked_for_the_whole_model() {
-    assert_eq!(HeadTrainingJob::default().scope, TrainingScope::FinalLayers);
+    assert_eq!(
+        DecisionTrainingJob::default().scope,
+        TrainingScope::FinalLayers
+    );
 }
 
 #[test]

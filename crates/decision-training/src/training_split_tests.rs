@@ -1,6 +1,6 @@
 //! Unit tests for assigning states to the parts of a training.
 
-use astronomical_decision_contract::head_training_job::TrainingScope;
+use astronomical_decision_contract::decision_training_job::TrainingScope;
 
 use super::*;
 

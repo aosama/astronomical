@@ -1,4 +1,4 @@
-//! The settings and shared pieces of head training, which runs on the GPU
+//! The settings and shared pieces of training, which runs on the GPU
 //! in the inference worker.
 //!
 //! Each run starts from the weights the folder serves and walks the
@@ -14,7 +14,7 @@
 //! runs never left the plateau on identical data), so several runs are made
 //! and the choosing questions pick the best.
 
-use crate::anchored_adam::{AdamSettings, HEAD_TRAINING_ADAM_SETTINGS};
+use crate::anchored_adam::{AdamSettings, TRAINING_ADAM_SETTINGS};
 
 /// The settings of one training.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,8 +34,8 @@ pub struct TrainingSettings {
 
 /// The stage 2 settings: small batches for a few hundred examples, at most
 /// 40 passes, three differently shuffled runs.
-pub const HEAD_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
-    adam: HEAD_TRAINING_ADAM_SETTINGS,
+pub const FINAL_LAYERS_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
+    adam: TRAINING_ADAM_SETTINGS,
     batch_question_count: 16,
     check_questions_per_batch: 16,
     check_weight: 1.0,
@@ -56,7 +56,7 @@ pub const HEAD_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
 /// more did not. A run that goes wrong is still caught: the gate judges it
 /// on questions it never saw and writes nothing unless it wins.
 pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
-    adam: HEAD_TRAINING_ADAM_SETTINGS,
+    adam: TRAINING_ADAM_SETTINGS,
     batch_question_count: 16,
     check_questions_per_batch: 8,
     check_weight: 1.0,
@@ -103,5 +103,5 @@ pub fn shuffled_order(length: usize, seed: u64, pass_number: u64) -> Vec<usize> 
 }
 
 #[cfg(test)]
-#[path = "head_training_tests.rs"]
+#[path = "training_settings_tests.rs"]
 mod tests;

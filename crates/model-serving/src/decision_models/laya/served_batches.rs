@@ -14,13 +14,13 @@
 //! runs in the very pass serving ran it in, beside the same questions and
 //! nothing else. Gradient steps need no such care and use larger batches.
 
-use astronomical_decision_contract::head_training_job::TrainingExample;
+use astronomical_decision_contract::decision_training_job::TrainingExample;
 use astronomical_decision_contract::laya_rendering::laya_question_type_index;
 use astronomical_decision_contract::{DecisionFailure, parse_system_one_questions};
 
-use crate::decision_models::head_training::question_selection::RowSource;
 use crate::decision_models::laya::batching::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
 use crate::decision_models::laya::loaded_state::LoadedLayaState;
+use crate::decision_models::training::question_selection::RowSource;
 
 /// One question as the model reads it.
 #[derive(Clone)]

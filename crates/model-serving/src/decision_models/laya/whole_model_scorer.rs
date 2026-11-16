@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::head_training_job::TrainingExample;
+use astronomical_decision_contract::decision_training_job::TrainingExample;
 use astronomical_decision_training::head_parameters::ParameterLayout;
 use astronomical_runtime_integration::MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
@@ -32,16 +32,16 @@ use crate::decision_models::adapter_training::micro_batch_objective::{
 use crate::decision_models::adapter_training::whole_model_layout::{
     ADAPTER_RANK, WholeModelLayout,
 };
-use crate::decision_models::head_training::gpu_math::{GpuMath, GpuResult, GpuTrainingError};
-use crate::decision_models::head_training::question_batch::QuestionBatch;
-use crate::decision_models::head_training::question_selection::RowSource;
-use crate::decision_models::head_training::row_objective::RowTargets;
-use crate::decision_models::head_training::trainable_scorer::TrainableScorer;
-use crate::decision_models::head_training::training_session::WholeModelScorer;
 use crate::decision_models::laya::adapter_targets::laya_adapter_targets;
 use crate::decision_models::laya::batching::plan_forward_passes;
 use crate::decision_models::laya::loaded_state::{ForwardRows, LoadedLayaState, TrainedParts};
 use crate::decision_models::laya::served_batches::{SequenceRow, ServedBatches};
+use crate::decision_models::training::gpu_math::{GpuMath, GpuResult, GpuTrainingError};
+use crate::decision_models::training::question_batch::QuestionBatch;
+use crate::decision_models::training::question_selection::RowSource;
+use crate::decision_models::training::row_objective::RowTargets;
+use crate::decision_models::training::trainable_scorer::TrainableScorer;
+use crate::decision_models::training::training_session::WholeModelScorer;
 
 /// What one padded token costs while a micro-batch runs backwards through
 /// the model: every layer keeps its activations for the backward pass,

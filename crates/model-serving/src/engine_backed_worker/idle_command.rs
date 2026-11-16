@@ -59,7 +59,7 @@ where
                 }),
             stepped_command @ (WorkerCommand::GenerateImage(_)
             | WorkerCommand::GenerateSpeech(_)
-            | WorkerCommand::TrainDecisionHead(_)) => {
+            | WorkerCommand::TrainDecisionModel(_)) => {
                 self.start_stepped_request(stepped_command, event_writer)
                     .await
             }

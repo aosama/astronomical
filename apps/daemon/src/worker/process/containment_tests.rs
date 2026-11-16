@@ -127,9 +127,10 @@ fn idle_health_snapshot() -> Arc<RwLock<WorkerHealthSnapshot>> {
 }
 
 fn training_progress_of(request_number: u64) -> WorkerEvent {
-    WorkerEvent::DecisionHeadTrainingProgress {
+    WorkerEvent::DecisionTrainingProgress {
         request_id: RequestId::new(request_number),
-        stage: astronomical_decision_contract::head_training_job::HeadTrainingStage::Training,
+        stage:
+            astronomical_decision_contract::decision_training_job::DecisionTrainingStage::Training,
         completed: 3,
         total: 36,
     }

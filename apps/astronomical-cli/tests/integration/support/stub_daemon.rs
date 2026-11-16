@@ -466,7 +466,7 @@ pub fn spawn_stub_daemon(
                             let _ = protocol_writer.close().await;
                             return;
                         }
-                        DaemonRequest::TrainDecisionHead { .. } => {
+                        DaemonRequest::TrainDecisionModel { .. } => {
                             send_frames_and_close(protocol_writer, vec![training_refusal()]).await;
                             return;
                         }

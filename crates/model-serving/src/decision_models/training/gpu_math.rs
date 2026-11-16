@@ -1,4 +1,4 @@
-//! The few MLX building blocks head training is written in, with one error
+//! The few MLX building blocks training is written in, with one error
 //! type, so each family's forward and backward pass reads as its formula.
 //!
 //! Every array here is 32-bit. The served heads compute their trainable
@@ -29,7 +29,7 @@ const FRAC_1_SQRT_2PI: f32 = 0.398_942_3;
 
 /// A graphics-processor operation failed during training.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error("head training failed on the graphics processor: {0}")]
+#[error("training failed on the graphics processor: {0}")]
 pub(crate) struct GpuTrainingError(pub(crate) String);
 
 impl From<MlxCError> for GpuTrainingError {

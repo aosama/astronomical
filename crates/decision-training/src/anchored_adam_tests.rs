@@ -7,7 +7,7 @@ fn plain_settings() -> AdamSettings {
         learning_rate: 0.1,
         anchor_decay: 0.0,
         maximum_gradient_norm: 1_000.0,
-        ..HEAD_TRAINING_ADAM_SETTINGS
+        ..TRAINING_ADAM_SETTINGS
     }
 }
 

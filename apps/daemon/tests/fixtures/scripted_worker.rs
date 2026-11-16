@@ -71,7 +71,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
         match worker_command {
             WorkerCommand::InitializeWorker(_) => {}
             single_shot_command @ (WorkerCommand::GenerateDecisions(_)
-            | WorkerCommand::TrainDecisionHead(_)
+            | WorkerCommand::TrainDecisionModel(_)
             | WorkerCommand::GenerateEmbeddings(_)
             | WorkerCommand::GenerateSpeech(_)) => {
                 scripted_worker_single_shot::answer_single_shot_command(

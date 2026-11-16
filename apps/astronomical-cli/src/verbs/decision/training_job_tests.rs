@@ -1,6 +1,6 @@
 //! Unit tests for building the training job and reading its outcome.
 
-use astronomical_decision_contract::head_training_job::{RunEnding, RunSummary, TrainingScope};
+use astronomical_decision_contract::decision_training_job::{RunEnding, RunSummary, TrainingScope};
 use astronomical_decision_contract::{
     DecisionQuestion, QuestionInputCoverage, answer_from_probabilities,
 };
@@ -44,9 +44,9 @@ fn served_outcome(question: &DecisionQuestion, question_name: &str) -> QuestionO
 /// An outcome answering every question of `job`, each with the same
 /// served and trained scores.
 fn outcome_for(
-    job: &HeadTrainingJob,
+    job: &DecisionTrainingJob,
     labelled_examples: &[LabelledExample],
-) -> HeadTrainingOutcome {
+) -> DecisionTrainingOutcome {
     let noul_question = &labelled_examples[0].labelled_questions[0].question;
     let mut examples = Vec::new();
     for training_example in &job.examples {
@@ -59,7 +59,7 @@ fn outcome_for(
         }
         examples.push(trained_questions);
     }
-    HeadTrainingOutcome {
+    DecisionTrainingOutcome {
         examples,
         trained_tensors: Vec::new(),
         adapter_tensors: Vec::new(),

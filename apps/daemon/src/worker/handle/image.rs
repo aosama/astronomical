@@ -65,9 +65,9 @@ impl ImageGenerationExecutor for WorkerHandle {
         )
     }
 
-    fn start_head_training(
+    fn start_training(
         &self,
-        training_command: astronomical_ipc_protocol::DecisionHeadTrainingCommand,
+        training_command: astronomical_ipc_protocol::DecisionTrainingCommand,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         self.start_decisions_generation_with_queue_admission(
             DecisionsWork::TrainHead(training_command),

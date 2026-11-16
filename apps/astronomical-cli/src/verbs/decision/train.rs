@@ -23,8 +23,8 @@ use astronomical_decision_contract::calibration_file::{
     CalibrationOverride, DECISION_CALIBRATION_FILE_NAME, parse_calibration_document,
 };
 use astronomical_decision_contract::decision_adapters_file::{DecisionAdapters, LinearAdapter};
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingOutcome, TrainedTensor, TrainingScope,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingOutcome, TrainedTensor, TrainingScope,
 };
 use astronomical_decision_contract::head_tuning_file::{
     HeadTuning, TunableHeadFamily, TunedTensor,
@@ -44,7 +44,6 @@ use super::decision_tool::{
     output_model_id, prepare_decision_model, read_labelled_examples, write_model_folder,
     write_report,
 };
-use super::head_training_request::request_head_training;
 use super::model_folder_lookup::{ModelFolderLookup, find_model_folder};
 use super::new_model_visibility::{
     NewModelVisibility, make_new_model_visible, written_folder_text,
@@ -52,6 +51,7 @@ use super::new_model_visibility::{
 use super::saved_model_check::{TrainedExpectation, check_saved_model};
 use super::training_job::{PartCounts, training_job, training_scores};
 use super::training_report::{TrainingSummary, training_report_text};
+use super::training_request::request_training;
 use crate::DaemonProbe;
 
 /// What the worker's training produced, with what judging it needs.
@@ -62,7 +62,7 @@ struct FinishedTraining<'finished> {
     example_parts: &'finished [SplitPart],
     sent_example_count: usize,
     part_counts: PartCounts,
-    outcome: HeadTrainingOutcome,
+    outcome: DecisionTrainingOutcome,
 }
 
 /// A head the gate kept, with what it was judged by.
@@ -104,7 +104,7 @@ pub async fn run_train(
     )?;
     let sent_example_count = prepared_job.sent_example_count();
     let daemon_probe = &model_lifecycle.daemon_probe;
-    let outcome = request_head_training(
+    let outcome = request_training(
         &decision_model_id,
         prepared_job.job,
         daemon_probe,

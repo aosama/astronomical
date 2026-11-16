@@ -7,7 +7,7 @@
 //! the final layers read for each question; a whole-model training runs the
 //! model from the question itself, so it needs only where the question is.
 
-use astronomical_decision_contract::head_training_job::{HeadTrainingJob, QuestionRole};
+use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, QuestionRole};
 use astronomical_decision_contract::{DecisionFailure, HeadInputs, QuestionOutcome};
 use astronomical_decision_training::trainable_head::TrainableHead;
 use astronomical_decision_training::training_losses::tempered_probabilities;
@@ -38,7 +38,7 @@ pub(crate) struct QuestionSelection<'read> {
 /// The rows of `job`; `final_layers` is the head whose inputs each row must
 /// carry, or `None` for a whole-model training.
 pub(crate) fn select_questions<'read>(
-    job: &HeadTrainingJob,
+    job: &DecisionTrainingJob,
     read_examples: &'read [Vec<QuestionOutcome>],
     final_layers: Option<&dyn TrainableHead>,
 ) -> Result<QuestionSelection<'read>, DecisionFailure> {

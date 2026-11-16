@@ -138,8 +138,8 @@ pub(super) fn handle_worker_event(
             )?;
         }
         single_shot_event @ (WorkerEvent::DecisionsCompleted { .. }
-        | WorkerEvent::DecisionHeadTrainingProgress { .. }
-        | WorkerEvent::DecisionHeadTrained { .. }
+        | WorkerEvent::DecisionTrainingProgress { .. }
+        | WorkerEvent::DecisionModelTrained { .. }
         | WorkerEvent::DecisionsFailed { .. }
         | WorkerEvent::DecisionsFinalized { .. }
         | WorkerEvent::EmbeddingsCompleted { .. }

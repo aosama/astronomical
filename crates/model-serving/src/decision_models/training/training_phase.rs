@@ -22,19 +22,20 @@
 use std::rc::Rc;
 use std::time::Instant;
 
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingOutcome, HeadTrainingStage, RunEnding, RunSummary, TrainedQuestion, TrainedTensor,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingOutcome, DecisionTrainingStage, RunEnding, RunSummary, TrainedQuestion,
+    TrainedTensor,
 };
 use astronomical_decision_contract::{DecisionFailure, FloatVector, QuestionOutcome};
 use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_decision_training::head_training::{SeedEnding, TrainingSettings};
+use astronomical_decision_training::training_settings::{SeedEnding, TrainingSettings};
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_bridge::MlxArray;
 
 use super::gpu_math::{GpuMath, GpuTrainingError};
 use super::gpu_training::{GpuSeedRun, GpuTrainer, GpuTrainingSet, STEP_TIME_BUDGET, TrainerStep};
 use super::stepped_scoring::SteppedScoring;
-use crate::decision_engine::HeadTrainingStep;
+use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_models::adapter_training::whole_model_layout::WholeModelLayout;
 
 /// A gap this small between the model and its trainable copy is float
@@ -131,7 +132,7 @@ impl TrainingPhase {
         &mut self,
         runtime: &MlxRuntime,
         read_examples: &[Vec<QuestionOutcome>],
-    ) -> Result<HeadTrainingStep, DecisionFailure> {
+    ) -> Result<DecisionTrainingStep, DecisionFailure> {
         let math = GpuMath { runtime };
         let step_deadline = Instant::now() + STEP_TIME_BUDGET;
         let step = match std::mem::replace(&mut self.stage, PhaseStage::Training) {
@@ -152,7 +153,7 @@ impl TrainingPhase {
         math: GpuMath<'_>,
         mut parity_scoring: SteppedScoring,
         step_deadline: Instant,
-    ) -> Result<HeadTrainingStep, DecisionFailure> {
+    ) -> Result<DecisionTrainingStep, DecisionFailure> {
         parity_scoring
             .advance(
                 math,
@@ -161,7 +162,7 @@ impl TrainingPhase {
                 step_deadline,
             )
             .map_err(gpu_failure)?;
-        let progress = scoring_progress(HeadTrainingStage::Checking, &parity_scoring);
+        let progress = scoring_progress(DecisionTrainingStage::Checking, &parity_scoring);
         if parity_scoring.is_finished() {
             self.largest_parity_gap =
                 largest_parity_gap(&parity_scoring.into_scores(), &self.prepared.served_logits)?;
@@ -172,7 +173,10 @@ impl TrainingPhase {
         Ok(progress)
     }
 
-    fn training_step(&mut self, math: GpuMath<'_>) -> Result<HeadTrainingStep, DecisionFailure> {
+    fn training_step(
+        &mut self,
+        math: GpuMath<'_>,
+    ) -> Result<DecisionTrainingStep, DecisionFailure> {
         let trainer_step = self
             .trainer
             .advance(
@@ -185,8 +189,8 @@ impl TrainingPhase {
             TrainerStep::Running {
                 completed_batches,
                 total_batches,
-            } => Ok(HeadTrainingStep::Progress {
-                stage: HeadTrainingStage::Training,
+            } => Ok(DecisionTrainingStep::Progress {
+                stage: DecisionTrainingStage::Training,
                 completed: completed_batches,
                 total: total_batches,
             }),
@@ -196,7 +200,7 @@ impl TrainingPhase {
                     return Err(DecisionFailure::fatal_execution("no training run finished"));
                 };
                 let scoring = SteppedScoring::new(self.prepared.training_set.rows.len());
-                let progress = scoring_progress(HeadTrainingStage::Scoring, &scoring);
+                let progress = scoring_progress(DecisionTrainingStage::Scoring, &scoring);
                 self.stage = PhaseStage::Scoring(Box::new(BestRunScoring {
                     runs,
                     best_position,
@@ -213,7 +217,7 @@ impl TrainingPhase {
         mut best_run_scoring: BestRunScoring,
         step_deadline: Instant,
         read_examples: &[Vec<QuestionOutcome>],
-    ) -> Result<HeadTrainingStep, DecisionFailure> {
+    ) -> Result<DecisionTrainingStep, DecisionFailure> {
         let best_run = &best_run_scoring.runs[best_run_scoring.best_position];
         best_run_scoring
             .scoring
@@ -225,7 +229,8 @@ impl TrainingPhase {
             )
             .map_err(gpu_failure)?;
         if !best_run_scoring.scoring.is_finished() {
-            let progress = scoring_progress(HeadTrainingStage::Scoring, &best_run_scoring.scoring);
+            let progress =
+                scoring_progress(DecisionTrainingStage::Scoring, &best_run_scoring.scoring);
             self.stage = PhaseStage::Scoring(Box::new(best_run_scoring));
             return Ok(progress);
         }
@@ -237,7 +242,7 @@ impl TrainingPhase {
             .prepared
             .trained_layout
             .exported_tensors(parameter_values);
-        let outcome = HeadTrainingOutcome {
+        let outcome = DecisionTrainingOutcome {
             examples: trained_examples(
                 read_examples,
                 &self.prepared.question_rows,
@@ -250,12 +255,15 @@ impl TrainingPhase {
             largest_parity_gap: self.largest_parity_gap,
             indistinguishable_question_count: self.prepared.indistinguishable_question_count,
         };
-        Ok(HeadTrainingStep::Completed(Box::new(outcome)))
+        Ok(DecisionTrainingStep::Completed(Box::new(outcome)))
     }
 }
 
-fn scoring_progress(stage: HeadTrainingStage, scoring: &SteppedScoring) -> HeadTrainingStep {
-    HeadTrainingStep::Progress {
+fn scoring_progress(
+    stage: DecisionTrainingStage,
+    scoring: &SteppedScoring,
+) -> DecisionTrainingStep {
+    DecisionTrainingStep::Progress {
         stage,
         completed: scoring.scored_question_count() as u64,
         total: scoring.question_count() as u64,

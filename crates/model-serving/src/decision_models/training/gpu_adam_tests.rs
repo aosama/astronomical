@@ -1,7 +1,7 @@
 //! The GPU optimizer against the CPU optimizer it mirrors.
 
 use astronomical_decision_training::anchored_adam::{
-    AdamSettings, AnchoredAdam, HEAD_TRAINING_ADAM_SETTINGS,
+    AdamSettings, AnchoredAdam, TRAINING_ADAM_SETTINGS,
 };
 use serial_test::serial;
 
@@ -14,7 +14,7 @@ fn settings() -> AdamSettings {
         learning_rate: 0.05,
         anchor_decay: 0.2,
         maximum_gradient_norm: 1.0,
-        ..HEAD_TRAINING_ADAM_SETTINGS
+        ..TRAINING_ADAM_SETTINGS
     }
 }
 

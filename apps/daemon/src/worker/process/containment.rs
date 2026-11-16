@@ -327,8 +327,8 @@ fn publish_observed_memory_facts(
 /// for any other event.
 fn stepped_event_request_id(worker_event: &WorkerEvent) -> Option<RequestId> {
     match worker_event {
-        WorkerEvent::DecisionHeadTrainingProgress { request_id, .. }
-        | WorkerEvent::DecisionHeadTrained { request_id, .. }
+        WorkerEvent::DecisionTrainingProgress { request_id, .. }
+        | WorkerEvent::DecisionModelTrained { request_id, .. }
         | WorkerEvent::DecisionsCompleted { request_id, .. }
         | WorkerEvent::DecisionsFailed { request_id, .. }
         | WorkerEvent::DecisionsFinalized { request_id, .. }

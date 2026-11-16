@@ -125,9 +125,9 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     /// Starts training the decision model's final layers; progress and
     /// then the trained head arrive on the returned channel. The default
     /// leaves test executors compiling without a training impl.
-    fn start_head_training(
+    fn start_training(
         &self,
-        _training_command: astronomical_ipc_protocol::DecisionHeadTrainingCommand,
+        _training_command: astronomical_ipc_protocol::DecisionTrainingCommand,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }

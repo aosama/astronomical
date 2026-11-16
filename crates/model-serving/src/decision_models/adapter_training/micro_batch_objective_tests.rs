@@ -5,8 +5,8 @@ use serial_test::serial;
 
 use super::*;
 use crate::decision_models::adapter_training::loss_gradient::{TrainableLoss, loss_gradients};
-use crate::decision_models::head_training::gpu_math::GpuMath;
-use crate::decision_models::head_training::row_objective::HostRow;
+use crate::decision_models::training::gpu_math::GpuMath;
+use crate::decision_models::training::row_objective::HostRow;
 use crate::synthetic_weights_test_support::initialize_test_runtime;
 
 /// Two questions in a batch three options wide: the first has two options

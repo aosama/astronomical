@@ -8,22 +8,22 @@
 //! cancelled between steps.
 
 use crate::memory::telemetry::MlxMemoryTelemetry;
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingJob, HeadTrainingOutcome, HeadTrainingStage,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage,
 };
 use astronomical_decision_contract::{
     DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
 };
 
-/// What one step of a head training did.
+/// What one step of a training did.
 #[derive(Clone, Debug, PartialEq)]
-pub enum HeadTrainingStep {
+pub enum DecisionTrainingStep {
     Progress {
-        stage: HeadTrainingStage,
+        stage: DecisionTrainingStage,
         completed: u64,
         total: u64,
     },
-    Completed(Box<HeadTrainingOutcome>),
+    Completed(Box<DecisionTrainingOutcome>),
 }
 
 /// A loaded decision runtime that answers typed questions about a state.
@@ -48,22 +48,22 @@ pub trait DecisionEngine: 'static {
 
     /// Starts training this model's final layers on `job`; models that
     /// cannot be trained refuse.
-    fn start_head_training(&mut self, job: HeadTrainingJob) -> Result<(), DecisionFailure> {
+    fn start_training(&mut self, job: DecisionTrainingJob) -> Result<(), DecisionFailure> {
         let _ = job;
         Err(DecisionFailure::invalid_request(
             "this model's final layers cannot be trained",
         ))
     }
 
-    /// Takes one step of the training started by [`Self::start_head_training`].
-    fn advance_head_training(&mut self) -> Result<HeadTrainingStep, DecisionFailure> {
+    /// Takes one step of the training started by [`Self::start_training`].
+    fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
         Err(DecisionFailure::fatal_execution(
-            "no head training is in progress",
+            "no training is in progress",
         ))
     }
 
     /// Drops a training in progress, if any.
-    fn cancel_head_training(&mut self) {}
+    fn cancel_training(&mut self) {}
 
     /// Returns the final MLX observation captured after request cleanup, when available.
     fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {
@@ -138,16 +138,16 @@ impl DecisionEngine for Box<dyn DecisionEngine> {
         self.as_ref().minimum_mlx_memory_ceiling_bytes()
     }
 
-    fn start_head_training(&mut self, job: HeadTrainingJob) -> Result<(), DecisionFailure> {
-        self.as_mut().start_head_training(job)
+    fn start_training(&mut self, job: DecisionTrainingJob) -> Result<(), DecisionFailure> {
+        self.as_mut().start_training(job)
     }
 
-    fn advance_head_training(&mut self) -> Result<HeadTrainingStep, DecisionFailure> {
-        self.as_mut().advance_head_training()
+    fn advance_training(&mut self) -> Result<DecisionTrainingStep, DecisionFailure> {
+        self.as_mut().advance_training()
     }
 
-    fn cancel_head_training(&mut self) {
-        self.as_mut().cancel_head_training();
+    fn cancel_training(&mut self) {
+        self.as_mut().cancel_training();
     }
 
     fn take_post_cleanup_memory_telemetry(&mut self) -> Option<MlxMemoryTelemetry> {

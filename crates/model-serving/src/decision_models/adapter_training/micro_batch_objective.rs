@@ -2,7 +2,7 @@
 //! at once, built as an MLX graph so MLX can differentiate it.
 //!
 //! It is the same objective final-layer training uses
-//! (`head_training::row_objective`): for each question,
+//! (`training::row_objective`): for each question,
 //! `weight · −Σ target · log softmax(score / T)`. There the gradient is
 //! written by hand; here MLX traces it back through every layer.
 //!
@@ -16,8 +16,8 @@
 
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 
-use crate::decision_models::head_training::question_batch::PADDING_SCORE;
-use crate::decision_models::head_training::row_objective::RowTargets;
+use crate::decision_models::training::question_batch::PADDING_SCORE;
+use crate::decision_models::training::row_objective::RowTargets;
 
 /// One micro-batch's rows of the batch's targets, `widest` the batch's
 /// widest option count.

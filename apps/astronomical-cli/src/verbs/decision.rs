@@ -15,7 +15,6 @@ mod check_set;
 mod decision_arguments;
 mod decision_tool;
 mod example_scoring;
-mod head_training_request;
 mod model_folder_lookup;
 mod new_model_visibility;
 mod progress_reporting;
@@ -23,6 +22,7 @@ mod saved_model_check;
 mod train;
 mod training_job;
 mod training_report;
+mod training_request;
 
 pub use calibrate::run_calibrate;
 pub use decision_arguments::{DecisionCommand, DecisionToolArguments, parse_decision_command};

@@ -1,13 +1,13 @@
-//! Unit tests for following a head training's frames.
+//! Unit tests for following a training's frames.
 
 use astronomical_decision_contract::DecisionFailure;
-use astronomical_decision_contract::head_training_job::{RunEnding, RunSummary};
+use astronomical_decision_contract::decision_training_job::{RunEnding, RunSummary};
 
 use super::*;
 
 fn report(
     stage_progress: &mut Option<StageProgress>,
-    stage: HeadTrainingStage,
+    stage: DecisionTrainingStage,
     completed: u64,
     total: u64,
     progress_text: &mut Vec<u8>,
@@ -30,21 +30,21 @@ fn should_start_a_fresh_line_for_each_stage_and_finish_when_runs_stop_early() {
     let mut stage_progress = None;
     report(
         &mut stage_progress,
-        HeadTrainingStage::Reading,
+        DecisionTrainingStage::Reading,
         1,
         24,
         &mut progress_text,
     );
     report(
         &mut stage_progress,
-        HeadTrainingStage::Reading,
+        DecisionTrainingStage::Reading,
         24,
         24,
         &mut progress_text,
     );
     report(
         &mut stage_progress,
-        HeadTrainingStage::Training,
+        DecisionTrainingStage::Training,
         1,
         120,
         &mut progress_text,
@@ -52,7 +52,7 @@ fn should_start_a_fresh_line_for_each_stage_and_finish_when_runs_stop_early() {
     // A run that stops improving jumps the count to the end of its steps.
     report(
         &mut stage_progress,
-        HeadTrainingStage::Training,
+        DecisionTrainingStage::Training,
         120,
         120,
         &mut progress_text,
@@ -74,7 +74,7 @@ fn should_start_a_fresh_line_for_each_stage_and_finish_when_runs_stop_early() {
 
 #[test]
 fn should_return_the_outcome_the_terminal_frame_carries() {
-    let outcome = HeadTrainingOutcome {
+    let outcome = DecisionTrainingOutcome {
         examples: Vec::new(),
         trained_tensors: Vec::new(),
         adapter_tensors: Vec::new(),
@@ -89,7 +89,7 @@ fn should_return_the_outcome_the_terminal_frame_carries() {
         largest_parity_gap: 0.000_2,
         indistinguishable_question_count: 0,
     };
-    let trained = training_outcome(DaemonResponse::DecisionHeadTrained {
+    let trained = training_outcome(DaemonResponse::DecisionModelTrained {
         model: "kev".to_owned(),
         outcome: Box::new(outcome.clone()),
     });

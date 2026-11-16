@@ -10,8 +10,8 @@
 
 use std::collections::HashMap;
 
-use astronomical_decision_contract::head_training_job::{
-    HeadTrainingJob, HeadTrainingOutcome, QuestionRole, TrainedQuestion, TrainingExample,
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingJob, DecisionTrainingOutcome, QuestionRole, TrainedQuestion, TrainingExample,
     TrainingScope,
 };
 use astronomical_decision_contract::{QuestionOutcome, parse_system_one_questions};
@@ -35,7 +35,7 @@ pub(super) struct PartCounts {
 
 /// The job, and which part each labelled example is in.
 pub(super) struct PreparedJob {
-    pub(super) job: HeadTrainingJob,
+    pub(super) job: DecisionTrainingJob,
     /// One per labelled example, in example order.
     pub(super) example_parts: Vec<SplitPart>,
     pub(super) part_counts: PartCounts,
@@ -61,7 +61,7 @@ pub(super) fn training_job(
     }
     let part_by_state = split_parts_by_state(&state_keys);
     let mut prepared = PreparedJob {
-        job: HeadTrainingJob {
+        job: DecisionTrainingJob {
             examples: Vec::with_capacity(labelled_examples.len() + check_examples.len()),
             scope,
         },
@@ -147,7 +147,7 @@ pub(super) fn training_scores(
     labelled_examples: &[LabelledExample],
     example_parts: &[SplitPart],
     sent_example_count: usize,
-    outcome: &HeadTrainingOutcome,
+    outcome: &DecisionTrainingOutcome,
 ) -> Result<TrainingScores, DecisionToolError> {
     let labelled_count = labelled_examples.len();
     if outcome.examples.len() != sent_example_count
