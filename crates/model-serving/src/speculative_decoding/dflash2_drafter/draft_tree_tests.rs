@@ -74,7 +74,7 @@ fn should_spend_the_budget_on_siblings_when_a_slot_is_uncertain() {
 #[test]
 fn should_never_exceed_the_budget_the_children_limit_or_the_lattice_depth() {
     let lattice = flat_lattice(4, 16, vec![0.0; 64]);
-    let tree = best_first_draft_tree(&lattice, 0, &DraftTreeOptions::default(), None);
+    let tree = best_first_draft_tree(&lattice, 0, &options(15, 4), None);
     assert_eq!(tree.token_ids.len(), 15);
     for depth in &tree.depths {
         assert!(*depth < 4);
