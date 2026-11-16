@@ -106,3 +106,42 @@ fn should_pair_trainable_arrays_with_their_targets_in_order() {
 fn should_have_no_add_ons_when_built_empty() {
     assert!(LinearAdapters::default().is_empty());
 }
+
+#[test]
+#[serial]
+fn should_keep_a_bfloat16_layer_in_bfloat16_and_leave_it_exact_with_a_zero_add_on() {
+    let runtime = initialize_test_runtime();
+    let adapters =
+        LinearAdapters::upload(&runtime, &rank_one_adapter(vec![0.0, 0.0, 0.0])).unwrap();
+    let layer_input = runtime
+        .astype(
+            &runtime.array_from_f32(&[3.0, 1.0], &[1, 2]).unwrap(),
+            mlx_bridge::MlxDtype::BFloat16,
+        )
+        .unwrap();
+    let base_output = runtime
+        .astype(
+            &runtime
+                .array_from_f32(&[10.125, -0.3, 7.0], &[1, 3])
+                .unwrap(),
+            mlx_bridge::MlxDtype::BFloat16,
+        )
+        .unwrap();
+    let base_values = runtime
+        .astype(&base_output, mlx_bridge::MlxDtype::Float32)
+        .unwrap()
+        .to_vec_f32()
+        .unwrap();
+
+    let adapted = adapters
+        .adapted_output(&runtime, "layers.0.attn.Wo", &layer_input, base_output)
+        .unwrap();
+
+    assert_eq!(adapted.dtype(), mlx_bridge::MlxDtype::BFloat16);
+    let adapted_values = runtime
+        .astype(&adapted, mlx_bridge::MlxDtype::Float32)
+        .unwrap()
+        .to_vec_f32()
+        .unwrap();
+    assert_eq!(adapted_values, base_values);
+}

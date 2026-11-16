@@ -13,7 +13,6 @@
 
 mod adapter_targets;
 mod artifact;
-mod batching;
 mod configuration;
 mod engine;
 mod head;

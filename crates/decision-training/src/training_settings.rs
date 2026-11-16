@@ -55,11 +55,17 @@ pub const FINAL_LAYERS_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
 /// stall on the starting plateau; add-ons in every layer on a thousand or
 /// more did not. A run that goes wrong is still caught: the gate judges it
 /// on questions it never saw and writes nothing unless it wins.
+///
+/// The check set weighs twice what it does for the final layers. Add-ons in
+/// every layer can move answers the examples never asked about: on 200
+/// coded questions Kev 0.8B learned the code completely at weight 1 but
+/// changed 9 of the 120 check-set answers, and the gate refused it; at
+/// weight 2 it learned the code just as completely and changed 4.
 pub const WHOLE_MODEL_TRAINING_SETTINGS: TrainingSettings = TrainingSettings {
     adam: TRAINING_ADAM_SETTINGS,
     batch_question_count: 16,
     check_questions_per_batch: 8,
-    check_weight: 1.0,
+    check_weight: 2.0,
     maximum_epochs: 12,
     patience_epochs: 3,
     seeds: &[1],

@@ -40,6 +40,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use super::base::Qwen3_5ModelBase;
+use super::differentiable_attention::{Qwen3_5AttentionKernel, plain_operation_attention};
 use crate::astro_decoder_state_cache::FullAttentionKeyValueState;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5FullAttentionWeights;
 use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
@@ -69,6 +70,7 @@ const FULL_ATTENTION_OPERATION: &str = "apply one Qwen3.5 full-attention step";
 /// yet exist when the model normally generates text. One-token decode needs no
 /// explicit mask: the active key/value view ends at the current token, so there
 /// is no later token to hide.
+#[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_full_attention_step(
     runtime: &MlxRuntime,
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,
@@ -77,6 +79,7 @@ pub fn qwen3_5_full_attention_step(
     active_values: &MlxArray,
     output_gate: &MlxArray,
     attention_scale: f32,
+    attention_kernel: Qwen3_5AttentionKernel,
 ) -> Result<MlxArray, MlxRuntimeError> {
     // Fail early with a model-serving error if the tensors cannot represent the
     // matrix operations below. This is more informative than a native failure.
@@ -91,26 +94,14 @@ pub fn qwen3_5_full_attention_step(
     // More than one query token means this is prompt processing. The causal
     // mask lets each token attend only to itself and earlier positions.
     let is_causal = attention_shape.query_token_count > 1;
-    let attention_output = if is_causal {
-        // Keep the stock MLX route so each Apple GPU receives the fastest
-        // supported fused or matrix-kernel graph for this head geometry.
-        runtime.causal_scaled_dot_product_attention(
-            rotated_queries,
-            active_keys,
-            active_values,
-            attention_scale,
-        )?
-    } else {
-        // A generated token supplies one query against every astro decoder state cache key. That
-        // is O(active_tokens) for this individual decode step. Reusing stored
-        // K and V is the important optimization over recomputing the prefix.
-        runtime.scaled_dot_product_attention(
-            rotated_queries,
-            active_keys,
-            active_values,
-            attention_scale,
-        )?
-    };
+    let attention_output = attended_values(
+        runtime,
+        attention_kernel,
+        is_causal,
+        rotated_queries,
+        (active_keys, active_values),
+        attention_scale,
+    )?;
 
     // MLX returns [batch, heads, tokens, features_per_head]. The rest of this
     // transformer expects token-oriented vectors, so move tokens before heads.
@@ -169,6 +160,64 @@ struct FullAttentionShape {
     // query_head_count x features_per_head and matches the output gate.
     output_dimension: i32,
 }
+/// `softmax(Q·Kᵀ · scale) · V` with the chosen kernels.
+fn attended_values(
+    runtime: &MlxRuntime,
+    attention_kernel: Qwen3_5AttentionKernel,
+    is_causal: bool,
+    rotated_queries: &MlxArray,
+    (active_keys, active_values): (&MlxArray, &MlxArray),
+    attention_scale: f32,
+) -> Result<MlxArray, MlxRuntimeError> {
+    match attention_kernel {
+        Qwen3_5AttentionKernel::Fused => fused_attention(
+            runtime,
+            is_causal,
+            rotated_queries,
+            active_keys,
+            active_values,
+            attention_scale,
+        ),
+        Qwen3_5AttentionKernel::PlainOperations => plain_operation_attention(
+            runtime,
+            rotated_queries,
+            active_keys,
+            active_values,
+            attention_scale,
+        ),
+    }
+}
+
+/// MLX's fused attention, as serving runs it.
+fn fused_attention(
+    runtime: &MlxRuntime,
+    is_causal: bool,
+    rotated_queries: &MlxArray,
+    active_keys: &MlxArray,
+    active_values: &MlxArray,
+    attention_scale: f32,
+) -> Result<MlxArray, MlxRuntimeError> {
+    if is_causal {
+        // Keep the stock MLX route so each Apple GPU receives the fastest
+        // supported fused or matrix-kernel graph for this head geometry.
+        return Ok(runtime.causal_scaled_dot_product_attention(
+            rotated_queries,
+            active_keys,
+            active_values,
+            attention_scale,
+        )?);
+    }
+    // A generated token supplies one query against every astro decoder state cache key. That
+    // is O(active_tokens) for this individual decode step. Reusing stored
+    // K and V is the important optimization over recomputing the prefix.
+    Ok(runtime.scaled_dot_product_attention(
+        rotated_queries,
+        active_keys,
+        active_values,
+        attention_scale,
+    )?)
+}
+
 fn validate_full_attention_arguments(
     rotated_queries: &MlxArray,
     active_keys: &MlxArray,
@@ -447,7 +496,7 @@ impl Qwen3_5ModelBase {
     /// one scaled dot-product calculation; this helper wraps it with the final
     /// learned projection so the caller gets the hidden-size result ready for
     /// the residual stream.
-    fn run_full_attention_computation(
+    pub(super) fn run_full_attention_computation(
         &self,
         rotated_queries: &MlxArray,
         active_keys: &MlxArray,
@@ -464,6 +513,7 @@ impl Qwen3_5ModelBase {
             active_values,
             output_gate,
             score_scale,
+            self.attention_kernel(),
         )?;
 
         // Final learned projection: mix the concatenated head outputs back into
@@ -574,7 +624,7 @@ impl Qwen3_5ModelBase {
         let query_projection = self.runtime.reshape(
             &query_projection,
             &[
-                1,
+                -1,
                 token_count,
                 query_head_count,
                 attention_projection_head_dimension,
@@ -603,7 +653,7 @@ impl Qwen3_5ModelBase {
         // flatten the gate from [heads, features_per_head] into that same shape.
         let output_gate = self.runtime.reshape(
             &output_gate,
-            &[1, token_count, query_head_count * attention_head_dimension],
+            &[-1, token_count, query_head_count * attention_head_dimension],
         )?;
 
         Ok((queries, output_gate))
@@ -626,7 +676,7 @@ impl Qwen3_5ModelBase {
         let projected_values = self.runtime.reshape(
             &projected_values,
             &[
-                1,
+                -1,
                 token_count,
                 key_value_head_count,
                 attention_head_dimension,

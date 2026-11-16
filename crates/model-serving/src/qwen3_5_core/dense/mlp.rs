@@ -34,24 +34,21 @@ pub(crate) fn bind_qwen3_5_dense_mlp_weights(
 ) -> Result<Qwen3_5DenseMlpWeights, Qwen3_5ExecutionError> {
     let dense_mlp_prefix = format!("{decoder_layer_prefix}.mlp");
     Ok(Qwen3_5DenseMlpWeights {
-        gate_projection: weights::take_quantized_affine_weights(
+        gate_projection: weights::take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.gate_proj"),
-        )?
-        .into(),
-        up_projection: weights::take_quantized_affine_weights(
+        )?,
+        up_projection: weights::take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.up_proj"),
-        )?
-        .into(),
-        down_projection: weights::take_quantized_affine_weights(
+        )?,
+        down_projection: weights::take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.down_proj"),
-        )?
-        .into(),
+        )?,
     })
 }
 

@@ -81,7 +81,7 @@ pub async fn run_train(
     dependencies: &mut DecisionToolDependencies<'_>,
 ) -> Result<(), DecisionToolError> {
     let labelled_examples = read_labelled_examples(&train_arguments.examples_file_path)?;
-    check_enough_data(&labelled_examples, train_arguments.training_scope)?;
+    check_enough_data(&labelled_examples)?;
     let model_lifecycle = model_lifecycle(dependencies);
     let decision_model_id = prepare_decision_model(
         train_arguments.model_id.as_deref(),
@@ -91,7 +91,6 @@ pub async fn run_train(
     .await?;
     let model_folder = find_model_folder(&dependencies.instance_paths, &decision_model_id)?;
     let family = tunable_family(model_folder.model_family, &decision_model_id)?;
-    check_scope_is_trainable(family, train_arguments.training_scope, &decision_model_id)?;
     let output_directory = &train_arguments.output_directory;
     check_output_is_new(&model_folder, output_directory)?;
     let check_examples = match built_in_check_examples() {
@@ -138,17 +137,14 @@ pub async fn run_train(
     .await
 }
 
-fn check_enough_data(
-    labelled_examples: &[LabelledExample],
-    scope: TrainingScope,
-) -> Result<(), DecisionToolError> {
+fn check_enough_data(labelled_examples: &[LabelledExample]) -> Result<(), DecisionToolError> {
     let mut distinct_states = HashSet::new();
     let mut labelled_question_count = 0;
     for labelled_example in labelled_examples {
         distinct_states.insert(state_group_key(&labelled_example.state));
         labelled_question_count += labelled_example.labelled_questions.len();
     }
-    match check_training_data(labelled_question_count, distinct_states.len(), scope) {
+    match check_training_data(labelled_question_count, distinct_states.len()) {
         Ok(()) => Ok(()),
         Err(too_little_data) => Err(DecisionToolError::TooLittleData(too_little_data)),
     }
@@ -165,26 +161,6 @@ fn tunable_family(
         _ => Err(DecisionToolError::NotTrainable {
             model_id: model_id.to_owned(),
         }),
-    }
-}
-
-/// Refuses a whole-model training of a family that has none yet, before
-/// any example is read: Laya trains as a whole; Kev and Clef train only
-/// their final layers so far.
-fn check_scope_is_trainable(
-    family: TunableHeadFamily,
-    scope: TrainingScope,
-    model_id: &str,
-) -> Result<(), DecisionToolError> {
-    match (scope, family) {
-        (TrainingScope::FinalLayers, _) | (TrainingScope::WholeModel, TunableHeadFamily::Laya) => {
-            Ok(())
-        }
-        (TrainingScope::WholeModel, TunableHeadFamily::Kev | TunableHeadFamily::Clef) => {
-            Err(DecisionToolError::WholeModelNotTrainable {
-                model_id: model_id.to_owned(),
-            })
-        }
     }
 }
 

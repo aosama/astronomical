@@ -10,20 +10,22 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::Instant;
 
 use astronomical_decision_contract::calibration_file::CalibrationOverride;
 use astronomical_decision_contract::clef_answers::clef_answer_from_scored_probabilities;
-use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
+use astronomical_decision_contract::decision_training_job::{DecisionTrainingJob, TrainingExample};
 use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
 use astronomical_decision_contract::{
     DecisionFailure, DecisionQuestion, FloatVector, HeadInputRequest, HeadInputs, OrderedJsonValue,
     QuestionInputCoverage, QuestionOutcome,
 };
+use astronomical_decision_training::head_parameters::ParameterLayout;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
 
-use super::head_layers::{ClefHeadLayers, head_math};
+use super::head_layers::{ClefAttentionRoute, ClefHeadLayers, head_math};
 use super::head_settings::ClefHeadSettings;
 use super::head_weights::ClefHeadWeights;
 use super::joint_head::{ClefHeadInputs, ClefQuestionReadout, JointHeadScores, SpanLayout};
@@ -31,14 +33,16 @@ use super::prompt::{
     CLEF_MAXIMUM_SEQUENCE_TOKENS, ClefQuestionLayout, ClefSequence, build_clef_sequence,
 };
 use super::tokenizer::ClefTokenizer;
+use super::whole_model_scorer::ClefWholeModelScorer;
 use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
 use crate::decision_models::head_tuning::read_head_tuning;
 use crate::decision_models::qwen_backbone::{PREFILL_CHUNK_TOKENS, QwenDecisionBackbone};
+use crate::decision_models::training::question_selection::RowSource;
 use crate::decision_models::training::training_session::{
-    DecisionTrainingHost, DecisionTrainingSession, keep_session_if_running, read_through_decide,
-    start_session,
+    DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
+    read_through_decide, start_session,
 };
 use crate::memory::forward_pass_telemetry::forward_pass_memory_telemetry;
 use crate::memory::telemetry::MlxMemoryTelemetry;
@@ -54,17 +58,19 @@ pub struct ClefDecisionEngine {
     effective_mlx_memory_ceiling_bytes: usize,
     mlx_buffer_cache_limit_bytes: usize,
     resident_weight_bytes: u64,
-    loaded_state: Option<LoadedClefState>,
+    /// Shared with a whole-model training's scorer, which reads the
+    /// backbone and the head from inside MLX's gradient closures.
+    loaded_state: Option<Rc<LoadedClefState>>,
     post_cleanup_memory_telemetry: Option<MlxMemoryTelemetry>,
     /// A training of the final layers in progress, if any.
     training_session: Option<DecisionTrainingSession>,
 }
 
-struct LoadedClefState {
-    backbone: QwenDecisionBackbone,
-    tokenizer: ClefTokenizer,
-    head_weights: ClefHeadWeights,
-    head_settings: ClefHeadSettings,
+pub(super) struct LoadedClefState {
+    pub(super) backbone: QwenDecisionBackbone,
+    pub(super) tokenizer: ClefTokenizer,
+    pub(super) head_weights: ClefHeadWeights,
+    pub(super) head_settings: ClefHeadSettings,
     /// Temperatures fitted on the person's own examples, for the kinds it names.
     calibration_override: CalibrationOverride,
 }
@@ -109,9 +115,12 @@ impl ClefDecisionEngine {
     }
 
     fn loaded_state(&self) -> Result<&LoadedClefState, DecisionFailure> {
-        self.loaded_state.as_ref().ok_or_else(|| {
-            DecisionFailure::fatal_execution("the Clef engine was asked to decide before load")
-        })
+        match self.loaded_state.as_deref() {
+            Some(loaded_state) => Ok(loaded_state),
+            None => Err(DecisionFailure::fatal_execution(
+                "the Clef engine was asked to decide before load",
+            )),
+        }
     }
 }
 
@@ -147,13 +156,13 @@ impl DecisionEngine for ClefDecisionEngine {
             &self.model_directory,
             TunableHeadFamily::Clef,
         )?)?;
-        self.loaded_state = Some(LoadedClefState {
+        self.loaded_state = Some(Rc::new(LoadedClefState {
             backbone,
             tokenizer,
             head_weights,
             head_settings,
             calibration_override,
-        });
+        }));
         Ok(DecisionEngineLoadResult {
             model_id: self.model_id.clone(),
             maximum_tokens_per_question: CLEF_MAXIMUM_SEQUENCE_TOKENS as u32,
@@ -173,8 +182,13 @@ impl DecisionEngine for ClefDecisionEngine {
             ));
         }
         let loaded_state = self.loaded_state()?;
-        let decision_outcome =
-            answer_every_question(loaded_state, state, questions, head_input_request);
+        let decision_outcome = answer_every_question(
+            loaded_state,
+            &loaded_state.head_weights,
+            state,
+            questions,
+            head_input_request,
+        );
         // Whatever happened, the request's decoder state is dropped by now;
         // clearing the MLX buffer cache returns its memory before the next one.
         let runtime = loaded_state.backbone.model.runtime();
@@ -240,8 +254,13 @@ impl DecisionEngine for ClefDecisionEngine {
 }
 
 /// Runs the sequence once and answers every question from the joint head.
-fn answer_every_question(
+/// Every question's answer, the head scoring with `head_weights`. A
+/// whole-model training scores with this very function, its add-ons in
+/// force and its head's current weights, so what it judges is what the
+/// trained folder serves.
+pub(super) fn answer_every_question(
     loaded_state: &LoadedClefState,
+    head_weights: &ClefHeadWeights,
     state: &OrderedJsonValue,
     questions: &[DecisionQuestion],
     head_input_request: HeadInputRequest,
@@ -259,8 +278,9 @@ fn answer_every_question(
         })?;
     let head_layers = ClefHeadLayers {
         runtime: loaded_state.backbone.model.runtime(),
-        weights: &loaded_state.head_weights,
+        weights: head_weights,
         attention_head_count: loaded_state.head_settings.attention_head_count,
+        attention_route: ClefAttentionRoute::Fused,
     };
     let JointHeadScores {
         question_logits,
@@ -477,6 +497,20 @@ impl DecisionTrainingHost for ClefDecisionEngine {
 
     fn tunable_family(&self) -> TunableHeadFamily {
         TunableHeadFamily::Clef
+    }
+
+    fn whole_model_scorer(
+        &mut self,
+        examples: &[TrainingExample],
+        row_sources: &[RowSource],
+        scorer_layout: &ParameterLayout,
+    ) -> Result<WholeModelScorer, DecisionFailure> {
+        let Some(loaded_state) = self.loaded_state.as_ref() else {
+            return Err(DecisionFailure::fatal_execution(
+                "the decision engine was asked to train before load",
+            ));
+        };
+        ClefWholeModelScorer::for_rows(loaded_state, examples, row_sources, scorer_layout)
     }
 }
 

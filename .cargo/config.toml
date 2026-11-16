@@ -173,14 +173,31 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # float32 reference recorded in tests/fixtures/laya_reference_decisions.json
 # (regenerate with the script beside it). `test-laya-engine-requests` covers
 # refusals and a request that spans several forward passes. A few seconds each.
-# `test-laya-whole-model-training` trains Laya's whole model on a few dozen
-# Romeo states and proves the trainable copy scores exactly as serving does,
-# that a folder with zeroed add-ons serves the shipped scores bit for bit, and
-# that a folder with the trained add-ons serves the trained scores.
+# `test-laya-whole-model-training` (and the Kev and Clef aliases below)
+# trains a family's whole model on a few dozen Romeo states and proves the
+# trainable copy scores exactly as serving does, that a folder with zeroed
+# add-ons serves the shipped scores bit for bit, and that a folder with the
+# trained add-ons serves the trained scores. `--configuration PATH` names a
+# JSON file whose `model_directory` is that family's model folder.
+# `test-kev-whole-model-positive-control` (and the Clef and Laya aliases)
+# trains the whole model on 140 coded lines whose code alone decides the
+# answer and requires 90% right on 30 unseen ones: about a minute and a half
+# on Kev, fifteen on Clef.
+# `test-kev-whole-model-training-speed` (and the Clef and Laya aliases) times
+# a few gradient steps and the scoring on a small job, about twenty seconds,
+# and prints milliseconds per question: the loop to iterate training speed on.
 test-laya = "test -p astronomical-model-serving --features direct-mlx --lib decision_models"
 test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
 test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
-test-laya-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_whole_model_training"
+test-laya-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_laya"
+test-kev-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_kev"
+test-clef-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_clef"
+test-kev-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_kev"
+test-clef-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_clef"
+test-laya-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_laya"
+test-kev-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_kev_whole_model_training_speed"
+test-clef-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_clef_whole_model_training_speed"
+test-laya-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_laya_whole_model_training_speed"
 # Text to speech: Kokoro-82M and Phonon 31M on MLX. `test-speech` runs the
 # speech lib tests (shared layers, both families' layers on small weights from
 # the Shakespeare fixture, the engines' request checks); about a second, no

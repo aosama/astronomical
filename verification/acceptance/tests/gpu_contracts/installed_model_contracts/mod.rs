@@ -34,8 +34,6 @@ mod laya_engine_requests;
 #[cfg(feature = "direct-mlx")]
 mod laya_reference_decisions;
 #[cfg(feature = "direct-mlx")]
-mod laya_whole_model_training;
-#[cfg(feature = "direct-mlx")]
 mod modernbert_embedding_vectors;
 #[cfg(feature = "direct-mlx")]
 mod neural_engine_answer_tasks;
@@ -64,3 +62,9 @@ mod speech_audio_checks;
 mod tokenizer;
 mod validate;
 mod weights;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_positive_control;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_training;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_training_speed;

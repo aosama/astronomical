@@ -330,14 +330,7 @@ fn clef_forward(
     let batch_cosines = runtime.take_axis(cosines, rows, 0)?;
     let (residuals, dense) = dense_scorer_forward(math, &features, &parameters[0..4])?;
     let mix = clef_mix(math, parameters)?;
-    let joint = runtime.add(
-        &runtime.multiply(&mix.agreement, &batch_cosines)?,
-        &residuals,
-    )?;
-    let option_scores = runtime.add(
-        &runtime.multiply(&mix.prior, &batch_priors)?,
-        &runtime.multiply(&mix.gate, &joint)?,
-    )?;
+    let option_scores = clef_mixed_scores(math, &mix, &residuals, &batch_priors, &batch_cosines)?;
     Ok(ForwardPass {
         option_scores,
         saved: SavedValues::Clef(ClefSaved {
@@ -351,6 +344,35 @@ fn clef_forward(
 
 /// `prior = exp(min(p, ln 100))`, `agreement = exp(min(j, ln 100))`,
 /// `gate = sigmoid(g)`, and whether each scale is below its ceiling (1 or 0).
+/// Clef's option scores from what its trainable final layers read, in
+/// option order: `prior · lexical prior + gate · (agreement · cosine +
+/// residual scorer(features))`. A whole-model training mixes the terms its
+/// graph computed with this, so both trainings score with one formula.
+pub(crate) fn clef_option_scores(
+    math: GpuMath<'_>,
+    parameters: &[MlxArray],
+    (residual_features, lexical_priors, cosines): (&MlxArray, &MlxArray, &MlxArray),
+) -> GpuResult<MlxArray> {
+    let (residuals, _dense) = dense_scorer_forward(math, residual_features, &parameters[0..4])?;
+    let mix = clef_mix(math, parameters)?;
+    clef_mixed_scores(math, &mix, &residuals, lexical_priors, cosines)
+}
+
+fn clef_mixed_scores(
+    math: GpuMath<'_>,
+    mix: &ClefMix,
+    residuals: &MlxArray,
+    lexical_priors: &MlxArray,
+    cosines: &MlxArray,
+) -> GpuResult<MlxArray> {
+    let runtime = math.runtime;
+    let joint = runtime.add(&runtime.multiply(&mix.agreement, cosines)?, residuals)?;
+    Ok(runtime.add(
+        &runtime.multiply(&mix.prior, lexical_priors)?,
+        &runtime.multiply(&mix.gate, &joint)?,
+    )?)
+}
+
 struct ClefMix {
     prior: MlxArray,
     agreement: MlxArray,

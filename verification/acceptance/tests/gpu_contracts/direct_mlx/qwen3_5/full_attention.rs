@@ -1,4 +1,4 @@
-use astronomical_model_serving::qwen3_5_full_attention_step;
+use astronomical_model_serving::{Qwen3_5AttentionKernel, qwen3_5_full_attention_step};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
 use crate::common::{
@@ -40,6 +40,7 @@ async fn should_apply_one_astro_decoder_state_cache_grouped_query_attention_step
         &active_values,
         &output_gate,
         2.0_f32.sqrt().recip(),
+        Qwen3_5AttentionKernel::Fused,
     )
     .expect("the full-attention step should build a valid graph");
 
@@ -85,6 +86,7 @@ async fn should_apply_causal_attention_across_multiple_prefill_tokens() {
         &active_values,
         &output_gate,
         2.0_f32.sqrt().recip(),
+        Qwen3_5AttentionKernel::Fused,
     )
     .expect("the causal full-attention step should build a valid graph");
 

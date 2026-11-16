@@ -18,7 +18,9 @@ use astronomical_decision_contract::decision_training_job::TrainingExample;
 use astronomical_decision_contract::laya_rendering::laya_question_type_index;
 use astronomical_decision_contract::{DecisionFailure, parse_system_one_questions};
 
-use crate::decision_models::laya::batching::{PADDED_TOKENS_PER_PASS, plan_forward_passes};
+use crate::decision_models::forward_pass_planning::{
+    LAYA_SERVING_PADDED_TOKENS_PER_PASS, plan_forward_passes,
+};
 use crate::decision_models::laya::loaded_state::LoadedLayaState;
 use crate::decision_models::training::question_selection::RowSource;
 
@@ -114,7 +116,9 @@ impl ServedBatches {
             training_sequence_rows.push(example_rows[row_source.question_index].clone());
         }
         // The same planning serving's `decide` runs over the same questions.
-        for pass_questions in plan_forward_passes(&sequence_lengths, PADDED_TOKENS_PER_PASS) {
+        for pass_questions in
+            plan_forward_passes(&sequence_lengths, LAYA_SERVING_PADDED_TOKENS_PER_PASS)
+        {
             let pass_index = self.passes.len();
             let mut served_pass = ServedPass {
                 sequence_rows: Vec::with_capacity(pass_questions.len()),

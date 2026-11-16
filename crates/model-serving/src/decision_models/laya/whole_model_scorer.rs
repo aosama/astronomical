@@ -8,13 +8,8 @@
 //! training scores is what the trained folder will serve; gradient steps
 //! use larger padded batches, where rounding that small does not matter.
 //!
-//! Every pass leaves freed GPU buffers in MLX's buffer cache, and passes of
-//! different shapes leave buffers nothing reuses. Serving empties the cache
-//! after each request; a training runs thousands of passes inside one
-//! request, and left alone the cache grew until the Mac swapped (found
-//! live: steps slowed from 6 to 40 seconds and the desktop froze). So the
-//! cache is reclaimed after every pass once it holds more than the
-//! runtime's reclaim threshold.
+//! The `mlx_buffer_cache` is reclaimed after every pass
+//! (`adapter_training::mlx_buffer_cache_reclaim` says why).
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -22,18 +17,20 @@ use std::rc::Rc;
 use astronomical_decision_contract::DecisionFailure;
 use astronomical_decision_contract::decision_training_job::TrainingExample;
 use astronomical_decision_training::head_parameters::ParameterLayout;
-use astronomical_runtime_integration::MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES;
 use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 
 use crate::decision_models::adapter_training::loss_gradient::{TrainableLoss, loss_gradients};
 use crate::decision_models::adapter_training::micro_batch_objective::{
     MicroBatchTargets, add_and_evaluate,
 };
+use crate::decision_models::adapter_training::mlx_buffer_cache_reclaim::reclaim_mlx_buffer_cache;
 use crate::decision_models::adapter_training::whole_model_layout::{
     ADAPTER_RANK, WholeModelLayout,
 };
+use crate::decision_models::forward_pass_planning::{
+    plan_forward_passes, training_tokens_per_pass,
+};
 use crate::decision_models::laya::adapter_targets::laya_adapter_targets;
-use crate::decision_models::laya::batching::plan_forward_passes;
 use crate::decision_models::laya::loaded_state::{ForwardRows, LoadedLayaState, TrainedParts};
 use crate::decision_models::laya::served_batches::{SequenceRow, ServedBatches};
 use crate::decision_models::training::gpu_math::{GpuMath, GpuResult, GpuTrainingError};
@@ -44,30 +41,10 @@ use crate::decision_models::training::trainable_scorer::TrainableScorer;
 use crate::decision_models::training::training_session::WholeModelScorer;
 
 /// What one padded token costs while a micro-batch runs backwards through
-/// the model: every layer keeps its activations for the backward pass,
-/// measured on Laya at 2,048 tokens peaking at 7.9 GB (about 3.6 MB per
-/// token after the model itself).
-const TRAINING_BYTES_PER_PADDED_TOKEN: usize = 3_800_000;
-/// The share of the runtime's memory limit one micro-batch may use, so the
-/// model, the optimizer and macOS keep the rest.
-const TRAINING_MEMORY_LIMIT_DIVISOR: usize = 4;
-/// The largest micro-batch, in padded tokens: about 4 GB, where the
-/// measured step time stops improving with size.
-const MAXIMUM_TRAINING_PADDED_TOKENS_PER_PASS: usize = 1_024;
-/// The smallest: one long question still forms a pass of its own.
-const MINIMUM_TRAINING_PADDED_TOKENS_PER_PASS: usize = 128;
-
-/// The padded tokens one micro-batch may hold under a runtime memory limit
-/// of `memory_limit_bytes`: a quarter of it, never more than the measured
-/// sweet spot. A Mac with less memory trains in smaller batches, so it
-/// trains more slowly rather than swapping; found live, when fixed
-/// 2,048-token batches froze a 48 GB Mac.
-pub(crate) fn training_tokens_per_pass(memory_limit_bytes: usize) -> usize {
-    (memory_limit_bytes / TRAINING_MEMORY_LIMIT_DIVISOR / TRAINING_BYTES_PER_PADDED_TOKEN).clamp(
-        MINIMUM_TRAINING_PADDED_TOKENS_PER_PASS,
-        MAXIMUM_TRAINING_PADDED_TOKENS_PER_PASS,
-    )
-}
+/// Laya: every layer keeps its activations for the backward pass, measured
+/// at 2,048 tokens peaking at 7.9 GB (about 3.6 MB per token after the
+/// model itself).
+const LAYA_TRAINING_BYTES_PER_PADDED_TOKEN: usize = 3_800_000;
 
 /// Laya's whole model, as the training loop's scorer.
 pub(crate) struct LayaWholeModelScorer {
@@ -119,7 +96,10 @@ impl LayaWholeModelScorer {
             }
         };
         let scorer = Self {
-            tokens_per_pass: training_tokens_per_pass(memory_limit_bytes),
+            tokens_per_pass: training_tokens_per_pass(
+                memory_limit_bytes,
+                LAYA_TRAINING_BYTES_PER_PADDED_TOKEN,
+            ),
             loaded_state: Rc::clone(loaded_state),
             sequence_rows: Rc::new(sequence_rows),
             served_batches: Rc::new(served_batches),
@@ -269,18 +249,6 @@ impl TrainableLoss for LayaMicroBatchLoss {
     }
 }
 
-/// Returns MLX's buffer cache to the system once it is worth the GPU wait.
-fn reclaim_mlx_buffer_cache(math: GpuMath<'_>) -> GpuResult<()> {
-    match math
-        .runtime
-        .synchronize_gpu_stream_and_reclaim_mlx_buffer_cache_above_threshold(
-            MLX_BUFFER_CACHE_RECLAIM_THRESHOLD_BYTES,
-        ) {
-        Ok(()) => Ok(()),
-        Err(reclaim_error) => Err(GpuTrainingError(reclaim_error.to_string())),
-    }
-}
-
 fn scoring_failure(failure: DecisionFailure) -> GpuTrainingError {
     GpuTrainingError(failure.to_string())
 }
@@ -303,7 +271,3 @@ fn forward_rows<'rows>(sequence_rows: &[&'rows SequenceRow]) -> ForwardRows<'row
     }
     rows
 }
-
-#[cfg(test)]
-#[path = "whole_model_scorer_tests.rs"]
-mod tests;

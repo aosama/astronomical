@@ -13,8 +13,6 @@
 
 use std::collections::HashMap;
 
-use astronomical_decision_contract::decision_training_job::TrainingScope;
-
 /// Out of every this many distinct states (ordered by their stable hash),
 /// the first three are judged and the next three choose.
 const STATE_POSITIONS_PER_CYCLE: usize = 20;
@@ -25,18 +23,20 @@ const CHOOSING_POSITIONS: usize = 3;
 /// judging part holds too few questions for the gate to tell an
 /// improvement from luck. Questions, not file lines, because one line may
 /// ask several.
+///
+/// It holds for training the whole model too, measured on 2026-11-16 with
+/// a coded control the final layers cannot learn (a code at the start of
+/// each line decides the answer): with exactly 200 questions about 200
+/// lines, Kev 0.8B's whole model went from 53% to 100% right on the judged
+/// questions, kept 116 of the 120 check-set answers, and the gate kept it,
+/// in two minutes. A whole-model minimum of 1,000 had been set before any
+/// such measurement, on the worry that every layer would memorise a few
+/// hundred questions; the gate already refuses a training that memorises,
+/// because it judges on questions training never saw.
 pub const MINIMUM_TRAINING_QUESTIONS: usize = 200;
 /// ... or fewer distinct states, which would leave each of the three parts
 /// only a handful of states to stand for everything.
 pub const MINIMUM_TRAINING_STATES: usize = 30;
-/// A whole-model training refuses fewer questions than this. Its add-ons
-/// let every layer change, so a few hundred questions are memorised rather
-/// than learned, and the judging part needs about 150 questions to tell
-/// the smaller gains of a sound training from luck.
-pub const MINIMUM_WHOLE_MODEL_TRAINING_QUESTIONS: usize = 1_000;
-/// ... or fewer distinct states, so no handful of texts dominates what
-/// every layer learns.
-pub const MINIMUM_WHOLE_MODEL_TRAINING_STATES: usize = 100;
 
 /// The part of a training a state's questions belong to.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -72,44 +72,26 @@ pub fn split_parts_by_state(state_keys: &[u64]) -> HashMap<u64, SplitPart> {
 /// Why there is too little data to train on.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TooLittleData {
-    TooFewQuestions {
-        have: usize,
-        need: usize,
-        scope: TrainingScope,
-    },
-    TooFewStates {
-        have: usize,
-        need: usize,
-        scope: TrainingScope,
-    },
+    TooFewQuestions { have: usize, need: usize },
+    TooFewStates { have: usize, need: usize },
 }
 
-/// Refuses to train on fewer questions or states than the gate can judge
-/// for a training of `scope`.
+/// Refuses to train on fewer questions or states than the gate can judge,
+/// whether the final layers or the whole model train.
 pub fn check_training_data(
     labelled_question_count: usize,
     distinct_state_count: usize,
-    scope: TrainingScope,
 ) -> Result<(), TooLittleData> {
-    let (minimum_questions, minimum_states) = match scope {
-        TrainingScope::FinalLayers => (MINIMUM_TRAINING_QUESTIONS, MINIMUM_TRAINING_STATES),
-        TrainingScope::WholeModel => (
-            MINIMUM_WHOLE_MODEL_TRAINING_QUESTIONS,
-            MINIMUM_WHOLE_MODEL_TRAINING_STATES,
-        ),
-    };
-    if labelled_question_count < minimum_questions {
+    if labelled_question_count < MINIMUM_TRAINING_QUESTIONS {
         return Err(TooLittleData::TooFewQuestions {
             have: labelled_question_count,
-            need: minimum_questions,
-            scope,
+            need: MINIMUM_TRAINING_QUESTIONS,
         });
     }
-    if distinct_state_count < minimum_states {
+    if distinct_state_count < MINIMUM_TRAINING_STATES {
         return Err(TooLittleData::TooFewStates {
             have: distinct_state_count,
-            need: minimum_states,
-            scope,
+            need: MINIMUM_TRAINING_STATES,
         });
     }
     Ok(())

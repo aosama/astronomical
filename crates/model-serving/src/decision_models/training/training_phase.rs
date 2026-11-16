@@ -1,12 +1,16 @@
 //! A prepared training, advanced a couple of seconds at a time through its
 //! three stages.
 //!
-//! - **Checking:** every question is scored with the starting parameters,
-//!   and the scores must reproduce the model's own (parity) before any
-//!   weight moves.
+//! - **Checking:** a spread of questions is scored with the starting
+//!   parameters, and the scores must reproduce the model's own (parity)
+//!   before any weight moves. The trainable copy scores with the same code
+//!   for every question, so a few dozen across the job prove what all of
+//!   them would; scoring all of them through a 9B model cost over a minute.
 //! - **Training:** the GPU trainer's passes, run after run.
-//! - **Scoring:** every question is scored with the best run's parameters,
-//!   and the trained tensors are read back.
+//! - **Scoring:** the questions the caller judges with (choosing, judging
+//!   and check-set questions) are scored with the best run's parameters,
+//!   and the trained tensors are read back. Training questions are left
+//!   out: nothing reads their trained scores, and they are most of a job.
 //!
 //! Every stage stops when its step's time is up and continues on the next
 //! step. The worker looks for a cancel only between steps, so a stage that
@@ -117,10 +121,13 @@ impl TrainingPhase {
         prepared: PreparedTraining,
         runtime: &MlxRuntime,
     ) -> Result<Self, DecisionFailure> {
-        let question_count = prepared.training_set.rows.len();
+        let row_count = prepared.training_set.rows.len();
         Ok(Self {
             trainer: GpuTrainer::new(prepared.settings),
-            stage: PhaseStage::Checking(SteppedScoring::new(question_count)),
+            stage: PhaseStage::Checking(SteppedScoring::new(
+                parity_sample_rows(row_count),
+                row_count,
+            )),
             largest_parity_gap: 0.0,
             starting_memory_bytes: held_memory_bytes(runtime)?,
             prepared,
@@ -199,7 +206,11 @@ impl TrainingPhase {
                 let Some(best_position) = best_run_position(&runs) else {
                     return Err(DecisionFailure::fatal_execution("no training run finished"));
                 };
-                let scoring = SteppedScoring::new(self.prepared.training_set.rows.len());
+                let training_set = &self.prepared.training_set;
+                let scoring = SteppedScoring::new(
+                    judged_rows(training_set.rows.len(), &training_set.training_rows),
+                    training_set.rows.len(),
+                );
                 let progress = scoring_progress(DecisionTrainingStage::Scoring, &scoring);
                 self.stage = PhaseStage::Scoring(Box::new(BestRunScoring {
                     runs,
@@ -257,6 +268,37 @@ impl TrainingPhase {
         };
         Ok(DecisionTrainingStep::Completed(Box::new(outcome)))
     }
+}
+
+/// How many questions the parity check scores at most.
+const PARITY_SAMPLE_QUESTION_COUNT: usize = 64;
+
+/// At most [`PARITY_SAMPLE_QUESTION_COUNT`] rows spread evenly over the job,
+/// the first and last included, so every part of it is represented.
+fn parity_sample_rows(row_count: usize) -> Vec<usize> {
+    if row_count <= PARITY_SAMPLE_QUESTION_COUNT {
+        return (0..row_count).collect();
+    }
+    let mut sampled_rows = Vec::with_capacity(PARITY_SAMPLE_QUESTION_COUNT);
+    for sample_index in 0..PARITY_SAMPLE_QUESTION_COUNT {
+        sampled_rows.push(sample_index * (row_count - 1) / (PARITY_SAMPLE_QUESTION_COUNT - 1));
+    }
+    sampled_rows
+}
+
+/// Every row that is not a training row, in row order.
+fn judged_rows(row_count: usize, training_rows: &[usize]) -> Vec<usize> {
+    let mut is_training_row = vec![false; row_count];
+    for training_row in training_rows {
+        is_training_row[*training_row] = true;
+    }
+    let mut rows = Vec::with_capacity(row_count - training_rows.len().min(row_count));
+    for (row, is_training) in is_training_row.iter().enumerate() {
+        if !is_training {
+            rows.push(row);
+        }
+    }
+    rows
 }
 
 fn scoring_progress(

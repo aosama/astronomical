@@ -503,6 +503,8 @@ pub use qwen3_5_core::decoder::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model::differentiable_attention::Qwen3_5AttentionKernel;
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 
 #[cfg(feature = "direct-mlx")]

@@ -9,6 +9,7 @@ pub(crate) mod adapter_training;
 pub(crate) mod calibration_override;
 pub(crate) mod clef;
 pub(crate) mod decision_adapters;
+pub(crate) mod forward_pass_planning;
 pub(crate) mod head_tuning;
 pub(crate) mod kev;
 pub(crate) mod laya;

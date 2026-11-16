@@ -5,4 +5,5 @@
 
 pub(crate) mod loss_gradient;
 pub(crate) mod micro_batch_objective;
+pub(crate) mod mlx_buffer_cache_reclaim;
 pub(crate) mod whole_model_layout;

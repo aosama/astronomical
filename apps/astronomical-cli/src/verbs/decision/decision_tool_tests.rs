@@ -64,7 +64,6 @@ fn should_say_how_much_more_data_training_needs_and_blame_the_invocation() {
     let too_few = DecisionToolError::TooLittleData(TooLittleData::TooFewQuestions {
         have: 70,
         need: 200,
-        scope: TrainingScope::FinalLayers,
     });
     assert!(too_few.is_usage_error());
     let message = too_few.to_string();
@@ -74,22 +73,6 @@ fn should_say_how_much_more_data_training_needs_and_blame_the_invocation() {
     );
     assert!(message.contains("has 70"), "{message}");
     assert!(message.contains("decision calibrate"), "{message}");
-}
-
-#[test]
-fn should_point_a_too_small_whole_model_training_at_the_final_layers() {
-    let too_few = DecisionToolError::TooLittleData(TooLittleData::TooFewQuestions {
-        have: 400,
-        need: 1_000,
-        scope: TrainingScope::WholeModel,
-    });
-    let message = too_few.to_string();
-    assert!(
-        message.contains("whole model needs at least 1000"),
-        "{message}"
-    );
-    assert!(message.contains("leave out --whole-model"), "{message}");
-    assert!(message.contains("works with 200"), "{message}");
 }
 
 #[test]

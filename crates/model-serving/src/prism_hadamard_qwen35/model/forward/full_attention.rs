@@ -8,6 +8,7 @@
 
 use mlx_bridge::MlxArray;
 
+use crate::qwen3_5_core::model::differentiable_attention::Qwen3_5AttentionKernel;
 use crate::qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 
 use super::super::PrismHadamardModelError;
@@ -352,6 +353,7 @@ impl super::super::PrismHadamardTextModel {
             active_values,
             output_gate,
             attention_scale,
+            Qwen3_5AttentionKernel::Fused,
         )
         .map_err(PrismHadamardModelError::ForwardRuntime)?;
         let rotated_gated_output = self
