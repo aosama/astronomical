@@ -4,46 +4,28 @@
 //! distributed as an undrafted one. Keep it in step with the sampler.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_bridge::MlxArray;
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::{
-    masked_logits_after_top_k_and_top_p, sampling_runtime_error, softmax_last_axis,
+    apply_top_p_mask, sampling_failure, sampling_runtime_error, softmax_last_axis,
     validate_sampled_logits,
 };
 use crate::InferenceEngineError;
 
-/// The probabilities the sampler draws from, per row: the same top-k and
-/// top-p mask on the untempered logits, then the temperature, then softmax.
-/// Speculative verification compares drafts against exactly this law, so a
-/// drafted reply is distributed as the undrafted one; keep the two in step.
-fn sampling_probability_rows(
-    runtime: &MlxRuntime,
-    logits: &MlxArray,
-    temperature_thousandths: u16,
-    top_p_thousandths: u16,
-    top_k: u16,
-) -> Result<MlxArray, InferenceEngineError> {
-    let vocabulary_size =
-        validate_sampled_logits(logits, temperature_thousandths, top_p_thousandths)?;
-    let constrained_logits = masked_logits_after_top_k_and_top_p(
-        runtime,
-        logits,
-        vocabulary_size,
-        top_k,
-        top_p_thousandths,
-    )?;
-    let temperature = f32::from(temperature_thousandths) / 1_000.0;
-    let tempered_logits = runtime
-        .multiply_scalar(&constrained_logits, temperature.recip())
-        .map_err(sampling_runtime_error)?;
-    softmax_last_axis(runtime, &tempered_logits)
-}
-
-/// `sampling_probability_rows` cut to each row's `top_k` most likely tokens:
-/// ([1, rows, top_k] uint32 ids, [1, rows, top_k] float32 probabilities).
-/// The sampler's top-k mask gives every other token probability zero, so
-/// this is the whole distribution in a few values a row; speculative
-/// verification reads back these instead of full vocabulary rows.
+/// The distribution the sampler draws each row from, restricted to the
+/// row's `top_k` most likely tokens: ([1, rows, top_k] uint32 ids,
+/// [1, rows, top_k] float32 probabilities). The sampler's law is a top-k and
+/// top-p mask on the untempered logits, then the temperature, then softmax
+/// (`masked_logits_after_top_k_and_top_p`); its top-k mask gives every other
+/// token probability zero, so this is the whole distribution. Speculative
+/// verification compares drafts against exactly this law, so a drafted reply
+/// is distributed as the undrafted one: keep the two in step.
+///
+/// It runs the law's own steps in the law's own dtype, on the kept tokens
+/// only after the one full-vocabulary softmax the top-p mask reads. The law
+/// as written scatters the masked tokens back over the vocabulary, takes a
+/// second softmax and a second partition there, which cost 6.6 ms for 16
+/// rows of the 27B's 248,320-token vocabulary on an M5 Pro.
 pub(crate) fn sampling_distribution_rows(
     runtime: &MlxRuntime,
     logits: &MlxArray,
@@ -51,33 +33,72 @@ pub(crate) fn sampling_distribution_rows(
     top_p_thousandths: u16,
     top_k: u16,
 ) -> Result<(MlxArray, MlxArray), InferenceEngineError> {
-    let probabilities = sampling_probability_rows(
+    let vocabulary_size =
+        validate_sampled_logits(logits, temperature_thousandths, top_p_thousandths)?;
+    if top_k == 0 {
+        return Err(sampling_failure("sampled top-k must be positive"));
+    }
+    let kept = kept_top_k(runtime, logits, i32::from(top_k).min(vocabulary_size))?;
+    let masked_logits = apply_top_p_mask(
         runtime,
-        logits,
-        temperature_thousandths,
+        &kept.full_vocabulary_probabilities,
+        &kept.logits,
         top_p_thousandths,
-        top_k,
     )?;
-    let shape = probabilities.shape();
-    let (row_count, vocabulary_size) = (shape[1], shape[2]);
-    let kept_count = i32::from(top_k).min(vocabulary_size);
-    let first_kept_rank = vocabulary_size - kept_count;
+    let temperature = f32::from(temperature_thousandths) / 1_000.0;
+    let tempered_logits = runtime
+        .multiply_scalar(&masked_logits, temperature.recip())
+        .map_err(sampling_runtime_error)?;
+    let probabilities = runtime
+        .astype(
+            &softmax_last_axis(runtime, &tempered_logits)?,
+            MlxDtype::Float32,
+        )
+        .map_err(sampling_runtime_error)?;
+    Ok((kept.token_ids, probabilities))
+}
+
+/// One row's `top_k` most likely tokens, chosen as the law chooses them.
+struct KeptTopK {
+    token_ids: MlxArray,
+    logits: MlxArray,
+    /// Their probabilities under the whole vocabulary's softmax.
+    full_vocabulary_probabilities: MlxArray,
+}
+
+fn kept_top_k(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    kept_count: i32,
+) -> Result<KeptTopK, InferenceEngineError> {
+    let row_count = logits.shape()[1];
+    let probabilities = softmax_last_axis(runtime, logits)?;
     let partitioned = runtime
-        .argpartition_axis(&probabilities, first_kept_rank, -1)
+        .argpartition_axis(
+            &runtime.negative(logits).map_err(sampling_runtime_error)?,
+            kept_count - 1,
+            -1,
+        )
         .map_err(sampling_runtime_error)?;
     let token_ids = runtime
         .slice(
             &partitioned,
-            &[0, 0, first_kept_rank],
-            &[1, row_count, vocabulary_size],
+            &[0, 0, 0],
+            &[1, row_count, kept_count],
             &[1, 1, 1],
         )
         .map_err(sampling_runtime_error)?;
-    let kept_probabilities = runtime
-        .take_along_axis(&probabilities, &token_ids, -1)
-        .map_err(sampling_runtime_error)?;
-    let single_precision = runtime
-        .astype(&kept_probabilities, mlx_bridge::MlxDtype::Float32)
-        .map_err(sampling_runtime_error)?;
-    Ok((token_ids, single_precision))
+    Ok(KeptTopK {
+        logits: runtime
+            .take_along_axis(logits, &token_ids, -1)
+            .map_err(sampling_runtime_error)?,
+        full_vocabulary_probabilities: runtime
+            .take_along_axis(&probabilities, &token_ids, -1)
+            .map_err(sampling_runtime_error)?,
+        token_ids,
+    })
 }
+
+#[cfg(test)]
+#[path = "sampling_distribution_tests.rs"]
+mod sampling_distribution_tests;

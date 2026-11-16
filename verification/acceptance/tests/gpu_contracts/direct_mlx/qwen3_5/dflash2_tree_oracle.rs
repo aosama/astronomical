@@ -288,6 +288,62 @@ pub(super) fn draft_tree(
     round: &mut RoundState,
     drafting: Drafting,
 ) -> DraftTree {
+    let (hidden, draft_logits) = drafted_block(pair, round);
+    let lattice = draft_lattice(
+        pair.target.runtime(),
+        &pair.drafter_weights.candidate_selector,
+        &pair.drafter_configuration,
+        &hidden,
+        &draft_logits,
+        round.last_token_id,
+    )
+    .expect("the lattice reads back");
+    search_tree(pair, cell, round, drafting, &lattice)
+}
+
+/// A drafted tree with each stage's milliseconds, every stage synced.
+pub(super) struct StagedDraftTree {
+    pub(super) tree: DraftTree,
+    pub(super) drafter_milliseconds: f64,
+    pub(super) lattice_milliseconds: f64,
+    pub(super) search_milliseconds: f64,
+}
+
+pub(super) fn staged_draft_tree(
+    pair: &JourneyPair,
+    cell: &Cell,
+    round: &mut RoundState,
+) -> StagedDraftTree {
+    let runtime = pair.target.runtime();
+    let started_at = std::time::Instant::now();
+    let (hidden, draft_logits) = drafted_block(pair, round);
+    runtime
+        .evaluate_arrays(&[&hidden])
+        .expect("the drafter evaluates");
+    let drafter_milliseconds = started_at.elapsed().as_secs_f64() * 1000.0;
+    let started_at = std::time::Instant::now();
+    let lattice = draft_lattice(
+        runtime,
+        &pair.drafter_weights.candidate_selector,
+        &pair.drafter_configuration,
+        &hidden,
+        &draft_logits,
+        round.last_token_id,
+    )
+    .expect("the lattice reads back");
+    let lattice_milliseconds = started_at.elapsed().as_secs_f64() * 1000.0;
+    let started_at = std::time::Instant::now();
+    let tree = search_tree(pair, cell, round, Drafting::Tree, &lattice);
+    StagedDraftTree {
+        tree,
+        drafter_milliseconds,
+        lattice_milliseconds,
+        search_milliseconds: started_at.elapsed().as_secs_f64() * 1000.0,
+    }
+}
+
+/// The drafter's hidden rows for one block and the target head's logits.
+fn drafted_block(pair: &JourneyPair, round: &mut RoundState) -> (MlxArray, MlxArray) {
     let runtime = pair.target.runtime();
     let configuration = &pair.drafter_configuration;
     let mut block_ids = vec![round.last_token_id];
@@ -312,21 +368,25 @@ pub(super) fn draft_tree(
     let draft_logits = target
         .head_logits(runtime, &hidden)
         .expect("the head scores the block");
-    let lattice = draft_lattice(
-        runtime,
-        &pair.drafter_weights.candidate_selector,
-        configuration,
-        &hidden,
-        &draft_logits,
-        round.last_token_id,
-    )
-    .expect("the lattice reads back");
+    (hidden, draft_logits)
+}
+
+/// TensorFold's tree over `lattice`, or a single chain (one child a node) as
+/// deep as the block. Sampled cells add the request's keyed draws, as the
+/// target samples with them.
+fn search_tree(
+    pair: &JourneyPair,
+    cell: &Cell,
+    round: &RoundState,
+    drafting: Drafting,
+    lattice: &astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftLattice,
+) -> DraftTree {
     let mut options = DraftTreeOptions {
         sampling_temperature: f64::from(cell.temperature_thousandths) / 1_000.0,
         ..DraftTreeOptions::default()
     };
     if drafting == Drafting::SinglePath {
-        options.node_budget = configuration.proposal_count() as usize;
+        options.node_budget = pair.drafter_configuration.proposal_count() as usize;
         options.children_per_node = 1;
     }
     let keyed_noise = RequestKeyedNoise { seed: KEYED_SEED };
@@ -335,7 +395,7 @@ pub(super) fn draft_tree(
     } else {
         Some(&keyed_noise)
     };
-    best_first_draft_tree(&lattice, u64::from(round.fed_token_count), &options, noise)
+    best_first_draft_tree(lattice, u64::from(round.fed_token_count), &options, noise)
 }
 
 /// How many slots deep the target's picks run through the tree from its
