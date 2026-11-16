@@ -40,10 +40,10 @@ use super::dflash2_journey_support::{
 
 const TARGET_REPOSITORY: &str = "TensorFold/Qwen3.8-27B-MLX-4bit";
 const DRAFTER_REPOSITORY: &str = "z-lab/Qwen3.8-27B-DFlash2";
-const CODE_PROMPT: &str =
+pub(crate) const CODE_PROMPT: &str =
     "Write a short Python function that computes the Fibonacci sequence and explain it.";
-const CHAT_PROMPT: &str = "Explain how matrix multiplication uses a GPU in plain English, then give a small numerical example.";
-const OUTPUT_TOKENS: usize = 256;
+pub(crate) const CHAT_PROMPT: &str = "Explain how matrix multiplication uses a GPU in plain English, then give a small numerical example.";
+pub(crate) const OUTPUT_TOKENS: usize = 256;
 const SAMPLING_SEED: u64 = 1234;
 const SAMPLED_SEED_COUNT: u64 = 3;
 /// Qwen3.8's recommended sampling, as users run it and as the reference ran.
@@ -56,13 +56,13 @@ const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 /// One measured cell: the prompt, the temperature (0 = greedy diagnostic), and
 /// the least kept-per-round that passes.
 pub(crate) struct Cell {
-    label: &'static str,
-    prompt: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) prompt: &'static str,
     /// The prompt as a raw completion rather than a chat turn: TensorFold's
     /// community benchmark sends its code cell this way, its chat cell as chat.
-    is_raw_completion: bool,
-    temperature_thousandths: u16,
-    minimum_kept_per_round: f64,
+    pub(crate) is_raw_completion: bool,
+    pub(crate) temperature_thousandths: u16,
+    pub(crate) minimum_kept_per_round: f64,
 }
 
 const CELLS: [Cell; 4] = [
@@ -233,7 +233,7 @@ pub(crate) fn load_pair() -> JourneyPair {
 }
 
 /// The prompt's tokens with no chat template, as a completion request sends it.
-fn completion_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
+pub(crate) fn completion_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
     pair.tokenizer
         .encode_prompt(prompt)
         .expect("the completion prompt tokenizes")
@@ -274,6 +274,8 @@ pub(crate) struct CellOutcome {
     pub(crate) rounds: usize,
     pub(crate) emitted_tokens: usize,
     pub(crate) decode_seconds: f64,
+    /// The first token the prefill picked, then every token the rounds kept.
+    pub(crate) emitted_token_ids: Vec<u32>,
 }
 
 pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> CellOutcome {
@@ -319,32 +321,34 @@ pub(crate) fn run_cell(pair: &JourneyPair, cell: &Cell, sampling_seed: u64) -> C
         context_states: DrafterContextStates::new(&pair.drafter_configuration, 0),
     };
     let decode_started_at = Instant::now();
-    let (mut rounds, mut emitted) = (0, 0);
-    while emitted < OUTPUT_TOKENS {
-        emitted += run_round(
+    let mut emitted_token_ids = vec![round.last_token_id];
+    let mut rounds = 0;
+    while emitted_token_ids.len() <= OUTPUT_TOKENS {
+        emitted_token_ids.extend(run_round(
             pair,
             cell,
             &mut round,
             &mut decoder_state,
             &mut random_state,
             &mut uniforms,
-        );
+        ));
         rounds += 1;
     }
     CellOutcome {
         rounds,
-        emitted_tokens: emitted,
+        emitted_tokens: emitted_token_ids.len() - 1,
         decode_seconds: decode_started_at.elapsed().as_secs_f64(),
+        emitted_token_ids,
     }
 }
 
-struct RoundState {
-    last_token_id: u32,
+pub(crate) struct RoundState {
+    pub(crate) last_token_id: u32,
     /// Tokens already in the target's decoder state; `last_token_id` is not.
-    fed_token_count: u32,
+    pub(crate) fed_token_count: u32,
     /// Fused-tap input rows the drafter has not absorbed yet.
-    pending_tap_rows: MlxArray,
-    context_states: DrafterContextStates,
+    pub(crate) pending_tap_rows: MlxArray,
+    pub(crate) context_states: DrafterContextStates,
 }
 
 /// Drafts a block, verifies it in one target pass, keeps what the target
@@ -356,7 +360,7 @@ fn run_round(
     decoder_state: &mut RequestDecoderStateStack,
     random_state: &mut MlxArray,
     uniforms: &mut UniformStream,
-) -> usize {
+) -> Vec<u32> {
     let runtime = pair.target.runtime();
     let configuration = &pair.drafter_configuration;
     let mut block_ids = vec![round.last_token_id];
@@ -441,13 +445,15 @@ fn run_round(
         uniforms,
     );
     settle_round(pair, round, decoder_state, verification, decision);
-    decision.kept_draft_count + 1
+    let mut emitted = drafted_ids[..decision.kept_draft_count].to_vec();
+    emitted.push(decision.next_token_id);
+    emitted
 }
 
 /// Keeps the accepted rows in the target and the drafter's pending context:
 /// a round that keeps fewer rows than it verified rewinds the target to the
 /// kept row's captured state, with no second pass.
-fn settle_round(
+pub(crate) fn settle_round(
     pair: &JourneyPair,
     round: &mut RoundState,
     decoder_state: &mut RequestDecoderStateStack,

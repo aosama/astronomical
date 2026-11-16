@@ -99,7 +99,7 @@ struct SelectorInputs {
 }
 
 /// The `selector_top_k` highest-logit ids at every slot, [1, proposals, candidates].
-fn kept_candidate_ids(
+pub(super) fn kept_candidate_ids(
     runtime: &MlxRuntime,
     configuration: &DFlash2DrafterConfiguration,
     proposal_logits: &MlxArray,
