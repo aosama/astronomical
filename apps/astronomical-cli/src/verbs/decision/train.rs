@@ -296,8 +296,10 @@ struct WrittenTraining<'written> {
     labelled_examples: &'written [LabelledExample],
 }
 
-/// Writes the folder, has the daemon serve it, and proves its answers; a
-/// folder that cannot be proven is removed.
+/// Writes the folder, has the daemon serve it, and proves its answers. A
+/// folder whose answers disagree with the trained model is removed; one that
+/// could not be checked (Astronomical busy, say) is kept, because removing
+/// it would throw away a training that may be perfectly sound.
 async fn write_and_prove(
     written_training: &WrittenTraining<'_>,
     daemon_probe: &DaemonProbe,
@@ -325,13 +327,21 @@ async fn write_and_prove(
         prove_written_folder(written_training, &new_model_id, daemon_probe, dependencies).await;
     let largest_gap = match proof {
         Ok(largest_gap) => largest_gap,
-        Err(proof_error) => {
+        Err(proof_error) if disproves_written_folder(&proof_error) => {
             // Only the folder this run wrote is removed; the source is never touched.
             let _ = std::fs::remove_dir_all(output_directory);
             let _ =
                 make_new_model_visible(dependencies.loopback_address, daemon_probe, &new_model_id)
                     .await;
             return Err(proof_error);
+        }
+        Err(DecisionToolError::SavedModelUnchecked(reason)) => {
+            return Err(DecisionToolError::SavedModelUnchecked(reason));
+        }
+        Err(proof_error) => {
+            return Err(DecisionToolError::SavedModelUnchecked(
+                proof_error.to_string(),
+            ));
         }
     };
     let mut closing_text = written_folder_text(
@@ -344,6 +354,12 @@ async fn write_and_prove(
         "Its answers to the judging questions match the trained model's to within {largest_gap:.4}.\n"
     ));
     write_report(dependencies.stdout, &closing_text)
+}
+
+/// Whether a failed proof showed the written folder answers differently from
+/// the trained model, rather than only that it could not be checked.
+fn disproves_written_folder(proof_error: &DecisionToolError) -> bool {
+    matches!(proof_error, DecisionToolError::SavedModelDisagrees { .. })
 }
 
 async fn prove_written_folder(

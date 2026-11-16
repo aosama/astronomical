@@ -173,7 +173,10 @@ pub fn check_output_location(
 /// and some of its parents do not exist yet: the nearest folder that exists
 /// is resolved and the missing names are added back. The folder is written
 /// with its parents created, so a new `calibrated/` folder is a fine target.
-fn canonical_output_path(output_directory: &Path) -> Result<PathBuf, CalibratedFolderError> {
+///
+/// # Errors
+/// Returns the folder error when the nearest existing folder cannot be resolved.
+pub fn canonical_output_path(output_directory: &Path) -> Result<PathBuf, CalibratedFolderError> {
     let mut missing_names = Vec::new();
     let mut existing_ancestor = output_directory;
     while !existing_ancestor.as_os_str().is_empty() && !existing_ancestor.exists() {

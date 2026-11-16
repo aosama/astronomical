@@ -231,3 +231,26 @@ fn should_refuse_a_whole_model_training_of_kev_or_clef_before_reading_any_exampl
         );
     }
 }
+
+#[test]
+fn should_remove_a_written_folder_only_when_its_answers_disagree() {
+    assert!(disproves_written_folder(
+        &DecisionToolError::SavedModelDisagrees {
+            question_name: "mood".to_owned(),
+            largest_gap: 0.5,
+        }
+    ));
+    assert!(!disproves_written_folder(
+        &DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned())
+    ));
+    assert!(!disproves_written_folder(
+        &DecisionToolError::TrainingFailed("the daemon stopped".to_owned())
+    ));
+}
+
+#[test]
+fn should_tell_the_person_an_unchecked_folder_is_kept() {
+    let unchecked = DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned());
+
+    assert!(unchecked.to_string().contains("the new folder is kept"));
+}

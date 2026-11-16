@@ -22,6 +22,7 @@ mod laya;
 mod marked_decision_folder;
 mod model_card_front_matter;
 mod model_family;
+mod model_folder_placement;
 mod modernbert;
 mod phonon;
 mod prism_hadamard_qwen35;
@@ -50,6 +51,7 @@ pub use model_family::{
     ModelFamily, ModelFamilyClassificationError, classify_mflux_transformer_index_bytes,
     classify_model_directory, classify_pipeline_index_bytes,
 };
+pub use model_folder_placement::is_discoverable_model_folder;
 pub use phonon::{
     PHONON_CONFIGURATION_FILE_NAME, PHONON_DEFAULT_VOICE_FILE_NAME, PHONON_DEFAULT_VOICE_NAME,
     PHONON_TOKENIZER_FILE_NAME, PHONON_VOICES_DIRECTORY_NAME, PHONON_WEIGHTS_FILE_NAME,
@@ -426,14 +428,16 @@ fn scan_directory_for_executable_models(
     }
 }
 
+/// How many folders below a scanned models folder discovery looks for a
+/// model. `model_folder_placement` answers from the same number.
+pub(crate) const MAXIMUM_MODEL_SCAN_DEPTH: usize = 4;
+
 fn scan_directory_recursive(
     current_directory: &Path,
     depth: usize,
     discovered_models: &mut Vec<DiscoveredModel>,
 ) -> Result<(), DiscoveredModelError> {
-    const MAX_SCAN_DEPTH: usize = 4;
-
-    if depth > MAX_SCAN_DEPTH {
+    if depth > MAXIMUM_MODEL_SCAN_DEPTH {
         return Ok(());
     }
 
