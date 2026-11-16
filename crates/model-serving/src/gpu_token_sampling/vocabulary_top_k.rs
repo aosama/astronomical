@@ -9,7 +9,7 @@
 //!
 //! One threadgroup takes a row: each thread keeps the best `K` of its
 //! strided share in registers, each simdgroup merges its 32 lists by `K`
-//! rounds of `simd_max`, and the first simdgroup merges the 16 simdgroups'
+//! rounds of `simd_max`, and the first simdgroup merges the 8 simdgroups'
 //! lists the same way. The result is exact and sorted best first; equal
 //! logits go to the lower token id.
 
@@ -21,16 +21,17 @@ use mlx_bridge::{
 use super::{sampling_failure, sampling_runtime_error};
 use crate::InferenceEngineError;
 
-/// Sixteen simdgroups: within the 640 threads a threadgroup may hold on
-/// every Metal GPU this runs on (GitHub's virtual Macs allow no more), where
-/// 1,024 was refused outright.
-const THREADS_PER_ROW: i32 = 512;
+/// Eight simdgroups. A threadgroup's thread limit falls as each thread's
+/// registers grow, and a thread here holds `2 * K` of them: GitHub's
+/// virtual Macs allowed 640 threads at `K = 20` and only 384 at `K = 32`,
+/// where an M5 Pro allows 1,024 at both. 256 fits every limit seen.
+const THREADS_PER_ROW: i32 = 256;
 /// The largest `k` a call may ask for: registers hold `K` pairs a thread.
 pub(crate) const MAXIMUM_TOP_K: i32 = 32;
 
 /// Input `logits` [1, rows, V]; output `token_ids` [1, rows, K] uint32.
 const VOCABULARY_TOP_K_SOURCE: &str = r#"
-    constexpr uint THREADS = 512;
+    constexpr uint THREADS = 256;
     constexpr uint SIMDGROUPS = THREADS / 32;
     const uint row = threadgroup_position_in_grid.y;
     const uint thread_index = thread_position_in_threadgroup.x;
