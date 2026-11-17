@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::drafter_discovery::{DrafterPairing, paired_drafter_directory};
+use super::drafter_discovery::{
+    BUNDLED_DRAFTER_DIRECTORY_NAME, DrafterPairing, paired_drafter_directory,
+};
 
 const TARGET_27B: DrafterPairing = DrafterPairing {
     target_layer_count: 64,
@@ -122,4 +124,45 @@ fn should_find_nothing_for_a_library_with_only_the_target() {
             .expect("the library lists")
             .is_none()
     );
+}
+
+/// A drafter in the target's own `drafter` folder belongs to that model and
+/// wins over a library drafter of the same shape, so a draft-tree build and
+/// its plain twin can share one library.
+#[test]
+fn should_prefer_the_drafter_bundled_inside_the_target_directory() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("local").join("target-27b-drafted");
+    write_config(&target, &json!({"model_type": "qwen3_5"}));
+    let bundled_drafter = target.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
+    write_config(&bundled_drafter, &drafter_document(64));
+    write_config(
+        &library_root.path().join("lab").join("a-library-drafter"),
+        &drafter_document(64),
+    );
+
+    let found = paired_drafter_directory(&target, &TARGET_27B)
+        .expect("the library lists")
+        .expect("the bundled drafter pairs");
+
+    assert_eq!(found.0, bundled_drafter);
+}
+
+#[test]
+fn should_fall_back_to_the_library_when_the_bundled_drafter_does_not_pair() {
+    let library_root = tempfile::tempdir().expect("a temporary directory");
+    let target = library_root.path().join("local").join("target-27b-drafted");
+    write_config(&target, &json!({"model_type": "qwen3_5"}));
+    write_config(
+        &target.join(BUNDLED_DRAFTER_DIRECTORY_NAME),
+        &drafter_document(40),
+    );
+    let library_drafter = library_root.path().join("lab").join("a-library-drafter");
+    write_config(&library_drafter, &drafter_document(64));
+
+    let found = paired_drafter_directory(&target, &TARGET_27B)
+        .expect("the library lists")
+        .expect("the library drafter pairs");
+
+    assert_eq!(found.0, library_drafter);
 }

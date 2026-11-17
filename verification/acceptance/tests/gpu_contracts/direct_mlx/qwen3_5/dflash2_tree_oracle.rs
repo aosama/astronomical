@@ -32,8 +32,8 @@ use serial_test::serial;
 
 use super::dflash2_journey_support::{host_values, tap_rows};
 use super::dflash2_kept_per_round::{
-    CHAT_PROMPT, CODE_PROMPT, Cell, JourneyPair, OUTPUT_TOKENS, RoundState, TOP_K,
-    TOP_P_THOUSANDTHS, completion_token_ids, load_pair, prompt_token_ids, settle_round,
+    CHAT_PROMPT, CODE_PROMPT, Cell, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,
+    TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair, prompt_token_ids, settle_round,
 };
 
 /// TensorFold's community benchmark seeds its repetitions from 1234.
@@ -60,6 +60,7 @@ const fn oracle_cell(
         temperature_thousandths,
         minimum_kept_per_round: 0.0,
         keyed_seed: FIRST_KEYED_SEED,
+        node_budget: ENGINE_NODE_BUDGET,
     }
 }
 
@@ -139,7 +140,7 @@ pub(super) fn decode(
         kept_by_round: Vec::new(),
         reference_divergences: 0,
     };
-    let reach = block_row_count(pair, drafting) - 1;
+    let reach = block_row_count(pair, drafting, cell.node_budget) - 1;
     while outcome.emitted_token_ids.len() <= OUTPUT_TOKENS {
         let emitted_count = outcome.emitted_token_ids.len();
         if drafting != Drafting::SinglePath && emitted_count + reach + 1 > reference.len() {
@@ -324,7 +325,7 @@ pub(super) fn draft_tree(
     round: &mut RoundState,
     drafting: Drafting,
 ) -> DraftTree {
-    let (hidden, draft_logits) = drafted_block(pair, round, drafting);
+    let (hidden, draft_logits) = drafted_block(pair, round, drafting, cell.node_budget);
     let lattice = draft_lattice(
         pair.target.runtime(),
         &pair.drafter_weights.candidate_selector,
@@ -352,7 +353,7 @@ pub(super) fn staged_draft_tree(
 ) -> StagedDraftTree {
     let runtime = pair.target.runtime();
     let started_at = std::time::Instant::now();
-    let (hidden, draft_logits) = drafted_block(pair, round, Drafting::Tree);
+    let (hidden, draft_logits) = drafted_block(pair, round, Drafting::Tree, cell.node_budget);
     runtime
         .evaluate_arrays(&[&hidden])
         .expect("the drafter evaluates");
@@ -381,16 +382,13 @@ pub(super) fn staged_draft_tree(
 /// Rows the drafted block holds: the checkpoint's trained block, as the
 /// engine serves, or TensorFold's 16 rows when its own text is replayed, so
 /// the rounds are compared like for like.
-fn block_row_count(pair: &JourneyPair, drafting: Drafting) -> usize {
+fn block_row_count(pair: &JourneyPair, drafting: Drafting, node_budget: usize) -> usize {
     let longest_block_row_count = if drafting == Drafting::TreeOnForcedText {
         TENSORFOLD_TREE_BLOCK_ROW_COUNT
     } else {
         pair.drafter_configuration.block_size as usize
     };
-    tree_block_row_count(
-        DraftTreeOptions::default().node_budget,
-        longest_block_row_count,
-    )
+    tree_block_row_count(node_budget, longest_block_row_count)
 }
 
 /// The drafter's hidden rows for one block and the target head's logits.
@@ -398,10 +396,11 @@ fn drafted_block(
     pair: &JourneyPair,
     round: &mut RoundState,
     drafting: Drafting,
+    node_budget: usize,
 ) -> (MlxArray, MlxArray) {
     let runtime = pair.target.runtime();
     let configuration = &pair.drafter_configuration;
-    let block_row_count = block_row_count(pair, drafting);
+    let block_row_count = block_row_count(pair, drafting, node_budget);
     let mut block_ids = vec![configuration.mask_token_id; block_row_count];
     block_ids[0] = round.last_token_id;
     let block = runtime
@@ -436,6 +435,7 @@ fn search_tree(
 ) -> DraftTree {
     let mut options = DraftTreeOptions {
         sampling_temperature: f64::from(cell.temperature_thousandths) / 1_000.0,
+        node_budget: cell.node_budget,
         ..DraftTreeOptions::default()
     };
     if drafting == Drafting::SinglePath {

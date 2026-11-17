@@ -18,9 +18,10 @@ use crate::PerformanceAttribution;
 use crate::qwen3_5_resident::Qwen3_5ResidentModel;
 use crate::speculative_decoding::dflash2_drafter::{
     DFlash2DrafterConfiguration, DFlash2DrafterWeights, DFlash2DrafterWeightsError,
-    bind_drafter_weights,
+    DraftTreeOptions, bind_drafter_weights,
 };
 
+use super::draft_tree_size::draft_tree_options_for_target;
 use super::drafter_discovery::{DrafterPairing, paired_drafter_directory};
 
 /// Headroom the drafter load insists on beyond its own weight bytes, so the
@@ -32,6 +33,8 @@ const DRAFTER_WEIGHTS_FILE_NAME: &str = "model.safetensors";
 pub struct Qwen3_5SpeculativeDraftRuntime {
     pub(crate) drafter_configuration: DFlash2DrafterConfiguration,
     pub(crate) drafter_weights: DFlash2DrafterWeights,
+    /// The tree size and search settings, chosen for this target's kind.
+    pub(crate) tree_options: DraftTreeOptions,
     /// Keeps the drafter's lazily mapped codebooks alive.
     _drafter_checkpoint: MlxSafetensors,
 }
@@ -64,38 +67,50 @@ impl Qwen3_5SpeculativeDraftRuntime {
         };
         let (drafter_weights, drafter_checkpoint) =
             load_drafter_weights(model, &drafter_directory, &drafter_configuration)?;
+        let tree_options = draft_tree_options_for_target(model.config().expert_count());
         tracing::info!(
             drafter_directory = %drafter_directory.display(),
             converted_projection_count,
+            tree_node_budget = tree_options.node_budget,
             "resident engine decode path: DFlash2 draft trees"
         );
         Ok(Some(Self {
             drafter_configuration,
             drafter_weights,
+            tree_options,
             _drafter_checkpoint: drafter_checkpoint,
         }))
     }
 }
 
 /// Converts the target's dense projections into register order and
-/// declares the tree kernels: the count converted, or `None` on a GPU that
-/// cannot run the register-ordered kernels.
+/// declares the tree kernels, the row-exact tree attention among them where
+/// the target's attention shape fits it: the count converted, or `None` on a
+/// GPU that cannot run the register-ordered kernels.
+///
+/// Conversion only speeds up verification; the tree kernels are what make
+/// it possible. So a target with nothing to convert still drafts: an 8-bit
+/// or mixed build, or a mixture-of-experts model whose experts stay in MLX's
+/// layout for the gathered expert kernels and whose attention may be 8-bit.
 fn prepare_target_for_draft_trees(
     model: &mut Qwen3_5ResidentModel,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<usize>, Qwen3_5SpeculativeDraftLoadingError> {
-    let converted_projection_count = model
+    let Some(converted_projection_count) = model
         .convert_projections_to_register_order(performance_attribution)
-        .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?;
-    if converted_projection_count == 0 {
+        .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?
+    else {
         tracing::info!(
             "a paired DFlash2 drafter is installed, but this GPU cannot run the \
              register-ordered kernels drafting needs; decoding stays classic"
         );
         return Ok(None);
-    }
+    };
     model
         .enable_draft_tree_verification()
+        .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?;
+    model
+        .enable_row_exact_tree_attention()
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?;
     Ok(Some(converted_projection_count))
 }

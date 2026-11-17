@@ -32,6 +32,15 @@ use crate::qwen3_5_core::model_math::error::{
 use crate::qwen3_5_core::model_math::gated_delta_tree::{
     UploadedTreeRowChains, qwen3_5_gated_delta_replay, qwen3_5_gated_delta_tree,
 };
+use crate::qwen3_5_core::model_math::row_exact_tree_attention;
+
+/// Context tokens from which a tree's attention goes through the row-exact
+/// kernel. Measured on the 35B-A3B target's 4-row rounds, every stage
+/// synced (`cargo measure-dflash2-tree-rounds`): the kernel's round cost
+/// 0.4 ms more than MLX's after 14 tokens, the same after 1,241, and 0.9,
+/// 1.3 and 2.1 ms less after 3,400, 6,117 and 11,292; its attention alone
+/// saves about 13 ms a round at 65,536 keys.
+pub const ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS: i32 = 2_048;
 use crate::{AstroDecoderStateCacheState, PerformanceAttribution};
 
 /// The rows of one draft tree on the GPU, shared by every layer of a pass.
@@ -77,6 +86,36 @@ impl Qwen3_5ModelBase {
             crate::qwen3_5_core::model_math::gated_delta_tree::qwen3_5_gated_delta_replay_kernel()?,
         );
         Ok(())
+    }
+
+    /// Verifies trees' full attention with the row-exact matrix-unit kernel
+    /// where the target's attention shape fits it, once the context reaches
+    /// `ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS`. Call it after
+    /// `enable_draft_tree_verification`, on a GPU that runs the row-batched
+    /// matrix-unit kernels.
+    ///
+    /// On the 35B-A3B target it keeps as many drafted tokens a round as
+    /// MLX's attention (2.40 against 2.43 over 24 seeds of a short chat,
+    /// 1.90 against 1.99 over 12 seeds after a 10,000-token prompt, both
+    /// inside the spread between seeds, which reached a whole token on one
+    /// seed; `cargo measure-dflash2-tree-rounds`). A first comparison over
+    /// six seeds read the same spread as a loss.
+    pub fn enable_row_exact_tree_attention(&mut self) -> Result<(), Qwen3_5ExecutionError> {
+        if self.config.head_dimension() as i32 == row_exact_tree_attention::HEAD_SIZE
+            && self.config.query_head_count()
+                == self.config.key_value_head_count()
+                    * row_exact_tree_attention::SUPPORTED_QUERY_GROUP as u32
+        {
+            self.optional_accelerators.row_exact_tree_attention_kernels =
+                Some(row_exact_tree_attention::RowExactTreeAttentionKernels::declare()?);
+        }
+        Ok(())
+    }
+
+    /// Sets the row-exact tree attention kernel aside, so the tree verify
+    /// uses MLX's masked attention again.
+    pub fn set_row_exact_tree_attention_aside(&mut self) {
+        self.optional_accelerators.row_exact_tree_attention_kernels = None;
     }
 
     /// The layer's attention half over the tree rows: input norm, attention,
@@ -261,12 +300,13 @@ impl Qwen3_5ModelBase {
             context_offset,
         )?;
         let scale = (self.config.head_dimension() as f32).sqrt().recip();
-        let attended = self.runtime.masked_scaled_dot_product_attention(
+        let attended = self.tree_attention(
             &rotated_queries,
-            &active_keys,
-            &active_values,
+            (&active_keys, &active_values),
+            kv_state,
+            context_offset,
+            tree,
             scale,
-            &tree.attention_mask,
         )?;
         let merged_heads = self.runtime.reshape(
             &self.runtime.transpose_axes(&attended, &[0, 2, 1, 3])?,
@@ -285,6 +325,78 @@ impl Qwen3_5ModelBase {
                 transposed_values,
             },
         ))
+    }
+
+    /// A tree's attention over the context and each row's ancestors: the
+    /// row-exact matrix-unit kernel where it fits, which reads the history
+    /// once for all rows (4 rows at 65,536 keys cost 15 ms over 10 layers
+    /// against MLX's 28, `cargo measure-row-exact-tree-attention`), and MLX's
+    /// masked attention otherwise.
+    fn tree_attention(
+        &self,
+        rotated_queries: &MlxArray,
+        (active_keys, active_values): (&MlxArray, &MlxArray),
+        kv_state: &FullAttentionKeyValueState,
+        context_offset: i32,
+        tree: &TreeRowInputs,
+        scale: f32,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        if let (Some(kernels), Some(key_slab), Some(value_slab)) = (
+            self.optional_accelerators
+                .row_exact_tree_attention_kernels
+                .as_ref(),
+            kv_state.keys_state(),
+            kv_state.values_state(),
+        ) && context_offset >= ROW_EXACT_TREE_ATTENTION_MINIMUM_CONTEXT_TOKENS
+        {
+            let kernel_inputs = row_exact_tree_attention::RowExactTreeAttentionInputs {
+                queries: rotated_queries,
+                key_slab,
+                value_slab,
+                context_length: context_offset,
+                row_chains: &tree.row_chains,
+                scale,
+            };
+            if row_exact_tree_attention::row_exact_tree_attention_accepts(&kernel_inputs) {
+                let attended = row_exact_tree_attention::row_exact_tree_attention(
+                    &self.runtime,
+                    kernels,
+                    &kernel_inputs,
+                )?;
+                if self
+                    .optional_accelerators
+                    .tree_attention_error_record
+                    .is_some()
+                {
+                    self.record_tree_attention_errors(
+                        &attended,
+                        rotated_queries,
+                        (active_keys, active_values),
+                        tree,
+                        scale,
+                    )?;
+                }
+                return Ok(attended);
+            }
+        }
+        if self
+            .optional_accelerators
+            .tree_attention_in_float32_for_measurement
+        {
+            return self.tree_attention_in_float32(
+                rotated_queries,
+                (active_keys, active_values),
+                tree,
+                scale,
+            );
+        }
+        Ok(self.runtime.masked_scaled_dot_product_attention(
+            rotated_queries,
+            active_keys,
+            active_values,
+            scale,
+            &tree.attention_mask,
+        )?)
     }
 
     fn tree_kernel(&self) -> Result<&MlxMetalKernel, Qwen3_5ExecutionError> {

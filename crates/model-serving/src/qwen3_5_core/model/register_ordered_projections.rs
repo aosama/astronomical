@@ -35,16 +35,18 @@ impl Qwen3_5ModelBase {
     /// exists, so the load never holds more than one extra projection. Call
     /// it only on a resident model whose weights are all materialized: it
     /// drops the loaded shard maps, which would otherwise keep every original
-    /// projection alive. Returns how many projections were converted: 0 on a
-    /// GPU without M5 matrix units or for a model with no such projection.
+    /// projection alive. Returns how many projections were converted, which
+    /// is 0 for a model with none of that packing (an 8-bit or mixed build,
+    /// or a mixture-of-experts model whose attention is not 4-bit), or `None`
+    /// on a GPU without M5 matrix units, where nothing can convert.
     pub fn convert_projections_to_register_order(
         &mut self,
         performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<usize, Qwen3_5ExecutionError> {
+    ) -> Result<Option<usize>, Qwen3_5ExecutionError> {
         let capabilities =
             worker_process_kernel_capabilities(&self.runtime, performance_attribution);
         if !capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::ROW_BATCHED_MATMUL) {
-            return Ok(0);
+            return Ok(None);
         }
         let kernels = RowBatchedMatmulKernels::declare()?;
         self.weights.release_model_shard_maps();
@@ -62,7 +64,7 @@ impl Qwen3_5ModelBase {
             converted_count += convert_one(&self.runtime, &kernels, head)?;
         }
         self.optional_accelerators.register_ordered_matmul_kernels = Some(kernels);
-        Ok(converted_count)
+        Ok(Some(converted_count))
     }
 
     /// `activations` [..., input] through a register-ordered projection. More

@@ -313,6 +313,26 @@ pub struct UploadedTreeRowChains {
     row_count: i32,
 }
 
+impl UploadedTreeRowChains {
+    /// int32 [rows, maximum chain]: each row's chain from the anchor to itself.
+    pub fn row_chains(&self) -> &MlxArray {
+        &self.row_chains
+    }
+
+    /// int32 [rows]: how many rows each chain holds, the row itself included.
+    pub fn chain_lengths(&self) -> &MlxArray {
+        &self.chain_lengths
+    }
+
+    pub fn maximum_chain(&self) -> i32 {
+        self.maximum_chain
+    }
+
+    pub fn row_count(&self) -> i32 {
+        self.row_count
+    }
+}
+
 impl TreeRowChains {
     pub fn upload(&self, runtime: &MlxRuntime) -> Result<UploadedTreeRowChains, MlxRuntimeError> {
         let row_count = self.chain_lengths.len() as i32;

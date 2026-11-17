@@ -45,6 +45,8 @@ const LONG_PROMPT_SOURCE: &str =
 /// About 6,000 tokens: long enough that anything a round copies or reads
 /// per context row shows, short enough to prefill in one pass.
 const LONG_PROMPT_WORD_COUNT: usize = 4_000;
+/// About 10,000 tokens, the size the serving throughput journey sends.
+const JOURNEY_PROMPT_WORD_COUNT: usize = 7_400;
 
 /// A round's stages with a long prompt already in the target's state. A
 /// round's cost should not grow with the context beyond the attention over
@@ -71,6 +73,66 @@ fn should_measure_where_a_tree_round_spends_its_time_after_a_long_prompt() {
     print_stage_breakdown(&pair, &cell, "long raw prompt, 1.0");
 }
 
+/// The same breakdown at the serving journey's size, about 10,000 prompt
+/// tokens, with the 4-row tree a mixture-of-experts target drafts with, so a
+/// round's growth with the prompt is placed on its stage.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_prompt() {
+    let mut pair = load_pair();
+    pair.target
+        .enable_draft_tree_verification()
+        .expect("the tree kernel declares");
+    let journey_prompt: &'static str = Box::leak(
+        LONG_PROMPT_SOURCE
+            .split_whitespace()
+            .take(JOURNEY_PROMPT_WORD_COUNT)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .into_boxed_str(),
+    );
+    let mut prompts = vec![("short prompt".to_owned(), ORACLE_CELLS[2].prompt)];
+    for word_count in [750, 2_200, LONG_PROMPT_WORD_COUNT] {
+        let prompt: &'static str = Box::leak(
+            LONG_PROMPT_SOURCE
+                .split_whitespace()
+                .take(word_count)
+                .collect::<Vec<_>>()
+                .join(" ")
+                .into_boxed_str(),
+        );
+        prompts.push((format!("{word_count}-word prompt"), prompt));
+    }
+    prompts.push(("journey prompt".to_owned(), journey_prompt));
+    // Each context through both tree attention paths: where the row-exact
+    // kernel's round starts costing less than serving's MLX attention.
+    for (prompt_label, prompt) in prompts {
+        for uses_kernel in [true, false] {
+            if uses_kernel {
+                pair.target
+                    .enable_row_exact_tree_attention()
+                    .expect("the tree attention kernel declares");
+            } else {
+                pair.target.set_row_exact_tree_attention_aside();
+            }
+            let mut cell = ORACLE_CELLS[2];
+            cell.prompt = prompt;
+            cell.node_budget = 3;
+            let path_label = if uses_kernel {
+                "row-exact kernel"
+            } else {
+                "MLX attention"
+            };
+            print_stage_breakdown(
+                &pair,
+                &cell,
+                &format!("{prompt_label}, 3-node tree, {path_label}"),
+            );
+        }
+    }
+}
+
 /// Whether a verify's cost after a long prompt follows the rows it attends
 /// with (attention work) or only the context (a copy of the stored keys and
 /// values): one row and sixteen rows, after a short and a long prompt. Each
@@ -94,11 +156,23 @@ fn should_separate_a_long_contexts_attention_work_from_copies_of_its_keys() {
     );
     let mut long_cell = ORACLE_CELLS[2];
     long_cell.prompt = long_prompt;
+    let journey_prompt: &'static str = Box::leak(
+        LONG_PROMPT_SOURCE
+            .split_whitespace()
+            .take(JOURNEY_PROMPT_WORD_COUNT)
+            .collect::<Vec<_>>()
+            .join(" ")
+            .into_boxed_str(),
+    );
+    let mut journey_cell = ORACLE_CELLS[2];
+    journey_cell.prompt = journey_prompt;
     for (context_label, cell) in [
         ("short prompt", ORACLE_CELLS[2]),
         ("long prompt", long_cell),
+        ("journey prompt", journey_cell),
     ] {
-        for row_count in [1_usize, 16] {
+        // 4 rows is the round a mixture-of-experts target verifies.
+        for row_count in [1_usize, 4, 16] {
             let mut chain = DraftTree::default();
             for row in 1..row_count {
                 chain.token_ids.push(1_000 + row as u32);
