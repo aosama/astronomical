@@ -4,25 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.114</title>
-            <pubDate>Tue, 17 Nov 2026 05:25:59 -0500</pubDate>
-            <sparkle:version>2370</sparkle:version>
-            <sparkle:shortVersionString>0.2.114</sparkle:shortVersionString>
+            <title>0.2.115</title>
+            <pubDate>Tue, 17 Nov 2026 06:28:00 -0500</pubDate>
+            <sparkle:version>2373</sparkle:version>
+            <sparkle:shortVersionString>0.2.115</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Decision models: train long texts and 9B models as a whole
+            <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **Whole-model training of Clef 9B and Kev 9B now finishes.** Since 0.2.112, `astronomical decision train --whole-model` on a 9B decision model trained and then failed at the very end with "the worker is unavailable", because the trained weights were too large to hand back. They now pass from the engine to the command line through a private temporary file, which is deleted once read.
-- **Long texts no longer run out of memory.** A text too long to train on all at once is now trained layer by layer: each layer is computed again when it is needed instead of being kept. The trained model is exactly the same, it takes a fraction of the memory, and it is slower; the report says when this happened. On Clef 9B, one long text with ten questions now trains in about five minutes on a 48 GB Mac.
+- **Qwen 3.8 27B in the Library.** You can now download `TensorFold/Qwen3.8-27B-MLX-4bit` from the Library or with the `astronomical` command. It is a large all-round model that reads pictures and text, reasons before it answers, can use tools, and keeps a large memory window for long conversations and documents. It is a 15.0 GiB download. (#2305)
 
-Your existing configuration and trained models keep working as before.
+## Compatibility
 
-This release is signed with Astronomical's Developer ID, notarized by Apple, and delivered through the signed update feed.
+- Your installed models, conversations and settings carry over unchanged; no settings were added or removed.
+- Requires macOS 14 or later on Apple silicon.
+
+## Distribution
+
+This release is signed with a Developer ID certificate, notarized by Apple, and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.114/Astronomical-0.2.114-macOS-arm64.dmg" length="24651576" type="application/octet-stream" sparkle:edSignature="XYZEFYKSZv4oM5QYKszfKcO1PYAS7TRoXJVBv81Hg3r334LjaerOVgS5/GS3swCKW2alBdqT8+utj43x4BViBw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.115/Astronomical-0.2.115-macOS-arm64.dmg" length="24649271" type="application/octet-stream" sparkle:edSignature="V0b82GMy3z5gIiGopUMM8sU19nP8+O3tR0WKKJp14VoxsVW9LJ+1l4w97TNARS8sA9Qm0VyAVCi80cFs5ns1Dw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: zsNUJg2/0RZ9pHdsCd8oaD5chl0BrB6i8GnqupvjQUryaH6cz5o2hqDrdF/Z1cOneiRLYG1GwkD37wQy84pDAw==
-length: 2288
+edSignature: M7/Br8SHczznZnfu+Ume1QeiHVpKesTeRYucQtBf/ZE0z/tUyhpTcoJlQB9dGRWnNESWm0QRFI5pOoPKGZZeCA==
+length: 1920
 -->
