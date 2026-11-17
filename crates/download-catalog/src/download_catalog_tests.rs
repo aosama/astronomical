@@ -1,7 +1,7 @@
 //! Strict bundled catalog contracts: the shipped file parses, and malformed,
 //! oversized or unsafe documents and entries are refused.
 
-use crate::{DownloadCatalog, DownloadCatalogRole};
+use crate::{DownloadCatalog, DownloadCatalogEntry, DownloadCatalogRole};
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -515,4 +515,64 @@ fn should_ship_the_plain_four_bit_qwen3_8_27b_as_a_vision_chat_model() {
     assert!(selection.includes("model-00003-of-00003.safetensors"));
     assert!(selection.includes("preprocessor_config.json"));
     assert!(selection.includes("chat_template.jinja"));
+}
+
+/// The OptiQ DFlash2 package is the plain OptiQ 35B-A3B with its DFlash2
+/// drafter in a `drafter` folder, which the engine pairs with the model it
+/// sits inside. The download must therefore keep that folder, and the size the
+/// disk check reserves must count the drafter on top of its plain twin. When the
+/// drafter cannot load (no M5 GPU, or a memory limit with no room for it) the
+/// model decodes exactly like its twin, so it streams from the same memory floor.
+#[test]
+fn should_ship_the_optiq_dflash2_package_with_its_bundled_drafter() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let package_entry = shipped_entry(
+        &download_catalog,
+        "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit",
+    );
+    let plain_twin_entry = shipped_entry(
+        &download_catalog,
+        "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
+    );
+
+    assert_eq!(package_entry.role(), plain_twin_entry.role());
+    assert_eq!(package_entry.family().as_str(), "qwen3_5");
+    assert_eq!(
+        package_entry.revision(),
+        "28c5203a83fa7bc39b3363b870273c23f6bcf04e"
+    );
+    assert!(!package_entry.experimental() && !package_entry.get_started());
+    assert_eq!(
+        package_entry.capabilities(),
+        plain_twin_entry.capabilities()
+    );
+    let selection = package_entry.download_path_selection();
+    assert!(selection.includes("drafter/model.safetensors"));
+    assert!(selection.includes("drafter/config.json"));
+    assert!(selection.includes("optiq/optiq_vision.safetensors"));
+    const DRAFTER_WEIGHTS_BYTES: u64 = 1_052_513_488;
+    assert!(
+        package_entry.approximate_size_bytes()
+            >= plain_twin_entry.approximate_size_bytes() + DRAFTER_WEIGHTS_BYTES
+    );
+    assert_eq!(
+        package_entry.approximate_memory_bytes() - package_entry.approximate_size_bytes(),
+        plain_twin_entry.approximate_memory_bytes() - plain_twin_entry.approximate_size_bytes()
+    );
+    assert_eq!(
+        package_entry.minimum_memory_bytes(),
+        plain_twin_entry.minimum_memory_bytes()
+    );
+}
+
+fn shipped_entry<'catalog>(
+    download_catalog: &'catalog DownloadCatalog,
+    huggingface_id: &str,
+) -> &'catalog DownloadCatalogEntry {
+    download_catalog
+        .entries()
+        .iter()
+        .find(|catalog_entry| catalog_entry.huggingface_id() == huggingface_id)
+        .unwrap_or_else(|| panic!("the shipped catalog should offer {huggingface_id}"))
 }
