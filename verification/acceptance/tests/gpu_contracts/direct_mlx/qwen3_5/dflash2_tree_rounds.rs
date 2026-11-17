@@ -11,6 +11,7 @@
 use std::time::Instant;
 
 use astronomical_model_serving::RequestDecoderStateStack;
+use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTreeOptions;
 use astronomical_model_serving::speculative_decoding::tree_rows::TreeRows;
 use astronomical_model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use mlx_bridge::MlxArray;
@@ -21,7 +22,8 @@ use astronomical_model_serving::speculative_decoding::context_copy::{
 };
 
 use super::dflash2_kept_per_round::{
-    Cell, JourneyPair, OUTPUT_TOKENS, RoundState, completion_token_ids, load_pair, prompt_token_ids,
+    Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,
+    completion_token_ids, load_pair, prompt_token_ids,
 };
 use super::dflash2_tree_oracle::{
     Drafting, FIRST_KEYED_SEED, ORACLE_CELLS, draft_tree, prefill, target_picks,
@@ -279,16 +281,109 @@ fn compare_tree_attention_paths(cell: &Cell, seed_count: u64, paths: &[TreeAtten
         eprintln!("{seed_line}");
     }
     for (pooled_decode, path) in pooled.iter().zip(paths.iter().copied()) {
-        eprintln!(
-            "[dflash2-tree-rounds] {} ({seed_count} seeds), {}: {:.2} kept per round, {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
-            cell.label,
-            path.label(),
-            pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
-            pooled_decode.emitted as f64 / pooled_decode.decode_seconds,
-            pooled_decode.emitted,
-            pooled_decode.rounds,
-            pooled_decode.decode_seconds * 1000.0 / pooled_decode.rounds as f64,
+        print_pooled(
+            &format!("{}, {}", cell.label, path.label()),
+            seed_count,
+            pooled_decode,
         );
+    }
+}
+
+/// One pooled decode's kept tokens a round, speed and round time.
+fn print_pooled(label: &str, seed_count: u64, pooled_decode: &PooledTreeDecode) {
+    eprintln!(
+        "[dflash2-tree-rounds] {label} ({seed_count} seeds): {:.2} kept per round, {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
+        pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
+        pooled_decode.emitted as f64 / pooled_decode.decode_seconds,
+        pooled_decode.emitted,
+        pooled_decode.rounds,
+        pooled_decode.decode_seconds * 1000.0 / pooled_decode.rounds as f64,
+    );
+}
+
+/// Seeds for the depth comparison, interleaved per seed.
+const DEPTH_COMPARISON_SEED_COUNT: u64 = 16;
+
+/// Looking four tokens ahead against today's three, on the short chat at
+/// temperature 1.0: the 3-node tree serving uses, a 4-node tree (the same
+/// search, reaching depth 4 where the drafter is confident) and a 4-deep
+/// chain (one candidate a node, always depth 4), each seed through all three,
+/// with plain one-token steps as the baseline.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_compare_drafting_three_and_four_tokens_ahead() {
+    report_plain_decode(&ORACLE_CELLS[4], DEPTH_COMPARISON_SEED_COUNT);
+    let mut cells = Vec::new();
+    for (label, node_budget, children_per_node) in [
+        ("3-node tree (serving)", 3, ENGINE_CHILDREN_PER_NODE),
+        ("4-node tree", 4, ENGINE_CHILDREN_PER_NODE),
+        ("4-deep chain", 4, 1),
+    ] {
+        let mut cell = ORACLE_CELLS[4];
+        cell.label = label;
+        cell.node_budget = node_budget;
+        cell.children_per_node = children_per_node;
+        cells.push(cell);
+    }
+    compare_cells_per_seed(&cells, DEPTH_COMPARISON_SEED_COUNT);
+}
+
+/// The 3-node tree serving uses against a 3-node chain: the same 4 rows a
+/// round, the chain always reaching 3 drafted tokens deep (4 counting the
+/// round's own token), the tree spending nodes on alternatives where the
+/// drafter is unsure.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_compare_a_three_node_tree_with_a_three_node_chain() {
+    let mut cells = Vec::new();
+    for (label, children_per_node) in [
+        ("3-node tree (serving)", ENGINE_CHILDREN_PER_NODE),
+        ("3-node chain", 1),
+    ] {
+        let mut cell = ORACLE_CELLS[4];
+        cell.label = label;
+        cell.node_budget = 3;
+        cell.children_per_node = children_per_node;
+        cells.push(cell);
+    }
+    compare_cells_per_seed(&cells, DEPTH_COMPARISON_SEED_COUNT);
+}
+
+/// Decodes every cell once a seed, interleaved so heat and drift hit all
+/// alike, printing each seed's kept tokens a round and each cell pooled.
+fn compare_cells_per_seed(cells: &[Cell], seed_count: u64) {
+    // The cells' engine figures are copied into constants because the cells
+    // are built at compile time; they must still be the engine's own.
+    let engine_options = DraftTreeOptions::default();
+    assert_eq!(ENGINE_NODE_BUDGET, engine_options.node_budget);
+    assert_eq!(ENGINE_CHILDREN_PER_NODE, engine_options.children_per_node);
+    let mut pair = load_pair();
+    pair.target
+        .enable_draft_tree_verification()
+        .expect("the tree kernels declare");
+    let mut pooled: Vec<PooledTreeDecode> =
+        cells.iter().map(|_| PooledTreeDecode::default()).collect();
+    for seed_offset in 0..seed_count {
+        let mut seed_line = format!("[dflash2-tree-rounds] seed {seed_offset:>2}:");
+        for (pooled_decode, cell) in pooled.iter_mut().zip(cells) {
+            let seeded_cell = Cell {
+                keyed_seed: FIRST_KEYED_SEED + seed_offset,
+                ..*cell
+            };
+            let decode = decode_with_trees(&pair, &seeded_cell, false);
+            seed_line.push_str(&format!(
+                " | {} {:.2}",
+                cell.label,
+                (decode.emitted_token_ids.len() - 1) as f64 / decode.rounds as f64
+            ));
+            pooled_decode.add(&decode);
+        }
+        eprintln!("{seed_line}");
+    }
+    for (pooled_decode, cell) in pooled.iter().zip(cells) {
+        print_pooled(cell.label, seed_count, pooled_decode);
     }
 }
 

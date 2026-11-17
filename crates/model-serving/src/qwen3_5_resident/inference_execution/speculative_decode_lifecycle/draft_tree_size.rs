@@ -14,6 +14,22 @@
 //!   (`cargo measure-dflash2-tree-rounds`, the tree-size ladder): 3 nodes
 //!   decoded 91 tok/s against 70 plain, 7 nodes 78 and 15 nodes 52. TensorFold
 //!   likewise verifies 4 to 5 rows a round on this family.
+//!
+//! The 3 nodes stay free to branch. Over 16 interleaved seeds of the same
+//! chat (`cargo measure-dflash2-tree-rounds`, the depth comparisons):
+//!
+//! | Drafting | Kept a round | ms a round | Decode |
+//! |---|---|---|---|
+//! | 3-node tree (this rule) | 2.45 | 26.7-27.3 | 89.7-91.8 tok/s |
+//! | 3-node chain, always 3 drafts deep | 2.27 | 26.7 | 84.9 tok/s |
+//! | 4-node tree, up to 4 deep | 2.56 | 30.4 | 84.2 tok/s |
+//! | 4-node chain, always 4 deep | 2.35 | 30.5 | 77.0 tok/s |
+//!
+//! A chain wastes its later nodes whenever its first guess is rejected,
+//! where a tree spends them on alternatives for the next token; the tree kept
+//! more on every seed at equal cost. A fourth node keeps 0.11 more tokens a
+//! round but adds about 3 ms of expert reads, and its fifth row passes the
+//! row-exact tree attention kernel's four.
 
 use crate::speculative_decoding::dflash2_drafter::DraftTreeOptions;
 

@@ -49,6 +49,8 @@ const SAMPLING_SEED: u64 = 1234;
 /// The engine's draft-tree node budget, `DraftTreeOptions::default()`;
 /// a `const` here because the cells below are built at compile time.
 pub(crate) const ENGINE_NODE_BUDGET: usize = 15;
+/// The engine's branching, `DraftTreeOptions::default()`.
+pub(crate) const ENGINE_CHILDREN_PER_NODE: usize = 16;
 const SAMPLED_SEED_COUNT: u64 = 3;
 /// Qwen3.8's recommended sampling, as users run it and as the reference ran.
 pub(crate) const TOP_P_THOUSANDTHS: u16 = 950;
@@ -76,6 +78,9 @@ pub(crate) struct Cell {
     /// Nodes a drafted tree may hold, the anchor's row aside: the engine's
     /// own budget unless a journey compares tree sizes.
     pub(crate) node_budget: usize,
+    /// Candidates a node may branch into: the engine's 16, or 1 for a chain
+    /// as deep as the budget.
+    pub(crate) children_per_node: usize,
     /// The keyed sampler's seed, for journeys that sample with it.
     pub(crate) keyed_seed: u64,
 }
@@ -89,6 +94,7 @@ const CELLS: [Cell; 4] = [
         minimum_kept_per_round: 5.5,
         keyed_seed: SAMPLING_SEED,
         node_budget: ENGINE_NODE_BUDGET,
+        children_per_node: ENGINE_CHILDREN_PER_NODE,
     },
     Cell {
         label: "chat",
@@ -98,6 +104,7 @@ const CELLS: [Cell; 4] = [
         minimum_kept_per_round: 2.7,
         keyed_seed: SAMPLING_SEED,
         node_budget: ENGINE_NODE_BUDGET,
+        children_per_node: ENGINE_CHILDREN_PER_NODE,
     },
     // TensorFold's community code cell: the same prompt as a raw completion.
     // No z-lab figure exists for it, so it reports without a floor.
@@ -109,6 +116,7 @@ const CELLS: [Cell; 4] = [
         minimum_kept_per_round: 0.0,
         keyed_seed: SAMPLING_SEED,
         node_budget: ENGINE_NODE_BUDGET,
+        children_per_node: ENGINE_CHILDREN_PER_NODE,
     },
     Cell {
         label: "chat greedy (diagnostic)",
@@ -118,6 +126,7 @@ const CELLS: [Cell; 4] = [
         minimum_kept_per_round: 2.8,
         keyed_seed: SAMPLING_SEED,
         node_budget: ENGINE_NODE_BUDGET,
+        children_per_node: ENGINE_CHILDREN_PER_NODE,
     },
 ];
 
