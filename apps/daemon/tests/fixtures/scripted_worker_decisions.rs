@@ -74,6 +74,7 @@ fn scripted_question_outcomes(
                 distinguishable_option_count: option_count as u32,
             },
             head_inputs: None,
+            training_record: None,
         });
     }
     Ok(question_outcomes)

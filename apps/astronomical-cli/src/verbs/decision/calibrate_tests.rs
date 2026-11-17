@@ -36,6 +36,7 @@ fn outcome_for(question_name: &str, labelled_example: &LabelledExample) -> Quest
             distinguishable_option_count: 2,
         },
         head_inputs: None,
+        training_record: None,
     }
 }
 

@@ -12,6 +12,7 @@
 mod calibrate;
 mod calibration_report;
 mod check_set;
+mod counted_noun;
 mod decision_arguments;
 mod decision_tool;
 mod example_scoring;

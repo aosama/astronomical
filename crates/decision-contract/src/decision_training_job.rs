@@ -3,11 +3,11 @@
 //!
 //! The worker owns the model and the GPU, so it reads every example and
 //! trains; the command-line tool owns the person's labels and the cheap,
-//! pure decisions (which part each example is in, the never-worse gate, the
-//! report, the new folder). The job therefore carries each question's role
+//! pure decisions (which part each example is in, the judgement, the report,
+//! the new folder). The job therefore carries each question's role
 //! and right answer in, and the served answers, the trained scores and the
-//! trained tensors out; nothing about the split or the gate is decided in
-//! the worker.
+//! trained tensors out; nothing about the split or the judgement is decided
+//! in the worker.
 
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +23,7 @@ pub enum QuestionRole {
     Training { correct_option: usize },
     /// Its label picks when to stop and which run is best.
     Choosing { correct_option: usize },
-    /// Held back for the gate; the worker only scores it.
+    /// Held back to judge the result; the worker only scores it.
     Judging { correct_option: usize },
     /// A check-set question: its shipped answer is what training must keep.
     Check,
@@ -144,6 +144,10 @@ pub struct DecisionTrainingOutcome {
     /// The largest gap between the model's scores and the trainable copy's,
     /// with the shipped weights, before training.
     pub largest_parity_gap: f32,
+    /// The worst gap beyond what rounding allows, when the trainable copy did
+    /// not reproduce the model; training went on and the report says so.
+    #[serde(default)]
+    pub parity_gap_beyond_rounding: Option<f32>,
     /// Questions left out because some of their options read the same.
     pub indistinguishable_question_count: usize,
 }

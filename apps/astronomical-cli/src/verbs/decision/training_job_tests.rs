@@ -38,6 +38,7 @@ fn served_outcome(question: &DecisionQuestion, question_name: &str) -> QuestionO
             distinguishable_option_count: 2,
         },
         head_inputs: None,
+        training_record: None,
     }
 }
 
@@ -72,6 +73,7 @@ fn outcome_for(
         }],
         best_seed: 1,
         largest_parity_gap: 0.0,
+        parity_gap_beyond_rounding: None,
         indistinguishable_question_count: 0,
     }
 }
@@ -178,4 +180,41 @@ fn should_refuse_an_outcome_that_does_not_answer_the_job() {
         ),
         Err(DecisionToolError::TrainingFailed(_))
     ));
+}
+
+#[test]
+fn should_compare_on_the_training_examples_when_too_few_texts_hold_any_back() {
+    let labelled_examples = examples_about(1);
+    let prepared = prepared_for(&labelled_examples);
+    assert_eq!(prepared.example_parts, vec![SplitPart::Training]);
+    let outcome = outcome_for(&prepared.job, &labelled_examples);
+
+    let training_scores = training_scores(
+        &labelled_examples,
+        &prepared.example_parts,
+        prepared.sent_example_count(),
+        &outcome,
+    )
+    .unwrap();
+
+    assert_eq!(training_scores.judged_on, JudgedOn::LearnedFromExamples);
+    assert_eq!(training_scores.choosing.len(), 1);
+    assert_eq!(training_scores.judging.len(), 1);
+}
+
+#[test]
+fn should_compare_on_held_back_questions_when_enough_texts_allow_it() {
+    let labelled_examples = examples_about(40);
+    let prepared = prepared_for(&labelled_examples);
+    let outcome = outcome_for(&prepared.job, &labelled_examples);
+
+    let training_scores = training_scores(
+        &labelled_examples,
+        &prepared.example_parts,
+        prepared.sent_example_count(),
+        &outcome,
+    )
+    .unwrap();
+
+    assert_eq!(training_scores.judged_on, JudgedOn::HeldBackQuestions);
 }

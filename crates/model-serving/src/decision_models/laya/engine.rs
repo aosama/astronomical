@@ -390,6 +390,7 @@ fn question_outcome(
             distinguishable_option_count: question_sequence.distinct_option_count as u32,
         },
         head_inputs: laya_head_inputs(marker_states),
+        training_record: None,
     })
 }
 

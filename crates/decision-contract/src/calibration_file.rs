@@ -19,9 +19,10 @@
 //!   prevents: an inherited `temperature_by_options` entry silently masked a
 //!   newly fitted temperature.
 //! * A kind the file leaves out keeps the family's own temperatures exactly.
-//!   Calibration only writes a kind whose fit beat the shipped temperatures
-//!   on held-out examples, so leaving a kind out is how "this did not help"
-//!   is recorded without changing a single answer.
+//!   Calibration writes every kind its examples ask, whether or not the fit
+//!   helped; what judging it showed is kept beside it in
+//!   `decision_training_record.json`, so a kind is left out only when no
+//!   example asked it.
 //!
 //! Parsing and writing live here, apart from any filesystem access, so the
 //! command-line tool and every engine agree on the format.

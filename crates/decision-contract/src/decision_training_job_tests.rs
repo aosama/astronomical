@@ -71,3 +71,12 @@ fn should_train_only_the_final_layers_unless_asked_for_the_whole_model() {
 fn should_refuse_a_scope_it_does_not_know() {
     assert!(serde_json::from_str::<TrainingScope>(r#""half_the_model""#).is_err());
 }
+
+#[test]
+fn should_read_an_outcome_written_before_parity_gaps_were_reported() {
+    let outcome_without_gap_field = r#"{"examples":[],"trained_tensors":[],"adapter_tensors":[],"runs":[],"best_seed":1,"largest_parity_gap":0.0,"indistinguishable_question_count":0}"#;
+
+    let outcome: DecisionTrainingOutcome = serde_json::from_str(outcome_without_gap_field).unwrap();
+
+    assert_eq!(outcome.parity_gap_beyond_rounding, None);
+}

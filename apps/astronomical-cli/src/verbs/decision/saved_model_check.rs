@@ -170,11 +170,8 @@ pub(super) fn temperature_after_training(
         if kind_verdict.kind != scored_question.kind {
             continue;
         }
-        if let KindOutcome::Calibrated {
-            kind_calibration, ..
-        } = &kind_verdict.outcome
-        {
-            return ScoringTemperature::Calibrated(kind_calibration)
+        if let KindOutcome::Calibrated(kind_fit) = &kind_verdict.outcome {
+            return ScoringTemperature::Calibrated(&kind_fit.kind_calibration)
                 .temperature_for(scored_question);
         }
     }

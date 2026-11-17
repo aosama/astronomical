@@ -37,6 +37,7 @@ fn trained_outcome() -> DecisionTrainingOutcome {
         }],
         best_seed: 2,
         largest_parity_gap: 0.000_3,
+        parity_gap_beyond_rounding: None,
         indistinguishable_question_count: 1,
     }
 }

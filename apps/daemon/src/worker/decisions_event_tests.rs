@@ -74,6 +74,7 @@ fn urgent_outcome() -> QuestionOutcome {
             distinguishable_option_count: 2,
         },
         head_inputs: None,
+        training_record: None,
     }
 }
 
@@ -292,6 +293,7 @@ fn trained_outcome() -> DecisionTrainingOutcome {
         }],
         best_seed: 1,
         largest_parity_gap: 0.0,
+        parity_gap_beyond_rounding: None,
         indistinguishable_question_count: 0,
     }
 }

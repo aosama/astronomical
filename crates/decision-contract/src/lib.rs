@@ -52,6 +52,7 @@ pub mod system_one_questions;
 pub mod system_one_response;
 pub mod token_encoder;
 pub mod trained_tensors;
+pub mod training_record;
 
 pub use answer::{
     AnswerError, ChoiceAnswer, DecisionAnswer, NoulAnswer, OptionProbability, ScoreAnswer,
@@ -75,6 +76,7 @@ pub use system_one_questions::{
 };
 pub use system_one_response::{system_one_answer, system_one_response};
 pub use token_encoder::{DecisionTokenEncoder, TokenEncodingError};
+pub use training_record::{RecordedVerdict, TrainingRecord};
 
 #[cfg(test)]
 mod laya_golden_vector_tests;

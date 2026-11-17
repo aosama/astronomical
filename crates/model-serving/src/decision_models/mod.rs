@@ -14,4 +14,5 @@ pub(crate) mod head_tuning;
 pub(crate) mod kev;
 pub(crate) mod laya;
 pub(crate) mod qwen_backbone;
+pub(crate) mod recorded_training;
 pub(crate) mod training;

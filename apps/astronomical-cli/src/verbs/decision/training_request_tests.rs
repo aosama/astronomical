@@ -87,6 +87,7 @@ fn should_return_the_outcome_the_terminal_frame_carries() {
         }],
         best_seed: 1,
         largest_parity_gap: 0.000_2,
+        parity_gap_beyond_rounding: None,
         indistinguishable_question_count: 0,
     };
     let trained = training_outcome(DaemonResponse::DecisionModelTrained {

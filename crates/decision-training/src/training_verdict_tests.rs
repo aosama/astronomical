@@ -1,4 +1,4 @@
-//! Unit tests for the never-worse gate, on scores built for each case.
+//! Unit tests for judging a trained head, on scores built for each case.
 
 use super::*;
 use crate::test_support::scored_question;
@@ -66,54 +66,84 @@ fn scores(trained_lift: Option<(bool, f32)>, check: Vec<CheckPair>) -> TrainingS
         choosing: scored_pairs(0, trained_lift),
         judging: scored_pairs(1_000, trained_lift),
         check,
+        judged_on: JudgedOn::HeldBackQuestions,
     }
 }
 
+fn has_concern(verdict: &TrainingVerdict, wanted: fn(&TrainingConcern) -> bool) -> bool {
+    verdict.concerns.iter().any(wanted)
+}
+
 #[test]
-fn should_keep_a_head_that_is_better_on_questions_nothing_else_read() {
+fn should_judge_better_a_head_that_is_better_on_questions_nothing_else_read() {
     let verdict = judge_training(&scores(Some((true, 2.0)), agreeing_check(20))).unwrap();
-    assert!(verdict.is_kept(), "{:?}", verdict.refusals);
+    assert_eq!(
+        verdict.recorded_verdict(),
+        RecordedVerdict::JudgedBetter,
+        "{:?}",
+        verdict.concerns
+    );
     assert!(verdict.trained_overall.accuracy() > verdict.shipped_overall.accuracy());
     assert_eq!(verdict.check_agreement.agreeing_count, 20);
 }
 
 #[test]
-fn should_refuse_a_head_that_did_not_change_even_when_calibration_alone_helps() {
+fn should_judge_worse_a_head_that_did_not_change_even_when_calibration_alone_helps() {
     let verdict = judge_training(&scores(None, Vec::new())).unwrap();
-    assert!(!verdict.is_kept());
-    assert!(
-        verdict
-            .refusals
-            .iter()
-            .any(|refusal| matches!(refusal, TrainingRefusal::NotLessSurprised { .. }))
-    );
+    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::JudgedWorse);
+    assert!(has_concern(&verdict, |concern| matches!(
+        concern,
+        TrainingConcern::NotLessSurprised { .. }
+    )));
 }
 
 #[test]
-fn should_refuse_a_head_that_got_worse() {
+fn should_judge_worse_a_head_that_got_worse_and_name_why() {
     let verdict = judge_training(&scores(Some((false, 2.0)), Vec::new())).unwrap();
-    assert!(
-        verdict
-            .refusals
-            .iter()
-            .any(|refusal| matches!(refusal, TrainingRefusal::LessAccurate { .. }))
-    );
+    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::JudgedWorse);
+    assert!(has_concern(&verdict, |concern| matches!(
+        concern,
+        TrainingConcern::LessAccurate { .. }
+    )));
 }
 
 #[test]
-fn should_refuse_a_head_that_changed_the_check_sets_answers() {
+fn should_name_a_changed_check_set_as_a_concern() {
     let mut check = agreeing_check(20);
     for check_pair in check.iter_mut().take(2) {
         check_pair.trained_logits = vec![0.0, 2.0];
     }
     let verdict = judge_training(&scores(Some((true, 2.0)), check)).unwrap();
     assert_eq!(verdict.check_agreement.agreeing_count, 18);
-    assert!(
-        verdict
-            .refusals
-            .iter()
-            .any(|refusal| matches!(refusal, TrainingRefusal::CheckAnswersChanged(_)))
-    );
+    assert!(has_concern(&verdict, |concern| matches!(
+        concern,
+        TrainingConcern::CheckAnswersChanged(_)
+    )));
+}
+
+#[test]
+fn should_record_not_judged_when_compared_on_its_training_examples() {
+    let mut training_scores = scores(Some((true, 2.0)), Vec::new());
+    training_scores.judged_on = JudgedOn::LearnedFromExamples;
+    let verdict = judge_training(&training_scores).unwrap();
+    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::NotJudged);
+}
+
+#[test]
+fn should_judge_a_single_question_compared_on_its_own_example() {
+    let single = vec![ScoredPair {
+        served: served_question(1),
+        trained_logits: lifted(&served_question(1), 1, 3.0),
+    }];
+    let verdict = judge_training(&TrainingScores {
+        choosing: single.clone(),
+        judging: single,
+        check: Vec::new(),
+        judged_on: JudgedOn::LearnedFromExamples,
+    })
+    .unwrap();
+    assert_eq!(verdict.trained_overall.question_count, 1);
+    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::NotJudged);
 }
 
 #[test]
@@ -133,12 +163,4 @@ fn should_see_a_collapse_only_when_the_labels_vary() {
     }
     assert!(!has_collapsed(&always_first, DecisionQuestionKind::Noul));
     assert!(!has_collapsed(&always_first, DecisionQuestionKind::Choice));
-}
-
-#[test]
-fn should_refuse_when_nothing_was_held_out_to_judge() {
-    let mut training_scores = scores(Some((true, 2.0)), Vec::new());
-    training_scores.judging.clear();
-    let verdict = judge_training(&training_scores).unwrap();
-    assert_eq!(verdict.refusals, vec![TrainingRefusal::NothingToJudge]);
 }

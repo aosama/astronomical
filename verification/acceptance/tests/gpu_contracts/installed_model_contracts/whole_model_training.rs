@@ -202,6 +202,7 @@ fn write_folder(
             calibration_override: None,
             head_tuning,
             decision_adapters: Some(decision_adapters),
+            training_record: None,
         },
         &mut SilentCopyProgress,
     )

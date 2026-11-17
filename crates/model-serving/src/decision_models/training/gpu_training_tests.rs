@@ -136,3 +136,29 @@ fn should_train_identically_when_every_pass_is_split_across_many_steps() {
         );
     }
 }
+
+#[test]
+#[serial]
+fn should_still_train_when_no_question_is_held_back_to_choose() {
+    let runtime = initialize_test_runtime();
+    let math = GpuMath { runtime: &runtime };
+    let mut ranked = ranked_task(math);
+    ranked.training_set.choosing_rows.clear();
+    let settings = TrainingSettings {
+        maximum_epochs: 3,
+        ..FAST_SETTINGS
+    };
+
+    let seed_runs = train_seeds_on_gpu(
+        math,
+        &ranked.training_set,
+        &ranked.served,
+        settings,
+        &mut SilentProgress,
+    )
+    .unwrap();
+
+    // The training questions chose, so a later epoch beat the start.
+    assert!(seed_runs[0].best_epoch > 0, "{}", seed_runs[0].best_epoch);
+    assert!(seed_runs[0].best_choosing_loss.is_finite());
+}

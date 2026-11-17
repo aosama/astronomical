@@ -75,7 +75,7 @@ test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astro
 test-decision-contract = "test -p astronomical-decision-contract"
 # Decision-model calibration and head training on a person's own labelled
 # examples: the examples format, the split by state, temperature fitting,
-# the never-worse gates, the CPU heads that serve as the GPU trainer's
+# judging each fit and training, the CPU heads that serve as the GPU trainer's
 # oracle, and the proven copy of a model folder. Pure Rust on the CPU with
 # no model or graphics processor; a second or two to run. The
 # `astronomical decision calibrate` and `decision train` verbs drive it end

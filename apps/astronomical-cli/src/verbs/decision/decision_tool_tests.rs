@@ -47,35 +47,6 @@ fn should_report_a_missing_examples_file_as_the_invocation_s_fault() {
 }
 
 #[test]
-fn should_not_count_a_change_that_did_not_help_as_a_usage_error() {
-    let nothing_improved = DecisionToolError::NothingImproved {
-        model_id: "laya-MLX-8bit".to_owned(),
-    };
-    assert!(!nothing_improved.is_usage_error());
-    assert!(nothing_improved.to_string().contains("nothing was written"));
-    let training_refused = DecisionToolError::TrainingRefused {
-        model_id: "laya-MLX-8bit".to_owned(),
-    };
-    assert!(!training_refused.is_usage_error());
-}
-
-#[test]
-fn should_say_how_much_more_data_training_needs_and_blame_the_invocation() {
-    let too_few = DecisionToolError::TooLittleData(TooLittleData::TooFewQuestions {
-        have: 70,
-        need: 200,
-    });
-    assert!(too_few.is_usage_error());
-    let message = too_few.to_string();
-    assert!(
-        message.contains("at least 200 labelled questions"),
-        "{message}"
-    );
-    assert!(message.contains("has 70"), "{message}");
-    assert!(message.contains("decision calibrate"), "{message}");
-}
-
-#[test]
 fn should_take_the_output_folder_name_as_the_model_id() {
     assert_eq!(
         output_model_id(Path::new("models/calibrated/laya-verona")),
@@ -175,4 +146,57 @@ fn should_accept_an_output_named_through_a_link_to_the_models_folder() {
         )
         .is_ok()
     );
+}
+
+#[test]
+fn should_read_the_record_a_source_folder_already_carries() {
+    use astronomical_decision_contract::training_record::{
+        DECISION_TRAINING_RECORD_FILE_NAME, RecordedVerdict, training_record_document,
+    };
+    let source_directory = tempfile::tempdir().unwrap();
+    let earlier = TrainingRecord {
+        verdict: RecordedVerdict::JudgedWorse,
+        labelled_question_count: 240,
+        distinct_state_count: 48,
+        warnings: vec!["was right less often (64.0% -> 61.0%)".to_owned()],
+    };
+    std::fs::write(
+        source_directory
+            .path()
+            .join(DECISION_TRAINING_RECORD_FILE_NAME),
+        training_record_document(&earlier),
+    )
+    .unwrap();
+
+    assert_eq!(
+        earlier_training_record(source_directory.path()).unwrap(),
+        Some(earlier)
+    );
+}
+
+#[test]
+fn should_find_no_earlier_record_in_a_folder_nobody_trained() {
+    let source_directory = tempfile::tempdir().unwrap();
+
+    assert_eq!(
+        earlier_training_record(source_directory.path()).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn should_stop_on_an_earlier_record_that_cannot_be_read() {
+    let source_directory = tempfile::tempdir().unwrap();
+    std::fs::write(
+        source_directory.path().join(
+            astronomical_decision_contract::training_record::DECISION_TRAINING_RECORD_FILE_NAME,
+        ),
+        b"not a record",
+    )
+    .unwrap();
+
+    assert!(matches!(
+        earlier_training_record(source_directory.path()),
+        Err(DecisionToolError::EarlierRecordUnreadable(_))
+    ));
 }

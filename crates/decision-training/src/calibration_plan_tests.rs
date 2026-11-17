@@ -1,4 +1,4 @@
-//! Unit tests for the never-worse gate.
+//! Unit tests for fitting and judging temperatures per kind.
 
 use super::*;
 use crate::test_support::{
@@ -60,13 +60,13 @@ fn should_calibrate_an_overconfident_kind_and_leave_the_others_to_the_family() {
     );
     let calibration_plan = plan_calibration(&holdout_split).unwrap();
     let noul_verdict = verdict_for(&calibration_plan, DecisionQuestionKind::Noul);
-    let KindOutcome::Calibrated {
-        kind_calibration,
-        calibrated_holdout_metrics,
-    } = &noul_verdict.outcome
-    else {
+    let KindOutcome::Calibrated(kind_fit) = &noul_verdict.outcome else {
         panic!("noul was not calibrated: {:?}", noul_verdict.outcome);
     };
+    let kind_calibration = &kind_fit.kind_calibration;
+    let calibrated_holdout_metrics = &kind_fit.calibrated_metrics;
+    assert_eq!(kind_fit.judged_on, JudgedOn::HeldBackQuestions);
+    assert!(kind_fit.improved());
     assert_close(
         kind_calibration.temperature,
         BEST_TEMPERATURE_FOR_GAP_THREE,
@@ -74,7 +74,7 @@ fn should_calibrate_an_overconfident_kind_and_leave_the_others_to_the_family() {
     );
     assert!(kind_calibration.range_temperatures.is_empty());
     assert_eq!(kind_calibration.fitted_question_count, 100);
-    let shipped_metrics = noul_verdict.shipped_holdout_metrics.unwrap();
+    let shipped_metrics = &kind_fit.shipped_metrics;
     assert!(
         calibrated_holdout_metrics.mean_negative_log_likelihood
             < shipped_metrics.mean_negative_log_likelihood
@@ -87,67 +87,59 @@ fn should_calibrate_an_overconfident_kind_and_leave_the_others_to_the_family() {
     assert!(calibration_plan.calibration_override.choice.is_none());
     assert_eq!(
         verdict_for(&calibration_plan, DecisionQuestionKind::Choice).outcome,
-        KindOutcome::KeptShipped(KeptShippedReason::NoQuestions)
+        KindOutcome::NoQuestions
     );
 }
 
+fn noul_fit(calibration_plan: &CalibrationPlan) -> &KindFit {
+    match &verdict_for(calibration_plan, DecisionQuestionKind::Noul).outcome {
+        KindOutcome::Calibrated(kind_fit) => kind_fit,
+        KindOutcome::NoQuestions => panic!("noul was not calibrated"),
+    }
+}
+
 #[test]
-fn should_keep_the_shipped_temperature_when_it_is_already_right() {
+fn should_write_a_fit_that_did_not_improve_and_say_so() {
     let holdout_split = split_of(
         noul_questions(100, CALIBRATED_SEVENTY_PERCENT_GAP, 7, 0),
         noul_questions(50, CALIBRATED_SEVENTY_PERCENT_GAP, 7, 1_000),
     );
     let calibration_plan = plan_calibration(&holdout_split).unwrap();
-    let noul_verdict = verdict_for(&calibration_plan, DecisionQuestionKind::Noul);
-    assert!(matches!(
-        noul_verdict.outcome,
-        KindOutcome::KeptShipped(KeptShippedReason::NoImprovement { .. })
-    ));
-    assert!(calibration_plan.calibration_override.decides_no_kind());
+    assert!(!noul_fit(&calibration_plan).improved());
+    assert!(calibration_plan.calibration_override.noul.is_some());
 }
 
 #[test]
-fn should_keep_the_shipped_temperature_when_the_fit_does_worse_on_held_out_questions() {
+fn should_write_a_fit_that_does_worse_on_held_out_questions_and_say_so() {
     // The fitting half is overconfident but the held-out half is calibrated
-    // as shipped: the fit would make held-out answers worse, so it is refused.
+    // as shipped: the fit makes held-out answers worse, which is reported.
     let holdout_split = split_of(
         noul_questions(100, 3.0, 7, 0),
         noul_questions(50, 3.0, 10, 1_000),
     );
     let calibration_plan = plan_calibration(&holdout_split).unwrap();
-    assert!(calibration_plan.calibration_override.decides_no_kind());
-}
-
-#[test]
-fn should_refuse_to_fit_on_too_few_questions_on_either_side() {
-    let few_fitting = split_of(
-        noul_questions(19, 3.0, 7, 0),
-        noul_questions(50, 3.0, 7, 1_000),
-    );
-    let few_holdout = split_of(
-        noul_questions(100, 3.0, 7, 0),
-        noul_questions(9, 3.0, 7, 1_000),
-    );
-    let few_fitting_plan = plan_calibration(&few_fitting).unwrap();
-    let few_holdout_plan = plan_calibration(&few_holdout).unwrap();
-    assert_eq!(
-        verdict_for(&few_fitting_plan, DecisionQuestionKind::Noul).outcome,
-        KindOutcome::KeptShipped(KeptShippedReason::TooFewFittingQuestions { have: 19, need: 20 })
-    );
-    assert_eq!(
-        verdict_for(&few_holdout_plan, DecisionQuestionKind::Noul).outcome,
-        KindOutcome::KeptShipped(KeptShippedReason::TooFewHoldoutQuestions { have: 9, need: 10 })
-    );
-}
-
-#[test]
-fn should_fit_a_temperature_at_exactly_the_minimum_question_counts() {
-    let holdout_split = split_of(
-        noul_questions(20, 3.0, 7, 0),
-        noul_questions(10, 3.0, 7, 1_000),
-    );
-    let calibration_plan = plan_calibration(&holdout_split).unwrap();
+    let kind_fit = noul_fit(&calibration_plan);
+    assert_eq!(kind_fit.judged_on, JudgedOn::HeldBackQuestions);
+    assert!(!kind_fit.improved());
     assert!(calibration_plan.calibration_override.noul.is_some());
+}
+
+#[test]
+fn should_fit_a_single_question_and_judge_it_on_itself() {
+    let holdout_split = split_of(noul_questions(1, 3.0, 7, 0), Vec::new());
+    let calibration_plan = plan_calibration(&holdout_split).unwrap();
+    let kind_fit = noul_fit(&calibration_plan);
+    assert_eq!(kind_fit.judged_on, JudgedOn::LearnedFromExamples);
+    assert_eq!(kind_fit.kind_calibration.fitted_question_count, 1);
+}
+
+#[test]
+fn should_fit_on_held_out_questions_when_no_question_of_the_kind_is_left_to_fit() {
+    let holdout_split = split_of(Vec::new(), noul_questions(5, 3.0, 7, 0));
+    let calibration_plan = plan_calibration(&holdout_split).unwrap();
+    let kind_fit = noul_fit(&calibration_plan);
+    assert_eq!(kind_fit.judged_on, JudgedOn::LearnedFromExamples);
+    assert_eq!(kind_fit.kind_calibration.fitted_question_count, 5);
 }
 
 #[test]
@@ -210,4 +202,26 @@ fn should_not_count_a_tie_as_a_changed_answer() {
         check_answers_unchanged(&[&tied_question], &single_temperature),
         Ok(())
     );
+}
+
+#[test]
+fn should_record_the_plans_verdict_from_its_kinds() {
+    let improved = plan_calibration(&split_of(
+        noul_questions(100, 3.0, 7, 0),
+        noul_questions(50, 3.0, 7, 1_000),
+    ))
+    .unwrap();
+    let not_improved = plan_calibration(&split_of(
+        noul_questions(100, 3.0, 7, 0),
+        noul_questions(50, 3.0, 10, 1_000),
+    ))
+    .unwrap();
+    let unjudged = plan_calibration(&split_of(noul_questions(3, 3.0, 7, 0), Vec::new())).unwrap();
+
+    assert_eq!(improved.recorded_verdict(), RecordedVerdict::JudgedBetter);
+    assert_eq!(
+        not_improved.recorded_verdict(),
+        RecordedVerdict::JudgedWorse
+    );
+    assert_eq!(unjudged.recorded_verdict(), RecordedVerdict::NotJudged);
 }

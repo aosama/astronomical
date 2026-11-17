@@ -1,6 +1,6 @@
 [package]
 name = "astronomical-decision-training"
-description = "Calibrating and training decision models on a person's own labelled examples: the example format, held-out splits, temperature fitting, CPU training of the final layers, the never-worse gates and the proven model folder, with no graphics-processor dependency."
+description = "Calibrating and training decision models on a person's own labelled examples: the example format, held-out splits, temperature fitting, CPU training of the final layers, judging each result and the proven model folder, with no graphics-processor dependency."
 edition.workspace = true
 license.workspace = true
 publish.workspace = true

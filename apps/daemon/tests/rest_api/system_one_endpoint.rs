@@ -381,6 +381,7 @@ fn play_outcome() -> QuestionOutcome {
             distinguishable_option_count: 2,
         },
         head_inputs: None,
+        training_record: None,
     }
 }
 

@@ -40,6 +40,7 @@ pub mod dense_math;
 pub mod gelu;
 pub mod head_parameters;
 pub mod holdout_split;
+pub mod judged_on;
 pub mod kev_trainable;
 pub mod labelled_example;
 pub mod laya_trainable;

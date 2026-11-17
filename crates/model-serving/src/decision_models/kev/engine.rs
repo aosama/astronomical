@@ -306,6 +306,7 @@ fn answer_every_question(
                 distinguishable_option_count: question_row.distinguishable_option_count as u32,
             },
             head_inputs,
+            training_record: None,
         });
     }
     Ok((

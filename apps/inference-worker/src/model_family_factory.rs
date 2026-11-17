@@ -25,7 +25,7 @@ use astronomical_model_serving::{
     Flux2KleinImageEngine, KevDecisionEngine, LayaDecisionEngine, ModelFactory,
     ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
     ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
-    QwenImage21ArtifactProvenance, QwenImage21ImageEngine, SpeechEngine,
+    QwenImage21ArtifactProvenance, QwenImage21ImageEngine, RecordedTrainingEngine, SpeechEngine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
@@ -662,7 +662,12 @@ fn unloaded_decision_engine(
         )
         .map(boxed_decision_engine),
     };
-    engine_outcome.map_err(|initialization_failure| initialization_failure.to_string())
+    // Every answer from a folder `astronomical decision` wrote carries what
+    // judging that folder showed.
+    let family_engine =
+        engine_outcome.map_err(|initialization_failure| initialization_failure.to_string())?;
+    RecordedTrainingEngine::wrapping(family_engine, model_directory_path)
+        .map_err(|record_failure| record_failure.to_string())
 }
 
 /// One decision engine behind the trait object the worker serves from.

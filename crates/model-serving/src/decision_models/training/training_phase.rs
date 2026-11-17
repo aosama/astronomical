@@ -111,7 +111,7 @@ pub(crate) struct TrainingPhase {
     prepared: PreparedTraining,
     trainer: GpuTrainer,
     stage: PhaseStage,
-    largest_parity_gap: f32,
+    parity: ParityCheck,
     /// MLX's active and cached bytes when the training was prepared.
     starting_memory_bytes: usize,
 }
@@ -128,7 +128,10 @@ impl TrainingPhase {
                 parity_sample_rows(row_count),
                 row_count,
             )),
-            largest_parity_gap: 0.0,
+            parity: ParityCheck {
+                largest_gap: 0.0,
+                gap_beyond_rounding: None,
+            },
             starting_memory_bytes: held_memory_bytes(runtime)?,
             prepared,
         })
@@ -171,8 +174,7 @@ impl TrainingPhase {
             .map_err(gpu_failure)?;
         let progress = scoring_progress(DecisionTrainingStage::Checking, &parity_scoring);
         if parity_scoring.is_finished() {
-            self.largest_parity_gap =
-                largest_parity_gap(&parity_scoring.into_scores(), &self.prepared.served_logits)?;
+            self.parity = parity_check(&parity_scoring.into_scores(), &self.prepared.served_logits);
             self.stage = PhaseStage::Training;
         } else {
             self.stage = PhaseStage::Checking(parity_scoring);
@@ -208,7 +210,11 @@ impl TrainingPhase {
                 };
                 let training_set = &self.prepared.training_set;
                 let scoring = SteppedScoring::new(
-                    judged_rows(training_set.rows.len(), &training_set.training_rows),
+                    judged_rows(
+                        training_set.rows.len(),
+                        &training_set.training_rows,
+                        &training_set.choosing_rows,
+                    ),
                     training_set.rows.len(),
                 );
                 let progress = scoring_progress(DecisionTrainingStage::Scoring, &scoring);
@@ -263,7 +269,8 @@ impl TrainingPhase {
             adapter_tensors,
             runs: run_summaries(&best_run_scoring.runs),
             best_seed: best_run_scoring.runs[best_run_scoring.best_position].seed,
-            largest_parity_gap: self.largest_parity_gap,
+            largest_parity_gap: self.parity.largest_gap,
+            parity_gap_beyond_rounding: self.parity.gap_beyond_rounding,
             indistinguishable_question_count: self.prepared.indistinguishable_question_count,
         };
         Ok(DecisionTrainingStep::Completed(Box::new(outcome)))
@@ -286,8 +293,14 @@ fn parity_sample_rows(row_count: usize) -> Vec<usize> {
     sampled_rows
 }
 
-/// Every row that is not a training row, in row order.
-fn judged_rows(row_count: usize, training_rows: &[usize]) -> Vec<usize> {
+/// The rows whose trained scores go back: every row that is not a
+/// training row, in row order. When nothing was held back (no choosing
+/// rows), the training rows go back too, since they are then what the
+/// result is compared on.
+fn judged_rows(row_count: usize, training_rows: &[usize], choosing_rows: &[usize]) -> Vec<usize> {
+    if choosing_rows.is_empty() {
+        return (0..row_count).collect();
+    }
     let mut is_training_row = vec![false; row_count];
     for training_row in training_rows {
         is_training_row[*training_row] = true;
@@ -340,17 +353,24 @@ fn check_memory_growth(
     )))
 }
 
-/// The largest gap between the model's scores and the trainable copy's
-/// with the starting parameters; refuses a gap beyond rounding, naming the
-/// worst one.
-fn largest_parity_gap(
-    trainable_scores: &[Vec<f32>],
-    served_logits: &[Vec<f32>],
-) -> Result<f32, DecisionFailure> {
+/// How closely the trainable copy reproduced the model's scores with the
+/// starting parameters.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ParityCheck {
+    pub(crate) largest_gap: f32,
+    /// The gap furthest past what rounding allows, when any is; training
+    /// goes on and the person is told, since they decide what to do with
+    /// a model that started from slightly the wrong place.
+    pub(crate) gap_beyond_rounding: Option<f32>,
+}
+
+/// The largest gap between the model's scores and the trainable copy's,
+/// and the worst one beyond rounding, if any.
+fn parity_check(trainable_scores: &[Vec<f32>], served_logits: &[Vec<f32>]) -> ParityCheck {
     let mut largest_gap = 0.0_f32;
-    // The gap furthest past what rounding allows, so a refusal names the
+    // The gap furthest past what rounding allows, so the report names the
     // worst question rather than the first one over the line.
-    let mut worst_excess_gap: Option<f32> = None;
+    let mut gap_beyond_rounding: Option<f32> = None;
     let mut worst_excess_ratio = 1.0_f32;
     for (trainable_question, served_question) in trainable_scores.iter().zip(served_logits) {
         for (trainable_score, served_score) in trainable_question.iter().zip(served_question) {
@@ -360,17 +380,15 @@ fn largest_parity_gap(
             let excess_ratio = gap / allowed;
             if excess_ratio > worst_excess_ratio || !gap.is_finite() {
                 worst_excess_ratio = excess_ratio;
-                worst_excess_gap = Some(gap);
+                gap_beyond_rounding = Some(gap);
             }
             largest_gap = largest_gap.max(gap);
         }
     }
-    if let Some(gap) = worst_excess_gap {
-        return Err(DecisionFailure::fatal_execution(&format!(
-            "the trainable copy of the model scores {gap:.5} away from the model, so training would start from the wrong place; nothing was trained"
-        )));
+    ParityCheck {
+        largest_gap,
+        gap_beyond_rounding,
     }
-    Ok(largest_gap)
 }
 
 /// The position of the run with the lowest choosing loss; the first on a tie.
