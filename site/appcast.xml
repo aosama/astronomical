@@ -4,27 +4,28 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.112</title>
-            <pubDate>Mon, 16 Nov 2026 11:39:30 -0500</pubDate>
-            <sparkle:version>2364</sparkle:version>
-            <sparkle:shortVersionString>0.2.112</sparkle:shortVersionString>
+            <title>0.2.113</title>
+            <pubDate>Mon, 16 Nov 2026 20:39:37 -0500</pubDate>
+            <sparkle:version>2367</sparkle:version>
+            <sparkle:shortVersionString>0.2.113</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Decision models: train Kev and Clef as a whole model
+            <description sparkle:format="markdown"><![CDATA[## Decision models: train on any amount of data, and see what the evidence shows
 
-- **`astronomical decision train --whole-model` now trains Kev and Clef as well as Laya.** Small add-on weights in every layer learn together with the final layers, so the model can pick up what it did not notice before. In a test where a code at the start of each text decided the answer, Kev went from 53% to 100% right on questions it never saw, where training only its final layers did not learn it at all.
-- **Faster whole-model training.** Questions now share each pass through the model. Kev 0.8B trains 200 questions in about two minutes; Clef 9B takes about 40 minutes on a 48 GB Mac. Training sizes its batches to your Mac's memory.
-- **200 labelled questions are enough** for whole-model training, about 30 or more different texts, the same as for the final layers (it was 1,000).
-- **A safer `--output`.** `decision train` and `decision calibrate` now check the output folder before reading any example. If Astronomical would not find a model there, they stop at once and name the folders it does look in. A finished training never deletes its own result.
+- **No minimum amount of data.** `astronomical decision train` and `astronomical decision calibrate` now accept any number of labelled examples, down to a single question about a single text. How much to experiment with is your call.
+- **Every result is written, with a verdict.** Instead of refusing, each run writes its new model folder and ends with one of three verdicts: *judged better* or *judged not better* on examples held back from the fit (every concern is listed with its numbers), or *not judged* when there are too few different texts to hold any back (training holds texts back from 20, calibration from 5). Whether to use the result is up to you.
+- **The verdict travels with the model.** The new folder carries a `decision_training_record.json`, and every `astronomical decide` answer from it (and every `POST /v1/systemone` answer) shows the verdict, the evidence behind it and any warnings under `input.training`. Models nobody trained answer exactly as before.
+- **Checks became warnings.** If the trainable copy does not reproduce the model before training, or training changes answers to questions nobody labelled, the report says so and the run continues.
+- **Earlier findings are kept.** Calibrating or training a folder that was itself trained keeps the less favourable verdict and the earlier warnings.
 
 Your existing configuration and trained models keep working as before.
 
 This release is signed with Astronomical's Developer ID, notarized by Apple, and delivered through the signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.112/Astronomical-0.2.112-macOS-arm64.dmg" length="24570847" type="application/octet-stream" sparkle:edSignature="icKSkLKz5OtC45OXEB5cNlnvw18kk6ebKCOWWI5mXcoIca5d0c1Q2GBcFM9X1KTBUDYQwAVZdI/V8m4mjYywCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.113/Astronomical-0.2.113-macOS-arm64.dmg" length="24604535" type="application/octet-stream" sparkle:edSignature="wkDuZNu5IXUzhQQ3qBxBh0/LsKeOv0fWBdyGYn8xjPqzB6QaZsF9IYKUu8jp21xUt8GcINkIpZQhrL7LJfvHBA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: WTnDXOpOvYiHx3d7Uku+Kc78a9uqGi9tFSvGnZaQ7zY/7q6h5ol/hTERtP1t3b0sOuewDSaCaOAmEUheUHzWCA==
-length: 2553
+edSignature: WUBpy9ZFKhtkZ6+FZ4OCvNgpXGNStWAdTeXRWyHCUI97ryRSif+K/xoJnEqQupFC1GtJuA+xuu18asLBNE+DBw==
+length: 2839
 -->
