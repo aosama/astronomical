@@ -4,28 +4,25 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.113</title>
-            <pubDate>Mon, 16 Nov 2026 20:39:37 -0500</pubDate>
-            <sparkle:version>2367</sparkle:version>
-            <sparkle:shortVersionString>0.2.113</sparkle:shortVersionString>
+            <title>0.2.114</title>
+            <pubDate>Tue, 17 Nov 2026 05:25:59 -0500</pubDate>
+            <sparkle:version>2370</sparkle:version>
+            <sparkle:shortVersionString>0.2.114</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Decision models: train on any amount of data, and see what the evidence shows
+            <description sparkle:format="markdown"><![CDATA[## Decision models: train long texts and 9B models as a whole
 
-- **No minimum amount of data.** `astronomical decision train` and `astronomical decision calibrate` now accept any number of labelled examples, down to a single question about a single text. How much to experiment with is your call.
-- **Every result is written, with a verdict.** Instead of refusing, each run writes its new model folder and ends with one of three verdicts: *judged better* or *judged not better* on examples held back from the fit (every concern is listed with its numbers), or *not judged* when there are too few different texts to hold any back (training holds texts back from 20, calibration from 5). Whether to use the result is up to you.
-- **The verdict travels with the model.** The new folder carries a `decision_training_record.json`, and every `astronomical decide` answer from it (and every `POST /v1/systemone` answer) shows the verdict, the evidence behind it and any warnings under `input.training`. Models nobody trained answer exactly as before.
-- **Checks became warnings.** If the trainable copy does not reproduce the model before training, or training changes answers to questions nobody labelled, the report says so and the run continues.
-- **Earlier findings are kept.** Calibrating or training a folder that was itself trained keeps the less favourable verdict and the earlier warnings.
+- **Whole-model training of Clef 9B and Kev 9B now finishes.** Since 0.2.112, `astronomical decision train --whole-model` on a 9B decision model trained and then failed at the very end with "the worker is unavailable", because the trained weights were too large to hand back. They now pass from the engine to the command line through a private temporary file, which is deleted once read.
+- **Long texts no longer run out of memory.** A text too long to train on all at once is now trained layer by layer: each layer is computed again when it is needed instead of being kept. The trained model is exactly the same, it takes a fraction of the memory, and it is slower; the report says when this happened. On Clef 9B, one long text with ten questions now trains in about five minutes on a 48 GB Mac.
 
 Your existing configuration and trained models keep working as before.
 
 This release is signed with Astronomical's Developer ID, notarized by Apple, and delivered through the signed update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.113/Astronomical-0.2.113-macOS-arm64.dmg" length="24604535" type="application/octet-stream" sparkle:edSignature="wkDuZNu5IXUzhQQ3qBxBh0/LsKeOv0fWBdyGYn8xjPqzB6QaZsF9IYKUu8jp21xUt8GcINkIpZQhrL7LJfvHBA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.114/Astronomical-0.2.114-macOS-arm64.dmg" length="24651576" type="application/octet-stream" sparkle:edSignature="XYZEFYKSZv4oM5QYKszfKcO1PYAS7TRoXJVBv81Hg3r334LjaerOVgS5/GS3swCKW2alBdqT8+utj43x4BViBw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: WUBpy9ZFKhtkZ6+FZ4OCvNgpXGNStWAdTeXRWyHCUI97ryRSif+K/xoJnEqQupFC1GtJuA+xuu18asLBNE+DBw==
-length: 2839
+edSignature: zsNUJg2/0RZ9pHdsCd8oaD5chl0BrB6i8GnqupvjQUryaH6cz5o2hqDrdF/Z1cOneiRLYG1GwkD37wQy84pDAw==
+length: 2288
 -->
