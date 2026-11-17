@@ -168,6 +168,7 @@ fn even_noul_outcome(question_name: &str) -> QuestionOutcome {
             distinguishable_option_count: 2,
         },
         head_inputs: None,
+        training_record: None,
     }
 }
 

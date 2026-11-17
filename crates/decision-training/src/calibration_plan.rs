@@ -1,48 +1,49 @@
-//! The never-worse gate: which question kinds get a fitted temperature.
+//! Fitting temperatures per question kind, and judging each fit.
 //!
 //! For each kind, temperatures are fitted on the fitting part of the split
-//! and then judged on the held-out part against what the model shipped with.
-//! A kind is calibrated only when the fit beats the shipped temperatures on
-//! questions it never saw; otherwise the kind is left out of the calibration
-//! file and keeps the family's own temperatures exactly. Too few questions
-//! on either side also leaves a kind alone, because a temperature fitted or
-//! judged on a handful of questions mostly measures noise. Laya's own
-//! trainer refuses to fit below 10 held-out items for the same reason.
+//! and judged on the held-out part against what the model shipped with. Any
+//! number of questions is fitted: every kind the examples ask is calibrated,
+//! and the judgement says whether it helped. A kind with no held-out
+//! questions (or none to fit on) is fitted on all of its questions and
+//! judged on them too, which the plan records as not judged. Nothing here
+//! refuses; the report and the folder's training record carry the findings
+//! and the person decides.
 //!
 //! Two candidates are tried per kind: one temperature for the whole kind,
-//! and that plus a temperature per option-count range that has enough
-//! fitting questions of its own. The per-range candidate is kept only when
-//! it beats the single temperature on held-out questions too, so extra
-//! numbers have to earn their place.
+//! and that plus a temperature per option-count range. A range gets its own
+//! temperature only with [`RANGE_TEMPERATURE_QUESTION_COUNT`] fitting
+//! questions; that decides how many numbers are fitted, never whether the
+//! kind is calibrated. The per-range candidate is kept only when it beats
+//! the single temperature on the judged questions, so extra numbers have to
+//! earn their place.
 //!
-//! The gate also checks the one thing a temperature can never do: change
-//! which option is most probable. If it ever does, the scoring code is wrong
-//! and nothing is written.
+//! One check stays a hard stop, because no person's choice is involved: a
+//! temperature can never change which option is most probable. If one ever
+//! does, the scoring code is wrong and nothing is written.
 
 use astronomical_decision_contract::DecisionQuestionKind;
 use astronomical_decision_contract::calibration::{
     OPTION_COUNT_RANGE_NAMES, option_count_range_name,
 };
 use astronomical_decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
+use astronomical_decision_contract::training_record::RecordedVerdict;
 use thiserror::Error;
 
 use crate::calibration_metrics::{CalibrationMetrics, ScoringTemperature, calibration_metrics};
 use crate::holdout_split::HoldoutSplit;
+use crate::judged_on::JudgedOn;
 use crate::scored_question::ScoredQuestion;
 use crate::temperature_fit::fit_temperature;
 use crate::temperature_softmax::{first_largest_index, log_probabilities_at};
 
-/// Fewest fitting questions a kind needs before a temperature is fitted.
-pub const MINIMUM_FITTING_QUESTIONS_PER_KIND: usize = 20;
-/// Fewest held-out questions a kind needs before a fit is judged.
-pub const MINIMUM_HOLDOUT_QUESTIONS_PER_KIND: usize = 10;
-/// Fewest fitting questions an option-count range needs for its own temperature.
-pub const MINIMUM_FITTING_QUESTIONS_PER_RANGE: usize = 30;
-/// How much lower, in nats per held-out question, the fitted loss must be
-/// than the shipped loss before the fit is kept. A temperature that only
-/// matches the shipped one to rounding error is not an improvement, and
-/// writing it would make a "calibrated" model that is the same model.
-pub const MINIMUM_HOLDOUT_LOSS_IMPROVEMENT: f64 = 1e-4;
+/// Fitting questions an option-count range needs for a temperature of its
+/// own; with fewer, the range uses its kind's single temperature. A
+/// temperature fitted on a few questions mostly measures noise.
+pub const RANGE_TEMPERATURE_QUESTION_COUNT: usize = 30;
+/// How much lower, in nats per judged question, the fitted loss must be than
+/// the shipped loss to count as an improvement. A temperature that only
+/// matches the shipped one to rounding error is not one.
+pub const MINIMUM_LOSS_IMPROVEMENT: f64 = 1e-4;
 /// Log-probabilities closer than this are a tie, which may break either way.
 const TIE_LOG_PROBABILITY_GAP: f64 = 1e-12;
 
@@ -52,48 +53,76 @@ const ALL_QUESTION_KINDS: [DecisionQuestionKind; 3] = [
     DecisionQuestionKind::Noul,
 ];
 
-/// What the gate decided for every kind, and the file that records it.
+/// Every kind's fit and judgement, and the file that records the fits.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CalibrationPlan {
     pub kind_verdicts: Vec<KindVerdict>,
     pub calibration_override: CalibrationOverride,
 }
 
-/// What the gate decided for one kind.
+impl CalibrationPlan {
+    /// What the folder's training record says: not judged when nothing was
+    /// calibrated or any kind could only be compared on the questions it was
+    /// fitted to, judged not better when any judged kind did not improve,
+    /// otherwise judged better.
+    #[must_use]
+    pub fn recorded_verdict(&self) -> RecordedVerdict {
+        let mut any_calibrated = false;
+        let mut any_unjudged = false;
+        let mut any_not_improved = false;
+        for kind_verdict in &self.kind_verdicts {
+            if let KindOutcome::Calibrated(kind_fit) = &kind_verdict.outcome {
+                any_calibrated = true;
+                any_unjudged |= kind_fit.judged_on == JudgedOn::LearnedFromExamples
+                    || kind_fit.calibrated_metrics.question_count == 0;
+                any_not_improved |= !kind_fit.improved();
+            }
+        }
+        if !any_calibrated || any_unjudged {
+            RecordedVerdict::NotJudged
+        } else if any_not_improved {
+            RecordedVerdict::JudgedNotBetter
+        } else {
+            RecordedVerdict::JudgedBetter
+        }
+    }
+}
+
+/// One kind's fit and what judging it showed.
 #[derive(Clone, Debug, PartialEq)]
 pub struct KindVerdict {
     pub kind: DecisionQuestionKind,
     pub fitting_question_count: usize,
     pub holdout_question_count: usize,
-    /// The shipped temperatures on held-out questions, when there were any.
-    pub shipped_holdout_metrics: Option<CalibrationMetrics>,
     pub outcome: KindOutcome,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum KindOutcome {
-    Calibrated {
-        kind_calibration: KindCalibration,
-        calibrated_holdout_metrics: CalibrationMetrics,
-    },
-    KeptShipped(KeptShippedReason),
+    Calibrated(KindFit),
+    /// The examples ask no question of this kind.
+    NoQuestions,
 }
 
-/// Why a kind keeps the temperatures it shipped with.
+/// A fitted kind, compared with the shipped temperatures.
 #[derive(Clone, Debug, PartialEq)]
-pub enum KeptShippedReason {
-    NoQuestions,
-    TooFewFittingQuestions {
-        have: usize,
-        need: usize,
-    },
-    TooFewHoldoutQuestions {
-        have: usize,
-        need: usize,
-    },
-    NoImprovement {
-        best_holdout_metrics: CalibrationMetrics,
-    },
+pub struct KindFit {
+    pub kind_calibration: KindCalibration,
+    pub judged_on: JudgedOn,
+    /// The shipped temperatures on the judged questions.
+    pub shipped_metrics: CalibrationMetrics,
+    /// The fitted temperatures on the same questions.
+    pub calibrated_metrics: CalibrationMetrics,
+}
+
+impl KindFit {
+    /// Whether the fit was less surprised by the right answers than the
+    /// shipped temperatures, beyond rounding.
+    #[must_use]
+    pub fn improved(&self) -> bool {
+        self.calibrated_metrics.mean_negative_log_likelihood
+            < self.shipped_metrics.mean_negative_log_likelihood - MINIMUM_LOSS_IMPROVEMENT
+    }
 }
 
 /// The scoring code broke an invariant, so no calibration can be trusted.
@@ -105,7 +134,7 @@ pub enum CalibrationPlanError {
     TemperatureChangedTheAnswer { question: String },
 }
 
-/// Runs the gate over every kind.
+/// Fits and judges every kind the examples ask.
 pub fn plan_calibration(
     holdout_split: &HoldoutSplit,
 ) -> Result<CalibrationPlan, CalibrationPlanError> {
@@ -115,13 +144,10 @@ pub fn plan_calibration(
     };
     for kind in ALL_QUESTION_KINDS {
         let kind_verdict = plan_kind(kind, holdout_split)?;
-        if let KindOutcome::Calibrated {
-            kind_calibration, ..
-        } = &kind_verdict.outcome
-        {
+        if let KindOutcome::Calibrated(kind_fit) = &kind_verdict.outcome {
             calibration_plan
                 .calibration_override
-                .set_kind_calibration(kind, kind_calibration.clone());
+                .set_kind_calibration(kind, kind_fit.kind_calibration.clone());
         }
         calibration_plan.kind_verdicts.push(kind_verdict);
     }
@@ -134,78 +160,54 @@ fn plan_kind(
 ) -> Result<KindVerdict, CalibrationPlanError> {
     let fitting_questions = questions_of_kind(&holdout_split.fitting_questions, kind);
     let holdout_questions = questions_of_kind(&holdout_split.holdout_questions, kind);
-    let shipped_holdout_metrics = if holdout_questions.is_empty() {
-        None
-    } else {
-        Some(calibration_metrics(
-            &holdout_questions,
-            ScoringTemperature::Shipped,
-        ))
-    };
     let mut kind_verdict = KindVerdict {
         kind,
         fitting_question_count: fitting_questions.len(),
         holdout_question_count: holdout_questions.len(),
-        shipped_holdout_metrics,
-        outcome: KindOutcome::KeptShipped(KeptShippedReason::NoQuestions),
+        outcome: KindOutcome::NoQuestions,
     };
-    if let Some(too_few_reason) = too_few_questions_reason(&fitting_questions, &holdout_questions) {
-        kind_verdict.outcome = KindOutcome::KeptShipped(too_few_reason);
+    if fitting_questions.is_empty() && holdout_questions.is_empty() {
         return Ok(kind_verdict);
     }
-    let best_candidate = best_fitted_candidate(&fitting_questions, &holdout_questions);
-    check_answers_unchanged(&holdout_questions, &best_candidate.kind_calibration)?;
-    // Too-few-questions has already returned, so held-out metrics exist here.
-    let shipped_loss = match shipped_holdout_metrics {
-        Some(shipped_metrics) => shipped_metrics.mean_negative_log_likelihood,
-        None => f64::INFINITY,
-    };
-    let calibrated_loss = best_candidate.holdout_metrics.mean_negative_log_likelihood;
-    kind_verdict.outcome = if calibrated_loss < shipped_loss - MINIMUM_HOLDOUT_LOSS_IMPROVEMENT {
-        KindOutcome::Calibrated {
-            kind_calibration: best_candidate.kind_calibration,
-            calibrated_holdout_metrics: best_candidate.holdout_metrics,
-        }
-    } else {
-        KindOutcome::KeptShipped(KeptShippedReason::NoImprovement {
-            best_holdout_metrics: best_candidate.holdout_metrics,
-        })
-    };
+    // Without both sides there is nothing to hold back: fit on every
+    // question of the kind and compare on the same ones.
+    let (fitted, judged, judged_on) =
+        if fitting_questions.is_empty() || holdout_questions.is_empty() {
+            let mut every_question = fitting_questions;
+            every_question.extend(holdout_questions);
+            (
+                every_question.clone(),
+                every_question,
+                JudgedOn::LearnedFromExamples,
+            )
+        } else {
+            (
+                fitting_questions,
+                holdout_questions,
+                JudgedOn::HeldBackQuestions,
+            )
+        };
+    let best_candidate = best_fitted_candidate(&fitted, &judged);
+    check_answers_unchanged(&judged, &best_candidate.kind_calibration)?;
+    kind_verdict.outcome = KindOutcome::Calibrated(KindFit {
+        kind_calibration: best_candidate.kind_calibration,
+        judged_on,
+        shipped_metrics: calibration_metrics(&judged, ScoringTemperature::Shipped),
+        calibrated_metrics: best_candidate.judged_metrics,
+    });
     Ok(kind_verdict)
-}
-
-fn too_few_questions_reason(
-    fitting_questions: &[&ScoredQuestion],
-    holdout_questions: &[&ScoredQuestion],
-) -> Option<KeptShippedReason> {
-    if fitting_questions.is_empty() && holdout_questions.is_empty() {
-        return Some(KeptShippedReason::NoQuestions);
-    }
-    if fitting_questions.len() < MINIMUM_FITTING_QUESTIONS_PER_KIND {
-        return Some(KeptShippedReason::TooFewFittingQuestions {
-            have: fitting_questions.len(),
-            need: MINIMUM_FITTING_QUESTIONS_PER_KIND,
-        });
-    }
-    if holdout_questions.len() < MINIMUM_HOLDOUT_QUESTIONS_PER_KIND {
-        return Some(KeptShippedReason::TooFewHoldoutQuestions {
-            have: holdout_questions.len(),
-            need: MINIMUM_HOLDOUT_QUESTIONS_PER_KIND,
-        });
-    }
-    None
 }
 
 struct FittedCandidate {
     kind_calibration: KindCalibration,
-    holdout_metrics: CalibrationMetrics,
+    judged_metrics: CalibrationMetrics,
 }
 
 /// The single-temperature candidate, or the per-range one when it does
-/// strictly better on held-out questions.
+/// strictly better on the judged questions.
 fn best_fitted_candidate(
     fitting_questions: &[&ScoredQuestion],
-    holdout_questions: &[&ScoredQuestion],
+    judged_questions: &[&ScoredQuestion],
 ) -> FittedCandidate {
     let kind_temperature = fit_temperature(fitting_questions).unwrap_or(1.0);
     let single_temperature = KindCalibration {
@@ -213,7 +215,7 @@ fn best_fitted_candidate(
         range_temperatures: Vec::new(),
         fitted_question_count: fitting_questions.len(),
     };
-    let single_candidate = judged_candidate(single_temperature, holdout_questions);
+    let single_candidate = judged_candidate(single_temperature, judged_questions);
     let range_temperatures = fitted_range_temperatures(fitting_questions);
     if range_temperatures.is_empty() {
         return single_candidate;
@@ -222,13 +224,11 @@ fn best_fitted_candidate(
         range_temperatures,
         ..single_candidate.kind_calibration.clone()
     };
-    let per_range_candidate = judged_candidate(per_range, holdout_questions);
+    let per_range_candidate = judged_candidate(per_range, judged_questions);
     if per_range_candidate
-        .holdout_metrics
+        .judged_metrics
         .mean_negative_log_likelihood
-        < single_candidate
-            .holdout_metrics
-            .mean_negative_log_likelihood
+        < single_candidate.judged_metrics.mean_negative_log_likelihood
     {
         return per_range_candidate;
     }
@@ -237,15 +237,15 @@ fn best_fitted_candidate(
 
 fn judged_candidate(
     kind_calibration: KindCalibration,
-    holdout_questions: &[&ScoredQuestion],
+    judged_questions: &[&ScoredQuestion],
 ) -> FittedCandidate {
-    let holdout_metrics = calibration_metrics(
-        holdout_questions,
+    let judged_metrics = calibration_metrics(
+        judged_questions,
         ScoringTemperature::Calibrated(&kind_calibration),
     );
     FittedCandidate {
         kind_calibration,
-        holdout_metrics,
+        judged_metrics,
     }
 }
 
@@ -258,7 +258,7 @@ fn fitted_range_temperatures(fitting_questions: &[&ScoredQuestion]) -> Vec<(Stri
                 range_questions.push(*scored_question);
             }
         }
-        if range_questions.len() < MINIMUM_FITTING_QUESTIONS_PER_RANGE {
+        if range_questions.len() < RANGE_TEMPERATURE_QUESTION_COUNT {
             continue;
         }
         if let Some(range_temperature) = fit_temperature(&range_questions) {
@@ -281,14 +281,14 @@ fn questions_of_kind(
     kind_questions
 }
 
-/// Refuses a calibration under which any held-out question's most probable
+/// Stops a calibration under which any judged question's most probable
 /// option differs from the one it was served, ties aside.
 fn check_answers_unchanged(
-    holdout_questions: &[&ScoredQuestion],
+    judged_questions: &[&ScoredQuestion],
     kind_calibration: &KindCalibration,
 ) -> Result<(), CalibrationPlanError> {
     let calibrated = ScoringTemperature::Calibrated(kind_calibration);
-    for scored_question in holdout_questions {
+    for scored_question in judged_questions {
         let shipped_log_probabilities = log_probabilities_at(
             &scored_question.option_logits,
             scored_question.shipped_temperature,

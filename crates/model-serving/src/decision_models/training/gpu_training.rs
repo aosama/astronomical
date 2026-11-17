@@ -471,20 +471,29 @@ fn row_target(
 
 /// Mean surprise at the right answer over the choosing questions, at the
 /// temperature each is served with.
+///
+/// With too few different texts to hold any back there are no choosing
+/// questions, and the training questions stand in: the run then stops when
+/// it stops improving on what it learns from, or at its epoch limit. An
+/// empty set would leave the loss infinite at every epoch, so the starting
+/// weights would always look best and come back untrained.
 fn choosing_loss(
     math: GpuMath<'_>,
     training_set: &GpuTrainingSet,
     parameters: &[MlxArray],
 ) -> GpuResult<f64> {
-    if training_set.choosing_rows.is_empty() {
+    let choosing_rows = if training_set.choosing_rows.is_empty() {
+        &training_set.training_rows
+    } else {
+        &training_set.choosing_rows
+    };
+    if choosing_rows.is_empty() {
         return Ok(f64::INFINITY);
     }
-    let batch_rows = training_set
-        .option_layout
-        .batch_rows(&training_set.choosing_rows);
+    let batch_rows = training_set.option_layout.batch_rows(choosing_rows);
     let question_batch = QuestionBatch::upload(math, &batch_rows)?;
-    let mut targets = Vec::with_capacity(training_set.choosing_rows.len());
-    for question_row in &training_set.choosing_rows {
+    let mut targets = Vec::with_capacity(choosing_rows.len());
+    for question_row in choosing_rows {
         targets.push(row_target(training_set, *question_row, 0.0));
     }
     let mut host_rows = Vec::with_capacity(targets.len());

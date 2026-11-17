@@ -38,6 +38,7 @@ fn consistent_outcome(
             distinguishable_option_count: 3,
         },
         head_inputs: None,
+        training_record: None,
     }
 }
 

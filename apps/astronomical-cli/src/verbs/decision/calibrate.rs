@@ -3,27 +3,30 @@
 //! Everything that can be checked without the model is checked first: the
 //! examples file, the model's folder, and the output folder. Only then is
 //! every example sent to the daemon, one request per example, keeping each
-//! question's raw scores. The fit, the never-worse gate and the proven copy
+//! question's raw scores. The fit, its judgement and the proven copy
 //! all run on the CPU in this process; the daemon's only part is scoring.
+//! Any number of examples is calibrated, and the folder is written whatever
+//! the judgement shows, with a training record saying what it showed.
 
 use std::io::Write;
 
 use astronomical_decision_contract::QuestionOutcome;
 use astronomical_decision_contract::calibration_file::CalibrationOverride;
+use astronomical_decision_contract::training_record::TrainingRecord;
 use astronomical_decision_training::calibrated_model_folder::FolderAdditions;
 use astronomical_decision_training::calibration_plan::plan_calibration;
 use astronomical_decision_training::holdout_split::{split_by_state, state_group_key};
-use astronomical_decision_training::labelled_example::LabelledExample;
+use astronomical_decision_training::labelled_example::{LabelledExample, labelled_data_counts};
 use astronomical_decision_training::scored_question::{
     ScoredQuestion, scored_question_from_outcome,
 };
 
-use super::calibration_report::{CalibrationCounts, calibration_report_text};
+use super::calibration_report::{CalibrationCounts, calibration_report_text, calibration_warnings};
 use super::decision_arguments::DecisionToolArguments;
 use super::decision_tool::{
     DecisionToolDependencies, DecisionToolError, announce_model_folder, check_output_is_new,
-    model_lifecycle, prepare_decision_model, read_labelled_examples, write_model_folder,
-    write_report,
+    earlier_training_record, model_lifecycle, prepare_decision_model, read_labelled_examples,
+    write_model_folder, write_report,
 };
 use super::example_scoring::{ExampleRequest, ScoringPass, answer_examples};
 use super::model_folder_lookup::find_model_folder;
@@ -44,6 +47,9 @@ pub async fn run_calibrate(
     let model_folder = find_model_folder(&dependencies.instance_paths, &decision_model_id)?;
     let output_directory = &calibrate_arguments.output_directory;
     check_output_is_new(&model_folder, output_directory)?;
+    // Read before scoring, so a record that cannot be read stops the run
+    // before the report says the folder will be written.
+    let earlier_record = earlier_training_record(&model_folder.model_directory)?;
     let answered_examples = answer_examples(
         &example_requests(&labelled_examples),
         &ScoringPass {
@@ -58,16 +64,21 @@ pub async fn run_calibrate(
     for (labelled_example, question_outcomes) in labelled_examples.iter().zip(&answered_examples) {
         scored_questions.extend(scored_example(labelled_example, question_outcomes)?);
     }
-    let calibration_override = fit_and_report(
+    let (calibration_override, calibration_record) = fit_and_report(
         &decision_model_id,
-        labelled_examples.len(),
+        &labelled_examples,
         scored_questions,
         dependencies.stdout,
     )?;
+    let training_record = calibration_record.after_earlier(earlier_record.as_ref());
+    // An empty calibration file would not load, so a run that calibrated no
+    // kind leaves the copy's own temperatures as they are.
     let folder_additions = FolderAdditions {
-        calibration_override: Some(&calibration_override),
+        calibration_override: (!calibration_override.decides_no_kind())
+            .then_some(&calibration_override),
         head_tuning: None,
         decision_adapters: None,
+        training_record: Some(&training_record),
     };
     write_model_folder(
         output_directory,
@@ -96,31 +107,34 @@ pub(super) fn example_requests(labelled_examples: &[LabelledExample]) -> Vec<Exa
     example_requests
 }
 
-/// Splits, fits and gates, prints the report, and returns the calibration
-/// to write; refuses when no kind improved, so nothing is written.
+/// Splits, fits and judges, prints the report, and returns the calibration
+/// to write with the record of what judging it showed.
 fn fit_and_report(
     decision_model_id: &str,
-    example_count: usize,
+    labelled_examples: &[LabelledExample],
     scored_questions: Vec<ScoredQuestion>,
     stdout: &mut dyn Write,
-) -> Result<CalibrationOverride, DecisionToolError> {
+) -> Result<(CalibrationOverride, TrainingRecord), DecisionToolError> {
     let question_count = scored_questions.len();
+    let data_counts = labelled_data_counts(labelled_examples);
     let holdout_split = split_by_state(scored_questions);
     let calibration_plan = plan_calibration(&holdout_split)?;
     let calibration_counts = CalibrationCounts {
-        example_count,
+        example_count: labelled_examples.len(),
         question_count,
+        distinct_state_count: data_counts.distinct_state_count,
         holdout_question_count: holdout_split.holdout_questions.len(),
     };
     let report_text =
         calibration_report_text(decision_model_id, calibration_counts, &calibration_plan);
     write_report(stdout, &report_text)?;
-    if calibration_plan.calibration_override.decides_no_kind() {
-        return Err(DecisionToolError::NothingImproved {
-            model_id: decision_model_id.to_owned(),
-        });
-    }
-    Ok(calibration_plan.calibration_override)
+    let training_record = TrainingRecord {
+        verdict: calibration_plan.recorded_verdict(),
+        labelled_question_count: data_counts.labelled_question_count,
+        distinct_state_count: data_counts.distinct_state_count,
+        warnings: calibration_warnings(&calibration_plan),
+    };
+    Ok((calibration_plan.calibration_override, training_record))
 }
 
 /// One example's questions with the scores the model gave them, each

@@ -70,6 +70,7 @@ fn calibration_only(calibration_override: &CalibrationOverride) -> FolderAdditio
         calibration_override: Some(calibration_override),
         head_tuning: None,
         decision_adapters: None,
+        training_record: None,
     }
 }
 
@@ -379,6 +380,7 @@ fn should_write_a_trained_head_that_reads_back_exactly() {
             calibration_override: None,
             head_tuning: Some((&scorer_bias_tuning(0.75), TunableHeadFamily::Laya)),
             decision_adapters: None,
+            training_record: None,
         },
         &mut RecordedProgress::default(),
     )
@@ -426,6 +428,7 @@ fn should_keep_an_earlier_trained_head_when_only_calibrating() {
             calibration_override: None,
             head_tuning: Some((&scorer_bias_tuning(2.0), TunableHeadFamily::Laya)),
             decision_adapters: None,
+            training_record: None,
         },
         &mut RecordedProgress::default(),
     )
@@ -456,6 +459,7 @@ fn should_refuse_a_trained_head_that_cannot_be_written_and_leave_nothing() {
             calibration_override: None,
             head_tuning: Some((&short_tensor, TunableHeadFamily::Laya)),
             decision_adapters: None,
+            training_record: None,
         },
         &mut RecordedProgress::default(),
     );
@@ -504,6 +508,7 @@ fn should_write_add_ons_beside_the_trained_head_that_read_back_exactly() {
             calibration_override: None,
             head_tuning: Some((&scorer_bias_tuning(0.75), TunableHeadFamily::Laya)),
             decision_adapters: Some(&two_layer_adapters()),
+            training_record: None,
         },
         &mut RecordedProgress::default(),
     )
@@ -554,6 +559,7 @@ fn should_replace_earlier_add_ons_and_keep_them_when_only_calibrating() {
             calibration_override: None,
             head_tuning: None,
             decision_adapters: Some(&retrained_adapters),
+            training_record: None,
         },
         &mut RecordedProgress::default(),
     )
@@ -563,4 +569,61 @@ fn should_replace_earlier_add_ons_and_keep_them_when_only_calibrating() {
         parse_decision_adapters(&written).unwrap(),
         retrained_adapters
     );
+}
+
+fn not_judged_record() -> TrainingRecord {
+    TrainingRecord {
+        verdict: astronomical_decision_contract::training_record::RecordedVerdict::NotJudged,
+        labelled_question_count: 1,
+        distinct_state_count: 1,
+        warnings: vec!["compared only on the examples it learned from".to_owned()],
+    }
+}
+
+#[test]
+fn should_write_the_training_record_beside_the_calibration() {
+    let work_directory = tempfile::tempdir().unwrap();
+    let source_directory = source_model_folder(work_directory.path());
+    let output_directory = work_directory.path().join("laya-one-example");
+    let training_record = not_judged_record();
+    write_calibrated_model_folder(
+        &whole_folder(&source_directory),
+        &output_directory,
+        FolderAdditions {
+            training_record: Some(&training_record),
+            ..calibration_only(&noul_calibration())
+        },
+        &mut RecordedProgress::default(),
+    )
+    .unwrap();
+    let record_bytes = fs::read(output_directory.join(DECISION_TRAINING_RECORD_FILE_NAME)).unwrap();
+    assert_eq!(
+        astronomical_decision_contract::training_record::parse_training_record(&record_bytes)
+            .unwrap(),
+        training_record
+    );
+}
+
+#[test]
+fn should_replace_a_training_record_the_source_already_carried() {
+    let work_directory = tempfile::tempdir().unwrap();
+    let source_directory = source_model_folder(work_directory.path());
+    fs::write(
+        source_directory.join(DECISION_TRAINING_RECORD_FILE_NAME),
+        b"an earlier record",
+    )
+    .unwrap();
+    let output_directory = work_directory.path().join("laya-recalibrated");
+    write_calibrated_model_folder(
+        &whole_folder(&source_directory),
+        &output_directory,
+        FolderAdditions {
+            training_record: Some(&not_judged_record()),
+            ..calibration_only(&noul_calibration())
+        },
+        &mut RecordedProgress::default(),
+    )
+    .unwrap();
+    let record_bytes = fs::read(output_directory.join(DECISION_TRAINING_RECORD_FILE_NAME)).unwrap();
+    assert_ne!(record_bytes, b"an earlier record");
 }

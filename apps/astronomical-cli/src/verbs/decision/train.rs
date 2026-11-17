@@ -1,21 +1,22 @@
 //! The `astronomical decision train` journey.
 //!
-//! 1. Check what needs no model: the examples file, that there is enough of
-//!    it, the model's folder and family, and the output folder.
+//! 1. Check what needs no model: the examples file, the model's folder and
+//!    family, and the output folder. Any number of examples trains.
 //! 2. Send one job to the daemon: the worker reads every example and the
 //!    built-in check set, proves its trainable copy (the final layers, or
 //!    with `--whole-model` the whole model with add-on weights in every
 //!    layer) reproduces the model's scores, and trains on the GPU in several
 //!    runs. It returns every answer beside the trained model's scores.
-//! 3. Fit fresh temperatures and judge the result against the shipped model
-//!    recalibrated the same way, on questions training never saw.
-//! 4. Only if it is kept: write the new folder (originals copied byte for
-//!    byte, trained layers and any add-ons in 32-bit files beside them),
-//!    reload, and prove
-//!    the written folder answers as the trained model did; otherwise remove
-//!    it.
+//! 3. Fit fresh temperatures and compare the result with the shipped model
+//!    recalibrated the same way, on questions training never saw, or, with
+//!    too few different texts to hold any back, on the training examples.
+//! 4. Whatever the comparison shows: write the new folder (originals copied
+//!    byte for byte, trained layers and any add-ons in 32-bit files beside
+//!    them, and the training record with the verdict and every warning),
+//!    reload, and check the written folder answers as the trained model did.
+//!    The person decides what to do with it; nothing here refuses or removes
+//!    a result.
 
-use std::collections::HashSet;
 use std::path::Path;
 
 use astronomical_config::ModelFamily;
@@ -30,20 +31,20 @@ use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunableHeadFa
 use astronomical_decision_contract::trained_tensors::{
     UnpairedAddOns, decision_adapters_of, head_tuning_of,
 };
+use astronomical_decision_contract::training_record::TrainingRecord;
 use astronomical_decision_training::calibrated_model_folder::FolderAdditions;
-use astronomical_decision_training::holdout_split::state_group_key;
-use astronomical_decision_training::labelled_example::LabelledExample;
-use astronomical_decision_training::training_split::{SplitPart, check_training_data};
+use astronomical_decision_training::labelled_example::{LabelledExample, labelled_data_counts};
+use astronomical_decision_training::training_split::SplitPart;
 use astronomical_decision_training::training_verdict::{
-    ScoredPair, TrainingVerdict, judge_training,
+    JudgedOn, ScoredPair, TrainingVerdict, judge_training,
 };
 
 use super::check_set::built_in_check_examples;
 use super::decision_arguments::DecisionToolArguments;
 use super::decision_tool::{
-    DecisionToolDependencies, DecisionToolError, check_output_is_new, model_lifecycle,
-    output_model_id, prepare_decision_model, read_labelled_examples, write_model_folder,
-    write_report,
+    DecisionToolDependencies, DecisionToolError, check_output_is_new, earlier_training_record,
+    model_lifecycle, output_model_id, prepare_decision_model, read_labelled_examples,
+    write_model_folder, write_report,
 };
 use super::model_folder_lookup::{ModelFolderLookup, find_model_folder};
 use super::new_model_visibility::{
@@ -51,7 +52,7 @@ use super::new_model_visibility::{
 };
 use super::saved_model_check::{TrainedExpectation, check_saved_model};
 use super::training_job::{PartCounts, training_job, training_scores};
-use super::training_report::{TrainingSummary, training_report_text};
+use super::training_report::{TrainingSummary, training_report_text, training_warnings};
 use super::training_request::request_training;
 use crate::DaemonProbe;
 
@@ -64,15 +65,25 @@ struct FinishedTraining<'finished> {
     sent_example_count: usize,
     part_counts: PartCounts,
     outcome: DecisionTrainingOutcome,
+    /// The source folder's own record, when it was made by a calibration or
+    /// training; the new record builds on it.
+    earlier_record: Option<TrainingRecord>,
+    /// The source folder's own calibration, which training's refits replace
+    /// kind by kind.
+    earlier_calibration: CalibrationOverride,
 }
 
-/// A head the gate kept, with what it was judged by.
-struct KeptTraining {
+/// A trained head, what it was judged by, and the record that travels with it.
+struct JudgedTraining {
+    /// The calibration the folder will carry: the earlier one with
+    /// training's refits; `None` when no kind has one.
+    calibration_override: Option<CalibrationOverride>,
     head_tuning: HeadTuning,
     /// The add-ons of a whole-model training; `None` for the final layers.
     decision_adapters: Option<DecisionAdapters>,
     verdict: TrainingVerdict,
     judging_pairs: Vec<ScoredPair>,
+    training_record: TrainingRecord,
 }
 
 /// Runs the whole training against the resident daemon.
@@ -81,7 +92,6 @@ pub async fn run_train(
     dependencies: &mut DecisionToolDependencies<'_>,
 ) -> Result<(), DecisionToolError> {
     let labelled_examples = read_labelled_examples(&train_arguments.examples_file_path)?;
-    check_enough_data(&labelled_examples)?;
     let model_lifecycle = model_lifecycle(dependencies);
     let decision_model_id = prepare_decision_model(
         train_arguments.model_id.as_deref(),
@@ -93,6 +103,8 @@ pub async fn run_train(
     let family = tunable_family(model_folder.model_family, &decision_model_id)?;
     let output_directory = &train_arguments.output_directory;
     check_output_is_new(&model_folder, output_directory)?;
+    let earlier_record = earlier_training_record(&model_folder.model_directory)?;
+    let earlier_calibration = earlier_calibration(&model_folder.model_directory)?;
     let check_examples = match built_in_check_examples() {
         Ok(check_examples) => check_examples,
         Err(check_set_error) => return Err(DecisionToolError::CheckSetUnreadable(check_set_error)),
@@ -111,7 +123,7 @@ pub async fn run_train(
         dependencies,
     )
     .await?;
-    let kept_training = judge_and_report(
+    let judged_training = judge_and_report(
         FinishedTraining {
             decision_model_id: &decision_model_id,
             scope: train_arguments.training_scope,
@@ -120,6 +132,8 @@ pub async fn run_train(
             sent_example_count,
             part_counts: prepared_job.part_counts,
             outcome,
+            earlier_record,
+            earlier_calibration,
         },
         dependencies,
     )?;
@@ -128,26 +142,13 @@ pub async fn run_train(
             output_directory,
             model_folder: &model_folder,
             family,
-            kept_training: &kept_training,
+            judged_training: &judged_training,
             labelled_examples: &labelled_examples,
         },
         daemon_probe,
         dependencies,
     )
     .await
-}
-
-fn check_enough_data(labelled_examples: &[LabelledExample]) -> Result<(), DecisionToolError> {
-    let mut distinct_states = HashSet::new();
-    let mut labelled_question_count = 0;
-    for labelled_example in labelled_examples {
-        distinct_states.insert(state_group_key(&labelled_example.state));
-        labelled_question_count += labelled_example.labelled_questions.len();
-    }
-    match check_training_data(labelled_question_count, distinct_states.len()) {
-        Ok(()) => Ok(()),
-        Err(too_little_data) => Err(DecisionToolError::TooLittleData(too_little_data)),
-    }
 }
 
 fn tunable_family(
@@ -164,12 +165,12 @@ fn tunable_family(
     }
 }
 
-/// Judges the trained head, prints the report, and returns the head only
-/// when the gate keeps it.
+/// Judges the trained head, prints the report, and returns the head with
+/// its training record, whatever the judgement found.
 fn judge_and_report(
     finished_training: FinishedTraining<'_>,
     dependencies: &mut DecisionToolDependencies<'_>,
-) -> Result<KeptTraining, DecisionToolError> {
+) -> Result<JudgedTraining, DecisionToolError> {
     let outcome = &finished_training.outcome;
     let training_scores = training_scores(
         finished_training.labelled_examples,
@@ -178,29 +179,46 @@ fn judge_and_report(
         outcome,
     )?;
     let verdict = judge_training(&training_scores)?;
-    let report_text = training_report_text(&TrainingSummary {
+    let data_counts = labelled_data_counts(finished_training.labelled_examples);
+    let training_summary = TrainingSummary {
         model_id: finished_training.decision_model_id,
         scope: finished_training.scope,
         example_count: finished_training.labelled_examples.len(),
+        distinct_state_count: data_counts.distinct_state_count,
         part_counts: finished_training.part_counts,
         indistinguishable_question_count: outcome.indistinguishable_question_count,
         largest_parity_gap: outcome.largest_parity_gap,
+        parity_gap_beyond_rounding: outcome.parity_gap_beyond_rounding,
         runs: &outcome.runs,
         best_seed: outcome.best_seed,
         verdict: &verdict,
-    });
-    write_report(dependencies.stdout, &report_text)?;
-    if !verdict.is_kept() {
-        return Err(DecisionToolError::TrainingRefused {
-            model_id: finished_training.decision_model_id.to_owned(),
-        });
+    };
+    // Everything that can still fail is done before the report says the
+    // folder will be written.
+    let decision_adapters =
+        decision_adapters_of(&outcome.adapter_tensors).map_err(unpaired_add_ons)?;
+    let calibration_override = merged_calibration(
+        &finished_training.earlier_calibration,
+        verdict.calibration_override(),
+    );
+    write_report(
+        dependencies.stdout,
+        &training_report_text(&training_summary),
+    )?;
+    let training_record = TrainingRecord {
+        verdict: verdict.recorded_verdict(),
+        labelled_question_count: data_counts.labelled_question_count,
+        distinct_state_count: data_counts.distinct_state_count,
+        warnings: training_warnings(&training_summary),
     }
-    Ok(KeptTraining {
+    .after_earlier(finished_training.earlier_record.as_ref());
+    Ok(JudgedTraining {
+        calibration_override,
         head_tuning: head_tuning_of(&outcome.trained_tensors),
-        decision_adapters: decision_adapters_of(&outcome.adapter_tensors)
-            .map_err(unpaired_add_ons)?,
+        decision_adapters,
         verdict,
         judging_pairs: training_scores.judging,
+        training_record,
     })
 }
 
@@ -213,28 +231,26 @@ struct WrittenTraining<'written> {
     output_directory: &'written Path,
     model_folder: &'written ModelFolderLookup,
     family: TunableHeadFamily,
-    kept_training: &'written KeptTraining,
+    judged_training: &'written JudgedTraining,
     labelled_examples: &'written [LabelledExample],
 }
 
-/// Writes the folder, has the daemon serve it, and proves its answers. A
-/// folder whose answers disagree with the trained model is removed; one that
-/// could not be checked (Astronomical busy, say) is kept, because removing
-/// it would throw away a training that may be perfectly sound.
+/// Writes the folder, has the daemon serve it, and checks its answers. The
+/// folder is kept whatever the check finds: one that could not be checked
+/// (Astronomical busy, say) may be perfectly sound, and one whose answers
+/// differ from the trained model is the person's to inspect; the failure
+/// says which, and the run exits 1.
 async fn write_and_prove(
     written_training: &WrittenTraining<'_>,
     daemon_probe: &DaemonProbe,
     dependencies: &mut DecisionToolDependencies<'_>,
 ) -> Result<(), DecisionToolError> {
-    let kept_training = written_training.kept_training;
-    let calibration_override = merged_calibration(
-        &written_training.model_folder.model_directory,
-        kept_training.verdict.calibration_override(),
-    )?;
+    let judged_training = written_training.judged_training;
     let folder_additions = FolderAdditions {
-        calibration_override: calibration_override.as_ref(),
-        head_tuning: Some((&kept_training.head_tuning, written_training.family)),
-        decision_adapters: kept_training.decision_adapters.as_ref(),
+        calibration_override: judged_training.calibration_override.as_ref(),
+        head_tuning: Some((&judged_training.head_tuning, written_training.family)),
+        decision_adapters: judged_training.decision_adapters.as_ref(),
+        training_record: Some(&judged_training.training_record),
     };
     let output_directory = written_training.output_directory;
     write_model_folder(
@@ -248,22 +264,7 @@ async fn write_and_prove(
         prove_written_folder(written_training, &new_model_id, daemon_probe, dependencies).await;
     let largest_gap = match proof {
         Ok(largest_gap) => largest_gap,
-        Err(proof_error) if disproves_written_folder(&proof_error) => {
-            // Only the folder this run wrote is removed; the source is never touched.
-            let _ = std::fs::remove_dir_all(output_directory);
-            let _ =
-                make_new_model_visible(dependencies.loopback_address, daemon_probe, &new_model_id)
-                    .await;
-            return Err(proof_error);
-        }
-        Err(DecisionToolError::SavedModelUnchecked(reason)) => {
-            return Err(DecisionToolError::SavedModelUnchecked(reason));
-        }
-        Err(proof_error) => {
-            return Err(DecisionToolError::SavedModelUnchecked(
-                proof_error.to_string(),
-            ));
-        }
+        Err(proof_error) => return Err(kept_folder_failure(proof_error)),
     };
     let mut closing_text = written_folder_text(
         output_directory,
@@ -271,16 +272,37 @@ async fn write_and_prove(
         NewModelVisibility::Listed,
         &written_training.model_folder.scanned_model_roots,
     );
-    closing_text.push_str(&format!(
-        "Its answers to the judging questions match the trained model's to within {largest_gap:.4}.\n"
+    closing_text.push_str(&checked_answers_text(
+        judged_training.verdict.judged_on,
+        judged_training.judging_pairs.len(),
+        largest_gap,
     ));
     write_report(dependencies.stdout, &closing_text)
 }
 
-/// Whether a failed proof showed the written folder answers differently from
-/// the trained model, rather than only that it could not be checked.
-fn disproves_written_folder(proof_error: &DecisionToolError) -> bool {
-    matches!(proof_error, DecisionToolError::SavedModelDisagrees { .. })
+/// How closely the written folder answered as the trained model did.
+fn checked_answers_text(judged_on: JudgedOn, checked_count: usize, largest_gap: f32) -> String {
+    if checked_count == 0 {
+        return "No questions were left to check its answers against.\n".to_owned();
+    }
+    let checked_questions = match judged_on {
+        JudgedOn::HeldBackQuestions => "judging questions",
+        JudgedOn::LearnedFromExamples => "training questions",
+    };
+    format!(
+        "Its answers to the {checked_questions} match the trained model's to within {largest_gap:.4}.\n"
+    )
+}
+
+/// A failed check of the written folder, said so the person knows the
+/// folder is still there: a disagreement as it is, anything else as a check
+/// that could not be made.
+fn kept_folder_failure(proof_error: DecisionToolError) -> DecisionToolError {
+    match proof_error {
+        DecisionToolError::SavedModelDisagrees { .. }
+        | DecisionToolError::SavedModelUnchecked(_) => proof_error,
+        other_error => DecisionToolError::SavedModelUnchecked(other_error.to_string()),
+    }
 }
 
 async fn prove_written_folder(
@@ -296,13 +318,13 @@ async fn prove_written_folder(
             "Astronomical did not serve the new folder, so its answers could not be checked; try again when it is idle".to_owned(),
         ));
     }
-    let kept_training = written_training.kept_training;
+    let judged_training = written_training.judged_training;
     check_saved_model(
         new_model_id,
         written_training.labelled_examples,
         &TrainedExpectation {
-            calibration_plan: &kept_training.verdict.calibration_plan,
-            judging_pairs: &kept_training.judging_pairs,
+            calibration_plan: &judged_training.verdict.calibration_plan,
+            judging_pairs: &judged_training.judging_pairs,
         },
         daemon_probe,
         dependencies,
@@ -310,33 +332,36 @@ async fn prove_written_folder(
     .await
 }
 
+/// The source folder's own calibration, read before training so a file
+/// that cannot be read stops the run before anything is reported; empty
+/// when the folder has none.
+fn earlier_calibration(source_directory: &Path) -> Result<CalibrationOverride, DecisionToolError> {
+    let calibration_path = source_directory.join(DECISION_CALIBRATION_FILE_NAME);
+    match std::fs::read(&calibration_path) {
+        Ok(calibration_bytes) => match parse_calibration_document(&calibration_bytes) {
+            Ok(earlier_calibration) => Ok(earlier_calibration),
+            Err(parse_error) => Err(DecisionToolError::EarlierCalibrationUnreadable(
+                parse_error.to_string(),
+            )),
+        },
+        Err(read_error) if read_error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(CalibrationOverride::default())
+        }
+        Err(read_error) => Err(DecisionToolError::EarlierCalibrationUnreadable(
+            read_error.to_string(),
+        )),
+    }
+}
+
 /// The folder's temperatures after training: its earlier calibration, with
 /// each kind training refitted replaced. A kind training did not refit keeps
 /// the temperature it was served and judged with; `None` when no kind has
 /// one, since an empty calibration file would not load.
 fn merged_calibration(
-    source_directory: &Path,
+    earlier_calibration: &CalibrationOverride,
     trained_calibration: &CalibrationOverride,
-) -> Result<Option<CalibrationOverride>, DecisionToolError> {
-    let calibration_path = source_directory.join(DECISION_CALIBRATION_FILE_NAME);
-    let mut merged = match std::fs::read(&calibration_path) {
-        Ok(calibration_bytes) => match parse_calibration_document(&calibration_bytes) {
-            Ok(earlier_calibration) => earlier_calibration,
-            Err(parse_error) => {
-                return Err(DecisionToolError::EarlierCalibrationUnreadable(
-                    parse_error.to_string(),
-                ));
-            }
-        },
-        Err(read_error) if read_error.kind() == std::io::ErrorKind::NotFound => {
-            CalibrationOverride::default()
-        }
-        Err(read_error) => {
-            return Err(DecisionToolError::EarlierCalibrationUnreadable(
-                read_error.to_string(),
-            ));
-        }
-    };
+) -> Option<CalibrationOverride> {
+    let mut merged = earlier_calibration.clone();
     for kind in [
         astronomical_decision_contract::DecisionQuestionKind::Choice,
         astronomical_decision_contract::DecisionQuestionKind::Score,
@@ -347,9 +372,9 @@ fn merged_calibration(
         }
     }
     if merged.decides_no_kind() {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(merged))
+    Some(merged)
 }
 
 #[cfg(test)]

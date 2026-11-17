@@ -1,10 +1,10 @@
 //! Building the job the worker trains on, and reading its outcome back as
-//! the scores the gate judges.
+//! the scores the judgement reads.
 //!
 //! The split is decided here, not in the worker: each labelled question
 //! goes in with its part (training, choosing or judging) and right answer,
 //! and the check-set questions go in unlabelled. What comes back is every
-//! question's served answer beside the trained head's scores, so the gate,
+//! question's served answer beside the trained head's scores, so the judgement,
 //! the report and the written-folder check all run on this side, on
 //! numbers the worker produced once.
 
@@ -19,7 +19,9 @@ use astronomical_decision_training::holdout_split::state_group_key;
 use astronomical_decision_training::labelled_example::LabelledExample;
 use astronomical_decision_training::training_losses::tempered_probabilities;
 use astronomical_decision_training::training_split::{SplitPart, split_parts_by_state};
-use astronomical_decision_training::training_verdict::{CheckPair, ScoredPair, TrainingScores};
+use astronomical_decision_training::training_verdict::{
+    CheckPair, JudgedOn, ScoredPair, TrainingScores,
+};
 
 use super::calibrate::scored_example;
 use super::check_set::CheckExample;
@@ -140,9 +142,12 @@ fn check_training_example(
     })
 }
 
-/// The choosing, judging and check scores the gate reads. Each labelled
-/// answer passes calibration's own checks first; questions the worker left
-/// out (their options read alike) carry no trained scores and are skipped.
+/// The choosing, judging and check scores the judgement reads. Each
+/// labelled answer passes calibration's own checks first; questions the
+/// worker left out (their options read alike) carry no trained scores and
+/// are skipped. When nothing was held back, the training questions are both
+/// what chooses the temperatures and what the result is compared on, and the
+/// scores say so.
 pub(super) fn training_scores(
     labelled_examples: &[LabelledExample],
     example_parts: &[SplitPart],
@@ -159,10 +164,16 @@ pub(super) fn training_scores(
             outcome.examples.len()
         )));
     }
+    let holds_back = example_parts.contains(&SplitPart::Judging);
     let mut training_scores = TrainingScores {
         choosing: Vec::new(),
         judging: Vec::new(),
         check: Vec::new(),
+        judged_on: if holds_back {
+            JudgedOn::HeldBackQuestions
+        } else {
+            JudgedOn::LearnedFromExamples
+        },
     };
     for ((labelled_example, part), trained_questions) in labelled_examples
         .iter()
@@ -171,7 +182,13 @@ pub(super) fn training_scores(
     {
         let scored_pairs = labelled_pairs(labelled_example, trained_questions)?;
         match part {
-            SplitPart::Training => {}
+            SplitPart::Training if holds_back => {}
+            SplitPart::Training => {
+                training_scores
+                    .choosing
+                    .extend(scored_pairs.iter().cloned());
+                training_scores.judging.extend(scored_pairs);
+            }
             SplitPart::Choosing => training_scores.choosing.extend(scored_pairs),
             SplitPart::Judging => training_scores.judging.extend(scored_pairs),
         }

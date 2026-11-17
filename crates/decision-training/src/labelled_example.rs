@@ -241,6 +241,34 @@ fn correct_option_index(
     }
 }
 
+/// How much labelled evidence an examples file holds: what a person needs
+/// to weigh a result, and what the folder's training record keeps.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LabelledDataCounts {
+    pub labelled_question_count: usize,
+    /// Different texts (states); ten questions about one text count once.
+    pub distinct_state_count: usize,
+}
+
+/// Counts the labelled questions and the different states they are about.
+#[must_use]
+pub fn labelled_data_counts(labelled_examples: &[LabelledExample]) -> LabelledDataCounts {
+    let mut state_keys = Vec::with_capacity(labelled_examples.len());
+    let mut labelled_question_count = 0;
+    for labelled_example in labelled_examples {
+        state_keys.push(crate::holdout_split::state_group_key(
+            &labelled_example.state,
+        ));
+        labelled_question_count += labelled_example.labelled_questions.len();
+    }
+    state_keys.sort_unstable();
+    state_keys.dedup();
+    LabelledDataCounts {
+        labelled_question_count,
+        distinct_state_count: state_keys.len(),
+    }
+}
+
 #[cfg(test)]
 #[path = "labelled_example_tests.rs"]
 mod tests;

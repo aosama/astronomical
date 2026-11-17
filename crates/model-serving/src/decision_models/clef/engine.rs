@@ -401,6 +401,7 @@ fn question_outcome(
             distinguishable_option_count: distinct_option_texts.len() as u32,
         },
         head_inputs: None,
+        training_record: None,
     })
 }
 

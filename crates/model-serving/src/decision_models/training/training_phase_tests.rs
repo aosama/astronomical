@@ -26,6 +26,7 @@ fn kev_outcome(question_name: &str, distinguishable_option_count: u32) -> Questi
             decision_state: FloatVector(vec![0.5; 3]),
             option_states: vec![FloatVector(vec![1.0; 3]), FloatVector(vec![-1.0; 3])],
         }),
+        training_record: None,
     }
 }
 
@@ -67,29 +68,28 @@ fn should_accept_scores_within_rounding_of_the_models_and_report_the_largest_gap
     let served_logits = vec![vec![1.0, -2.0], vec![8.0]];
     let trainable_scores = vec![vec![1.0005, -2.0], vec![8.002]];
 
-    let largest_gap = largest_parity_gap(&trainable_scores, &served_logits).unwrap();
+    let parity = parity_check(&trainable_scores, &served_logits);
 
-    assert!((largest_gap - 0.002).abs() < 1e-5, "{largest_gap}");
+    assert!((parity.largest_gap - 0.002).abs() < 1e-5, "{parity:?}");
+    assert_eq!(parity.gap_beyond_rounding, None);
 }
 
 #[test]
-fn should_refuse_a_trainable_copy_that_scores_away_from_the_model_and_name_the_worst_gap() {
+fn should_report_a_trainable_copy_that_scores_away_from_the_model_with_the_worst_gap() {
     let served_logits = vec![vec![1.0, -2.0], vec![0.5]];
     // The first gap is over the line; the last is far further over it.
     let trainable_scores = vec![vec![1.004, -2.0], vec![0.75]];
 
-    let refusal = largest_parity_gap(&trainable_scores, &served_logits).unwrap_err();
+    let parity = parity_check(&trainable_scores, &served_logits);
 
-    assert!(refusal.to_string().contains("0.25000"), "{refusal}");
-    assert!(
-        refusal.to_string().contains("nothing was trained"),
-        "{refusal}"
-    );
+    let worst_gap = parity.gap_beyond_rounding.unwrap();
+    assert!((worst_gap - 0.25).abs() < 1e-5, "{parity:?}");
 }
 
 #[test]
-fn should_refuse_a_trainable_copy_whose_score_is_not_a_number() {
-    assert!(largest_parity_gap(&[vec![f32::NAN]], &[vec![1.0]]).is_err());
+fn should_report_a_trainable_copy_whose_score_is_not_a_number() {
+    let parity = parity_check(&[vec![f32::NAN]], &[vec![1.0]]);
+    assert!(parity.gap_beyond_rounding.unwrap().is_nan());
 }
 
 #[test]
@@ -130,7 +130,13 @@ fn should_check_a_spread_of_a_large_job_from_its_first_row_to_its_last() {
 
 #[test]
 fn should_judge_every_row_but_the_training_rows() {
-    assert_eq!(judged_rows(6, &[0, 2, 3]), vec![1, 4, 5]);
-    assert_eq!(judged_rows(3, &[]), vec![0, 1, 2]);
-    assert!(judged_rows(2, &[0, 1]).is_empty());
+    assert_eq!(judged_rows(6, &[0, 2, 3], &[1]), vec![1, 4, 5]);
+    assert_eq!(judged_rows(3, &[], &[0]), vec![0, 1, 2]);
+    assert_eq!(judged_rows(3, &[0, 1], &[2]), vec![2]);
+}
+
+#[test]
+fn should_score_the_training_rows_too_when_nothing_was_held_back() {
+    assert_eq!(judged_rows(3, &[0, 1], &[]), vec![0, 1, 2]);
+    assert_eq!(judged_rows(1, &[0], &[]), vec![0]);
 }

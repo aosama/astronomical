@@ -2,8 +2,13 @@
 //!
 //! - `decision calibrate` fits a decision model's temperatures to a person's
 //!   own labelled examples and writes a calibrated copy of the model.
-//! - `decision train` trains the model's final layers on those examples and
-//!   writes a trained copy, kept only when it beats the model as shipped.
+//! - `decision train` trains the model's final layers (or, with
+//!   `--whole-model`, every layer) on those examples and writes a trained
+//!   copy.
+//!
+//! Both accept any number of examples and write their copy whatever the
+//! result; the report and the copy's training record say what judging it
+//! showed, and the person decides.
 //!
 //! The fitting and training live in the `astronomical-decision-training`
 //! crate; these verbs read the examples, have the daemon score them, and
@@ -12,6 +17,7 @@
 mod calibrate;
 mod calibration_report;
 mod check_set;
+mod counted_noun;
 mod decision_arguments;
 mod decision_tool;
 mod example_scoring;

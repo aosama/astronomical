@@ -14,6 +14,7 @@
 use crate::answer::DecisionAnswer;
 use crate::ordered_json::{OrderedJsonMember, OrderedJsonValue};
 use crate::outcome::QuestionOutcome;
+use crate::training_record::TrainingRecord;
 
 /// Decimal places every probability, score and confidence is rounded to,
 /// matching the reference implementations' responses.
@@ -134,14 +135,15 @@ pub fn system_one_answer(question_outcome: &QuestionOutcome) -> OrderedJsonValue
 }
 
 /// What the model read for one question, so a caller can see an answer was
-/// made from a cut state or from options the cut made indistinguishable.
+/// made from a cut state or from options the cut made indistinguishable,
+/// and, for a calibrated or trained folder, what judging it showed.
 fn input_coverage(question_outcome: &QuestionOutcome) -> OrderedJsonValue {
     let coverage = question_outcome.input_coverage;
     let option_token_cap = match coverage.option_token_cap {
         Some(token_cap) => OrderedJsonValue::SignedInteger(i64::from(token_cap)),
         None => OrderedJsonValue::Null,
     };
-    OrderedJsonValue::Object(vec![
+    let mut input_members = vec![
         member(
             "state_tokens",
             OrderedJsonValue::SignedInteger(i64::from(coverage.state_token_count)),
@@ -159,7 +161,38 @@ fn input_coverage(question_outcome: &QuestionOutcome) -> OrderedJsonValue {
             "distinguishable_options",
             OrderedJsonValue::SignedInteger(i64::from(coverage.distinguishable_option_count)),
         ),
+    ];
+    if let Some(training_record) = &question_outcome.training_record {
+        input_members.push(member("training", training_summary(training_record)));
+    }
+    OrderedJsonValue::Object(input_members)
+}
+
+/// The folder's verdict, the evidence behind it and its warnings.
+fn training_summary(training_record: &TrainingRecord) -> OrderedJsonValue {
+    let mut warning_values = Vec::with_capacity(training_record.warnings.len());
+    for warning in &training_record.warnings {
+        warning_values.push(OrderedJsonValue::Text(warning.clone()));
+    }
+    OrderedJsonValue::Object(vec![
+        member(
+            "verdict",
+            OrderedJsonValue::Text(training_record.verdict.wire_name().to_owned()),
+        ),
+        member(
+            "labelled_questions",
+            OrderedJsonValue::SignedInteger(count_value(training_record.labelled_question_count)),
+        ),
+        member(
+            "texts",
+            OrderedJsonValue::SignedInteger(count_value(training_record.distinct_state_count)),
+        ),
+        member("warnings", OrderedJsonValue::Array(warning_values)),
     ])
+}
+
+fn count_value(count: usize) -> i64 {
+    i64::try_from(count).unwrap_or(i64::MAX)
 }
 
 fn member(key: &str, value: OrderedJsonValue) -> OrderedJsonMember {

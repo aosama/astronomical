@@ -158,6 +158,8 @@ pub use decision_models::clef::ClefDecisionEngine;
 pub use decision_models::kev::{KevDecisionEngine, KevRowLayout};
 #[cfg(feature = "direct-mlx")]
 pub use decision_models::laya::LayaDecisionEngine;
+#[cfg(feature = "direct-mlx")]
+pub use decision_models::recorded_training::RecordedTrainingEngine;
 
 pub use embedding_engine::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,

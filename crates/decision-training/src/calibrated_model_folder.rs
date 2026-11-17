@@ -3,7 +3,8 @@
 //! The source folder is only ever read. Writing into it, or into memory
 //! mapped from it, is how a tuning tool damages the very weights it was
 //! meant to improve, so the calibrated model is a new folder: every source
-//! file copied unchanged, plus `decision_calibration.json`.
+//! file copied unchanged, plus `decision_calibration.json`, any trained
+//! parts, and `decision_training_record.json` saying what judging it showed.
 //!
 //! The copy is then proven: every copied file is read back and compared
 //! byte for byte with its source. On APFS `std::fs::copy` clones a file
@@ -38,6 +39,9 @@ use astronomical_decision_contract::decision_adapters_file::{
 use astronomical_decision_contract::head_tuning_file::{
     DECISION_HEAD_TUNING_FILE_NAME, HeadTuning, TunableHeadFamily, head_tuning_bytes,
     parse_head_tuning,
+};
+use astronomical_decision_contract::training_record::{
+    DECISION_TRAINING_RECORD_FILE_NAME, TrainingRecord, training_record_document,
 };
 use thiserror::Error;
 
@@ -86,6 +90,9 @@ pub struct FolderAdditions<'a> {
     /// Add-on weights from a whole-model training; `None` keeps the copy's
     /// own, if it has any.
     pub decision_adapters: Option<&'a DecisionAdapters>,
+    /// What judging the new folder showed; `None` keeps the copy's own
+    /// record, if it has one.
+    pub training_record: Option<&'a TrainingRecord>,
 }
 
 impl FolderAdditions<'_> {
@@ -101,6 +108,9 @@ impl FolderAdditions<'_> {
         }
         if self.decision_adapters.is_some() {
             replaced_file_names.push(DECISION_ADAPTERS_FILE_NAME);
+        }
+        if self.training_record.is_some() {
+            replaced_file_names.push(DECISION_TRAINING_RECORD_FILE_NAME);
         }
         replaced_file_names
     }
@@ -202,7 +212,7 @@ fn canonical_path(path: &Path) -> Result<PathBuf, CalibratedFolderError> {
     fs::canonicalize(path_to_resolve).at_path(path)
 }
 
-/// A source file and its size; symbolic links (as in a Hugging Face cache
+/// A source file and its size; symbolic links (as in a `huggingface_hub_cache`
 /// snapshot) are followed, so the copy holds real files.
 struct SourceFile {
     relative_path: PathBuf,
@@ -320,6 +330,10 @@ fn write_additions(
     }
     if let Some(decision_adapters) = folder_additions.decision_adapters {
         write_decision_adapters(partial_directory, decision_adapters)?;
+    }
+    if let Some(training_record) = folder_additions.training_record {
+        let record_path = partial_directory.join(DECISION_TRAINING_RECORD_FILE_NAME);
+        fs::write(&record_path, training_record_document(training_record)).at_path(&record_path)?;
     }
     Ok(())
 }

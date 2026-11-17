@@ -3,8 +3,9 @@
 //! The trained weights pass through a file, a reload and the engine's own
 //! substitution before anyone uses them; Laya's own trainer once saved in a
 //! lower precision than it trained in, and a test of the in-memory model
-//! would never have noticed. So after writing, the judging examples are
-//! asked again, of the new model through the daemon, and every answer must
+//! would never have noticed. So after writing, the examples the result was
+//! judged on (held back, or the training examples when none were) are asked
+//! again, of the new model through the daemon, and every answer must
 //! match the scores the worker's trained head gave it: the same raw scores
 //! within rounding, and the same temperature.
 
@@ -33,14 +34,14 @@ const TEMPERATURE_TOLERANCE: f64 = 1e-6;
 const LOGIT_ABSOLUTE_TOLERANCE: f32 = 2e-3;
 const LOGIT_RELATIVE_TOLERANCE: f32 = 1e-3;
 
-/// What the written model must answer: each judging question's trained
-/// scores, and the temperatures the gate fitted.
+/// What the written model must answer: each judged question's trained
+/// scores, and the temperatures fitted for the trained model.
 pub(super) struct TrainedExpectation<'expectation> {
     pub(super) calibration_plan: &'expectation CalibrationPlan,
     pub(super) judging_pairs: &'expectation [ScoredPair],
 }
 
-/// Asks the written model the judging examples and returns the largest
+/// Asks the written model the judged examples and returns the largest
 /// score gap, or why its answers differ from the trained model's.
 pub(super) async fn check_saved_model(
     new_model_id: &str,
@@ -170,11 +171,8 @@ pub(super) fn temperature_after_training(
         if kind_verdict.kind != scored_question.kind {
             continue;
         }
-        if let KindOutcome::Calibrated {
-            kind_calibration, ..
-        } = &kind_verdict.outcome
-        {
-            return ScoringTemperature::Calibrated(kind_calibration)
+        if let KindOutcome::Calibrated(kind_fit) = &kind_verdict.outcome {
+            return ScoringTemperature::Calibrated(&kind_fit.kind_calibration)
                 .temperature_for(scored_question);
         }
     }

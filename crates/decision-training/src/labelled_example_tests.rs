@@ -150,3 +150,29 @@ fn should_report_malformed_questions_with_their_line() {
         Err(LabelledExampleError::InvalidQuestions { line_number: 9, .. })
     ));
 }
+
+#[test]
+fn should_count_questions_and_count_a_repeated_text_once() {
+    let line_text = example_line(r#"{"speaker": "Romeo", "longing": 1, "romantic": true}"#);
+    let labelled_examples =
+        parse_labelled_examples(&format!("{line_text}\n{line_text}\n")).unwrap();
+
+    assert_eq!(
+        labelled_data_counts(&labelled_examples),
+        LabelledDataCounts {
+            labelled_question_count: 6,
+            distinct_state_count: 1,
+        }
+    );
+}
+
+#[test]
+fn should_count_nothing_in_no_examples() {
+    assert_eq!(
+        labelled_data_counts(&[]),
+        LabelledDataCounts {
+            labelled_question_count: 0,
+            distinct_state_count: 0,
+        }
+    );
+}

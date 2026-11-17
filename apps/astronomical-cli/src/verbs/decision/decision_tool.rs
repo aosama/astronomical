@@ -11,6 +11,7 @@ use std::time::Duration;
 use astronomical_config::{
     AstronomicalInstancePaths, AstronomicalRuntimeInstance, is_discoverable_model_folder,
 };
+use astronomical_decision_contract::training_record::TrainingRecord;
 use astronomical_decision_training::calibrated_model_folder::{
     CalibratedFolderError, FolderAdditions, SourceModelFolder, canonical_output_path,
     check_output_location, write_calibrated_model_folder,
@@ -20,7 +21,7 @@ use astronomical_decision_training::labelled_example::{
     LabelledExample, LabelledExampleError, parse_labelled_examples,
 };
 use astronomical_decision_training::scored_question::ScoredQuestionError;
-use astronomical_decision_training::training_split::TooLittleData;
+use astronomical_decision_training::training_record_file::read_training_record_file;
 use thiserror::Error;
 
 use super::model_folder_lookup::{ModelFolderLookup, ModelFolderLookupError};
@@ -82,20 +83,14 @@ pub enum DecisionToolError {
     },
     #[error(transparent)]
     Plan(#[from] CalibrationPlanError),
-    #[error("Calibration would not improve {model_id} on these examples, so nothing was written.")]
-    NothingImproved { model_id: String },
     #[error("Could not write the report: {cause}")]
     ReportUnwritable { cause: String },
-    #[error("{}", too_little_data_text(.0))]
-    TooLittleData(TooLittleData),
     #[error("{model_id} is not a decision model training can change")]
     NotTrainable { model_id: String },
     #[error("the training did not finish: {0}")]
     TrainingFailed(String),
-    #[error("Training would not improve {model_id} on these examples, so nothing was written.")]
-    TrainingRefused { model_id: String },
     #[error(
-        "the written model answered question {question_name} {largest_gap:.5} away from the trained model, so the folder was removed"
+        "the written model answered question {question_name} {largest_gap:.5} away from the trained model; the new folder is kept so you can look at it, but it may not answer as the report describes"
     )]
     SavedModelDisagrees {
         question_name: String,
@@ -117,17 +112,8 @@ pub enum DecisionToolError {
     CheckSetUnreadable(String),
     #[error("the model folder's earlier calibration cannot be read: {0}")]
     EarlierCalibrationUnreadable(String),
-}
-
-fn too_little_data_text(too_little_data: &TooLittleData) -> String {
-    match too_little_data {
-        TooLittleData::TooFewQuestions { have, need } => format!(
-            "Training needs at least {need} labelled questions to judge itself fairly; the file has {have}. Calibration (`decision calibrate`) works with fewer."
-        ),
-        TooLittleData::TooFewStates { have, need } => format!(
-            "Training needs examples about at least {need} different states; the file has {have}. Add examples about more different texts."
-        ),
-    }
+    #[error("the model folder's earlier training record cannot be read: {0}")]
+    EarlierRecordUnreadable(String),
 }
 
 impl DecisionToolError {
@@ -138,7 +124,6 @@ impl DecisionToolError {
             Self::ExamplesUnreadable { .. }
             | Self::Examples(_)
             | Self::OutputNameTaken { .. }
-            | Self::TooLittleData(_)
             | Self::NotTrainable { .. }
             | Self::OutputNotDiscoverable { .. }
             | Self::ModelFolder(ModelFolderLookupError::ModelNotFound { .. })
@@ -265,6 +250,17 @@ fn output_not_discoverable_text(
             .join(suggested_name)
             .display()
     )
+}
+
+/// The training record a source folder already carries, when it was itself
+/// made by `astronomical decision`; its findings still hold for the parts
+/// the new folder copies, so the new record builds on it.
+pub(super) fn earlier_training_record(
+    model_directory: &Path,
+) -> Result<Option<TrainingRecord>, DecisionToolError> {
+    read_training_record_file(model_directory).map_err(|record_error| {
+        DecisionToolError::EarlierRecordUnreadable(record_error.to_string())
+    })
 }
 
 /// The ID the daemon serves a folder under: its name.

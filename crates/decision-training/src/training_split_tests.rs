@@ -51,17 +51,22 @@ fn should_assign_nothing_without_states() {
 }
 
 #[test]
-fn should_refuse_too_few_questions_or_states() {
-    assert_eq!(
-        check_training_data(199, 400),
-        Err(TooLittleData::TooFewQuestions {
-            have: 199,
-            need: 200,
-        })
-    );
-    assert_eq!(
-        check_training_data(500, 29),
-        Err(TooLittleData::TooFewStates { have: 29, need: 30 })
-    );
-    assert_eq!(check_training_data(200, 30), Ok(()));
+fn should_train_on_every_state_below_one_whole_cycle() {
+    let parts = split_parts_by_state(&spread_keys(19));
+    assert_eq!(count_of(&parts, SplitPart::Training), 19);
+}
+
+#[test]
+fn should_hold_states_back_from_one_whole_cycle() {
+    let parts = split_parts_by_state(&spread_keys(20));
+    assert_eq!(count_of(&parts, SplitPart::Judging), 3);
+    assert_eq!(count_of(&parts, SplitPart::Choosing), 3);
+    assert_eq!(count_of(&parts, SplitPart::Training), 14);
+}
+
+#[test]
+fn should_train_a_single_state() {
+    let parts = split_parts_by_state(&spread_keys(1));
+    assert_eq!(parts.len(), 1);
+    assert_eq!(count_of(&parts, SplitPart::Training), 1);
 }

@@ -1,7 +1,7 @@
 //! Splitting scored questions into a fitting part and a held-out part.
 //!
-//! The held-out part is what decides whether a fitted temperature is kept,
-//! so it must be questions the fit never saw. Splitting question by question
+//! The held-out part is what a fitted temperature is judged on, so it must
+//! be questions the fit never saw. Splitting question by question
 //! would put two questions about the same state on both sides, and the
 //! held-out score would then partly measure memory of that state; Laya's
 //! training notes count such rows as overlap for the same reason. The split
@@ -17,7 +17,7 @@ use astronomical_decision_contract::OrderedJsonValue;
 use crate::scored_question::ScoredQuestion;
 
 /// One state in this many is held out: 20%, the usual calibration share.
-const HOLDOUT_EVERY_NTH_STATE: usize = 5;
+pub const HOLDOUT_EVERY_NTH_STATE: usize = 5;
 const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
@@ -44,8 +44,9 @@ pub fn state_group_key(state: &OrderedJsonValue) -> u64 {
     state_hash
 }
 
-/// Divides `scored_questions` by state; fewer than five distinct states
-/// leaves nothing held out, which the calibration gate then refuses.
+/// Divides `scored_questions` by state; with fewer than five distinct states
+/// nothing is held out, and calibration then fits and compares on every
+/// question, reporting the result as not judged.
 #[must_use]
 pub fn split_by_state(scored_questions: Vec<ScoredQuestion>) -> HoldoutSplit {
     let mut distinct_state_keys = Vec::new();

@@ -31,6 +31,7 @@ fn kev_outcome(question_name: &str, distinguishable_option_count: u32) -> Questi
             decision_state: FloatVector(vec![0.5; 3]),
             option_states: vec![FloatVector(vec![1.0; 3]), FloatVector(vec![-1.0; 3])],
         }),
+        training_record: None,
     }
 }
 

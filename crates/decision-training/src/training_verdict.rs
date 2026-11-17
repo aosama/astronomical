@@ -1,4 +1,4 @@
-//! The never-worse gate for a trained head.
+//! Judging a trained head against the shipped model.
 //!
 //! The trained model is the trained head with its own temperatures, fitted
 //! and chosen on the choosing questions alone. It is compared on the judging
@@ -6,34 +6,41 @@
 //! head given the same treatment: its own temperatures fitted the same way
 //! on the same choosing questions. Comparing with the shipped model as
 //! served would let training take the credit for what calibration alone
-//! does, and a head that training made worse could pass behind a
-//! temperature that made up for it. The trained model is kept only when all
-//! of these hold:
+//! does, and a head that training made worse could look better behind a
+//! temperature that made up for it.
 //!
-//! - it is right at least as often as the shipped head
-//! - it is less surprised by the right answers overall than the calibrated
-//!   shipped head
-//! - no question kind with enough judging questions got more surprised
-//! - it still gives the shipped answer on at least 95% of the built-in check
+//! The judgement never decides for the person: the folder is written
+//! whatever it finds, and the findings go into the report and the folder's
+//! training record. It is judged better only when none of these concerns
+//! appear:
+//!
+//! - it is right less often than the shipped head
+//! - it is not less surprised by the right answers overall than the
+//!   calibrated shipped head
+//! - a question kind got more surprised
+//! - it changed the shipped answer on more than 5% of the built-in check
 //!   set, the questions nobody labelled
-//! - it has not collapsed into giving one answer to every question of a kind
-//!   whose labels vary (the failure Laya's training notes warn small data
-//!   produces)
+//! - it collapsed into giving one answer to every question of a kind whose
+//!   labels vary (the failure Laya's training notes warn small data produces)
+//!
+//! With too few different texts to hold any back, the comparison runs on the
+//! training examples themselves; the verdict is then "not judged", since
+//! doing well on what it learned from says nothing about new questions.
 
 use astronomical_decision_contract::DecisionQuestionKind;
 use astronomical_decision_contract::calibration_file::CalibrationOverride;
+use astronomical_decision_contract::training_record::RecordedVerdict;
 
 use crate::calibration_metrics::{CalibrationMetrics, ScoringTemperature, calibration_metrics};
 use crate::calibration_plan::{
     CalibrationPlan, CalibrationPlanError, KindOutcome, plan_calibration,
 };
 use crate::holdout_split::HoldoutSplit;
+pub use crate::judged_on::JudgedOn;
 use crate::scored_question::ScoredQuestion;
 use crate::temperature_softmax::first_largest_index;
 
-/// A kind is judged on its own only with at least this many judging questions.
-pub const MINIMUM_JUDGED_QUESTIONS_PER_KIND: usize = 10;
-/// The share of check-set answers that must stay as shipped.
+/// The share of check-set answers below which a changed check set is a concern.
 pub const MINIMUM_CHECK_AGREEMENT: f64 = 0.95;
 /// One answer this common among a kind's judging questions is a collapse,
 /// unless the labels themselves are that uniform.
@@ -62,10 +69,10 @@ pub struct CheckAgreement {
     pub question_count: usize,
 }
 
-/// Why a trained head was not kept.
+/// What the comparison found that a person should weigh before using the
+/// trained model.
 #[derive(Clone, Debug, PartialEq)]
-pub enum TrainingRefusal {
-    NothingToJudge,
+pub enum TrainingConcern {
     LessAccurate {
         shipped: f64,
         trained: f64,
@@ -76,6 +83,8 @@ pub enum TrainingRefusal {
     },
     KindMoreSurprised {
         kind: DecisionQuestionKind,
+        /// How many judged questions of the kind this rests on.
+        question_count: usize,
         shipped: f64,
         trained: f64,
     },
@@ -85,7 +94,7 @@ pub enum TrainingRefusal {
     },
 }
 
-/// The gate's findings about one trained head.
+/// The findings about one trained head.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrainingVerdict {
     /// The shipped model exactly as it serves today.
@@ -96,15 +105,26 @@ pub struct TrainingVerdict {
     pub trained_overall: CalibrationMetrics,
     pub kind_comparisons: Vec<KindComparison>,
     pub check_agreement: CheckAgreement,
-    /// The trained model's temperatures, written beside its head when kept.
+    /// The trained model's temperatures, written beside its head.
     pub calibration_plan: CalibrationPlan,
-    pub refusals: Vec<TrainingRefusal>,
+    pub judged_on: JudgedOn,
+    pub concerns: Vec<TrainingConcern>,
 }
 
 impl TrainingVerdict {
+    /// What the folder's training record says about this head.
     #[must_use]
-    pub fn is_kept(&self) -> bool {
-        self.refusals.is_empty()
+    pub fn recorded_verdict(&self) -> RecordedVerdict {
+        // Every judged question can be left out because its options read
+        // alike; a comparison over none says nothing either way.
+        if self.shipped_overall.question_count == 0 {
+            return RecordedVerdict::NotJudged;
+        }
+        match (self.judged_on, self.concerns.is_empty()) {
+            (JudgedOn::LearnedFromExamples, _) => RecordedVerdict::NotJudged,
+            (JudgedOn::HeldBackQuestions, true) => RecordedVerdict::JudgedBetter,
+            (JudgedOn::HeldBackQuestions, false) => RecordedVerdict::JudgedNotBetter,
+        }
     }
 
     #[must_use]
@@ -129,15 +149,18 @@ pub struct CheckPair {
     pub trained_logits: Vec<f32>,
 }
 
-/// Everything the gate reads about one training.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// Everything the judgement reads about one training.
+#[derive(Clone, Debug, PartialEq)]
 pub struct TrainingScores {
     pub choosing: Vec<ScoredPair>,
     pub judging: Vec<ScoredPair>,
     pub check: Vec<CheckPair>,
+    /// What `judging` holds: held-back questions, or, when nothing was held
+    /// back, the training examples (and `choosing` holds them too).
+    pub judged_on: JudgedOn,
 }
 
-/// Fits the trained model's temperatures and judges it against the shipped model.
+/// Fits the trained model's temperatures and compares it with the shipped model.
 pub fn judge_training(
     training_scores: &TrainingScores,
 ) -> Result<TrainingVerdict, CalibrationPlanError> {
@@ -156,9 +179,10 @@ pub fn judge_training(
         kind_comparisons: kind_comparisons(&shipped_judging, &trained_judging),
         check_agreement: check_agreement(&training_scores.check),
         calibration_plan,
-        refusals: Vec::new(),
+        judged_on: training_scores.judged_on,
+        concerns: Vec::new(),
     };
-    verdict.refusals = refusals(&verdict, &trained_judging);
+    verdict.concerns = concerns(&verdict, &trained_judging);
     Ok(verdict)
 }
 
@@ -202,13 +226,11 @@ fn as_served_after_calibration(
 ) -> Vec<ScoredQuestion> {
     for scored_question in &mut scored_questions {
         for kind_verdict in &calibration_plan.kind_verdicts {
-            if let KindOutcome::Calibrated {
-                kind_calibration, ..
-            } = &kind_verdict.outcome
+            if let KindOutcome::Calibrated(kind_fit) = &kind_verdict.outcome
                 && kind_verdict.kind == scored_question.kind
             {
                 scored_question.shipped_temperature =
-                    ScoringTemperature::Calibrated(kind_calibration)
+                    ScoringTemperature::Calibrated(&kind_fit.kind_calibration)
                         .temperature_for(scored_question);
             }
         }
@@ -268,40 +290,42 @@ fn first_largest_logit_index(option_logits: &[f32]) -> usize {
     largest_index
 }
 
-fn refusals(verdict: &TrainingVerdict, trained_judging: &[ScoredQuestion]) -> Vec<TrainingRefusal> {
-    let mut refusals = Vec::new();
+fn concerns(verdict: &TrainingVerdict, trained_judging: &[ScoredQuestion]) -> Vec<TrainingConcern> {
+    let mut concerns = Vec::new();
     let (shipped, trained) = (&verdict.shipped_overall, &verdict.trained_overall);
-    if shipped.question_count == 0 {
-        return vec![TrainingRefusal::NothingToJudge];
+    if shipped.question_count > 0 {
+        if trained.correct_count < shipped.correct_count {
+            concerns.push(TrainingConcern::LessAccurate {
+                shipped: shipped.accuracy(),
+                trained: trained.accuracy(),
+            });
+        }
+        if trained.mean_negative_log_likelihood
+            > shipped.mean_negative_log_likelihood - MINIMUM_SURPRISE_IMPROVEMENT
+        {
+            concerns.push(TrainingConcern::NotLessSurprised {
+                shipped: shipped.mean_negative_log_likelihood,
+                trained: trained.mean_negative_log_likelihood,
+            });
+        }
     }
-    if trained.correct_count < shipped.correct_count {
-        refusals.push(TrainingRefusal::LessAccurate {
-            shipped: shipped.accuracy(),
-            trained: trained.accuracy(),
-        });
-    }
-    if trained.mean_negative_log_likelihood
-        > shipped.mean_negative_log_likelihood - MINIMUM_SURPRISE_IMPROVEMENT
-    {
-        refusals.push(TrainingRefusal::NotLessSurprised {
-            shipped: shipped.mean_negative_log_likelihood,
-            trained: trained.mean_negative_log_likelihood,
-        });
-    }
+    // With a single kind its comparison repeats the overall one, so only a
+    // mix of kinds is compared kind by kind.
+    let compares_kinds = verdict.kind_comparisons.len() > 1;
     for comparison in &verdict.kind_comparisons {
-        let judged_alone = comparison.shipped.question_count >= MINIMUM_JUDGED_QUESTIONS_PER_KIND;
-        if judged_alone
+        if compares_kinds
             && comparison.trained.mean_negative_log_likelihood
                 > comparison.shipped.mean_negative_log_likelihood
         {
-            refusals.push(TrainingRefusal::KindMoreSurprised {
+            concerns.push(TrainingConcern::KindMoreSurprised {
                 kind: comparison.kind,
+                question_count: comparison.shipped.question_count,
                 shipped: comparison.shipped.mean_negative_log_likelihood,
                 trained: comparison.trained.mean_negative_log_likelihood,
             });
         }
-        if judged_alone && has_collapsed(trained_judging, comparison.kind) {
-            refusals.push(TrainingRefusal::Collapsed {
+        if has_collapsed(trained_judging, comparison.kind) {
+            concerns.push(TrainingConcern::Collapsed {
                 kind: comparison.kind,
             });
         }
@@ -311,9 +335,9 @@ fn refusals(verdict: &TrainingVerdict, trained_judging: &[ScoredQuestion]) -> Ve
         && (agreement.agreeing_count as f64)
             < MINIMUM_CHECK_AGREEMENT * agreement.question_count as f64
     {
-        refusals.push(TrainingRefusal::CheckAnswersChanged(agreement));
+        concerns.push(TrainingConcern::CheckAnswersChanged(agreement));
     }
-    refusals
+    concerns
 }
 
 /// Whether one answer position covers nearly every judging question of
