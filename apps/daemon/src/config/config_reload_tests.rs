@@ -241,6 +241,71 @@ fn should_restart_worker_when_any_per_model_execution_policy_changes() {
     ));
 }
 
+/// A coding agent keeps a request running almost all the time, and a worker
+/// restart must wait for a pause, so a temperature saved on the Tuning page
+/// only took effect after the engine restarted. The daemon fills the
+/// temperature into each request itself, so it applies in place.
+#[test]
+fn should_apply_a_new_model_temperature_without_restarting_the_worker() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate_default_policy(&mut candidate)
+        .generation_defaults
+        .temperature_thousandths = Some(100);
+    candidate.configuration_generation = "next-generation".to_owned();
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::NoWorkerRestart { ref reloaded_fields, .. }
+            if reloaded_fields == &["model_generation_defaults".to_owned()]
+    ));
+}
+
+#[test]
+fn should_apply_top_p_and_repetition_penalty_without_restarting_the_worker() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    let generation_defaults = &mut candidate_default_policy(&mut candidate).generation_defaults;
+    generation_defaults.top_p_thousandths = Some(950);
+    generation_defaults.repetition_penalty_thousandths = Some(1_050);
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(!decision.worker_restart_required());
+}
+
+/// The worker's model configuration carries its own copy of the output
+/// limit, so this request default still needs a replacement worker.
+#[test]
+fn should_still_restart_the_worker_when_the_maximum_output_tokens_changes() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    let candidate_policy = candidate_default_policy(&mut candidate);
+    candidate_policy.generation_defaults.maximum_output_tokens = 8_192;
+    candidate_policy
+        .worker_model_configuration
+        .autoregressive_mut()
+        .expect("sample policy should be autoregressive")
+        .maximum_output_tokens = 8_192;
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields.contains(&"model_generation_defaults".to_owned())
+                && reloaded_fields.contains(&"model_policies".to_owned())
+    ));
+}
+
+fn candidate_default_policy(candidate: &mut ResolvedRuntimeConfig) -> &mut RuntimeModelPolicy {
+    Arc::make_mut(&mut candidate.model_policy_catalog)
+        .get_mut("default")
+        .expect("sample policy should exist")
+}
+
 #[test]
 fn should_restart_worker_when_metal_residency_refresh_is_switched_on() {
     let current = sample_resolved_config();
@@ -433,7 +498,7 @@ fn should_restart_worker_when_astro_ssd_prompt_cache_flag_changes() {
     );
 }
 
-fn sample_resolved_config() -> ResolvedRuntimeConfig {
+pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
     ResolvedRuntimeConfig {
         neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
@@ -467,7 +532,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
     }
 }
 
-fn sample_runtime_model_policy() -> RuntimeModelPolicy {
+pub(super) fn sample_runtime_model_policy() -> RuntimeModelPolicy {
     RuntimeModelPolicy {
         model_directory: PathBuf::from("/tmp/models/default"),
         generation_defaults: crate::RuntimeModelGenerationDefaults {

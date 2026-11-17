@@ -7,6 +7,7 @@ use crate::config::config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfigResolver,
 };
 use crate::config::config_reload_response::ConfigReloadResponse;
+use crate::config::model_request_default_changes::catalog_with_candidate_request_defaults;
 use crate::{WorkerActivity, WorkerControlError};
 use axum::{
     Json,
@@ -438,6 +439,10 @@ fn apply_in_place_reload_fields(
     // Worker and listener settings remain live-old until the requested restart succeeds.
     live_config.maximum_mlx_memory_bytes = candidate_resolved.maximum_mlx_memory_bytes;
     live_config.idle_model_unload_seconds = candidate_resolved.idle_model_unload_seconds;
+    live_config.model_policy_catalog = Arc::new(catalog_with_candidate_request_defaults(
+        &live_config.model_policy_catalog,
+        &candidate_resolved.model_policy_catalog,
+    ));
     if let Some(memory_effective_generation) = memory_effective_generation {
         live_config.configuration_generation = memory_effective_generation;
     }
