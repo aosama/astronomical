@@ -38,6 +38,8 @@ fn trained_outcome() -> DecisionTrainingOutcome {
         best_seed: 2,
         largest_parity_gap: 0.000_3,
         parity_gap_beyond_rounding: None,
+        recomputed_text_count: 0,
+        trained_tensors_file: None,
         indistinguishable_question_count: 1,
     }
 }

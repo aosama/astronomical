@@ -108,6 +108,7 @@ mod speech_model_swap;
 mod stepped_request;
 mod support;
 mod token_count;
+mod trained_tensors_handover_writing;
 
 pub use support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
 

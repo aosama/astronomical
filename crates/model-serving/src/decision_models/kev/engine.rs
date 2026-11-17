@@ -31,7 +31,7 @@ use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
 use crate::decision_models::head_tuning::read_head_tuning;
-use crate::decision_models::qwen_backbone::QwenDecisionBackbone;
+use crate::decision_models::qwen_backbone::{HoldsDecisionBackbone, QwenDecisionBackbone};
 use crate::decision_models::training::question_selection::RowSource;
 use crate::decision_models::training::training_session::{
     DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
@@ -62,6 +62,12 @@ pub(super) struct LoadedKevState {
     settings: KevSettings,
     /// Temperatures fitted on the person's own examples, for the kinds it names.
     calibration_override: CalibrationOverride,
+}
+
+impl HoldsDecisionBackbone for LoadedKevState {
+    fn decision_backbone(&self) -> &QwenDecisionBackbone {
+        &self.backbone
+    }
 }
 
 impl KevDecisionEngine {

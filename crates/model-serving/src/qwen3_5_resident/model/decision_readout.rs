@@ -5,7 +5,10 @@
 //! generating: it reads the backbone's final hidden states at chosen
 //! positions and scores the allowed answers with its own head. Clef also
 //! reads the rows of the output projection that belong to each option's
-//! tokens. These two reads are all such a model needs from the engine.
+//! tokens. Serving needs only these two reads; a whole-model training also
+//! runs several sequences through the layers at once
+//! (`final_normalized_hidden_states_of_rows`), recomputing each layer
+//! during the backward pass when one text is too long to keep.
 //!
 //! A third need, answering several questions that each continue one shared
 //! state, is served by the decoder state's own checkpoint and restore: the
@@ -19,7 +22,43 @@ use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use super::{Qwen3_5ExecutionError, Qwen3_5ResidentModel, RequestDecoderStateStack};
 use crate::PerformanceAttribution;
 
+/// Runs one decoder layer of a training's batched forward pass so that
+/// its activations are recomputed during the backward pass instead of kept
+/// (`adapter_training::layer_recomputation` says why and what it costs).
+pub(crate) trait DecoderLayerRecomputation {
+    /// Layer `layer_index` over `hidden_states`, as
+    /// [`Qwen3_5ResidentModel::empty_state_decoder_layer`] computes it.
+    fn recomputed_layer(
+        &self,
+        hidden_states: &MlxArray,
+        layer_index: usize,
+        token_count: i32,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError>;
+}
+
 impl Qwen3_5ResidentModel {
+    /// Layer `layer_index` of a training's batched forward pass over
+    /// `[rows, token_count, hidden]` hidden states (`empty_state_forward`).
+    pub(crate) fn empty_state_decoder_layer(
+        &self,
+        hidden_states: &MlxArray,
+        layer_index: usize,
+        token_count: i32,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let Some(decoder_layer_weights) = self.weights.decoder_layer_weights.get(layer_index)
+        else {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "a decoder layer index is past the model's layers",
+            });
+        };
+        self.decoder_layer_from_empty_state(
+            hidden_states,
+            token_count,
+            layer_index,
+            decoder_layer_weights,
+        )
+    }
+
     /// The width of one hidden state: the readout's row width, and the
     /// width a decision head's projections take.
     #[must_use]
@@ -93,11 +132,42 @@ impl Qwen3_5ResidentModel {
     /// lazy float32 graph `[rows, longest, hidden_size]`: what a decision
     /// model's training differentiates (`empty_state_forward` says why).
     /// Shorter rows are padded at the end with token 0; every layer is
-    /// causal, so a real position's states never see the padding.
+    /// causal, so a real position's states never see the padding. With
+    /// `layer_recomputation`, each layer runs through it, so its activations
+    /// are recomputed during the backward pass rather than kept.
     pub(crate) fn final_normalized_hidden_states_of_rows(
         &self,
         token_rows: &[&[u32]],
+        layer_recomputation: Option<&dyn DecoderLayerRecomputation>,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let (token_indices, token_count) = self.padded_token_indices(token_rows)?;
+        let mut hidden_states = self.embedding_lookup(&token_indices)?;
+        for layer_index in 0..self.weights.decoder_layer_weights.len() {
+            hidden_states = match layer_recomputation {
+                Some(layer_recomputation) => layer_recomputation.recomputed_layer(
+                    &hidden_states,
+                    layer_index,
+                    token_count,
+                )?,
+                None => self.empty_state_decoder_layer(&hidden_states, layer_index, token_count)?,
+            };
+        }
+        let normalized_hidden_states = self.runtime.rms_norm(
+            &hidden_states,
+            &self.weights.final_normalization_weight,
+            f32::from_bits(self.config.rms_norm_epsilon_bits()),
+        )?;
+        Ok(self
+            .runtime
+            .astype(&normalized_hidden_states, MlxDtype::Float32)?)
+    }
+
+    /// `token_rows` as one `[rows, longest]` index array, shorter rows padded
+    /// at the end with token 0, and the longest row's length.
+    fn padded_token_indices(
+        &self,
+        token_rows: &[&[u32]],
+    ) -> Result<(MlxArray, i32), Qwen3_5ExecutionError> {
         let mut longest_row = 0;
         for token_row in token_rows {
             longest_row = longest_row.max(token_row.len());
@@ -123,25 +193,7 @@ impl Qwen3_5ResidentModel {
         let token_indices = self
             .runtime
             .array_from_i32(&padded_token_ids, &[token_rows.len() as i32, token_count])?;
-        let mut hidden_states = self.embedding_lookup(&token_indices)?;
-        for (layer_index, decoder_layer_weights) in
-            self.weights.decoder_layer_weights.iter().enumerate()
-        {
-            hidden_states = self.decoder_layer_from_empty_state(
-                &hidden_states,
-                token_count,
-                layer_index,
-                decoder_layer_weights,
-            )?;
-        }
-        let normalized_hidden_states = self.runtime.rms_norm(
-            &hidden_states,
-            &self.weights.final_normalization_weight,
-            f32::from_bits(self.config.rms_norm_epsilon_bits()),
-        )?;
-        Ok(self
-            .runtime
-            .astype(&normalized_hidden_states, MlxDtype::Float32)?)
+        Ok((token_indices, token_count))
     }
 
     /// The rows of the output projection for `token_ids`, as float32

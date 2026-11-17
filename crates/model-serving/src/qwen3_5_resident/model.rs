@@ -2,6 +2,7 @@
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
 mod decision_readout;
+pub(crate) use decision_readout::DecoderLayerRecomputation;
 #[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]

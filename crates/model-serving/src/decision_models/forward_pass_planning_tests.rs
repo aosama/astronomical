@@ -1,6 +1,9 @@
 //! Unit tests for grouping question sequences into bounded forward passes.
 
-use super::{LAYA_SERVING_PADDED_TOKENS_PER_PASS, plan_forward_passes, training_tokens_per_pass};
+use super::{
+    LAYA_SERVING_PADDED_TOKENS_PER_PASS, pass_exceeds_budget, plan_forward_passes,
+    recomputation_threshold_tokens, training_tokens_per_pass,
+};
 
 fn covered_indices(forward_passes: &[Vec<usize>]) -> Vec<usize> {
     let mut covered_indices = Vec::new();
@@ -104,4 +107,48 @@ fn should_never_go_below_one_long_question_however_small_the_limit() {
         128
     );
     assert_eq!(training_tokens_per_pass(GIGABYTE, 0), 1_024);
+}
+
+#[test]
+fn should_find_a_single_sequence_longer_than_the_budget_over_it() {
+    assert!(pass_exceeds_budget(&[0], &[900], 580));
+}
+
+#[test]
+fn should_keep_a_sequence_exactly_at_the_budget_within_it() {
+    assert!(!pass_exceeds_budget(&[0], &[580], 580));
+}
+
+#[test]
+fn should_count_a_pass_by_its_longest_sequence_times_its_size() {
+    assert!(!pass_exceeds_budget(&[0, 1], &[100, 290], 580));
+    assert!(pass_exceeds_budget(&[0, 1], &[100, 291], 580));
+}
+
+#[test]
+fn should_plan_passes_that_exceed_the_budget_only_for_one_long_sequence() {
+    let sequence_lengths = [120, 900, 130, 140];
+    for forward_pass in plan_forward_passes(&sequence_lengths, 580) {
+        if pass_exceeds_budget(&forward_pass, &sequence_lengths, 580) {
+            assert_eq!(forward_pass.len(), 1);
+            assert_eq!(sequence_lengths[forward_pass[0]], 900);
+        }
+    }
+}
+
+#[test]
+fn should_recompute_only_texts_twice_the_batching_budget_or_longer() {
+    let memory_limit_bytes = 36 * 1024 * 1024 * 1024;
+    let clef_bytes_per_token = 17_000_000;
+
+    let batching_budget = training_tokens_per_pass(memory_limit_bytes, clef_bytes_per_token);
+    let threshold = recomputation_threshold_tokens(memory_limit_bytes, clef_bytes_per_token);
+
+    assert_eq!(threshold, 1_136);
+    assert!(threshold >= 2 * batching_budget - 1);
+}
+
+#[test]
+fn should_keep_the_recomputation_threshold_at_the_smallest_pass_on_a_tiny_limit() {
+    assert_eq!(recomputation_threshold_tokens(1, 17_000_000), 128);
 }

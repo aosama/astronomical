@@ -106,11 +106,27 @@ impl Qwen3_5ModelBase {
     /// stay as shipped.
     ///
     /// # Errors
+    /// See [`Self::adapter_targets_by_layer`].
+    pub(crate) fn adapter_targets(&self) -> Result<Vec<AdapterTarget>, Qwen3_5ExecutionError> {
+        Ok(self
+            .adapter_targets_by_layer()?
+            .into_iter()
+            .flatten()
+            .collect())
+    }
+
+    /// The add-on targets of each decoder layer, one list per layer in
+    /// forward order: what a layer recomputed during the backward pass
+    /// takes as its own inputs.
+    ///
+    /// # Errors
     /// Refuses a model whose feed-forward layers are mixtures of experts, or
     /// whose projections are stored in a form an add-on cannot be sized
     /// from: whole-model training covers dense Qwen3.5 backbones.
-    pub(crate) fn adapter_targets(&self) -> Result<Vec<AdapterTarget>, Qwen3_5ExecutionError> {
-        let mut targets = Vec::new();
+    pub(crate) fn adapter_targets_by_layer(
+        &self,
+    ) -> Result<Vec<Vec<AdapterTarget>>, Qwen3_5ExecutionError> {
+        let mut targets_by_layer = Vec::with_capacity(self.weights.decoder_layer_weights.len());
         for decoder_layer_weights in &self.weights.decoder_layer_weights {
             let mut layer_projections: Vec<&Qwen3_5DenseProjection> = Vec::with_capacity(8);
             match &decoder_layer_weights.attention_weights {
@@ -143,11 +159,13 @@ impl Qwen3_5ModelBase {
                 &dense_mlp_weights.up_projection,
                 &dense_mlp_weights.down_projection,
             ]);
+            let mut layer_targets = Vec::with_capacity(layer_projections.len());
             for projection in layer_projections {
-                targets.push(adapter_target_of(projection)?);
+                layer_targets.push(adapter_target_of(projection)?);
             }
+            targets_by_layer.push(layer_targets);
         }
-        Ok(targets)
+        Ok(targets_by_layer)
     }
 }
 

@@ -96,6 +96,7 @@ fn summary_for<'summary>(
         indistinguishable_question_count: 3,
         largest_parity_gap: 0.000_4,
         parity_gap_beyond_rounding,
+        recomputed_text_count: 0,
         runs: seed_runs,
         best_seed: 1,
         verdict,
@@ -241,4 +242,39 @@ fn should_say_one_question_was_left_out_in_the_singular() {
     summary.indistinguishable_question_count = 1;
 
     assert!(training_report_text(&summary).contains("1 question was left out"));
+}
+
+#[test]
+fn should_say_when_long_texts_recomputed_their_layers() {
+    let verdict = verdict_with(Vec::new());
+    let seed_runs = seed_runs();
+    let mut summary = summary_for(&verdict, TrainingScope::WholeModel, None, &seed_runs);
+    summary.recomputed_text_count = 1;
+
+    assert!(
+        training_report_text(&summary).contains(
+            "1 text was too long to hold in memory at once, so the model trained on it layer by layer: slower, same result."
+        )
+    );
+}
+
+#[test]
+fn should_say_nothing_about_recomputation_when_no_pass_needed_it() {
+    let verdict = verdict_with(Vec::new());
+    let seed_runs = seed_runs();
+    let summary = summary_for(&verdict, TrainingScope::WholeModel, None, &seed_runs);
+
+    assert!(!training_report_text(&summary).contains("layer by layer"));
+}
+
+#[test]
+fn should_name_several_long_texts_in_the_plural() {
+    let verdict = verdict_with(Vec::new());
+    let seed_runs = seed_runs();
+    let mut summary = summary_for(&verdict, TrainingScope::WholeModel, None, &seed_runs);
+    summary.recomputed_text_count = 3;
+
+    assert!(training_report_text(&summary).contains(
+        "3 texts were too long to hold in memory at once, so the model trained on them layer by layer"
+    ));
 }

@@ -50,6 +50,13 @@ pub(crate) struct QwenDecisionBackbone {
     pub(crate) has_add_ons: bool,
 }
 
+/// A loaded decision model that reads a Qwen3.5 backbone (Kev, Clef), as
+/// work that must outlive one call, such as a layer MLX recomputes during
+/// the backward pass, reaches it.
+pub(crate) trait HoldsDecisionBackbone {
+    fn decision_backbone(&self) -> &QwenDecisionBackbone;
+}
+
 impl QwenDecisionBackbone {
     pub(crate) fn load(
         model_directory: &Path,

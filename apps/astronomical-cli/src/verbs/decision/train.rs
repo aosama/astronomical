@@ -189,6 +189,7 @@ fn judge_and_report(
         indistinguishable_question_count: outcome.indistinguishable_question_count,
         largest_parity_gap: outcome.largest_parity_gap,
         parity_gap_beyond_rounding: outcome.parity_gap_beyond_rounding,
+        recomputed_text_count: outcome.recomputed_text_count,
         runs: &outcome.runs,
         best_seed: outcome.best_seed,
         verdict: &verdict,

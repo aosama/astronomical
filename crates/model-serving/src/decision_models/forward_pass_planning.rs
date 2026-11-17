@@ -41,6 +41,22 @@ pub(crate) fn plan_forward_passes(
     forward_passes
 }
 
+/// Whether `forward_pass` (indices into `sequence_lengths`) holds more
+/// padded tokens than `padded_tokens_per_pass`: only a pass of one
+/// sequence longer than the budget can, since
+/// [`plan_forward_passes`] closes every other pass before it does.
+pub(crate) fn pass_exceeds_budget(
+    forward_pass: &[usize],
+    sequence_lengths: &[usize],
+    padded_tokens_per_pass: usize,
+) -> bool {
+    let mut longest_length = 0;
+    for sequence_index in forward_pass {
+        longest_length = longest_length.max(sequence_lengths[*sequence_index]);
+    }
+    longest_length * forward_pass.len() > padded_tokens_per_pass
+}
+
 /// The share of the runtime's memory limit one training micro-batch may
 /// use, so the model, the optimizer and macOS keep the rest.
 const TRAINING_MEMORY_LIMIT_DIVISOR: usize = 4;
@@ -65,6 +81,25 @@ pub(crate) fn training_tokens_per_pass(
         MINIMUM_TRAINING_PADDED_TOKENS_PER_PASS,
         MAXIMUM_TRAINING_PADDED_TOKENS_PER_PASS,
     )
+}
+
+/// The share of the memory limit one sequence's kept activations may take
+/// before its layers are recomputed instead: half, so the model, the
+/// optimizer and macOS keep the other half. Twice the batching budget, so a
+/// text that only overflows the batching budget, such as Clef's built-in
+/// check texts with their long prompt, keeps today's faster path. Measured on
+/// Clef 9B (16 MB a token, linear), a stored text this long peaks near 29 GB
+/// under a 36.9 GB limit.
+const RECOMPUTATION_MEMORY_LIMIT_DIVISOR: usize = 2;
+
+/// The padded tokens above which a training pass recomputes its layers
+/// during the backward pass rather than keep their activations.
+pub(crate) fn recomputation_threshold_tokens(
+    memory_limit_bytes: usize,
+    bytes_per_padded_token: usize,
+) -> usize {
+    (memory_limit_bytes / RECOMPUTATION_MEMORY_LIMIT_DIVISOR / bytes_per_padded_token.max(1))
+        .max(MINIMUM_TRAINING_PADDED_TOKENS_PER_PASS)
 }
 
 #[cfg(test)]
