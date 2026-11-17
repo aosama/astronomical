@@ -54,6 +54,8 @@ impl WorkerEvent {
             Self::EmbeddingsFinalized => "embeddings_finalized",
             Self::DecisionsCompleted => "decisions_completed",
             Self::DecisionsFailed => "decisions_failed",
+            Self::DecisionTrainingProgress => "decision_training_progress",
+            Self::DecisionModelTrained => "decision_model_trained",
             Self::DecisionsFinalized => "decisions_finalized",
             Self::SpeechSegmentSpoken => "speech_segment_spoken",
             Self::SpeechCompleted => "speech_completed",
@@ -88,6 +90,8 @@ impl WorkerEvent {
             | Self::EmbeddingsFinalized { request_id, .. }
             | Self::DecisionsCompleted { request_id, .. }
             | Self::DecisionsFailed { request_id, .. }
+            | Self::DecisionTrainingProgress { request_id, .. }
+            | Self::DecisionModelTrained { request_id, .. }
             | Self::DecisionsFinalized { request_id, .. }
             | Self::SpeechSegmentSpoken { request_id, .. }
             | Self::SpeechCompleted { request_id, .. }

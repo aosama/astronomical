@@ -36,6 +36,7 @@ async fn main() {
             WorkerCommand::GenerateImage(_) => continue,
             WorkerCommand::GenerateEmbeddings(_)
             | WorkerCommand::GenerateDecisions(_)
+            | WorkerCommand::TrainDecisionModel(_)
             | WorkerCommand::GenerateSpeech(_) => continue,
             WorkerCommand::Cancel { request_id } => {
                 (request_id, ChatGenerationCompletionReason::Cancelled)

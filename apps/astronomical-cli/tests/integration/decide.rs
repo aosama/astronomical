@@ -73,6 +73,8 @@ fn refund_outcome(probability_true: f64) -> QuestionOutcome {
             option_token_cap: None,
             distinguishable_option_count: 2,
         },
+        head_inputs: None,
+        training_record: None,
     }
 }
 

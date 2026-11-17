@@ -46,6 +46,8 @@ fn should_survive_a_round_trip_through_json() {
             option_token_cap: Some(4),
             distinguishable_option_count: 2,
         },
+        head_inputs: None,
+        training_record: None,
     };
     let json_text = serde_json::to_string(&outcome).expect("an outcome serializes");
     let restored: QuestionOutcome = serde_json::from_str(&json_text).expect("it parses back");

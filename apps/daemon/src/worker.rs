@@ -29,6 +29,7 @@ mod request_event_dispatch;
 mod single_shot_command_arms;
 pub(crate) mod speech_event;
 pub(crate) mod speech_request;
+mod undelivered_training_result;
 
 pub(crate) mod command_arms;
 pub(crate) mod event_reaction;

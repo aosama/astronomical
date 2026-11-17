@@ -11,11 +11,14 @@
 //! `tokenizer_config.json`, and one `model.safetensors` with the encoder under
 //! `encoder.` and the head under `head.`, `type_emb.` and `scorer.`.
 
+mod adapter_targets;
 mod artifact;
-mod batching;
 mod configuration;
 mod engine;
 mod head;
+mod loaded_state;
+mod served_batches;
 mod tokenizer;
+mod whole_model_scorer;
 
 pub use engine::LayaDecisionEngine;

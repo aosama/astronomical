@@ -307,6 +307,26 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit",
+            "revision": "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+            "summary": "The heavy thinker with its draft model built in: about a quarter faster on M5 Macs.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 24618514377,
+            "approximate_memory_bytes": 25748620290,
+            "minimum_memory_bytes": 4451287808,
+            "role": "coding",
+            "public": true,
+            "description": "The same large model as Ornith-1.5-35B-A3B-OptiQ-4bit, with a small draft model packed in. On an M5 Mac the draft model guesses the next few words and the large model checks them all in one step, so answers arrive about a quarter faster and every word is still the large model's own choice. On other Macs, or with less memory, it runs just like the OptiQ build.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "OptiQ 4/8-bit (affine, group 64) with a DFlash2 draft model",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e",
             "revision": "e96662f04124748aed20b2a2e768f75997f136ca",
             "summary": "Built for code. Strong at finding and fixing bugs in real projects.",
@@ -363,6 +383,25 @@
                 "context_window": 262144
             },
             "quantization_label": "MTPLX dynamic 4-bit (affine, group 32)",
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "TensorFold/Qwen3.8-27B-MLX-4bit",
+            "revision": "22d8d538154e0e5b6f8dcb1fcc74a60a0798104c",
+            "summary": "A large all-round model that reads pictures and thinks before it answers.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 16081520999,
+            "approximate_memory_bytes": 17174993019,
+            "role": "chat",
+            "public": true,
+            "description": "Qwen 3.8 27B in a plain 4-bit build. A large, capable model that reads pictures and text, reasons before answering, and calls tools for agentic work. Best for writing, coding and multi-step problems when quality matters more than speed, and keeps a large memory window for long conversations and documents.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "4-bit affine (group 64), bf16 vision tower",
             "upstream_license": "Apache-2.0"
         },
         {

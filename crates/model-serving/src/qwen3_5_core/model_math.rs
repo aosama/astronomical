@@ -11,6 +11,10 @@
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_weights;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod dense_projection;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod differentiable_gated_delta;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod error;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_gate_up_fusion;
@@ -31,11 +35,19 @@ pub(crate) mod gated_delta_sequence_contract;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_step;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod gated_delta_tree;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod gated_delta_tree_tests;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod gdn_decode_prework_kernel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod output_combination;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod routing;
+#[cfg(feature = "direct-mlx")]
+pub mod row_exact_tree_attention;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod row_exact_tree_attention_tests;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod streamed_layer_binding;
 #[cfg(all(test, feature = "direct-mlx"))]

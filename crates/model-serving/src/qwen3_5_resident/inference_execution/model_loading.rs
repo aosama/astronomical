@@ -10,6 +10,7 @@ use crate::{
 };
 
 use super::astro_ssd_prompt_cache_startup_logging;
+use super::speculative_decode_lifecycle::Qwen3_5SpeculativeDraftRuntime;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
@@ -101,13 +102,7 @@ impl Qwen3_5EngineState {
                 &mut model_loading_performance_attribution,
             )
             .map_err(qwen3_5_runtime_error)?;
-            let model_chunking = resolve_model_chunking_configuration(&self.chunking).map_err(
-                |configuration_error| {
-                    fatal_engine_error(format!(
-                        "failed to validate model chunking configuration: {configuration_error}"
-                    ))
-                },
-            )?;
+            let model_chunking = validated_model_chunking(&self.chunking)?;
             let mut model = load_and_materialize_resident_model(
                 runtime,
                 validated_artifact,
@@ -138,24 +133,10 @@ impl Qwen3_5EngineState {
                 &mut model,
                 &mut model_loading_performance_attribution,
             )?;
-            // DFlash speculative decoding is DISABLED BY DESIGN. The
-            // configuration key is accepted and ignored everywhere, the
-            // worker wire contract no longer carries a block length, and
-            // no draft runtime is ever installed here — every session
-            // decodes through the classic one-token-per-forward path.
-            //
-            // Why: corrected journey accounting showed token-equality
-            // verification at the realistic serving temperature (1.0)
-            // averages a throughput LOSS on this workload (measured
-            // 0.50x-1.15x across trajectories; the greedy ceiling is only
-            // ~1.6x). The open question — an unresolved defect versus a
-            // weak draft artifact — is to be settled by independently
-            // reproducing the vendor's published speedups under vLLM
-            // before any re-enable. The draft trunk, round lifecycle, and
-            // proof journey remain compiled in their compartments as the
-            // diagnostic instrument for that day; see
-            // speculative_decode_lifecycle and dflash_draft.
-            tracing::debug!("resident engine decode path: classic (DFlash disabled by design)");
+            self.install_speculative_draft_runtime(
+                &mut model,
+                &mut model_loading_performance_attribution,
+            );
             Ok((
                 model,
                 astro_ssd_prompt_cache_model_contract,
@@ -194,6 +175,32 @@ impl Qwen3_5EngineState {
                 Err(model_loading_error)
             }
         }
+    }
+
+    /// A DFlash2 drafter installed beside the target turns on draft trees;
+    /// with none (or on a GPU without the kernels they need) every session
+    /// decodes one token per forward. A drafter that fails to load costs
+    /// the speedup, never the model.
+    fn install_speculative_draft_runtime(
+        &mut self,
+        model: &mut Qwen3_5ResidentModel,
+        model_loading_performance_attribution: &mut PerformanceAttribution,
+    ) {
+        self.speculative_draft_runtime = match Qwen3_5SpeculativeDraftRuntime::load_for_target(
+            model,
+            self.memory_limits.active_memory_limit_bytes(),
+            &self.model_directory,
+            model_loading_performance_attribution,
+        ) {
+            Ok(speculative_draft_runtime) => speculative_draft_runtime,
+            Err(draft_loading_error) => {
+                tracing::warn!(
+                    %draft_loading_error,
+                    "the installed DFlash2 drafter could not be loaded; decoding stays classic"
+                );
+                None
+            }
+        };
     }
 
     /// Moves the successfully loaded model and its `astro_ssd_prompt_cache` ownership into the
@@ -551,3 +558,14 @@ fn record_failed_resident_model_loading(
 #[cfg(test)]
 #[path = "model_loading_tests.rs"]
 mod model_loading_tests;
+
+fn validated_model_chunking(
+    chunking: &WorkerChunkingConfiguration,
+) -> Result<Qwen3_5ModelChunkingConfiguration, InferenceEngineError> {
+    match resolve_model_chunking_configuration(chunking) {
+        Ok(model_chunking) => Ok(model_chunking),
+        Err(configuration_error) => Err(fatal_engine_error(format!(
+            "failed to validate model chunking configuration: {configuration_error}"
+        ))),
+    }
+}

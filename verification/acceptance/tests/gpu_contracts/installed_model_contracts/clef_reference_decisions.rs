@@ -20,7 +20,7 @@
 //! where the configuration's `model_directory` is the build's folder.
 
 use astronomical_decision_contract::{
-    DecisionQuestion, DecisionQuestionBody, OrderedJsonValue, QuestionOutcome,
+    DecisionQuestion, DecisionQuestionBody, HeadInputRequest, OrderedJsonValue, QuestionOutcome,
     parse_system_one_questions,
 };
 use astronomical_model_serving::{ClefDecisionEngine, DecisionEngine};
@@ -172,7 +172,7 @@ fn compare_case(
     );
     let reference_rows = reference_array(reference_case, "reference");
     let decision_output = decision_engine
-        .decide(state, &questions)
+        .decide(state, &questions, HeadInputRequest::Omit)
         .unwrap_or_else(|error| panic!("case {case_name}: {error}"));
     for ((question, question_outcome), reference_row) in questions
         .iter()

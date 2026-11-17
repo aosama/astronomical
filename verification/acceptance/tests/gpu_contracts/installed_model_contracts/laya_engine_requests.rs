@@ -10,7 +10,8 @@
 //! the configuration's `model_directory` is the MLX Laya repository folder.
 
 use astronomical_decision_contract::{
-    DecisionAnswer, DecisionFailure, DecisionQuestion, OrderedJsonValue, parse_system_one_questions,
+    DecisionAnswer, DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue,
+    parse_system_one_questions,
 };
 use astronomical_model_serving::{DecisionEngine, LayaDecisionEngine};
 use astronomical_test_harness::test_run::TestRunContext;
@@ -64,7 +65,7 @@ async fn should_refuse_to_decide_before_it_is_loaded() {
     let mut decision_engine = new_english_engine();
     let questions = questions_from(r#"{"q": {"type": "noul", "instructions": "Is it night?"}}"#);
     assert!(matches!(
-        decision_engine.decide(&text_state(20), &questions),
+        decision_engine.decide(&text_state(20), &questions, HeadInputRequest::Omit),
         Err(DecisionFailure::FatalExecution { .. })
     ));
 }
@@ -87,14 +88,16 @@ async fn should_refuse_requests_the_checkpoint_cannot_answer_and_say_why() {
 
     let no_questions: Vec<DecisionQuestion> = Vec::new();
     assert!(matches!(
-        decision_engine.decide(&text_state(20), &no_questions),
+        decision_engine.decide(&text_state(20), &no_questions, HeadInputRequest::Omit),
         Err(DecisionFailure::InvalidRequest { .. })
     ));
 
     let without_instructions = questions_from(r#"{"q": {"type": "noul"}}"#);
-    let Err(DecisionFailure::InvalidRequest { reason }) =
-        decision_engine.decide(&text_state(20), &without_instructions)
-    else {
+    let Err(DecisionFailure::InvalidRequest { reason }) = decision_engine.decide(
+        &text_state(20),
+        &without_instructions,
+        HeadInputRequest::Omit,
+    ) else {
         panic!("a question without instructions must be refused as the request's fault");
     };
     assert!(
@@ -112,7 +115,7 @@ async fn should_refuse_requests_the_checkpoint_cannot_answer_and_say_why() {
         option_labels.join(",")
     ));
     let Err(DecisionFailure::InvalidRequest { reason }) =
-        decision_engine.decide(&text_state(20), &too_many_options)
+        decision_engine.decide(&text_state(20), &too_many_options, HeadInputRequest::Omit)
     else {
         panic!("options that do not fit must be refused as the request's fault");
     };
@@ -144,7 +147,7 @@ async fn should_answer_a_request_spanning_several_passes_as_it_answers_each_ques
     }
     let all_questions = questions_from(&format!("{{{}}}", question_members.join(",")));
     let whole_request = decision_engine
-        .decide(&long_state, &all_questions)
+        .decide(&long_state, &all_questions, HeadInputRequest::Omit)
         .expect("the large request should be answered");
     assert_eq!(
         whole_request.question_outcomes.len(),
@@ -166,7 +169,11 @@ async fn should_answer_a_request_spanning_several_passes_as_it_answers_each_ques
             "the long state must be reported as cut"
         );
         let alone = decision_engine
-            .decide(&long_state, &all_questions[question_index..=question_index])
+            .decide(
+                &long_state,
+                &all_questions[question_index..=question_index],
+                HeadInputRequest::Omit,
+            )
             .expect("one question should be answered");
         let probability_difference = (probability_true(&outcome_in_the_whole.answer)
             - probability_true(&alone.question_outcomes[0].answer))

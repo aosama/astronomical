@@ -4,30 +4,29 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.109</title>
-            <pubDate>Sun, 15 Nov 2026 14:58:53 -0500</pubDate>
-            <sparkle:version>2351</sparkle:version>
-            <sparkle:shortVersionString>0.2.109</sparkle:shortVersionString>
+            <title>0.2.115</title>
+            <pubDate>Tue, 17 Nov 2026 06:28:00 -0500</pubDate>
+            <sparkle:version>2373</sparkle:version>
+            <sparkle:shortVersionString>0.2.115</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **GitHub Copilot works with Astronomical again.** Since 0.2.106 the Responses API refused OpenAI's standard `prompt_cache_key` request field, which GitHub Copilot sends with every request, so Copilot answered every message with "request field 'prompt_cache_key' is unknown". Astronomical accepts OpenAI's spelling of `prompt_cache_key` again, and reports `prompt_cache_options` and `prompt_cache_retention` as unsupported under OpenAI's names.
-- **Download speed on the Models page.** A download in progress now shows its speed in MB/s next to the amount received and the time left, for example "2.8 of 8.0 GB · 55 MB/s · about 2 minutes left".
-- **Accurate live download progress.** The progress and speed now count every byte that has arrived, not only the bytes that are already in order on disk, so a fast download no longer appears to slow down while its pieces arrive out of order.
+- **Qwen 3.8 27B in the Library.** You can now download `TensorFold/Qwen3.8-27B-MLX-4bit` from the Library or with the `astronomical` command. It is a large all-round model that reads pictures and text, reasons before it answers, can use tools, and keeps a large memory window for long conversations and documents. It is a 15.0 GiB download. (#2305)
 
 ## Compatibility
 
-No settings, models or conversations change. Chat Completions, Anthropic Messages and every other endpoint behave as in 0.2.108.
+- Your installed models, conversations and settings carry over unchanged; no settings were added or removed.
+- Requires macOS 14 or later on Apple silicon.
 
 ## Distribution
 
-Astronomical 0.2.109 is signed with a Developer ID, notarized by Apple, and offered through the signed Sparkle update feed.
+This release is signed with a Developer ID certificate, notarized by Apple, and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.109/Astronomical-0.2.109-macOS-arm64.dmg" length="23786538" type="application/octet-stream" sparkle:edSignature="jgBV6sG223iUiQAecoAksTsK/UnfBOTNw9kaE+vqrpOjAKVTPVVe1i4LR2jhz8K5cQDT9U1i6MvHVQpMfB6SAA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.115/Astronomical-0.2.115-macOS-arm64.dmg" length="24649271" type="application/octet-stream" sparkle:edSignature="V0b82GMy3z5gIiGopUMM8sU19nP8+O3tR0WKKJp14VoxsVW9LJ+1l4w97TNARS8sA9Qm0VyAVCi80cFs5ns1Dw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: MJoNtfpWvAPeopGxNtqdI4UD9l6qiP8QkQxwip98rIfXnixPP9LHxhaA1KSVfwuTqFigpSFOYB3lxmfI3GYTAg==
-length: 2429
+edSignature: M7/Br8SHczznZnfu+Ume1QeiHVpKesTeRYucQtBf/ZE0z/tUyhpTcoJlQB9dGRWnNESWm0QRFI5pOoPKGZZeCA==
+length: 1920
 -->

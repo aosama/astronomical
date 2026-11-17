@@ -6,12 +6,12 @@
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, DecisionsCommand, EmbeddingsCommand, ImageGenerationCommand,
-    SpeechCommand,
+    ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand, SpeechCommand,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
+use crate::serving::decisions_executor::{DECISIONS_RESULT_CHANNEL_CAPACITY, DecisionsWork};
 use crate::serving::{ChatGenerationStartFuture, GenerationOutcomeStartFuture};
 use crate::worker::loop_types::{ChatWork, QueuedChatRequest, WorkerLoopCommand};
 use crate::{
@@ -184,7 +184,7 @@ impl WorkerHandle {
     /// worker, and resolves once the worker has accepted it.
     pub(in crate::worker) fn start_decisions_generation_with_queue_admission(
         &self,
-        decisions_command: DecisionsCommand,
+        decisions_work: DecisionsWork,
         admission_sender: Option<oneshot::Sender<()>>,
     ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
         Box::pin(async move {
@@ -204,12 +204,16 @@ impl WorkerHandle {
                 .map_err(|_| GenerationStartError::WorkerUnavailable)?;
             drop(generation_queue_permit);
 
-            let (decisions_result_sender, decisions_result_receiver) = mpsc::channel(1);
+            // Room for progress messages ahead of the result; progress is
+            // only sent while at least two slots are free, so the result
+            // always has one.
+            let (decisions_result_sender, decisions_result_receiver) =
+                mpsc::channel(DECISIONS_RESULT_CHANNEL_CAPACITY);
             let (start_sender, start_receiver) = oneshot::channel();
             command_sender
                 .send(WorkerLoopCommand::GenerateDecisions {
                     active_generation_permit,
-                    decisions_command,
+                    decisions_work,
                     start_sender,
                     decisions_result_sender,
                 })

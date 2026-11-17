@@ -1,0 +1,166 @@
+//! Whole-model training learns what the final layers cannot, on a real
+//! checkpoint.
+//!
+//! Each example is a short Romeo and Juliet line opening with a code,
+//! `[code 17]` or `[code 42]`, and the code alone decides the right answer;
+//! the words say nothing about it. The shipped model cannot know the codes,
+//! and the final layers only re-weigh what the rest of the model already
+//! reads, so they cannot learn them either (measured through `decision
+//! train` on Kev: 53% right before and 43% after). A whole-model training
+//! must learn them: this journey trains on 140 lines, chooses its stopping
+//! point on 30, and requires the trained model to be right on at least 90%
+//! of 30 lines it never saw: the split `decision train` makes of its
+//! 200-question minimum.
+//!
+//! Smaller jobs were tried and do not prove it: the add-ons need about 60
+//! optimizer steps before the code shows, and a run stops after three
+//! passes without improvement, so with 40 or 64 training lines (3 or 4
+//! steps a pass) it stopped before learning anything. At this size it
+//! takes about a minute and a half on Kev 0.8B (53% to 100% right) and
+//! about fifteen on Clef 9B (50% to 100%), whose 108 steps cost about eight
+//! and a half seconds each. Run one family with its alias and
+//! `--configuration PATH` naming that family's `model_directory`:
+//! `cargo test-kev-whole-model-positive-control`,
+//! `cargo test-clef-whole-model-positive-control` or
+//! `cargo test-laya-whole-model-positive-control`.
+
+use astronomical_decision_contract::OrderedJsonValue;
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingJob, DecisionTrainingOutcome, QuestionRole, TrainingExample, TrainingScope,
+};
+use astronomical_decision_contract::head_tuning_file::TunableHeadFamily;
+use astronomical_model_serving::DecisionTrainingStep;
+use astronomical_test_harness::test_run::TestRunContext;
+
+use super::whole_model_training::loaded_engine;
+
+#[path = "../../support/romeo_and_juliet.rs"]
+#[allow(dead_code)]
+mod romeo_and_juliet;
+
+const EXAMPLE_COUNT: usize = 200;
+const WORDS_PER_LINE: usize = 14;
+/// The share of judged lines the trained model must answer right.
+const REQUIRED_TRAINED_ACCURACY: f64 = 0.9;
+const QUESTIONS_JSON: &str = r#"{"mood": {"type": "choice", "instructions": "What is the main feeling of this line from Romeo and Juliet?", "criteria": {"love": "romantic love or longing", "conflict": "quarrels, insults, threats or fighting"}}}"#;
+
+/// The code of each example and the option it decides: a fixed scramble of
+/// the example index, so neither the line's words nor its position predict
+/// it.
+fn coded_option(example_index: usize) -> usize {
+    (example_index * 7 + example_index / 3) % 2
+}
+
+fn example_role(example_index: usize, correct_option: usize) -> QuestionRole {
+    // Of every twenty lines 14 train, 3 choose and 3 are judged: the split
+    // `decision train` makes of its 200-question minimum.
+    match example_index % 20 {
+        0..14 => QuestionRole::Training { correct_option },
+        14..17 => QuestionRole::Choosing { correct_option },
+        _ => QuestionRole::Judging { correct_option },
+    }
+}
+
+fn coded_job() -> DecisionTrainingJob {
+    let mut examples = Vec::with_capacity(EXAMPLE_COUNT);
+    for example_index in 0..EXAMPLE_COUNT {
+        let correct_option = coded_option(example_index);
+        let code = if correct_option == 0 { 17 } else { 42 };
+        let line = romeo_and_juliet::passage(example_index * WORDS_PER_LINE, WORDS_PER_LINE);
+        examples.push(TrainingExample {
+            state: OrderedJsonValue::Text(format!("[code {code}] {line}")),
+            questions: serde_json::from_str(QUESTIONS_JSON).expect("the question is well formed"),
+            question_roles: vec![example_role(example_index, correct_option)],
+        });
+    }
+    DecisionTrainingJob {
+        examples,
+        scope: TrainingScope::WholeModel,
+    }
+}
+
+/// The share of judged questions whose highest score is the right option,
+/// served and trained.
+fn judged_accuracy(job: &DecisionTrainingJob, outcome: &DecisionTrainingOutcome) -> (f64, f64) {
+    let (mut judged, mut served_right, mut trained_right) = (0, 0, 0);
+    for (example, trained_questions) in job.examples.iter().zip(&outcome.examples) {
+        let QuestionRole::Judging { correct_option } = example.question_roles[0] else {
+            continue;
+        };
+        judged += 1;
+        if highest_scoring(&trained_questions[0].served.option_logits) == correct_option {
+            served_right += 1;
+        }
+        if highest_scoring(&trained_questions[0].trained_logits) == correct_option {
+            trained_right += 1;
+        }
+    }
+    (
+        f64::from(served_right) / f64::from(judged),
+        f64::from(trained_right) / f64::from(judged),
+    )
+}
+
+fn highest_scoring(option_logits: &[f32]) -> usize {
+    let mut best_option = 0;
+    for (option_index, option_logit) in option_logits.iter().enumerate() {
+        if *option_logit > option_logits[best_option] {
+            best_option = option_index;
+        }
+    }
+    best_option
+}
+
+async fn prove_whole_model_learns_the_code(family: TunableHeadFamily) {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let model_directory = TestRunContext::current().required_model_directory();
+    let mut decision_engine = loaded_engine(family, &model_directory);
+    let job = coded_job();
+    decision_engine
+        .start_training(job.clone())
+        .expect("the whole model should be trainable");
+    let outcome = loop {
+        match decision_engine
+            .advance_training()
+            .expect("every training step should succeed")
+        {
+            DecisionTrainingStep::Progress {
+                stage,
+                completed,
+                total,
+            } => eprintln!("[positive-control] {stage:?} {completed}/{total}"),
+            DecisionTrainingStep::Completed(outcome) => break *outcome,
+        }
+    };
+    let (served_accuracy, trained_accuracy) = judged_accuracy(&job, &outcome);
+    eprintln!(
+        "[positive-control] family={family:?} judged_right_served={served_accuracy:.3} judged_right_trained={trained_accuracy:.3} parity_gap={}",
+        outcome.largest_parity_gap
+    );
+    assert_eq!(outcome.largest_parity_gap, 0.0);
+    assert!(
+        trained_accuracy >= REQUIRED_TRAINED_ACCURACY,
+        "the whole model must learn the code: {trained_accuracy:.3} right on unseen lines"
+    );
+}
+
+#[ignore = "requires a Kev model_directory in the explicit test-run configuration"]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_learn_a_code_the_final_layers_cannot_on_kev() {
+    prove_whole_model_learns_the_code(TunableHeadFamily::Kev).await;
+}
+
+#[ignore = "requires a Clef model_directory in the explicit test-run configuration"]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_learn_a_code_the_final_layers_cannot_on_clef() {
+    prove_whole_model_learns_the_code(TunableHeadFamily::Clef).await;
+}
+
+#[ignore = "requires the MLX Laya repository model_directory in the explicit test-run configuration"]
+#[tokio::test]
+#[serial_test::serial]
+async fn should_learn_a_code_the_final_layers_cannot_on_laya() {
+    prove_whole_model_learns_the_code(TunableHeadFamily::Laya).await;
+}

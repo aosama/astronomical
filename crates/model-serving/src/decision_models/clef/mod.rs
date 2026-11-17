@@ -13,5 +13,6 @@ mod prompt;
 #[cfg(test)]
 mod test_tokenizer;
 mod tokenizer;
+mod whole_model_scorer;
 
 pub use engine::ClefDecisionEngine;

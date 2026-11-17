@@ -30,10 +30,16 @@
 
 pub mod answer;
 pub mod calibration;
+pub mod calibration_file;
 pub mod clef_answers;
 pub mod clef_rendering;
 pub mod criterion_text;
+pub mod decision_adapters_file;
+pub mod decision_training_job;
 pub mod failure;
+pub mod float32_safetensors;
+pub mod head_inputs;
+pub mod head_tuning_file;
 pub mod kev_answers;
 pub mod kev_rendering;
 pub mod laya_rendering;
@@ -45,6 +51,9 @@ pub mod question;
 pub mod system_one_questions;
 pub mod system_one_response;
 pub mod token_encoder;
+pub mod trained_tensors;
+pub mod trained_tensors_file;
+pub mod training_record;
 
 pub use answer::{
     AnswerError, ChoiceAnswer, DecisionAnswer, NoulAnswer, OptionProbability, ScoreAnswer,
@@ -55,6 +64,7 @@ pub use calibration::{
     clamp_temperature, temperature_bucket_key,
 };
 pub use failure::DecisionFailure;
+pub use head_inputs::{FloatVector, HeadInputRequest, HeadInputs};
 pub use ordered_json::{OrderedJsonMember, OrderedJsonValue};
 pub use outcome::{QuestionInputCoverage, QuestionOutcome};
 pub use python_json_text::{JsonKeyOrder, JsonTextStyle, python_float_repr, python_json_text};
@@ -67,6 +77,7 @@ pub use system_one_questions::{
 };
 pub use system_one_response::{system_one_answer, system_one_response};
 pub use token_encoder::{DecisionTokenEncoder, TokenEncodingError};
+pub use training_record::{RecordedVerdict, TrainingRecord};
 
 #[cfg(test)]
 mod laya_golden_vector_tests;

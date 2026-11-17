@@ -1,3 +1,6 @@
+use astronomical_decision_contract::decision_training_job::{
+    DecisionTrainingJob, DecisionTrainingOutcome, DecisionTrainingStage,
+};
 use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue, QuestionOutcome};
 use serde::{Deserialize, Serialize};
 
@@ -74,6 +77,13 @@ pub enum DaemonRequest {
         state: OrderedJsonValue,
         /// The System One `questions` object, exactly as the caller wrote it.
         questions: OrderedJsonValue,
+    },
+    /// Trains a decision model's final layers on labelled examples. Progress
+    /// frames arrive while it runs, then one terminal frame.
+    TrainDecisionModel {
+        /// Exact worker-advertised model ID, or the resident model when absent.
+        model: Option<String>,
+        job: DecisionTrainingJob,
     },
     /// Reads text aloud with one speech model. The daemon chooses the model
     /// when none is named, as it does for decisions.
@@ -228,6 +238,18 @@ pub enum DaemonResponse {
     },
     /// Terminal frame for a failed decision request.
     DecisionsFailed { reason: DecisionFailure },
+    /// Progress of a training; more frames follow.
+    DecisionTrainingProgress {
+        stage: DecisionTrainingStage,
+        completed: u64,
+        total: u64,
+    },
+    /// Terminal frame for a finished training.
+    DecisionModelTrained {
+        /// Worker-advertised model ID that was trained.
+        model: String,
+        outcome: Box<DecisionTrainingOutcome>,
+    },
     /// Terminal frame for a finished image. The PNG travels as base64 in the
     /// frame, well inside the 32 MB frame ceiling for any supported size.
     ImageGenerationCompleted {

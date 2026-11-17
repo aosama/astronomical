@@ -58,7 +58,8 @@ where
                         .map(ActiveWorkerRequest::Autoregressive)
                 }),
             stepped_command @ (WorkerCommand::GenerateImage(_)
-            | WorkerCommand::GenerateSpeech(_)) => {
+            | WorkerCommand::GenerateSpeech(_)
+            | WorkerCommand::TrainDecisionModel(_)) => {
                 self.start_stepped_request(stepped_command, event_writer)
                     .await
             }

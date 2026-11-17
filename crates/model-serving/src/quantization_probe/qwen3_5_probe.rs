@@ -18,6 +18,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5ProjectionStorage;
 use crate::qwen3_5_resident::{Qwen3_5ResidentModel, RecordedDecoderLayerInput};
 use crate::{Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration};
 
@@ -377,7 +378,8 @@ impl SensitivityProbeModel for Qwen3_5SensitivityProbe {
             .swapped_out_weights
             .remove(&tied_head_key(&restore_token.module_name))
         {
-            self.model.base.weights.language_model_head_weights = previous_head;
+            let head_weights = &mut self.model.base.weights.language_model_head_weights;
+            head_weights.storage = Qwen3_5ProjectionStorage::Bound(previous_head);
         }
         Ok(())
     }

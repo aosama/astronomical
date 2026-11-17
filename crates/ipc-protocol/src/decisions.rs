@@ -6,6 +6,7 @@
 //! of object members is part of the text the model reads, and it must
 //! survive both process boundaries exactly as the caller wrote it.
 
+use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
 use astronomical_decision_contract::{
     DecisionQuestion, OrderedJsonValue, QuestionDefinitionError, parse_system_one_questions,
 };
@@ -35,6 +36,16 @@ impl DecisionsCommand {
         }
         Ok(parse_system_one_questions(&self.questions)?)
     }
+}
+
+/// One training request sent to the local inference worker: train
+/// the loaded decision model's final layers on the job's examples.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecisionTrainingCommand {
+    pub request_id: RequestId,
+    pub model: String,
+    pub job: DecisionTrainingJob,
 }
 
 /// Rejection reasons enforced independently at the worker IPC boundary.

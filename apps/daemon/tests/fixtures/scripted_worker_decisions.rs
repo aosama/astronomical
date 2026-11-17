@@ -73,6 +73,8 @@ fn scripted_question_outcomes(
                 option_token_cap: None,
                 distinguishable_option_count: option_count as u32,
             },
+            head_inputs: None,
+            training_record: None,
         });
     }
     Ok(question_outcomes)

@@ -35,7 +35,7 @@ pub fn qwen3_5_gated_delta_kernel()
 /// capability-demoted kernel — `None` — uses the ops-based public MLX route.
 #[allow(clippy::too_many_arguments)]
 pub fn qwen3_5_gated_delta_sequence(
-    runtime: &MlxRuntime,
+    runtime: &mlx_bridge::MlxBindingsContext,
     gated_delta_kernel: Option<&MlxMetalKernel>,
     queries: &MlxArray,
     keys: &MlxArray,
@@ -79,7 +79,7 @@ pub fn qwen3_5_gated_delta_sequence(
 
 #[allow(clippy::too_many_arguments)]
 fn apply_qwen3_5_gated_delta_sequence_kernel(
-    runtime: &MlxRuntime,
+    runtime: &mlx_bridge::MlxBindingsContext,
     gated_delta_kernel: &MlxMetalKernel,
     queries: &MlxArray,
     keys: &MlxArray,
@@ -170,7 +170,7 @@ pub fn qwen3_5_gated_delta_sequence_ops_fallback(
 /// outputs and carrying the float32 recurrent state forward.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn ops_gated_delta_sequence_loop(
-    runtime: &MlxRuntime,
+    runtime: &mlx_bridge::MlxBindingsContext,
     queries: &MlxArray,
     keys: &MlxArray,
     values: &MlxArray,
@@ -233,7 +233,7 @@ pub(super) fn ops_gated_delta_sequence_loop(
 }
 
 fn slice_rank_four_token(
-    runtime: &MlxRuntime,
+    runtime: &mlx_bridge::MlxBindingsContext,
     sequence_array: &MlxArray,
     token_index: i32,
     head_count: i32,
@@ -249,7 +249,7 @@ fn slice_rank_four_token(
 }
 
 fn slice_rank_three_token(
-    runtime: &MlxRuntime,
+    runtime: &mlx_bridge::MlxBindingsContext,
     sequence_array: &MlxArray,
     token_index: i32,
     head_count: i32,

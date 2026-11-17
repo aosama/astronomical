@@ -20,7 +20,9 @@ pub use input::ASK_QUESTION_NAME;
 use input::{resolve_questions, resolve_state};
 
 use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_decision_contract::{DecisionFailure, OrderedJsonValue, system_one_response};
+use astronomical_decision_contract::{
+    DecisionFailure, OrderedJsonValue, QuestionOutcome, system_one_response,
+};
 use astronomical_ipc_protocol::{DaemonRequest, DaemonResponse};
 use thiserror::Error;
 use tokio::time::timeout;
@@ -116,33 +118,76 @@ pub async fn run_decide(
         // Finalize the live progress line before the JSON document owns stdout.
         let _ = writeln!(decide_dependencies.stderr);
     }
-    submit_decision_request(
+    let wait_bounds = DecisionWaitBounds {
+        request_timeout: decide_dependencies.request_timeout,
+        model_load_stall_bound: decide_dependencies.model_load_stall_bound,
+        daemon_work_poll_interval: decide_dependencies.daemon_work_poll_interval,
+    };
+    let decision_request = DecisionRequest {
         state,
         questions,
         decision_model_id,
+    };
+    let decisions_answered = request_decisions(
+        decision_request,
         &model_lifecycle.daemon_probe,
-        decide_dependencies,
+        wait_bounds,
+        &mut *decide_dependencies.stderr,
     )
-    .await
+    .await?;
+    let answers_document = system_one_response(
+        &decisions_answered.model,
+        &decisions_answered.question_outcomes,
+        decisions_answered.input_token_count,
+    );
+    write_json_document(decide_dependencies.stdout, &answers_document)
 }
 
-/// Submits one decision request and writes the single terminal frame as one
-/// JSON document on stdout.
-async fn submit_decision_request(
-    state: OrderedJsonValue,
-    questions: OrderedJsonValue,
-    decision_model_id: String,
+/// How long one decision request may wait on the daemon.
+#[derive(Clone, Copy, Debug)]
+pub struct DecisionWaitBounds {
+    /// How long each protocol stage may go with nothing heard from the daemon.
+    pub request_timeout: Duration,
+    /// How long one load may stay reported before the wait gives up.
+    pub model_load_stall_bound: Duration,
+    /// Wait between asking what the daemon is doing while no answer has come.
+    pub daemon_work_poll_interval: Duration,
+}
+
+/// One state and its questions, for one decision model.
+pub struct DecisionRequest {
+    pub state: OrderedJsonValue,
+    pub questions: OrderedJsonValue,
+    pub decision_model_id: String,
+}
+
+/// What the daemon answered for one decision request.
+pub struct DecisionsAnswered {
+    /// The model that answered, as the worker advertises it.
+    pub model: String,
+    /// One outcome per question, in request order, raw logits included.
+    pub question_outcomes: Vec<QuestionOutcome>,
+    pub input_token_count: u32,
+}
+
+/// Sends one decision request and waits for its single terminal frame.
+///
+/// Shared by `decide`, which prints the answers, and `decision calibrate`,
+/// which keeps each question's raw logits.
+pub async fn request_decisions(
+    decision_request: DecisionRequest,
     daemon_probe: &DaemonProbe,
-    decide_dependencies: &mut DecideDependencies<'_>,
-) -> Result<(), DecideError> {
+    wait_bounds: DecisionWaitBounds,
+    stderr: &mut dyn Write,
+) -> Result<DecisionsAnswered, DecideError> {
     let mut daemon_client = daemon_probe.connect().await?;
     let decide_generate_request = DaemonRequest::DecideGenerate {
-        model: Some(decision_model_id),
-        state,
-        questions,
+        model: Some(decision_request.decision_model_id),
+        state: decision_request.state,
+        questions: decision_request.questions,
     };
     match timeout(
-        decide_dependencies.request_timeout,
+        wait_bounds.request_timeout,
         daemon_client.send_request(&decide_generate_request),
     )
     .await
@@ -152,42 +197,41 @@ async fn submit_decision_request(
     }
     // The request can wait behind a generation or a model load with nothing on this
     // connection, so the bound is on hearing nothing at all, not on the answer's time.
-    let wait_bounds = DaemonWaitBounds {
-        silence_bound: decide_dependencies.request_timeout,
-        load_stall_bound: decide_dependencies.model_load_stall_bound,
-        work_poll_interval: decide_dependencies.daemon_work_poll_interval,
+    let daemon_wait_bounds = DaemonWaitBounds {
+        silence_bound: wait_bounds.request_timeout,
+        load_stall_bound: wait_bounds.model_load_stall_bound,
+        work_poll_interval: wait_bounds.daemon_work_poll_interval,
     };
     let terminal_frame = await_frame_watching_daemon_work(
         daemon_client.next_response(),
         daemon_probe,
-        wait_bounds,
+        daemon_wait_bounds,
         &mut DaemonWorkWatch::default(),
-        &mut *decide_dependencies.stderr,
+        stderr,
     )
     .await?;
     let decisions_response = match terminal_frame {
         Ok(Some(decisions_response)) => decisions_response,
         Ok(None) | Err(_) => return Err(DecideError::DaemonStoppedResponding),
     };
-    write_decisions_outcome(decisions_response, decide_dependencies.stdout)
+    decisions_answered(decisions_response)
 }
 
-/// Writes the one frame that ends a decision request.
-fn write_decisions_outcome(
+/// The answers carried by the one frame that ends a decision request.
+fn decisions_answered(
     decisions_response: DaemonResponse,
-    stdout: &mut dyn Write,
-) -> Result<(), DecideError> {
+) -> Result<DecisionsAnswered, DecideError> {
     match decisions_response {
         DaemonResponse::DecisionsCompleted {
             model,
             question_outcomes,
             input_token_count,
             ..
-        } => {
-            let answers_document =
-                system_one_response(&model, &question_outcomes, input_token_count);
-            write_json_document(stdout, &answers_document)
-        }
+        } => Ok(DecisionsAnswered {
+            model,
+            question_outcomes,
+            input_token_count,
+        }),
         DaemonResponse::DecisionsFailed { reason } => Err(DecideError::DecisionsFailed { reason }),
         DaemonResponse::GenerationRejected { reason } => {
             Err(DecideError::DecisionsRejected { reason })

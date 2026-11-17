@@ -62,3 +62,12 @@ mod speech_audio_checks;
 mod tokenizer;
 mod validate;
 mod weights;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_layer_recomputation;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_pass_memory;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_positive_control;
+#[cfg(feature = "direct-mlx")]
+mod whole_model_training;
+mod whole_model_training_speed;

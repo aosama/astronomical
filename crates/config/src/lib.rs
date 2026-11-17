@@ -67,6 +67,7 @@ pub use maximum_mlx_memory::{
 pub use model_config_entries::{
     ModelConfigEntryOutcome, ModelConfigEntryReport, SettingsFreeModelKind,
 };
+pub use model_discovery::is_discoverable_model_folder;
 pub use model_discovery::{
     ChatModelCapabilities, ClassifiedModelArtifact, DecisionModelCapabilities, DiscoveredModel,
     DiscoveredModelError, EffectiveModelDiscovery, EffectiveModelDiscoveryError,

@@ -134,7 +134,7 @@ impl Qwen3_5ResidentModel {
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
-                output_gate_engine: None,
+                optional_accelerators: Default::default(),
                 sorted_expert_weighted_sum_kernel,
                 compiled_swiglu,
                 compiled_elementwise_graphs,
@@ -143,6 +143,7 @@ impl Qwen3_5ResidentModel {
                 inverse_square_root_linear_head_dimension_scale,
                 query_normalization_scale_weight,
                 key_normalization_scale_weight,
+                layer_additions: std::cell::RefCell::new(None),
             },
             expert_layer_plans,
             // Publication occurs only after core materialization and a fresh idle

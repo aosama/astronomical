@@ -1,6 +1,6 @@
 //! Serializes one synchronous decisions request and publishes its cleanup event.
 
-use astronomical_decision_contract::DecisionFailure;
+use astronomical_decision_contract::{DecisionFailure, HeadInputRequest};
 use astronomical_ipc_protocol::{
     DecisionsCommand, MlxMemorySnapshotSource, ProtocolWriter, RequestId, WorkerEvent,
 };
@@ -60,9 +60,11 @@ where
                 &validation_error.to_string(),
             )),
             Ok(questions) => match self.loaded_runtime.as_mut() {
-                Some(LoadedRuntime::Decisions(decision_engine)) => {
-                    decision_engine.decide(&decisions_command.state, &questions)
-                }
+                Some(LoadedRuntime::Decisions(decision_engine)) => decision_engine.decide(
+                    &decisions_command.state,
+                    &questions,
+                    HeadInputRequest::Omit,
+                ),
                 Some(_) | None => Err(DecisionFailure::fatal_execution(
                     "the loaded model does not answer decision requests",
                 )),
@@ -135,7 +137,7 @@ where
             .await
     }
 
-    async fn emit_decisions_finalization<WriteTransport>(
+    pub(crate) async fn emit_decisions_finalization<WriteTransport>(
         &mut self,
         request_id: RequestId,
         elapsed_millis: u64,

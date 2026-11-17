@@ -16,6 +16,8 @@ fn outcome(question_name: &str, answer: DecisionAnswer) -> QuestionOutcome {
             option_token_cap: None,
             distinguishable_option_count: 2,
         },
+        head_inputs: None,
+        training_record: None,
     }
 }
 
@@ -130,4 +132,26 @@ fn should_round_at_the_fourth_decimal_place_boundary() {
     assert_eq!(reported_number(0.123_46), OrderedJsonValue::Float(0.1235));
     assert_eq!(reported_number(1.0), OrderedJsonValue::Float(1.0));
     assert_eq!(reported_number(0.0), OrderedJsonValue::Float(0.0));
+}
+
+#[test]
+fn should_report_the_folders_training_verdict_under_input() {
+    let mut trained_outcome = choice_outcome();
+    trained_outcome.training_record = Some(TrainingRecord {
+        verdict: crate::training_record::RecordedVerdict::NotJudged,
+        labelled_question_count: 1,
+        distinct_state_count: 1,
+        warnings: vec!["compared only on the examples it learned from".to_owned()],
+    });
+
+    let answer_text = json_text(&system_one_answer(&trained_outcome));
+
+    assert!(answer_text.ends_with(
+        r#""distinguishable_options":2,"training":{"verdict":"not_judged","labelled_questions":1,"texts":1,"warnings":["compared only on the examples it learned from"]}}}"#
+    ));
+}
+
+#[test]
+fn should_leave_training_out_for_a_folder_without_a_record() {
+    assert!(!json_text(&system_one_answer(&choice_outcome())).contains("training"));
 }

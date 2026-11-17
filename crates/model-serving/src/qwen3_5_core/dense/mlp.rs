@@ -4,16 +4,16 @@ use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights;
 
 /// Pre-bound projections for one dense Qwen3.5 SwiGLU MLP layer.
 #[derive(Debug)]
 pub(crate) struct Qwen3_5DenseMlpWeights {
-    pub(crate) gate_projection: Qwen3_5AffineWeights,
-    pub(crate) up_projection: Qwen3_5AffineWeights,
-    pub(crate) down_projection: Qwen3_5AffineWeights,
+    pub(crate) gate_projection: Qwen3_5DenseProjection,
+    pub(crate) up_projection: Qwen3_5DenseProjection,
+    pub(crate) down_projection: Qwen3_5DenseProjection,
 }
 
 impl Qwen3_5DenseMlpWeights {
@@ -34,17 +34,17 @@ pub(crate) fn bind_qwen3_5_dense_mlp_weights(
 ) -> Result<Qwen3_5DenseMlpWeights, Qwen3_5ExecutionError> {
     let dense_mlp_prefix = format!("{decoder_layer_prefix}.mlp");
     Ok(Qwen3_5DenseMlpWeights {
-        gate_projection: weights::take_quantized_affine_weights(
+        gate_projection: weights::take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.gate_proj"),
         )?,
-        up_projection: weights::take_quantized_affine_weights(
+        up_projection: weights::take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.up_proj"),
         )?,
-        down_projection: weights::take_quantized_affine_weights(
+        down_projection: weights::take_dense_projection(
             bound_tensors,
             qwen3_5_config,
             &format!("{dense_mlp_prefix}.down_proj"),

@@ -21,7 +21,7 @@ use crate::qwen3_5_resident::model::request_errors;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
 
 /// The prompt-side identity of a generation session: token list, image-pad
-/// accounting, `astro_ssd_prompt_cache` eligibility flags (after speculative admission), and the
+/// accounting, `astro_ssd_prompt_cache` eligibility flags, speculative admission, and the
 /// visual astro SSD prompt cache identity they feed.
 struct GenerationPromptIdentity {
     prompt_token_ids: Vec<u32>,
@@ -278,8 +278,7 @@ impl Qwen3_5EngineState {
     }
 
     /// Resolves the prompt-side session identity: token list, image-pad
-    /// accounting, `astro_ssd_prompt_cache` eligibility (speculative admission forgoes the
-    /// `astro_ssd_prompt_cache` in both directions), and the visual
+    /// accounting, `astro_ssd_prompt_cache` eligibility, speculative admission, and the visual
     /// astro SSD prompt cache identity text and image reuse share.
     fn resolve_prompt_identity(
         &mut self,
@@ -316,10 +315,10 @@ impl Qwen3_5EngineState {
                 has_precomputed_visual_embeddings,
             );
         // Speculative admission, decided once from request properties plus
-        // draft residency. An admitted session also forgoes the
-        // `astro_ssd_prompt_cache` in both directions: restored prefixes would bypass
-        // the tap-capturing prefill that conditions the draft, and captured
-        // boundaries do not exist on the speculative forward path.
+        // draft residency. An admitted session uses the
+        // `astro_ssd_prompt_cache` like any other: the drafter's context then
+        // starts at the restored boundary and grows from the taps of the
+        // suffix that prefill computes.
         let speculative_session_admitted = self
             .speculative_draft_runtime
             .as_ref()
@@ -339,8 +338,6 @@ impl Qwen3_5EngineState {
                     },
                 )
             });
-        let can_use_astro_ssd_prompt_cache =
-            can_use_astro_ssd_prompt_cache && !speculative_session_admitted;
         // Computes which prompt blocks are eligible for the `astro_ssd_prompt_cache` and how many
         // visual embedding rows each image contributes, so text and image
         // reuse decisions come from one consistent identity.
@@ -577,7 +574,12 @@ impl Qwen3_5EngineState {
                 generation_position.prefill_cursor,
                 prompt_prefill_end_exclusive,
             );
-        let speculative_session_admitted = prompt_identity.speculative_session_admitted;
+        let engine_extension = ResidentRequestExtension::for_new_request(
+            prompt_identity.speculative_session_admitted,
+            generation_position.prefill_cursor,
+            prompt_prefill_end_exclusive,
+            sampling_strategy,
+        );
         self.active_request = Some(Qwen3_5EngineRequest {
             request_decoder_state,
             generated_token_count: 0,
@@ -616,12 +618,7 @@ impl Qwen3_5EngineState {
             first_decode_forward_elapsed_millis: None,
             generation_preparation_announced: false,
             structured_generation: inference_request.take_structured_generation(),
-            engine_extension: ResidentRequestExtension {
-                speculative_draft_key_value_states: self
-                    .empty_speculative_draft_key_value_states(speculative_session_admitted),
-                speculative_emission_queue: std::collections::VecDeque::new(),
-                speculative_session_admitted,
-            },
+            engine_extension,
         });
         let restored_prompt_prefix_token_count = u32::try_from(generation_position.prefill_cursor)
             .map_err(
@@ -636,24 +633,6 @@ impl Qwen3_5EngineState {
             initial_prompt_processing_phase,
             generation_position.astro_ssd_prompt_cache_diagnostics,
         )
-    }
-
-    /// The empty per-session draft key-value states an admitted speculative
-    /// session starts from; a non-admitted session carries none.
-    fn empty_speculative_draft_key_value_states(
-        &self,
-        speculative_session_admitted: bool,
-    ) -> Option<
-        crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
-    > {
-        self.speculative_draft_runtime
-            .as_ref()
-            .filter(|_| speculative_session_admitted)
-            .map(|draft_runtime| {
-                crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates::empty(
-                    draft_runtime.draft_configuration.layer_count() as usize,
-                )
-            })
     }
 
     /// Builds the caller-visible generation-start contract: the restored

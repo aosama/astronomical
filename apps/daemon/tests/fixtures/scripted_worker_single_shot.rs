@@ -24,6 +24,24 @@ where
             scripted_worker_decisions::answer_decisions_command(event_writer, decisions_command)
                 .await
         }
+        WorkerCommand::TrainDecisionModel(training_command) => {
+            // The scripted worker serves no real model, so it cannot train.
+            event_writer
+                .send_event(&WorkerEvent::DecisionsFailed {
+                    request_id: training_command.request_id,
+                    reason: astronomical_decision_contract::DecisionFailure::invalid_request(
+                        "the scripted worker does not train",
+                    ),
+                })
+                .await?;
+            event_writer
+                .send_event(&WorkerEvent::DecisionsFinalized {
+                    request_id: training_command.request_id,
+                    elapsed_millis: 1,
+                    mlx_memory_snapshot: None,
+                })
+                .await
+        }
         WorkerCommand::GenerateEmbeddings(embeddings_command) => {
             event_writer
                 .send_event(&WorkerEvent::EmbeddingsCompleted {

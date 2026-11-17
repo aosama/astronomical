@@ -20,6 +20,8 @@ pub mod gated_delta_probes;
 #[cfg(feature = "direct-mlx")]
 pub mod prism_hadamard_probes;
 #[cfg(feature = "direct-mlx")]
+pub mod row_batched_matmul_probe;
+#[cfg(feature = "direct-mlx")]
 pub mod sorted_expert_weighted_sum_probe;
 
 #[cfg(test)]
@@ -282,6 +284,7 @@ pub fn worker_process_kernel_capabilities(
         ));
         family_probes.extend(gated_delta_probes::capability_probes(runtime));
         family_probes.extend(prism_hadamard_probes::capability_probes(runtime));
+        family_probes.extend(row_batched_matmul_probe::capability_probes(runtime));
         let family_probe_references: Vec<&dyn CustomMetalKernelProbe> =
             family_probes.iter().map(|probe| probe.as_ref()).collect();
         WorkerKernelCapabilities::probe_custom_kernels(

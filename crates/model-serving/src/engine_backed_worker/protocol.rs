@@ -400,6 +400,7 @@ where
                     busy_command @ (WorkerCommand::GenerateImage(_)
                     | WorkerCommand::GenerateEmbeddings(_)
                     | WorkerCommand::GenerateDecisions(_)
+                    | WorkerCommand::TrainDecisionModel(_)
                     | WorkerCommand::GenerateSpeech(_)) => {
                         self.refuse_request_while_busy(busy_command, event_writer).await?;
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))

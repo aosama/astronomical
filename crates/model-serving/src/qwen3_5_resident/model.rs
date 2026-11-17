@@ -2,6 +2,7 @@
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
 mod decision_readout;
+pub(crate) use decision_readout::DecoderLayerRecomputation;
 #[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]
@@ -27,6 +28,7 @@ mod resident_execution;
 #[cfg(feature = "direct-mlx")]
 mod resident_model;
 #[cfg(feature = "direct-mlx")]
+mod tree_verification_forward;
 mod verification_forward;
 
 #[cfg(feature = "direct-mlx")]
@@ -65,4 +67,7 @@ pub use resident_model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use resident_model::Qwen3_5ResidentModel as Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
-pub use verification_forward::VerificationLogitsMode;
+pub use tree_verification_forward::Qwen3_5DraftTreeVerification;
+pub use verification_forward::{
+    Qwen3_5DraftedRowsVerification, Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,
+};

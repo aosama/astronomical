@@ -230,6 +230,7 @@ pub(crate) enum ActiveWorkerRequest<RequestOutput, RetryRequest> {
     Autoregressive(Box<ActiveEngineGeneration<RequestOutput, RetryRequest>>),
     Image(ActiveImageGeneration),
     Speech(super::speech::ActiveSpeechGeneration),
+    DecisionTraining(super::decision_training::ActiveDecisionTraining),
 }
 
 #[derive(Clone)]

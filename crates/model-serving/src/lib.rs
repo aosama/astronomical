@@ -52,6 +52,9 @@ pub(crate) mod synthetic_weights_test_support;
 pub(crate) mod decision_models;
 
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod linear_adapters;
+
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod modernbert;
 
 #[cfg(feature = "direct-mlx")]
@@ -97,6 +100,10 @@ pub(crate) mod qwen_image_21;
 // the serving crate resolving without touching their many consumers.
 pub(crate) use astronomical_memory_policy::{safetensors, strict_json};
 
+pub mod row_batched_matmul;
+
+pub mod speculative_decoding;
+
 mod sampling_seed;
 
 mod sparse_experts;
@@ -141,7 +148,8 @@ pub use astro_decoder_state_cache::{
 };
 
 pub use decision_engine::{
-    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionUnavailableEngine,
+    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionTrainingStep,
+    DecisionUnavailableEngine,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -150,6 +158,8 @@ pub use decision_models::clef::ClefDecisionEngine;
 pub use decision_models::kev::{KevDecisionEngine, KevRowLayout};
 #[cfg(feature = "direct-mlx")]
 pub use decision_models::laya::LayaDecisionEngine;
+#[cfg(feature = "direct-mlx")]
+pub use decision_models::recorded_training::RecordedTrainingEngine;
 
 pub use embedding_engine::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,
@@ -408,6 +418,19 @@ pub use crate::qwen_image_21::tensor_profiles::QwenImage21TensorProfile;
 pub use qwen3_5_core::configuration::{
     Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
 };
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use qwen3_5_core::model::tree_attention_measurement::TreeAttentionErrorCount;
+/// The row-exact draft-tree attention kernel and the row chains it reads, for the
+/// acceptance journeys that hold it to the one-row step and time it.
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use qwen3_5_core::model_math::gated_delta_tree::{TreeRowChains, UploadedTreeRowChains};
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use qwen3_5_core::model_math::row_exact_tree_attention::{
+    RowExactTreeAttentionInputs, RowExactTreeAttentionKernels, row_exact_tree_attention,
+};
 
 pub use qwen3_5_core::decoder::{
     Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,
@@ -495,6 +518,8 @@ pub use qwen3_5_core::decoder::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_core::model::differentiable_attention::Qwen3_5AttentionKernel;
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 
 #[cfg(feature = "direct-mlx")]
@@ -548,31 +573,9 @@ pub use qwen3_5_resident::{
 };
 
 #[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_configuration::{
-    DFlashDraftConfiguration, DFlashDraftConfigurationError, DFlashDraftLayerAttentionKind,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_weights::{
-    DFlashDraftLayerWeights, DFlashDraftWeights,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_weights_loading::DFlashDraftLoadedWeights;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values;
-
-#[cfg(feature = "direct-mlx")]
-pub use qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states;
-
-#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
-    SpeculationRoundOutcome, SpeculationRoundRequest, VerificationLogitsMode,
-    VerificationTokenChoice, run_speculative_round,
+    Qwen3_5DraftTreeVerification, Qwen3_5DraftedRowsVerification,
+    Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode, VerificationTokenChoice,
 };
 
 #[cfg(feature = "direct-mlx")]

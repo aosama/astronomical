@@ -91,7 +91,7 @@ impl ScriptedExecutor {
             }),
             is_busy_override: false,
             received_decisions_commands: Arc::new(Mutex::new(Vec::new())),
-            decisions_outcome: Ok(DecisionsOutput {
+            decisions_outcome: Ok(DecisionsOutput::Answered {
                 question_outcomes: Vec::new(),
                 input_token_count: 0,
                 elapsed_millis: 4,

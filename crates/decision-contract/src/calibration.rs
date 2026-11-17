@@ -41,6 +41,7 @@ pub fn clamp_temperature(raw_temperature: f64) -> f64 {
 /// published checkpoints use.
 #[must_use]
 pub const fn option_count_range_name(option_count: usize) -> &'static str {
+    // Keep in step with OPTION_COUNT_RANGE_NAMES below.
     match option_count {
         0..=2 => "2",
         3..=5 => "3-5",
@@ -48,6 +49,9 @@ pub const fn option_count_range_name(option_count: usize) -> &'static str {
         _ => "11+",
     }
 }
+
+/// Every name [`option_count_range_name`] can return, smallest range first.
+pub const OPTION_COUNT_RANGE_NAMES: [&str; 4] = ["2", "3-5", "6-10", "11+"];
 
 /// The key a checkpoint stores a per-option-count temperature under, such as `choice:3-5`.
 #[must_use]

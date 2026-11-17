@@ -263,6 +263,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
                     tensors: &loaded_state.tensors,
                     configuration: &loaded_state.configuration,
                     weight_layout: &loaded_state.weight_layout,
+                    adapters: None,
                 };
                 for encoded_input in &encoded_inputs {
                     output_embeddings.push(embedding_pooling::embed_token_ids(

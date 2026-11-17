@@ -6,6 +6,7 @@
 
 pub mod convert_atlas;
 pub mod decide;
+pub mod decision;
 pub mod doctor;
 pub(crate) mod download_progress_line;
 pub mod embed;

@@ -7,6 +7,8 @@
 //! they pin is the head's own bookkeeping: padding is invisible, the question
 //! type matters, and every row gets back exactly its own options.
 
+use std::collections::BTreeMap;
+
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use mlx_bridge::MlxArray;
 use serial_test::serial;
@@ -137,6 +139,17 @@ fn head_logits(
     configuration: &LayaConfiguration,
     test_rows: &[TestRow],
 ) -> Result<Vec<Vec<f32>>, ModernBertTrunkError> {
+    tuned_head_logits(runtime, tensors, &BTreeMap::new(), configuration, test_rows)
+}
+
+/// The logits with `tuned_tensors` read in place of the shipped tensors.
+fn tuned_head_logits(
+    runtime: &MlxRuntime,
+    tensors: &MlxSafetensors,
+    tuned_tensors: &BTreeMap<String, MlxArray>,
+    configuration: &LayaConfiguration,
+    test_rows: &[TestRow],
+) -> Result<Vec<Vec<f32>>, ModernBertTrunkError> {
     let mut token_sequences = Vec::with_capacity(test_rows.len());
     for test_row in test_rows {
         token_sequences.push(vec![7_u32; test_row.real_token_count]);
@@ -164,8 +177,10 @@ fn head_logits(
         option_marker_positions.push(test_row.option_marker_positions.as_slice());
     }
     let head = LayaDecisionHead {
+        adapters: None,
         runtime,
         tensors,
+        tuned_tensors,
         configuration,
     };
     head.option_logits(
@@ -283,4 +298,41 @@ fn should_name_the_head_tensor_an_artifact_is_missing() {
         panic!("a missing head tensor must be reported by name");
     };
     assert_eq!(tensor_name, "scorer.layers.3.bias");
+}
+
+#[test]
+#[serial]
+fn should_read_a_trained_scorer_tensor_in_place_of_the_shipped_one() {
+    let runtime = initialize_test_runtime();
+    let configuration = synthetic_configuration(2);
+    let tensors = load_synthetic_weights(&runtime, &synthetic_head_tensors(&runtime, 2));
+    let shipped_bias = runtime
+        .astype(
+            &tensors.tensor("scorer.layers.3.bias").unwrap(),
+            mlx_bridge::MlxDtype::Float32,
+        )
+        .unwrap()
+        .to_vec_f32()
+        .unwrap();
+    // The final bias adds to every option's logit, so raising it by one must
+    // raise every logit by exactly one and change nothing else.
+    let raised_bias = MlxArray::from_f32(&[shipped_bias[0] + 1.0], &[1]).unwrap();
+    let mut tuned_tensors = BTreeMap::new();
+    tuned_tensors.insert("scorer.layers.3.bias".to_owned(), raised_bias);
+    let shipped_logits = head_logits(&runtime, &tensors, &configuration, &[long_row()]).unwrap();
+    let tuned_logits = tuned_head_logits(
+        &runtime,
+        &tensors,
+        &tuned_tensors,
+        &configuration,
+        &[long_row()],
+    )
+    .unwrap();
+    assert_eq!(tuned_logits[0].len(), shipped_logits[0].len());
+    for (tuned_logit, shipped_logit) in tuned_logits[0].iter().zip(&shipped_logits[0]) {
+        assert!(
+            (tuned_logit - shipped_logit - 1.0).abs() <= LOGIT_TOLERANCE,
+            "{tuned_logit} vs {shipped_logit}"
+        );
+    }
 }

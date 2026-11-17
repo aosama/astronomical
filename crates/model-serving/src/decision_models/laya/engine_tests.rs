@@ -9,8 +9,25 @@ use astronomical_decision_contract::{
     parse_system_one_questions,
 };
 
-use super::{question_outcome, sequence_failure};
+use astronomical_decision_contract::calibration_file::{CalibrationOverride, KindCalibration};
+
+use super::{QuestionTemperatures, question_outcome, sequence_failure};
 use crate::decision_models::laya::configuration::LayaConfiguration;
+use crate::decision_models::laya::head::ScoredHeadRow;
+
+/// No calibration file: the checkpoint's own temperatures apply.
+const UNCALIBRATED: CalibrationOverride = CalibrationOverride {
+    choice: None,
+    score: None,
+    noul: None,
+};
+
+fn uncalibrated_temperatures(configuration: &LayaConfiguration) -> QuestionTemperatures<'_> {
+    QuestionTemperatures {
+        configuration,
+        calibration_override: &UNCALIBRATED,
+    }
+}
 
 fn test_configuration() -> LayaConfiguration {
     LayaConfiguration::from_config_value(&serde_json::json!({
@@ -88,10 +105,10 @@ fn should_blame_the_model_for_a_tokenizer_that_cannot_encode() {
 #[test]
 fn should_calibrate_logits_with_the_kinds_temperature_and_report_coverage() {
     let outcome = question_outcome(
-        &test_configuration(),
+        &uncalibrated_temperatures(&test_configuration()),
         &two_option_question(),
         &sequence_with_a_cut_state(),
-        vec![2.0, 0.0],
+        logits_only(vec![2.0, 0.0]),
     )
     .expect("finite logits give an outcome");
     assert_eq!(outcome.question_name, "mood");
@@ -113,14 +130,66 @@ fn should_calibrate_logits_with_the_kinds_temperature_and_report_coverage() {
 }
 
 #[test]
+fn should_use_the_folder_calibration_for_the_kind_it_names() {
+    let configuration = test_configuration();
+    let calibration_override = CalibrationOverride {
+        choice: Some(KindCalibration {
+            temperature: 4.0,
+            range_temperatures: Vec::new(),
+            fitted_question_count: 120,
+        }),
+        ..CalibrationOverride::default()
+    };
+    let calibrated_temperatures = QuestionTemperatures {
+        configuration: &configuration,
+        calibration_override: &calibration_override,
+    };
+    let outcome = question_outcome(
+        &calibrated_temperatures,
+        &two_option_question(),
+        &sequence_with_a_cut_state(),
+        logits_only(vec![2.0, 0.0]),
+    )
+    .expect("finite logits give an outcome");
+    // The checkpoint ships 2.0 for choice; the calibration's 4.0 wins.
+    assert_eq!(outcome.applied_temperature, 4.0);
+    assert_eq!(outcome.option_logits, [2.0, 0.0]);
+}
+
+#[test]
+fn should_keep_the_checkpoint_temperature_for_a_kind_the_calibration_leaves_out() {
+    let configuration = test_configuration();
+    let noul_only = CalibrationOverride {
+        noul: Some(KindCalibration {
+            temperature: 4.0,
+            range_temperatures: Vec::new(),
+            fitted_question_count: 120,
+        }),
+        ..CalibrationOverride::default()
+    };
+    let temperatures = QuestionTemperatures {
+        configuration: &configuration,
+        calibration_override: &noul_only,
+    };
+    let outcome = question_outcome(
+        &temperatures,
+        &two_option_question(),
+        &sequence_with_a_cut_state(),
+        logits_only(vec![2.0, 0.0]),
+    )
+    .expect("finite logits give an outcome");
+    assert_eq!(outcome.applied_temperature, 2.0);
+}
+
+#[test]
 fn should_refuse_a_non_finite_logit() {
     for non_finite_logit in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
         assert!(matches!(
             question_outcome(
-                &test_configuration(),
+                &uncalibrated_temperatures(&test_configuration()),
                 &two_option_question(),
                 &sequence_with_a_cut_state(),
-                vec![0.5, non_finite_logit],
+                logits_only(vec![0.5, non_finite_logit]),
             ),
             Err(DecisionFailure::FatalExecution { .. })
         ));
@@ -131,11 +200,19 @@ fn should_refuse_a_non_finite_logit() {
 fn should_refuse_a_logit_count_that_differs_from_the_option_count() {
     assert!(matches!(
         question_outcome(
-            &test_configuration(),
+            &uncalibrated_temperatures(&test_configuration()),
             &two_option_question(),
             &sequence_with_a_cut_state(),
-            vec![0.5],
+            logits_only(vec![0.5]),
         ),
         Err(DecisionFailure::FatalExecution { .. })
     ));
+}
+
+/// A scored row with logits and no head inputs, as an ordinary request has.
+fn logits_only(option_logits: Vec<f32>) -> ScoredHeadRow {
+    ScoredHeadRow {
+        option_logits,
+        marker_states: None,
+    }
 }

@@ -141,3 +141,20 @@ fn should_require_a_command_when_invoked_bare() {
 fn should_parse_status_as_a_plain_verb() {
     assert_eq!(parse(&["status"]), Ok(CliCommand::Status));
 }
+
+#[test]
+fn should_describe_decision_verdicts_and_state_no_minimum_amount_of_data() {
+    let help = help_text();
+
+    assert!(help.contains("any number of them"));
+    assert!(help.contains("judged better or judged not better"));
+    assert!(help.contains("not judged when too few different texts leave none to hold"));
+    // The numbers the help quotes are the ones the splits use.
+    assert!(help.contains(&format!(
+        "calibrate holds texts back from {}, train from {}",
+        astronomical_decision_training::holdout_split::HOLDOUT_EVERY_NTH_STATE,
+        astronomical_decision_training::training_split::HOLD_BACK_STATE_COUNT
+    )));
+    assert!(!help.contains("at least 200"));
+    assert!(!help.contains("writes nothing unless"));
+}

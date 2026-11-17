@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use safetensors::tensor::TensorView;
 use safetensors::{Dtype, serialize};
 
+use astronomical_decision_contract::head_tuning_file::{HeadTuning, TunedTensor};
+
 use super::{KevPointerHead, kev_probabilities};
 
 fn float32_bytes(values: &[f32]) -> Vec<u8> {
@@ -86,4 +88,58 @@ fn should_give_equal_logits_equal_probability_at_any_temperature() {
         vec![1.0 / 3.0; 3]
     );
     assert_eq!(kev_probabilities(&[7.0], 1.0), vec![1.0]);
+}
+
+fn identity_like_head() -> KevPointerHead {
+    KevPointerHead::from_safetensors_bytes(
+        &head_bytes(
+            &[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            &[0.0, 0.0],
+            &[1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            &[0.0, 0.0],
+        ),
+        2,
+    )
+    .expect("a well-formed head should read")
+}
+
+fn tuned(tensor_name: &str, shape: Vec<usize>, values: Vec<f32>) -> HeadTuning {
+    HeadTuning {
+        tensors: vec![TunedTensor {
+            name: tensor_name.to_owned(),
+            shape,
+            values,
+        }],
+    }
+}
+
+#[test]
+fn should_score_with_the_trained_tensors_once_a_tuning_is_applied() {
+    let mut pointer_head = identity_like_head();
+    // q = [1, 2]; with the shipped key, option [3, 0, 0] scores 3 / √2.
+    let before = pointer_head.option_logits(&[1.0, 2.0, 0.0], &[&[3.0, 0.0, 0.0]]);
+    pointer_head
+        .apply_tuning(&tuned("k.bias", vec![2], vec![0.0, 5.0]))
+        .unwrap();
+    // The trained key bias adds [0, 5]: k = [3, 5], so the score is (3 + 10) / √2.
+    let after = pointer_head.option_logits(&[1.0, 2.0, 0.0], &[&[3.0, 0.0, 0.0]]);
+    let scale = 1.0 / 2.0_f32.sqrt();
+    assert!((before[0] - 3.0 * scale).abs() < 1e-6);
+    assert!((after[0] - 13.0 * scale).abs() < 1e-6);
+}
+
+#[test]
+fn should_leave_the_head_unchanged_with_an_empty_tuning() {
+    let mut pointer_head = identity_like_head();
+    pointer_head.apply_tuning(&HeadTuning::default()).unwrap();
+    assert_eq!(pointer_head, identity_like_head());
+}
+
+#[test]
+fn should_refuse_a_trained_tensor_of_another_shape() {
+    let mut pointer_head = identity_like_head();
+    // A key weight trained for a 4-wide backbone is not this head's.
+    let wrong_width = tuned("k.weight", vec![2, 4], vec![0.0; 8]);
+    assert!(pointer_head.apply_tuning(&wrong_width).is_err());
+    assert_eq!(pointer_head, identity_like_head());
 }

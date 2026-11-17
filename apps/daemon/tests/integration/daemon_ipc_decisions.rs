@@ -77,7 +77,7 @@ async fn should_route_a_decide_request_to_the_only_installed_decision_model() {
     // model, and leave making it resident to the worker loop.
     let stub_executor = ready_stub_executor_with_decisions(
         CHAT_MODEL_ID,
-        Ok(DecisionsOutput {
+        Ok(DecisionsOutput::Answered {
             question_outcomes: Vec::new(),
             input_token_count: 9,
             elapsed_millis: 5,

@@ -15,6 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+use crate::DecisionsOutput;
 use crate::{
     DecisionsExecutionError, GenerationStartError,
     application::{ApplicationState, allocate_chat_request_id},
@@ -102,12 +103,20 @@ pub(crate) async fn create_decisions(
         Err(start_error) => return generation_start_error_response(start_error),
     };
     match decisions_result_receiver.recv().await {
-        Some(Ok(decisions_output)) => Json(system_one_response(
+        Some(Ok(DecisionsOutput::Answered {
+            question_outcomes,
+            input_token_count,
+            ..
+        })) => Json(system_one_response(
             &resolved_model_id,
-            &decisions_output.question_outcomes,
-            decisions_output.input_token_count,
+            &question_outcomes,
+            input_token_count,
         ))
         .into_response(),
+        // An answer request never trains; the worker broke the protocol.
+        Some(Ok(
+            DecisionsOutput::TrainingProgress { .. } | DecisionsOutput::ModelTrained { .. },
+        )) => worker_unavailable_response(),
         Some(Err(decisions_error)) => {
             decisions_execution_error_response(request_identifier, decisions_error)
         }

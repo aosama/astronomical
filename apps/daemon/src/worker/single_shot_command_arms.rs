@@ -39,7 +39,7 @@ async fn admit_decisions_generation_command(
 ) {
     let WorkerLoopCommand::GenerateDecisions {
         active_generation_permit,
-        decisions_command,
+        decisions_work,
         start_sender,
         decisions_result_sender,
     } = routed_command
@@ -69,7 +69,7 @@ async fn admit_decisions_generation_command(
     if let Err(control_error) = handle_generate_decisions_command(
         &mut runtime.worker_process,
         active_generation_permit,
-        decisions_command,
+        decisions_work,
         start_sender,
         decisions_result_sender,
         &runtime.health_snapshot,

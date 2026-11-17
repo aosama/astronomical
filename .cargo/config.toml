@@ -28,19 +28,19 @@ warnings = "deny"
 # The package list here, in nextest-archive-integration, -rest-api and -e2e must stay
 # identical: cargo unifies features per command, so a different list recompiles what
 # the CI build step just compiled (49 crates and about 36 seconds when they differed).
-test-integration = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
+test-integration = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
 
 # Most of that selection through cargo-nextest (one process per test, so process-global
 # state cannot leak between tests), for local runs; it leaves out the REST contract,
 # E2E and Neural Engine research packages. CI uses the archives below instead.
-nextest-integration = "nextest run --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower --lib --test integration_tests"
+nextest-integration = "nextest run --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower --lib --test integration_tests"
 
 # Portable nextest archives for the CI build/test split; each selection must
 # stay identical to the selection the compile step builds through the cargo
 # aliases above (the workflow lane contract pins that equality).
-nextest-archive-integration = "nextest archive --profile ci --archive-file target/nextest-archives/integration.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
-nextest-archive-rest-api = "nextest archive --profile ci --archive-file target/nextest-archives/rest-api.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --test rest_api_tests"
-nextest-archive-e2e = "nextest archive --profile ci --archive-file target/nextest-archives/e2e.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --test e2e"
+nextest-archive-integration = "nextest archive --profile ci --archive-file target/nextest-archives/integration.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --lib --test integration_tests --test hardware_journeys"
+nextest-archive-rest-api = "nextest archive --profile ci --archive-file target/nextest-archives/rest-api.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --test rest_api_tests"
+nextest-archive-e2e = "nextest archive --profile ci --archive-file target/nextest-archives/e2e.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract -p astronomical-e2e --test e2e"
 
 # The shared fixture registry and leaf-id contracts (test-fixtures), plus the
 # independent FLUX reference-oracle unit coverage (flux-reference-oracle), which
@@ -63,7 +63,7 @@ test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 test-app-builder = "test -p xtask --bin xtask app_package"
 
 # Both lanes together; run this before committing.
-test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract --lib --test integration_tests --test hardware_journeys --test rest_api_tests"
+test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-lowercase-hex -p astronomical-download-catalog -p astronomical-decision-contract -p astronomical-decision-training -p astronomical-expert-atlas -p astronomical-native-identity -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-vision-tower -p astronomical-neural-engine-research -p astronomical-rest-contract --lib --test integration_tests --test hardware_journeys --test rest_api_tests"
 
 # The decision-model contract crate on its own: typed questions, validation,
 # calibration, typed answers and the Laya prompt layout, pinned to the
@@ -73,6 +73,36 @@ test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astro
 # with crates/decision-contract/tests/fixtures/generate_laya_golden_reference_vectors.py
 # under a Python environment that has the reference package installed.
 test-decision-contract = "test -p astronomical-decision-contract"
+# Decision-model calibration and head training on a person's own labelled
+# examples: the examples format, the split by state, temperature fitting,
+# judging each fit and training, the CPU heads that serve as the GPU trainer's
+# oracle, and the proven copy of a model folder. Pure Rust on the CPU with
+# no model or graphics processor; a second or two to run. The
+# `astronomical decision calibrate` and `decision train` verbs drive it end
+# to end.
+test-decision-training = "test -p astronomical-decision-training"
+# The GPU training loop that runs inside the inference worker: the stepped
+# job (check, train, score), runs and early stopping, each family's final
+# layers' forward and backward pass, the precise (TF32-safe) matrix product,
+# the objective and the anchored optimizer, all against the CPU oracle, plus
+# a synthetic positive control. Needs MLX and the graphics processor (the
+# tests are #[serial]); under a second once built. The whole journey runs
+# live with `astronomical decision train EXAMPLES --output DIR --model ID`
+# against the Development instance.
+test-decision-gpu-training = "test -p astronomical-model-serving --features direct-mlx --lib decision_models::training"
+# Whole-model training (`decision train --whole-model`): MLX's own gradients
+# through every operation Laya's forward pass uses (an 8-bit projection with
+# an add-on, rotary embedding, masked attention, exact GELU), the micro-batch
+# objective against final-layer training's hand-written gradient, the add-on
+# layout and starting values, the add-on path every linear layer takes, and
+# how serving's passes are regrouped so trained scores compare with served
+# ones, and the parts of recomputing layers for a text too long for a pass
+# (issue #2299) that need no model. Needs MLX and the graphics processor
+# (#[serial]); about a second.
+# The whole journey runs live with `astronomical decision train EXAMPLES
+# --whole-model --output DIR --model laya-MLX-8bit` against Development, on
+# at least 1000 labelled questions about 100 states.
+test-decision-whole-model-training = "test -p astronomical-model-serving --features direct-mlx --lib -- adapter_training linear_adapters decision_adapters laya::served_batches laya::batching"
 
 # Vision tower journeys against real public Hugging Face repositories: whether a
 # repository has a tower, and whether a tower shares a text model's base. They
@@ -145,9 +175,43 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # float32 reference recorded in tests/fixtures/laya_reference_decisions.json
 # (regenerate with the script beside it). `test-laya-engine-requests` covers
 # refusals and a request that spans several forward passes. A few seconds each.
+# `test-laya-whole-model-training` (and the Kev and Clef aliases below)
+# trains a family's whole model on a few dozen Romeo states and proves the
+# trainable copy scores exactly as serving does, that a folder with zeroed
+# add-ons serves the shipped scores bit for bit, and that a folder with the
+# trained add-ons serves the trained scores. `--configuration PATH` names a
+# JSON file whose `model_directory` is that family's model folder.
+# `test-kev-whole-model-positive-control` (and the Clef and Laya aliases)
+# trains the whole model on 140 coded lines whose code alone decides the
+# answer and requires 90% right on 30 unseen ones: about a minute and a half
+# on Kev, fifteen on Clef.
+# `test-kev-whole-model-training-speed` (and the Clef and Laya aliases) times
+# a few gradient steps and the scoring on a small job, about twenty seconds,
+# and prints milliseconds per question: the loop to iterate training speed on.
+# `test-clef-whole-model-pass-memory` (and the Kev alias) runs one gradient
+# step on a single text of about 130, 195 and 260 tokens, all inside the
+# pass budget, and prints each step's peak memory above the resident model,
+# under a minute on Clef: how a pass's memory grows with text length.
+# `test-kev-whole-model-layer-recomputation` (and the Clef alias) trains one
+# text longer than the pass budget twice, recomputing each layer and keeping
+# every activation, and requires the same weights and a lower peak: about a
+# minute on Kev 0.8B.
 test-laya = "test -p astronomical-model-serving --features direct-mlx --lib decision_models"
 test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
 test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
+test-laya-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_laya"
+test-kev-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_kev"
+test-clef-whole-model-training = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training::should_serve_shipped_scores_with_zero_add_ons_and_trained_scores_with_trained_ones_on_clef"
+test-kev-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_kev"
+test-clef-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_clef"
+test-laya-whole-model-positive-control = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_positive_control::should_learn_a_code_the_final_layers_cannot_on_laya"
+test-kev-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_kev_whole_model_training_speed"
+test-clef-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_clef_whole_model_training_speed"
+test-laya-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_laya_whole_model_training_speed"
+test-clef-whole-model-pass-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_pass_memory::should_measure_clef_whole_model_pass_memory_by_text_length"
+test-kev-whole-model-pass-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_pass_memory::should_measure_kev_whole_model_pass_memory_by_text_length"
+test-kev-whole-model-layer-recomputation = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_layer_recomputation::should_train_a_text_over_the_pass_budget_to_the_same_weights_in_less_memory_on_kev"
+test-clef-whole-model-layer-recomputation = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_layer_recomputation::should_train_a_text_over_the_pass_budget_to_the_same_weights_in_less_memory_on_clef"
 # Text to speech: Kokoro-82M and Phonon 31M on MLX. `test-speech` runs the
 # speech lib tests (shared layers, both families' layers on small weights from
 # the Shakespeare fixture, the engines' request checks); about a second, no
@@ -453,6 +517,109 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # back-to-back residency churn on the large sparse model; issues #1716 and
 # #1717). Each case loads the real model, so run them only when comparing
 # strategies; append --filter NAME to pick cases.
+# A drafted block rewound to its kept rows leaves the target exactly where
+# forwarding only those rows would (small dense Qwen3.5 from the Development
+# library, every kept count 1 to 7, plus a control without the rewind). Seconds.
+test-drafted-rewind = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter drafted_rewind"
+# A draft tree verified in one pass on the small dense Qwen3.5: every row's
+# logits match feeding its chain alone, committing a branch leaves the state
+# feeding that branch leaves, and a control that commits the other branch
+# differs. Seconds.
+test-draft-tree-verification = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter draft_tree_verification"
+# Gate 2 baseline: where one DFlash2 draft-and-verify round's time goes on the
+# real 27B pair (drafter, draft head, selector, 8-row verify, readback, rewind)
+# beside a plain one-row step. Each stage is timed alone. Asserts nothing;
+# about 10 seconds after the pair loads. Same downloads as the Gate 1 alias.
+measure-dflash2-round-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_round_cost"
+# Gate 1 of speculative decoding on the dense Qwen3.8 27B: tokens kept per
+# verify round by the DFlash2 drafter on the real pair (TensorFold/Qwen3.8-27B-
+# MLX-4bit and z-lab/Qwen3.8-27B-DFlash2, read from the Hugging Face hub folder;
+# `hf download` both first). Code at 0.7, chat at 1.0, greedy as a diagnostic;
+# floors sit about 10% under z-lab's reference (6.07 and 3.00). Needs about
+# 22 GB of free memory; about one minute.
+measure-dflash2-kept-per-round = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_kept_per_round"
+# Gate 4's first measurement: kept per round if each round verified
+# TensorFold's draft tree (15 nodes, 4 children) instead of one path, on the
+# code-completion and chat cells, greedy and keyed-sampled (0.7 and 1.0).
+# Replays a recorded single-path reference, so it needs no tree forward. It
+# also forces TensorFold's own greedy code text (a fixture) through this
+# drafter and tree, the one count that is on the same text as its 5.95.
+# Same pair and memory as above; about a minute.
+measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_oracle"
+# Gate 4 end to end on the 27B pair: every round verifies TensorFold's draft
+# tree in one target pass and commits the kept chain; prints kept per round,
+# decode tok/s and ms a round for the code-completion and chat cells, greedy
+# and keyed-sampled, then where a round's time goes (each stage synced, after
+# a short and a long prompt, and by layer stage). Same pair and memory as
+# above; about three minutes, or one test with --filter NAME. With a
+# mixture-of-experts target (see the configuration note below) it also has:
+# the tree-size ladder against plain one-token steps; prose after a
+# 10,000-token prompt; synced rounds through the row-exact tree attention
+# kernel and MLX's attention from 14 to 11,292 context tokens (where the
+# kernel starts to pay); trees against chains three and four tokens deep;
+# and the kernel against MLX's bf16 and float32
+# attention over many interleaved seeds, each seed printed, since tokens kept
+# a round vary between sampled texts more than between attention paths.
+# Those are long: pass --exact --filter with the test's full path.
+measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_round"
+# Whether a verified draft row gives the target's own one-token step's
+# logits: the greedy continuation fed one token a step, as one 16-row chain
+# through the tree verify, and as one plain 16-row forward, with each row's
+# largest logit difference, pick agreement and top-two margin; the same for a
+# 4-row chain after a short and a 10,000-token prompt; a real drafted tree
+# through the row-exact tree attention kernel and through MLX's attention;
+# and, on real data, how many attention outputs each path leaves float32
+# attention's, by tree row and head half. Every DFlash2
+# journey above takes another target the same way: append --configuration
+# PATH whose model_directory is a model folder holding its own drafter in a
+# `drafter` folder; without one they load the 27B pair. About a minute.
+measure-dflash2-row-exactness = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_row_exactness"
+# The rung below it: whether MLX's quantized matmul (4- and 8-bit, group 64,
+# at the 35B-A3B target's widths) and its attention kernel give a row the same
+# bits inside a window of 2, 4, 8 and 16 rows as alone. Random inputs, no
+# model; a few seconds.
+measure-batched-kernel-row-exactness = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter batched_kernel_row_exactness"
+# MLX attention alone at the 35B-A3B target's shape over 1,024 to 65,536
+# stored keys: one row unmasked (a plain step), four rows unmasked, and four
+# rows with a tree verify's additive mask. Seconds.
+measure-tree-attention-context-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter tree_attention_context_cost"
+# The row-exact tree attention kernel (crates/model-serving/src/qwen3_5_core/model_math/row_exact_tree_attention.rs):
+# every row of a 4-row chain and of a branching tree must equal its one-row
+# step bit for bit and agree with MLX's masked attention, after 1,000 and 9,000
+# keys; then its time against MLX over 1,024 to 65,536 keys. Seconds.
+measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter row_exact_tree_attention"
+# The same pair through the real worker: 10,000 Romeo and Juliet tokens in,
+# 500 out at temperature 1.0, over the daemon IPC boundary, with the worker
+# finding the drafter beside the target. Append --configuration PATH with
+# model_directory set to the target's snapshot directory (and
+# throughput_history_path to keep the durable history untouched). About two
+# minutes.
+measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter dflash2_draft_tree --ignored"
+# The DFlash2 drafter against z-lab's own MLX reference: a tiny random
+# drafter run through dflash/model_mlx.py for two rounds (fixture and its
+# generator in verification/acceptance/tests/fixtures/dflash2_reference); hidden
+# rows, logits, greedy path and kept candidates must match. Seconds.
+test-dflash2-drafter-reference = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_drafter_reference"
+# The row-batched kernel's GPU contracts: matches MLX's quantized matmul on
+# every 27B shape at 1 to 32 rows, gives each row the same bits alone and
+# inside a 16-row block, and refuses packings it cannot read. Seconds.
+test-row-batched-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter row_batched_matmul"
+# The register-ordered kernel's GPU contracts: its one-time conversion
+# matches a CPU transcription of TensorFold's regBlock word for word, its
+# values match MLX's quantized matmul on every 27B shape at 1 to 128 rows,
+# and each row gets the same bits alone and inside a 128-row dispatch. Seconds.
+test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter register_ordered_matmul"
+# Speculative decoding: what a verify pass over K drafted rows costs against
+# one row. Times the dense Qwen3.8 27B's real 4-bit projection shapes for
+# K = 1 to 128, through MLX's quantized matmul, the row-batched kernel reading
+# MLX's layout, and the register-ordered kernel reading weights converted
+# into TensorFold's order (crates/model-serving/src/row_batched_matmul), over
+# 16 distinct layers
+# so every pass reads DRAM, plus the 248,320-row output head, then each
+# projection shape on its own. Prints each K's cost against one row and the
+# read rate; asserts nothing. Needs about 6 GB of free GPU memory and no
+# model; runs in about 15 seconds.
+measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --filter k_row_verify_cost"
 measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
 # Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the

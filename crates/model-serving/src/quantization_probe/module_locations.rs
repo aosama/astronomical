@@ -97,7 +97,7 @@ pub(crate) fn affine_weights_at_mut(
 ) -> Option<&mut Qwen3_5AffineWeights> {
     match location {
         ModuleLocation::Embedding => Some(&mut weights.embedding_weights),
-        ModuleLocation::LanguageModelHead => Some(&mut weights.language_model_head_weights),
+        ModuleLocation::LanguageModelHead => weights.language_model_head_weights.bound_mut(),
         ModuleLocation::DecoderLayerAttention {
             decoder_layer_index,
             projection,
@@ -117,32 +117,32 @@ fn attention_weights_mut(
 ) -> Option<&mut Qwen3_5AffineWeights> {
     match (attention_weights, projection) {
         (Qwen3_5AttentionWeights::Full(full), AttentionProjection::Query) => {
-            Some(&mut full.query_projection)
+            full.query_projection.bound_mut()
         }
         (Qwen3_5AttentionWeights::Full(full), AttentionProjection::Key) => {
-            Some(&mut full.key_projection)
+            full.key_projection.bound_mut()
         }
         (Qwen3_5AttentionWeights::Full(full), AttentionProjection::Value) => {
-            Some(&mut full.value_projection)
+            full.value_projection.bound_mut()
         }
         (Qwen3_5AttentionWeights::Full(full), AttentionProjection::Output) => {
-            Some(&mut full.output_projection)
+            full.output_projection.bound_mut()
         }
         (
             Qwen3_5AttentionWeights::Linear(linear),
             AttentionProjection::LinearInputQueriesKeysValues,
-        ) => Some(&mut linear.input_queries_keys_values_projection),
+        ) => linear.input_queries_keys_values_projection.bound_mut(),
         (Qwen3_5AttentionWeights::Linear(linear), AttentionProjection::LinearOutputGate) => {
-            Some(&mut linear.output_gate_projection)
+            linear.output_gate_projection.bound_mut()
         }
         (Qwen3_5AttentionWeights::Linear(linear), AttentionProjection::LinearUpdateRate) => {
-            Some(&mut linear.update_rate_projection)
+            linear.update_rate_projection.bound_mut()
         }
         (Qwen3_5AttentionWeights::Linear(linear), AttentionProjection::LinearDecayInterval) => {
-            Some(&mut linear.decay_interval_projection)
+            linear.decay_interval_projection.bound_mut()
         }
         (Qwen3_5AttentionWeights::Linear(linear), AttentionProjection::LinearOutput) => {
-            Some(&mut linear.output_projection)
+            linear.output_projection.bound_mut()
         }
         _ => None,
     }
@@ -169,11 +169,11 @@ fn feed_forward_weights_mut(
     let layer_weights = weights.decoder_layer_weights.get_mut(decoder_layer_index)?;
     match (&mut layer_weights.mlp_weights, is_shared_expert, projection) {
         (Qwen3_5DecoderFeedForwardWeights::Dense(dense), false, Some(projection)) => {
-            Some(match projection {
-                FeedForwardProjection::Gate => &mut dense.gate_projection,
-                FeedForwardProjection::Up => &mut dense.up_projection,
-                FeedForwardProjection::Down => &mut dense.down_projection,
-            })
+            match projection {
+                FeedForwardProjection::Gate => dense.gate_projection.bound_mut(),
+                FeedForwardProjection::Up => dense.up_projection.bound_mut(),
+                FeedForwardProjection::Down => dense.down_projection.bound_mut(),
+            }
         }
         (Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(moe), true, Some(projection)) => {
             Some(match projection {

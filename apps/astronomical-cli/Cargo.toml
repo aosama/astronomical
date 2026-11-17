@@ -44,6 +44,7 @@ quantize-convert = [
 astronomical-config = { path = "../../crates/config" }
 astronomical-expert-atlas = { path = "../../crates/expert-atlas" }
 astronomical-decision-contract = { path = "../../crates/decision-contract" }
+astronomical-decision-training = { path = "../../crates/decision-training" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-speech-contract = { path = "../../crates/speech-contract" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"], optional = true }

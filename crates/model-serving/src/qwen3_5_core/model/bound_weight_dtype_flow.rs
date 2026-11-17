@@ -23,6 +23,7 @@ use crate::qwen3_5_core::decoder::astro_decoder_state_cache_dtype_flow::{
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
 };
+use crate::qwen3_5_core::model_math::dense_projection::Qwen3_5DenseProjection;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 
@@ -97,30 +98,30 @@ fn attention_dtypes(
         Qwen3_5AttentionWeights::Linear(linear_attention_weights) => {
             linear_attention_dtypes(&LinearAttentionDtypeFlow {
                 normalized_input_dtype,
-                input_queries_keys_values_projection: affine_contract(
+                input_queries_keys_values_projection: dense_contract(
                     &linear_attention_weights.input_queries_keys_values_projection,
                 ),
                 convolution_weight_dtype: linear_attention_weights.convolution_weight.dtype(),
                 normalization_weight_dtype: linear_attention_weights.normalization_weight.dtype(),
-                output_gate_projection: affine_contract(
+                output_gate_projection: dense_contract(
                     &linear_attention_weights.output_gate_projection,
                 ),
-                output_projection: affine_contract(&linear_attention_weights.output_projection),
+                output_projection: dense_contract(&linear_attention_weights.output_projection),
             })?
         }
         Qwen3_5AttentionWeights::Full(full_attention_weights) => {
             full_attention_dtypes(&FullAttentionDtypeFlow {
                 normalized_input_dtype,
-                query_projection: affine_contract(&full_attention_weights.query_projection),
+                query_projection: dense_contract(&full_attention_weights.query_projection),
                 query_normalization_weight_dtype: full_attention_weights
                     .query_normalization_weight
                     .dtype(),
-                key_projection: affine_contract(&full_attention_weights.key_projection),
+                key_projection: dense_contract(&full_attention_weights.key_projection),
                 key_normalization_weight_dtype: full_attention_weights
                     .key_normalization_weight
                     .dtype(),
-                value_projection: affine_contract(&full_attention_weights.value_projection),
-                output_projection: affine_contract(&full_attention_weights.output_projection),
+                value_projection: dense_contract(&full_attention_weights.value_projection),
+                output_projection: dense_contract(&full_attention_weights.output_projection),
             })?
         }
     })
@@ -137,9 +138,9 @@ fn feed_forward_output_dtype(
         Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
             dense_mlp_output_dtype(&DenseMlpDtypeFlow {
                 normalized_attention_dtype,
-                gate_projection: affine_contract(&dense_mlp_weights.gate_projection),
-                up_projection: affine_contract(&dense_mlp_weights.up_projection),
-                down_projection: affine_contract(&dense_mlp_weights.down_projection),
+                gate_projection: dense_contract(&dense_mlp_weights.gate_projection),
+                up_projection: dense_contract(&dense_mlp_weights.up_projection),
+                down_projection: dense_contract(&dense_mlp_weights.down_projection),
             })?
         }
         Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
@@ -167,6 +168,16 @@ fn feed_forward_output_dtype(
             )?
         }
     })
+}
+
+/// A dense projection's dtype contract. A projection converted into register
+/// order holds bf16 scales and biases, so its products promote exactly as a
+/// bf16 weight's do.
+fn dense_contract(projection: &Qwen3_5DenseProjection) -> AffineDtypeContract {
+    match projection.bound() {
+        Some(bound_weights) => affine_contract(bound_weights),
+        None => AffineDtypeContract::NativeBfloat16,
+    }
 }
 
 /// Reduces one bound affine weight to the shared replay's dtype contract.

@@ -10,6 +10,14 @@ use astronomical_runtime_integration::MlxRuntime;
 use crate::InferenceEngineError;
 use mlx_bridge::MlxArray;
 
+mod sampling_distribution;
+mod vocabulary_top_k;
+#[cfg(test)]
+#[path = "gpu_token_sampling/vocabulary_top_k_tests.rs"]
+mod vocabulary_top_k_tests;
+pub(crate) use sampling_distribution::sampling_distribution_rows;
+pub(crate) use vocabulary_top_k::vocabulary_top_k;
+
 /// Builds one lazy sampled token using a fully GPU-resident top-k + top-p pipeline.
 ///
 /// `logits` must have shape `[1, 1, vocabulary]`. `top_k = None` means no k-truncation:

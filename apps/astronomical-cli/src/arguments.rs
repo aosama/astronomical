@@ -42,6 +42,7 @@ pub enum CliCommand {
     ValidateConfig(ValidateConfigArguments),
     Quantize(QuantizeCommand),
     Vision(VisionCommand),
+    Decision(crate::verbs::decision::DecisionCommand),
     ModelPrograms,
     ModelConvertAtlas(crate::verbs::convert_atlas::ConvertAtlasArguments),
 }
@@ -93,8 +94,7 @@ pub fn parse_command(
         }
         "quantize" => crate::verbs::quantize::parse_quantize_command(&remaining_arguments[1..])
             .map(CliCommand::Quantize),
-        "vision" => crate::verbs::vision::parse_vision_command(&remaining_arguments[1..])
-            .map(CliCommand::Vision),
+        "vision" | "decision" => parse_model_building_verb(command_name, &remaining_arguments[1..]),
         other => Err(UsageError::UnknownCommand(other.to_owned())),
     }
 }
@@ -108,6 +108,19 @@ fn parse_file_output_verb(
         return parse_speak_arguments(verb_arguments).map(CliCommand::Speak);
     }
     parse_image_arguments(verb_arguments).map(CliCommand::Image)
+}
+
+/// Parses a verb that builds a new model folder from installed ones:
+/// `decision` (a calibrated copy), or else `vision` (a text model with a tower).
+fn parse_model_building_verb(
+    command_name: &str,
+    verb_arguments: &[OsString],
+) -> Result<CliCommand, UsageError> {
+    if command_name == "decision" {
+        return crate::verbs::decision::parse_decision_command(verb_arguments)
+            .map(CliCommand::Decision);
+    }
+    crate::verbs::vision::parse_vision_command(verb_arguments).map(CliCommand::Vision)
 }
 
 /// Parses a verb served by a helper model that answers in one step:
@@ -564,6 +577,12 @@ pub enum UsageError {
     UnknownQuantizeTarget(String),
     #[error("unknown vision target: {0}. Supported targets: inspect, match, add")]
     UnknownVisionTarget(String),
+    #[error("unknown decision target: {0:?}. Supported targets: calibrate")]
+    UnknownDecisionTarget(String),
+    #[error(
+        "decision calibrate needs a labelled examples file. Try: astronomical decision calibrate examples.jsonl --output my-calibrated-model"
+    )]
+    DecisionCalibrateExamplesRequired,
     #[error("invalid value for {flag}: {reason}")]
     InvalidQuantizeValue { flag: &'static str, reason: String },
     #[error("unknown instance {0}: expected stable or development")]

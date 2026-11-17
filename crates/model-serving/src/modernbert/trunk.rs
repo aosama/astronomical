@@ -20,6 +20,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetenso
 use mlx_bridge::{MlxArray, MlxCError, MlxDtype};
 use thiserror::Error;
 
+use crate::linear_adapters::{LinearAdapters, adapted_layer_output};
 use crate::modernbert::attention_mask::{
     HIDDEN_POSITION_MASK_VALUE, key_padding_mask_values, local_window_hides_any_pair,
     local_window_mask_values,
@@ -56,6 +57,9 @@ pub(crate) struct ModernBertTrunk<'model> {
     pub(crate) tensors: &'model MlxSafetensors,
     pub(crate) configuration: &'model ModernBertConfiguration,
     pub(crate) weight_layout: &'model ModernBertWeightLayout,
+    /// Add-on weights trained for a decision model, or `None` to run the
+    /// shipped layers alone.
+    pub(crate) adapters: Option<&'model LinearAdapters>,
 }
 
 /// The additive masks one batch needs, built once and shared by every layer.
@@ -373,7 +377,7 @@ impl ModernBertTrunk<'_> {
             self.tensor(&format!("{full_tensor_prefix}{QUANTIZED_WEIGHTS_TAIL}"))?;
         let scales = self.tensor(&format!("{full_tensor_prefix}{QUANTIZED_SCALES_TAIL}"))?;
         let biases = self.tensor(&format!("{full_tensor_prefix}{QUANTIZED_BIASES_TAIL}"))?;
-        Ok(self.runtime.quantized_matmul_affine(
+        let shipped_output = self.runtime.quantized_matmul_affine(
             activations,
             &quantized_weights,
             &scales,
@@ -381,6 +385,13 @@ impl ModernBertTrunk<'_> {
             true,
             self.configuration.quantization_group_size as i32,
             self.configuration.quantization_bits as i32,
+        )?;
+        Ok(adapted_layer_output(
+            self.adapters,
+            self.runtime,
+            &full_tensor_prefix,
+            activations,
+            shipped_output,
         )?)
     }
 

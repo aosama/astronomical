@@ -86,9 +86,10 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::MlxMemoryLimitRestartRequired { .. }) => {
             apply_memory_limit_event(memory_limit_event, health_snapshot);
         }
-        swap_wait_event @ (WorkerEvent::ModelSwapped { .. }
-        | WorkerEvent::ModelSwapFailed { .. }) => {
-            return Err(outside_model_swap_wait_violation(&swap_wait_event));
+        waited_for_event @ (WorkerEvent::ModelSwapped { .. }
+        | WorkerEvent::ModelSwapFailed { .. }
+        | WorkerEvent::AstroSsdPromptCacheCleared { .. }) => {
+            return Err(outside_its_wait_violation(&waited_for_event));
         }
         generation_finalized_event @ WorkerEvent::GenerationFinalized { .. } => {
             apply_generation_finalized(
@@ -121,9 +122,6 @@ pub(super) fn handle_worker_event(
         | WorkerEvent::ExpertStreamingStats { .. }) => {
             dispatch_observability_worker_event(observability_event, health_snapshot);
         }
-        event @ WorkerEvent::AstroSsdPromptCacheCleared { .. } => {
-            return Err(outside_astro_ssd_prompt_cache_clear_wait_violation(&event));
-        }
         stepped_event @ (WorkerEvent::ImageGenerationProgress { .. }
         | WorkerEvent::ImageGenerationCompleted { .. }
         | WorkerEvent::ImageGenerationFailed { .. }
@@ -140,6 +138,8 @@ pub(super) fn handle_worker_event(
             )?;
         }
         single_shot_event @ (WorkerEvent::DecisionsCompleted { .. }
+        | WorkerEvent::DecisionTrainingProgress { .. }
+        | WorkerEvent::DecisionModelTrained { .. }
         | WorkerEvent::DecisionsFailed { .. }
         | WorkerEvent::DecisionsFinalized { .. }
         | WorkerEvent::EmbeddingsCompleted { .. }
@@ -623,6 +623,19 @@ fn dispatch_chat_progress_event(
             )
         }
         _ => Ok(()),
+    }
+}
+
+/// The protocol violation for an event only its own wait loop may receive
+/// (a model swap's or an Astro SSD prompt-cache clear's), arriving outside
+/// that wait. One arm in `handle_worker_event` keeps that function inside
+/// the 100-line budget.
+fn outside_its_wait_violation(waited_for_event: &WorkerEvent) -> WorkerControlError {
+    match waited_for_event {
+        WorkerEvent::AstroSsdPromptCacheCleared { .. } => {
+            outside_astro_ssd_prompt_cache_clear_wait_violation(waited_for_event)
+        }
+        _ => outside_model_swap_wait_violation(waited_for_event),
     }
 }
 

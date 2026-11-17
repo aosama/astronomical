@@ -38,6 +38,7 @@ async fn main() {
             }
             WorkerCommand::GenerateEmbeddings(_)
             | WorkerCommand::GenerateDecisions(_)
+            | WorkerCommand::TrainDecisionModel(_)
             | WorkerCommand::GenerateSpeech(_) => {
                 panic!(
                     "the chat-only fixture must not receive an embeddings, decision or speech request"

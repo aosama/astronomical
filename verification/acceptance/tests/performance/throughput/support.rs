@@ -456,3 +456,82 @@ pub(crate) async fn measure_throughput(
         logging_directory,
     }
 }
+
+/// The Romeo and Juliet source token-bounded prompts are cut from, word by word.
+const ROMEO_AND_JULIET_SOURCE: &str =
+    include_str!("../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
+
+/// The model id discovery derives for a model directory: the leaf of the
+/// decoded `models--org--repo` `huggingface_hub_cache` entry a snapshot lives
+/// under, or, in a plain library (`<organization>/<model>`), the folder's
+/// own name, as Astronomical's own library names its models.
+pub(crate) fn discovered_model_id(pack_directory: &std::path::Path) -> String {
+    huggingface_hub_cache_model_id(pack_directory)
+        .unwrap_or_else(|| plain_library_model_id(pack_directory))
+}
+
+/// The repository leaf of the `huggingface_hub_cache` entry above a snapshot.
+fn huggingface_hub_cache_model_id(pack_directory: &std::path::Path) -> Option<String> {
+    let entry_name = pack_directory.ancestors().find_map(|ancestor| {
+        ancestor
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| name.starts_with("models--"))
+    })?;
+    entry_name
+        .trim_start_matches("models--")
+        .rsplit("--")
+        .next()
+        .map(str::to_owned)
+}
+
+fn plain_library_model_id(pack_directory: &std::path::Path) -> String {
+    pack_directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("a plain library model directory has a folder name")
+        .to_owned()
+}
+
+/// Cuts the Romeo and Juliet source at the fewest words whose prompt encodes
+/// to at least `minimum_token_count` tokens under the tokenizer in
+/// `model_directory`, so a measured prompt clears its token floor by at most
+/// a word.
+pub(crate) fn romeo_and_juliet_prompt_of_at_least(
+    model_directory: &std::path::Path,
+    instruction: &str,
+    minimum_token_count: usize,
+) -> String {
+    let tokenizer = tokenizers::Tokenizer::from_file(model_directory.join("tokenizer.json"))
+        .expect("the pack tokenizer should load");
+    let render = |word_count: usize| {
+        let excerpt = ROMEO_AND_JULIET_SOURCE
+            .split_whitespace()
+            .take(word_count)
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!("{instruction}\n\n{excerpt}")
+    };
+    let encoded_length = |word_count: usize| {
+        tokenizer
+            .encode(render(word_count).as_str(), false)
+            .expect("the prompt should encode")
+            .get_ids()
+            .len()
+    };
+    let total_word_count = ROMEO_AND_JULIET_SOURCE.split_whitespace().count();
+    assert!(
+        encoded_length(total_word_count) >= minimum_token_count,
+        "the Romeo and Juliet source must encode to at least {minimum_token_count} tokens"
+    );
+    let (mut low, mut high) = (1_usize, total_word_count);
+    while low < high {
+        let middle = low + (high - low) / 2;
+        if encoded_length(middle) >= minimum_token_count {
+            high = middle;
+        } else {
+            low = middle + 1;
+        }
+    }
+    render(low)
+}
