@@ -14,6 +14,7 @@
 //! It also prints each cell's decode speed (prefill excluded); every stage
 //! still syncs with the GPU, so `dflash2_round_cost` is where stages are timed.
 
+use std::path::PathBuf;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::RequestId;
@@ -45,12 +46,20 @@ pub(crate) const CODE_PROMPT: &str =
 pub(crate) const CHAT_PROMPT: &str = "Explain how matrix multiplication uses a GPU in plain English, then give a small numerical example.";
 pub(crate) const OUTPUT_TOKENS: usize = 256;
 const SAMPLING_SEED: u64 = 1234;
+/// The engine's draft-tree node budget, `DraftTreeOptions::default()`;
+/// a `const` here because the cells below are built at compile time.
+pub(crate) const ENGINE_NODE_BUDGET: usize = 15;
 const SAMPLED_SEED_COUNT: u64 = 3;
 /// Qwen3.8's recommended sampling, as users run it and as the reference ran.
 pub(crate) const TOP_P_THOUSANDTHS: u16 = 950;
 pub(crate) const TOP_K: u16 = 20;
-/// 15 GiB of target weights, 3.6 GiB of bf16 drafter, and working room.
-const ACTIVE_MEMORY_LIMIT_BYTES: usize = 26 * 1024 * 1024 * 1024;
+/// The larger of the two pairs: the 35B-A3B mixture-of-experts target's
+/// 23 GiB with its 1 GiB drafter, or the 27B's 15 GiB with its 3.6 GiB of
+/// bf16 drafter, plus working room.
+const ACTIVE_MEMORY_LIMIT_BYTES: usize = 30 * 1024 * 1024 * 1024;
+/// The folder inside a configured target that holds its own drafter, as the
+/// engine's drafter discovery reads it.
+const BUNDLED_DRAFTER_DIRECTORY_NAME: &str = "drafter";
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
 /// One measured cell: the prompt, the temperature (0 = greedy diagnostic), and
@@ -64,6 +73,9 @@ pub(crate) struct Cell {
     pub(crate) is_raw_completion: bool,
     pub(crate) temperature_thousandths: u16,
     pub(crate) minimum_kept_per_round: f64,
+    /// Nodes a drafted tree may hold, the anchor's row aside: the engine's
+    /// own budget unless a journey compares tree sizes.
+    pub(crate) node_budget: usize,
     /// The keyed sampler's seed, for journeys that sample with it.
     pub(crate) keyed_seed: u64,
 }
@@ -76,6 +88,7 @@ const CELLS: [Cell; 4] = [
         temperature_thousandths: 700,
         minimum_kept_per_round: 5.5,
         keyed_seed: SAMPLING_SEED,
+        node_budget: ENGINE_NODE_BUDGET,
     },
     Cell {
         label: "chat",
@@ -84,6 +97,7 @@ const CELLS: [Cell; 4] = [
         temperature_thousandths: 1_000,
         minimum_kept_per_round: 2.7,
         keyed_seed: SAMPLING_SEED,
+        node_budget: ENGINE_NODE_BUDGET,
     },
     // TensorFold's community code cell: the same prompt as a raw completion.
     // No z-lab figure exists for it, so it reports without a floor.
@@ -94,6 +108,7 @@ const CELLS: [Cell; 4] = [
         temperature_thousandths: 700,
         minimum_kept_per_round: 0.0,
         keyed_seed: SAMPLING_SEED,
+        node_budget: ENGINE_NODE_BUDGET,
     },
     Cell {
         label: "chat greedy (diagnostic)",
@@ -102,11 +117,14 @@ const CELLS: [Cell; 4] = [
         temperature_thousandths: 0,
         minimum_kept_per_round: 2.8,
         keyed_seed: SAMPLING_SEED,
+        node_budget: ENGINE_NODE_BUDGET,
     },
 ];
 
 pub(crate) struct JourneyPair {
     pub(crate) target: Qwen3_5ResidentModel,
+    /// The model ID chat commands name: the loaded target's folder leaf.
+    pub(crate) target_model_id: String,
     pub(crate) tokenizer: Qwen3_5Tokenizer,
     pub(crate) drafter_configuration: DFlash2DrafterConfiguration,
     pub(crate) drafter_weights: DFlash2DrafterWeights,
@@ -169,9 +187,39 @@ fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
     );
 }
 
+/// The target and drafter directories: the test-run configuration's
+/// `model_directory` with its bundled drafter when one is selected, so the
+/// same journeys measure any paired target, otherwise the 27B pair from the
+/// Hugging Face hub folder.
+fn pair_directories() -> (PathBuf, PathBuf, String) {
+    let configured_target = astronomical_test_harness::test_run::TestRunContext::current()
+        .configuration
+        .model_directory;
+    match configured_target {
+        Some(target_directory) => {
+            let drafter_directory = target_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME);
+            let target_model_id = target_directory
+                .file_name()
+                .expect("the configured target names a folder")
+                .to_string_lossy()
+                .into_owned();
+            (target_directory, drafter_directory, target_model_id)
+        }
+        None => (
+            huggingface_hub_snapshot(TARGET_REPOSITORY),
+            huggingface_hub_snapshot(DRAFTER_REPOSITORY),
+            TARGET_REPOSITORY.to_owned(),
+        ),
+    }
+}
+
 pub(crate) fn load_pair() -> JourneyPair {
-    let target_directory = huggingface_hub_snapshot(TARGET_REPOSITORY);
-    let drafter_directory = huggingface_hub_snapshot(DRAFTER_REPOSITORY);
+    let (target_directory, drafter_directory, target_model_id) = pair_directories();
+    eprintln!(
+        "[dflash2] target {} with drafter {}",
+        target_directory.display(),
+        drafter_directory.display()
+    );
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
             .expect("memory limits are valid"),
@@ -179,7 +227,7 @@ pub(crate) fn load_pair() -> JourneyPair {
     .expect("the MLX runtime initializes");
     let artifact = Qwen3_5ArtifactValidator::new()
         .validate(&target_directory, 4096)
-        .expect("the 27B artifact validates");
+        .expect("the target artifact validates");
     let tokenizer =
         Qwen3_5Tokenizer::from_validated_artifact(&artifact).expect("the tokenizer builds");
     let chunking =
@@ -193,15 +241,16 @@ pub(crate) fn load_pair() -> JourneyPair {
         chunking,
         &mut attribution,
     )
-    .expect("the 27B loads in the resident engine");
+    .expect("the target loads in the resident engine");
     target
         .materialize_complete_weights_matching_production()
-        .expect("the 27B weights materialize");
+        .expect("the target weights materialize");
     // A drafting engine converts its projections into register order once
     // this GPU's probe proves the kernel; every row count then uses it.
     let converted_projection_count = target
         .convert_projections_to_register_order(&mut attribution)
-        .expect("the projections convert");
+        .expect("the projections convert")
+        .unwrap_or(0);
     let register_order_enabled = converted_projection_count > 0;
     eprintln!("[dflash2] register-ordered projections: {converted_projection_count}");
     let config_document: serde_json::Value = serde_json::from_str(
@@ -232,6 +281,7 @@ pub(crate) fn load_pair() -> JourneyPair {
         .expect("the drafter quantizes to 4 bits");
     JourneyPair {
         target,
+        target_model_id,
         tokenizer,
         drafter_configuration,
         drafter_weights,
@@ -249,7 +299,7 @@ pub(crate) fn completion_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32>
 pub(crate) fn prompt_token_ids(pair: &JourneyPair, prompt: &str) -> Vec<u32> {
     let command = astronomical_ipc_protocol::ChatGenerationCommand {
         request_id: RequestId::new(0),
-        model: TARGET_REPOSITORY.to_owned(),
+        model: pair.target_model_id.clone(),
         messages: vec![astronomical_ipc_protocol::ChatMessage::User {
             content: prompt.to_owned(),
             images: Vec::new(),

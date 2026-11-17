@@ -40,6 +40,22 @@ pub struct Qwen3_5OptionalAccelerators {
     /// Advances a DeltaNet layer over a verified tree's kept rows; set with
     /// the tree kernel.
     pub(crate) gated_delta_replay_kernel: Option<mlx_bridge::MlxMetalKernel>,
+    /// Full attention for a draft tree's rows on the M5 matrix units, each
+    /// row exact to its one-row step; set with the tree kernel when the
+    /// target's attention shape fits it.
+    pub(crate) row_exact_tree_attention_kernels: Option<
+        crate::qwen3_5_core::model_math::row_exact_tree_attention::RowExactTreeAttentionKernels,
+    >,
+    /// Runs MLX's tree attention on float32 copies of its bf16 inputs, the
+    /// exact reference, for measurements of how attention precision moves
+    /// the drafted tokens a round keeps. Serving leaves it off.
+    pub(crate) tree_attention_in_float32_for_measurement: bool,
+    /// When set, every tree attention through the row-exact kernel also runs
+    /// MLX's bf16 and float32 attention on the same inputs and records how
+    /// many output elements each path's bf16 result differs from float32's.
+    /// For measurements only: it evaluates every layer on the spot.
+    pub(crate) tree_attention_error_record:
+        Option<std::cell::RefCell<Vec<super::tree_attention_measurement::TreeAttentionErrorCount>>>,
 }
 
 /// One resident native Qwen3.5 text model, optional vision tower, and its direct MLX runtime.

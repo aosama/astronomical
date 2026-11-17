@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use astronomical_model_serving::RequestDecoderStateStack;
 use astronomical_model_serving::speculative_decoding::tree_rows::TreeRows;
+use astronomical_model_serving::{PerformanceAttribution, VerificationLogitsMode};
 use mlx_bridge::MlxArray;
 use serial_test::serial;
 
@@ -71,6 +72,267 @@ fn should_decode_prose_after_a_long_prompt_with_draft_trees() {
     cell.prompt = long_prompt;
     // One seed: every decode prefills the long prompt again.
     decode_cells_with_trees(&[cell], 1);
+}
+
+/// Node budgets for the tree-size ladder: 2- to 8-row rounds, where the
+/// first ladder on the 35B-A3B target (3 to 15 nodes) peaked at its
+/// smallest size.
+const LADDER_NODE_BUDGETS: [usize; 6] = [1, 2, 3, 4, 5, 7];
+/// Seeds pooled at each budget of the ladder.
+const LADDER_SEED_COUNT: u64 = 2;
+
+/// The sampled chat cell at a ladder of tree sizes. On a mixture-of-experts
+/// target every verified row pays its own expert reads, so a round's cost
+/// grows with its rows while the tokens it keeps level off; this finds the
+/// size where the two meet. One process, smallest first.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_decode_chat_at_a_ladder_of_tree_sizes() {
+    report_plain_decode(&ORACLE_CELLS[4], LADDER_SEED_COUNT);
+    let mut cells = Vec::with_capacity(LADDER_NODE_BUDGETS.len());
+    for node_budget in LADDER_NODE_BUDGETS {
+        let mut cell = ORACLE_CELLS[4];
+        cell.label = Box::leak(format!("chat 1.0, {node_budget}-node tree").into_boxed_str());
+        cell.node_budget = node_budget;
+        cells.push(cell);
+    }
+    decode_cells_with_trees(&cells, LADDER_SEED_COUNT);
+}
+
+/// Romeo and Juliet words that make about 10,000 prompt tokens with the
+/// instruction, the size the serving throughput journey sends.
+const JOURNEY_PROMPT_WORD_COUNT: usize = 7_400;
+const JOURNEY_INSTRUCTION: &str =
+    "Continue the supplied Romeo and Juliet story above for approximately 500 tokens.";
+
+/// The serving journey's own cell in this harness: about 10,000 prompt
+/// tokens, prose at temperature 1.0, plain against the small trees a
+/// mixture-of-experts target drafts with. Read against the journey: if this
+/// keeps the short prompt's gain, the serving loop loses it; if it does not,
+/// the long prompt does.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_decode_prose_after_a_journey_sized_prompt_plain_and_with_small_trees() {
+    let words: Vec<&str> =
+        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
+            .split_whitespace()
+            .take(JOURNEY_PROMPT_WORD_COUNT)
+            .collect();
+    let prompt: &'static str =
+        Box::leak(format!("{}\n\n{JOURNEY_INSTRUCTION}", words.join(" ")).into_boxed_str());
+    let mut cell = ORACLE_CELLS[4];
+    cell.label = "prose after a journey-sized prompt, 1.0";
+    cell.prompt = prompt;
+    report_plain_decode(&cell, 1);
+    let mut cells = Vec::new();
+    for node_budget in [3, 7] {
+        let mut sized_cell = cell;
+        sized_cell.label = Box::leak(
+            format!("prose after a journey-sized prompt, 1.0, {node_budget}-node tree")
+                .into_boxed_str(),
+        );
+        sized_cell.node_budget = node_budget;
+        cells.push(sized_cell);
+    }
+    decode_cells_with_trees(&cells, 1);
+}
+
+/// Seeds pooled for the kernel comparison: at temperature 1.0 any change in
+/// arithmetic sends the sampled text down another path, so one seed cannot
+/// tell a kernel's effect on kept tokens from the text's.
+const KERNEL_COMPARISON_SEED_COUNT: u64 = 6;
+
+/// The 3-node tree after a journey-sized prompt with the row-exact tree
+/// attention kernel and with MLX's masked attention, seeds pooled, in one
+/// process.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_compare_the_tree_attention_kernel_with_mlx_after_a_journey_sized_prompt() {
+    let words: Vec<&str> =
+        include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
+            .split_whitespace()
+            .take(JOURNEY_PROMPT_WORD_COUNT)
+            .collect();
+    let prompt: &'static str =
+        Box::leak(format!("{}\n\n{JOURNEY_INSTRUCTION}", words.join(" ")).into_boxed_str());
+    let mut cell = ORACLE_CELLS[4];
+    cell.prompt = prompt;
+    cell.node_budget = 3;
+    cell.label = "prose after a journey-sized prompt, 1.0, 3-node tree";
+    compare_tree_attention_paths(
+        &cell,
+        JOURNEY_NOISE_CHECK_SEED_COUNT,
+        &[
+            TreeAttentionPath::RowExactKernel,
+            TreeAttentionPath::MlxBf16,
+        ],
+    );
+}
+
+/// The same comparison on the short chat prompt, where every row's keys fit
+/// one chunk, to tell a long-context effect from one at any length.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_compare_the_tree_attention_kernel_with_mlx_after_a_short_prompt() {
+    let mut cell = ORACLE_CELLS[4];
+    cell.node_budget = 3;
+    cell.label = "chat 1.0, 3-node tree";
+    compare_tree_attention_per_seed(&cell, KERNEL_COMPARISON_SEED_COUNT);
+}
+
+/// How a tree's full attention runs in a comparison.
+#[derive(Clone, Copy)]
+enum TreeAttentionPath {
+    RowExactKernel,
+    MlxBf16,
+    MlxFloat32,
+}
+
+impl TreeAttentionPath {
+    const ALL: [Self; 3] = [Self::RowExactKernel, Self::MlxBf16, Self::MlxFloat32];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::RowExactKernel => "row-exact kernel",
+            Self::MlxBf16 => "MLX attention, bf16 (serving)",
+            Self::MlxFloat32 => "MLX attention, float32",
+        }
+    }
+
+    fn configure(self, pair: &mut JourneyPair) {
+        pair.target
+            .enable_draft_tree_verification()
+            .expect("the tree kernels declare");
+        match self {
+            Self::RowExactKernel => pair
+                .target
+                .enable_row_exact_tree_attention()
+                .expect("the tree attention kernel declares"),
+            Self::MlxBf16 | Self::MlxFloat32 => pair.target.set_row_exact_tree_attention_aside(),
+        }
+        pair.target
+            .set_tree_attention_in_float32_for_measurement(matches!(self, Self::MlxFloat32));
+    }
+}
+
+/// Seeds for the short-prompt noise check: enough that a difference of a
+/// tenth of a kept token a round stands out from the seeds' own spread.
+const NOISE_CHECK_SEED_COUNT: u64 = 24;
+/// The same after a journey-sized prompt, where each seed prefills 10,000
+/// tokens: half the seeds keep the run near four minutes.
+const JOURNEY_NOISE_CHECK_SEED_COUNT: u64 = 12;
+
+/// The kernel against serving's attention over many seeds of the short
+/// chat prompt, each seed printed, to tell the kernel's effect on kept
+/// tokens from the spread between sampled texts.
+#[test]
+#[ignore = "loads a real target and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[serial]
+fn should_tell_the_kernels_effect_on_kept_tokens_from_the_spread_between_seeds() {
+    let mut cell = ORACLE_CELLS[4];
+    cell.node_budget = 3;
+    cell.label = "chat 1.0, 3-node tree";
+    compare_tree_attention_paths(
+        &cell,
+        NOISE_CHECK_SEED_COUNT,
+        &[
+            TreeAttentionPath::RowExactKernel,
+            TreeAttentionPath::MlxBf16,
+        ],
+    );
+}
+
+/// Decodes `cell` once a seed through every tree attention path, alternating
+/// in one process so heat and drift hit all alike, and prints each path
+/// pooled over the seeds.
+fn compare_tree_attention_per_seed(cell: &Cell, seed_count: u64) {
+    compare_tree_attention_paths(cell, seed_count, &TreeAttentionPath::ALL);
+}
+
+/// Like `compare_tree_attention_per_seed` for chosen paths, also printing
+/// each seed's kept tokens a round, whose spread is the noise a difference
+/// between the pooled figures has to clear.
+fn compare_tree_attention_paths(cell: &Cell, seed_count: u64, paths: &[TreeAttentionPath]) {
+    let mut pair = load_pair();
+    let mut pooled: Vec<PooledTreeDecode> =
+        paths.iter().map(|_| PooledTreeDecode::default()).collect();
+    for seed_offset in 0..seed_count {
+        let seeded_cell = Cell {
+            keyed_seed: FIRST_KEYED_SEED + seed_offset,
+            ..*cell
+        };
+        let mut seed_line = format!("[dflash2-tree-rounds] seed {seed_offset:>2}:");
+        for (pooled_decode, path) in pooled.iter_mut().zip(paths) {
+            path.configure(&mut pair);
+            let decode = decode_with_trees(&pair, &seeded_cell, false);
+            seed_line.push_str(&format!(
+                " {} {:.2}",
+                path.label(),
+                (decode.emitted_token_ids.len() - 1) as f64 / decode.rounds as f64
+            ));
+            pooled_decode.add(&decode);
+        }
+        eprintln!("{seed_line}");
+    }
+    for (pooled_decode, path) in pooled.iter().zip(paths.iter().copied()) {
+        eprintln!(
+            "[dflash2-tree-rounds] {} ({seed_count} seeds), {}: {:.2} kept per round, {:.1} tok/s decode ({} tokens in {} rounds, {:.1} ms a round)",
+            cell.label,
+            path.label(),
+            pooled_decode.emitted as f64 / pooled_decode.rounds as f64,
+            pooled_decode.emitted as f64 / pooled_decode.decode_seconds,
+            pooled_decode.emitted,
+            pooled_decode.rounds,
+            pooled_decode.decode_seconds * 1000.0 / pooled_decode.rounds as f64,
+        );
+    }
+}
+
+/// Plain decoding in the same harness, the ladder's baseline: one token a
+/// step through the target's verification forward with no taps and no
+/// drafter, picked as the tree rounds pick, over the same output length.
+fn report_plain_decode(cell: &Cell, seed_count: u64) {
+    let pair = load_pair();
+    let (mut emitted_count, mut decode_seconds) = (0, 0.0);
+    for seed_offset in 0..seed_count {
+        let seeded_cell = Cell {
+            keyed_seed: FIRST_KEYED_SEED + seed_offset,
+            ..*cell
+        };
+        let (round, mut decoder_state, first_token_id) = prefill(&pair, &seeded_cell);
+        let mut last_token_id = first_token_id;
+        let mut fed_token_count = round.fed_token_count;
+        let decode_started_at = Instant::now();
+        for _ in 0..OUTPUT_TOKENS {
+            let step = pair
+                .target
+                .build_speculative_verification_forward(
+                    &[last_token_id],
+                    fed_token_count,
+                    &mut decoder_state,
+                    &[],
+                    VerificationLogitsMode::AllPositions,
+                    &mut PerformanceAttribution::disabled(),
+                )
+                .expect("the plain step runs");
+            let logits = step.per_position_logits.expect("the step has logits");
+            fed_token_count += 1;
+            last_token_id =
+                target_picks(&pair, &seeded_cell, &logits, &[u64::from(fed_token_count)])[0];
+        }
+        decode_seconds += decode_started_at.elapsed().as_secs_f64();
+        emitted_count += OUTPUT_TOKENS;
+    }
+    eprintln!(
+        "[dflash2-tree-rounds] {} ({seed_count} seeds), plain one-token steps: {:.1} tok/s decode ({emitted_count} tokens, {:.1} ms a token)",
+        cell.label,
+        emitted_count as f64 / decode_seconds,
+        decode_seconds * 1000.0 / emitted_count as f64,
+    );
 }
 
 /// Decodes every cell with and without context copies; a sampled cell

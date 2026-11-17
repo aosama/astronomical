@@ -39,6 +39,8 @@ pub(crate) mod probe_token_ids;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod register_ordered_projections;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod tree_attention_measurement;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod tree_layer_attention;
 
 #[cfg(feature = "direct-mlx")]

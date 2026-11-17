@@ -418,6 +418,19 @@ pub use crate::qwen_image_21::tensor_profiles::QwenImage21TensorProfile;
 pub use qwen3_5_core::configuration::{
     Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
 };
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use qwen3_5_core::model::tree_attention_measurement::TreeAttentionErrorCount;
+/// The row-exact draft-tree attention kernel and the row chains it reads, for the
+/// acceptance journeys that hold it to the one-row step and time it.
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use qwen3_5_core::model_math::gated_delta_tree::{TreeRowChains, UploadedTreeRowChains};
+#[cfg(feature = "direct-mlx")]
+#[doc(hidden)]
+pub use qwen3_5_core::model_math::row_exact_tree_attention::{
+    RowExactTreeAttentionInputs, RowExactTreeAttentionKernels, row_exact_tree_attention,
+};
 
 pub use qwen3_5_core::decoder::{
     Qwen3_5AstroDecoderStateCacheLayerDtypes, qwen3_5_astro_decoder_state_cache_layout,

@@ -224,7 +224,7 @@ fn drafted_tree_rows(
             description: "the drafter's context states were not created",
         });
     };
-    let tree_options = DraftTreeOptions::default();
+    let tree_options = draft_runtime.tree_options;
     let block_row_count =
         tree_block_row_count(tree_options.node_budget, configuration.block_size as usize);
     let mut block_ids = vec![configuration.mask_token_id; block_row_count];

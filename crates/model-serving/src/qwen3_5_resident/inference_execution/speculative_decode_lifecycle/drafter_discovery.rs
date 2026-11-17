@@ -8,9 +8,15 @@
 //! token a drafter proposes is still verified by the target, so a pairing
 //! can cost speed but never correctness.
 //!
-//! Two library layouts are searched from the target's own directory: the
-//! `huggingface_hub_cache` (`models--org--name/snapshots/<revision>`) and a
-//! plain library (`<organization>/<model>`).
+//! A drafter bundled inside the target's own directory, in a `drafter`
+//! folder, is tried first. It belongs to that one model, so a library can
+//! hold the same target with and without drafting side by side, which is how
+//! a draft-tree build is compared with its plain twin. A library-wide drafter
+//! pairs with every target of its shape.
+//!
+//! Two library layouts are then searched from the target's own directory:
+//! the `huggingface_hub_cache` (`models--org--name/snapshots/<revision>`) and
+//! a plain library (`<organization>/<model>`).
 
 use std::path::{Path, PathBuf};
 
@@ -20,6 +26,8 @@ use super::engine_draft_runtime::Qwen3_5SpeculativeDraftLoadingError;
 
 const HUGGINGFACE_SNAPSHOTS_DIRECTORY_NAME: &str = "snapshots";
 const CONFIGURATION_FILE_NAME: &str = "config.json";
+/// The folder inside a target's directory that holds its own drafter.
+pub const BUNDLED_DRAFTER_DIRECTORY_NAME: &str = "drafter";
 /// A drafter's `config.json` is a few kilobytes; larger files are other
 /// things and are not read.
 const MAXIMUM_CONFIGURATION_BYTES: u64 = 1024 * 1024;
@@ -42,14 +50,18 @@ impl DrafterPairing {
     }
 }
 
-/// The first installed drafter (in path order) that pairs with the target
-/// in `target_model_directory`, with its configuration.
+/// The drafter that pairs with the target in `target_model_directory`, with
+/// its configuration: the target's bundled drafter when it pairs, otherwise
+/// the first library drafter (in path order) that does.
 pub fn paired_drafter_directory(
     target_model_directory: &Path,
     pairing: &DrafterPairing,
 ) -> Result<Option<(PathBuf, DFlash2DrafterConfiguration)>, Qwen3_5SpeculativeDraftLoadingError> {
-    let mut candidate_directories = sibling_model_directories(target_model_directory)?;
-    candidate_directories.sort();
+    let mut library_directories = sibling_model_directories(target_model_directory)?;
+    library_directories.sort();
+    let mut candidate_directories =
+        vec![target_model_directory.join(BUNDLED_DRAFTER_DIRECTORY_NAME)];
+    candidate_directories.extend(library_directories);
     for candidate_directory in candidate_directories {
         let Some(config_document) = drafter_config_document(&candidate_directory) else {
             continue;

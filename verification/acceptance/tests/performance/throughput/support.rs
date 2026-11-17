@@ -461,28 +461,35 @@ pub(crate) async fn measure_throughput(
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
 
-/// The model id discovery derives for the snapshot: the leaf of the decoded
-/// `models--org--repo` Hugging Face hub cache entry the snapshot lives under.
+/// The model id discovery derives for a model directory: the leaf of the
+/// decoded `models--org--repo` `huggingface_hub_cache` entry a snapshot lives
+/// under, or, in a plain library (`<organization>/<model>`), the folder's
+/// own name, as Astronomical's own library names its models.
 pub(crate) fn discovered_model_id(pack_directory: &std::path::Path) -> String {
-    let huggingface_hub_cache_entry_name = pack_directory
-        .ancestors()
-        .find_map(|ancestor| {
-            ancestor
-                .file_name()
-                .and_then(|name| name.to_str())
-                .filter(|name| name.starts_with("models--"))
-        })
-        .unwrap_or_else(|| {
-            panic!(
-                "model_directory must point inside a Hugging Face hub cache entry \
-                 (models--org--repo/snapshots/<revision>)"
-            )
-        });
-    huggingface_hub_cache_entry_name
+    huggingface_hub_cache_model_id(pack_directory)
+        .unwrap_or_else(|| plain_library_model_id(pack_directory))
+}
+
+/// The repository leaf of the `huggingface_hub_cache` entry above a snapshot.
+fn huggingface_hub_cache_model_id(pack_directory: &std::path::Path) -> Option<String> {
+    let entry_name = pack_directory.ancestors().find_map(|ancestor| {
+        ancestor
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| name.starts_with("models--"))
+    })?;
+    entry_name
         .trim_start_matches("models--")
         .rsplit("--")
         .next()
-        .expect("a Hugging Face hub cache entry name always has at least one segment")
+        .map(str::to_owned)
+}
+
+fn plain_library_model_id(pack_directory: &std::path::Path) -> String {
+    pack_directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("a plain library model directory has a folder name")
         .to_owned()
 }
 

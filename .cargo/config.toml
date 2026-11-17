@@ -551,8 +551,42 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # decode tok/s and ms a round for the code-completion and chat cells, greedy
 # and keyed-sampled, then where a round's time goes (each stage synced, after
 # a short and a long prompt, and by layer stage). Same pair and memory as
-# above; about three minutes, or one test with --filter NAME.
+# above; about three minutes, or one test with --filter NAME. With a
+# mixture-of-experts target (see the configuration note below) it also has:
+# the tree-size ladder against plain one-token steps; prose after a
+# 10,000-token prompt; synced rounds through the row-exact tree attention
+# kernel and MLX's attention from 14 to 11,292 context tokens (where the
+# kernel starts to pay); and the kernel against MLX's bf16 and float32
+# attention over many interleaved seeds, each seed printed, since tokens kept
+# a round vary between sampled texts more than between attention paths.
+# Those are long: pass --exact --filter with the test's full path.
 measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_tree_round"
+# Whether a verified draft row gives the target's own one-token step's
+# logits: the greedy continuation fed one token a step, as one 16-row chain
+# through the tree verify, and as one plain 16-row forward, with each row's
+# largest logit difference, pick agreement and top-two margin; the same for a
+# 4-row chain after a short and a 10,000-token prompt; a real drafted tree
+# through the row-exact tree attention kernel and through MLX's attention;
+# and, on real data, how many attention outputs each path leaves float32
+# attention's, by tree row and head half. Every DFlash2
+# journey above takes another target the same way: append --configuration
+# PATH whose model_directory is a model folder holding its own drafter in a
+# `drafter` folder; without one they load the 27B pair. About a minute.
+measure-dflash2-row-exactness = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_row_exactness"
+# The rung below it: whether MLX's quantized matmul (4- and 8-bit, group 64,
+# at the 35B-A3B target's widths) and its attention kernel give a row the same
+# bits inside a window of 2, 4, 8 and 16 rows as alone. Random inputs, no
+# model; a few seconds.
+measure-batched-kernel-row-exactness = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter batched_kernel_row_exactness"
+# MLX attention alone at the 35B-A3B target's shape over 1,024 to 65,536
+# stored keys: one row unmasked (a plain step), four rows unmasked, and four
+# rows with a tree verify's additive mask. Seconds.
+measure-tree-attention-context-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter tree_attention_context_cost"
+# The row-exact tree attention kernel (crates/model-serving/src/qwen3_5_core/model_math/row_exact_tree_attention.rs):
+# every row of a 4-row chain and of a branching tree must equal its one-row
+# step bit for bit and agree with MLX's masked attention, after 1,000 and 9,000
+# keys; then its time against MLX over 1,024 to 65,536 keys. Seconds.
+measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter row_exact_tree_attention"
 # The same pair through the real worker: 10,000 Romeo and Juliet tokens in,
 # 500 out at temperature 1.0, over the daemon IPC boundary, with the worker
 # finding the drafter beside the target. Append --configuration PATH with

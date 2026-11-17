@@ -10,6 +10,7 @@
 //! the ordinary emission machinery, one per engine advance.
 
 pub mod draft_tree_round;
+pub mod draft_tree_size;
 pub mod drafter_discovery;
 pub mod engine_draft_runtime;
 pub mod speculation_session_admission;
@@ -23,6 +24,8 @@ pub use speculation_session_admission::{
 
 #[cfg(test)]
 mod draft_tree_round_tests;
+#[cfg(test)]
+mod draft_tree_size_tests;
 #[cfg(test)]
 mod drafter_discovery_tests;
 #[cfg(test)]
