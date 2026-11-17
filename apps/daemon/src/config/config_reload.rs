@@ -20,6 +20,9 @@ use astronomical_ipc_protocol::{
 use thiserror::Error;
 
 use crate::RuntimeModelPolicy;
+use crate::config::model_request_default_changes::{
+    model_policies_differ_beyond_request_defaults, model_request_defaults_differ,
+};
 use crate::config::resolved_model_policy_catalog::ResolvedModelPolicyCatalog;
 
 /// Immutable snapshot of every resolved runtime value the daemon needs
@@ -343,16 +346,10 @@ impl ConfigReloadDiff {
         current: &ResolvedRuntimeConfig,
         candidate: &ResolvedRuntimeConfig,
     ) -> ConfigReloadDecision {
-        let mut in_place_reloaded_fields = Vec::new();
+        let mut in_place_reloaded_fields = in_place_field_changes(current, candidate);
         let mut worker_restart_reloaded_fields = worker_restart_field_changes(current, candidate);
         let mut restart_required_fields = Vec::new();
 
-        if current.maximum_mlx_memory_bytes != candidate.maximum_mlx_memory_bytes {
-            in_place_reloaded_fields.push("maximum_mlx_memory_gb".to_owned());
-        }
-        if current.idle_model_unload_seconds != candidate.idle_model_unload_seconds {
-            in_place_reloaded_fields.push("idle_model_unload_seconds".to_owned());
-        }
         if current.performance_attribution_enabled != candidate.performance_attribution_enabled {
             // Daemon and worker attribution share one setting, while the daemon writer is
             // opened before the listener binds. An application restart keeps both owners aligned.
@@ -395,6 +392,28 @@ impl ConfigReloadDiff {
     }
 }
 
+/// The changed settings the running worker and listener can take as they
+/// are, in report order.
+fn in_place_field_changes(
+    current: &ResolvedRuntimeConfig,
+    candidate: &ResolvedRuntimeConfig,
+) -> Vec<String> {
+    let mut changed_fields = Vec::new();
+    if current.maximum_mlx_memory_bytes != candidate.maximum_mlx_memory_bytes {
+        changed_fields.push("maximum_mlx_memory_gb".to_owned());
+    }
+    if current.idle_model_unload_seconds != candidate.idle_model_unload_seconds {
+        changed_fields.push("idle_model_unload_seconds".to_owned());
+    }
+    if model_request_defaults_differ(
+        &current.model_policy_catalog,
+        &candidate.model_policy_catalog,
+    ) {
+        changed_fields.push("model_generation_defaults".to_owned());
+    }
+    changed_fields
+}
+
 /// The changed settings only a replacement worker can pick up, in report order.
 fn worker_restart_field_changes(
     current: &ResolvedRuntimeConfig,
@@ -407,7 +426,10 @@ fn worker_restart_field_changes(
     if current.discovered_models != candidate.discovered_models {
         changed_fields.push("discovered_model_artifacts".to_owned());
     }
-    if current.model_policy_catalog != candidate.model_policy_catalog {
+    if model_policies_differ_beyond_request_defaults(
+        &current.model_policy_catalog,
+        &candidate.model_policy_catalog,
+    ) {
         changed_fields.push("model_policies".to_owned());
     }
     if current.unmatched_model_config_ids != candidate.unmatched_model_config_ids {
