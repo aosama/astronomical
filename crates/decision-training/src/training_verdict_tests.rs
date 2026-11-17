@@ -88,9 +88,9 @@ fn should_judge_better_a_head_that_is_better_on_questions_nothing_else_read() {
 }
 
 #[test]
-fn should_judge_worse_a_head_that_did_not_change_even_when_calibration_alone_helps() {
+fn should_judge_not_better_a_head_that_did_not_change_even_when_calibration_alone_helps() {
     let verdict = judge_training(&scores(None, Vec::new())).unwrap();
-    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::JudgedWorse);
+    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::JudgedNotBetter);
     assert!(has_concern(&verdict, |concern| matches!(
         concern,
         TrainingConcern::NotLessSurprised { .. }
@@ -98,9 +98,9 @@ fn should_judge_worse_a_head_that_did_not_change_even_when_calibration_alone_hel
 }
 
 #[test]
-fn should_judge_worse_a_head_that_got_worse_and_name_why() {
+fn should_judge_not_better_a_head_that_got_worse_and_name_why() {
     let verdict = judge_training(&scores(Some((false, 2.0)), Vec::new())).unwrap();
-    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::JudgedWorse);
+    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::JudgedNotBetter);
     assert!(has_concern(&verdict, |concern| matches!(
         concern,
         TrainingConcern::LessAccurate { .. }
@@ -163,4 +163,44 @@ fn should_see_a_collapse_only_when_the_labels_vary() {
     }
     assert!(!has_collapsed(&always_first, DecisionQuestionKind::Noul));
     assert!(!has_collapsed(&always_first, DecisionQuestionKind::Choice));
+}
+
+#[test]
+fn should_record_not_judged_when_every_held_back_question_was_left_out() {
+    let mut training_scores = scores(Some((true, 2.0)), Vec::new());
+    training_scores.judging.clear();
+    let verdict = judge_training(&training_scores).unwrap();
+    assert_eq!(verdict.recorded_verdict(), RecordedVerdict::NotJudged);
+}
+
+#[test]
+fn should_name_the_kind_that_got_more_surprised_in_a_mix_of_kinds() {
+    let mut training_scores = scores(Some((true, 2.0)), Vec::new());
+    let mut worse_noul = Vec::new();
+    for state_offset in 0..20_u64 {
+        let served = scored_question(
+            DecisionQuestionKind::Noul,
+            &[0.0, 0.0],
+            (state_offset % 2) as usize,
+            5_000 + state_offset,
+        );
+        let wrong = 1 - served.correct_option_index;
+        let mut trained_logits = vec![0.0, 0.0];
+        trained_logits[wrong] = 3.0;
+        worse_noul.push(ScoredPair {
+            served,
+            trained_logits,
+        });
+    }
+    training_scores.judging.extend(worse_noul.iter().cloned());
+    training_scores.choosing.extend(worse_noul);
+    let verdict = judge_training(&training_scores).unwrap();
+    assert!(has_concern(&verdict, |concern| matches!(
+        concern,
+        TrainingConcern::KindMoreSurprised {
+            kind: DecisionQuestionKind::Noul,
+            question_count: 20,
+            ..
+        }
+    )));
 }

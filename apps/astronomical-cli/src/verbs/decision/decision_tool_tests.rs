@@ -155,7 +155,7 @@ fn should_read_the_record_a_source_folder_already_carries() {
     };
     let source_directory = tempfile::tempdir().unwrap();
     let earlier = TrainingRecord {
-        verdict: RecordedVerdict::JudgedWorse,
+        verdict: RecordedVerdict::JudgedNotBetter,
         labelled_question_count: 240,
         distinct_state_count: 48,
         warnings: vec!["was right less often (64.0% -> 61.0%)".to_owned()],

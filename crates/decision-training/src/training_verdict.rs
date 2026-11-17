@@ -115,10 +115,15 @@ impl TrainingVerdict {
     /// What the folder's training record says about this head.
     #[must_use]
     pub fn recorded_verdict(&self) -> RecordedVerdict {
+        // Every judged question can be left out because its options read
+        // alike; a comparison over none says nothing either way.
+        if self.shipped_overall.question_count == 0 {
+            return RecordedVerdict::NotJudged;
+        }
         match (self.judged_on, self.concerns.is_empty()) {
             (JudgedOn::LearnedFromExamples, _) => RecordedVerdict::NotJudged,
             (JudgedOn::HeldBackQuestions, true) => RecordedVerdict::JudgedBetter,
-            (JudgedOn::HeldBackQuestions, false) => RecordedVerdict::JudgedWorse,
+            (JudgedOn::HeldBackQuestions, false) => RecordedVerdict::JudgedNotBetter,
         }
     }
 

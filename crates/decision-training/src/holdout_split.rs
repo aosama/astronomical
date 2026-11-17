@@ -1,7 +1,7 @@
 //! Splitting scored questions into a fitting part and a held-out part.
 //!
-//! The held-out part is what decides whether a fitted temperature is kept,
-//! so it must be questions the fit never saw. Splitting question by question
+//! The held-out part is what a fitted temperature is judged on, so it must
+//! be questions the fit never saw. Splitting question by question
 //! would put two questions about the same state on both sides, and the
 //! held-out score would then partly measure memory of that state; Laya's
 //! training notes count such rows as overlap for the same reason. The split

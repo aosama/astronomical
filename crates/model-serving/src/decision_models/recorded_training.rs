@@ -13,13 +13,11 @@
 use std::path::Path;
 
 use astronomical_decision_contract::decision_training_job::DecisionTrainingJob;
-use astronomical_decision_contract::training_record::{
-    DECISION_TRAINING_RECORD_FILE_NAME, MAXIMUM_DECISION_TRAINING_RECORD_FILE_BYTES,
-    TrainingRecord, parse_training_record,
-};
+use astronomical_decision_contract::training_record::TrainingRecord;
 use astronomical_decision_contract::{
     DecisionFailure, DecisionQuestion, HeadInputRequest, OrderedJsonValue,
 };
+use astronomical_decision_training::training_record_file::read_training_record_file;
 
 use crate::decision_engine::{
     DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionTrainingStep,
@@ -30,30 +28,8 @@ use crate::memory::telemetry::MlxMemoryTelemetry;
 pub fn read_training_record(
     model_directory: &Path,
 ) -> Result<Option<TrainingRecord>, DecisionFailure> {
-    let record_path = model_directory.join(DECISION_TRAINING_RECORD_FILE_NAME);
-    let record_size = match std::fs::metadata(&record_path) {
-        Ok(record_metadata) => record_metadata.len(),
-        Err(metadata_error) if metadata_error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(None);
-        }
-        Err(_) => return Err(unusable_record("it cannot be read")),
-    };
-    if record_size > MAXIMUM_DECISION_TRAINING_RECORD_FILE_BYTES {
-        return Err(unusable_record("it is too large"));
-    }
-    let Ok(record_bytes) = std::fs::read(&record_path) else {
-        return Err(unusable_record("it cannot be read"));
-    };
-    match parse_training_record(&record_bytes) {
-        Ok(training_record) => Ok(Some(training_record)),
-        Err(record_error) => Err(DecisionFailure::fatal_execution(&record_error.to_string())),
-    }
-}
-
-fn unusable_record(reason: &str) -> DecisionFailure {
-    DecisionFailure::fatal_execution(&format!(
-        "{DECISION_TRAINING_RECORD_FILE_NAME} cannot be used: {reason}"
-    ))
+    read_training_record_file(model_directory)
+        .map_err(|record_error| DecisionFailure::fatal_execution(&record_error.to_string()))
 }
 
 /// A family's engine whose answers carry the folder's training record.

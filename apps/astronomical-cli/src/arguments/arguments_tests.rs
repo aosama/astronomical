@@ -147,8 +147,8 @@ fn should_describe_decision_verdicts_and_state_no_minimum_amount_of_data() {
     let help = help_text();
 
     assert!(help.contains("any number of them"));
-    assert!(help.contains("judged better or judged worse"));
-    assert!(help.contains("not judged when too few different texts"));
+    assert!(help.contains("judged better or judged not better"));
+    assert!(help.contains("not judged when too few different texts leave none to hold"));
     // The numbers the help quotes are the ones the splits use.
     assert!(help.contains(&format!(
         "calibrate holds texts back from {}, train from {}",

@@ -1,5 +1,5 @@
-//! Unit tests for the calibration journey's own steps. The fitting and the
-//! gate are tested in the training crate; scoring against a live model is
+//! Unit tests for the calibration journey's own steps. The fitting and its
+//! judgement are tested in the training crate; scoring against a live model is
 //! an acceptance run on the Development instance.
 
 use astronomical_decision_contract::{

@@ -4,7 +4,7 @@
 //! Calibration and training never refuse to write the folder a person asked
 //! for; they report what the evidence shows and let the person decide what
 //! to do with it. The verdict therefore has to travel with the folder: an
-//! answer from a model judged worse, or never judged at all, must not look
+//! answer from a model judged not better, or never judged at all, must not look
 //! like one from a model that beat the original on questions it never saw.
 //! Every engine reads this one family-neutral file, and every answer the
 //! folder gives carries it under `input.training`.
@@ -21,6 +21,12 @@ pub const DECISION_TRAINING_RECORD_VERSION: u64 = 1;
 /// The largest record read: a full document is a few hundred bytes plus its
 /// warnings, so anything near this size is not one.
 pub const MAXIMUM_DECISION_TRAINING_RECORD_FILE_BYTES: u64 = 64 * 1024;
+/// The most warnings a record keeps, newest first kept: a folder trained
+/// again and again carries every earlier run's warnings, and without a cap
+/// the record would grow past the size it can be read at.
+pub const MAXIMUM_RECORDED_WARNINGS: usize = 64;
+/// The mark on a warning carried over from the folder a run started from.
+const EARLIER_WARNING_PREFIX: &str = "earlier: ";
 
 /// What comparing the folder with the original model showed.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -28,8 +34,9 @@ pub const MAXIMUM_DECISION_TRAINING_RECORD_FILE_BYTES: u64 = 64 * 1024;
 pub enum RecordedVerdict {
     /// Better than the original on questions held back from the fit.
     JudgedBetter,
-    /// Worse than the original on at least one measure, on held-back questions.
-    JudgedWorse,
+    /// No better than the original on at least one measure, on held-back
+    /// questions: worse, or equal to rounding. The report says which.
+    JudgedNotBetter,
     /// Too few different texts to hold any back, so it was only compared on
     /// the examples it learned from, which shows it learned them, not that
     /// it generalises.
@@ -37,12 +44,22 @@ pub enum RecordedVerdict {
 }
 
 impl RecordedVerdict {
+    /// How much a person should weigh against the folder: judged not
+    /// better outranks not judged, which outranks judged better.
+    const fn concern_rank(self) -> u8 {
+        match self {
+            Self::JudgedBetter => 0,
+            Self::NotJudged => 1,
+            Self::JudgedNotBetter => 2,
+        }
+    }
+
     /// The verdict as the answer JSON and the report name it.
     #[must_use]
     pub const fn wire_name(self) -> &'static str {
         match self {
             Self::JudgedBetter => "judged_better",
-            Self::JudgedWorse => "judged_worse",
+            Self::JudgedNotBetter => "judged_not_better",
             Self::NotJudged => "not_judged",
         }
     }
@@ -74,9 +91,15 @@ impl TrainingRecord {
         };
         let mut warnings = Vec::with_capacity(earlier.warnings.len() + self.warnings.len());
         for earlier_warning in &earlier.warnings {
-            warnings.push(format!("earlier: {earlier_warning}"));
+            if earlier_warning.starts_with(EARLIER_WARNING_PREFIX) {
+                warnings.push(earlier_warning.clone());
+            } else {
+                warnings.push(format!("{EARLIER_WARNING_PREFIX}{earlier_warning}"));
+            }
         }
         warnings.extend(self.warnings);
+        let dropped_count = warnings.len().saturating_sub(MAXIMUM_RECORDED_WARNINGS);
+        warnings.drain(..dropped_count);
         Self {
             verdict: less_favourable(earlier.verdict, self.verdict),
             labelled_question_count: self.labelled_question_count,
@@ -86,14 +109,9 @@ impl TrainingRecord {
     }
 }
 
-/// Judged worse outranks not judged, which outranks judged better.
-fn less_favourable(first: RecordedVerdict, second: RecordedVerdict) -> RecordedVerdict {
-    let concern_rank = |verdict: RecordedVerdict| match verdict {
-        RecordedVerdict::JudgedBetter => 0,
-        RecordedVerdict::NotJudged => 1,
-        RecordedVerdict::JudgedWorse => 2,
-    };
-    if concern_rank(first) >= concern_rank(second) {
+/// The verdict a person should weigh more of the two.
+const fn less_favourable(first: RecordedVerdict, second: RecordedVerdict) -> RecordedVerdict {
+    if first.concern_rank() >= second.concern_rank() {
         first
     } else {
         second

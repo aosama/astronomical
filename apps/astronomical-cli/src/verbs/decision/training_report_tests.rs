@@ -83,11 +83,15 @@ fn summary_for<'summary>(
             judging: 0,
         },
     };
+    let (example_count, distinct_state_count) = match verdict.judged_on {
+        JudgedOn::HeldBackQuestions => (210, 150),
+        JudgedOn::LearnedFromExamples => (1, 1),
+    };
     TrainingSummary {
         model_id: "laya-MLX-8bit",
         scope,
-        example_count: 210,
-        distinct_state_count: 150,
+        example_count,
+        distinct_state_count,
         part_counts,
         indistinguishable_question_count: 3,
         largest_parity_gap: 0.000_4,
@@ -137,7 +141,9 @@ fn should_name_every_concern_of_a_training_judged_worse_and_still_write_it() {
         },
     ]);
     let report_text = report_for(&verdict);
-    assert!(report_text.contains("Judged worse: on questions it never saw, the trained model\n"));
+    assert!(
+        report_text.contains("Judged not better: on questions it never saw, the trained model\n")
+    );
     assert!(report_text.contains("  - was right less often (65.0% -> 60.0%)"));
     assert!(report_text.contains("changed the answers to 20 of 120 questions nobody labelled"));
     assert!(report_text.contains("nearly every yes-or-no question the same answer"));
@@ -164,7 +170,11 @@ fn should_say_a_training_on_too_few_texts_was_not_judged() {
     assert!(report_text.contains("all of them to train on; fewer than 20 different texts"));
     assert!(report_text.contains("the best on its own training examples"));
     assert!(report_text.contains("training questions themselves, which it learned from"));
-    assert!(report_text.contains("Not judged: with 150 different texts"));
+    assert!(
+        report_text
+            .contains("on 1 example: 3 questions about 1 different text, all of them to train on")
+    );
+    assert!(report_text.contains("Not judged: with 1 different text (fewer than 20)"));
     assert_eq!(training_warnings(&summary).len(), 1);
 }
 
@@ -200,4 +210,35 @@ fn should_say_when_the_whole_model_trained_and_that_its_weights_were_kept() {
         "{report}"
     );
     assert!(!report.contains("final layers of"), "{report}");
+}
+
+#[test]
+fn should_list_concerns_found_on_its_own_examples_when_not_judged() {
+    let mut verdict = verdict_with(vec![TrainingConcern::LessAccurate {
+        shipped: 1.0,
+        trained: 0.0,
+    }]);
+    verdict.judged_on = JudgedOn::LearnedFromExamples;
+    let seed_runs = seed_runs();
+
+    let report_text = training_report_text(&summary_for(
+        &verdict,
+        TrainingScope::FinalLayers,
+        None,
+        &seed_runs,
+    ));
+
+    assert!(
+        report_text.contains("On its own examples, the trained model\n  - was right less often")
+    );
+}
+
+#[test]
+fn should_say_one_question_was_left_out_in_the_singular() {
+    let verdict = verdict_with(Vec::new());
+    let seed_runs = seed_runs();
+    let mut summary = summary_for(&verdict, TrainingScope::FinalLayers, None, &seed_runs);
+    summary.indistinguishable_question_count = 1;
+
+    assert!(training_report_text(&summary).contains("1 question was left out"));
 }

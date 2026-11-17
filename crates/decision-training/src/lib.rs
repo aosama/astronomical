@@ -52,6 +52,7 @@ pub mod temperature_fit;
 pub mod temperature_softmax;
 pub mod trainable_head;
 pub mod training_losses;
+pub mod training_record_file;
 pub mod training_settings;
 pub mod training_split;
 pub mod training_verdict;

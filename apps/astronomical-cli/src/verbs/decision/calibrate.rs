@@ -47,6 +47,9 @@ pub async fn run_calibrate(
     let model_folder = find_model_folder(&dependencies.instance_paths, &decision_model_id)?;
     let output_directory = &calibrate_arguments.output_directory;
     check_output_is_new(&model_folder, output_directory)?;
+    // Read before scoring, so a record that cannot be read stops the run
+    // before the report says the folder will be written.
+    let earlier_record = earlier_training_record(&model_folder.model_directory)?;
     let answered_examples = answer_examples(
         &example_requests(&labelled_examples),
         &ScoringPass {
@@ -67,10 +70,12 @@ pub async fn run_calibrate(
         scored_questions,
         dependencies.stdout,
     )?;
-    let earlier_record = earlier_training_record(&model_folder.model_directory)?;
     let training_record = calibration_record.after_earlier(earlier_record.as_ref());
+    // An empty calibration file would not load, so a run that calibrated no
+    // kind leaves the copy's own temperatures as they are.
     let folder_additions = FolderAdditions {
-        calibration_override: Some(&calibration_override),
+        calibration_override: (!calibration_override.decides_no_kind())
+            .then_some(&calibration_override),
         head_tuning: None,
         decision_adapters: None,
         training_record: Some(&training_record),

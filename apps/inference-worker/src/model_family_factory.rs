@@ -564,8 +564,8 @@ impl ModelFamilyFactory {
         ))
     }
 
-    /// Builds the decision engine of a directory already classified as Laya
-    /// or Kev. The unloaded engine only reads the config and tokenizer bytes;
+    /// Builds the decision engine of a directory already classified as Laya,
+    /// Kev or Clef. The unloaded engine only reads the config and tokenizer bytes;
     /// MLX runtime initialization stays inside load() on the worker runtime
     /// thread.
     fn create_decision_engine(

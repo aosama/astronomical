@@ -221,7 +221,27 @@ fn should_record_the_plans_verdict_from_its_kinds() {
     assert_eq!(improved.recorded_verdict(), RecordedVerdict::JudgedBetter);
     assert_eq!(
         not_improved.recorded_verdict(),
-        RecordedVerdict::JudgedWorse
+        RecordedVerdict::JudgedNotBetter
     );
     assert_eq!(unjudged.recorded_verdict(), RecordedVerdict::NotJudged);
+}
+
+#[test]
+fn should_record_not_judged_for_a_plan_that_calibrated_nothing() {
+    let empty_plan = plan_calibration(&split_of(Vec::new(), Vec::new())).unwrap();
+    assert_eq!(empty_plan.recorded_verdict(), RecordedVerdict::NotJudged);
+    assert!(empty_plan.calibration_override.decides_no_kind());
+}
+
+#[test]
+fn should_record_not_judged_when_one_kind_is_judged_and_another_is_not() {
+    let mut fitting_questions = noul_questions(100, 3.0, 7, 0);
+    fitting_questions.extend(choice_questions_needing_two_temperatures(5, 50_000));
+    let mixed_plan = plan_calibration(&split_of(
+        fitting_questions,
+        noul_questions(50, 3.0, 7, 1_000),
+    ))
+    .unwrap();
+    assert_eq!(noul_fit(&mixed_plan).judged_on, JudgedOn::HeldBackQuestions);
+    assert_eq!(mixed_plan.recorded_verdict(), RecordedVerdict::NotJudged);
 }

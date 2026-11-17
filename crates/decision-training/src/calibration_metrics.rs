@@ -1,12 +1,12 @@
 //! How good a set of probabilities is against the right answers.
 //!
-//! Four numbers, all on held-out questions:
+//! Four numbers, on the questions a fit is judged on:
 //!
 //! * accuracy: how often the most probable option is the right one. A
 //!   temperature never changes which option is most probable, so this must
-//!   be identical before and after calibration; the gate checks it.
+//!   be identical before and after calibration; the plan checks it.
 //! * negative log-likelihood: the average surprise at the right answer. It
-//!   is what the temperature is fitted to lower, and what the gate compares.
+//!   is what the temperature is fitted to lower, and what the judgement compares.
 //! * Brier score: the squared distance between the probabilities and the
 //!   right answer, a second view that punishes confident mistakes less.
 //! * expected calibration error: the gap between stated confidence and

@@ -31,10 +31,9 @@ fn should_keep_an_earlier_calibration_for_kinds_training_did_not_refit() {
     )
     .unwrap();
     let merged = merged_calibration(
-        source_directory.path(),
+        &earlier_calibration(source_directory.path()).unwrap(),
         &calibration_of(DecisionQuestionKind::Choice, 1.5),
     )
-    .unwrap()
     .unwrap();
     assert_eq!(
         merged.temperature_for(DecisionQuestionKind::Noul, 2),
@@ -49,8 +48,10 @@ fn should_keep_an_earlier_calibration_for_kinds_training_did_not_refit() {
 #[test]
 fn should_write_no_calibration_when_no_kind_has_one() {
     let source_directory = tempfile::tempdir().unwrap();
-    let merged =
-        merged_calibration(source_directory.path(), &CalibrationOverride::default()).unwrap();
+    let merged = merged_calibration(
+        &earlier_calibration(source_directory.path()).unwrap(),
+        &CalibrationOverride::default(),
+    );
     assert!(merged.is_none());
 }
 
@@ -63,7 +64,7 @@ fn should_refuse_an_earlier_calibration_it_cannot_read() {
     )
     .unwrap();
     assert!(matches!(
-        merged_calibration(source_directory.path(), &CalibrationOverride::default()),
+        earlier_calibration(source_directory.path()),
         Err(DecisionToolError::EarlierCalibrationUnreadable(_))
     ));
 }
@@ -109,4 +110,23 @@ fn should_tell_the_person_an_unchecked_folder_is_kept() {
     let unchecked = DecisionToolError::SavedModelUnchecked("Astronomical was busy".to_owned());
 
     assert!(unchecked.to_string().contains("the new folder is kept"));
+}
+
+#[test]
+fn should_name_the_questions_the_written_folder_was_checked_on() {
+    assert!(
+        checked_answers_text(JudgedOn::LearnedFromExamples, 3, 0.0031)
+            .contains("training questions match the trained model's to within 0.0031")
+    );
+    assert!(
+        checked_answers_text(JudgedOn::HeldBackQuestions, 40, 0.0).contains("judging questions")
+    );
+}
+
+#[test]
+fn should_not_claim_a_match_when_no_question_was_checked() {
+    assert_eq!(
+        checked_answers_text(JudgedOn::HeldBackQuestions, 0, 0.0),
+        "No questions were left to check its answers against.\n"
+    );
 }

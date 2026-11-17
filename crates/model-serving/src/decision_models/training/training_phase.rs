@@ -2,15 +2,16 @@
 //! three stages.
 //!
 //! - **Checking:** a spread of questions is scored with the starting
-//!   parameters, and the scores must reproduce the model's own (parity)
-//!   before any weight moves. The trainable copy scores with the same code
+//!   parameters and compared with the model's own (parity) before any weight
+//!   moves; a gap beyond rounding is reported, not refused. The trainable copy scores with the same code
 //!   for every question, so a few dozen across the job prove what all of
 //!   them would; scoring all of them through a 9B model cost over a minute.
 //! - **Training:** the GPU trainer's passes, run after run.
 //! - **Scoring:** the questions the caller judges with (choosing, judging
 //!   and check-set questions) are scored with the best run's parameters,
 //!   and the trained tensors are read back. Training questions are left
-//!   out: nothing reads their trained scores, and they are most of a job.
+//!   out, since they are most of a job, unless nothing was held back: then
+//!   they are what the result is compared on.
 //!
 //! Every stage stops when its step's time is up and continues on the next
 //! step. The worker looks for a cancel only between steps, so a stage that
@@ -112,7 +113,8 @@ pub(crate) struct TrainingPhase {
     trainer: GpuTrainer,
     stage: PhaseStage,
     parity: ParityCheck,
-    /// MLX's active and cached bytes when the training was prepared.
+    /// MLX's active bytes and `mlx_buffer_cache` bytes when the training was
+    /// prepared.
     starting_memory_bytes: usize,
 }
 

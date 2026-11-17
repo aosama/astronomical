@@ -95,7 +95,7 @@ fn opening_text(training_summary: &TrainingSummary<'_>) -> String {
         TrainingScope::WholeModel => ("the whole of", "the trainable copy of the whole model"),
     };
     let question_count = training_count + choosing_count + judging_count;
-    let mut opening = if judging_count == 0 {
+    let mut opening = if training_summary.verdict.judged_on == JudgedOn::LearnedFromExamples {
         format!(
             "Training {what_trains} {} on {}: {} about {}, all of them to train on; fewer than {HOLD_BACK_STATE_COUNT} different texts leaves none to hold back.\n",
             training_summary.model_id,
@@ -109,8 +109,10 @@ fn opening_text(training_summary: &TrainingSummary<'_>) -> String {
         )
     } else {
         format!(
-            "Training {what_trains} {} on {} examples: {question_count} questions, {training_count} to train on, {choosing_count} to choose with and {judging_count} held back to judge.\n",
-            training_summary.model_id, training_summary.example_count,
+            "Training {what_trains} {} on {}: {}, {training_count} to train on, {choosing_count} to choose with and {judging_count} held back to judge.\n",
+            training_summary.model_id,
+            counted_noun(training_summary.example_count, "example", "examples"),
+            counted_noun(question_count, "question", "questions"),
         )
     };
     if training_summary.scope == TrainingScope::WholeModel {
@@ -118,11 +120,13 @@ fn opening_text(training_summary: &TrainingSummary<'_>) -> String {
             "Every layer gets small add-on weights that learn alongside the final layers; the original weights are never changed.\n",
         );
     }
-    if training_summary.indistinguishable_question_count > 0 {
+    let left_out_count = training_summary.indistinguishable_question_count;
+    if left_out_count > 0 {
+        let was_or_were = if left_out_count == 1 { "was" } else { "were" };
         let _ = writeln!(
             opening,
-            "{} questions were left out because some of their options read the same to the model.",
-            training_summary.indistinguishable_question_count
+            "{} {was_or_were} left out because some of their options read the same to the model.",
+            counted_noun(left_out_count, "question", "questions"),
         );
     }
     match training_summary.parity_gap_beyond_rounding {
@@ -230,8 +234,8 @@ fn verdict_text(training_summary: &TrainingSummary<'_>) -> String {
             "Judged better: the trained model beats the shipped one on questions it never saw.\n"
                 .to_owned()
         }
-        RecordedVerdict::JudgedWorse => {
-            "Judged worse: on questions it never saw, the trained model\n".to_owned()
+        RecordedVerdict::JudgedNotBetter => {
+            "Judged not better: on questions it never saw, the trained model\n".to_owned()
         }
         RecordedVerdict::NotJudged => format!(
             "Not judged: {}.\n",

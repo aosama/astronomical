@@ -11,9 +11,7 @@ use std::time::Duration;
 use astronomical_config::{
     AstronomicalInstancePaths, AstronomicalRuntimeInstance, is_discoverable_model_folder,
 };
-use astronomical_decision_contract::training_record::{
-    DECISION_TRAINING_RECORD_FILE_NAME, TrainingRecord, parse_training_record,
-};
+use astronomical_decision_contract::training_record::TrainingRecord;
 use astronomical_decision_training::calibrated_model_folder::{
     CalibratedFolderError, FolderAdditions, SourceModelFolder, canonical_output_path,
     check_output_location, write_calibrated_model_folder,
@@ -23,6 +21,7 @@ use astronomical_decision_training::labelled_example::{
     LabelledExample, LabelledExampleError, parse_labelled_examples,
 };
 use astronomical_decision_training::scored_question::ScoredQuestionError;
+use astronomical_decision_training::training_record_file::read_training_record_file;
 use thiserror::Error;
 
 use super::model_folder_lookup::{ModelFolderLookup, ModelFolderLookupError};
@@ -259,19 +258,9 @@ fn output_not_discoverable_text(
 pub(super) fn earlier_training_record(
     model_directory: &Path,
 ) -> Result<Option<TrainingRecord>, DecisionToolError> {
-    let record_path = model_directory.join(DECISION_TRAINING_RECORD_FILE_NAME);
-    match std::fs::read(&record_path) {
-        Ok(record_bytes) => match parse_training_record(&record_bytes) {
-            Ok(training_record) => Ok(Some(training_record)),
-            Err(record_error) => Err(DecisionToolError::EarlierRecordUnreadable(
-                record_error.to_string(),
-            )),
-        },
-        Err(read_error) if read_error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(read_error) => Err(DecisionToolError::EarlierRecordUnreadable(
-            read_error.to_string(),
-        )),
-    }
+    read_training_record_file(model_directory).map_err(|record_error| {
+        DecisionToolError::EarlierRecordUnreadable(record_error.to_string())
+    })
 }
 
 /// The ID the daemon serves a folder under: its name.

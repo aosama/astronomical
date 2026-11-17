@@ -68,10 +68,16 @@ struct FinishedTraining<'finished> {
     /// The source folder's own record, when it was made by a calibration or
     /// training; the new record builds on it.
     earlier_record: Option<TrainingRecord>,
+    /// The source folder's own calibration, which training's refits replace
+    /// kind by kind.
+    earlier_calibration: CalibrationOverride,
 }
 
 /// A trained head, what it was judged by, and the record that travels with it.
 struct JudgedTraining {
+    /// The calibration the folder will carry: the earlier one with
+    /// training's refits; `None` when no kind has one.
+    calibration_override: Option<CalibrationOverride>,
     head_tuning: HeadTuning,
     /// The add-ons of a whole-model training; `None` for the final layers.
     decision_adapters: Option<DecisionAdapters>,
@@ -98,6 +104,7 @@ pub async fn run_train(
     let output_directory = &train_arguments.output_directory;
     check_output_is_new(&model_folder, output_directory)?;
     let earlier_record = earlier_training_record(&model_folder.model_directory)?;
+    let earlier_calibration = earlier_calibration(&model_folder.model_directory)?;
     let check_examples = match built_in_check_examples() {
         Ok(check_examples) => check_examples,
         Err(check_set_error) => return Err(DecisionToolError::CheckSetUnreadable(check_set_error)),
@@ -126,6 +133,7 @@ pub async fn run_train(
             part_counts: prepared_job.part_counts,
             outcome,
             earlier_record,
+            earlier_calibration,
         },
         dependencies,
     )?;
@@ -185,6 +193,14 @@ fn judge_and_report(
         best_seed: outcome.best_seed,
         verdict: &verdict,
     };
+    // Everything that can still fail is done before the report says the
+    // folder will be written.
+    let decision_adapters =
+        decision_adapters_of(&outcome.adapter_tensors).map_err(unpaired_add_ons)?;
+    let calibration_override = merged_calibration(
+        &finished_training.earlier_calibration,
+        verdict.calibration_override(),
+    );
     write_report(
         dependencies.stdout,
         &training_report_text(&training_summary),
@@ -197,9 +213,9 @@ fn judge_and_report(
     }
     .after_earlier(finished_training.earlier_record.as_ref());
     Ok(JudgedTraining {
+        calibration_override,
         head_tuning: head_tuning_of(&outcome.trained_tensors),
-        decision_adapters: decision_adapters_of(&outcome.adapter_tensors)
-            .map_err(unpaired_add_ons)?,
+        decision_adapters,
         verdict,
         judging_pairs: training_scores.judging,
         training_record,
@@ -230,12 +246,8 @@ async fn write_and_prove(
     dependencies: &mut DecisionToolDependencies<'_>,
 ) -> Result<(), DecisionToolError> {
     let judged_training = written_training.judged_training;
-    let calibration_override = merged_calibration(
-        &written_training.model_folder.model_directory,
-        judged_training.verdict.calibration_override(),
-    )?;
     let folder_additions = FolderAdditions {
-        calibration_override: calibration_override.as_ref(),
+        calibration_override: judged_training.calibration_override.as_ref(),
         head_tuning: Some((&judged_training.head_tuning, written_training.family)),
         decision_adapters: judged_training.decision_adapters.as_ref(),
         training_record: Some(&judged_training.training_record),
@@ -260,14 +272,26 @@ async fn write_and_prove(
         NewModelVisibility::Listed,
         &written_training.model_folder.scanned_model_roots,
     );
-    let checked_questions = match judged_training.verdict.judged_on {
+    closing_text.push_str(&checked_answers_text(
+        judged_training.verdict.judged_on,
+        judged_training.judging_pairs.len(),
+        largest_gap,
+    ));
+    write_report(dependencies.stdout, &closing_text)
+}
+
+/// How closely the written folder answered as the trained model did.
+fn checked_answers_text(judged_on: JudgedOn, checked_count: usize, largest_gap: f32) -> String {
+    if checked_count == 0 {
+        return "No questions were left to check its answers against.\n".to_owned();
+    }
+    let checked_questions = match judged_on {
         JudgedOn::HeldBackQuestions => "judging questions",
         JudgedOn::LearnedFromExamples => "training questions",
     };
-    closing_text.push_str(&format!(
+    format!(
         "Its answers to the {checked_questions} match the trained model's to within {largest_gap:.4}.\n"
-    ));
-    write_report(dependencies.stdout, &closing_text)
+    )
 }
 
 /// A failed check of the written folder, said so the person knows the
@@ -308,33 +332,36 @@ async fn prove_written_folder(
     .await
 }
 
+/// The source folder's own calibration, read before training so a file
+/// that cannot be read stops the run before anything is reported; empty
+/// when the folder has none.
+fn earlier_calibration(source_directory: &Path) -> Result<CalibrationOverride, DecisionToolError> {
+    let calibration_path = source_directory.join(DECISION_CALIBRATION_FILE_NAME);
+    match std::fs::read(&calibration_path) {
+        Ok(calibration_bytes) => match parse_calibration_document(&calibration_bytes) {
+            Ok(earlier_calibration) => Ok(earlier_calibration),
+            Err(parse_error) => Err(DecisionToolError::EarlierCalibrationUnreadable(
+                parse_error.to_string(),
+            )),
+        },
+        Err(read_error) if read_error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(CalibrationOverride::default())
+        }
+        Err(read_error) => Err(DecisionToolError::EarlierCalibrationUnreadable(
+            read_error.to_string(),
+        )),
+    }
+}
+
 /// The folder's temperatures after training: its earlier calibration, with
 /// each kind training refitted replaced. A kind training did not refit keeps
 /// the temperature it was served and judged with; `None` when no kind has
 /// one, since an empty calibration file would not load.
 fn merged_calibration(
-    source_directory: &Path,
+    earlier_calibration: &CalibrationOverride,
     trained_calibration: &CalibrationOverride,
-) -> Result<Option<CalibrationOverride>, DecisionToolError> {
-    let calibration_path = source_directory.join(DECISION_CALIBRATION_FILE_NAME);
-    let mut merged = match std::fs::read(&calibration_path) {
-        Ok(calibration_bytes) => match parse_calibration_document(&calibration_bytes) {
-            Ok(earlier_calibration) => earlier_calibration,
-            Err(parse_error) => {
-                return Err(DecisionToolError::EarlierCalibrationUnreadable(
-                    parse_error.to_string(),
-                ));
-            }
-        },
-        Err(read_error) if read_error.kind() == std::io::ErrorKind::NotFound => {
-            CalibrationOverride::default()
-        }
-        Err(read_error) => {
-            return Err(DecisionToolError::EarlierCalibrationUnreadable(
-                read_error.to_string(),
-            ));
-        }
-    };
+) -> Option<CalibrationOverride> {
+    let mut merged = earlier_calibration.clone();
     for kind in [
         astronomical_decision_contract::DecisionQuestionKind::Choice,
         astronomical_decision_contract::DecisionQuestionKind::Score,
@@ -345,9 +372,9 @@ fn merged_calibration(
         }
     }
     if merged.decides_no_kind() {
-        return Ok(None);
+        return None;
     }
-    Ok(Some(merged))
+    Some(merged)
 }
 
 #[cfg(test)]

@@ -61,23 +61,27 @@ pub struct CalibrationPlan {
 }
 
 impl CalibrationPlan {
-    /// What the folder's training record says: not judged when any kind
-    /// could only be compared on the questions it was fitted to, judged
-    /// worse when any judged kind did not improve, otherwise judged better.
+    /// What the folder's training record says: not judged when nothing was
+    /// calibrated or any kind could only be compared on the questions it was
+    /// fitted to, judged not better when any judged kind did not improve,
+    /// otherwise judged better.
     #[must_use]
     pub fn recorded_verdict(&self) -> RecordedVerdict {
+        let mut any_calibrated = false;
         let mut any_unjudged = false;
         let mut any_not_improved = false;
         for kind_verdict in &self.kind_verdicts {
             if let KindOutcome::Calibrated(kind_fit) = &kind_verdict.outcome {
-                any_unjudged |= kind_fit.judged_on == JudgedOn::LearnedFromExamples;
+                any_calibrated = true;
+                any_unjudged |= kind_fit.judged_on == JudgedOn::LearnedFromExamples
+                    || kind_fit.calibrated_metrics.question_count == 0;
                 any_not_improved |= !kind_fit.improved();
             }
         }
-        if any_unjudged {
+        if !any_calibrated || any_unjudged {
             RecordedVerdict::NotJudged
         } else if any_not_improved {
-            RecordedVerdict::JudgedWorse
+            RecordedVerdict::JudgedNotBetter
         } else {
             RecordedVerdict::JudgedBetter
         }

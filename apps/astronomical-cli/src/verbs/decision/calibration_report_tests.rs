@@ -94,7 +94,7 @@ fn should_write_a_fit_that_did_not_help_and_say_so() {
             "Note: it did no better than the shipped temperatures on held-out questions."
         )
     );
-    assert!(report_text.contains("Judged worse"));
+    assert!(report_text.contains("Judged not better"));
     assert!(report_text.contains("whether to use it is your call"));
     assert_eq!(calibration_warnings(&plan).len(), 1);
 }

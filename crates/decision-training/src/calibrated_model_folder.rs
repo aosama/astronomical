@@ -212,7 +212,7 @@ fn canonical_path(path: &Path) -> Result<PathBuf, CalibratedFolderError> {
     fs::canonicalize(path_to_resolve).at_path(path)
 }
 
-/// A source file and its size; symbolic links (as in a Hugging Face cache
+/// A source file and its size; symbolic links (as in a `huggingface_hub_cache`
 /// snapshot) are followed, so the copy holds real files.
 struct SourceFile {
     relative_path: PathBuf,

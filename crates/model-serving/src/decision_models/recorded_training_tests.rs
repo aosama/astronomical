@@ -1,4 +1,6 @@
-use astronomical_decision_contract::training_record::{RecordedVerdict, training_record_document};
+use astronomical_decision_contract::training_record::{
+    DECISION_TRAINING_RECORD_FILE_NAME, RecordedVerdict, training_record_document,
+};
 use astronomical_decision_contract::{
     DecisionAnswer, NoulAnswer, QuestionInputCoverage, QuestionOutcome,
 };
@@ -48,9 +50,9 @@ impl DecisionEngine for OneAnswerEngine {
     }
 }
 
-fn judged_worse_record() -> TrainingRecord {
+fn judged_not_better_record() -> TrainingRecord {
     TrainingRecord {
-        verdict: RecordedVerdict::JudgedWorse,
+        verdict: RecordedVerdict::JudgedNotBetter,
         labelled_question_count: 240,
         distinct_state_count: 48,
         warnings: vec!["right 61.0% of the time, down from 64.0%".to_owned()],
@@ -74,7 +76,7 @@ fn should_carry_the_folders_record_into_every_answer() {
         model_directory
             .path()
             .join(DECISION_TRAINING_RECORD_FILE_NAME),
-        training_record_document(&judged_worse_record()),
+        training_record_document(&judged_not_better_record()),
     )
     .unwrap();
 
@@ -85,7 +87,7 @@ fn should_carry_the_folders_record_into_every_answer() {
     let engine_output = answers_of(engine.as_mut());
     assert_eq!(
         engine_output.question_outcomes[0].training_record,
-        Some(judged_worse_record())
+        Some(judged_not_better_record())
     );
 }
 

@@ -73,8 +73,8 @@ pub fn calibration_warnings(calibration_plan: &CalibrationPlan) -> Vec<String> {
 fn verdict_line(recorded_verdict: RecordedVerdict) -> String {
     let verdict_text = match recorded_verdict {
         RecordedVerdict::JudgedBetter => "Judged better on held-out questions.",
-        RecordedVerdict::JudgedWorse => {
-            "Judged worse: at least one kind did no better on held-out questions."
+        RecordedVerdict::JudgedNotBetter => {
+            "Judged not better: at least one kind did no better on held-out questions."
         }
         RecordedVerdict::NotJudged => {
             "Not judged: at least one kind could only be compared on the questions it was fitted to."
