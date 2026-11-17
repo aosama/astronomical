@@ -79,6 +79,28 @@ impl LinearAdapters {
         Ok(Self { by_target })
     }
 
+    /// The add-ons of `targets` as `down, up` per target, in `targets`
+    /// order, sharing the arrays: the layout
+    /// [`Self::from_trainable_arrays`] reads back.
+    ///
+    /// # Errors
+    /// Names a target that has no add-on, or returns the MLX description
+    /// when a handle cannot be shared.
+    pub(crate) fn arrays_of(&self, targets: &[String]) -> Result<Vec<MlxArray>, MlxCError> {
+        let mut target_arrays = Vec::with_capacity(targets.len() * 2);
+        for target in targets {
+            let Some(adapter_arrays) = self.by_target.get(target) else {
+                return Err(MlxCError {
+                    operation: "read a layer's add-ons",
+                    description: format!("{target} has no add-on"),
+                });
+            };
+            target_arrays.push(adapter_arrays.down.retain()?);
+            target_arrays.push(adapter_arrays.up.retain()?);
+        }
+        Ok(target_arrays)
+    }
+
     /// Whether no layer has an add-on.
     pub(crate) fn is_empty(&self) -> bool {
         self.by_target.is_empty()

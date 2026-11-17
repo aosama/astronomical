@@ -26,6 +26,7 @@ mod new_model_visibility;
 mod progress_reporting;
 mod saved_model_check;
 mod train;
+mod trained_tensors_handover_reading;
 mod training_job;
 mod training_report;
 mod training_request;

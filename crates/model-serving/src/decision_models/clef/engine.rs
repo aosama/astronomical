@@ -38,7 +38,9 @@ use crate::decision_engine::DecisionTrainingStep;
 use crate::decision_engine::{DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput};
 use crate::decision_models::calibration_override::read_calibration_override;
 use crate::decision_models::head_tuning::read_head_tuning;
-use crate::decision_models::qwen_backbone::{PREFILL_CHUNK_TOKENS, QwenDecisionBackbone};
+use crate::decision_models::qwen_backbone::{
+    HoldsDecisionBackbone, PREFILL_CHUNK_TOKENS, QwenDecisionBackbone,
+};
 use crate::decision_models::training::question_selection::RowSource;
 use crate::decision_models::training::training_session::{
     DecisionTrainingHost, DecisionTrainingSession, WholeModelScorer, keep_session_if_running,
@@ -73,6 +75,12 @@ pub(super) struct LoadedClefState {
     pub(super) head_settings: ClefHeadSettings,
     /// Temperatures fitted on the person's own examples, for the kinds it names.
     calibration_override: CalibrationOverride,
+}
+
+impl HoldsDecisionBackbone for LoadedClefState {
+    fn decision_backbone(&self) -> &QwenDecisionBackbone {
+        &self.backbone
+    }
 }
 
 impl ClefDecisionEngine {

@@ -38,6 +38,8 @@ pub(super) struct TrainingSummary<'summary> {
     /// The worst gap past rounding when the trainable copy did not
     /// reproduce the model.
     pub(super) parity_gap_beyond_rounding: Option<f32>,
+    /// Texts too long to hold in memory at once, trained layer by layer.
+    pub(super) recomputed_text_count: usize,
     pub(super) runs: &'summary [RunSummary],
     pub(super) best_seed: u64,
     pub(super) verdict: &'summary TrainingVerdict,
@@ -51,6 +53,7 @@ pub(super) fn training_report_text(training_summary: &TrainingSummary<'_>) -> St
         training_summary.best_seed,
         training_summary.verdict.judged_on,
     ));
+    report_text.push_str(&recomputation_text(training_summary.recomputed_text_count));
     report_text.push_str(&comparison_text(training_summary.verdict));
     report_text.push_str(&verdict_text(training_summary));
     report_text
@@ -142,6 +145,23 @@ fn opening_text(training_summary: &TrainingSummary<'_>) -> String {
         }
     }
     opening
+}
+
+/// Says when a text was too long to hold in memory at once, which explains
+/// a slower run; nothing for the usual case.
+fn recomputation_text(recomputed_text_count: usize) -> String {
+    if recomputed_text_count == 0 {
+        return String::new();
+    }
+    let pronoun = if recomputed_text_count == 1 {
+        "it"
+    } else {
+        "them"
+    };
+    format!(
+        "{} too long to hold in memory at once, so the model trained on {pronoun} layer by layer: slower, same result.\n\n",
+        counted_noun(recomputed_text_count, "text was", "texts were")
+    )
 }
 
 fn runs_text(runs: &[RunSummary], best_seed: u64, judged_on: JudgedOn) -> String {

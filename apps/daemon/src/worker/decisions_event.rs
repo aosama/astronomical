@@ -6,6 +6,7 @@ use astronomical_decision_contract::DecisionFailure;
 use astronomical_ipc_protocol::{RequestId, WorkerEvent, WorkerMlxMemorySnapshot};
 
 use crate::worker::request_admission::SINGLE_SHOT_EXECUTION_TIMEOUT;
+use crate::worker::undelivered_training_result::discard_undelivered_handover_file;
 use crate::{
     DecisionsExecutionError, DecisionsOutput, WorkerControlError, WorkerHealthSnapshot,
     worker::embeddings_event::publish_single_shot_finalized_memory_snapshot,
@@ -135,7 +136,13 @@ fn finalize_decisions(
         Ok(decisions_output) => Ok(decisions_output),
         Err(decision_failure) => Err(DecisionsExecutionError::WorkerFailure(decision_failure)),
     };
-    let _send_outcome = result_sender.try_send(client_outcome);
+    if let Err(send_error) = result_sender.try_send(client_outcome)
+        && let Ok(undelivered_output) = send_error.into_inner()
+    {
+        // The caller stopped waiting, so nothing will read the trained
+        // tensors the worker wrote for it.
+        discard_undelivered_handover_file(&undelivered_output, &std::env::temp_dir());
+    }
     publish_activity(health_snapshot, crate::WorkerActivity::Idle);
     clear_active_request_progress(health_snapshot);
     // A decision engine owns no experts or context state either, so its

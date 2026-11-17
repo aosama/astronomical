@@ -17,6 +17,7 @@ use tokio::time::timeout;
 
 use super::decision_tool::{DecisionToolDependencies, DecisionToolError};
 use super::progress_reporting::TimedProgress;
+use super::trained_tensors_handover_reading::take_handed_over_tensors;
 use crate::DaemonProbe;
 use crate::daemon_frame_wait::{
     DaemonWaitBounds, DaemonWorkWatch, await_frame_watching_daemon_work,
@@ -148,12 +149,15 @@ fn stage_wording(stage: DecisionTrainingStage) -> (&'static str, &'static str) {
     }
 }
 
-/// The outcome the one terminal frame carries, or why there is none.
+/// The outcome the one terminal frame carries, with its trained tensors
+/// read back from the worker's hand-over file, or why there is none.
 fn training_outcome(
     terminal_response: DaemonResponse,
 ) -> Result<DecisionTrainingOutcome, DecisionToolError> {
     match terminal_response {
-        DaemonResponse::DecisionModelTrained { outcome, .. } => Ok(*outcome),
+        DaemonResponse::DecisionModelTrained { outcome, .. } => {
+            take_handed_over_tensors(*outcome, &std::env::temp_dir())
+        }
         DaemonResponse::DecisionsFailed { reason } => {
             Err(DecisionToolError::TrainingFailed(reason.to_string()))
         }

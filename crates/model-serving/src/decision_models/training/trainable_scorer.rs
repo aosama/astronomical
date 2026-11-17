@@ -35,6 +35,13 @@ pub(crate) trait TrainableScorer {
         question_batch: &QuestionBatch,
         row_targets: &RowTargets,
     ) -> GpuResult<Vec<MlxArray>>;
+
+    /// How many different texts so far were too long for a pass's memory
+    /// budget and had every layer recomputed during the backward pass; only
+    /// a whole-model training ever does.
+    fn recomputed_text_count(&self) -> usize {
+        0
+    }
 }
 
 /// A family's final layers, scoring what the rest of the model read once.

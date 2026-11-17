@@ -273,6 +273,8 @@ impl TrainingPhase {
             best_seed: best_run_scoring.runs[best_run_scoring.best_position].seed,
             largest_parity_gap: self.parity.largest_gap,
             parity_gap_beyond_rounding: self.parity.gap_beyond_rounding,
+            recomputed_text_count: self.prepared.training_set.scorer.recomputed_text_count(),
+            trained_tensors_file: None,
             indistinguishable_question_count: self.prepared.indistinguishable_question_count,
         };
         Ok(DecisionTrainingStep::Completed(Box::new(outcome)))

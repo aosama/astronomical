@@ -30,6 +30,9 @@ use mlx_bridge::{MlxArray, MlxBindingsContext, MlxCError};
 
 use super::engine::{LoadedKevState, question_scores};
 use super::sequence::{KevQuestionRow, build_kev_sequence};
+use crate::decision_models::adapter_training::layer_recomputation::{
+    CheckpointedDecoderLayers, PassRecomputation, as_layer_recomputation,
+};
 use crate::decision_models::adapter_training::loss_gradient::{TrainableLoss, loss_gradients};
 use crate::decision_models::adapter_training::micro_batch_objective::{
     MicroBatchTargets, add_and_evaluate,
@@ -39,9 +42,9 @@ use crate::decision_models::adapter_training::whole_model_layout::{
     ADAPTER_RANK, WholeModelLayout,
 };
 use crate::decision_models::forward_pass_planning::{
-    plan_forward_passes, training_tokens_per_pass,
+    plan_forward_passes, recomputation_threshold_tokens, training_tokens_per_pass,
 };
-use crate::decision_models::qwen_backbone::backbone_memory_limit_bytes;
+use crate::decision_models::qwen_backbone::{HoldsDecisionBackbone, backbone_memory_limit_bytes};
 use crate::decision_models::training::gpu_math::{GpuMath, GpuResult, GpuTrainingError};
 use crate::decision_models::training::question_batch::QuestionBatch;
 use crate::decision_models::training::question_selection::RowSource;
@@ -74,6 +77,8 @@ pub(crate) struct KevWholeModelScorer {
     differentiable_recurrence: Rc<DifferentiableGatedDelta>,
     /// The padded tokens one gradient pass may hold.
     tokens_per_pass: usize,
+    /// Recomputes the layers of a pass over that budget: one long question.
+    pass_recomputation: PassRecomputation,
 }
 
 impl KevWholeModelScorer {
@@ -94,14 +99,25 @@ impl KevWholeModelScorer {
                 "this model was already trained as a whole; train the original model instead",
             ));
         }
-        let adapter_targets = backbone.model.adapter_targets().map_err(|target_error| {
-            DecisionFailure::invalid_request(&format!(
-                "this model cannot train its whole model: {target_error}"
-            ))
-        })?;
+        let targets_by_layer =
+            backbone
+                .model
+                .adapter_targets_by_layer()
+                .map_err(|target_error| {
+                    DecisionFailure::invalid_request(&format!(
+                        "this model cannot train its whole model: {target_error}"
+                    ))
+                })?;
+        let backbone_holder: Rc<dyn HoldsDecisionBackbone> = loaded_state.clone();
+        let memory_limit_bytes = backbone_memory_limit_bytes(&loaded_state.backbone)?;
+        let pass_recomputation = PassRecomputation::new(
+            backbone_holder,
+            &targets_by_layer,
+            recomputation_threshold_tokens(memory_limit_bytes, KEV_TRAINING_BYTES_PER_PADDED_TOKEN),
+        );
         let layout = Rc::new(WholeModelLayout {
             scorer_layout: scorer_layout.clone(),
-            adapter_targets,
+            adapter_targets: targets_by_layer.into_iter().flatten().collect(),
             adapter_rank: ADAPTER_RANK,
         });
         let mut tokenized_examples = Vec::with_capacity(examples.len());
@@ -114,13 +130,14 @@ impl KevWholeModelScorer {
             ))
         })?;
         let scorer = Self {
+            pass_recomputation,
             loaded_state: Rc::clone(loaded_state),
             examples: Rc::new(tokenized_examples),
             row_sources: row_sources.to_vec(),
             layout: Rc::clone(&layout),
             differentiable_recurrence: Rc::new(differentiable_recurrence),
             tokens_per_pass: training_tokens_per_pass(
-                backbone_memory_limit_bytes(&loaded_state.backbone)?,
+                memory_limit_bytes,
                 KEV_TRAINING_BYTES_PER_PADDED_TOKEN,
             ),
         };
@@ -247,8 +264,10 @@ impl TrainableScorer for KevWholeModelScorer {
     ) -> GpuResult<Vec<MlxArray>> {
         let row_numbers = &question_batch.dataset_question_row_numbers;
         let mut sequence_lengths = Vec::with_capacity(row_numbers.len());
+        let mut text_indices = Vec::with_capacity(row_numbers.len());
         for row_number in row_numbers {
             let row_source = self.row_sources[*row_number];
+            text_indices.push(row_source.example_index);
             let example = &self.examples[row_source.example_index];
             sequence_lengths.push(
                 example.state_token_ids.len()
@@ -259,6 +278,9 @@ impl TrainableScorer for KevWholeModelScorer {
         }
         let mut summed_gradients = Vec::with_capacity(parameters.len());
         for pass_positions in plan_forward_passes(&sequence_lengths, self.tokens_per_pass) {
+            let layer_recomputation =
+                self.pass_recomputation
+                    .for_pass(&pass_positions, &sequence_lengths, &text_indices);
             let mut pass_sources = Vec::with_capacity(pass_positions.len());
             let mut option_counts = Vec::with_capacity(pass_positions.len());
             for batch_position in &pass_positions {
@@ -274,6 +296,7 @@ impl TrainableScorer for KevWholeModelScorer {
                 row_sources: pass_sources,
                 layout: Rc::clone(&self.layout),
                 differentiable_recurrence: Rc::clone(&self.differentiable_recurrence),
+                layer_recomputation,
                 targets: MicroBatchTargets::take(
                     math.runtime,
                     row_targets,
@@ -291,6 +314,10 @@ impl TrainableScorer for KevWholeModelScorer {
         }
         Ok(summed_gradients)
     }
+
+    fn recomputed_text_count(&self) -> usize {
+        self.pass_recomputation.recomputed_text_count()
+    }
 }
 
 /// One micro-batch's objective, owning everything its graph reads.
@@ -302,6 +329,8 @@ struct KevMicroBatchLoss {
     layout: Rc<WholeModelLayout>,
     differentiable_recurrence: Rc<DifferentiableGatedDelta>,
     targets: MicroBatchTargets,
+    /// Set when the pass is over the memory budget.
+    layer_recomputation: Option<Rc<CheckpointedDecoderLayers>>,
 }
 
 impl TrainableLoss for KevMicroBatchLoss {
@@ -362,7 +391,10 @@ impl KevMicroBatchLoss {
             .loaded_state
             .backbone
             .model
-            .final_normalized_hidden_states_of_rows(&row_references)
+            .final_normalized_hidden_states_of_rows(
+                &row_references,
+                as_layer_recomputation(self.layer_recomputation.as_ref()),
+            )
             .map_err(|forward_error| MlxCError {
                 operation: "build Kev's whole-model training loss",
                 description: forward_error.to_string(),

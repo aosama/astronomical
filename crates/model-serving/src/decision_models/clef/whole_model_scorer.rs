@@ -31,6 +31,9 @@ use super::head_layers::{ClefAttentionRoute, ClefHeadLayers};
 use super::head_weights::ClefHeadWeights;
 use super::joint_head::{ClefHeadInputs, SpanLayout};
 use super::prompt::{ClefSequence, build_clef_sequence};
+use crate::decision_models::adapter_training::layer_recomputation::{
+    CheckpointedDecoderLayers, PassRecomputation, as_layer_recomputation,
+};
 use crate::decision_models::adapter_training::loss_gradient::{TrainableLoss, loss_gradients};
 use crate::decision_models::adapter_training::micro_batch_objective::{
     MicroBatchTargets, add_and_evaluate,
@@ -40,9 +43,9 @@ use crate::decision_models::adapter_training::whole_model_layout::{
     ADAPTER_RANK, WholeModelLayout,
 };
 use crate::decision_models::forward_pass_planning::{
-    plan_forward_passes, training_tokens_per_pass,
+    plan_forward_passes, recomputation_threshold_tokens, training_tokens_per_pass,
 };
-use crate::decision_models::qwen_backbone::backbone_memory_limit_bytes;
+use crate::decision_models::qwen_backbone::{HoldsDecisionBackbone, backbone_memory_limit_bytes};
 use crate::decision_models::training::gpu_heads::clef_option_scores;
 use crate::decision_models::training::gpu_math::{GpuMath, GpuResult, GpuTrainingError};
 use crate::decision_models::training::question_batch::QuestionBatch;
@@ -75,6 +78,8 @@ pub(crate) struct ClefWholeModelScorer {
     differentiable_recurrence: Rc<DifferentiableGatedDelta>,
     /// The padded tokens one gradient pass may hold.
     tokens_per_pass: usize,
+    /// Recomputes the layers of a pass over that budget: one long text.
+    pass_recomputation: PassRecomputation,
 }
 
 impl ClefWholeModelScorer {
@@ -93,14 +98,28 @@ impl ClefWholeModelScorer {
                 "this model was already trained as a whole; train the original model instead",
             ));
         }
-        let adapter_targets = backbone.model.adapter_targets().map_err(|target_error| {
-            DecisionFailure::invalid_request(&format!(
-                "this model cannot train its whole model: {target_error}"
-            ))
-        })?;
+        let targets_by_layer =
+            backbone
+                .model
+                .adapter_targets_by_layer()
+                .map_err(|target_error| {
+                    DecisionFailure::invalid_request(&format!(
+                        "this model cannot train its whole model: {target_error}"
+                    ))
+                })?;
+        let backbone_holder: Rc<dyn HoldsDecisionBackbone> = loaded_state.clone();
+        let memory_limit_bytes = backbone_memory_limit_bytes(&loaded_state.backbone)?;
+        let pass_recomputation = PassRecomputation::new(
+            backbone_holder,
+            &targets_by_layer,
+            recomputation_threshold_tokens(
+                memory_limit_bytes,
+                CLEF_TRAINING_BYTES_PER_PADDED_TOKEN,
+            ),
+        );
         let layout = Rc::new(WholeModelLayout {
             scorer_layout: scorer_layout.clone(),
-            adapter_targets,
+            adapter_targets: targets_by_layer.into_iter().flatten().collect(),
             adapter_rank: ADAPTER_RANK,
         });
         let mut read_examples = Vec::with_capacity(examples.len());
@@ -123,13 +142,14 @@ impl ClefWholeModelScorer {
             ))
         })?;
         let scorer = Self {
+            pass_recomputation,
             loaded_state: Rc::clone(loaded_state),
             examples: Rc::new(read_examples),
             row_sources: row_sources.to_vec(),
             layout: Rc::clone(&layout),
             differentiable_recurrence: Rc::new(differentiable_recurrence),
             tokens_per_pass: training_tokens_per_pass(
-                backbone_memory_limit_bytes(&loaded_state.backbone)?,
+                memory_limit_bytes,
                 CLEF_TRAINING_BYTES_PER_PADDED_TOKEN,
             ),
         };
@@ -245,11 +265,16 @@ impl TrainableScorer for ClefWholeModelScorer {
         let row_numbers = &question_batch.dataset_question_row_numbers;
         let example_groups = self.positions_by_example(row_numbers);
         let mut sequence_lengths = Vec::with_capacity(example_groups.len());
+        let mut text_indices = Vec::with_capacity(example_groups.len());
         for (example_index, _) in &example_groups {
             sequence_lengths.push(self.examples[*example_index].sequence.token_ids.len());
+            text_indices.push(*example_index);
         }
         let mut summed_gradients = Vec::with_capacity(parameters.len());
         for pass_groups in plan_forward_passes(&sequence_lengths, self.tokens_per_pass) {
+            let layer_recomputation =
+                self.pass_recomputation
+                    .for_pass(&pass_groups, &sequence_lengths, &text_indices);
             let mut pass_examples = Vec::with_capacity(pass_groups.len());
             let mut pass_positions = Vec::new();
             let mut option_counts = Vec::new();
@@ -272,6 +297,7 @@ impl TrainableScorer for ClefWholeModelScorer {
                 pass_examples,
                 layout: Rc::clone(&self.layout),
                 differentiable_recurrence: Rc::clone(&self.differentiable_recurrence),
+                layer_recomputation,
                 targets: MicroBatchTargets::take(
                     math.runtime,
                     row_targets,
@@ -289,6 +315,10 @@ impl TrainableScorer for ClefWholeModelScorer {
         }
         Ok(summed_gradients)
     }
+
+    fn recomputed_text_count(&self) -> usize {
+        self.pass_recomputation.recomputed_text_count()
+    }
 }
 
 /// One micro-batch's objective, owning everything its graph reads.
@@ -299,6 +329,8 @@ struct ClefMicroBatchLoss {
     pass_examples: Vec<(usize, Vec<usize>)>,
     layout: Rc<WholeModelLayout>,
     differentiable_recurrence: Rc<DifferentiableGatedDelta>,
+    /// Set when the pass is over the memory budget.
+    layer_recomputation: Option<Rc<CheckpointedDecoderLayers>>,
     targets: MicroBatchTargets,
 }
 
@@ -337,7 +369,10 @@ impl ClefMicroBatchLoss {
         }
         let model = &self.loaded_state.backbone.model;
         let pass_hidden_states = model
-            .final_normalized_hidden_states_of_rows(&token_rows)
+            .final_normalized_hidden_states_of_rows(
+                &token_rows,
+                as_layer_recomputation(self.layer_recomputation.as_ref()),
+            )
             .map_err(|forward_error| {
                 loss_failure(DecisionFailure::fatal_execution(&forward_error.to_string()))
             })?;

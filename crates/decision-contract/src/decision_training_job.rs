@@ -148,6 +148,17 @@ pub struct DecisionTrainingOutcome {
     /// not reproduce the model; training went on and the report says so.
     #[serde(default)]
     pub parity_gap_beyond_rounding: Option<f32>,
+    /// The name of the hand-over file in the temporary folder where the
+    /// worker wrote `trained_tensors` and `adapter_tensors`, which are then
+    /// empty here: a 9B model's add-ons are larger than one message between
+    /// processes may be (`trained_tensors_file`). `None` when the tensors
+    /// travel in place, as from an engine called directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trained_tensors_file: Option<String>,
+    /// Different texts too long for a pass's memory budget, whose layers were
+    /// recomputed during the backward pass: slower, same result.
+    #[serde(default)]
+    pub recomputed_text_count: usize,
     /// Questions left out because some of their options read the same.
     pub indistinguishable_question_count: usize,
 }

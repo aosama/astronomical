@@ -13,6 +13,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::stepped_request::CommandDuringRequest;
 use super::support::{ActiveWorkerRequest, ModelFactory, WorkerRuntimeError};
+use super::trained_tensors_handover_writing::{discard_handover_file, hand_over_trained_tensors};
 use super::{EngineBackedWorker, LoadedRuntime};
 use crate::decision_engine::DecisionTrainingStep;
 use crate::model_generation_processor::ModelGenerationProcessor;
@@ -137,13 +138,36 @@ where
                 Ok(Some(active_training))
             }
             Ok(DecisionTrainingStep::Completed(outcome)) => {
-                event_writer
+                // One message may not hold a 9B model's add-ons; the
+                // tensors go through a file the command-line tool reads.
+                let handover_directory = std::env::temp_dir();
+                let outcome = match hand_over_trained_tensors(outcome, &handover_directory) {
+                    Ok(outcome) => outcome,
+                    Err(handover_failure) => {
+                        let elapsed_millis = active_training.elapsed_millis();
+                        self.fail_decision_training(
+                            request_id,
+                            DecisionFailure::fatal_execution(&handover_failure),
+                            elapsed_millis,
+                            event_writer,
+                        )
+                        .await?;
+                        return Ok(None);
+                    }
+                };
+                let handover_file_name = outcome.trained_tensors_file.clone();
+                let sent = event_writer
                     .send_event(&WorkerEvent::DecisionModelTrained {
                         request_id,
                         outcome,
                         elapsed_millis: active_training.elapsed_millis(),
                     })
-                    .await?;
+                    .await;
+                if let Err(send_error) = sent {
+                    // No reader will come for a file whose message never left.
+                    discard_handover_file(handover_file_name.as_deref(), &handover_directory);
+                    return Err(send_error.into());
+                }
                 self.emit_decisions_finalization(
                     request_id,
                     active_training.elapsed_millis(),

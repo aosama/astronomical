@@ -96,7 +96,9 @@ test-decision-gpu-training = "test -p astronomical-model-serving --features dire
 # objective against final-layer training's hand-written gradient, the add-on
 # layout and starting values, the add-on path every linear layer takes, and
 # how serving's passes are regrouped so trained scores compare with served
-# ones. Needs MLX and the graphics processor (#[serial]); about a second.
+# ones, and the parts of recomputing layers for a text too long for a pass
+# (issue #2299) that need no model. Needs MLX and the graphics processor
+# (#[serial]); about a second.
 # The whole journey runs live with `astronomical decision train EXAMPLES
 # --whole-model --output DIR --model laya-MLX-8bit` against Development, on
 # at least 1000 labelled questions about 100 states.
@@ -186,6 +188,14 @@ test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronom
 # `test-kev-whole-model-training-speed` (and the Clef and Laya aliases) times
 # a few gradient steps and the scoring on a small job, about twenty seconds,
 # and prints milliseconds per question: the loop to iterate training speed on.
+# `test-clef-whole-model-pass-memory` (and the Kev alias) runs one gradient
+# step on a single text of about 130, 195 and 260 tokens, all inside the
+# pass budget, and prints each step's peak memory above the resident model,
+# under a minute on Clef: how a pass's memory grows with text length.
+# `test-kev-whole-model-layer-recomputation` (and the Clef alias) trains one
+# text longer than the pass budget twice, recomputing each layer and keeping
+# every activation, and requires the same weights and a lower peak: about a
+# minute on Kev 0.8B.
 test-laya = "test -p astronomical-model-serving --features direct-mlx --lib decision_models"
 test-laya-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_reference_decisions"
 test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter laya_engine_requests"
@@ -198,6 +208,10 @@ test-laya-whole-model-positive-control = "run -p xtask -- test-run --package ast
 test-kev-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_kev_whole_model_training_speed"
 test-clef-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_clef_whole_model_training_speed"
 test-laya-whole-model-training-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_training_speed::should_measure_laya_whole_model_training_speed"
+test-clef-whole-model-pass-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_pass_memory::should_measure_clef_whole_model_pass_memory_by_text_length"
+test-kev-whole-model-pass-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_pass_memory::should_measure_kev_whole_model_pass_memory_by_text_length"
+test-kev-whole-model-layer-recomputation = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_layer_recomputation::should_train_a_text_over_the_pass_budget_to_the_same_weights_in_less_memory_on_kev"
+test-clef-whole-model-layer-recomputation = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter whole_model_layer_recomputation::should_train_a_text_over_the_pass_budget_to_the_same_weights_in_less_memory_on_clef"
 # Text to speech: Kokoro-82M and Phonon 31M on MLX. `test-speech` runs the
 # speech lib tests (shared layers, both families' layers on small weights from
 # the Shakespeare fixture, the engines' request checks); about a second, no

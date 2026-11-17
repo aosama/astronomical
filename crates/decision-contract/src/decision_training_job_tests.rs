@@ -80,3 +80,24 @@ fn should_read_an_outcome_written_before_parity_gaps_were_reported() {
 
     assert_eq!(outcome.parity_gap_beyond_rounding, None);
 }
+
+#[test]
+fn should_carry_the_hand_over_file_name_and_leave_it_out_when_there_is_none() {
+    let outcome_with_file = r#"{"examples":[],"trained_tensors":[],"adapter_tensors":[],"runs":[],"best_seed":1,"largest_parity_gap":0.0,"trained_tensors_file":"astronomical-trained-tensors-1-2.safetensors","indistinguishable_question_count":0}"#;
+
+    let outcome: DecisionTrainingOutcome = serde_json::from_str(outcome_with_file).unwrap();
+    assert_eq!(
+        outcome.trained_tensors_file.as_deref(),
+        Some("astronomical-trained-tensors-1-2.safetensors")
+    );
+
+    let without_file = DecisionTrainingOutcome {
+        trained_tensors_file: None,
+        ..outcome
+    };
+    assert!(
+        !serde_json::to_string(&without_file)
+            .unwrap()
+            .contains("trained_tensors_file")
+    );
+}
