@@ -485,3 +485,34 @@ fn should_ship_kokoro_and_phonon_as_speech_models() {
             .includes("model.q8.gguf")
     );
 }
+
+/// The plain 4-bit Qwen 3.8 27B is the target the DFlash2 drafter pairs with,
+/// so the catalog offers it as an ordinary chat model with its vision tower
+/// and every file in the repository: nothing is filtered out, because the
+/// processor and chat template files are what make pictures and tools work.
+#[test]
+fn should_ship_the_plain_four_bit_qwen3_8_27b_as_a_vision_chat_model() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let qwen3_8_entry = download_catalog
+        .entries()
+        .iter()
+        .find(|catalog_entry| catalog_entry.huggingface_id() == "TensorFold/Qwen3.8-27B-MLX-4bit")
+        .expect("the shipped catalog should offer the plain 4-bit Qwen 3.8 27B");
+
+    assert_eq!(qwen3_8_entry.role(), DownloadCatalogRole::Chat);
+    assert_eq!(qwen3_8_entry.family().as_str(), "qwen3_5");
+    assert_eq!(
+        qwen3_8_entry.revision(),
+        "22d8d538154e0e5b6f8dcb1fcc74a60a0798104c"
+    );
+    assert!(!qwen3_8_entry.experimental() && !qwen3_8_entry.get_started());
+    let capabilities = qwen3_8_entry.capabilities();
+    assert!(capabilities.supports_vision && capabilities.supports_reasoning);
+    assert!(capabilities.supports_tool_calls);
+    assert!(qwen3_8_entry.approximate_memory_bytes() > qwen3_8_entry.approximate_size_bytes());
+    let selection = qwen3_8_entry.download_path_selection();
+    assert!(selection.includes("model-00003-of-00003.safetensors"));
+    assert!(selection.includes("preprocessor_config.json"));
+    assert!(selection.includes("chat_template.jinja"));
+}
