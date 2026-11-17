@@ -32,8 +32,9 @@ use serial_test::serial;
 
 use super::dflash2_journey_support::{host_values, tap_rows};
 use super::dflash2_kept_per_round::{
-    CHAT_PROMPT, CODE_PROMPT, Cell, ENGINE_NODE_BUDGET, JourneyPair, OUTPUT_TOKENS, RoundState,
-    TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair, prompt_token_ids, settle_round,
+    CHAT_PROMPT, CODE_PROMPT, Cell, ENGINE_CHILDREN_PER_NODE, ENGINE_NODE_BUDGET, JourneyPair,
+    OUTPUT_TOKENS, RoundState, TOP_K, TOP_P_THOUSANDTHS, completion_token_ids, load_pair,
+    prompt_token_ids, settle_round,
 };
 
 /// TensorFold's community benchmark seeds its repetitions from 1234.
@@ -61,6 +62,7 @@ const fn oracle_cell(
         minimum_kept_per_round: 0.0,
         keyed_seed: FIRST_KEYED_SEED,
         node_budget: ENGINE_NODE_BUDGET,
+        children_per_node: ENGINE_CHILDREN_PER_NODE,
     }
 }
 
@@ -436,6 +438,7 @@ fn search_tree(
     let mut options = DraftTreeOptions {
         sampling_temperature: f64::from(cell.temperature_thousandths) / 1_000.0,
         node_budget: cell.node_budget,
+        children_per_node: cell.children_per_node,
         ..DraftTreeOptions::default()
     };
     if drafting == Drafting::SinglePath {

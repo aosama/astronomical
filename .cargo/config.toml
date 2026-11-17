@@ -556,7 +556,8 @@ measure-dflash2-tree-oracle = "run -p xtask -- test-run --package astronomical-a
 # the tree-size ladder against plain one-token steps; prose after a
 # 10,000-token prompt; synced rounds through the row-exact tree attention
 # kernel and MLX's attention from 14 to 11,292 context tokens (where the
-# kernel starts to pay); and the kernel against MLX's bf16 and float32
+# kernel starts to pay); trees against chains three and four tokens deep;
+# and the kernel against MLX's bf16 and float32
 # attention over many interleaved seeds, each seed printed, since tokens kept
 # a round vary between sampled texts more than between attention paths.
 # Those are long: pass --exact --filter with the test's full path.
