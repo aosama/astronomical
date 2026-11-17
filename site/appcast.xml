@@ -4,29 +4,37 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.115</title>
-            <pubDate>Tue, 17 Nov 2026 06:28:00 -0500</pubDate>
-            <sparkle:version>2373</sparkle:version>
-            <sparkle:shortVersionString>0.2.115</sparkle:shortVersionString>
+            <title>0.2.116</title>
+            <pubDate>Tue, 17 Nov 2026 17:24:18 -0500</pubDate>
+            <sparkle:version>2381</sparkle:version>
+            <sparkle:shortVersionString>0.2.116</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **Qwen 3.8 27B in the Library.** You can now download `TensorFold/Qwen3.8-27B-MLX-4bit` from the Library or with the `astronomical` command. It is a large all-round model that reads pictures and text, reasons before it answers, can use tools, and keeps a large memory window for long conversations and documents. It is a 15.0 GiB download. (#2305)
+- **Faster replies from the Ornith 1.5 35B-A3B model on M5 Macs.** When this model comes with its DFlash2 draft model, the draft model guesses a small tree of next words each round, and the large model checks all of them in one step. Replies decode about 1.28 times faster on short chat and about 1.24 times faster after a 10,000-token prompt. Every word is still the large model's own choice, sampled at your settings. From 2,048 tokens of conversation, a new M5 kernel reads the conversation once for the whole tree instead of once per guess, so long chats keep the gain.
+- **A new model in the catalog: `Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit`.** It is the OptiQ 4/8-bit Ornith 1.5 35B-A3B with its DFlash2 draft model packed inside, about 22.9 GB. Get it from Observatory's **Models** page, or run `astronomical models download Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit`. On Macs without an M5 GPU it runs exactly like the plain OptiQ build.
+
+## Fixed
+
+- **The Tuning page's temperature now takes effect while requests keep arriving.** A change to temperature and the other request defaults used to wait for an idle engine, and could be refused while a client kept sending requests. It now applies to the next request, without restarting the engine.
+
+## Under the hood
+
+- Updated `crc32fast` to 1.5.5 and a CI action to its latest patch.
 
 ## Compatibility
 
-- Your installed models, conversations and settings carry over unchanged; no settings were added or removed.
-- Requires macOS 14 or later on Apple silicon.
+- Apple silicon Macs with macOS 14 or later.
+- Your settings, models and conversations carry over unchanged.
+- The faster drafting needs an M5-family GPU. Every other Mac runs every model as before.
 
-## Distribution
-
-This release is signed with a Developer ID certificate, notarized by Apple, and delivered through the signed Sparkle update feed.
+Astronomical is signed with a Developer ID, notarized by Apple, and delivered as a signed Sparkle update.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.115/Astronomical-0.2.115-macOS-arm64.dmg" length="24649271" type="application/octet-stream" sparkle:edSignature="V0b82GMy3z5gIiGopUMM8sU19nP8+O3tR0WKKJp14VoxsVW9LJ+1l4w97TNARS8sA9Qm0VyAVCi80cFs5ns1Dw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.116/Astronomical-0.2.116-macOS-arm64.dmg" length="24648261" type="application/octet-stream" sparkle:edSignature="fUdnw65xc+ZdewxA7+pFVE1S0fdCnTAl72FqKTotiJAUHafwfHLEqgiq0U81i9aTeghcchMSPbj1Mns58M+qBA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: M7/Br8SHczznZnfu+Ume1QeiHVpKesTeRYucQtBf/ZE0z/tUyhpTcoJlQB9dGRWnNESWm0QRFI5pOoPKGZZeCA==
-length: 1920
+edSignature: IN8BbVJR/nrMO2zf8Jd7qpdW1HsDmelCggZwoz+pl11lPKNDeISIsktQ2IB/wt5d2s+UkgbIr1A8y4C4Uks3Dg==
+length: 2909
 -->
