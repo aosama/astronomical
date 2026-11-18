@@ -647,7 +647,8 @@ measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomica
 # already exists), a graphics-processor pass over our bytes against MLX's,
 # the copy into table slots, a read straight into tables MLX owns (with
 # threads started for it and through the native record reader, whole and half
-# records), and what stopping the forward to bring a route to the host costs. Prints each as milliseconds a layer and a token over 28
+# records), and what stopping the forward to bring a route to the host costs,
+# waiting inside MLX as serving does and polling for the route on a spinning core (`[stop-cost]`). Prints each as milliseconds a layer and a token over 28
 # fetching layers. Same configuration and scratch space as the alias above.
 measure-fetching-layer-stages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_one_fetching_layer_stage_by_stage"
 # The native record reader filling table slots at each fetch size (1, 2, 4, 8
