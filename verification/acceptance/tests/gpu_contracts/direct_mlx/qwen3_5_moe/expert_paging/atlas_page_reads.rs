@@ -329,7 +329,14 @@ fn should_time_the_native_reader_at_each_fetch_size() {
         &probe.atlas,
         SERVED_FETCH_EXPERT_COUNT,
     );
-    for pause in [None, Some(Duration::from_micros(100))] {
+    // Twice each, alternating, so a drift in what else the Mac is doing
+    // does not pass for a difference between the two.
+    for pause in [
+        None,
+        Some(Duration::from_micros(100)),
+        None,
+        Some(Duration::from_micros(100)),
+    ] {
         table_reads::report_cost_of_keeping_storage_awake(
             &probe.runtime,
             &probe.atlas,

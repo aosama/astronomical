@@ -95,8 +95,9 @@ async fn compare_replies() {
         )
         .await;
         eprintln!(
-            "[direct-expert-read-parity] {phase_name}: {} reply tokens",
-            reply_token_ids.len()
+            "[direct-expert-read-parity] {phase_name}: {} reply tokens, fingerprint {:016x}",
+            reply_token_ids.len(),
+            reply_fingerprint(&reply_token_ids)
         );
         replies.push(reply_token_ids);
     }
@@ -119,6 +120,20 @@ async fn compare_replies() {
         "the reply read into tables must be the copied reply, token for token (first difference at token {:?})",
         first_difference(&replies[0], &replies[1])
     );
+}
+
+/// A reply's tokens folded into one number (FNV-1a over each token's bytes),
+/// printed so replies from two runs can be compared: the same request served
+/// from an Atlas and from its stock source must print the same fingerprint.
+fn reply_fingerprint(reply_token_ids: &[u32]) -> u64 {
+    let mut fingerprint: u64 = 0xcbf2_9ce4_8422_2325;
+    for token_id in reply_token_ids {
+        for token_byte in token_id.to_le_bytes() {
+            fingerprint ^= u64::from(token_byte);
+            fingerprint = fingerprint.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    fingerprint
 }
 
 /// Index of the first token two replies disagree on, or the shorter one's

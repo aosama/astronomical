@@ -531,16 +531,19 @@ pub(super) fn report_native_reader_fetch_time(
 }
 
 /// What keeping storage awake costs while a reply fetches: the reader is fed
-/// one small fetch a millisecond for two seconds, as a streamed reply feeds
-/// it, and the pages it reads on the side and the processor time this
-/// process spends are counted.
+/// one small fetch a millisecond for several seconds, as a streamed reply
+/// feeds it, and the pages it reads on the side and the processor time this
+/// process spends are reported. Power is not: the system load a portable
+/// Mac's battery controller reports without administrator rights was tried
+/// and refreshes less than once in 45 seconds, too slowly to tell two runs
+/// of a few seconds apart.
 pub(super) fn report_cost_of_keeping_storage_awake(
     runtime: &MlxRuntime,
     atlas: &AtlasTestFile,
     planned_page: &PlannedPage,
     pause: Option<Duration>,
 ) {
-    const MEASURED_FETCH_COUNT: u32 = 2_000;
+    const MEASURED_FETCH_COUNT: u32 = 4_000;
     let mut tables = empty_tables(runtime, atlas);
     let atlas_file = open_bypassing_macos_file_cache(&atlas.path);
     let native_reader = ExpertRecordReader::new(NATIVE_READER_HELPER_THREAD_COUNT)
