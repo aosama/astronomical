@@ -24,20 +24,43 @@ pub(super) fn whole_layer_keep_count(model: &Qwen3_5Model) -> usize {
     let Some(first_layer_plan) = expert_pager.layer_plans().first() else {
         return 0;
     };
-    let Ok(per_expert_payload_bytes) =
-        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-            first_layer_plan,
-            1,
-        )
-    else {
-        return 0;
-    };
     crate::decode_whole_layer_keep_count(
         model.kept_expert_capacity_bytes(),
-        per_expert_payload_bytes,
+        mean_expert_payload_bytes(expert_pager),
         first_layer_plan.expert_capacity,
         expert_pager.layer_count(),
     )
+}
+
+/// One expert's payload bytes averaged over every sparse layer.
+///
+/// A model quantized with mixed precision stores some layers' experts at 8
+/// bits and others at 4: the 4-bit OptiQ 35B-A3B's first layer holds 3.19 MB
+/// experts against a mean of 1.82 MB. Pricing every table by the first layer
+/// sized them to 62 experts under an 11 GB limit and left about 3.2 GB of the
+/// `astro_expert_cache` capacity unused (issue #2338). The mean prices the
+/// room the tables share as it is spent.
+pub(super) fn mean_expert_payload_bytes(
+    expert_pager: &crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager,
+) -> u64 {
+    let mut total_payload_bytes = 0_u64;
+    let mut total_expert_count = 0_u64;
+    for layer_plan in expert_pager.layer_plans() {
+        let Ok(layer_payload_bytes) =
+            crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
+                layer_plan,
+                layer_plan.expert_capacity,
+            )
+        else {
+            continue;
+        };
+        total_payload_bytes = total_payload_bytes.saturating_add(layer_payload_bytes);
+        total_expert_count = total_expert_count
+            .saturating_add(u64::try_from(layer_plan.expert_capacity).unwrap_or(0));
+    }
+    total_payload_bytes
+        .checked_div(total_expert_count)
+        .unwrap_or(0)
 }
 
 /// The planned complete layers to seat, cut to what the keep count leaves

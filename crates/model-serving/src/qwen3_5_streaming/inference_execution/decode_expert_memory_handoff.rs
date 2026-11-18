@@ -170,21 +170,24 @@ struct DecodeWarmLayerGeometry {
     sparse_layer_count: usize,
 }
 
-/// Reads the first sparse layer plan's expert capacity, per-expert payload
-/// bytes, and the pager's sparse layer count.
+/// Reads the first sparse layer plan's expert capacity, one expert's payload
+/// bytes averaged over every sparse layer, and the pager's sparse layer
+/// count.
 ///
-/// `None` means no warm decision applies — no pager, no layer plans, or a
-/// first plan that cannot price one routed expert page — and every caller
+/// `None` means no warm decision applies — no pager, no layer plans, or no
+/// layer that can price its experts — and every caller
 /// treats that as "size to zero" rather than inventing a fallback geometry.
 fn decode_warm_layer_geometry(model: &Qwen3_5Model) -> Option<DecodeWarmLayerGeometry> {
     let expert_pager = model.expert_pager.as_ref()?;
     let first_layer_plan = expert_pager.layer_plans().first()?;
+    // Priced at the mean over every layer: a mixed-precision model's first
+    // layer can hold experts twice the size of the rest, and pricing by it
+    // left gigabytes of the capacity unused (issue #2338).
     let per_expert_payload_bytes =
-        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-            first_layer_plan,
-            1,
-        )
-        .ok()?;
+        super::decode_whole_layer_keep::mean_expert_payload_bytes(expert_pager);
+    if per_expert_payload_bytes == 0 {
+        return None;
+    }
     Some(DecodeWarmLayerGeometry {
         expert_capacity: first_layer_plan.expert_capacity,
         per_expert_payload_bytes,
