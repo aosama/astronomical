@@ -22,10 +22,10 @@ impl AstroExpertCache {
     /// Puts every expert of `missing_expert_ids` into the layer's table by
     /// reading it from storage into a slot planned as an insert would plan
     /// it, never taking a slot from `protected_expert_ids` (the experts this
-    /// token found in the table). Returns `true` when all of them are now in
-    /// the table.
+    /// token found in the table). Returns how many reads that took when all
+    /// of them are now in the table.
     ///
-    /// Returns `false`, having changed nothing an insert would not, when the
+    /// Returns `None`, having changed nothing an insert would not, when the
     /// layer has no table yet, its experts are stored in an encoding the
     /// filler does not write, or the table cannot take them all; the caller
     /// then serves the token the copying way.
@@ -42,16 +42,16 @@ impl AstroExpertCache {
         protected_expert_ids: &[usize],
         warm_slot_count: usize,
         slot_filler: &ExpertSlotStorageFiller,
-    ) -> Result<bool, MlxRuntimeError> {
+    ) -> Result<Option<usize>, MlxRuntimeError> {
         let Some(table) = self
             .tables_by_layer
             .get(layer_index)
             .and_then(|table| table.as_ref())
         else {
-            return Ok(false);
+            return Ok(None);
         };
         if missing_expert_ids.is_empty() || !ExpertSlotStorageFiller::can_fill(&table.weights) {
-            return Ok(false);
+            return Ok(None);
         }
         let candidate_decode_step_epoch = (self.decode_astro_expert_cache_policy
             == astronomical_ipc_protocol::WorkerDecodeAstroExpertCachePolicy::Candidate)
@@ -71,12 +71,12 @@ impl AstroExpertCache {
             candidate_decode_step_epoch,
         )?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         if new_expert_rows.len() != missing_expert_ids.len() {
             // Planning skips experts it will not admit; a token served from
             // the table needs every one of them there.
-            return Ok(false);
+            return Ok(None);
         }
         let table = self
             .tables_by_layer
@@ -96,27 +96,31 @@ impl AstroExpertCache {
         // Growth leaves the table as a lazy copy of the smaller one; its
         // storage exists only once that copy has run.
         materialize_and_detach_table_weights(runtime, &table.weights)?;
-        if let Err(fill_error) =
-            slot_filler.fill_slots(layer_plan, &mut table.weights, &claimed_expert_slots)
-        {
-            // The slots hold whatever the failed read left: give them up so
-            // no token multiplies from them.
-            for (expert_id, slot) in claimed_expert_slots {
-                table.slot_by_expert_id.remove(&expert_id);
-                table.expert_id_by_slot[slot] = None;
-                table.occupied_slot_count = table.occupied_slot_count.saturating_sub(1);
-                table.payload_bytes = table
-                    .payload_bytes
-                    .saturating_sub(table.per_expert_payload_bytes);
-            }
-            return Err(fill_error);
-        }
+        let storage_read_count =
+            match slot_filler.fill_slots(layer_plan, &mut table.weights, &claimed_expert_slots) {
+                Ok(storage_read_count) => storage_read_count,
+                Err(fill_error) => {
+                    // The slots hold whatever the failed read left: give them
+                    // up so no token multiplies from them. An expert evicted to
+                    // make room is not brought back; it is read again when a
+                    // token next routes to it.
+                    for (expert_id, slot) in claimed_expert_slots {
+                        table.slot_by_expert_id.remove(&expert_id);
+                        table.expert_id_by_slot[slot] = None;
+                        table.occupied_slot_count = table.occupied_slot_count.saturating_sub(1);
+                        table.payload_bytes = table
+                            .payload_bytes
+                            .saturating_sub(table.per_expert_payload_bytes);
+                    }
+                    return Err(fill_error);
+                }
+            };
         self.record_planned_insert_counters(
             claimed_expert_slots.len(),
             slot_replacement_count,
             warm_slot_count,
             candidate_decode_step_epoch,
         );
-        Ok(true)
+        Ok(Some(storage_read_count))
     }
 }

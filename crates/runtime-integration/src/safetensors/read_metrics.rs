@@ -144,6 +144,43 @@ impl PositionalFileReadMetrics {
         read_succeeded
     }
 
+    /// Adds reads that were issued and timed outside this module family: a
+    /// batch of `read_count` reads that together moved `byte_count` bytes and
+    /// took `batch_elapsed` from first request to last completion.
+    ///
+    /// The record reader that fills expert tables issues its reads from
+    /// threads of its own, so no wrapper sits around each one. Without this
+    /// the bytes a model reads from storage would vanish from every report
+    /// the moment they stopped going through MLX's loader. The batch counts
+    /// as one elapsed span, since its reads overlap, and the concurrency peak
+    /// is left alone because the batch does not say how many overlapped.
+    pub fn record_completed_batch(
+        &self,
+        read_count: u64,
+        byte_count: u64,
+        batch_elapsed: std::time::Duration,
+    ) {
+        let elapsed_nanoseconds = u64::try_from(batch_elapsed.as_nanos()).unwrap_or(u64::MAX);
+        let mut aggregates = vec![self];
+        if let Some(peer_read_metrics) = self.peer_read_metrics.get() {
+            aggregates.push(peer_read_metrics);
+        }
+        for aggregate in aggregates {
+            aggregate
+                .read_call_count
+                .fetch_add(read_count, Ordering::Relaxed);
+            aggregate
+                .read_byte_count
+                .fetch_add(byte_count, Ordering::Relaxed);
+            aggregate
+                .total_read_elapsed_nanoseconds
+                .fetch_add(elapsed_nanoseconds, Ordering::Relaxed);
+            aggregate
+                .maximum_read_elapsed_nanoseconds
+                .fetch_max(elapsed_nanoseconds, Ordering::Relaxed);
+        }
+    }
+
     /// Mirrors one completed read into the session aggregate when this request
     /// aggregate has a peer. The peer skips live active-read tracking because
     /// snapshots only expose the concurrency peak, which is mirrored directly.

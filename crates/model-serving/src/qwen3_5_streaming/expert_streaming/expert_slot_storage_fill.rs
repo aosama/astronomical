@@ -96,16 +96,17 @@ impl ExpertSlotStorageFiller {
     }
 
     /// Reads each `(expert id, slot)` of the layer from storage into that
-    /// slot of every table array. The caller must hold no unevaluated graph
-    /// that reads the slots being written.
+    /// slot of every table array, and returns how many reads that took. The
+    /// caller must hold no unevaluated graph that reads the slots being
+    /// written.
     pub(crate) fn fill_slots(
         &self,
         layer_plan: &QuantizedExpertLayerPlan,
         table_weights: &mut Qwen3_5PagedExpertWeights,
         expert_slots: &[(usize, usize)],
-    ) -> Result<(), MlxRuntimeError> {
+    ) -> Result<usize, MlxRuntimeError> {
         if expert_slots.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         let mut table_arrays = table_arrays_by_tensor_name(table_weights)?;
         // One entry per (tensor, expert): where the slice is, and where it goes.
@@ -153,7 +154,7 @@ impl ExpertSlotStorageFiller {
         &self,
         storage_slices: &[StorageSlice],
         mut slice_destinations: Vec<Option<&mut [u8]>>,
-    ) -> Result<(), MlxRuntimeError> {
+    ) -> Result<usize, MlxRuntimeError> {
         let planned_reads = plan_record_reads(storage_slices);
         let mut record_reads = Vec::with_capacity(planned_reads.len());
         for planned_read in planned_reads {
@@ -172,7 +173,8 @@ impl ExpertSlotStorageFiller {
         }
         self.record_reader
             .read(&mut record_reads)
-            .map_err(|read_error| fill_error(read_error.to_string()))
+            .map_err(|read_error| fill_error(read_error.to_string()))?;
+        Ok(record_reads.len())
     }
 }
 

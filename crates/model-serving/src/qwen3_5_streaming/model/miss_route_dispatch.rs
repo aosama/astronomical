@@ -121,6 +121,7 @@ impl Qwen3_5Model {
                 layer_index,
                 &route_coverage,
                 production_default_paging,
+                performance_attribution,
             )?;
         if route_has_misses
             && !misses_were_fetched_into_table

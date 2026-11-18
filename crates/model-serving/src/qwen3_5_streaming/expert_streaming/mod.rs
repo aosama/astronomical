@@ -13,6 +13,8 @@ pub mod expert_pager;
 mod expert_pager_construction;
 #[cfg(feature = "direct-mlx")]
 mod expert_slot_storage_fill;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod expert_slot_storage_fill_tests;
 #[cfg(feature = "direct-mlx")]
 mod expert_usage_history;
 #[cfg(feature = "direct-mlx")]

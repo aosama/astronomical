@@ -148,6 +148,20 @@ impl Qwen3_5ExpertPager {
     /// report deltas stay exact, and install the session aggregate as its
     /// mirror peer so the always-on observatory totals see the same reads.
     /// When diagnostics are off the session aggregate feeds the readers directly.
+    /// Counts reads the record reader made straight into a table, in the
+    /// same aggregates a page loaded through MLX is counted in.
+    pub(crate) fn record_direct_expert_reads(
+        &self,
+        performance_attribution: &PerformanceAttribution,
+        read_count: u64,
+        byte_count: u64,
+        batch_elapsed: std::time::Duration,
+    ) {
+        self.ensure_session_process_io_baseline();
+        self.expert_read_metrics_for_streamed_page(performance_attribution)
+            .record_completed_batch(read_count, byte_count, batch_elapsed);
+    }
+
     fn expert_read_metrics_for_streamed_page(
         &self,
         performance_attribution: &PerformanceAttribution,
