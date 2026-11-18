@@ -18,6 +18,8 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ReplyStartSnapshot {
     held_expert_ids_by_layer: Vec<Vec<u16>>,
+    prompt_demand_by_layer: Vec<Vec<u64>>,
+    reply_demand_by_layer: Vec<Vec<u64>>,
     kept_expert_capacity_bytes: u64,
     /// The observation ring's lifetime count when the reply began: every
     /// observation stored after it belongs to this reply.
@@ -37,6 +39,12 @@ pub struct RoutedReplyRecording {
     /// For each layer, the experts it held when the recording was taken,
     /// after the reply: a layer the reply's plan kept nothing in holds none.
     pub held_expert_ids_by_layer_at_reply_end: Vec<Vec<u16>>,
+    /// How often this request's prompt routed to each expert of each layer,
+    /// its final chunk counted heavier, when the reply began.
+    pub prompt_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
+    /// How often earlier replies routed to each expert of each layer, when
+    /// this reply began.
+    pub reply_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
     /// The `astro_expert_cache` capacity the reply was served under.
     pub kept_expert_capacity_bytes: u64,
     /// Slots each layer not held whole may keep, when the recording was
@@ -56,25 +64,15 @@ impl Qwen3_5Model {
         ) else {
             return;
         };
-        let expert_capacity = expert_pager
-            .layer_plans()
-            .first()
-            .map_or(0, |layer_plan| layer_plan.expert_capacity);
-        let mut held_expert_ids_by_layer = vec![Vec::new(); expert_pager.layer_plans().len()];
-        for layer_residency in astro_expert_cache
-            .borrow()
-            .topology_snapshot(expert_capacity)
-        {
-            if let Some(held_expert_ids) =
-                held_expert_ids_by_layer.get_mut(layer_residency.layer_index)
-            {
-                *held_expert_ids = expert_ids_as_u16(&layer_residency.retained_expert_ids);
-            }
-        }
+        let held_expert_ids_by_layer = held_expert_ids_by_layer(astro_expert_cache, expert_pager);
+        let (prompt_demand_by_layer, reply_demand_by_layer) =
+            astro_expert_cache.borrow().demand_counts_snapshot();
         let mut route_observation = self.route_observation.borrow_mut();
         let stored_observation_count_at_reply_start = route_observation.stored_observation_count();
         route_observation.set_reply_start_snapshot(ReplyStartSnapshot {
             held_expert_ids_by_layer,
+            prompt_demand_by_layer,
+            reply_demand_by_layer,
             kept_expert_capacity_bytes: self.kept_expert_capacity_bytes(),
             stored_observation_count_at_reply_start,
         });
@@ -109,6 +107,8 @@ impl Qwen3_5Model {
                 .map_or(0, |layer_plan| layer_plan.expert_capacity),
             token_routes,
             held_expert_ids_by_layer_at_reply_start: reply_start.held_expert_ids_by_layer,
+            prompt_demand_by_layer_at_reply_start: reply_start.prompt_demand_by_layer,
+            reply_demand_by_layer_at_reply_start: reply_start.reply_demand_by_layer,
             held_expert_ids_by_layer_at_reply_end: match self.astro_expert_cache.as_ref() {
                 Some(astro_expert_cache) => {
                     held_expert_ids_by_layer(astro_expert_cache, expert_pager)

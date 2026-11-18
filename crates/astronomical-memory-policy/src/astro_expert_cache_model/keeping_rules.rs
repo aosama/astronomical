@@ -127,7 +127,7 @@ impl KeepingRule for LeastFrequentlyUsed {
 pub struct DecayedFrequency {
     half_life_tokens: f64,
     layer_count: usize,
-    use_weight_by_expert: HashMap<ExpertKey, f64>,
+    pub(super) use_weight_by_expert: HashMap<ExpertKey, f64>,
 }
 
 impl DecayedFrequency {
@@ -378,5 +378,121 @@ impl KeepingRule for CappedReplacements {
 
     fn forget(&mut self, expert: ExpertKey) {
         self.inner_rule.forget(expert);
+    }
+}
+
+/// LRU-2: gives up the expert whose second-most-recent use is oldest, so an
+/// expert used once ranks below every expert used twice, however recent its
+/// one use. Experts used once in a reply are common (about a thousand in
+/// each recorded reply), and plain recency keeps each of them a while for
+/// nothing.
+#[derive(Debug, Default)]
+pub struct SecondMostRecentUse {
+    layer_count: usize,
+    last_two_use_steps_by_expert: HashMap<ExpertKey, (u64, u64)>,
+}
+
+impl KeepingRule for SecondMostRecentUse {
+    fn name(&self) -> String {
+        "second most recent use (LRU-2)".to_owned()
+    }
+
+    fn prepare(&mut self, routed_reply: &RoutedReply) {
+        self.layer_count = routed_reply.layer_count();
+        self.last_two_use_steps_by_expert.clear();
+    }
+
+    fn starting_priority(&mut self, _expert: ExpertKey) -> (u64, u64) {
+        (0, 0)
+    }
+
+    fn priority_after_use(
+        &mut self,
+        expert: ExpertKey,
+        replay_position: ReplayPosition,
+    ) -> (u64, u64) {
+        let use_step = reply_step(replay_position, self.layer_count);
+        let last_two_use_steps = self
+            .last_two_use_steps_by_expert
+            .entry(expert)
+            .or_insert((0, 0));
+        *last_two_use_steps = (last_two_use_steps.1, use_step);
+        // The older of the two uses first, the newer to break ties.
+        *last_two_use_steps
+    }
+}
+
+/// Decayed frequency whose every expert starts from a prior: its demand in
+/// the prompt (and earlier replies) scaled to `prior_weight` reply uses at
+/// the reply's first token. The prompt's routing is evidence the engine has
+/// before the reply begins.
+#[derive(Debug)]
+pub struct PriorSeededDecayedFrequency {
+    decayed_frequency: DecayedFrequency,
+    prior_use_weight_by_expert: HashMap<ExpertKey, f64>,
+}
+
+impl PriorSeededDecayedFrequency {
+    /// `demand_by_layer[layer][expert]` scaled so the most demanded expert
+    /// starts with `prior_weight` uses.
+    #[must_use]
+    pub fn new(half_life_tokens: f64, demand_by_layer: &[Vec<u64>], prior_weight: f64) -> Self {
+        let mut largest_demand = 0_u64;
+        for layer_demand in demand_by_layer {
+            for &demand in layer_demand {
+                largest_demand = largest_demand.max(demand);
+            }
+        }
+        let mut prior_use_weight_by_expert = HashMap::new();
+        for (layer_index, layer_demand) in demand_by_layer.iter().enumerate() {
+            for (expert_id, &demand) in layer_demand.iter().enumerate() {
+                if demand > 0 && largest_demand > 0 {
+                    prior_use_weight_by_expert.insert(
+                        ExpertKey {
+                            layer_index,
+                            expert_id: u16::try_from(expert_id).unwrap_or(u16::MAX),
+                        },
+                        prior_weight * demand as f64 / largest_demand as f64,
+                    );
+                }
+            }
+        }
+        Self {
+            decayed_frequency: DecayedFrequency::new(half_life_tokens),
+            prior_use_weight_by_expert,
+        }
+    }
+}
+
+impl KeepingRule for PriorSeededDecayedFrequency {
+    fn name(&self) -> String {
+        format!("{}, seeded from the prompt", self.decayed_frequency.name())
+    }
+
+    fn prepare(&mut self, routed_reply: &RoutedReply) {
+        self.decayed_frequency.prepare(routed_reply);
+        for (&expert, &prior_use_weight) in &self.prior_use_weight_by_expert {
+            self.decayed_frequency
+                .use_weight_by_expert
+                .insert(expert, prior_use_weight);
+        }
+    }
+
+    fn starting_priority(&mut self, expert: ExpertKey) -> (u64, u64) {
+        let prior_use_weight = self
+            .prior_use_weight_by_expert
+            .get(&expert)
+            .copied()
+            .unwrap_or(0.0);
+        (prior_use_weight.to_bits(), 0)
+    }
+
+    fn priority_after_use(
+        &mut self,
+        expert: ExpertKey,
+        replay_position: ReplayPosition,
+    ) -> (u64, u64) {
+        self.decayed_frequency
+            .priority_after_use(expert, replay_position)
     }
 }

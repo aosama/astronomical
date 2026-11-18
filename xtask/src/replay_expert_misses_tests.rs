@@ -31,6 +31,8 @@ fn saved_case(held_at_end: Vec<Vec<u16>>) -> SavedReplayCase {
         },
         held_expert_ids_by_layer_at_end: held_at_end,
         warm_slot_count: Some(2),
+        prompt_demand_by_layer: vec![vec![9, 0, 0, 1], vec![0, 4, 0, 0], vec![0, 0, 7, 0]],
+        reply_demand_by_layer: vec![vec![0, 0, 0, 0], vec![0, 0, 0, 20], vec![0, 0, 0, 0]],
     }
 }
 
@@ -70,9 +72,13 @@ fn should_report_every_division_and_rule_for_each_saved_case() {
 
     let report_lines = replay_report(evidence_directory.path()).expect("the report runs");
 
-    // A header, today's engine, seven shared rules, and three rules for each
-    // of the two other divisions.
-    assert_eq!(report_lines.len(), 1 + 1 + 7 + 3 + 3, "{report_lines:#?}");
+    // A header, today's engine, eight shared rules, three prompt-seeded
+    // weights, and three rules for each of the seven other divisions.
+    assert_eq!(
+        report_lines.len(),
+        1 + 1 + 8 + 3 + 7 * 3,
+        "{report_lines:#?}"
+    );
     assert!(report_lines[0].contains("workload=small reply_tokens=3"));
     assert!(report_lines[1].contains("division=todays_engine"));
     assert!(report_lines.iter().any(|line| line.contains("Belady")));
@@ -135,4 +141,62 @@ fn should_divide_by_demand_in_proportion_to_each_layers_distinct_experts() {
     // Distinct experts used: layer 0 all four, layer 1 three, layer 2 four;
     // eight slots shared in proportion, rounded down.
     assert_eq!(divided_case.layer_slot_limits, Some(vec![2, 2, 2]));
+}
+
+#[test]
+fn should_start_with_nothing_held() {
+    let started_empty =
+        super::capacity_divisions::starting_with_nothing(&saved_case(Vec::new()).replay_case);
+
+    assert!(
+        started_empty
+            .held_expert_ids_by_layer_at_start
+            .iter()
+            .all(Vec::is_empty)
+    );
+}
+
+#[test]
+fn should_start_with_the_most_used_experts_up_to_the_capacity() {
+    let started_warm =
+        super::capacity_divisions::starting_with_the_most_used(&saved_case(Vec::new()).replay_case);
+
+    let held_count: usize = started_warm
+        .held_expert_ids_by_layer_at_start
+        .iter()
+        .map(Vec::len)
+        .sum();
+    // Room for eight; layer 2 routes to 2 and 3 twice, so both are held.
+    assert_eq!(held_count, 8);
+    assert!(started_warm.held_expert_ids_by_layer_at_start[2].contains(&2));
+    assert!(started_warm.held_expert_ids_by_layer_at_start[2].contains(&3));
+}
+
+#[test]
+fn should_divide_equally_between_layers_and_hold_none_whole() {
+    let divided_case =
+        super::capacity_divisions::divided_equally(&saved_case(Vec::new()).replay_case);
+
+    // Room for eight over three layers: two each.
+    assert_eq!(divided_case.layer_slot_limits, Some(vec![2, 2, 2]));
+}
+
+#[test]
+fn should_start_from_the_prompts_most_demanded_experts() {
+    let started_from_prompt =
+        super::capacity_divisions::starting_from_demand(&saved_case(Vec::new()), 0);
+
+    // Four experts have prompt demand and room is eight: all four start held.
+    assert_eq!(
+        started_from_prompt.held_expert_ids_by_layer_at_start,
+        vec![vec![0, 3], vec![1], vec![2]]
+    );
+}
+
+#[test]
+fn should_add_earlier_replies_demand_when_asked() {
+    let started_from_both =
+        super::capacity_divisions::starting_from_demand(&saved_case(Vec::new()), 1);
+
+    assert!(started_from_both.held_expert_ids_by_layer_at_start[1].contains(&3));
 }

@@ -31,6 +31,17 @@ impl AstroExpertCache {
         );
     }
 
+    /// This request's prompt demand and the lifetime reply demand, each per
+    /// layer per expert, as they stand now: what a recorded reply keeps of
+    /// where its experts' heat came from.
+    #[must_use]
+    pub(crate) fn demand_counts_snapshot(&self) -> (Vec<Vec<u64>>, Vec<Vec<u64>>) {
+        (
+            self.prefill_demand_counts_by_layer.clone(),
+            self.decode_demand_counts_by_layer.clone(),
+        )
+    }
+
     /// The prompt-demand weight a route built now would record under.
     #[must_use]
     pub(crate) const fn prefill_demand_assignment_weight(&self) -> u64 {

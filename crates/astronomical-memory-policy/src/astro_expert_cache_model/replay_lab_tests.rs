@@ -275,3 +275,16 @@ fn should_never_give_up_an_expert_of_a_pinned_layer() {
     assert_eq!(outcome.hit_count, 2);
     assert_eq!(outcome.miss_count, 4);
 }
+
+#[test]
+fn should_seat_no_more_starting_experts_in_a_layer_than_its_slot_limit() {
+    let mut replay_case = single_layer_case(&[0, 1, 2], 3);
+    replay_case.held_expert_ids_by_layer_at_start = vec![vec![0, 1, 2]];
+    replay_case.layer_slot_limits = Some(vec![1]);
+
+    let outcome = replay(&replay_case, &mut LeastRecentlyUsed::default());
+
+    // Only expert 0 is seated; 1 and 2 are read.
+    assert_eq!(outcome.hit_count, 1);
+    assert_eq!(outcome.miss_count, 2);
+}

@@ -23,14 +23,16 @@ use std::time::Instant;
 
 use astronomical_memory_policy::astro_expert_cache_model::{
     BeladyMinimum, CappedReplacements, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule,
-    LeastFrequentlyUsed, LeastRecentlyUsed, ReplayCase, SavedReplayCase, find_saved_case_documents,
-    read_saved_replay_case, replay,
+    LeastFrequentlyUsed, LeastRecentlyUsed, PriorSeededDecayedFrequency, ReplayCase,
+    SavedReplayCase, SecondMostRecentUse, find_saved_case_documents, read_saved_replay_case,
+    replay,
 };
 
 mod capacity_divisions;
 
 use capacity_divisions::{
-    divided_by_demand, divided_like_todays_engine, shared_pinning_whole_layers,
+    divided_by_demand, divided_equally, divided_like_todays_engine, shared_pinning_whole_layers,
+    starting_from_demand, starting_with_nothing, starting_with_the_most_used,
 };
 
 /// Runs the report over `arguments[0]`, the evidence directory.
@@ -70,6 +72,7 @@ fn every_rule() -> Vec<Box<dyn KeepingRule>> {
         Box::new(DecayedFrequency::new(32.0)),
         Box::new(DecayedFrequency::new(128.0)),
         Box::new(FrequencyAdmittedRecency::default()),
+        Box::new(SecondMostRecentUse::default()),
         Box::new(BeladyMinimum::default()),
     ]
 }
@@ -112,11 +115,37 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
             keeping_rule,
         ));
     }
-    for division_name in ["shared_pinning_whole_layers", "divided_by_demand"] {
-        let divided_case = if division_name == "divided_by_demand" {
-            divided_by_demand(replay_case)
-        } else {
-            shared_pinning_whole_layers(replay_case)
+    for prior_weight in [2.0, 8.0, 32.0] {
+        report_lines.push(report_replay(
+            workload_name,
+            &format!("shared_prior_weight_{prior_weight}"),
+            replay_case,
+            Box::new(PriorSeededDecayedFrequency::new(
+                32.0,
+                &saved_replay_case.prompt_demand_by_layer,
+                prior_weight,
+            )),
+        ));
+    }
+    for division_name in [
+        "shared_pinning_whole_layers",
+        "divided_by_demand",
+        "divided_equally",
+        "shared_starting_with_nothing",
+        "shared_starting_with_the_most_used",
+        "shared_starting_from_the_prompt",
+        "shared_starting_from_the_prompt_and_earlier_replies",
+    ] {
+        let divided_case = match division_name {
+            "divided_by_demand" => divided_by_demand(replay_case),
+            "divided_equally" => divided_equally(replay_case),
+            "shared_starting_with_nothing" => starting_with_nothing(replay_case),
+            "shared_starting_with_the_most_used" => starting_with_the_most_used(replay_case),
+            "shared_starting_from_the_prompt" => starting_from_demand(saved_replay_case, 0),
+            "shared_starting_from_the_prompt_and_earlier_replies" => {
+                starting_from_demand(saved_replay_case, 1)
+            }
+            _ => shared_pinning_whole_layers(replay_case),
         };
         for keeping_rule in [
             Box::new(LeastRecentlyUsed::default()) as Box<dyn KeepingRule>,

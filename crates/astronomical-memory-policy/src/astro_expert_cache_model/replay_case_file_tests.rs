@@ -22,7 +22,9 @@ const CASE_DOCUMENT: &str = r#"{
     "expert_payload_bytes_by_layer": [100],
     "held_expert_ids_by_layer_at_reply_start": [[1]],
     "held_expert_ids_by_layer_at_reply_end": [[1, 3]],
-    "warm_slot_count": 2
+    "warm_slot_count": 2,
+    "prompt_demand_by_layer_at_reply_start": [[0, 5, 0, 2]],
+    "reply_demand_by_layer_at_reply_start": [[1, 0, 0, 0]]
 }"#;
 
 #[test]
@@ -42,6 +44,8 @@ fn should_read_a_saved_case_with_its_routes_and_end_state() {
     );
     assert_eq!(saved_case.held_expert_ids_by_layer_at_end, vec![vec![1, 3]]);
     assert_eq!(saved_case.warm_slot_count, Some(2));
+    assert_eq!(saved_case.prompt_demand_by_layer, vec![vec![0, 5, 0, 2]]);
+    assert_eq!(saved_case.reply_demand_by_layer, vec![vec![1, 0, 0, 0]]);
     assert_eq!(saved_case.replay_case.layer_slot_limits, None);
 }
 
@@ -60,6 +64,7 @@ fn should_read_a_case_recorded_before_the_end_state_was_kept() {
 
     assert!(saved_case.held_expert_ids_by_layer_at_end.is_empty());
     assert_eq!(saved_case.warm_slot_count, None);
+    assert!(saved_case.prompt_demand_by_layer.is_empty());
 }
 
 #[test]

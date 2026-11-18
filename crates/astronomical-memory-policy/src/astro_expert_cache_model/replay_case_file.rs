@@ -37,6 +37,10 @@ struct CaseDocument {
     held_expert_ids_by_layer_at_reply_end: Vec<Vec<u16>>,
     #[serde(default)]
     warm_slot_count: Option<usize>,
+    #[serde(default)]
+    prompt_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
+    #[serde(default)]
+    reply_demand_by_layer_at_reply_start: Vec<Vec<u64>>,
 }
 
 /// One saved case: its workload name, its replay case, and what each layer
@@ -48,6 +52,12 @@ pub struct SavedReplayCase {
     pub held_expert_ids_by_layer_at_end: Vec<Vec<u16>>,
     /// The engine's warm slot count when the reply was recorded, when kept.
     pub warm_slot_count: Option<usize>,
+    /// How often the prompt routed to each expert of each layer when the
+    /// reply began (empty when not kept).
+    pub prompt_demand_by_layer: Vec<Vec<u64>>,
+    /// How often earlier replies routed to each expert of each layer when
+    /// this reply began (empty when not kept).
+    pub reply_demand_by_layer: Vec<Vec<u64>>,
 }
 
 /// Reads the case whose document is `case_document_path`; its routes are
@@ -80,6 +90,8 @@ pub fn read_saved_replay_case(
         workload_name,
         held_expert_ids_by_layer_at_end: case_document.held_expert_ids_by_layer_at_reply_end,
         warm_slot_count: case_document.warm_slot_count,
+        prompt_demand_by_layer: case_document.prompt_demand_by_layer_at_reply_start,
+        reply_demand_by_layer: case_document.reply_demand_by_layer_at_reply_start,
         replay_case: ReplayCase {
             routed_reply,
             expert_payload_bytes_by_layer: case_document.expert_payload_bytes_by_layer,

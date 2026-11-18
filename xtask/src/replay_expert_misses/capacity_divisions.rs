@@ -143,3 +143,96 @@ fn with_layer_slot_limits(replay_case: &ReplayCase, layer_slot_limits: Vec<usize
         ..replay_case.clone()
     }
 }
+
+/// The same case starting with nothing held: what a rule does from a cold
+/// start.
+pub(crate) fn starting_with_nothing(replay_case: &ReplayCase) -> ReplayCase {
+    ReplayCase {
+        held_expert_ids_by_layer_at_start: vec![Vec::new(); replay_case.routed_reply.layer_count()],
+        ..replay_case.clone()
+    }
+}
+
+/// The same case starting with the experts the reply uses most, as many as
+/// the capacity holds: an oracle for what a perfect warm start is worth.
+pub(crate) fn starting_with_the_most_used(replay_case: &ReplayCase) -> ReplayCase {
+    let routed_reply = &replay_case.routed_reply;
+    let mut use_count_by_expert = std::collections::BTreeMap::new();
+    for token_index in 0..routed_reply.token_count() {
+        for layer_index in 0..routed_reply.layer_count() {
+            for &expert_id in routed_reply.layer_route(token_index, layer_index) {
+                *use_count_by_expert
+                    .entry((layer_index, expert_id))
+                    .or_insert(0_u64) += 1;
+            }
+        }
+    }
+    let mut experts_by_use: Vec<((usize, u16), u64)> = use_count_by_expert.into_iter().collect();
+    experts_by_use.sort_by_key(|&(expert, use_count)| (std::cmp::Reverse(use_count), expert));
+    let mut held_expert_ids_by_layer = vec![Vec::new(); routed_reply.layer_count()];
+    for ((layer_index, expert_id), _) in experts_by_use
+        .into_iter()
+        .take(capacity_in_experts(replay_case))
+    {
+        held_expert_ids_by_layer[layer_index].push(expert_id);
+    }
+    ReplayCase {
+        held_expert_ids_by_layer_at_start: held_expert_ids_by_layer,
+        ..replay_case.clone()
+    }
+}
+
+/// Every layer an equal table and none held whole: the simplest division.
+pub(crate) fn divided_equally(replay_case: &ReplayCase) -> ReplayCase {
+    let layer_count = replay_case.routed_reply.layer_count();
+    let equal_slot_count = capacity_in_experts(replay_case)
+        .checked_div(layer_count)
+        .unwrap_or(0)
+        .min(usize::from(replay_case.routed_reply.experts_per_layer()));
+    with_layer_slot_limits(replay_case, vec![equal_slot_count; layer_count])
+}
+
+/// The same case starting with the experts the prompt routed to most, as
+/// many as the capacity holds, with `reply_demand_weight` times the earlier
+/// replies' demand added: a warm start the engine can make at the reply's
+/// start, from evidence it already has.
+pub(crate) fn starting_from_demand(
+    saved_replay_case: &SavedReplayCase,
+    reply_demand_weight: u64,
+) -> ReplayCase {
+    let replay_case = &saved_replay_case.replay_case;
+    let mut experts_by_demand = Vec::new();
+    for (layer_index, prompt_layer_demand) in
+        saved_replay_case.prompt_demand_by_layer.iter().enumerate()
+    {
+        for (expert_id, &prompt_demand) in prompt_layer_demand.iter().enumerate() {
+            let reply_demand = saved_replay_case
+                .reply_demand_by_layer
+                .get(layer_index)
+                .and_then(|reply_layer_demand| reply_layer_demand.get(expert_id))
+                .copied()
+                .unwrap_or(0);
+            let demand = prompt_demand + reply_demand_weight * reply_demand;
+            if demand > 0 {
+                experts_by_demand.push((std::cmp::Reverse(demand), layer_index, expert_id));
+            }
+        }
+    }
+    experts_by_demand.sort_unstable();
+    let mut held_expert_ids_by_layer = vec![Vec::new(); replay_case.routed_reply.layer_count()];
+    for (_, layer_index, expert_id) in experts_by_demand
+        .into_iter()
+        .take(capacity_in_experts(replay_case))
+    {
+        if let (Some(held_expert_ids), Ok(expert_id)) = (
+            held_expert_ids_by_layer.get_mut(layer_index),
+            u16::try_from(expert_id),
+        ) {
+            held_expert_ids.push(expert_id);
+        }
+    }
+    ReplayCase {
+        held_expert_ids_by_layer_at_start: held_expert_ids_by_layer,
+        ..replay_case.clone()
+    }
+}

@@ -185,7 +185,8 @@ fn seat_starting_experts(
         .enumerate()
     {
         let expert_bytes = expert_bytes_of(replay_case, layer_index);
-        for &expert_id in held_expert_ids {
+        let layer_slot_limit = layer_slot_limit_of(replay_case, layer_index).unwrap_or(usize::MAX);
+        for &expert_id in held_expert_ids.iter().take(layer_slot_limit) {
             if held_experts.held_bytes.saturating_add(expert_bytes) > replay_case.capacity_bytes {
                 return;
             }

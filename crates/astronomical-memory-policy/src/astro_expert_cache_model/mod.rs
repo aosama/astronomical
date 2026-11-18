@@ -55,7 +55,8 @@ pub use astro_expert_cache_record::{
 pub use expert_tables::{AstroExpertCacheTableRules, AstroExpertCacheTables, TableChange};
 pub use keeping_rules::{
     BeladyMinimum, CappedReplacements, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule,
-    LeastFrequentlyUsed, LeastRecentlyUsed, ReplayPosition,
+    LeastFrequentlyUsed, LeastRecentlyUsed, PriorSeededDecayedFrequency, ReplayPosition,
+    SecondMostRecentUse,
 };
 pub use replay_case_file::{
     ReplayCaseFileError, SavedReplayCase, find_saved_case_documents, read_saved_replay_case,
