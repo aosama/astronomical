@@ -15,5 +15,6 @@ mod image_content;
 mod option_validation;
 mod standard_request;
 mod thinking_budget_spellings;
+mod tool_message_images;
 mod tool_strict_field;
 mod transport_boundaries;

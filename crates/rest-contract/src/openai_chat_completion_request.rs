@@ -217,7 +217,9 @@ impl OpenAiChatCompletionRequest {
         let mut messages = Vec::with_capacity(self.messages.len());
         for chat_message in self.messages {
             let message_parts = chat_message.into_parts()?;
-            if let OpenAiChatMessageParts::User { images, .. } = &message_parts {
+            if let OpenAiChatMessageParts::User { images, .. }
+            | OpenAiChatMessageParts::Tool { images, .. } = &message_parts
+            {
                 for decoded_image in images {
                     decoded_inline_media_bytes += decoded_image.decoded_bytes().len();
                 }

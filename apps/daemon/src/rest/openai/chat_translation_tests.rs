@@ -332,3 +332,48 @@ fn should_translate_structured_outputs_choice_into_an_ipc_mask() {
         })
     );
 }
+
+/// A 1x1 red PNG, the smallest image the decoder accepts as real.
+const RED_PIXEL_DATA_URI: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+
+#[test]
+fn should_follow_tool_messages_with_the_images_they_returned() {
+    let request = serde_json::from_value::<OpenAiChatCompletionRequest>(serde_json::json!({
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [
+            {"role": "user", "content": "Capture the stage."},
+            {"role": "assistant", "content": null, "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "screenshot", "arguments": "{}"}},
+                {"id": "call_2", "type": "function", "function": {"name": "read", "arguments": "{}"}}
+            ]},
+            {"role": "tool", "tool_call_id": "call_1", "content": [
+                {"type": "text", "text": "captured"},
+                {"type": "image_url", "image_url": {"url": RED_PIXEL_DATA_URI}}
+            ]},
+            {"role": "tool", "tool_call_id": "call_2", "content": "Exit, pursued by a bear."},
+            {"role": "user", "content": "Describe it."}
+        ]
+    }))
+    .expect("the chat request should deserialize");
+
+    let chat_messages =
+        crate::translate_openai_chat_completion_request(RequestId::new(911), request)
+            .expect("the chat request should translate")
+            .messages;
+
+    assert!(matches!(
+        &chat_messages[2..],
+        [
+            ChatMessage::Tool { tool_call_id: first_call, content: first_content },
+            ChatMessage::Tool { tool_call_id: second_call, .. },
+            ChatMessage::User { content: image_message_text, images },
+            ChatMessage::User { content: question, images: question_images },
+        ] if first_call == "call_1"
+            && first_content == "captured"
+            && second_call == "call_2"
+            && image_message_text == "Images returned by the tool calls above."
+            && images.len() == 1
+            && question == "Describe it."
+            && question_images.is_empty()
+    ));
+}

@@ -10,6 +10,8 @@ use astronomical_rest_contract::{
 };
 use thiserror::Error;
 
+use crate::rest::tool_result_images::{PendingToolResultImages, chat_image_input};
+
 const CHRONOLOGICAL_SYSTEM_UPDATE_OPENING_TAG: &str = "<system-update>\n";
 const CHRONOLOGICAL_SYSTEM_UPDATE_CLOSING_TAG: &str = "\n</system-update>";
 
@@ -86,7 +88,12 @@ pub(crate) fn translate_openai_chat_completion_request_parts(
 
 fn translate_messages(messages: Vec<OpenAiChatMessageParts>) -> Vec<ChatMessage> {
     let mut translated_chat_messages = Vec::with_capacity(messages.len());
+    let mut pending_tool_result_images = PendingToolResultImages::default();
     for openai_chat_message in messages {
+        pending_tool_result_images.end_run_before(
+            openai_chat_message.is_tool_result(),
+            &mut translated_chat_messages,
+        );
         match openai_chat_message {
             OpenAiChatMessageParts::System {
                 content: system_message_content,
@@ -130,12 +137,17 @@ fn translate_messages(messages: Vec<OpenAiChatMessageParts>) -> Vec<ChatMessage>
             OpenAiChatMessageParts::Tool {
                 tool_call_id,
                 content: tool_result_content,
-            } => translated_chat_messages.push(ChatMessage::Tool {
-                tool_call_id,
-                content: tool_result_content,
-            }),
+                images: tool_result_images,
+            } => {
+                pending_tool_result_images.hold(&tool_result_images);
+                translated_chat_messages.push(ChatMessage::Tool {
+                    tool_call_id,
+                    content: tool_result_content,
+                });
+            }
         }
     }
+    pending_tool_result_images.flush_into(&mut translated_chat_messages);
     translated_chat_messages
 }
 
@@ -186,13 +198,7 @@ fn append_escaped_chronological_system_update(
 fn translate_images(
     images: Vec<astronomical_rest_contract::DecodedImageInput>,
 ) -> Vec<ChatImageInput> {
-    images
-        .into_iter()
-        .map(|image| ChatImageInput {
-            mime_type: image.mime_type().to_owned(),
-            decoded_bytes: image.decoded_bytes().to_vec(),
-        })
-        .collect()
+    images.iter().map(chat_image_input).collect()
 }
 
 fn translate_tools(tools: Vec<OpenAiToolDefinitionParts>) -> Vec<ChatToolDefinition> {

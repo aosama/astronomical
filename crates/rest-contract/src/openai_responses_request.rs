@@ -284,6 +284,8 @@ pub enum OpenAiResponsesValidationError {
     UnsupportedReasoningReplay,
     #[error("response input item type '{input_item_type}' is unsupported")]
     UnsupportedInputItem { input_item_type: String },
+    #[error("an input_image part needs an image_url holding a data:image/... URI")]
+    MissingImageUrl,
     #[error("tool name '{tool_name}' is invalid")]
     InvalidToolName { tool_name: String },
     #[error(
@@ -446,3 +448,6 @@ mod tests;
 
 #[cfg(test)]
 mod prompt_cache_fields;
+
+#[cfg(test)]
+mod tool_output_images;

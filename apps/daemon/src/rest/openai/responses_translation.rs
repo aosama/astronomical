@@ -1,7 +1,7 @@
 use astronomical_ipc_protocol::{
     ChatAssistantToolCall, ChatAssistantToolFunction, ChatGenerationCommand,
-    ChatGenerationSettings, ChatGenerationValidationError, ChatImageInput, ChatMessage,
-    ChatToolChoice, ChatToolDefinition, RequestId,
+    ChatGenerationSettings, ChatGenerationValidationError, ChatMessage, ChatToolChoice,
+    ChatToolDefinition, RequestId,
 };
 use astronomical_rest_contract::{
     OpenAiResponseInputItemParts, OpenAiResponseInputParts, OpenAiResponseToolChoiceParts,
@@ -10,6 +10,7 @@ use astronomical_rest_contract::{
 use thiserror::Error;
 
 use crate::rest::chronological_instruction::append_instruction;
+use crate::rest::tool_result_images::{PendingToolResultImages, chat_image_input};
 
 /// Translates one validated Responses request into the existing worker command.
 pub fn translate_openai_responses_request(
@@ -115,7 +116,10 @@ fn translate_response_input_items(
     chat_messages: &mut Vec<ChatMessage>,
 ) {
     let mut pending_assistant_message = PendingAssistantMessage::default();
+    let mut pending_tool_result_images = PendingToolResultImages::default();
     for response_input_item in response_input_items {
+        pending_tool_result_images
+            .end_run_before(response_input_item.is_tool_result(), chat_messages);
         match response_input_item {
             OpenAiResponseInputItemParts::SystemMessage { content }
             | OpenAiResponseInputItemParts::DeveloperMessage { content } => {
@@ -126,13 +130,7 @@ fn translate_response_input_items(
                 flush_pending_assistant_message(chat_messages, &mut pending_assistant_message);
                 chat_messages.push(ChatMessage::User {
                     content,
-                    images: images
-                        .into_iter()
-                        .map(|image| ChatImageInput {
-                            mime_type: image.mime_type().to_owned(),
-                            decoded_bytes: image.decoded_bytes().to_vec(),
-                        })
-                        .collect(),
+                    images: images.iter().map(chat_image_input).collect(),
                 });
             }
             OpenAiResponseInputItemParts::AssistantMessage { content } => {
@@ -156,8 +154,13 @@ fn translate_response_input_items(
                         arguments_json,
                     },
                 }),
-            OpenAiResponseInputItemParts::FunctionCallOutput { call_id, output } => {
+            OpenAiResponseInputItemParts::FunctionCallOutput {
+                call_id,
+                output,
+                images,
+            } => {
                 flush_pending_assistant_message(chat_messages, &mut pending_assistant_message);
+                pending_tool_result_images.hold(&images);
                 chat_messages.push(ChatMessage::Tool {
                     tool_call_id: call_id,
                     content: output,
@@ -165,6 +168,7 @@ fn translate_response_input_items(
             }
         }
     }
+    pending_tool_result_images.flush_into(chat_messages);
     flush_pending_assistant_message(chat_messages, &mut pending_assistant_message);
 }
 
