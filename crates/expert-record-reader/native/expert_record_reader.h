@@ -47,6 +47,10 @@ void astro_expert_record_reader_keep_storage_awake(astro_expert_record_reader* r
                                                    uint32_t pause_microseconds,
                                                    uint32_t linger_milliseconds);
 
+// How many pages the reader has read to keep storage awake since it was
+// created: what that upkeep costs, for whoever measures or reports it.
+uint64_t astro_expert_record_reader_awake_read_count(const astro_expert_record_reader* reader);
+
 // Runs every read of the batch and returns when all have finished: 0 when
 // every read filled every destination, otherwise the errno of the first read
 // to fail (EIO for a read that ended before its destinations were full).

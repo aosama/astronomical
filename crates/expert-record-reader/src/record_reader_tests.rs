@@ -332,3 +332,48 @@ fn should_stop_keeping_storage_awake_when_the_linger_is_zero() {
     drop(record_reads);
     assert!(destination.iter().all(|byte| *byte == 0));
 }
+
+/// One batch of one block, which is what starts the awake reads.
+fn read_one_block(reader: &ExpertRecordReader, file: &tempfile::NamedTempFile) {
+    let mut destination = vec![0xFF_u8; BLOCK_BYTES];
+    let mut record_reads = vec![RecordRead {
+        file: file.as_file().as_fd(),
+        file_offset: 0,
+        destinations: vec![destination.as_mut_slice()],
+    }];
+    reader.read(&mut record_reads).expect("the batch reads");
+}
+
+#[test]
+fn should_read_to_keep_storage_awake_only_until_the_linger_runs_out() {
+    let file = numbered_block_file(8);
+    let reader = ExpertRecordReader::new(0).expect("the reader starts");
+    reader.keep_storage_awake(
+        std::time::Duration::from_micros(200),
+        std::time::Duration::from_millis(10),
+    );
+    assert_eq!(
+        reader.awake_read_count(),
+        0,
+        "nothing is read before a batch"
+    );
+    read_one_block(&reader, &file);
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    let count_after_the_linger = reader.awake_read_count();
+    assert!(count_after_the_linger > 0, "a batch starts the awake reads");
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    assert_eq!(
+        reader.awake_read_count(),
+        count_after_the_linger,
+        "the awake reads stop by themselves once the linger has passed"
+    );
+}
+
+#[test]
+fn should_never_read_to_keep_storage_awake_unless_asked_to() {
+    let file = numbered_block_file(8);
+    let reader = ExpertRecordReader::new(1).expect("the reader starts");
+    read_one_block(&reader, &file);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    assert_eq!(reader.awake_read_count(), 0);
+}

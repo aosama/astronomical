@@ -295,6 +295,7 @@ fn should_time_the_native_reader_at_each_fetch_size() {
         // At the size a served fetch has, the two things serving adds: slots
         // spread over the table, and the sweep the cold probes run.
         for fetch_condition in [
+            table_reads::FetchCondition::NeighbouringRecords,
             table_reads::FetchCondition::ScatteredSlots,
             table_reads::FetchCondition::DuringEvictionSweep,
             table_reads::FetchCondition::AfterAnIdleMillisecond,
@@ -320,6 +321,21 @@ fn should_time_the_native_reader_at_each_fetch_size() {
                 fetch_condition,
             );
         }
+    }
+    // What the awake reads cost, beside the same fetches without them.
+    let served_size_pages = plan_cold_pages(
+        &probe.layer_plans,
+        &probe.cold_expert_ids_by_layer,
+        &probe.atlas,
+        SERVED_FETCH_EXPERT_COUNT,
+    );
+    for pause in [None, Some(Duration::from_micros(100))] {
+        table_reads::report_cost_of_keeping_storage_awake(
+            &probe.runtime,
+            &probe.atlas,
+            &served_size_pages[0],
+            pause,
+        );
     }
     assert!(
         probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,

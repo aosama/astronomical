@@ -113,6 +113,7 @@ struct astro_expert_record_reader {
     int awake_source_file_descriptor = -1;
     int64_t awake_file_offset = 0;
     std::atomic<int64_t> last_batch_nanoseconds{0};
+    std::atomic<uint64_t> awake_read_count{0};
     void* awake_page = nullptr;
 
     // Remembers where the batch read and wakes the thread that keeps storage
@@ -161,6 +162,7 @@ struct astro_expert_record_reader {
             const uint32_t pause_microseconds = awake_pause_microseconds;
             lock.unlock();
             (void)pread(file_descriptor, awake_page, kAwakeReadBytes, static_cast<off_t>(file_offset));
+            awake_read_count.fetch_add(1, std::memory_order_relaxed);
             if (pause_microseconds > 0) {
                 std::this_thread::sleep_for(std::chrono::microseconds(pause_microseconds));
             }
@@ -282,6 +284,13 @@ void astro_expert_record_reader_keep_storage_awake(astro_expert_record_reader* r
             reader->awake_linger_nanoseconds = 0;
         }
     }
+}
+
+uint64_t astro_expert_record_reader_awake_read_count(const astro_expert_record_reader* reader) {
+    if (reader == nullptr) {
+        return 0;
+    }
+    return reader->awake_read_count.load(std::memory_order_relaxed);
 }
 
 int32_t astro_expert_record_reader_read(astro_expert_record_reader* reader,

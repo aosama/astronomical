@@ -46,6 +46,7 @@ struct NativeReader {
 unsafe extern "C" {
     fn astro_expert_record_reader_create(helper_thread_count: u32) -> *mut NativeReader;
     fn astro_expert_record_reader_destroy(reader: *mut NativeReader);
+    fn astro_expert_record_reader_awake_read_count(reader: *const NativeReader) -> u64;
     fn astro_expert_record_reader_keep_storage_awake(
         reader: *mut NativeReader,
         pause_microseconds: u32,
@@ -98,6 +99,14 @@ impl ExpertRecordReader {
                 linger_milliseconds,
             );
         }
+    }
+
+    /// How many pages this reader has read to keep storage awake since it
+    /// was created.
+    #[must_use]
+    pub fn awake_read_count(&self) -> u64 {
+        // SAFETY: the handle is live for as long as `self` is.
+        unsafe { astro_expert_record_reader_awake_read_count(self.native_reader) }
     }
 
     /// Reads every record of the batch and returns when all have finished.

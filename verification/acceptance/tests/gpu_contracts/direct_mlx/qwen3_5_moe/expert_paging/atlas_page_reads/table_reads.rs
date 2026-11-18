@@ -293,6 +293,10 @@ pub(super) enum FetchCondition {
     /// `macos_file_cache` every 10 ms, as the cold serving probes do to keep
     /// a model's files out of that memory.
     DuringEvictionSweep,
+    /// Experts that sit next to one another in the file, so the whole fetch
+    /// is one unbroken run of it: what a fetch would be if experts used
+    /// together were stored together.
+    NeighbouringRecords,
     /// Neighbouring slots, each fetch after a millisecond in which the
     /// reader does nothing: in a served token the forward computes for about
     /// that long between one layer's fetch and the next, so the reader's
@@ -415,6 +419,18 @@ impl Drop for EvictionSweep {
     }
 }
 
+/// A page of as many experts as `planned_page`, starting at its first expert
+/// and running on through that expert's neighbours in the file.
+fn page_of_neighbouring_records(atlas: &AtlasTestFile, planned_page: &PlannedPage) -> PlannedPage {
+    let fetch_expert_count = planned_page.expert_ids.len();
+    let first_expert_id = planned_page.expert_ids[0].min(atlas.expert_count - fetch_expert_count);
+    PlannedPage {
+        atlas_layer_position: planned_page.atlas_layer_position,
+        expert_ids: (first_expert_id..first_expert_id + fetch_expert_count).collect(),
+        stock_manifest: planned_page.stock_manifest.clone(),
+    }
+}
+
 /// Times the native reader filling table slots with `planned_pages` (all one
 /// size) that the `macos_file_cache` does not hold, and prints the median.
 pub(super) fn report_native_reader_fetch_time(
@@ -436,6 +452,7 @@ pub(super) fn report_native_reader_fetch_time(
     let table_slot_stride = match fetch_condition {
         FetchCondition::ScatteredSlots => 13,
         FetchCondition::NeighbouringSlots
+        | FetchCondition::NeighbouringRecords
         | FetchCondition::DuringEvictionSweep
         | FetchCondition::AfterAnIdleMillisecond
         | FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy
@@ -477,6 +494,13 @@ pub(super) fn report_native_reader_fetch_time(
         ) {
             std::thread::sleep(Duration::from_millis(1));
         }
+        let neighbouring_page;
+        let planned_page = if matches!(fetch_condition, FetchCondition::NeighbouringRecords) {
+            neighbouring_page = page_of_neighbouring_records(atlas, planned_page);
+            &neighbouring_page
+        } else {
+            planned_page
+        };
         let fetch_elapsed = read_records_into_tables_with_native_reader(
             &native_reader,
             atlas,
@@ -504,4 +528,62 @@ pub(super) fn report_native_reader_fetch_time(
         fetch_milliseconds.len(),
         fetch_megabytes / 1024.0 / (median_milliseconds / 1_000.0),
     );
+}
+
+/// What keeping storage awake costs while a reply fetches: the reader is fed
+/// one small fetch a millisecond for two seconds, as a streamed reply feeds
+/// it, and the pages it reads on the side and the processor time this
+/// process spends are counted.
+pub(super) fn report_cost_of_keeping_storage_awake(
+    runtime: &MlxRuntime,
+    atlas: &AtlasTestFile,
+    planned_page: &PlannedPage,
+    pause: Option<Duration>,
+) {
+    const MEASURED_FETCH_COUNT: u32 = 2_000;
+    let mut tables = empty_tables(runtime, atlas);
+    let atlas_file = open_bypassing_macos_file_cache(&atlas.path);
+    let native_reader = ExpertRecordReader::new(NATIVE_READER_HELPER_THREAD_COUNT)
+        .expect("the native reader should start");
+    if let Some(pause) = pause {
+        native_reader.keep_storage_awake(pause, Duration::from_millis(20));
+    }
+    let processor_seconds_before = process_processor_seconds();
+    let started_at = Instant::now();
+    for _ in 0..MEASURED_FETCH_COUNT {
+        std::thread::sleep(Duration::from_millis(1));
+        let _ = read_records_into_tables_with_native_reader(
+            &native_reader,
+            atlas,
+            &atlas_file,
+            planned_page,
+            &mut tables,
+            0,
+            1,
+            2,
+        );
+    }
+    let elapsed_seconds = started_at.elapsed().as_secs_f64();
+    let processor_seconds = process_processor_seconds() - processor_seconds_before;
+    let awake_read_count = native_reader.awake_read_count();
+    eprintln!(
+        "[awake-cost] awake reads {}: {:.0} pages a second ({:.0} MB/s), this process used {:.1}% of one processor core",
+        match pause {
+            Some(pause) => format!("every {} µs", pause.as_micros()),
+            None => "off".to_owned(),
+        },
+        awake_read_count as f64 / elapsed_seconds,
+        awake_read_count as f64 * 16_384.0 / 1_048_576.0 / elapsed_seconds,
+        processor_seconds * 100.0 / elapsed_seconds,
+    );
+}
+
+/// Processor time this process has used, user and system together.
+fn process_processor_seconds() -> f64 {
+    // SAFETY: getrusage fills a zeroed struct for this process.
+    let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+    // SAFETY: as above; the pointer is to a live, writable struct.
+    unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) };
+    let seconds = |time: libc::timeval| time.tv_sec as f64 + time.tv_usec as f64 / 1e6;
+    seconds(usage.ru_utime) + seconds(usage.ru_stime)
 }
