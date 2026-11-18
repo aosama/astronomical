@@ -234,7 +234,11 @@ pub struct BeladyMinimum {
 impl BeladyMinimum {
     /// Priority from the step of the next use after `after_step`: the sooner
     /// the next use, the higher; never used again is lowest.
-    fn priority_for_next_use_after(&self, expert: ExpertKey, after_step: u64) -> (u64, u64) {
+    pub(super) fn priority_for_next_use_after(
+        &self,
+        expert: ExpertKey,
+        after_step: u64,
+    ) -> (u64, u64) {
         let Some(use_steps) = self.use_steps_by_expert.get(&expert) else {
             return (0, 0);
         };
@@ -494,5 +498,76 @@ impl KeepingRule for PriorSeededDecayedFrequency {
     ) -> (u64, u64) {
         self.decayed_frequency
             .priority_after_use(expert, replay_position)
+    }
+}
+
+/// Belady's MIN that sees only the next `lookahead_tokens` tokens: an expert
+/// used within that window ranks by how soon; every other expert ranks below
+/// all of them, by recency. With no lookahead it is least recently used;
+/// with the whole reply it is Belady's MIN. How far ahead a rule must see to
+/// come near Belady measures how much of the gap is knowing the future.
+#[derive(Debug, Default)]
+pub struct LimitedLookaheadBelady {
+    lookahead_tokens: usize,
+    belady_minimum: BeladyMinimum,
+    layer_count: usize,
+}
+
+impl LimitedLookaheadBelady {
+    #[must_use]
+    pub fn new(lookahead_tokens: usize) -> Self {
+        Self {
+            lookahead_tokens,
+            ..Self::default()
+        }
+    }
+
+    fn priority_seen_from(&self, expert: ExpertKey, after_step: u64) -> (u64, u64) {
+        let lookahead_steps = (self.lookahead_tokens * self.layer_count) as u64;
+        let (inverted_next_use, _) = self
+            .belady_minimum
+            .priority_for_next_use_after(expert, after_step);
+        let next_use_step = u64::MAX - inverted_next_use;
+        if inverted_next_use > 0 && next_use_step <= after_step + lookahead_steps {
+            // Seen ahead: above every unseen expert, sooner higher.
+            (1, inverted_next_use)
+        } else {
+            // Not seen ahead: by recency, below every seen expert.
+            (0, after_step)
+        }
+    }
+}
+
+impl KeepingRule for LimitedLookaheadBelady {
+    fn name(&self) -> String {
+        format!("Belady seeing {} tokens ahead", self.lookahead_tokens)
+    }
+
+    fn prepare(&mut self, routed_reply: &RoutedReply) {
+        self.layer_count = routed_reply.layer_count();
+        self.belady_minimum.prepare(routed_reply);
+    }
+
+    fn starting_priority(&mut self, expert: ExpertKey) -> (u64, u64) {
+        self.priority_seen_from(expert, 0)
+    }
+
+    fn priority_after_use(
+        &mut self,
+        expert: ExpertKey,
+        replay_position: ReplayPosition,
+    ) -> (u64, u64) {
+        let use_step = reply_step(replay_position, self.layer_count);
+        self.priority_seen_from(expert, use_step)
+    }
+
+    fn admits(
+        &mut self,
+        _incoming: ExpertKey,
+        incoming_priority: (u64, u64),
+        _victim: ExpertKey,
+        victim_priority: (u64, u64),
+    ) -> bool {
+        incoming_priority > victim_priority
     }
 }

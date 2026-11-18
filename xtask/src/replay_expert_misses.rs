@@ -23,9 +23,9 @@ use std::time::Instant;
 
 use astronomical_memory_policy::astro_expert_cache_model::{
     BeladyMinimum, CappedReplacements, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule,
-    LeastFrequentlyUsed, LeastRecentlyUsed, PriorSeededDecayedFrequency, ReplayCase,
-    SavedReplayCase, SecondMostRecentUse, find_saved_case_documents, read_saved_replay_case,
-    replay,
+    LeastFrequentlyUsed, LeastRecentlyUsed, LimitedLookaheadBelady, PriorSeededDecayedFrequency,
+    ReplayCase, SavedReplayCase, SecondMostRecentUse, find_saved_case_documents,
+    read_saved_replay_case, replay, replay_with_rebalanced_tables,
 };
 
 mod capacity_divisions;
@@ -112,6 +112,58 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
     report_lines.extend(report_shared_rules(saved_replay_case));
     report_lines.extend(report_whole_layer_sweeps(saved_replay_case));
     report_lines.extend(report_other_divisions(saved_replay_case));
+    report_lines.extend(report_rebalanced_tables(saved_replay_case));
+    report_lines.extend(report_lookahead(saved_replay_case));
+    report_lines
+}
+
+/// Belady seeing only so many tokens ahead, shared and in the engine's
+/// layout: how far ahead a rule must know the routes to come near Y.
+fn report_lookahead(saved_replay_case: &SavedReplayCase) -> Vec<String> {
+    let workload_name = &saved_replay_case.workload_name;
+    let engine_division = divided_like_todays_engine(saved_replay_case);
+    let mut report_lines = Vec::new();
+    for lookahead_tokens in [1, 2, 4, 8, 16, 64] {
+        report_lines.push(report_replay(
+            workload_name,
+            "shared",
+            &saved_replay_case.replay_case,
+            Box::new(LimitedLookaheadBelady::new(lookahead_tokens)),
+        ));
+        report_lines.push(report_replay(
+            workload_name,
+            "engine_layout",
+            &engine_division,
+            Box::new(LimitedLookaheadBelady::new(lookahead_tokens)),
+        ));
+    }
+    report_lines.push(report_replay(
+        workload_name,
+        "engine_layout",
+        &engine_division,
+        Box::new(BeladyMinimum::default()),
+    ));
+    report_lines
+}
+
+/// The engine's own layout with its tables re-sized every so many tokens
+/// from each layer's recent breadth: how much of sharing a periodic re-size
+/// keeps.
+fn report_rebalanced_tables(saved_replay_case: &SavedReplayCase) -> Vec<String> {
+    let workload_name = &saved_replay_case.workload_name;
+    let engine_division = divided_like_todays_engine(saved_replay_case);
+    let mut report_lines = Vec::new();
+    for interval_tokens in [8, 32, 128] {
+        let mut keeping_rule = DecayedFrequency::new(32.0);
+        let replay_outcome =
+            replay_with_rebalanced_tables(&engine_division, &mut keeping_rule, interval_tokens, 16);
+        report_lines.push(format!(
+            "[replay-expert-misses] workload={workload_name} division=engine_layout_rebalanced_every_{interval_tokens}_tokens rule=\"{}\" misses_per_token={:.2} partly_held_layers_per_token={:.2}",
+            keeping_rule.name(),
+            replay_outcome.misses_per_token(),
+            replay_outcome.partly_held_layers_per_token(),
+        ));
+    }
     report_lines
 }
 

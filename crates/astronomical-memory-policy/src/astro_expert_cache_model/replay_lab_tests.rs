@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use super::{
     BeladyMinimum, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule, LeastFrequentlyUsed,
-    LeastRecentlyUsed, ReplayCase, RoutedReply, replay,
+    LeastRecentlyUsed, LimitedLookaheadBelady, ReplayCase, RoutedReply, replay,
 };
 
 const EXPERT_BYTES: u64 = 10;
@@ -287,4 +287,54 @@ fn should_seat_no_more_starting_experts_in_a_layer_than_its_slot_limit() {
     // Only expert 0 is seated; 1 and 2 are read.
     assert_eq!(outcome.hit_count, 1);
     assert_eq!(outcome.miss_count, 2);
+}
+
+#[test]
+fn should_reach_belady_when_the_lookahead_covers_the_whole_reply() {
+    let replay_case = single_layer_case(&[0, 1, 2, 0, 1, 3, 0, 1], 2);
+
+    let full_lookahead = replay(&replay_case, &mut LimitedLookaheadBelady::new(8)).miss_count;
+    let belady = replay(&replay_case, &mut BeladyMinimum::default()).miss_count;
+
+    assert_eq!(full_lookahead, belady);
+}
+
+#[test]
+fn should_miss_like_recency_when_it_sees_nothing_ahead() {
+    let replay_case = single_layer_case(&[0, 1, 2, 0, 1, 3, 0, 1], 2);
+
+    let no_lookahead = replay(&replay_case, &mut LimitedLookaheadBelady::new(0)).miss_count;
+    let recency = replay(&replay_case, &mut LeastRecentlyUsed::default()).miss_count;
+
+    assert_eq!(no_lookahead, recency);
+}
+
+#[test]
+fn should_never_miss_more_as_it_sees_further_ahead_on_a_recorded_reply() {
+    let routed_reply = RoutedReply::from_recording_bytes(include_bytes!(
+        "fixtures/shakespeare_summary_40_layers.routes"
+    ))
+    .expect("the fixture decodes");
+    let layer_count = routed_reply.layer_count();
+    let replay_case = ReplayCase {
+        routed_reply,
+        expert_payload_bytes_by_layer: vec![EXPERT_BYTES; layer_count],
+        capacity_bytes: 3_000 * EXPERT_BYTES,
+        held_expert_ids_by_layer_at_start: vec![Vec::new(); layer_count],
+        layer_slot_limits: None,
+        pinned_layer_indexes: Vec::new(),
+    };
+    let mut previous_misses = u64::MAX;
+    for lookahead_tokens in [0, 2, 16, 499] {
+        let misses = replay(
+            &replay_case,
+            &mut LimitedLookaheadBelady::new(lookahead_tokens),
+        )
+        .miss_count;
+        assert!(
+            misses <= previous_misses,
+            "lookahead {lookahead_tokens}: {misses} > {previous_misses}"
+        );
+        previous_misses = misses;
+    }
 }

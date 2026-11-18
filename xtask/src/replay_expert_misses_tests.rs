@@ -77,7 +77,7 @@ fn should_report_every_division_and_rule_for_each_saved_case() {
     // other divisions.
     assert_eq!(
         report_lines.len(),
-        1 + 1 + 3 + 8 + 8 + 3 + 1 + 3 + 7 * 3,
+        1 + 1 + 3 + 8 + 8 + 3 + 1 + 3 + 7 * 3 + 3 + 13,
         "{report_lines:#?}"
     );
     assert!(report_lines[0].contains("workload=small reply_tokens=3"));

@@ -28,6 +28,7 @@ mod astro_expert_cache;
 mod astro_expert_cache_record;
 mod expert_tables;
 mod keeping_rules;
+mod rebalanced_replay;
 mod replay_case_file;
 mod replay_lab;
 mod routed_reply;
@@ -55,9 +56,10 @@ pub use astro_expert_cache_record::{
 pub use expert_tables::{AstroExpertCacheTableRules, AstroExpertCacheTables, TableChange};
 pub use keeping_rules::{
     BeladyMinimum, CappedReplacements, DecayedFrequency, FrequencyAdmittedRecency, KeepingRule,
-    LeastFrequentlyUsed, LeastRecentlyUsed, PriorSeededDecayedFrequency, ReplayPosition,
-    SecondMostRecentUse,
+    LeastFrequentlyUsed, LeastRecentlyUsed, LimitedLookaheadBelady, PriorSeededDecayedFrequency,
+    ReplayPosition, SecondMostRecentUse,
 };
+pub use rebalanced_replay::replay_with_rebalanced_tables;
 pub use replay_case_file::{
     ReplayCaseFileError, SavedReplayCase, find_saved_case_documents, read_saved_replay_case,
 };

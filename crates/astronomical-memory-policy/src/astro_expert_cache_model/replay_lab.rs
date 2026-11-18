@@ -80,7 +80,7 @@ fn per_reply_token(total: u64, reply_token_count: usize) -> f64 {
 }
 
 /// The held experts, ordered by the rule's priority.
-struct HeldExperts {
+pub(super) struct HeldExperts {
     priority_by_expert: HashMap<ExpertKey, (u64, u64)>,
     experts_by_priority: BTreeSet<((u64, u64), ExpertKey)>,
     held_bytes: u64,
@@ -95,6 +95,17 @@ impl HeldExperts {
             held_bytes: 0,
             held_count_by_layer: HashMap::new(),
         }
+    }
+
+    /// The held experts of `layer_index`, lowest priority first.
+    pub(super) fn layer_experts_by_priority(&self, layer_index: usize) -> Vec<ExpertKey> {
+        let mut layer_experts = Vec::new();
+        for &(_, expert) in &self.experts_by_priority {
+            if expert.layer_index == layer_index {
+                layer_experts.push(expert);
+            }
+        }
+        layer_experts
     }
 
     fn is_held(&self, expert: ExpertKey) -> bool {
@@ -118,14 +129,14 @@ impl HeldExperts {
             .or_insert(0) += 1;
     }
 
-    fn held_count(&self, layer_index: usize) -> usize {
+    pub(super) fn held_count(&self, layer_index: usize) -> usize {
         self.held_count_by_layer
             .get(&layer_index)
             .copied()
             .unwrap_or(0)
     }
 
-    fn remove(&mut self, expert: ExpertKey, expert_bytes: u64) {
+    pub(super) fn remove(&mut self, expert: ExpertKey, expert_bytes: u64) {
         if let Some(keep_priority) = self.priority_by_expert.remove(&expert) {
             self.experts_by_priority.remove(&(keep_priority, expert));
             self.held_bytes = self.held_bytes.saturating_sub(expert_bytes);
@@ -138,39 +149,68 @@ impl HeldExperts {
 
 /// Serves `replay_case` under `keeping_rule`.
 pub fn replay(replay_case: &ReplayCase, keeping_rule: &mut dyn KeepingRule) -> ReplayOutcome {
+    let mut held_experts = begin_replay(replay_case, keeping_rule);
+    let mut replay_outcome = empty_outcome(replay_case);
+    for token_index in 0..replay_case.routed_reply.token_count() {
+        serve_token(
+            replay_case,
+            keeping_rule,
+            &mut held_experts,
+            token_index,
+            &mut replay_outcome,
+        );
+    }
+    replay_outcome
+}
+
+/// Prepares the rule and seats the starting experts.
+pub(super) fn begin_replay(
+    replay_case: &ReplayCase,
+    keeping_rule: &mut dyn KeepingRule,
+) -> HeldExperts {
     keeping_rule.prepare(&replay_case.routed_reply);
     let mut held_experts = HeldExperts::new();
     seat_starting_experts(replay_case, keeping_rule, &mut held_experts);
-    let routed_reply = &replay_case.routed_reply;
-    let mut replay_outcome = ReplayOutcome {
-        reply_token_count: routed_reply.token_count(),
+    held_experts
+}
+
+pub(super) fn empty_outcome(replay_case: &ReplayCase) -> ReplayOutcome {
+    ReplayOutcome {
+        reply_token_count: replay_case.routed_reply.token_count(),
         ..ReplayOutcome::default()
-    };
+    }
+}
+
+/// Serves every layer of one token.
+pub(super) fn serve_token(
+    replay_case: &ReplayCase,
+    keeping_rule: &mut dyn KeepingRule,
+    held_experts: &mut HeldExperts,
+    token_index: usize,
+    replay_outcome: &mut ReplayOutcome,
+) {
+    let routed_reply = &replay_case.routed_reply;
     let mut protected_route = Vec::with_capacity(routed_reply.experts_per_token());
-    for token_index in 0..routed_reply.token_count() {
-        for layer_index in 0..routed_reply.layer_count() {
-            protected_route.clear();
-            for &expert_id in routed_reply.layer_route(token_index, layer_index) {
-                protected_route.push(ExpertKey {
-                    layer_index,
-                    expert_id,
-                });
-            }
-            let replay_position = ReplayPosition {
+    for layer_index in 0..routed_reply.layer_count() {
+        protected_route.clear();
+        for &expert_id in routed_reply.layer_route(token_index, layer_index) {
+            protected_route.push(ExpertKey {
+                layer_index,
+                expert_id,
+            });
+        }
+        serve_layer_route(
+            replay_case,
+            keeping_rule,
+            held_experts,
+            &protected_route,
+            ReplayPosition {
                 token_index,
                 layer_index,
-            };
-            serve_layer_route(
-                replay_case,
-                keeping_rule,
-                &mut held_experts,
-                &protected_route,
-                replay_position,
-                &mut replay_outcome,
-            );
-        }
+            },
+            replay_outcome,
+        );
     }
-    replay_outcome
 }
 
 /// Seats the experts the reply began with, as far as the capacity allows.
@@ -324,7 +364,7 @@ fn layer_slot_limit_of(replay_case: &ReplayCase, layer_index: usize) -> Option<u
     Some(layer_slot_limits.get(layer_index).copied().unwrap_or(0))
 }
 
-fn expert_bytes_of(replay_case: &ReplayCase, layer_index: usize) -> u64 {
+pub(super) fn expert_bytes_of(replay_case: &ReplayCase, layer_index: usize) -> u64 {
     replay_case
         .expert_payload_bytes_by_layer
         .get(layer_index)
