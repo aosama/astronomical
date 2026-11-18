@@ -77,9 +77,17 @@ enum OpenAiResponseContentPart {
         logprobs: Vec<Value>,
     },
     InputImage {
-        image_url: String,
+        /// Optional on the wire so a part without one reaches validation and
+        /// is refused by name, instead of failing the whole item's match.
+        #[serde(default)]
+        image_url: Option<String>,
         #[serde(default)]
         detail: Option<String>,
+        /// OpenAI's stored-file reference. Clients send it as null beside an
+        /// inline `image_url`; a real file id names an upload this local
+        /// endpoint never received, so it is refused.
+        #[serde(default)]
+        file_id: Option<String>,
     },
 }
 
@@ -146,7 +154,9 @@ pub struct OpenAiResponseFunctionCallOutputInput {
     #[serde(default)]
     id: Option<String>,
     call_id: String,
-    output: String,
+    /// A tool's result: plain text, or text and image parts such as a
+    /// screenshot the tool took, as the Responses API allows.
+    output: OpenAiResponseMessageContent,
     #[serde(default)]
     status: Option<OpenAiResponseItemStatus>,
 }
@@ -206,10 +216,32 @@ pub enum OpenAiResponseInputItemParts {
     FunctionCallOutput {
         call_id: String,
         output: String,
+        /// Images the tool returned, in part order. Empty for a text result.
+        images: Vec<DecodedImageInput>,
     },
 }
 
 impl OpenAiResponseInputItemParts {
+    /// Whether this item is a tool's result.
+    #[must_use]
+    pub const fn is_tool_result(&self) -> bool {
+        matches!(self, Self::FunctionCallOutput { .. })
+    }
+
+    /// The decoded images this item carries: a user message's, or the ones a
+    /// tool returned. Every other item carries none.
+    #[must_use]
+    pub fn images(&self) -> &[DecodedImageInput] {
+        match self {
+            Self::UserMessage { images, .. } | Self::FunctionCallOutput { images, .. } => images,
+            Self::SystemMessage { .. }
+            | Self::DeveloperMessage { .. }
+            | Self::AssistantMessage { .. }
+            | Self::Reasoning { .. }
+            | Self::FunctionCall { .. } => &[],
+        }
+    }
+
     #[must_use]
     pub const fn kind_name(&self) -> &'static str {
         match self {
@@ -242,16 +274,14 @@ impl OpenAiResponseInput {
                         .map(OpenAiResponseInputItem::image_url_part_count)
                         .sum(),
                 )?;
-                // Inline media accumulates across every user message so the
-                // portable media budget is per request, not per message.
+                // Inline media accumulates across every user message and tool
+                // result so the portable media budget is per request, not per item.
                 let mut decoded_inline_media_bytes = 0usize;
                 let mut input_item_parts = Vec::with_capacity(input_items.len());
                 for input_item in input_items {
                     let item_parts = input_item.into_parts()?;
-                    if let OpenAiResponseInputItemParts::UserMessage { images, .. } = &item_parts {
-                        for decoded_image in images {
-                            decoded_inline_media_bytes += decoded_image.decoded_bytes().len();
-                        }
+                    for decoded_image in item_parts.images() {
+                        decoded_inline_media_bytes += decoded_image.decoded_bytes().len();
                     }
                     input_item_parts.push(item_parts);
                 }
@@ -293,20 +323,21 @@ fn validate_inline_media_total(
 impl OpenAiResponseInputItem {
     /// Counts the image parts this input item carries.
     ///
-    /// Only user message items can structurally carry image parts; the count
-    /// feeds the request-level portable image-count budget.
+    /// Messages and tool results can carry image parts; the count feeds the
+    /// request-level portable image-count budget. Images in a system,
+    /// developer or assistant message are counted too and refused later.
     fn image_url_part_count(&self) -> usize {
-        let Self::Message(message_input) = self else {
-            return 0;
-        };
-        match &message_input.content {
-            OpenAiResponseMessageContent::Text(_) => 0,
-            OpenAiResponseMessageContent::Parts(content_parts) => content_parts
-                .iter()
-                .filter(|content_part| {
-                    matches!(content_part, OpenAiResponseContentPart::InputImage { .. })
-                })
-                .count(),
+        self.content_with_parts()
+            .map_or(0, OpenAiResponseMessageContent::image_part_count)
+    }
+
+    /// The content of an item that can hold parts: a message's, or a tool
+    /// result's output.
+    fn content_with_parts(&self) -> Option<&OpenAiResponseMessageContent> {
+        match self {
+            Self::Message(message_input) => Some(&message_input.content),
+            Self::FunctionCallOutput(function_call_output) => Some(&function_call_output.output),
+            Self::Reasoning(_) | Self::FunctionCall(_) | Self::Unsupported(_) => None,
         }
     }
 
@@ -319,12 +350,7 @@ impl OpenAiResponseInputItem {
                 name: function_call.name,
                 arguments_json: function_call.arguments,
             }),
-            Self::FunctionCallOutput(function_call_output) => {
-                Ok(OpenAiResponseInputItemParts::FunctionCallOutput {
-                    call_id: function_call_output.call_id,
-                    output: function_call_output.output,
-                })
-            }
+            Self::FunctionCallOutput(function_call_output) => function_call_output.into_parts(),
             Self::Unsupported(unsupported_input_item) => {
                 let input_item_type = unsupported_input_item
                     .get("type")
@@ -341,7 +367,7 @@ impl OpenAiResponseMessageInput {
     fn into_parts(self) -> Result<OpenAiResponseInputItemParts, OpenAiResponsesValidationError> {
         match self.role {
             OpenAiResponseMessageRole::User => {
-                let (content, images) = self.content.into_user_content()?;
+                let (content, images) = self.content.into_text_and_images()?;
                 Ok(OpenAiResponseInputItemParts::UserMessage { content, images })
             }
             OpenAiResponseMessageRole::System => Ok(OpenAiResponseInputItemParts::SystemMessage {
@@ -362,6 +388,19 @@ impl OpenAiResponseMessageInput {
 }
 
 impl OpenAiResponseMessageContent {
+    /// How many `input_image` parts this content holds; plain text holds none.
+    fn image_part_count(&self) -> usize {
+        match self {
+            Self::Text(_) => 0,
+            Self::Parts(content_parts) => content_parts
+                .iter()
+                .filter(|content_part| {
+                    matches!(content_part, OpenAiResponseContentPart::InputImage { .. })
+                })
+                .count(),
+        }
+    }
+
     fn into_text(self) -> Result<String, OpenAiResponsesValidationError> {
         match self {
             Self::Text(content) => Ok(content),
@@ -388,7 +427,7 @@ impl OpenAiResponseMessageContent {
         }
     }
 
-    fn into_user_content(
+    fn into_text_and_images(
         self,
     ) -> Result<(String, Vec<DecodedImageInput>), OpenAiResponsesValidationError> {
         match self {
@@ -405,7 +444,16 @@ impl OpenAiResponseMessageContent {
                         | OpenAiResponseContentPart::OutputText { text, .. } => {
                             combined_text.push_str(&text);
                         }
-                        OpenAiResponseContentPart::InputImage { image_url, .. } => {
+                        OpenAiResponseContentPart::InputImage {
+                            image_url, file_id, ..
+                        } => {
+                            if file_id.is_some() {
+                                return Err(OpenAiResponsesValidationError::UnsupportedOption {
+                                    option_name: "input_image.file_id",
+                                });
+                            }
+                            let image_url =
+                                image_url.ok_or(OpenAiResponsesValidationError::MissingImageUrl)?;
                             image_input::validate_image_url_scheme(&image_url)
                                 .map_err(OpenAiResponsesValidationError::ImageInput)?;
                             decoded_images.push(
@@ -418,6 +466,17 @@ impl OpenAiResponseMessageContent {
                 Ok((combined_text, decoded_images))
             }
         }
+    }
+}
+
+impl OpenAiResponseFunctionCallOutputInput {
+    fn into_parts(self) -> Result<OpenAiResponseInputItemParts, OpenAiResponsesValidationError> {
+        let (output, images) = self.output.into_text_and_images()?;
+        Ok(OpenAiResponseInputItemParts::FunctionCallOutput {
+            call_id: self.call_id,
+            output,
+            images,
+        })
     }
 }
 

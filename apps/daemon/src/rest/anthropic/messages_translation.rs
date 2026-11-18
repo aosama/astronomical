@@ -10,11 +10,11 @@ use astronomical_ipc_protocol::{
 use astronomical_rest_contract::{
     AnthropicMessageParts, AnthropicMessagesRequestParts, AnthropicToolChoiceParts,
     AnthropicToolDefinitionParts, AnthropicToolUseParts, AnthropicUserSegmentParts,
-    DecodedImageInput,
 };
 use thiserror::Error;
 
 use crate::rest::chronological_instruction::append_instruction;
+use crate::rest::tool_result_images::chat_image_input;
 
 /// Anthropic flags a failed tool run with `is_error`; the chat template has
 /// no such field, so the flag reaches the model as this prefix instead.
@@ -203,13 +203,6 @@ fn tool_result_content(text: String, is_error: bool) -> String {
         format!("{TOOL_ERROR_PREFIX}{text}")
     } else {
         text
-    }
-}
-
-fn chat_image_input(image: &DecodedImageInput) -> ChatImageInput {
-    ChatImageInput {
-        mime_type: image.mime_type().to_owned(),
-        decoded_bytes: image.decoded_bytes().to_vec(),
     }
 }
 

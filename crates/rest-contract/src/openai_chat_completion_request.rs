@@ -208,8 +208,8 @@ impl OpenAiChatCompletionRequest {
             self.guided_grammar.as_deref(),
         )?;
         let thinking_controls = self.resolve_thinking_controls()?;
-        // Inline media accumulates across every user message so the portable
-        // media budget is per request, not per message. Each image was already
+        // Inline media accumulates across every user and tool message so the
+        // portable media budget is per request, not per message. Each image was already
         // size-checked individually during decode; this accumulation rejects a
         // request whose combined media exceeds the budget the mainstream
         // providers enforce on the whole request.
@@ -217,7 +217,9 @@ impl OpenAiChatCompletionRequest {
         let mut messages = Vec::with_capacity(self.messages.len());
         for chat_message in self.messages {
             let message_parts = chat_message.into_parts()?;
-            if let OpenAiChatMessageParts::User { images, .. } = &message_parts {
+            if let OpenAiChatMessageParts::User { images, .. }
+            | OpenAiChatMessageParts::Tool { images, .. } = &message_parts
+            {
                 for decoded_image in images {
                     decoded_inline_media_bytes += decoded_image.decoded_bytes().len();
                 }

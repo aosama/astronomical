@@ -111,3 +111,112 @@ fn should_translate_summary_reasoning_and_function_loop_replay() {
         }]
     );
 }
+
+/// A 1x1 red PNG, the smallest image the decoder accepts as real.
+const RED_PIXEL_DATA_URI: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+
+/// Each chat message as a short label, so a test reads the whole order.
+fn message_order_labels(chat_messages: &[ChatMessage]) -> Vec<String> {
+    let mut labels = Vec::with_capacity(chat_messages.len());
+    for chat_message in chat_messages {
+        labels.push(match chat_message {
+            ChatMessage::System { .. } => "system".to_owned(),
+            ChatMessage::User { content, images } => {
+                format!("user '{content}' with {} images", images.len())
+            }
+            ChatMessage::Assistant { .. } => "assistant".to_owned(),
+            ChatMessage::Tool {
+                tool_call_id,
+                content,
+            } => {
+                format!("tool {tool_call_id} '{content}'")
+            }
+        });
+    }
+    labels
+}
+
+fn translated_responses_messages(request_document: serde_json::Value) -> Vec<ChatMessage> {
+    let request = serde_json::from_value::<OpenAiResponsesRequest>(request_document)
+        .expect("the Responses request should deserialize");
+    crate::translate_openai_responses_request(RequestId::new(910), request)
+        .expect("the Responses request should translate")
+        .messages
+}
+
+#[test]
+fn should_follow_a_run_of_function_call_outputs_with_the_images_they_returned() {
+    let chat_messages = translated_responses_messages(serde_json::json!({
+        "model": "astronomical/fake-mixture-of-experts",
+        "input": [
+            {"role": "user", "content": "Capture both stages."},
+            {"type": "function_call", "call_id": "call_1", "name": "screenshot", "arguments": "{}"},
+            {"type": "function_call", "call_id": "call_2", "name": "screenshot", "arguments": "{}"},
+            {"type": "function_call_output", "call_id": "call_1", "output": [
+                {"type": "input_text", "text": "first"},
+                {"type": "input_image", "image_url": RED_PIXEL_DATA_URI}
+            ]},
+            {"type": "function_call_output", "call_id": "call_2", "output": [
+                {"type": "input_image", "image_url": RED_PIXEL_DATA_URI, "file_id": null}
+            ]},
+            {"role": "user", "content": "Compare them."}
+        ]
+    }));
+
+    assert_eq!(
+        message_order_labels(&chat_messages),
+        [
+            "user 'Capture both stages.' with 0 images",
+            "assistant",
+            "tool call_1 'first'",
+            "tool call_2 ''",
+            "user 'Images returned by the tool calls above.' with 2 images",
+            "user 'Compare them.' with 0 images",
+        ]
+    );
+}
+
+#[test]
+fn should_add_the_tool_images_last_when_the_input_ends_with_function_call_outputs() {
+    let chat_messages = translated_responses_messages(serde_json::json!({
+        "model": "astronomical/fake-mixture-of-experts",
+        "input": [
+            {"role": "user", "content": "Capture the stage."},
+            {"type": "function_call", "call_id": "call_1", "name": "screenshot", "arguments": "{}"},
+            {"type": "function_call_output", "call_id": "call_1", "output": [
+                {"type": "input_image", "image_url": RED_PIXEL_DATA_URI}
+            ]}
+        ]
+    }));
+
+    assert_eq!(
+        message_order_labels(&chat_messages),
+        [
+            "user 'Capture the stage.' with 0 images",
+            "assistant",
+            "tool call_1 ''",
+            "user 'Images returned by the tool calls above.' with 1 images",
+        ]
+    );
+}
+
+#[test]
+fn should_add_no_image_message_after_text_function_call_outputs() {
+    let chat_messages = translated_responses_messages(serde_json::json!({
+        "model": "astronomical/fake-mixture-of-experts",
+        "input": [
+            {"role": "user", "content": "Read the play."},
+            {"type": "function_call", "call_id": "call_1", "name": "read", "arguments": "{}"},
+            {"type": "function_call_output", "call_id": "call_1", "output": "Exit, pursued by a bear."}
+        ]
+    }));
+
+    assert_eq!(
+        message_order_labels(&chat_messages),
+        [
+            "user 'Read the play.' with 0 images",
+            "assistant",
+            "tool call_1 'Exit, pursued by a bear.'",
+        ]
+    );
+}

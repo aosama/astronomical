@@ -44,10 +44,10 @@ pub enum OpenAiChatMessage {
 impl OpenAiChatMessage {
     /// Counts the image parts this message carries.
     ///
-    /// Only multipart user messages can structurally carry image parts; the
-    /// count feeds the request-level portable image-count budget.
+    /// Multipart user messages and tool results carry image parts; the count
+    /// feeds the request-level portable image-count budget.
     pub(crate) fn image_url_part_count(&self) -> usize {
-        let Self::User { content } = self else {
+        let (Self::User { content } | Self::Tool { content, .. }) = self else {
             return 0;
         };
         match content {
@@ -102,7 +102,7 @@ impl OpenAiChatMessage {
                 content: content.into_text()?,
             }),
             Self::User { content } => {
-                let (text_content, images) = content.into_user_content()?;
+                let (text_content, images) = content.into_text_and_images()?;
                 Ok(OpenAiChatMessageParts::User {
                     content: text_content,
                     images,
@@ -129,11 +129,23 @@ impl OpenAiChatMessage {
             Self::Tool {
                 content,
                 tool_call_id,
-            } => Ok(OpenAiChatMessageParts::Tool {
-                tool_call_id,
-                content: content.into_text()?,
-            }),
+            } => {
+                let (text_content, images) = content.into_text_and_images()?;
+                Ok(OpenAiChatMessageParts::Tool {
+                    tool_call_id,
+                    content: text_content,
+                    images,
+                })
+            }
         }
+    }
+}
+
+impl OpenAiChatMessageParts {
+    /// Whether this message is a tool's result.
+    #[must_use]
+    pub const fn is_tool_result(&self) -> bool {
+        matches!(self, Self::Tool { .. })
     }
 }
 
@@ -158,6 +170,9 @@ pub enum OpenAiChatMessageParts {
     Tool {
         tool_call_id: String,
         content: String,
+        /// Images the tool returned, such as a screenshot, in part order.
+        /// Empty for a text result.
+        images: Vec<DecodedImageInput>,
     },
 }
 
@@ -207,8 +222,9 @@ impl OpenAiMessageContent {
         }
     }
 
-    /// Decodes user message content into concatenated text and ordered image inputs.
-    fn into_user_content(
+    /// Decodes user or tool message content into concatenated text and
+    /// ordered image inputs.
+    fn into_text_and_images(
         self,
     ) -> Result<(String, Vec<DecodedImageInput>), OpenAiChatCompletionValidationError> {
         self.validate()?;

@@ -255,7 +255,7 @@ pub enum OpenAiResponsesValidationError {
     EmptyInputItems,
     #[error("message content parts must not be empty")]
     EmptyContentParts,
-    #[error("image input is supported only in user messages")]
+    #[error("image input is supported only in user messages and tool results")]
     ImageInputOutsideUserMessage,
     /// A reasoning-control spelling was contradictory or unrecognized.
     #[error(transparent)]
@@ -284,6 +284,9 @@ pub enum OpenAiResponsesValidationError {
     UnsupportedReasoningReplay,
     #[error("response input item type '{input_item_type}' is unsupported")]
     UnsupportedInputItem { input_item_type: String },
+    /// An `input_image` part arrived without the inline image it describes.
+    #[error("an input_image part needs an image_url holding a data:image/... URI")]
+    MissingImageUrl,
     #[error("tool name '{tool_name}' is invalid")]
     InvalidToolName { tool_name: String },
     #[error(
@@ -446,3 +449,6 @@ mod tests;
 
 #[cfg(test)]
 mod prompt_cache_fields;
+
+#[cfg(test)]
+mod tool_output_images;

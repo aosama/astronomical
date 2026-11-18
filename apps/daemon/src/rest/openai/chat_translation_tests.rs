@@ -332,3 +332,95 @@ fn should_translate_structured_outputs_choice_into_an_ipc_mask() {
         })
     );
 }
+
+/// A 1x1 red PNG, the smallest image the decoder accepts as real.
+const RED_PIXEL_DATA_URI: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
+
+#[test]
+fn should_follow_tool_messages_with_the_images_they_returned() {
+    let request = serde_json::from_value::<OpenAiChatCompletionRequest>(serde_json::json!({
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [
+            {"role": "user", "content": "Capture the stage."},
+            {"role": "assistant", "content": null, "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "screenshot", "arguments": "{}"}},
+                {"id": "call_2", "type": "function", "function": {"name": "read", "arguments": "{}"}}
+            ]},
+            {"role": "tool", "tool_call_id": "call_1", "content": [
+                {"type": "text", "text": "captured"},
+                {"type": "image_url", "image_url": {"url": RED_PIXEL_DATA_URI}}
+            ]},
+            {"role": "tool", "tool_call_id": "call_2", "content": "Exit, pursued by a bear."},
+            {"role": "user", "content": "Describe it."}
+        ]
+    }))
+    .expect("the chat request should deserialize");
+
+    let chat_messages =
+        crate::translate_openai_chat_completion_request(RequestId::new(911), request)
+            .expect("the chat request should translate")
+            .messages;
+
+    assert!(matches!(
+        &chat_messages[2..],
+        [
+            ChatMessage::Tool { tool_call_id: first_call, content: first_content },
+            ChatMessage::Tool { tool_call_id: second_call, .. },
+            ChatMessage::User { content: image_message_text, images },
+            ChatMessage::User { content: question, images: question_images },
+        ] if first_call == "call_1"
+            && first_content == "captured"
+            && second_call == "call_2"
+            && image_message_text == "Images returned by the tool calls above."
+            && images.len() == 1
+            && question == "Describe it."
+            && question_images.is_empty()
+    ));
+}
+
+/// One assistant tool call to the `screenshot` tool.
+fn screenshot_tool_call(call_id: &str) -> serde_json::Value {
+    serde_json::json!({"id": call_id, "type": "function", "function": {"name": "screenshot", "arguments": "{}"}})
+}
+
+/// A tool message returning one screenshot for `call_id`.
+fn screenshot_result(call_id: &str) -> serde_json::Value {
+    serde_json::json!({"role": "tool", "tool_call_id": call_id, "content": [
+        {"type": "image_url", "image_url": {"url": RED_PIXEL_DATA_URI}}
+    ]})
+}
+
+#[test]
+fn should_place_each_tool_runs_images_after_that_run() {
+    let request = serde_json::from_value::<OpenAiChatCompletionRequest>(serde_json::json!({
+        "model": "astronomical/fake-mixture-of-experts",
+        "messages": [
+            {"role": "user", "content": "Capture the stage twice."},
+            {"role": "assistant", "content": null, "tool_calls": [screenshot_tool_call("call_1")]},
+            screenshot_result("call_1"),
+            {"role": "assistant", "content": null, "tool_calls": [screenshot_tool_call("call_2")]},
+            screenshot_result("call_2"),
+            {"role": "user", "content": "Compare them."}
+        ]
+    }))
+    .expect("the chat request should deserialize");
+
+    let chat_messages =
+        crate::translate_openai_chat_completion_request(RequestId::new(912), request)
+            .expect("the chat request should translate")
+            .messages;
+
+    let image_message_positions: Vec<usize> = chat_messages
+        .iter()
+        .enumerate()
+        .filter(|(_, chat_message)| {
+            matches!(chat_message, ChatMessage::User { images, .. } if !images.is_empty())
+        })
+        .map(|(message_position, _)| message_position)
+        .collect();
+    assert_eq!(
+        image_message_positions,
+        [3, 6],
+        "each run's image follows its own tool message, before the next assistant turn"
+    );
+}
