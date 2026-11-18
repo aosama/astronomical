@@ -87,13 +87,13 @@ fn should_refuse_a_vision_tower_inside_a_language_shard() {
     let refusal = vision_sidecar_file_names(&shard_index, true)
         .expect_err("serving cannot load a tower outside the vision bundle");
     assert!(
-        refusal.contains("vision_tower.blocks.0.attn.proj.bias"),
+        refusal.contains("model-00001.safetensors") && refusal.contains("beside the vision tower"),
         "{refusal}"
     );
 }
 
 #[test]
-fn should_refuse_a_vision_tower_in_its_own_regular_shard() {
+fn should_carry_a_vision_tower_from_any_file_that_holds_only_the_tower() {
     let shard_index = shard_index_of(&[
         (
             "language_model.model.embed_tokens.weight",
@@ -101,11 +101,37 @@ fn should_refuse_a_vision_tower_in_its_own_regular_shard() {
         ),
         (
             "vision_tower.blocks.0.attn.proj.bias",
-            "model-00002.safetensors",
+            "model-vision.safetensors",
+        ),
+        ("vision_tower.merger.norm.bias", "model-vision.safetensors"),
+    ]);
+
+    assert_eq!(
+        vision_sidecar_file_names(&shard_index, true),
+        Ok(BTreeSet::from(["model-vision.safetensors".to_owned()]))
+    );
+}
+
+#[test]
+fn should_refuse_a_vision_tower_split_over_two_files() {
+    let shard_index = shard_index_of(&[
+        (
+            "language_model.model.embed_tokens.weight",
+            "model-00001.safetensors",
+        ),
+        (
+            "vision_tower.blocks.0.attn.proj.bias",
+            "model-vision-1.safetensors",
+        ),
+        (
+            "vision_tower.merger.norm.bias",
+            "model-vision-2.safetensors",
         ),
     ]);
 
-    assert!(vision_sidecar_file_names(&shard_index, true).is_err());
+    let refusal = vision_sidecar_file_names(&shard_index, true)
+        .expect_err("an Atlas carries the tower as one file");
+    assert!(refusal.contains("split over 2 files"), "{refusal}");
 }
 
 #[test]

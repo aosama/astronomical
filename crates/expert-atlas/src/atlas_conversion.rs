@@ -18,7 +18,7 @@ use crate::layer_record_writer::{LayerRecordWriteError, SourceShardFiles, write_
 use crate::macos_file_cache_bypassing_io::available_bytes_on_volume;
 use crate::record_layout::plan_layer_records;
 use crate::resident_bundle_writer::{ResidentBundleWriteError, write_resident_bundle};
-use crate::source_checkpoint::{SourceCheckpoint, SourceCheckpointError};
+use crate::source_checkpoint::{SourceCheckpoint, SourceCheckpointError, VISION_BUNDLE_FILE_NAME};
 
 /// Free space kept beyond the Atlas itself, so a conversion fails up front
 /// rather than filling the volume other writers depend on.
@@ -141,7 +141,7 @@ fn write_and_publish_atlas(
     staging_directory: &Path,
     progress_observer: &mut dyn ConversionProgressObserver,
 ) -> Result<AtlasManifest, AtlasConversionError> {
-    copy_companion_files(&conversion_plan.source_checkpoint, staging_directory)?;
+    stage_companion_files(&conversion_plan.source_checkpoint, staging_directory)?;
     let (resident_file, expert_files) =
         write_atlas_files(conversion_plan, staging_directory, progress_observer)?;
     let atlas_manifest = AtlasManifest {
@@ -294,6 +294,37 @@ fn copy_companion_files(
             &directory_entry.path(),
             &staging_directory.join(&entry_name),
         )?;
+    }
+    Ok(())
+}
+
+/// Puts every file the Atlas carries unchanged into the staging folder,
+/// the vision tower at the path serving loads it from.
+fn stage_companion_files(
+    source_checkpoint: &SourceCheckpoint,
+    staging_directory: &Path,
+) -> Result<(), AtlasConversionError> {
+    copy_companion_files(source_checkpoint, staging_directory)?;
+    place_vision_bundle(source_checkpoint, staging_directory)
+}
+
+/// Moves the vision tower's file, copied with the companions under its
+/// source name, to `VISION_BUNDLE_FILE_NAME`, where serving looks for an
+/// Atlas's tower. A source that already uses that name needs nothing.
+fn place_vision_bundle(
+    source_checkpoint: &SourceCheckpoint,
+    staging_directory: &Path,
+) -> Result<(), AtlasConversionError> {
+    for vision_file_name in &source_checkpoint.vision_sidecar_file_names {
+        if vision_file_name == VISION_BUNDLE_FILE_NAME {
+            continue;
+        }
+        let copied_path = staging_directory.join(vision_file_name);
+        let bundle_path = staging_directory.join(VISION_BUNDLE_FILE_NAME);
+        if let Some(bundle_directory) = bundle_path.parent() {
+            std::fs::create_dir_all(bundle_directory).map_err(io_error(bundle_directory))?;
+        }
+        std::fs::rename(&copied_path, &bundle_path).map_err(io_error(&copied_path))?;
     }
     Ok(())
 }

@@ -18,9 +18,9 @@ const ROUTED_EXPERT_NAME_MARKER: &str = ".mlp.switch_mlp.";
 /// The two spellings of a vision-tower tensor name (canonical and unified
 /// Hugging Face), as the serving shard index recognises them.
 const VISION_TOWER_NAME_PREFIXES: [&str; 2] = ["vision_tower.", "model.visual."];
-/// The one place an Atlas carries a vision tower. Serving loads the tower
-/// only from this file, so a conversion that put it anywhere else would
-/// produce a model that refuses to load.
+/// The one place an Atlas carries a vision tower, whatever the source called
+/// its file. Serving loads the tower only from here, so a conversion that put
+/// it anywhere else would produce a model that refuses to load.
 pub const VISION_BUNDLE_FILE_NAME: &str = "optiq/optiq_vision.safetensors";
 /// A safetensors header is JSON metadata; anything larger is not a header.
 const MAXIMUM_SAFETENSORS_HEADER_BYTES: u64 = 100 * 1024 * 1024;
@@ -52,10 +52,11 @@ pub struct SourceCheckpoint {
     pub resident_tensors: Vec<SourceTensor>,
     /// Every language shard the index names; these are replaced, not copied.
     pub shard_file_names: BTreeSet<String>,
-    /// The vision bundle (`VISION_BUNDLE_FILE_NAME`) when the source has a
-    /// vision tower. Serving loads it through the separate vision path, so it
-    /// travels with the companion files unchanged rather than being folded
-    /// into the resident bundle, where the tower would then exist twice.
+    /// The source file holding the vision tower, when there is one; at most
+    /// one name. Serving loads the tower through the separate vision path,
+    /// so the file travels unchanged to `VISION_BUNDLE_FILE_NAME` rather than
+    /// being folded into the resident bundle, where the tower would then
+    /// exist twice.
     pub vision_sidecar_file_names: BTreeSet<String>,
     /// The first shard's `__metadata__`, carried into the resident bundle.
     pub safetensors_metadata: Option<serde_json::Value>,
@@ -327,35 +328,68 @@ fn split_expert_tensors(
     Ok((expert_layers, resident_tensors))
 }
 
-/// The vision bundle to carry unchanged, or why this checkpoint's vision
-/// layout cannot become an Atlas. Serving reads a vision tower only from
-/// `VISION_BUNDLE_FILE_NAME` and requires it whenever the config declares
-/// one, so conversion refuses every other layout up front rather than
-/// writing tens of gigabytes of a model that will not load.
+/// The source file that holds the vision tower, or why this checkpoint's
+/// vision layout cannot become an Atlas.
+///
+/// The tower may sit in any one file of the source, as long as that file
+/// holds the tower and nothing else: OptiQ writes it as
+/// `VISION_BUNDLE_FILE_NAME`, `astronomical vision add` as
+/// `model-vision.safetensors`. The conversion carries the file's bytes
+/// unchanged to `VISION_BUNDLE_FILE_NAME`, the one place serving loads an
+/// Atlas's tower from. A tower split over several files, or sharing a file
+/// with language tensors, is refused up front rather than after tens of
+/// gigabytes of a model that would not load.
 fn vision_sidecar_file_names(
     shard_index: &ShardIndexDocument,
     declares_vision_tower: bool,
 ) -> Result<BTreeSet<String>, String> {
-    let mut has_vision_bundle = false;
+    let tower_file_names = vision_tower_file_names(shard_index);
+    refuse_a_split_vision_tower(&tower_file_names)?;
+    refuse_language_tensors_beside_the_tower(shard_index, &tower_file_names)?;
+    if declares_vision_tower && tower_file_names.is_empty() {
+        return Err(
+            "config.json declares a vision tower but the index names none of its tensors"
+                .to_owned(),
+        );
+    }
+    Ok(tower_file_names)
+}
+
+/// Every file the index puts a vision-tower tensor in.
+fn vision_tower_file_names(shard_index: &ShardIndexDocument) -> BTreeSet<String> {
+    let mut tower_file_names = BTreeSet::new();
     for (tensor_name, shard_file_name) in &shard_index.weight_map {
-        let is_in_vision_bundle = shard_file_name == VISION_BUNDLE_FILE_NAME;
-        if is_vision_tower_tensor(tensor_name) != is_in_vision_bundle {
+        if is_vision_tower_tensor(tensor_name) {
+            tower_file_names.insert(shard_file_name.clone());
+        }
+    }
+    tower_file_names
+}
+
+fn refuse_a_split_vision_tower(tower_file_names: &BTreeSet<String>) -> Result<(), String> {
+    if tower_file_names.len() <= 1 {
+        return Ok(());
+    }
+    let listed_file_names: Vec<&str> = tower_file_names.iter().map(String::as_str).collect();
+    Err(format!(
+        "the vision tower is split over {} files ({}), but an Atlas carries it as one file",
+        tower_file_names.len(),
+        listed_file_names.join(", ")
+    ))
+}
+
+fn refuse_language_tensors_beside_the_tower(
+    shard_index: &ShardIndexDocument,
+    tower_file_names: &BTreeSet<String>,
+) -> Result<(), String> {
+    for (tensor_name, shard_file_name) in &shard_index.weight_map {
+        if !is_vision_tower_tensor(tensor_name) && tower_file_names.contains(shard_file_name) {
             return Err(format!(
-                "{tensor_name} sits in {shard_file_name}, but an Atlas keeps the vision tower, and only the vision tower, in {VISION_BUNDLE_FILE_NAME}"
+                "{tensor_name} sits in {shard_file_name} beside the vision tower, but an Atlas keeps the tower, and only the tower, in {VISION_BUNDLE_FILE_NAME}"
             ));
         }
-        has_vision_bundle |= is_in_vision_bundle;
     }
-    if declares_vision_tower && !has_vision_bundle {
-        return Err(format!(
-            "config.json declares a vision tower but no tensor is indexed in {VISION_BUNDLE_FILE_NAME}"
-        ));
-    }
-    Ok(if has_vision_bundle {
-        BTreeSet::from([VISION_BUNDLE_FILE_NAME.to_owned()])
-    } else {
-        BTreeSet::new()
-    })
+    Ok(())
 }
 
 fn is_vision_tower_tensor(tensor_name: &str) -> bool {
