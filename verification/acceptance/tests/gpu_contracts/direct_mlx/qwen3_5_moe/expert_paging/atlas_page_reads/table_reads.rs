@@ -271,3 +271,64 @@ pub(super) fn assert_tables_read_in_place_match_stock(
         );
     }
 }
+
+/// Most fetches timed at one size: enough for a steady median, few enough
+/// that five sizes finish in seconds.
+const FETCHES_TIMED_AT_ONE_SIZE: usize = 120;
+
+/// Times the native reader filling table slots with `planned_pages` (all one
+/// size) that the `macos_file_cache` does not hold, and prints the median.
+pub(super) fn report_native_reader_fetch_time(
+    runtime: &MlxRuntime,
+    atlas: &AtlasTestFile,
+    planned_pages: &[PlannedPage],
+    residency_checker: &mut super::cold_page_plan::ResidencyChecker,
+) {
+    let Some(first_page) = planned_pages.first() else {
+        eprintln!("[fetch-size] no pages outside the macos_file_cache at this size");
+        return;
+    };
+    let fetch_expert_count = first_page.expert_ids.len();
+    let mut tables = empty_tables(runtime, atlas);
+    let atlas_file = open_bypassing_macos_file_cache(&atlas.path);
+    let native_reader = ExpertRecordReader::new(NATIVE_READER_HELPER_THREAD_COUNT)
+        .expect("the native reader should start");
+    let mut fetch_milliseconds = Vec::with_capacity(FETCHES_TIMED_AT_ONE_SIZE);
+    for planned_page in planned_pages {
+        if fetch_milliseconds.len() == FETCHES_TIMED_AT_ONE_SIZE {
+            break;
+        }
+        if residency_checker.atlas_page_is_in_macos_file_cache(
+            atlas,
+            planned_page.atlas_layer_position,
+            &planned_page.expert_ids,
+        ) {
+            continue;
+        }
+        let fetch_elapsed = read_records_into_tables_with_native_reader(
+            &native_reader,
+            atlas,
+            &atlas_file,
+            planned_page,
+            &mut tables,
+            0,
+            2,
+        );
+        fetch_milliseconds.push(fetch_elapsed.as_secs_f64() * 1_000.0);
+    }
+    if fetch_milliseconds.is_empty() {
+        eprintln!(
+            "[fetch-size] {fetch_expert_count} experts: no pages outside the macos_file_cache"
+        );
+        return;
+    }
+    fetch_milliseconds.sort_by(f64::total_cmp);
+    let median_milliseconds = fetch_milliseconds[fetch_milliseconds.len() / 2];
+    let fetch_megabytes =
+        (atlas.record_byte_count * fetch_expert_count as u64) as f64 / 1_048_576.0;
+    eprintln!(
+        "[fetch-size] {fetch_expert_count:>2} experts ({fetch_megabytes:5.1} MB): {median_milliseconds:.3} ms a fetch over {} fetches, {:.1} GB/s",
+        fetch_milliseconds.len(),
+        fetch_megabytes / 1024.0 / (median_milliseconds / 1_000.0),
+    );
+}

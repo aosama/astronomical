@@ -168,15 +168,19 @@ const FETCHING_LAYER_EXPERT_COUNT: usize = 5;
 /// Layers on which a reply token fetches at the anchor.
 const FETCHING_LAYER_COUNT: usize = 28;
 
-#[test]
-#[ignore = "converts installed expert layers to an atlas and times one fetching layer stage by stage"]
-#[serial]
-fn should_time_one_fetching_layer_stage_by_stage() {
-    assert!(
-        !cfg!(debug_assertions),
-        "stage timings need an optimized build (--release)"
-    );
-    let probe_started_at = Instant::now();
+/// A temporary atlas of the layers least present in the `macos_file_cache`,
+/// with what is needed to plan pages of it that are not in that memory.
+struct ColdAtlasProbe {
+    runtime: MlxRuntime,
+    layer_plans: Vec<QuantizedExpertLayerPlan>,
+    cold_expert_ids_by_layer: Vec<Vec<usize>>,
+    residency_checker: ResidencyChecker,
+    atlas: AtlasTestFile,
+    /// Removes the atlas when the probe ends.
+    _atlas_directory: tempfile::TempDir,
+}
+
+fn cold_atlas_probe() -> ColdAtlasProbe {
     let fixture = installed_large_sparse_moe_streaming_fixture();
     let runtime = probe_runtime();
     let layer_plans = all_layer_plans(&fixture);
@@ -203,27 +207,86 @@ fn should_time_one_fetching_layer_stage_by_stage() {
         &atlas_layer_indexes,
         &atlas_directory.path().join("experts.atlas"),
     );
+    ColdAtlasProbe {
+        runtime,
+        layer_plans,
+        cold_expert_ids_by_layer,
+        residency_checker,
+        atlas,
+        _atlas_directory: atlas_directory,
+    }
+}
+
+#[test]
+#[ignore = "converts installed expert layers to an atlas and times one fetching layer stage by stage"]
+#[serial]
+fn should_time_one_fetching_layer_stage_by_stage() {
+    assert!(
+        !cfg!(debug_assertions),
+        "stage timings need an optimized build (--release)"
+    );
+    let probe_started_at = Instant::now();
+    let mut probe = cold_atlas_probe();
     let planned_pages = plan_cold_pages(
-        &layer_plans,
-        &cold_expert_ids_by_layer,
-        &atlas,
+        &probe.layer_plans,
+        &probe.cold_expert_ids_by_layer,
+        &probe.atlas,
         FETCHING_LAYER_EXPERT_COUNT,
     );
     // The first planned page proves bytes read in place are the stock bytes.
-    table_reads::assert_tables_read_in_place_match_stock(&runtime, &atlas, &planned_pages[0]);
-    let mut samples = fetching_layer_stages::measure_cold_stages(
-        &runtime,
-        &atlas,
-        &planned_pages[1..],
-        &mut residency_checker,
+    table_reads::assert_tables_read_in_place_match_stock(
+        &probe.runtime,
+        &probe.atlas,
+        &planned_pages[0],
     );
-    let stop_chain_milliseconds = stop_cost::measure_stop_cost(&runtime);
+    let mut samples = fetching_layer_stages::measure_cold_stages(
+        &probe.runtime,
+        &probe.atlas,
+        &planned_pages[1..],
+        &mut probe.residency_checker,
+    );
+    let stop_chain_milliseconds = stop_cost::measure_stop_cost(&probe.runtime);
     fetching_layer_stages::report_stages(
         &mut samples,
         stop_chain_milliseconds,
-        atlas.record_byte_count * FETCHING_LAYER_EXPERT_COUNT as u64,
+        probe.atlas.record_byte_count * FETCHING_LAYER_EXPERT_COUNT as u64,
         FETCHING_LAYER_COUNT,
     );
+    assert!(
+        probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,
+        "the probe exceeded its 120-second ceiling"
+    );
+}
+
+/// Experts in one fetch, from one to a whole token's route on a layer and
+/// beyond: how a fetch's time grows with its size separates what each
+/// request to storage costs from what each byte costs.
+const FETCH_SIZE_SWEEP_EXPERT_COUNTS: [usize; 5] = [1, 2, 4, 8, 16];
+
+#[test]
+#[ignore = "converts installed expert layers to an atlas and times the native reader at each fetch size"]
+#[serial]
+fn should_time_the_native_reader_at_each_fetch_size() {
+    assert!(
+        !cfg!(debug_assertions),
+        "fetch timings need an optimized build (--release)"
+    );
+    let probe_started_at = Instant::now();
+    let mut probe = cold_atlas_probe();
+    for fetch_expert_count in FETCH_SIZE_SWEEP_EXPERT_COUNTS {
+        let planned_pages = plan_cold_pages(
+            &probe.layer_plans,
+            &probe.cold_expert_ids_by_layer,
+            &probe.atlas,
+            fetch_expert_count,
+        );
+        table_reads::report_native_reader_fetch_time(
+            &probe.runtime,
+            &probe.atlas,
+            &planned_pages,
+            &mut probe.residency_checker,
+        );
+    }
     assert!(
         probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,
         "the probe exceeded its 120-second ceiling"

@@ -84,46 +84,15 @@ impl Qwen3_5Model {
             &selected_indices,
             performance_attribution.is_enabled(),
         );
-        // A seated complete layer whose page multiplies without a transient
-        // decode (affine or bfloat16 pages for any chunk, codebook pages for a
-        // decode token with the fused kernel) is served straight from the
-        // table with the route remapped on-device. No router indices reach
-        // the host and no routed-subset copy is gathered, so the forward keeps
-        // one graphics-processor wait instead of one per layer; at 40 layers
-        // the per-layer route copy cost decode about 20 ms per token. The
-        // route still feeds demand learning, deferred to the forward's single
-        // completion evaluation. Codebook pages that would decode the whole
-        // table fall through to the host-side route and decode only their
-        // routed union.
-        let decode_tokens_multiply_packed_pages =
-            self.fused_jangtq2_gathered_projection_kernel.is_some();
         if should_use_loaded_model_mode
-            && token_count > 1
-            && let Some(handled) = self.dispatch_complete_layer_page_in_hand(
+            && let Some(handled) = self.dispatch_without_host_route(
+                hidden_states,
+                mixture_of_experts_weights,
                 expert_pager,
                 layer_index,
                 token_count,
-                hidden_states,
-                mixture_of_experts_weights,
                 &selected_indices,
                 &selected_scores,
-                should_use_compiled_elementwise_graphs,
-                performance_attribution,
-            )?
-        {
-            return Ok(handled);
-        }
-        if should_use_loaded_model_mode
-            && self.astro_expert_cache.is_some()
-            && let Some(handled) = self.dispatch_table_page_without_host_route(
-                expert_pager,
-                layer_index,
-                token_count,
-                decode_tokens_multiply_packed_pages,
-                &selected_indices,
-                &selected_scores,
-                mixture_of_experts_weights,
-                hidden_states,
                 should_use_compiled_elementwise_graphs,
                 performance_attribution,
             )?
@@ -151,7 +120,7 @@ impl Qwen3_5Model {
                 expert_pager,
                 layer_index,
                 token_count,
-                decode_tokens_multiply_packed_pages,
+                self.fused_jangtq2_gathered_projection_kernel.is_some(),
                 &selected_indices,
                 &selected_scores,
                 selected_expert_ids,
@@ -177,6 +146,68 @@ impl Qwen3_5Model {
             should_use_compiled_elementwise_graphs,
             paged_execution_mode,
             sorted_unique_expert_ids.as_deref(),
+            performance_attribution,
+        )
+    }
+
+    /// The ways that keep the route on the graphics processor, so the
+    /// forward does not stop at this layer. `Ok(None)` when neither applies
+    /// and the route has to reach the host.
+    ///
+    /// A seated complete layer whose page multiplies without a transient
+    /// decode (affine or bfloat16 pages for any chunk, codebook pages for a
+    /// decode token with the fused kernel) is served straight from the
+    /// table with the route remapped on-device. No router indices reach
+    /// the host and no routed-subset copy is gathered, so the forward keeps
+    /// one graphics-processor wait instead of one per layer; at 40 layers
+    /// the per-layer route copy cost decode about 20 ms per token. The
+    /// route still feeds demand learning, deferred to the forward's single
+    /// completion evaluation. Codebook pages that would decode the whole
+    /// table fall through to the host-side route and decode only their
+    /// routed union.
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_without_host_route(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        token_count: i32,
+        selected_indices: &MlxArray,
+        selected_scores: &MlxArray,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+        if token_count > 1
+            && let Some(handled) = self.dispatch_complete_layer_page_in_hand(
+                expert_pager,
+                layer_index,
+                token_count,
+                hidden_states,
+                mixture_of_experts_weights,
+                selected_indices,
+                selected_scores,
+                should_use_compiled_elementwise_graphs,
+                performance_attribution,
+            )?
+        {
+            return Ok(Some(handled));
+        }
+        // A measurement that prices a route stop sends every layer on to the
+        // host, held whole or not.
+        if self.astro_expert_cache.is_none() || self.brings_every_route_to_the_host.get() {
+            return Ok(None);
+        }
+        self.dispatch_table_page_without_host_route(
+            expert_pager,
+            layer_index,
+            token_count,
+            self.fused_jangtq2_gathered_projection_kernel.is_some(),
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
             performance_attribution,
         )
     }

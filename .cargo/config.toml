@@ -648,6 +648,11 @@ measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomica
 # records), and what stopping the forward to bring a route to the host costs. Prints each as milliseconds a layer and a token over 28
 # fetching layers. Same configuration and scratch space as the alias above.
 measure-fetching-layer-stages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_one_fetching_layer_stage_by_stage"
+# The native record reader filling table slots at each fetch size (1, 2, 4, 8
+# and 16 experts) from pages the macOS file cache does not hold: how a fetch's
+# time grows with its size separates what each request to storage costs from
+# what each byte costs. Same configuration and scratch space as above.
+measure-expert-fetch-size = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_the_native_reader_at_each_fetch_size"
 
 # An Expert Atlas model (made by `astronomical models convert-atlas`) against
 # the stock checkpoint it came from: both validate, budget memory alike, and
@@ -673,6 +678,10 @@ measure-decode-residency-attribution = "run -p xtask -- test-run --package astro
 # cache for the whole run: what the reads cost on a Mac whose RAM is the
 # limit, rather than on a larger Mac that keeps the model in the macOS file cache.
 measure-cold-decode-residency-attribution = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_with_a_cold_file_cache"
+# The warm probe with a route stop at every layer, held whole or not. Under a
+# limit the model fits in, the stops are the only thing added, so the token
+# time less the plain probe's is what the stops cost inside the real forward.
+measure-decode-residency-attribution-every-layer-stops = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_with_a_route_stop_at_every_layer"
 # The same two probes with a reply token's missing experts loaded as pages
 # and copied into their tables after the forward, the path serving used
 # before experts were read straight into the tables: the comparison.

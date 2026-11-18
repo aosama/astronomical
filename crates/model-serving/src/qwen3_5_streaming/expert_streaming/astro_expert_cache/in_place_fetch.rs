@@ -18,12 +18,21 @@ use super::slot_writes::materialize_and_detach_table_weights;
 use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::qwen3_5_streaming::expert_streaming::ExpertSlotStorageFiller;
 
+/// What one fetch into a table did.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TableFetchReport {
+    pub(crate) storage_read_count: usize,
+    /// Time inside the reads alone, from first request to last completion;
+    /// the rest of a fetch's time is slot planning and bookkeeping.
+    pub(crate) storage_read_elapsed: std::time::Duration,
+}
+
 impl AstroExpertCache {
     /// Puts every expert of `missing_expert_ids` into the layer's table by
     /// reading it from storage into a slot planned as an insert would plan
     /// it, never taking a slot from `protected_expert_ids` (the experts this
-    /// token found in the table). Returns how many reads that took when all
-    /// of them are now in the table.
+    /// token found in the table). Returns what the reads took when all of
+    /// them are now in the table.
     ///
     /// Returns `None`, having changed nothing an insert would not, when the
     /// layer has no table yet, its experts are stored in an encoding the
@@ -42,7 +51,7 @@ impl AstroExpertCache {
         protected_expert_ids: &[usize],
         warm_slot_count: usize,
         slot_filler: &ExpertSlotStorageFiller,
-    ) -> Result<Option<usize>, MlxRuntimeError> {
+    ) -> Result<Option<TableFetchReport>, MlxRuntimeError> {
         let Some(table) = self
             .tables_by_layer
             .get(layer_index)
@@ -61,6 +70,7 @@ impl AstroExpertCache {
         let Some(PlannedSlotInsert {
             new_expert_rows,
             planned_slots,
+            table_grew,
         }) = self.plan_slots_in_existing_table(
             runtime,
             layer_index,
@@ -93,9 +103,14 @@ impl AstroExpertCache {
             &historically_hot_expert_ids,
             candidate_decode_step_epoch,
         )?;
-        // Growth leaves the table as a lazy copy of the smaller one; its
-        // storage exists only once that copy has run.
-        materialize_and_detach_table_weights(runtime, &table.weights)?;
+        if table_grew {
+            // Growth leaves the table as a lazy copy of the smaller one; its
+            // storage exists only once that copy has run. A table that did
+            // not grow is already evaluated, and evaluating its nine arrays
+            // again on every fetch is nine round trips into MLX for nothing.
+            materialize_and_detach_table_weights(runtime, &table.weights)?;
+        }
+        let storage_read_started_at = std::time::Instant::now();
         let storage_read_count =
             match slot_filler.fill_slots(layer_plan, &mut table.weights, &claimed_expert_slots) {
                 Ok(storage_read_count) => storage_read_count,
@@ -115,12 +130,16 @@ impl AstroExpertCache {
                     return Err(fill_error);
                 }
             };
+        let storage_read_elapsed = storage_read_started_at.elapsed();
         self.record_planned_insert_counters(
             claimed_expert_slots.len(),
             slot_replacement_count,
             warm_slot_count,
             candidate_decode_step_epoch,
         );
-        Ok(Some(storage_read_count))
+        Ok(Some(TableFetchReport {
+            storage_read_count,
+            storage_read_elapsed,
+        }))
     }
 }

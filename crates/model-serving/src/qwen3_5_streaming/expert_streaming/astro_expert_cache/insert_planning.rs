@@ -279,6 +279,9 @@ pub(super) struct PlannedSlotInsert {
     pub(super) new_expert_rows: Vec<(usize, usize)>,
     /// One slot per new expert, in the same order.
     pub(super) planned_slots: Vec<usize>,
+    /// Whether planning replaced the table with a larger one, which is a
+    /// lazy copy until it is evaluated.
+    pub(super) table_grew: bool,
 }
 
 /// Where the rows of a planned insert come from.

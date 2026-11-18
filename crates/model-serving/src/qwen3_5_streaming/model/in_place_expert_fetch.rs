@@ -8,10 +8,57 @@
 //! copying way, exactly as before.
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_streaming::expert_streaming::ExpertSlotStorageFiller;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
+use crate::qwen3_5_streaming::model::direct_expert_fetch_tally::{
+    DirectExpertFetchOutcome, DirectExpertFetchTally,
+};
 use crate::{PerformanceAttribution, should_commit_mandatory_routed_page};
+
+/// What a model needs to read a reply token's missing experts straight into
+/// their tables, and the record of how often it could.
+#[derive(Debug)]
+pub(crate) struct DirectExpertFetching {
+    /// `None` for a model without streamed experts, or when its files could
+    /// not be opened for direct reads.
+    pub(crate) slot_filler: Option<ExpertSlotStorageFiller>,
+    /// Off only while a measurement compares the copying path with the
+    /// direct one on the same loaded model.
+    pub(crate) is_enabled: std::cell::Cell<bool>,
+    /// Which way each fetching layer's missing experts went, and why.
+    pub(crate) tally: DirectExpertFetchTally,
+}
+
+impl DirectExpertFetching {
+    /// Opens the reader for a model that streams experts. Without it every
+    /// missing expert is served the copying way, which is slower and still
+    /// correct, so a failure to open it is logged, not fatal.
+    ///
+    /// It borrows the pager, so a model under construction calls this before
+    /// the pager moves into it.
+    pub(crate) fn open(expert_pager: Option<&Qwen3_5ExpertPager>) -> Self {
+        let slot_filler = match expert_pager {
+            None => None,
+            Some(expert_pager) => match ExpertSlotStorageFiller::open(expert_pager.layer_plans()) {
+                Ok(slot_filler) => Some(slot_filler),
+                Err(open_error) => {
+                    tracing::warn!(
+                        %open_error,
+                        "experts will be copied into their tables: the direct reader did not open"
+                    );
+                    None
+                }
+            },
+        };
+        Self {
+            slot_filler,
+            is_enabled: std::cell::Cell::new(true),
+            tally: DirectExpertFetchTally::default(),
+        }
+    }
+}
 
 impl Qwen3_5Model {
     /// Reads the experts `route_coverage` misses into the layer's table and
@@ -29,12 +76,18 @@ impl Qwen3_5Model {
         performance_attribution: &PerformanceAttribution,
     ) -> Result<bool, Qwen3_5ExecutionError> {
         let (Some(slot_filler), Some(astro_expert_cache)) = (
-            self.expert_slot_storage_filler.as_ref(),
+            self.direct_expert_fetching.slot_filler.as_ref(),
             self.astro_expert_cache.as_ref(),
         ) else {
+            self.direct_expert_fetching
+                .tally
+                .record_outcome(DirectExpertFetchOutcome::NoDirectReader);
             return Ok(false);
         };
-        if !self.fetches_decode_misses_into_tables.get() {
+        if !self.direct_expert_fetching.is_enabled.get() {
+            self.direct_expert_fetching
+                .tally
+                .record_outcome(DirectExpertFetchOutcome::NoDirectReader);
             return Ok(false);
         }
         let warm_slot_count = self.hot_expert_warm_slot_count();
@@ -47,11 +100,14 @@ impl Qwen3_5Model {
             false,
         );
         if warm_slot_count == 0 || !keeps_decode_experts {
+            self.direct_expert_fetching
+                .tally
+                .record_outcome(DirectExpertFetchOutcome::LayerKeepsNothing);
             return Ok(false);
         }
         let layer_plan = expert_pager.layer_plan(layer_index)?;
         let fetch_started_at = std::time::Instant::now();
-        let storage_read_count = astro_expert_cache
+        let table_fetch_report = astro_expert_cache
             .borrow_mut()
             .fetch_missing_experts_into_table(
                 &self.runtime,
@@ -62,7 +118,10 @@ impl Qwen3_5Model {
                 warm_slot_count.min(layer_plan.expert_capacity),
                 slot_filler,
             )?;
-        let Some(storage_read_count) = storage_read_count else {
+        let Some(table_fetch_report) = table_fetch_report else {
+            self.direct_expert_fetching
+                .tally
+                .record_outcome(DirectExpertFetchOutcome::TableCouldNotTakeThem);
             return Ok(false);
         };
         let fetch_elapsed = fetch_started_at.elapsed();
@@ -75,13 +134,22 @@ impl Qwen3_5Model {
                 layer_plan,
                 missing_expert_count,
             )?;
+        self.direct_expert_fetching
+            .tally
+            .record_outcome(DirectExpertFetchOutcome::FetchedIntoTable);
+        self.direct_expert_fetching.tally.record_fetch(
+            missing_expert_count,
+            fetched_payload_bytes,
+            fetch_elapsed,
+            table_fetch_report.storage_read_elapsed,
+        );
         self.request_expert_storage_read_tally
             .record_streamed_page(fetched_payload_bytes);
         // The reads went around MLX's loader, which is where reads are
         // counted; record them so storage figures stay whole.
         expert_pager.record_direct_expert_reads(
             performance_attribution,
-            u64::try_from(storage_read_count).unwrap_or(u64::MAX),
+            u64::try_from(table_fetch_report.storage_read_count).unwrap_or(u64::MAX),
             fetched_payload_bytes,
             fetch_elapsed,
         );

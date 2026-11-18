@@ -135,6 +135,7 @@ impl AstroExpertCache {
         let Some(PlannedSlotInsert {
             new_expert_rows,
             planned_slots,
+            table_grew: _,
         }) = self.plan_slots_in_existing_table(
             runtime,
             layer_index,
@@ -204,6 +205,7 @@ impl AstroExpertCache {
             .and_then(|table| table.as_mut())
             .expect("the caller checked the layer has a table");
         let mut resident_payload_bytes = self.resident_payload_bytes;
+        let mut table_grew = false;
         let new_expert_rows = plan_new_expert_rows(table, expert_ids, candidate_decode_step_epoch);
         let new_expert_count = new_expert_rows.len();
         if new_expert_count == 0 {
@@ -226,6 +228,7 @@ impl AstroExpertCache {
             free_slots = grown_free_slots;
             if let Some(grown_resident_payload_bytes) = grown_resident_payload_bytes {
                 resident_payload_bytes = grown_resident_payload_bytes;
+                table_grew = true;
             }
         }
         // The table tensor may have grown, so the `astro_expert_cache`-wide
@@ -249,6 +252,7 @@ impl AstroExpertCache {
         Ok(Some(PlannedSlotInsert {
             new_expert_rows,
             planned_slots,
+            table_grew,
         }))
     }
 

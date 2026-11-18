@@ -72,6 +72,17 @@ enum ExpertReadPath {
     Copying,
 }
 
+/// Where a reply token's forward stops to copy a route to the host.
+#[derive(Clone, Copy, Debug)]
+enum RouteStops {
+    /// Only at layers not held whole: what serving does.
+    AsServed,
+    /// At every layer, held whole or not. On a model held whole this adds
+    /// the stops and nothing else, which prices one stop inside the real
+    /// forward.
+    AtEveryLayer,
+}
+
 /// Whether the model's weight files may stay in the `macos_file_cache`.
 #[derive(Clone, Copy, Debug)]
 enum MacosFileCacheCondition {
@@ -85,10 +96,30 @@ enum MacosFileCacheCondition {
 async fn should_attribute_decode_token_time_to_route_copies_and_storage_reads() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(MacosFileCacheCondition::Warm, ExpertReadPath::IntoTables),
+        attribute_decode_token_time(
+            MacosFileCacheCondition::Warm,
+            ExpertReadPath::IntoTables,
+            RouteStops::AsServed,
+        ),
     )
     .await
     .expect("the decode attribution probe must finish within 120 seconds");
+}
+
+#[tokio::test]
+#[ignore = "serves a 10,000-token Shakespeare request with a route stop at every layer and attributes each decode token's time"]
+#[serial]
+async fn should_attribute_decode_token_time_with_a_route_stop_at_every_layer() {
+    timeout(
+        DECODE_ATTRIBUTION_TIMEOUT,
+        attribute_decode_token_time(
+            MacosFileCacheCondition::Warm,
+            ExpertReadPath::IntoTables,
+            RouteStops::AtEveryLayer,
+        ),
+    )
+    .await
+    .expect("the every-layer-stop decode attribution probe must finish within 120 seconds");
 }
 
 #[tokio::test]
@@ -97,7 +128,11 @@ async fn should_attribute_decode_token_time_to_route_copies_and_storage_reads() 
 async fn should_attribute_decode_token_time_when_experts_are_copied_into_tables() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(MacosFileCacheCondition::Warm, ExpertReadPath::Copying),
+        attribute_decode_token_time(
+            MacosFileCacheCondition::Warm,
+            ExpertReadPath::Copying,
+            RouteStops::AsServed,
+        ),
     )
     .await
     .expect("the copying decode attribution probe must finish within 120 seconds");
@@ -109,7 +144,11 @@ async fn should_attribute_decode_token_time_when_experts_are_copied_into_tables(
 async fn should_attribute_decode_token_time_when_experts_are_copied_with_a_cold_file_cache() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(MacosFileCacheCondition::Cold, ExpertReadPath::Copying),
+        attribute_decode_token_time(
+            MacosFileCacheCondition::Cold,
+            ExpertReadPath::Copying,
+            RouteStops::AsServed,
+        ),
     )
     .await
     .expect("the cold copying decode attribution probe must finish within 120 seconds");
@@ -121,7 +160,11 @@ async fn should_attribute_decode_token_time_when_experts_are_copied_with_a_cold_
 async fn should_attribute_decode_token_time_with_a_cold_file_cache() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(MacosFileCacheCondition::Cold, ExpertReadPath::IntoTables),
+        attribute_decode_token_time(
+            MacosFileCacheCondition::Cold,
+            ExpertReadPath::IntoTables,
+            RouteStops::AsServed,
+        ),
     )
     .await
     .expect("the cold decode attribution probe must finish within 120 seconds");
@@ -130,6 +173,7 @@ async fn should_attribute_decode_token_time_with_a_cold_file_cache() {
 async fn attribute_decode_token_time(
     macos_file_cache_condition: MacosFileCacheCondition,
     expert_read_path: ExpertReadPath,
+    route_stops: RouteStops,
 ) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let test_run_configuration = TestRunContext::current().configuration;
@@ -170,12 +214,24 @@ async fn attribute_decode_token_time(
         ))
         .await
         .expect("the engine takes the expert read path");
-    eprintln!("[decode-attribution] expert_read_path={expert_read_path:?}");
+    engine
+        .set_every_route_brought_to_the_host_for_tests(matches!(
+            route_stops,
+            RouteStops::AtEveryLayer
+        ))
+        .await
+        .expect("the engine takes the route stops");
+    eprintln!(
+        "[decode-attribution] expert_read_path={expert_read_path:?} route_stops={route_stops:?}"
+    );
     // Started after loading: the resident bundle is copied into MLX memory at
     // load, so only reads made while serving should pay storage cost.
     let cold_macos_file_cache = matches!(macos_file_cache_condition, MacosFileCacheCondition::Cold)
         .then(|| ColdMacosFileCache::start(&model_directory));
     for probe_request in &probe_requests {
+        // Counts from loading and from the request before are not this
+        // request's.
+        let _ = engine.take_direct_expert_fetch_counts_for_tests().await;
         let generated_token_ids = run_attributed_generation(
             &mut engine,
             probe_request.request_id,
@@ -189,6 +245,14 @@ async fn attribute_decode_token_time(
             !generated_token_ids.is_empty(),
             "{} must generate tokens",
             probe_request.phase_name
+        );
+        print_direct_expert_fetch_counts(
+            probe_request.phase_name,
+            engine
+                .take_direct_expert_fetch_counts_for_tests()
+                .await
+                .expect("the engine reports its expert fetch counts"),
+            generated_token_ids.len(),
         );
         // The residency each request leaves is what the next one starts
         // from; printing it shows whether decode's warm experts survive.
@@ -218,6 +282,27 @@ async fn attribute_decode_token_time(
         &report_documents,
         FOLLOW_UP_REQUEST_ID.value(),
     ));
+}
+
+/// How the request's fetching layers got their missing experts, per reply
+/// token: straight into the table, or the copying path and why.
+fn print_direct_expert_fetch_counts(
+    phase_name: &str,
+    counts: astronomical_model_serving::DirectExpertFetchCounts,
+    reply_token_count: usize,
+) {
+    let reply_token_count = reply_token_count.max(1) as f64;
+    eprintln!(
+        "[decode-attribution] after={phase_name} per reply token: {:.1} layers fetched into tables ({:.1} experts, {:.1} MB, {:.2} ms of which {:.2} ms reading), {:.1} layers that keep nothing, {:.1} layers whose table could not take them, {:.1} with no direct reader",
+        counts.fetched_into_table_layer_count as f64 / reply_token_count,
+        counts.fetched_into_table_expert_count as f64 / reply_token_count,
+        counts.fetched_into_table_bytes as f64 / 1_048_576.0 / reply_token_count,
+        counts.direct_fetch_nanoseconds as f64 / 1e6 / reply_token_count,
+        counts.storage_read_nanoseconds as f64 / 1e6 / reply_token_count,
+        counts.layer_keeps_nothing_count as f64 / reply_token_count,
+        counts.table_could_not_take_them_count as f64 / reply_token_count,
+        counts.no_direct_reader_count as f64 / reply_token_count,
+    );
 }
 
 /// One request the probe serves, in order.
