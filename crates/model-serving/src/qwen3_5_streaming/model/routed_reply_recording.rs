@@ -34,8 +34,14 @@ pub struct RoutedReplyRecording {
     /// For each layer, the experts the `astro_expert_cache` held when the
     /// reply's first token ran.
     pub held_expert_ids_by_layer_at_reply_start: Vec<Vec<u16>>,
+    /// For each layer, the experts it held when the recording was taken,
+    /// after the reply: a layer the reply's plan kept nothing in holds none.
+    pub held_expert_ids_by_layer_at_reply_end: Vec<Vec<u16>>,
     /// The `astro_expert_cache` capacity the reply was served under.
     pub kept_expert_capacity_bytes: u64,
+    /// Slots each layer not held whole may keep, when the recording was
+    /// taken (the engine's warm slot count).
+    pub warm_slot_count: usize,
     /// One expert's payload bytes in each layer.
     pub expert_payload_bytes_by_layer: Vec<u64>,
 }
@@ -103,10 +109,39 @@ impl Qwen3_5Model {
                 .map_or(0, |layer_plan| layer_plan.expert_capacity),
             token_routes,
             held_expert_ids_by_layer_at_reply_start: reply_start.held_expert_ids_by_layer,
+            held_expert_ids_by_layer_at_reply_end: match self.astro_expert_cache.as_ref() {
+                Some(astro_expert_cache) => {
+                    held_expert_ids_by_layer(astro_expert_cache, expert_pager)
+                }
+                None => Vec::new(),
+            },
             kept_expert_capacity_bytes: reply_start.kept_expert_capacity_bytes,
+            warm_slot_count: self.hot_expert_warm_slot_count(),
             expert_payload_bytes_by_layer,
         })
     }
+}
+
+/// What each layer holds now.
+fn held_expert_ids_by_layer(
+    astro_expert_cache: &std::cell::RefCell<crate::qwen3_5_streaming::AstroExpertCache>,
+    expert_pager: &crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager,
+) -> Vec<Vec<u16>> {
+    let expert_capacity = expert_pager
+        .layer_plans()
+        .first()
+        .map_or(0, |layer_plan| layer_plan.expert_capacity);
+    let mut held_expert_ids_by_layer = vec![Vec::new(); expert_pager.layer_plans().len()];
+    for layer_residency in astro_expert_cache
+        .borrow()
+        .topology_snapshot(expert_capacity)
+    {
+        if let Some(held_expert_ids) = held_expert_ids_by_layer.get_mut(layer_residency.layer_index)
+        {
+            *held_expert_ids = expert_ids_as_u16(&layer_residency.retained_expert_ids);
+        }
+    }
+    held_expert_ids_by_layer
 }
 
 fn expert_ids_as_u16(expert_ids: &[usize]) -> Vec<u16> {

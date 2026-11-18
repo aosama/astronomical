@@ -303,8 +303,10 @@ fn save_recording(
         "workload": measured_workload.name(),
         "experts_per_layer": recording.experts_per_layer,
         "kept_expert_capacity_bytes": recording.kept_expert_capacity_bytes,
+        "warm_slot_count": recording.warm_slot_count,
         "expert_payload_bytes_by_layer": recording.expert_payload_bytes_by_layer,
         "held_expert_ids_by_layer_at_reply_start": recording.held_expert_ids_by_layer_at_reply_start,
+        "held_expert_ids_by_layer_at_reply_end": recording.held_expert_ids_by_layer_at_reply_end,
     });
     let case_path = evidence_directory.join(format!("{}.case.json", measured_workload.name()));
     std::fs::write(
