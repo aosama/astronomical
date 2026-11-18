@@ -77,6 +77,8 @@ pub(crate) mod mlx_buffer_cache_reply_record;
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub(crate) mod reply_expert_route_record;
+#[cfg(feature = "direct-mlx")]
+pub use reply_expert_route_record::SessionExpertRouteSample;
 pub(crate) mod serving_phase;
 pub(crate) mod telemetry;
 mod utilization;
@@ -138,8 +140,8 @@ pub(crate) use astronomical_memory_policy::residency;
 pub use astronomical_memory_policy::residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerState,
     ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
-    StreamingStartupResidencyFacts, classify_expert_memory_mode,
-    decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count,
+    StreamingStartupResidencyFacts, classify_expert_memory_mode, complete_layers_beyond_keep_count,
+    decode_warm_floor_eviction_indexes, decode_whole_layer_keep_count, hot_expert_warm_slot_count,
     kept_layer_indexes_to_seat_before_reply, minimum_decode_warm_slot_count,
     observed_expert_memory_mode, plan_expert_residency, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,

@@ -53,6 +53,8 @@ pub(crate) mod memory_governance;
 // Holds one streamed layer for every span of a layer-at-a-time prompt.
 pub(crate) mod held_prompt_expert_layer;
 // Reads the next streamed layer while the graphics processor computes.
+#[cfg(feature = "direct-mlx")]
+mod decode_whole_layer_keep;
 pub(crate) mod prefill_complete_layer_prefetch;
 #[cfg(test)]
 mod prefill_complete_layer_prefetch_tests;
@@ -61,7 +63,6 @@ mod prefill_partial_layer_read;
 mod prefill_partial_layer_read_tests;
 #[cfg(feature = "direct-mlx")]
 mod prefill_partial_page;
-#[cfg(feature = "direct-mlx")]
 pub(crate) mod reply_expert_residency;
 mod request_expert_storage_read_tally;
 #[cfg(feature = "direct-mlx")]
@@ -93,6 +94,8 @@ mod resident_layer_accounting;
 mod route_id_materialization;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod route_observation;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod routed_reply_recording;
 #[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
 pub(crate) mod streaming_model;

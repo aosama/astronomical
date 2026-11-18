@@ -87,3 +87,73 @@ fn should_refuse_layers_too_large_for_one_byte_per_expert() {
         })
     );
 }
+
+#[test]
+fn should_write_routes_it_was_built_from_and_read_them_back_unchanged() {
+    let token_routes = vec![
+        vec![vec![0, 255], vec![7, 9]],
+        vec![vec![3, 4], vec![255, 0]],
+        vec![vec![1, 2], vec![5, 6]],
+    ];
+
+    let routed_reply =
+        RoutedReply::from_token_routes(256, &token_routes).expect("even routes build");
+    let read_back = RoutedReply::from_recording_bytes(&routed_reply.to_recording_bytes())
+        .expect("its own bytes decode");
+
+    assert_eq!(read_back, routed_reply);
+    assert_eq!(read_back.token_count(), 3);
+    assert_eq!(read_back.layer_count(), 2);
+    assert_eq!(read_back.experts_per_token(), 2);
+    assert_eq!(read_back.layer_route(1, 1), &[255, 0]);
+}
+
+#[test]
+fn should_build_an_empty_recording_from_no_tokens() {
+    let routed_reply = RoutedReply::from_token_routes(256, &[]).expect("no tokens build");
+
+    assert_eq!(routed_reply.token_count(), 0);
+    assert_eq!(
+        RoutedReply::from_recording_bytes(&routed_reply.to_recording_bytes()),
+        Ok(routed_reply)
+    );
+}
+
+#[test]
+fn should_refuse_a_layer_that_routes_to_a_different_number_of_experts() {
+    let token_routes = vec![vec![vec![0, 1], vec![2, 3]], vec![vec![0, 1], vec![2]]];
+
+    assert_eq!(
+        RoutedReply::from_token_routes(256, &token_routes),
+        Err(RoutedReplyDecodeError::UnevenRoute {
+            token_index: 1,
+            layer_index: 1,
+            expected_expert_count: 2,
+            actual_expert_count: 1,
+        })
+    );
+}
+
+#[test]
+fn should_refuse_a_layer_missing_from_a_later_token() {
+    let token_routes = vec![vec![vec![0], vec![1]], vec![vec![0]]];
+
+    assert!(matches!(
+        RoutedReply::from_token_routes(256, &token_routes),
+        Err(RoutedReplyDecodeError::UnevenRoute {
+            token_index: 1,
+            layer_index: 1,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn should_refuse_to_build_routes_naming_an_expert_beyond_the_layer() {
+    let token_routes = vec![vec![vec![0, 8]]];
+
+    assert!(matches!(
+        RoutedReply::from_token_routes(8, &token_routes),
+        Err(RoutedReplyDecodeError::ExpertBeyondLayer { expert_id: 8, .. })
+    ));
+}

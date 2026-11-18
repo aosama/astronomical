@@ -121,10 +121,7 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_forward(
 /// admitted gigabytes more. Every completed reply step re-sizes here.
 fn resize_hot_expert_tables_to_the_capacity(model: &Qwen3_5Model) {
     let hot_expert_warm_slot_count =
-        crate::qwen3_5_streaming::model::reply_expert_residency::decode_warm_slot_count(
-            model,
-            model.astro_expert_cache_statistics(),
-        );
+        crate::qwen3_5_streaming::model::reply_expert_residency::decode_warm_slot_count(model);
     if hot_expert_warm_slot_count != model.hot_expert_warm_slot_count() {
         model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
     }

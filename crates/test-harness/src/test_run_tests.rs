@@ -46,6 +46,30 @@ fn should_accept_the_largest_representable_whole_gigabyte_limit() {
 }
 
 #[test]
+fn should_take_a_limit_in_megabytes_over_the_one_in_gigabytes() {
+    let experiment = PagingExperimentCase {
+        maximum_mlx_memory_gigabytes: 32,
+        maximum_mlx_memory_megabytes: Some(18_022),
+        ..PagingExperimentCase::default()
+    };
+    assert_eq!(
+        experiment.maximum_mlx_memory_bytes(),
+        Ok(18_022 * (1 << 20))
+    );
+}
+
+#[test]
+fn should_reject_zero_or_overflowing_limits_in_megabytes() {
+    for maximum_mlx_memory_megabytes in [0, u64::MAX / (1 << 20) + 1] {
+        let experiment = PagingExperimentCase {
+            maximum_mlx_memory_megabytes: Some(maximum_mlx_memory_megabytes),
+            ..PagingExperimentCase::default()
+        };
+        assert!(experiment.maximum_mlx_memory_bytes().is_err());
+    }
+}
+
+#[test]
 fn should_reject_zero_experiment_token_counts_and_layer_intervals() {
     let invalid_experiments = [
         PagingExperimentCase {

@@ -62,7 +62,14 @@ fn should_carry_the_readings_and_each_token_storage_reads_into_the_reply_memory_
     let mut route_record =
         crate::memory::reply_expert_route_record::ReplyExpertRouteRecord::default();
     for (memory_served_route_count, storage_read_route_count) in [(377, 7), (384, 0), (382, 2)] {
-        route_record.record_token(memory_served_route_count, storage_read_route_count);
+        route_record.record_token(
+            crate::memory::reply_expert_route_record::SessionExpertRouteSample {
+                memory_served_expert_count: memory_served_route_count,
+                storage_read_expert_count: storage_read_route_count,
+                decode_storage_read_bytes: storage_read_route_count * MEBIBYTE,
+                decode_storage_read_wait_nanoseconds: storage_read_route_count * 1_000,
+            },
+        );
     }
 
     let reply_memory_record = reply_record.reply_memory_record(route_record);
@@ -72,6 +79,10 @@ fn should_carry_the_readings_and_each_token_storage_reads_into_the_reply_memory_
         vec![7, 0, 2]
     );
     assert_eq!(reply_memory_record.routed_expert_count_per_token, 384);
+    assert_eq!(reply_memory_record.expert_hit_count, 1_143);
+    assert_eq!(reply_memory_record.expert_miss_count, 9);
+    assert_eq!(reply_memory_record.storage_read_bytes, 9 * MEBIBYTE);
+    assert_eq!(reply_memory_record.storage_read_wait_nanoseconds, 9_000);
     assert_eq!(reply_memory_record.mlx_buffer_cache_sampled_token_count, 3);
     assert_eq!(reply_memory_record.mlx_buffer_cache_empty_token_count, 1);
     assert_eq!(reply_memory_record.smallest_mlx_buffer_cache_bytes, 0);

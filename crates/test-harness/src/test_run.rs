@@ -9,11 +9,16 @@ use serde::{Deserialize, Serialize};
 
 pub const TEST_RUN_CONTEXT_FILE_NAME: &str = "astronomical-test-run.json";
 const BYTES_PER_GIGABYTE: u64 = 1 << 30;
+const BYTES_PER_MEGABYTE: u64 = 1 << 20;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PagingExperimentCase {
     pub maximum_mlx_memory_gigabytes: u64,
+    /// A limit finer than whole gigabytes, in megabytes of 2^20 bytes; when
+    /// set it replaces `maximum_mlx_memory_gigabytes`. Half of a 35.15 GB
+    /// model is 17.6 GB, 18,022 megabytes.
+    pub maximum_mlx_memory_megabytes: Option<u64>,
     pub streaming_prompt_processing_chunk_tokens: u32,
     pub generation_graph_submission_layer_interval: u32,
 }
@@ -22,6 +27,7 @@ impl Default for PagingExperimentCase {
     fn default() -> Self {
         Self {
             maximum_mlx_memory_gigabytes: 32,
+            maximum_mlx_memory_megabytes: None,
             streaming_prompt_processing_chunk_tokens: 2_048,
             generation_graph_submission_layer_interval: 1,
         }
@@ -30,12 +36,18 @@ impl Default for PagingExperimentCase {
 
 impl PagingExperimentCase {
     pub fn maximum_mlx_memory_bytes(&self) -> Result<u64, String> {
-        if self.maximum_mlx_memory_gigabytes == 0 {
-            return Err("paging experiment memory must be at least one gigabyte".to_owned());
+        let (limit_units, bytes_per_unit) = self.limit_in_units();
+        limit_bytes(limit_units, bytes_per_unit)
+    }
+
+    /// The limit and its unit: megabytes when set, otherwise gigabytes.
+    fn limit_in_units(&self) -> (u64, u64) {
+        match self.maximum_mlx_memory_megabytes {
+            Some(maximum_mlx_memory_megabytes) => {
+                (maximum_mlx_memory_megabytes, BYTES_PER_MEGABYTE)
+            }
+            None => (self.maximum_mlx_memory_gigabytes, BYTES_PER_GIGABYTE),
         }
-        self.maximum_mlx_memory_gigabytes
-            .checked_mul(BYTES_PER_GIGABYTE)
-            .ok_or_else(|| "paging experiment memory exceeds the byte-count range".to_owned())
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -234,3 +246,13 @@ impl TestRunContext {
 #[cfg(test)]
 #[path = "test_run_tests.rs"]
 mod test_run_tests;
+
+/// `limit_units` of `bytes_per_unit` as bytes, refusing zero and overflow.
+fn limit_bytes(limit_units: u64, bytes_per_unit: u64) -> Result<u64, String> {
+    if limit_units == 0 {
+        return Err("paging experiment memory must not be zero".to_owned());
+    }
+    limit_units
+        .checked_mul(bytes_per_unit)
+        .ok_or_else(|| "paging experiment memory exceeds the byte-count range".to_owned())
+}

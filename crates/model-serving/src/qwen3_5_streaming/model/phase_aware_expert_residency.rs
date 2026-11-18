@@ -189,7 +189,7 @@ impl Qwen3_5StreamingModel {
 
     /// What the astro expert cache holds of each layer now, for decisions that compare a
     /// layer's state with it.
-    pub(super) fn current_expert_layer_residencies(&self) -> Vec<CurrentExpertLayerResidency> {
+    pub(crate) fn current_expert_layer_residencies(&self) -> Vec<CurrentExpertLayerResidency> {
         let (Some(expert_pager), Some(astro_expert_cache)) =
             (self.expert_pager.as_ref(), self.astro_expert_cache.as_ref())
         else {

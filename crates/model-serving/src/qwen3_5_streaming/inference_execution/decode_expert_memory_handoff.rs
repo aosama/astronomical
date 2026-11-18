@@ -58,6 +58,7 @@ impl Qwen3_5EngineState {
             total_layer_count = preparation.total_layer_count,
             resident_expert_count = preparation.resident_expert_count,
             resident_expert_payload_bytes = preparation.resident_expert_payload_bytes,
+            released_beyond_keep_count = preparation.released_beyond_keep_count,
             evicted_complete_layer_count = preparation.evicted_complete_layer_count,
             hot_expert_warm_slot_count = preparation.hot_expert_warm_slot_count,
             "expert retention prepared for the reply"

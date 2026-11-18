@@ -215,3 +215,73 @@ pub const fn minimum_decode_warm_slot_count(experts_per_token: usize) -> usize {
         experts_per_token.saturating_mul(2)
     }
 }
+
+/// How many experts each table must be able to hold before a reply keeps
+/// another layer whole. Replays of recorded replies under memory half the
+/// model's size and three quarters of it (issue #2338) put the fewest
+/// estimated milliseconds of misses and route stops per token where the
+/// layers not held whole get tables of about 80 to 110 experts: a whole
+/// layer saves one route stop per token, but the 256 experts it holds cut
+/// the misses of every table by more once the tables drop below that size.
+pub const DECODE_TABLE_TARGET_SLOT_COUNT: usize = 96;
+
+/// How many complete layers a reply keeps whole: the most it can while
+/// every other layer still gets a table of `DECODE_TABLE_TARGET_SLOT_COUNT`
+/// experts (or the whole layer, when that is smaller). Every layer stays
+/// whole when the capacity holds the whole model.
+#[must_use]
+pub fn decode_whole_layer_keep_count(
+    capacity_bytes: u64,
+    per_expert_payload_bytes: u64,
+    experts_per_layer: usize,
+    sparse_layer_count: usize,
+) -> usize {
+    if per_expert_payload_bytes == 0 || experts_per_layer == 0 {
+        return 0;
+    }
+    let capacity_experts =
+        usize::try_from(capacity_bytes / per_expert_payload_bytes).unwrap_or(usize::MAX);
+    if capacity_experts >= experts_per_layer.saturating_mul(sparse_layer_count) {
+        return sparse_layer_count;
+    }
+    let table_slot_count = DECODE_TABLE_TARGET_SLOT_COUNT.min(experts_per_layer);
+    let mut whole_layer_count = 0;
+    while whole_layer_count < sparse_layer_count {
+        let next_whole_layer_count = whole_layer_count + 1;
+        let experts_left = capacity_experts
+            .saturating_sub(next_whole_layer_count.saturating_mul(experts_per_layer));
+        let table_layer_count = sparse_layer_count - next_whole_layer_count;
+        if experts_left < table_slot_count.saturating_mul(table_layer_count) {
+            break;
+        }
+        whole_layer_count = next_whole_layer_count;
+    }
+    whole_layer_count
+}
+
+/// The complete layers a reply gives up so that only `keep_count` stay
+/// whole: the ones the requests routed to least go first.
+#[must_use]
+pub fn complete_layers_beyond_keep_count(
+    layer_residencies: &[CurrentExpertLayerResidency],
+    keep_count: usize,
+) -> Vec<usize> {
+    let mut complete_layer_residencies = Vec::new();
+    for layer_residency in layer_residencies {
+        if layer_residency.class == RetainedExpertPageClass::StableCompleteLayer {
+            complete_layer_residencies.push(layer_residency);
+        }
+    }
+    // Most demanded first; the ones past `keep_count` are given up.
+    complete_layer_residencies.sort_by_key(|layer_residency| {
+        (
+            std::cmp::Reverse(layer_residency.covered_weighted_demand),
+            layer_residency.layer_index,
+        )
+    });
+    let mut released_layer_indexes = Vec::new();
+    for layer_residency in complete_layer_residencies.into_iter().skip(keep_count) {
+        released_layer_indexes.push(layer_residency.layer_index);
+    }
+    released_layer_indexes
+}

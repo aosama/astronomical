@@ -31,6 +31,15 @@ pub enum RoutedReplyDecodeError {
         expected_bytes: usize,
         actual_bytes: usize,
     },
+    #[error(
+        "token {token_index} layer {layer_index} routes to {actual_expert_count} experts where the first layer of the first token routes to {expected_expert_count}"
+    )]
+    UnevenRoute {
+        token_index: usize,
+        layer_index: usize,
+        expected_expert_count: usize,
+        actual_expert_count: usize,
+    },
     #[error("token {token_index} layer {layer_index} names expert {expert_id}, beyond the layer")]
     ExpertBeyondLayer {
         token_index: usize,
@@ -94,6 +103,82 @@ impl RoutedReply {
         Ok(routed_reply)
     }
 
+    /// Builds a recording from routes taken out of an engine: for each token,
+    /// for each layer, the experts it routed to. Every layer of every token
+    /// must route to the same number of experts.
+    ///
+    /// # Errors
+    ///
+    /// Returns why the routes cannot form a recording: layers too large for
+    /// one byte per expert, a route of a different width, or an expert
+    /// beyond its layer.
+    pub fn from_token_routes(
+        experts_per_layer: u16,
+        token_routes: &[Vec<Vec<u16>>],
+    ) -> Result<Self, RoutedReplyDecodeError> {
+        if experts_per_layer > MAXIMUM_RECORDED_EXPERTS_PER_LAYER {
+            return Err(RoutedReplyDecodeError::TooManyExpertsPerLayer { experts_per_layer });
+        }
+        let layer_count = token_routes.first().map_or(0, Vec::len);
+        let experts_per_token = token_routes
+            .first()
+            .and_then(|layer_routes| layer_routes.first())
+            .map_or(0, Vec::len);
+        let mut routed_expert_ids =
+            Vec::with_capacity(token_routes.len() * layer_count * experts_per_token);
+        for (token_index, layer_routes) in token_routes.iter().enumerate() {
+            for layer_index in 0..layer_count {
+                let layer_route = layer_routes.get(layer_index).map_or(&[][..], Vec::as_slice);
+                if layer_route.len() != experts_per_token {
+                    return Err(RoutedReplyDecodeError::UnevenRoute {
+                        token_index,
+                        layer_index,
+                        expected_expert_count: experts_per_token,
+                        actual_expert_count: layer_route.len(),
+                    });
+                }
+                routed_expert_ids.extend_from_slice(layer_route);
+            }
+        }
+        let routed_reply = Self {
+            layer_count,
+            experts_per_token,
+            experts_per_layer,
+            routed_expert_ids,
+        };
+        routed_reply.require_every_expert_within_its_layer()?;
+        Ok(routed_reply)
+    }
+
+    /// The recording file's bytes, which `from_recording_bytes` reads back.
+    #[must_use]
+    pub fn to_recording_bytes(&self) -> Vec<u8> {
+        let mut recording_bytes = Vec::with_capacity(
+            RECORDING_MAGIC.len() + RECORDING_HEADER_FIELD_BYTES + self.routed_expert_ids.len(),
+        );
+        recording_bytes.extend_from_slice(RECORDING_MAGIC);
+        recording_bytes.extend_from_slice(&header_field_u16(self.layer_count).to_le_bytes());
+        recording_bytes.extend_from_slice(&header_field_u16(self.experts_per_token).to_le_bytes());
+        recording_bytes.extend_from_slice(&self.experts_per_layer.to_le_bytes());
+        recording_bytes.extend_from_slice(
+            &u32::try_from(self.token_count())
+                .unwrap_or(u32::MAX)
+                .to_le_bytes(),
+        );
+        for &expert_id in &self.routed_expert_ids {
+            // `require_every_expert_within_its_layer` bounds every identifier
+            // by a layer of at most 256 experts.
+            recording_bytes.push(u8::try_from(expert_id).unwrap_or(u8::MAX));
+        }
+        recording_bytes
+    }
+
+    /// How many experts every layer of every token routes to.
+    #[must_use]
+    pub const fn experts_per_token(&self) -> usize {
+        self.experts_per_token
+    }
+
     fn require_every_expert_within_its_layer(&self) -> Result<(), RoutedReplyDecodeError> {
         for token_index in 0..self.token_count() {
             for layer_index in 0..self.layer_count {
@@ -142,4 +227,8 @@ impl RoutedReply {
         let route_start = (token_index * self.layer_count + layer_index) * self.experts_per_token;
         &self.routed_expert_ids[route_start..route_start + self.experts_per_token]
     }
+}
+
+fn header_field_u16(header_value: usize) -> u16 {
+    u16::try_from(header_value).unwrap_or(u16::MAX)
 }
