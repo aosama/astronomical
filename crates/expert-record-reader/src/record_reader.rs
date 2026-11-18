@@ -46,6 +46,11 @@ struct NativeReader {
 unsafe extern "C" {
     fn astro_expert_record_reader_create(helper_thread_count: u32) -> *mut NativeReader;
     fn astro_expert_record_reader_destroy(reader: *mut NativeReader);
+    fn astro_expert_record_reader_keep_storage_awake(
+        reader: *mut NativeReader,
+        pause_microseconds: u32,
+        linger_milliseconds: u32,
+    );
     fn astro_expert_record_reader_read(
         reader: *mut NativeReader,
         reads: *const NativeRecordRead,
@@ -74,6 +79,25 @@ impl ExpertRecordReader {
             return Err(RecordReadError::ThreadsDidNotStart);
         }
         Ok(Self { native_reader })
+    }
+
+    /// Keeps storage awake between batches: while batches keep coming, a
+    /// thread of the reader's own reads one 16 KiB page every `pause` from
+    /// the file the last batch read, and stops by itself `linger` after the
+    /// last batch. A drive left alone for a millisecond answers its next
+    /// request more slowly, and a reply token's fetches are about that far
+    /// apart. A zero `linger` turns it off.
+    pub fn keep_storage_awake(&self, pause: std::time::Duration, linger: std::time::Duration) {
+        let pause_microseconds = u32::try_from(pause.as_micros()).unwrap_or(u32::MAX);
+        let linger_milliseconds = u32::try_from(linger.as_millis()).unwrap_or(u32::MAX);
+        // SAFETY: the handle is live for as long as `self` is.
+        unsafe {
+            astro_expert_record_reader_keep_storage_awake(
+                self.native_reader,
+                pause_microseconds,
+                linger_milliseconds,
+            );
+        }
     }
 
     /// Reads every record of the batch and returns when all have finished.

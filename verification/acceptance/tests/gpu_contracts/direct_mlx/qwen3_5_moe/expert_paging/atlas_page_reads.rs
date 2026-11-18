@@ -262,6 +262,8 @@ fn should_time_one_fetching_layer_stage_by_stage() {
 /// beyond: how a fetch's time grows with its size separates what each
 /// request to storage costs from what each byte costs.
 const FETCH_SIZE_SWEEP_EXPERT_COUNTS: [usize; 5] = [1, 2, 4, 8, 16];
+/// The swept size nearest a served fetch at the anchor (about 3.8 experts).
+const SERVED_FETCH_EXPERT_COUNT: usize = 4;
 
 #[test]
 #[ignore = "converts installed expert layers to an atlas and times the native reader at each fetch size"]
@@ -285,7 +287,39 @@ fn should_time_the_native_reader_at_each_fetch_size() {
             &probe.atlas,
             &planned_pages,
             &mut probe.residency_checker,
+            table_reads::FetchCondition::NeighbouringSlots,
         );
+        if fetch_expert_count != SERVED_FETCH_EXPERT_COUNT {
+            continue;
+        }
+        // At the size a served fetch has, the two things serving adds: slots
+        // spread over the table, and the sweep the cold probes run.
+        for fetch_condition in [
+            table_reads::FetchCondition::ScatteredSlots,
+            table_reads::FetchCondition::DuringEvictionSweep,
+            table_reads::FetchCondition::AfterAnIdleMillisecond,
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy,
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 0,
+            },
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 100,
+            },
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 250,
+            },
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 500,
+            },
+        ] {
+            table_reads::report_native_reader_fetch_time(
+                &probe.runtime,
+                &probe.atlas,
+                &planned_pages,
+                &mut probe.residency_checker,
+                fetch_condition,
+            );
+        }
     }
     assert!(
         probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,

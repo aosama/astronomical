@@ -308,6 +308,7 @@ impl ColdStageRun<'_> {
             planned_page,
             &mut self.tables,
             first_table_slot,
+            1,
             reads_per_record,
         ));
         if reads_per_record == 2 {

@@ -251,3 +251,84 @@ fn should_report_a_file_that_does_not_exist() {
     let missing_path = std::path::Path::new("/nonexistent/astronomical/expert-records");
     assert!(open_for_direct_reads(missing_path).is_err());
 }
+
+#[test]
+fn should_read_every_batch_while_keeping_storage_awake_without_a_pause() {
+    // With no pause the awake thread reads back to back. It must never hold
+    // up a batch on its way in: 400 batches then take milliseconds, where a
+    // thread that held its lock while reading made each one wait.
+    let file = numbered_block_file(8);
+    let reader = ExpertRecordReader::new(2).expect("the reader starts");
+    reader.keep_storage_awake(
+        std::time::Duration::ZERO,
+        std::time::Duration::from_millis(20),
+    );
+    let batches_started_at = std::time::Instant::now();
+    for batch_index in 0..400_usize {
+        let block_index = batch_index % 8;
+        let mut destination = vec![0xFF_u8; BLOCK_BYTES];
+        let mut record_reads = vec![RecordRead {
+            file: file.as_file().as_fd(),
+            file_offset: (block_index * BLOCK_BYTES) as u64,
+            destinations: vec![destination.as_mut_slice()],
+        }];
+        reader.read(&mut record_reads).expect("the batch reads");
+        drop(record_reads);
+        assert!(destination.iter().all(|byte| *byte == block_index as u8));
+    }
+    assert!(
+        batches_started_at.elapsed() < std::time::Duration::from_secs(2),
+        "batches waited on the awake thread: {:?}",
+        batches_started_at.elapsed()
+    );
+}
+
+#[test]
+fn should_follow_batches_from_one_file_to_another_while_keeping_storage_awake() {
+    let first_file = numbered_block_file(4);
+    let second_file = numbered_block_file(4);
+    let reader = ExpertRecordReader::new(1).expect("the reader starts");
+    reader.keep_storage_awake(
+        std::time::Duration::from_micros(50),
+        std::time::Duration::from_millis(5),
+    );
+    for batch_index in 0..200_usize {
+        let file = if batch_index % 2 == 0 {
+            &first_file
+        } else {
+            &second_file
+        };
+        let mut destination = vec![0xFF_u8; BLOCK_BYTES];
+        let mut record_reads = vec![RecordRead {
+            file: file.as_file().as_fd(),
+            file_offset: (2 * BLOCK_BYTES) as u64,
+            destinations: vec![destination.as_mut_slice()],
+        }];
+        reader.read(&mut record_reads).expect("the batch reads");
+        drop(record_reads);
+        assert!(destination.iter().all(|byte| *byte == 2));
+    }
+}
+
+#[test]
+fn should_stop_keeping_storage_awake_when_the_linger_is_zero() {
+    let file = numbered_block_file(2);
+    let reader = ExpertRecordReader::new(0).expect("the reader starts");
+    reader.keep_storage_awake(
+        std::time::Duration::from_micros(100),
+        std::time::Duration::from_millis(10),
+    );
+    reader.keep_storage_awake(
+        std::time::Duration::from_micros(100),
+        std::time::Duration::ZERO,
+    );
+    let mut destination = vec![0xFF_u8; BLOCK_BYTES];
+    let mut record_reads = vec![RecordRead {
+        file: file.as_file().as_fd(),
+        file_offset: 0,
+        destinations: vec![destination.as_mut_slice()],
+    }];
+    reader.read(&mut record_reads).expect("the batch reads");
+    drop(record_reads);
+    assert!(destination.iter().all(|byte| *byte == 0));
+}

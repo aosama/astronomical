@@ -30,6 +30,22 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpert
 /// with two parts and ten threads.
 const RECORD_READER_HELPER_THREAD_COUNT: u32 = 14;
 
+/// How often the reader touches storage between fetches, to keep it awake.
+/// A drive left alone for a millisecond answers its next request more
+/// slowly, and a reply token's fetches come about a millisecond apart.
+/// Measured on a four-expert fetch after an idle millisecond
+/// (`cargo measure-expert-fetch-size`): 0.81 ms left alone, 0.68 ms with one
+/// 16 KiB page read every 100 microseconds, 0.76 ms every 250 and 0.80 ms
+/// every 500, so the drive goes quiet after roughly 100 to 200 microseconds.
+/// The cost is one thread, mostly asleep, and about 100 MB a second of reads
+/// while a reply is fetching.
+const STORAGE_AWAKE_READ_PAUSE: std::time::Duration = std::time::Duration::from_micros(100);
+
+/// How long after the last fetch the reader goes on keeping storage awake: a
+/// few tokens' worth, so it runs through a reply and stops when the reply
+/// does.
+const STORAGE_AWAKE_LINGER: std::time::Duration = std::time::Duration::from_millis(20);
+
 /// Reads experts from a model's files into the storage of its tables.
 pub(crate) struct ExpertSlotStorageFiller {
     record_reader: ExpertRecordReader,
@@ -77,6 +93,7 @@ impl ExpertSlotStorageFiller {
             ExpertRecordReader::new(RECORD_READER_HELPER_THREAD_COUNT).map_err(|start_error| {
                 fill_error(format!("the record reader did not start: {start_error}"))
             })?;
+        record_reader.keep_storage_awake(STORAGE_AWAKE_READ_PAUSE, STORAGE_AWAKE_LINGER);
         Ok(Self {
             record_reader,
             source_files,

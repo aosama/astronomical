@@ -148,7 +148,10 @@ fn half_record_slot_index(atlas: &AtlasTestFile) -> usize {
 }
 
 /// The same read into the tables' storage through the native reader, each
-/// record as `reads_per_record` reads (1 or 2).
+/// record as `reads_per_record` reads (1 or 2). Page slot `n` goes to table
+/// slot `first_table_slot + n * table_slot_stride`: a stride of 1 fills
+/// neighbouring slots, a larger one scatters the page across the table as a
+/// served fetch does.
 pub(super) fn read_records_into_tables_with_native_reader(
     native_reader: &ExpertRecordReader,
     atlas: &AtlasTestFile,
@@ -156,6 +159,7 @@ pub(super) fn read_records_into_tables_with_native_reader(
     planned_page: &PlannedPage,
     tables: &mut [MlxArray],
     first_table_slot: usize,
+    table_slot_stride: usize,
     reads_per_record: usize,
 ) -> Duration {
     use std::os::fd::AsFd;
@@ -182,8 +186,9 @@ pub(super) fn read_records_into_tables_with_native_reader(
                 // inside its table's storage and no two destinations overlap.
                 destinations.push(unsafe {
                     std::slice::from_raw_parts_mut(
-                        table_storages[slot_index]
-                            .add((first_table_slot + page_slot) * slot_byte_count),
+                        table_storages[slot_index].add(
+                            (first_table_slot + page_slot * table_slot_stride) * slot_byte_count,
+                        ),
                         slot_byte_count,
                     )
                 });
@@ -273,8 +278,142 @@ pub(super) fn assert_tables_read_in_place_match_stock(
 }
 
 /// Most fetches timed at one size: enough for a steady median, few enough
-/// that five sizes finish in seconds.
+/// that every size and condition finishes in seconds.
 const FETCHES_TIMED_AT_ONE_SIZE: usize = 120;
+
+/// What surrounds a timed fetch besides its size.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum FetchCondition {
+    /// Neighbouring table slots, nothing else touching the file.
+    NeighbouringSlots,
+    /// Slots thirteen apart, as a table that has been evicting for a while
+    /// hands them out.
+    ScatteredSlots,
+    /// Neighbouring slots while a thread drops the file's pages from the
+    /// `macos_file_cache` every 10 ms, as the cold serving probes do to keep
+    /// a model's files out of that memory.
+    DuringEvictionSweep,
+    /// Neighbouring slots, each fetch after a millisecond in which the
+    /// reader does nothing: in a served token the forward computes for about
+    /// that long between one layer's fetch and the next, so the reader's
+    /// threads are asleep when the fetch arrives.
+    AfterAnIdleMillisecond,
+    /// The same idle millisecond while another thread keeps storage busy
+    /// with one 16 KiB direct read after another: if the idle millisecond
+    /// costs because storage itself went quiet, this takes the cost away.
+    AfterAnIdleMillisecondWithStorageKeptBusy,
+    /// The same idle millisecond with the reader itself keeping storage
+    /// awake, one page read every so many microseconds.
+    AfterAnIdleMillisecondWithReaderKeepingStorageAwake { pause_microseconds: u64 },
+}
+
+/// A thread that keeps one file's pages out of the `macos_file_cache` until
+/// it is dropped, the way the serving probes' sweep does.
+struct EvictionSweep {
+    should_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    sweeping_thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl EvictionSweep {
+    fn start(path: &std::path::Path) -> Self {
+        use std::os::fd::AsRawFd;
+        let file = std::fs::File::open(path).expect("the atlas opens for the sweep");
+        let mapping_length = file.metadata().expect("the atlas stats").len() as usize;
+        // SAFETY: a fresh read-only shared mapping of a live descriptor; the
+        // pages are never read through it.
+        let mapping_address = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                mapping_length,
+                libc::PROT_READ,
+                libc::MAP_SHARED,
+                file.as_raw_fd(),
+                0,
+            )
+        };
+        assert_ne!(
+            mapping_address,
+            libc::MAP_FAILED,
+            "the atlas maps for the sweep"
+        );
+        let mapping_address = mapping_address as usize;
+        let should_stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let thread_should_stop = std::sync::Arc::clone(&should_stop);
+        let sweeping_thread = std::thread::spawn(move || {
+            let _file = file;
+            while !thread_should_stop.load(std::sync::atomic::Ordering::Relaxed) {
+                // SAFETY: the address and length are exactly the live mapping.
+                unsafe {
+                    libc::msync(
+                        mapping_address as *mut libc::c_void,
+                        mapping_length,
+                        libc::MS_INVALIDATE,
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            // SAFETY: unmaps exactly the mapping made above, once.
+            unsafe {
+                libc::munmap(mapping_address as *mut libc::c_void, mapping_length);
+            }
+        });
+        Self {
+            should_stop,
+            sweeping_thread: Some(sweeping_thread),
+        }
+    }
+}
+
+/// A thread that reads one 16 KiB page straight from storage, over and over,
+/// until it is dropped, so storage never sees a quiet moment.
+struct StorageKeptBusy {
+    should_stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    reading_thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl StorageKeptBusy {
+    fn start(path: &std::path::Path) -> Self {
+        use std::os::unix::fs::FileExt;
+        let file = open_bypassing_macos_file_cache(path);
+        let file_page_count = file.metadata().expect("the atlas stats").len() / 16_384;
+        let should_stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let thread_should_stop = std::sync::Arc::clone(&should_stop);
+        let reading_thread = std::thread::spawn(move || {
+            let mut page = super::macos_file_cache_bypassing_io::PageAlignedBuffer::new(16_384);
+            let mut page_index = 0_u64;
+            while !thread_should_stop.load(std::sync::atomic::Ordering::Relaxed) {
+                // A different page each time, so no read is answered from
+                // anything but storage.
+                page_index = (page_index + 7_919) % file_page_count;
+                let _ = file.read_exact_at(page.bytes_mut(), page_index * 16_384);
+            }
+        });
+        Self {
+            should_stop,
+            reading_thread: Some(reading_thread),
+        }
+    }
+}
+
+impl Drop for StorageKeptBusy {
+    fn drop(&mut self) {
+        self.should_stop
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(reading_thread) = self.reading_thread.take() {
+            let _ = reading_thread.join();
+        }
+    }
+}
+
+impl Drop for EvictionSweep {
+    fn drop(&mut self) {
+        self.should_stop
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(sweeping_thread) = self.sweeping_thread.take() {
+            let _ = sweeping_thread.join();
+        }
+    }
+}
 
 /// Times the native reader filling table slots with `planned_pages` (all one
 /// size) that the `macos_file_cache` does not hold, and prints the median.
@@ -283,6 +422,7 @@ pub(super) fn report_native_reader_fetch_time(
     atlas: &AtlasTestFile,
     planned_pages: &[PlannedPage],
     residency_checker: &mut super::cold_page_plan::ResidencyChecker,
+    fetch_condition: FetchCondition,
 ) {
     let Some(first_page) = planned_pages.first() else {
         eprintln!("[fetch-size] no pages outside the macos_file_cache at this size");
@@ -293,6 +433,30 @@ pub(super) fn report_native_reader_fetch_time(
     let atlas_file = open_bypassing_macos_file_cache(&atlas.path);
     let native_reader = ExpertRecordReader::new(NATIVE_READER_HELPER_THREAD_COUNT)
         .expect("the native reader should start");
+    let table_slot_stride = match fetch_condition {
+        FetchCondition::ScatteredSlots => 13,
+        FetchCondition::NeighbouringSlots
+        | FetchCondition::DuringEvictionSweep
+        | FetchCondition::AfterAnIdleMillisecond
+        | FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy
+        | FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake { .. } => 1,
+    };
+    let _eviction_sweep = matches!(fetch_condition, FetchCondition::DuringEvictionSweep)
+        .then(|| EvictionSweep::start(&atlas.path));
+    if let FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+        pause_microseconds,
+    } = fetch_condition
+    {
+        native_reader.keep_storage_awake(
+            Duration::from_micros(pause_microseconds),
+            Duration::from_millis(20),
+        );
+    }
+    let _storage_kept_busy = matches!(
+        fetch_condition,
+        FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy
+    )
+    .then(|| StorageKeptBusy::start(&atlas.path));
     let mut fetch_milliseconds = Vec::with_capacity(FETCHES_TIMED_AT_ONE_SIZE);
     for planned_page in planned_pages {
         if fetch_milliseconds.len() == FETCHES_TIMED_AT_ONE_SIZE {
@@ -305,6 +469,14 @@ pub(super) fn report_native_reader_fetch_time(
         ) {
             continue;
         }
+        if matches!(
+            fetch_condition,
+            FetchCondition::AfterAnIdleMillisecond
+                | FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy
+                | FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake { .. }
+        ) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
         let fetch_elapsed = read_records_into_tables_with_native_reader(
             &native_reader,
             atlas,
@@ -312,6 +484,7 @@ pub(super) fn report_native_reader_fetch_time(
             planned_page,
             &mut tables,
             0,
+            table_slot_stride,
             2,
         );
         fetch_milliseconds.push(fetch_elapsed.as_secs_f64() * 1_000.0);
@@ -327,7 +500,7 @@ pub(super) fn report_native_reader_fetch_time(
     let fetch_megabytes =
         (atlas.record_byte_count * fetch_expert_count as u64) as f64 / 1_048_576.0;
     eprintln!(
-        "[fetch-size] {fetch_expert_count:>2} experts ({fetch_megabytes:5.1} MB): {median_milliseconds:.3} ms a fetch over {} fetches, {:.1} GB/s",
+        "[fetch-size] {fetch_expert_count:>2} experts ({fetch_megabytes:5.1} MB), {fetch_condition:?}: {median_milliseconds:.3} ms a fetch over {} fetches, {:.1} GB/s",
         fetch_milliseconds.len(),
         fetch_megabytes / 1024.0 / (median_milliseconds / 1_000.0),
     );

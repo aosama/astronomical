@@ -16,6 +16,8 @@
 
 #include <atomic>
 #include <cerrno>
+#include <chrono>
+#include <cstdlib>
 #include <condition_variable>
 #include <mutex>
 #include <new>
@@ -24,6 +26,16 @@
 #include <vector>
 
 namespace {
+
+// What the reader reads to keep storage awake: one page of the size macOS
+// reads directly, so the request goes to the drive and not to memory.
+constexpr size_t kAwakeReadBytes = 16384;
+
+int64_t monotonic_nanoseconds() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
 
 // The total bytes a read's destinations hold, which a complete preadv returns.
 ssize_t destination_byte_count(const astro_expert_record_read& read) {
@@ -80,6 +92,81 @@ struct astro_expert_record_reader {
     bool is_stopping = false;
 
     std::vector<std::thread> helper_threads;
+
+    // Keeping storage awake between batches. `awake_*` settings and the
+    // descriptor are written under awake_mutex; the thread sleeps on
+    // awake_wanted while no batch has come for longer than the linger.
+    std::mutex awake_mutex;
+    std::condition_variable awake_wanted;
+    std::thread awake_thread;
+    bool awake_thread_is_stopping = false;
+    uint32_t awake_pause_microseconds = 0;
+    int64_t awake_linger_nanoseconds = 0;
+    // A duplicate of the descriptor the last batch read from, so the thread
+    // never reads a descriptor its owner has since closed. Only the awake
+    // thread reads or closes it; a batch that reads another file leaves a
+    // new duplicate in `awake_next_file_descriptor` for the thread to adopt.
+    // The thread can then read without holding the lock, which a batch needs
+    // for a moment on its way in.
+    int awake_file_descriptor = -1;
+    int awake_next_file_descriptor = -1;
+    int awake_source_file_descriptor = -1;
+    int64_t awake_file_offset = 0;
+    std::atomic<int64_t> last_batch_nanoseconds{0};
+    void* awake_page = nullptr;
+
+    // Remembers where the batch read and wakes the thread that keeps storage
+    // awake. Called once for every batch.
+    void note_batch_for_keeping_awake(const astro_expert_record_read& first_read) {
+        last_batch_nanoseconds.store(monotonic_nanoseconds(), std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(awake_mutex);
+        if (awake_linger_nanoseconds == 0) {
+            return;
+        }
+        if (first_read.file_descriptor != awake_source_file_descriptor) {
+            if (awake_next_file_descriptor >= 0) {
+                close(awake_next_file_descriptor);
+            }
+            awake_next_file_descriptor = dup(first_read.file_descriptor);
+            awake_source_file_descriptor = first_read.file_descriptor;
+        }
+        awake_file_offset =
+            first_read.file_offset - (first_read.file_offset % static_cast<int64_t>(kAwakeReadBytes));
+        awake_wanted.notify_one();
+    }
+
+    void awake_loop() {
+        std::unique_lock<std::mutex> lock(awake_mutex);
+        for (;;) {
+            if (awake_next_file_descriptor >= 0) {
+                if (awake_file_descriptor >= 0) {
+                    close(awake_file_descriptor);
+                }
+                awake_file_descriptor = awake_next_file_descriptor;
+                awake_next_file_descriptor = -1;
+            }
+            const bool has_work =
+                awake_linger_nanoseconds != 0 && awake_file_descriptor >= 0 &&
+                monotonic_nanoseconds() - last_batch_nanoseconds.load(std::memory_order_relaxed) <=
+                    awake_linger_nanoseconds;
+            if (awake_thread_is_stopping) {
+                return;
+            }
+            if (!has_work) {
+                awake_wanted.wait(lock);
+                continue;
+            }
+            const int file_descriptor = awake_file_descriptor;
+            const int64_t file_offset = awake_file_offset;
+            const uint32_t pause_microseconds = awake_pause_microseconds;
+            lock.unlock();
+            (void)pread(file_descriptor, awake_page, kAwakeReadBytes, static_cast<off_t>(file_offset));
+            if (pause_microseconds > 0) {
+                std::this_thread::sleep_for(std::chrono::microseconds(pause_microseconds));
+            }
+            lock.lock();
+        }
+    }
 
     // Claims and runs reads until none is left.
     void run_claimed_reads(const astro_expert_record_read* batch_reads, size_t batch_read_count) {
@@ -149,6 +236,21 @@ void astro_expert_record_reader_destroy(astro_expert_record_reader* reader) {
         return;
     }
     {
+        std::lock_guard<std::mutex> lock(reader->awake_mutex);
+        reader->awake_thread_is_stopping = true;
+    }
+    reader->awake_wanted.notify_all();
+    if (reader->awake_thread.joinable()) {
+        reader->awake_thread.join();
+    }
+    if (reader->awake_file_descriptor >= 0) {
+        close(reader->awake_file_descriptor);
+    }
+    if (reader->awake_next_file_descriptor >= 0) {
+        close(reader->awake_next_file_descriptor);
+    }
+    std::free(reader->awake_page);
+    {
         std::lock_guard<std::mutex> lock(reader->batch_mutex);
         reader->is_stopping = true;
     }
@@ -157,6 +259,29 @@ void astro_expert_record_reader_destroy(astro_expert_record_reader* reader) {
         helper_thread.join();
     }
     delete reader;
+}
+
+void astro_expert_record_reader_keep_storage_awake(astro_expert_record_reader* reader,
+                                                   uint32_t pause_microseconds,
+                                                   uint32_t linger_milliseconds) {
+    if (reader == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(reader->awake_mutex);
+    if (reader->awake_page == nullptr &&
+        posix_memalign(&reader->awake_page, kAwakeReadBytes, kAwakeReadBytes) != 0) {
+        reader->awake_page = nullptr;
+        return;
+    }
+    reader->awake_pause_microseconds = pause_microseconds;
+    reader->awake_linger_nanoseconds = static_cast<int64_t>(linger_milliseconds) * 1000000;
+    if (linger_milliseconds > 0 && !reader->awake_thread.joinable()) {
+        try {
+            reader->awake_thread = std::thread(&astro_expert_record_reader::awake_loop, reader);
+        } catch (...) {
+            reader->awake_linger_nanoseconds = 0;
+        }
+    }
 }
 
 int32_t astro_expert_record_reader_read(astro_expert_record_reader* reader,
@@ -169,6 +294,7 @@ int32_t astro_expert_record_reader_read(astro_expert_record_reader* reader,
         return 0;
     }
     std::lock_guard<std::mutex> caller_lock(reader->caller_mutex);
+    reader->note_batch_for_keeping_awake(reads[0]);
     {
         std::lock_guard<std::mutex> lock(reader->batch_mutex);
         reader->reads = reads;

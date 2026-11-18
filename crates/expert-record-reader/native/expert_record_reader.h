@@ -35,6 +35,18 @@ astro_expert_record_reader* astro_expert_record_reader_create(uint32_t helper_th
 // Stops and joins the helper threads. No batch may be running.
 void astro_expert_record_reader_destroy(astro_expert_record_reader* reader);
 
+// Keeps storage awake between batches. A drive left alone for a millisecond
+// answers its next request more slowly: a fetch of four experts measured 0.81
+// ms after a quiet millisecond against 0.68 ms straight after another read,
+// and a reply token makes dozens of fetches about a millisecond apart. While
+// batches keep coming, a thread of the reader's own reads one 16 KiB page
+// every `pause_microseconds`, from the file the last batch read; it stops by
+// itself `linger_milliseconds` after the last batch. Off until this is
+// called; a linger of zero turns it off again.
+void astro_expert_record_reader_keep_storage_awake(astro_expert_record_reader* reader,
+                                                   uint32_t pause_microseconds,
+                                                   uint32_t linger_milliseconds);
+
 // Runs every read of the batch and returns when all have finished: 0 when
 // every read filled every destination, otherwise the errno of the first read
 // to fail (EIO for a read that ended before its destinations were full).
