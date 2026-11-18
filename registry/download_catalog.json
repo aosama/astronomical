@@ -212,6 +212,26 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision-astro-atlas-streaming",
+            "revision": "c6be440baef6467e8779eb6c3be542885033f733",
+            "summary": "The large Ornith that sees, laid out to stream from the SSD on Macs with less memory.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 37741506585,
+            "approximate_memory_bytes": 39069869406,
+            "minimum_memory_bytes": 4484842240,
+            "role": "chat",
+            "public": true,
+            "description": "The same model as Ornith-1.5-35B-A3B-MLX-8bit-vision, with every weight unchanged, stored so each expert can be read from the SSD in one step. Pick it when your Mac has less memory than the model: with 10 GB set aside it writes about 40% faster than the regular build. With enough memory to hold the whole model, both run the same.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 8-bit (affine, group 64), bf16 vision, Astro Atlas layout",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "black-forest-labs/FLUX.2-klein-4B",
             "revision": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
             "summary": "Turns a written description into a picture.",
