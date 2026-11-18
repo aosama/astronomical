@@ -21,8 +21,8 @@ use crate::qwen3_5_core::model::draft_tree_verification::{
 };
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DraftTreeOptions, DrafterContextStates, KeyedNoise, best_first_draft_tree,
-    draft_lattice, drafted_hidden_rows, tree_block_row_count,
+    DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
+    best_first_draft_tree, draft_lattice, drafted_hidden_rows, tree_block_row_count,
 };
 use crate::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
 use crate::speculative_decoding::tree_rows::TreeRows;
@@ -50,6 +50,12 @@ impl DraftSession {
             first_pending_position: 0,
             keyed_seed,
         }
+    }
+
+    /// Whether the drafter has nothing to condition on: no context kept
+    /// from earlier rounds and no target rows waiting to be absorbed.
+    fn has_no_target_rows_yet(&self) -> bool {
+        self.context_states.is_none() && self.pending_tap_rows.is_none()
     }
 
     /// Hands the drafter the target's taps (one [1, rows, hidden] array per
@@ -211,6 +217,16 @@ fn drafted_tree_rows(
 ) -> Result<TreeRows, Qwen3_5ExecutionError> {
     let runtime = model.runtime();
     let configuration = &draft_runtime.drafter_configuration;
+    if draft_session.has_no_target_rows_yet() {
+        // The drafter conditions on the target's taps, and a session whose
+        // prompt was read without collecting any has none. Its first round
+        // verifies the bonus token alone, which costs a plain step and
+        // leaves that row's taps for the next round to draft from.
+        return Ok(TreeRows::from_draft_tree(
+            round_request.bonus_token_id,
+            &DraftTree::default(),
+        ));
+    }
     let pending_tap_rows =
         draft_session
             .pending_tap_rows

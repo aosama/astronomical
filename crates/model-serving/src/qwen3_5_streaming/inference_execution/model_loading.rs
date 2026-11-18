@@ -150,6 +150,11 @@ impl Qwen3_5EngineState {
         self.persistent_visual_embedding_model_contract =
             persistent_visual_embedding_model_contract;
         self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
+        // Hosted before the payload below is read, so the drafter's bytes are
+        // in the figure the memory governor starts from.
+        let (mut model, mut model_loading_performance_attribution) =
+            (model, model_loading_performance_attribution);
+        self.host_speculative_draft_runtime(&mut model, &mut model_loading_performance_attribution);
         let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
         let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
         let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;

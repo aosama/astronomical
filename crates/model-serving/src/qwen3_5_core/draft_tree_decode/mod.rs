@@ -13,6 +13,7 @@
 //! too: each engine supplies only how a layer's feed-forward finds its
 //! weights (`DraftTreeTarget`) and how a round's tokens reach its caller.
 
+pub(crate) mod draft_request_state;
 pub mod draft_tree_round;
 pub mod draft_tree_size;
 pub mod drafter_discovery;

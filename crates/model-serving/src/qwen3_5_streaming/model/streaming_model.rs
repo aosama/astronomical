@@ -86,6 +86,10 @@ pub struct Qwen3_5StreamingModel {
     pub(crate) fused_jangtq2_gathered_projection_kernel: Option<
         astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
     >,
+    /// Bytes a DFlash2 drafter hosted beside this model keeps in memory for
+    /// as long as the model is loaded; zero without one. They never page, so
+    /// the memory governor counts them with the model's core weights.
+    pub(crate) hosted_drafter_payload_bytes: Cell<u64>,
 }
 
 impl std::ops::Deref for Qwen3_5StreamingModel {

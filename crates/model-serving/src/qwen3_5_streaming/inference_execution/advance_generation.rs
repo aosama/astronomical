@@ -102,6 +102,30 @@ impl Qwen3_5EngineState {
 
         let forced_thinking_transition_token_id =
             active_request.next_forced_thinking_transition_token_id()?;
+        match self.advance_drafting_session_if_active(
+            request_id,
+            active_request,
+            forced_thinking_transition_token_id,
+        )? {
+            Some(drafting_advance) => Ok(drafting_advance),
+            None => self.advance_classic_decode_step(
+                request_id,
+                active_request,
+                forced_thinking_transition_token_id,
+                final_prompt_index,
+            ),
+        }
+    }
+
+    /// One classic decode step: emits the current token and starts the
+    /// forward that produces its successor.
+    fn advance_classic_decode_step(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        forced_thinking_transition_token_id: Option<u32>,
+        final_prompt_index: usize,
+    ) -> Result<ActiveRequestAdvance, InferenceEngineError> {
         let mut first_decode_forward_started_at = None;
         let current_generated_token = self.current_generated_token_for_decode(
             request_id,
@@ -115,20 +139,8 @@ impl Qwen3_5EngineState {
             active_request,
             &current_generated_token,
         )?;
-        if let Some(model) = self.model.as_ref() {
-            self.warm_hot_experts_and_record_utilization(model, active_request);
-            model
-                .record_warm_insert_and_prefetch_statistics(
-                    &mut active_request.performance_attribution,
-                )
-                .map_err(InferenceEngineError::from)?;
-        }
-        if let Some(first_decode_forward_started_at) = first_decode_forward_started_at {
-            active_request.first_decode_forward_elapsed_millis = Some(
-                u64::try_from(first_decode_forward_started_at.elapsed().as_millis())
-                    .unwrap_or(u64::MAX),
-            );
-        }
+        self.warm_hot_experts_and_record_statistics(active_request)?;
+        record_first_decode_forward_elapsed(active_request, first_decode_forward_started_at);
         if let Some(completed_advance) =
             self.complete_generation_if_terminal(active_request, current_generated_token_id)?
         {
@@ -166,17 +178,11 @@ impl Qwen3_5EngineState {
 
         let generated_token_emission = match early_structured_emission.take() {
             Some(generated_token_emission) => generated_token_emission,
-            None => {
-                let model = self.model.as_ref().ok_or_else(|| {
-                    super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                })?;
-                self.build_generated_token_emission(
-                    model,
-                    active_request,
-                    current_generated_token_id,
-                    Some(&completed_forward_memory),
-                )?
-            }
+            None => self.emission_after_decode_forward(
+                active_request,
+                current_generated_token_id,
+                &completed_forward_memory,
+            )?,
         };
         if generated_token_emission.is_terminal {
             Ok(ActiveRequestAdvance::Complete(
@@ -190,6 +196,80 @@ impl Qwen3_5EngineState {
                 generated_token_emission.generated_token,
             ))
         }
+    }
+
+    /// The current token's emission, built once the forward for its
+    /// successor has been measured.
+    fn emission_after_decode_forward(
+        &mut self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        current_generated_token_id: u32,
+        completed_forward_memory: &CompletedForwardMemoryObservation,
+    ) -> Result<generated_token_emission::GeneratedTokenEmission, InferenceEngineError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        self.build_generated_token_emission(
+            model,
+            active_request,
+            current_generated_token_id,
+            Some(completed_forward_memory),
+        )
+    }
+
+    /// Warms the hot experts for the next step and records what the warming
+    /// and the prefetch did.
+    fn warm_hot_experts_and_record_statistics(
+        &self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+    ) -> Result<(), InferenceEngineError> {
+        let Some(model) = self.model.as_ref() else {
+            return Ok(());
+        };
+        self.warm_hot_experts_and_record_utilization(model, active_request);
+        model
+            .record_warm_insert_and_prefetch_statistics(&mut active_request.performance_attribution)
+            .map_err(InferenceEngineError::from)
+    }
+
+    /// A drafting session's advance, or `None` when this call belongs to the
+    /// classic path: the session does not draft, a forced thinking boundary
+    /// ends its drafting (a round cannot re-seed a forced token mid-tree, and
+    /// the classic path handles that boundary exactly), or nothing is pending
+    /// yet because the prompt was restored whole and its first token still
+    /// has to be decoded.
+    fn advance_drafting_session_if_active(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        forced_thinking_transition_token_id: Option<u32>,
+    ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
+        let draft_request_state = &mut active_request.engine_extension.draft_request_state;
+        if !draft_request_state.is_drafting() {
+            return Ok(None);
+        }
+        // Tokens a round already committed are in the target's state, so they
+        // are emitted before anything ends the drafting: dropping them would
+        // leave the reply missing tokens its own state holds. Only the
+        // uncommitted last pick may be discarded for a forced token.
+        let has_committed_tokens_to_emit = draft_request_state.emission_queue.len() > 1;
+        if forced_thinking_transition_token_id.is_some() && !has_committed_tokens_to_emit {
+            draft_request_state.stop_drafting();
+            tracing::info!(
+                request_id = request_id.value(),
+                suspension_reason = "forced_thinking_transition",
+                "drafting stops for the session's remainder"
+            );
+            return Ok(None);
+        }
+        if active_request.pending_generated_token.is_none()
+            && draft_request_state.emission_queue.is_empty()
+        {
+            return Ok(None);
+        }
+        self.advance_speculative_generation(request_id, active_request)
+            .map(Some)
     }
 
     /// Announces preparation the moment prompt work ends, then reconciles
@@ -478,6 +558,19 @@ impl Qwen3_5EngineState {
                 .unwrap_or(u64::MAX),
             );
         Ok((next_generated_token, completed_forward_memory))
+    }
+}
+
+/// Records how long the first decode forward took, when this step ran it.
+fn record_first_decode_forward_elapsed(
+    active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+    first_decode_forward_started_at: Option<Instant>,
+) {
+    if let Some(first_decode_forward_started_at) = first_decode_forward_started_at {
+        active_request.first_decode_forward_elapsed_millis = Some(
+            u64::try_from(first_decode_forward_started_at.elapsed().as_millis())
+                .unwrap_or(u64::MAX),
+        );
     }
 }
 

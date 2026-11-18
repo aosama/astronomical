@@ -184,6 +184,7 @@ impl Qwen3_5Model {
             probed_prompt_layer_mlx_working_buffers: std::cell::Cell::new(None),
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
+            hosted_drafter_payload_bytes: std::cell::Cell::new(0),
         })
     }
 }

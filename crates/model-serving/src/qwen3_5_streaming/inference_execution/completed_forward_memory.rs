@@ -37,6 +37,15 @@ pub(in crate::qwen3_5_streaming) struct MeasuredForward {
 }
 
 impl MeasuredForward {
+    /// One draft round's target pass over `row_count` tree rows while a
+    /// reply is written.
+    pub(in crate::qwen3_5_streaming) const fn reply_round(row_count: usize) -> Self {
+        Self {
+            memory_phase: MemoryPhase::Decode,
+            forward_token_count: row_count,
+        }
+    }
+
     /// A prompt forward over `forward_token_count` tokens.
     pub(in crate::qwen3_5_streaming) const fn prompt(forward_token_count: usize) -> Self {
         Self {
