@@ -174,6 +174,19 @@ impl Qwen3_5StreamingModel {
             .unwrap_or(ExpertLayerState::Kept)
     }
 
+    /// Whether every expert layer is in memory whole right now, so a step
+    /// that routes several rows a layer reads nothing from storage.
+    pub(crate) fn holds_every_expert_layer_whole(&self) -> bool {
+        let layer_count = self
+            .expert_pager
+            .as_ref()
+            .map_or(0, |expert_pager| expert_pager.layer_count());
+        astronomical_memory_policy::residency::holds_every_layer_whole(
+            &self.current_expert_layer_residencies(),
+            layer_count,
+        )
+    }
+
     /// What the astro expert cache holds of each layer now, for decisions that compare a
     /// layer's state with it.
     pub(crate) fn current_expert_layer_residencies(&self) -> Vec<CurrentExpertLayerResidency> {

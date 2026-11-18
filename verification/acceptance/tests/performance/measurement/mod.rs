@@ -1,4 +1,6 @@
 #[cfg(feature = "performance-measurement")]
+mod expert_row_cost;
+#[cfg(feature = "performance-measurement")]
 mod k_row_fused_projection_cost;
 #[cfg(feature = "performance-measurement")]
 mod k_row_verify_cost;

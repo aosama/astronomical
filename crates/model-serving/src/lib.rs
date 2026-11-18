@@ -602,10 +602,10 @@ pub use qwen3_5_streaming::{
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
-    DirectExpertFetchCounts, LayerProbeShape, Qwen3_5StreamingEngine, Qwen3_5StreamingModel,
-    Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
-    Qwen3_5StreamingTargetForwardOutput, RoutedReplyRecording,
-    safe_minimum_mlx_memory_ceiling_bytes,
+    DirectExpertFetchCounts, ExpertDispatchCounts, LayerProbeShape, Qwen3_5StreamingEngine,
+    Qwen3_5StreamingModel, Qwen3_5StreamingPromptProcessingChunkSizer,
+    Qwen3_5StreamingPromptProcessingChunkSizerError, Qwen3_5StreamingTargetForwardOutput,
+    RoutedReplyRecording, safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 #[cfg(feature = "direct-mlx")]

@@ -545,7 +545,7 @@ fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
                 .array_from_u32(&block_ids, &[1, block_row_count as i32])
                 .expect("the block builds");
             let mut context_states = DrafterContextStates::new(configuration, 0);
-            let target: &dyn DFlash2DraftTarget = &pair.target;
+            let target: &dyn DFlash2DraftTarget = pair.target.as_dflash2_draft_target();
             let hidden_rows = drafted_hidden_rows(
                 runtime,
                 &pair.drafter_weights,

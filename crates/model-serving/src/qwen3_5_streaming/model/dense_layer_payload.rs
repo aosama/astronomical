@@ -9,7 +9,10 @@ impl Qwen3_5Model {
     /// The text weight bytes in memory: the bound tensors less any dense
     /// decoder layers that are read per forward rather than kept.
     pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {
-        let bound_payload_bytes = self.base.resident_model_payload_byte_count();
+        let bound_payload_bytes = self
+            .base
+            .resident_model_payload_byte_count()
+            .saturating_add(self.hosted_drafter_payload_bytes.get());
         match &self.dense_layer_streamer {
             Some(dense_layer_streamer) => bound_payload_bytes
                 .saturating_sub(dense_layer_streamer.streamed_layer_payload_bytes()),

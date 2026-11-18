@@ -31,7 +31,7 @@ use astronomical_ipc_protocol::{
 };
 
 pub(crate) use crate::performance_throughput::completion::{
-    drive_completion, dump_worker_logging_directory,
+    drive_completion, dump_worker_logging_directory, print_worker_log_lines_containing,
     read_decode_astro_expert_cache_diagnostic_evidence, read_measured_completion, wait_until_idle,
 };
 
@@ -119,6 +119,9 @@ pub(crate) struct ThroughputJourney {
     /// Which prompt chunk size the worker serves with.
     pub(crate) prompt_chunking: PromptChunking,
     pub(crate) journey_timeout: Duration,
+    /// Worker log lines containing any of these are printed after the
+    /// journey, so its output shows the few lines that explain its speed.
+    pub(crate) explanatory_worker_log_markers: &'static [&'static str],
     /// The measured model's directory when the journey locates it itself
     /// (an environment-addressed pack); `None` resolves the model id through
     /// the Development configuration's model directories.
@@ -156,6 +159,7 @@ impl ThroughputJourney {
             attribution_enabled: false,
             prompt_chunking: PromptChunking::MeasurementLane,
             journey_timeout: JOURNEY_TIMEOUT,
+            explanatory_worker_log_markers: &[],
             model_directory: None,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
         }
@@ -255,6 +259,10 @@ pub(crate) async fn run_throughput_journey(
 ) -> ThroughputMeasurement {
     let machine_specs = MachineSpecs::capture().await;
     let outcome = measure_throughput(model_id, journey).await;
+    print_worker_log_lines_containing(
+        &outcome.logging_directory,
+        journey.explanatory_worker_log_markers,
+    );
     let measurement = outcome.measurement;
     let record = ThroughputRecord {
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
@@ -372,6 +380,7 @@ pub(crate) async fn measure_throughput(
         model_id,
         &model_directory,
         journey.attribution_enabled,
+        !journey.explanatory_worker_log_markers.is_empty(),
         journey.prompt_chunking,
     );
     apply_journey_overrides(&mut worker_startup_configuration, journey);

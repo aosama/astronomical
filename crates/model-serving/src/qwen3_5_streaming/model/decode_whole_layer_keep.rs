@@ -10,10 +10,8 @@
 //! the rest. `decode_whole_layer_keep_count` sets the number; the layers kept
 //! are the ones the requests routed to most.
 
-use astronomical_ipc_protocol::RequestId;
-
+use super::Qwen3_5Model;
 use crate::RetainedExpertPageClass;
-use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 /// How many complete layers this reply may keep whole under the capacity
 /// the memory governor gave the `astro_expert_cache`.
@@ -80,11 +78,9 @@ pub(super) fn cap_seating_to_whole_layer_keep_count(
 }
 
 /// Gives up the complete layers beyond the keep count, the least routed to
-/// first, so their room goes to the other layers' tables.
-pub(super) fn release_complete_layers_beyond_keep_count(
-    request_id: RequestId,
-    model: &Qwen3_5Model,
-) {
+/// first, so their room goes to the other layers' tables, and returns how
+/// many it gave up.
+pub(super) fn release_complete_layers_beyond_keep_count(model: &Qwen3_5Model) -> usize {
     let keep_count = whole_layer_keep_count(model);
     let layer_residencies = model.current_expert_layer_residencies();
     let released_layer_indexes =
@@ -95,14 +91,7 @@ pub(super) fn release_complete_layers_beyond_keep_count(
             released_layer_count += 1;
         }
     }
-    if released_layer_count > 0 {
-        tracing::info!(
-            request_id = request_id.value(),
-            keep_count,
-            released_layer_count,
-            "gave up complete layers beyond the reply's whole-layer keep count"
-        );
-    }
+    released_layer_count
 }
 
 fn held_whole_layer_count(model: &Qwen3_5Model) -> usize {

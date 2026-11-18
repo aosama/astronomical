@@ -49,7 +49,7 @@ pub use page_commit::{
 };
 pub use planner::plan_expert_residency;
 pub use promotion_on_raise::StreamingStartupResidencyFacts;
-pub use seated_layers::seated_complete_layer_count;
+pub use seated_layers::{holds_every_layer_whole, seated_complete_layer_count};
 pub use types::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerState, ExpertResidencyPlan,
     ExpertResidencyPlanError, RetainedExpertPageClass,

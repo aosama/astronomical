@@ -39,6 +39,16 @@ impl Qwen3_5ModelBase {
     /// is 0 for a model with none of that packing (an 8-bit or mixed build,
     /// or a mixture-of-experts model whose attention is not 4-bit), or `None`
     /// on a GPU without M5 matrix units, where nothing can convert.
+    /// Whether this worker's GPU runs the row-batched matrix-unit kernels
+    /// (M5 family), which a drafting session's tree kernels are built on.
+    pub fn runs_row_batched_matrix_unit_kernels(
+        &self,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> bool {
+        worker_process_kernel_capabilities(&self.runtime, performance_attribution)
+            .is_custom_kernel_supported(CustomMetalKernelFamily::ROW_BATCHED_MATMUL)
+    }
+
     pub fn convert_projections_to_register_order(
         &mut self,
         performance_attribution: &mut PerformanceAttribution,

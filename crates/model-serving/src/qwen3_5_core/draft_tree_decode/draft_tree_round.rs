@@ -15,10 +15,15 @@
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
-use crate::qwen3_5_resident::model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
+use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::draft_tree_verification::{
+    DraftTreeTarget, Qwen3_5DraftTreeVerification, TreePassOutcome, commit_draft_tree,
+    verify_draft_tree,
+};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::speculative_decoding::dflash2_drafter::{
-    DFlash2DraftTarget, DraftTreeOptions, DrafterContextStates, KeyedNoise, best_first_draft_tree,
-    draft_lattice, drafted_hidden_rows, tree_block_row_count,
+    DFlash2DraftTarget, DraftTree, DraftTreeOptions, DrafterContextStates, KeyedNoise,
+    best_first_draft_tree, draft_lattice, drafted_hidden_rows, tree_block_row_count,
 };
 use crate::speculative_decoding::keyed_sampling::{RequestKeyedNoise, keyed_sample};
 use crate::speculative_decoding::tree_rows::TreeRows;
@@ -48,6 +53,12 @@ impl DraftSession {
         }
     }
 
+    /// Whether the drafter has nothing to condition on: no context kept
+    /// from earlier rounds and no target rows waiting to be absorbed.
+    fn has_no_target_rows_yet(&self) -> bool {
+        self.context_states.is_none() && self.pending_tap_rows.is_none()
+    }
+
     /// Hands the drafter the target's taps (one [1, rows, hidden] array per
     /// tapped layer) for rows committed from `first_position` on. Rows the
     /// drafter's window will never show are dropped as they fall out of it:
@@ -55,7 +66,7 @@ impl DraftSession {
     /// tokens until the first round, for rows no drafter layer reads.
     pub fn append_tap_rows(
         &mut self,
-        model: &Qwen3_5ResidentModel,
+        model: &Qwen3_5ModelBase,
         context_row_limit: Option<i32>,
         layer_taps: &[MlxArray],
         first_position: i32,
@@ -90,7 +101,7 @@ impl DraftSession {
     /// produced them.
     pub fn evaluate_pending_tap_rows(
         &self,
-        model: &Qwen3_5ResidentModel,
+        model: &Qwen3_5ModelBase,
     ) -> Result<(), Qwen3_5ExecutionError> {
         if let Some(pending_tap_rows) = self.pending_tap_rows.as_ref() {
             model.runtime().evaluate_arrays(&[pending_tap_rows])?;
@@ -139,7 +150,7 @@ pub struct DraftTreeRoundOutcome {
 /// Runs one round and leaves `request_decoder_state` advanced over the
 /// bonus token and the kept drafts.
 pub fn run_draft_tree_round(
-    model: &Qwen3_5ResidentModel,
+    target: &impl DraftTreeTarget,
     request_decoder_state: &mut RequestDecoderStateStack,
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
@@ -150,19 +161,14 @@ pub fn run_draft_tree_round(
             description: "the context length exceeds the MLX int32 range",
         }
     })?;
+    let model = target.draft_tree_model_base();
     let tree_rows = drafted_tree_rows(model, draft_runtime, draft_session, round_request)?;
-    let tap_layer_ids = &draft_runtime.drafter_configuration.target_tap_layer_ids;
-    let verification = model.verify_draft_tree(
-        &tree_rows,
-        round_request.context_length_tokens,
+    let (verification, picks) = verified_tree_and_picks(
+        target,
         request_decoder_state,
-        tap_layer_ids,
-    )?;
-    let picks = target_picks(
-        model,
-        &verification.per_row_logits,
-        &tree_rows.positions(anchor_position),
-        round_request.target_token_choice,
+        &tree_rows,
+        round_request,
+        &draft_runtime.drafter_configuration.target_tap_layer_ids,
         draft_session.keyed_seed,
     )?;
     let kept = tree_rows.kept_chain(&picks);
@@ -186,7 +192,7 @@ pub fn run_draft_tree_round(
         &kept_taps,
         anchor_position,
     )?;
-    model.commit_draft_tree(request_decoder_state, verification, &kept.rows)?;
+    commit_draft_tree(model, request_decoder_state, verification, &kept.rows)?;
     Ok(DraftTreeRoundOutcome {
         emitted_token_ids,
         accepted_proposal_count: kept.rows.len() - 1,
@@ -195,16 +201,101 @@ pub fn run_draft_tree_round(
     })
 }
 
+/// Verifies `tree_rows` and reads the target's pick after every row.
+///
+/// A target that keeps part of its weights on storage first runs the pass
+/// assuming every routed weight is in memory, which spares it a wait at every
+/// layer it holds only part of. The assumption is checked in the same
+/// evaluation that produces the picks; when it was wrong the state returns
+/// to where the round started and the pass runs once more without it.
+fn verified_tree_and_picks(
+    target: &impl DraftTreeTarget,
+    request_decoder_state: &mut RequestDecoderStateStack,
+    tree_rows: &TreeRows,
+    round_request: &DraftTreeRoundRequest,
+    tap_layer_ids: &[i32],
+    keyed_seed: u64,
+) -> Result<(Qwen3_5DraftTreeVerification, Vec<u32>), Qwen3_5ExecutionError> {
+    let row_positions = tree_rows.positions(round_request.context_length_tokens as i32);
+    let mut state_before_optimistic_pass = if target.starts_tree_pass_optimistically() {
+        Some(request_decoder_state.checkpoint()?)
+    } else {
+        None
+    };
+    loop {
+        target.set_tree_pass_optimism(state_before_optimistic_pass.is_some());
+        let pass_result = one_tree_pass(
+            target,
+            request_decoder_state,
+            tree_rows,
+            round_request,
+            tap_layer_ids,
+            &row_positions,
+            keyed_seed,
+        );
+        target.set_tree_pass_optimism(false);
+        let (verification, picks) = pass_result?;
+        if let Some(picks) = picks {
+            return Ok((verification, picks));
+        }
+        let state_before_pass =
+            state_before_optimistic_pass
+                .take()
+                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "a tree pass run without assumptions reported missing weights",
+                })?;
+        request_decoder_state.restore_checkpoint(state_before_pass)?;
+    }
+}
+
+/// One pass over the tree: the verification, and the picks when the pass's
+/// results can be used.
+fn one_tree_pass(
+    target: &impl DraftTreeTarget,
+    request_decoder_state: &mut RequestDecoderStateStack,
+    tree_rows: &TreeRows,
+    round_request: &DraftTreeRoundRequest,
+    tap_layer_ids: &[i32],
+    row_positions: &[i32],
+    keyed_seed: u64,
+) -> Result<(Qwen3_5DraftTreeVerification, Option<Vec<u32>>), Qwen3_5ExecutionError> {
+    let verification = verify_draft_tree(
+        target,
+        tree_rows,
+        round_request.context_length_tokens,
+        request_decoder_state,
+        tap_layer_ids,
+    )?;
+    let picks = target_picks(
+        target,
+        &verification.per_row_logits,
+        row_positions,
+        round_request.target_token_choice,
+        keyed_seed,
+    )?;
+    Ok((verification, picks))
+}
+
 /// Drafts one block from the bonus token and searches its lattice: the
 /// tree's rows, the bonus first.
 fn drafted_tree_rows(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
     round_request: &DraftTreeRoundRequest,
 ) -> Result<TreeRows, Qwen3_5ExecutionError> {
     let runtime = model.runtime();
     let configuration = &draft_runtime.drafter_configuration;
+    if draft_session.has_no_target_rows_yet() {
+        // The drafter conditions on the target's taps, and a session whose
+        // prompt was read without collecting any has none. Its first round
+        // verifies the bonus token alone, which costs a plain step and
+        // leaves that row's taps for the next round to draft from.
+        return Ok(TreeRows::from_draft_tree(
+            round_request.bonus_token_id,
+            &DraftTree::default(),
+        ));
+    }
     let pending_tap_rows =
         draft_session
             .pending_tap_rows
@@ -279,14 +370,16 @@ fn drafted_tree_rows(
 }
 
 /// The target's pick after every row of `per_row_logits` [1, rows, V]: the
-/// argmax, or the keyed sample at the position after the row's own.
+/// argmax, or the keyed sample at the position after the row's own. `None`
+/// when evaluating the pass showed its results cannot be used.
 fn target_picks(
-    model: &Qwen3_5ResidentModel,
+    target: &impl DraftTreeTarget,
     per_row_logits: &MlxArray,
     row_positions: &[i32],
     target_token_choice: VerificationTokenChoice,
     keyed_seed: u64,
-) -> Result<Vec<u32>, Qwen3_5ExecutionError> {
+) -> Result<Option<Vec<u32>>, Qwen3_5ExecutionError> {
+    let model = target.draft_tree_model_base();
     let runtime = model.runtime();
     let (temperature_thousandths, top_k, top_p_thousandths) = match target_token_choice {
         VerificationTokenChoice::HighestLogit => {
@@ -294,8 +387,10 @@ fn target_picks(
                 &runtime.argmax_axis(per_row_logits, -1)?,
                 mlx_bridge::MlxDtype::UInt32,
             )?;
-            runtime.evaluate_arrays(&[&argmax])?;
-            return Ok(argmax.to_vec_u32()?);
+            if target.evaluate_tree_pass(&[&argmax])? == TreePassOutcome::MustRunAgain {
+                return Ok(None);
+            }
+            return Ok(Some(argmax.to_vec_u32()?));
         }
         VerificationTokenChoice::TopKTopP {
             temperature_thousandths,
@@ -311,7 +406,11 @@ fn target_picks(
             top_k,
         )
         .map_err(sampling_failure)?;
-    runtime.evaluate_arrays(&[&distribution_ids, &distribution_probabilities])?;
+    if target.evaluate_tree_pass(&[&distribution_ids, &distribution_probabilities])?
+        == TreePassOutcome::MustRunAgain
+    {
+        return Ok(None);
+    }
     let kept_ids = distribution_ids.to_vec_u32()?;
     let kept_probabilities = runtime.array_to_vec_f32(&distribution_probabilities)?;
     let kept_per_row = kept_ids.len() / row_positions.len();
@@ -330,7 +429,7 @@ fn target_picks(
         )?;
         picks.push(pick);
     }
-    Ok(picks)
+    Ok(Some(picks))
 }
 
 fn sampling_failure(sampling_error: crate::InferenceEngineError) -> Qwen3_5ExecutionError {

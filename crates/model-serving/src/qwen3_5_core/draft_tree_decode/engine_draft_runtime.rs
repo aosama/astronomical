@@ -1,6 +1,6 @@
 //! The engine-owned DFlash2 drafter runtime.
 //!
-//! One resident engine may host one drafter beside its target. Loading is
+//! One engine may host one drafter beside its target. Loading is
 //! permissive about absence (a library with no drafter runs the classic
 //! decode path) and strict about pairing: a drafter is used only when its
 //! configuration names this target's layer count, hidden width and
@@ -15,7 +15,7 @@ use std::path::Path;
 use astronomical_runtime_integration::MlxSafetensors;
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_resident::Qwen3_5ResidentModel;
+use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 use crate::speculative_decoding::dflash2_drafter::{
     DFlash2DrafterConfiguration, DFlash2DrafterWeights, DFlash2DrafterWeightsError,
     DraftTreeOptions, bind_drafter_weights,
@@ -39,12 +39,25 @@ pub struct Qwen3_5SpeculativeDraftRuntime {
     _drafter_checkpoint: MlxSafetensors,
 }
 
+/// What installing a drafter may do to its target's dense projections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DraftTargetProjections {
+    /// Convert every eligible projection into register order. Only for a
+    /// model whose weights are all in memory: the conversion releases the
+    /// loaded shard maps.
+    ConvertToRegisterOrder,
+    /// Leave every projection in MLX's layout. A streaming model reads
+    /// weights from its shard maps for as long as it runs, so they stay.
+    KeepLoadedLayout,
+}
+
 impl Qwen3_5SpeculativeDraftRuntime {
     /// Finds and loads the drafter for `model`, or `Ok(None)` when the
     /// library holds none that pairs with it, or this GPU cannot run the
-    /// register-ordered kernels a drafting session needs.
+    /// matrix-unit kernels a drafting session needs.
     pub fn load_for_target(
-        model: &mut Qwen3_5ResidentModel,
+        model: &mut Qwen3_5ModelBase,
+        target_projections: DraftTargetProjections,
         active_memory_limit_bytes: usize,
         target_model_directory: &Path,
         performance_attribution: &mut PerformanceAttribution,
@@ -61,7 +74,7 @@ impl Qwen3_5SpeculativeDraftRuntime {
         };
         ensure_memory_headroom_for_drafter(model, active_memory_limit_bytes, &drafter_directory)?;
         let Some(converted_projection_count) =
-            prepare_target_for_draft_trees(model, performance_attribution)?
+            prepare_target_for_draft_trees(model, target_projections, performance_attribution)?
         else {
             return Ok(None);
         };
@@ -72,7 +85,7 @@ impl Qwen3_5SpeculativeDraftRuntime {
             drafter_directory = %drafter_directory.display(),
             converted_projection_count,
             tree_node_budget = tree_options.node_budget,
-            "resident engine decode path: DFlash2 draft trees"
+            "engine decode path: DFlash2 draft trees"
         );
         Ok(Some(Self {
             drafter_configuration,
@@ -93,13 +106,19 @@ impl Qwen3_5SpeculativeDraftRuntime {
 /// or mixed build, or a mixture-of-experts model whose experts stay in MLX's
 /// layout for the gathered expert kernels and whose attention may be 8-bit.
 fn prepare_target_for_draft_trees(
-    model: &mut Qwen3_5ResidentModel,
+    model: &mut Qwen3_5ModelBase,
+    target_projections: DraftTargetProjections,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<usize>, Qwen3_5SpeculativeDraftLoadingError> {
-    let Some(converted_projection_count) = model
-        .convert_projections_to_register_order(performance_attribution)
-        .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?
-    else {
+    let converted_projection_count = match target_projections {
+        DraftTargetProjections::ConvertToRegisterOrder => model
+            .convert_projections_to_register_order(performance_attribution)
+            .map_err(Qwen3_5SpeculativeDraftLoadingError::Target)?,
+        DraftTargetProjections::KeepLoadedLayout => model
+            .runs_row_batched_matrix_unit_kernels(performance_attribution)
+            .then_some(0),
+    };
+    let Some(converted_projection_count) = converted_projection_count else {
         tracing::info!(
             "a paired DFlash2 drafter is installed, but this GPU cannot run the \
              register-ordered kernels drafting needs; decoding stays classic"
@@ -117,7 +136,7 @@ fn prepare_target_for_draft_trees(
 
 /// Binds the drafter's checkpoint and requantizes its linears for serving.
 fn load_drafter_weights(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     drafter_directory: &Path,
     drafter_configuration: &DFlash2DrafterConfiguration,
 ) -> Result<(DFlash2DrafterWeights, MlxSafetensors), Qwen3_5SpeculativeDraftLoadingError> {
@@ -147,7 +166,7 @@ fn load_drafter_weights(
 /// Refuses the drafter when the active limit cannot hold its weights plus
 /// headroom beside everything already resident.
 fn ensure_memory_headroom_for_drafter(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     active_memory_limit_bytes: usize,
     drafter_directory: &Path,
 ) -> Result<(), Qwen3_5SpeculativeDraftLoadingError> {

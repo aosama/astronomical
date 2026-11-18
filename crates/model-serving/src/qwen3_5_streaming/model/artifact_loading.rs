@@ -105,19 +105,16 @@ impl Qwen3_5Model {
             performance_attribution,
         )?;
         let (expert_pager, astro_expert_cache, sorted_expert_weighted_sum_kernel) =
-            match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
-                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
-                    &runtime,
-                    model_directory,
-                    &config,
-                    &shard_index,
-                    &tensor_inventory,
-                    expert_atlas.as_ref(),
-                    decode_astro_expert_cache_policy,
-                    performance_attribution,
-                )?,
-            };
+            streaming_expert_runtime_for_architecture(
+                &runtime,
+                model_directory,
+                &config,
+                &shard_index,
+                &tensor_inventory,
+                expert_atlas.as_ref(),
+                decode_astro_expert_cache_policy,
+                performance_attribution,
+            )?;
         let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
             &config,
             &chunking,
@@ -187,6 +184,8 @@ impl Qwen3_5Model {
             probed_prompt_layer_mlx_working_buffers: std::cell::Cell::new(None),
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
+            hosted_drafter_payload_bytes: std::cell::Cell::new(0),
+            expert_dispatch_tally: Default::default(),
         })
     }
 }
@@ -319,9 +318,36 @@ type StreamingExpertRuntimeTrio = (
     Option<MlxMetalKernel>,
 );
 
-/// Builds the streaming expert runtime for a sparse model. Mirrors the MoE
-/// branch of the inlined loader, including the warm-table seeding from the
-/// persisted `.coli_usage`-analog history.
+/// The streaming expert runtime a model's feed-forward architecture needs:
+/// none for a dense model, `load_streaming_expert_runtime` for a sparse one.
+#[allow(clippy::too_many_arguments)]
+fn streaming_expert_runtime_for_architecture(
+    runtime: &MlxRuntime,
+    model_directory: &Path,
+    config: &crate::Qwen3_5Config,
+    shard_index: &super::Qwen3_5ShardIndex,
+    tensor_inventory: &crate::TensorInventory,
+    expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
+    match config.feed_forward_architecture() {
+        Qwen3_5FeedForwardArchitecture::Dense => Ok((None, None, None)),
+        Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
+            runtime,
+            model_directory,
+            config,
+            shard_index,
+            tensor_inventory,
+            expert_atlas,
+            decode_astro_expert_cache_policy,
+            performance_attribution,
+        ),
+    }
+}
+
+/// Builds the streaming expert runtime for a sparse model, including the
+/// warm-table seeding from the persisted `.coli_usage`-analog history.
 #[allow(clippy::too_many_arguments)]
 fn load_streaming_expert_runtime(
     runtime: &MlxRuntime,

@@ -1,6 +1,7 @@
-//! The resident Qwen3.5 model as a DFlash2 drafter's target: the drafter
-//! borrows its embedding rows and output head, so it has no vocabulary of its
-//! own and its logits are the target's.
+//! A Qwen3.5 model as a DFlash2 drafter's target: the drafter borrows its
+//! embedding rows and output head, so it has no vocabulary of its own and its
+//! logits are the target's. Both live in the shared base, so a resident and a
+//! streaming model lend them the same way.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_bridge::{MlxArray, MlxDtype};
@@ -9,9 +10,9 @@ use crate::InferenceEngineError;
 use crate::gpu_token_sampling::sampling_distribution_rows;
 use crate::speculative_decoding::dflash2_drafter::DFlash2DraftTarget;
 
-use super::model::Qwen3_5ResidentModel;
+use super::Qwen3_5ModelBase;
 
-impl DFlash2DraftTarget for Qwen3_5ResidentModel {
+impl DFlash2DraftTarget for Qwen3_5ModelBase {
     fn embedded_rows(
         &self,
         _runtime: &MlxRuntime,
@@ -32,7 +33,14 @@ impl DFlash2DraftTarget for Qwen3_5ResidentModel {
     }
 }
 
-impl Qwen3_5ResidentModel {
+impl Qwen3_5ModelBase {
+    /// This model as the target a DFlash2 drafter borrows from. A resident
+    /// or streaming model reaches it through its base.
+    #[must_use]
+    pub fn as_dflash2_draft_target(&self) -> &dyn DFlash2DraftTarget {
+        self
+    }
+
     /// The distribution this engine's sampler draws each row of `logits`
     /// [1, rows, vocabulary] from, as each row's `top_k` token ids and their
     /// probabilities (every other token has probability zero), for
@@ -56,7 +64,7 @@ impl Qwen3_5ResidentModel {
 
 fn runtime_error(execution_error: impl std::fmt::Display) -> MlxRuntimeError {
     MlxRuntimeError::RuntimeOperation {
-        operation: "lend the resident target's rows to the DFlash2 drafter",
+        operation: "lend the target's rows to the DFlash2 drafter",
         description: execution_error.to_string(),
     }
 }

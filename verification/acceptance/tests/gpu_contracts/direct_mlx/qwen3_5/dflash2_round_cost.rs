@@ -215,7 +215,7 @@ fn time_drafting(
     let block = runtime
         .array_from_u32(&block_ids, &[1, configuration.block_size])
         .expect("block");
-    let target: &dyn DFlash2DraftTarget = &pair.target;
+    let target: &dyn DFlash2DraftTarget = pair.target.as_dflash2_draft_target();
     let started = Instant::now();
     let hidden = drafted_hidden_rows(
         runtime,

@@ -37,6 +37,15 @@ pub(in crate::qwen3_5_streaming) struct MeasuredForward {
 }
 
 impl MeasuredForward {
+    /// One draft round's target pass over `row_count` tree rows while a
+    /// reply is written.
+    pub(in crate::qwen3_5_streaming) const fn reply_round(row_count: usize) -> Self {
+        Self {
+            memory_phase: MemoryPhase::Decode,
+            forward_token_count: row_count,
+        }
+    }
+
     /// A prompt forward over `forward_token_count` tokens.
     pub(in crate::qwen3_5_streaming) const fn prompt(forward_token_count: usize) -> Self {
         Self {
@@ -112,7 +121,7 @@ pub(in crate::qwen3_5_streaming) fn measure_completed_forward(
 /// admitted gigabytes more. Every completed reply step re-sizes here.
 fn resize_hot_expert_tables_to_the_capacity(model: &Qwen3_5Model) {
     let hot_expert_warm_slot_count =
-        super::decode_expert_memory_handoff::decode_warm_slot_count(model);
+        crate::qwen3_5_streaming::model::reply_expert_residency::decode_warm_slot_count(model);
     if hot_expert_warm_slot_count != model.hot_expert_warm_slot_count() {
         model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
     }

@@ -6,8 +6,8 @@ mod completed_forward_memory;
 /// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
 mod decode_expert_memory_handoff;
 /// How many layers a reply keeps whole, and giving up the rest.
-mod decode_whole_layer_keep;
 mod decoder_state_reuse;
+mod draft_runtime_hosting;
 pub(crate) mod engine_request;
 pub(in crate::qwen3_5_streaming) mod forward_memory_baseline;
 pub(in crate::qwen3_5_streaming) mod generated_token_emission;
@@ -25,6 +25,7 @@ mod prefill_memory_recovery;
 mod prompt_prefill_errors;
 mod prompt_processing_chunk_sizer;
 mod request_memory_release;
+mod speculative_decode_advance;
 mod start_generation;
 mod test_controls;
 use std::path::PathBuf;
@@ -205,6 +206,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             maximum_position_count,
             hard_maximum_position_count,
             model: None,
+            speculative_draft_runtime: None,
             prompt_span_to_fail_once_for_tests: None,
             astro_ssd_prompt_cache_model_contract: None,
             persistent_visual_embedding_model_contract: None,
@@ -243,6 +245,10 @@ pub struct Qwen3_5InferenceExecution {
     /// above is advisory and advertised unchanged.
     hard_maximum_position_count: usize,
     pub(crate) model: Option<Qwen3_5Model>,
+    /// The DFlash2 drafter hosted beside the model; `None` without one.
+    pub(super) speculative_draft_runtime: Option<
+        crate::qwen3_5_core::draft_tree_decode::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime,
+    >,
     /// A span, as (layer, span), that the next layer-at-a-time prompt fails
     /// once on purpose; set only by a test.
     pub(super) prompt_span_to_fail_once_for_tests: Option<(usize, usize)>,

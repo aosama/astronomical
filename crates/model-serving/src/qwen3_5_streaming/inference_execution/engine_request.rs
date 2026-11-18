@@ -25,6 +25,10 @@ pub(crate) struct StreamingRequestExtension {
     /// Where each reply token found its routed experts.
     pub(in crate::qwen3_5_streaming) reply_expert_route_record:
         crate::memory::reply_expert_route_record::ReplyExpertRouteRecord,
+    /// Whether this session decodes in draft rounds, and the round tokens
+    /// that have not reached the caller yet.
+    pub(in crate::qwen3_5_streaming) draft_request_state:
+        crate::qwen3_5_core::draft_tree_decode::draft_request_state::DraftRequestState,
 }
 
 impl Qwen3_5EngineRequest {}

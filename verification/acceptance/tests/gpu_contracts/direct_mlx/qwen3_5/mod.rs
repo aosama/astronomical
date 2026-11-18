@@ -11,6 +11,7 @@ mod dflash2_kept_per_round;
 mod dflash2_round_cost;
 mod dflash2_row_exactness;
 mod dflash2_row_exactness_by_layer;
+mod dflash2_streaming_tree_verify;
 mod dflash2_tree_oracle;
 mod dflash2_tree_round_stages;
 mod dflash2_tree_rounds;

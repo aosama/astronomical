@@ -16,6 +16,18 @@ pub fn seated_complete_layer_count(current_residencies: &[CurrentExpertLayerResi
         .count()
 }
 
+/// Whether every one of a model's `layer_count` expert layers is resident as
+/// a complete layer right now. A step that routes several rows a layer (a
+/// draft round) then finds every expert in memory, and needs none of the
+/// working room a read from storage takes.
+#[must_use]
+pub fn holds_every_layer_whole(
+    current_residencies: &[CurrentExpertLayerResidency],
+    layer_count: usize,
+) -> bool {
+    layer_count > 0 && seated_complete_layer_count(current_residencies) == layer_count
+}
+
 #[cfg(test)]
 #[path = "seated_layers_tests.rs"]
 mod tests;

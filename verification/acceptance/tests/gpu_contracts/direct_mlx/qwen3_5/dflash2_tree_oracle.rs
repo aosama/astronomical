@@ -408,7 +408,7 @@ fn drafted_block(
     let block = runtime
         .array_from_u32(&block_ids, &[1, block_row_count as i32])
         .expect("the block builds");
-    let target: &dyn DFlash2DraftTarget = &pair.target;
+    let target: &dyn DFlash2DraftTarget = pair.target.as_dflash2_draft_target();
     let hidden = drafted_hidden_rows(
         runtime,
         &pair.drafter_weights,

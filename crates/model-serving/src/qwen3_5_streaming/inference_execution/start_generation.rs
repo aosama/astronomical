@@ -15,6 +15,7 @@ use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 use crate::astro_decoder_state_cache::AstroDecoderStateCacheLayout;
 use crate::astro_ssd_prompt_cache::block_causal_input::AstroSsdPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::draft_tree_decode::draft_request_state::DraftRequestState;
 use crate::qwen3_5_core::text::sampler;
 use crate::qwen3_5_streaming::model::request_refusal;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
@@ -497,6 +498,29 @@ impl Qwen3_5EngineState {
     /// builds the generation-start contract the caller observes. The
     /// performance attribution moves into the request here, exactly as the
     /// original single body did.
+    fn log_resolved_generation_session(
+        &self,
+        inference_request: &Qwen3_5InferenceRequest,
+        sampling_strategy: Qwen3_5SamplingStrategy,
+    ) {
+        let sampling_selects_highest_logit =
+            matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
+        let effective_temperature_thousandths = match sampling_strategy {
+            Qwen3_5SamplingStrategy::HighestLogit => 0,
+            Qwen3_5SamplingStrategy::TopKTopP {
+                temperature_thousandths,
+                ..
+            } => temperature_thousandths,
+        };
+        tracing::info!(
+            request_id = inference_request.request_id().value(),
+            astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some(),
+            sampling_selects_highest_logit,
+            effective_temperature_thousandths,
+            "resolved target-only generation request session"
+        );
+    }
+
     fn install_active_generation_request(
         &mut self,
         install_inputs: InstallActiveGenerationRequest<'_>,
@@ -518,22 +542,12 @@ impl Qwen3_5EngineState {
             image_pad_token_id,
             mut performance_attribution,
         } = install_inputs;
-        let sampling_selects_highest_logit =
-            matches!(sampling_strategy, Qwen3_5SamplingStrategy::HighestLogit);
-        let effective_temperature_thousandths = match sampling_strategy {
-            Qwen3_5SamplingStrategy::HighestLogit => 0,
-            Qwen3_5SamplingStrategy::TopKTopP {
-                temperature_thousandths,
-                ..
-            } => temperature_thousandths,
-        };
-        tracing::info!(
-            request_id = inference_request.request_id().value(),
-            astro_ssd_prompt_cache_is_available = self.astro_ssd_prompt_cache.is_some(),
-            sampling_selects_highest_logit,
-            effective_temperature_thousandths,
-            "resolved target-only generation request session"
+        let drafting_is_admitted = self.admits_drafting_for(
+            inference_request,
+            &sampling_strategy,
+            has_precomputed_visual_embeddings || has_processed_visual_images,
         );
+        self.log_resolved_generation_session(inference_request, sampling_strategy);
         performance_attribution.record_counter(
             PerformanceCounter::PromptTokenCount,
             u64::try_from(prompt_token_ids.len()).unwrap_or(u64::MAX),
@@ -589,6 +603,10 @@ impl Qwen3_5EngineState {
                 layer_at_a_time_prefill: None,
                 mlx_buffer_cache_reply_record: Default::default(),
                 reply_expert_route_record: Default::default(),
+                draft_request_state: DraftRequestState::for_new_request(
+                    drafting_is_admitted,
+                    sampling_strategy,
+                ),
             },
         });
         let restored_prompt_prefix_token_count =

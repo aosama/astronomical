@@ -75,6 +75,7 @@ impl Qwen3_5EngineState {
         // one-token-ahead successor and its rollback verdict before forwarding
         // feedback; neither belongs to the newly injected token sequence.
         active_request.pending_generated_token = None;
+        stop_drafting_for_injected_feedback(active_request);
         let final_input_token_position = input_token_ids.len() - 1;
         if final_input_token_position > 0 {
             self.prefill_injected_feedback_prefix(
@@ -221,6 +222,23 @@ fn project_injection_context_token_count(
         );
     }
     Ok(projected_context_tokens)
+}
+
+/// Injected tokens enter the target's state without the taps a drafter
+/// conditions on, so a drafting session decodes classically from here.
+fn stop_drafting_for_injected_feedback(
+    active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+) {
+    if active_request
+        .engine_extension
+        .draft_request_state
+        .stop_drafting()
+    {
+        tracing::info!(
+            suspension_reason = "feedback_injection",
+            "drafting stops for the session's remainder"
+        );
+    }
 }
 
 #[cfg(test)]
