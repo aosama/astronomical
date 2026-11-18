@@ -38,7 +38,9 @@ pub(crate) use metallib::{configure_metallib_path, configured_metallib_path};
 
 // Re-exported for the crate root: the device probe is part of the runtime's
 // public diagnostic surface even though it never needs a full MlxRuntime.
+pub use array_storage::evaluated_array_storage_mut;
 pub use device_info::maximum_recommended_gpu_working_set_size_bytes;
+mod array_storage;
 mod device_info;
 
 // The status-check helper and the poison-tolerant lock helper are shared by

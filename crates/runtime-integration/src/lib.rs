@@ -88,7 +88,7 @@ pub use mlx_runtime_types::{
 
 #[cfg(feature = "mlx")]
 pub use mlx_runtime::{
-    MlxRuntime, classify_mlx_error, compiled_metallib_path,
+    MlxRuntime, classify_mlx_error, compiled_metallib_path, evaluated_array_storage_mut,
     maximum_recommended_gpu_working_set_size_bytes, validate_metallib_path,
 };
 #[cfg(feature = "mlx")]

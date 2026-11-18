@@ -2,9 +2,11 @@
 //!
 //! # One token's journey through this dispatch
 //!
-//! The match below is the whole SSD-paging decision tree. Every outcome names
-//! the serving function it lands in, so a reader can trace any layer's forward
-//! from here without hunting across directories:
+//! This file and `miss_route_dispatch.rs` are the whole SSD-paging decision
+//! tree: outcomes 1 and 2 (a layer held whole) are served here, outcomes 3 to
+//! 5 (a layer not held whole) there. Every outcome names the serving function
+//! it lands in, so a reader can trace any layer's forward from here without
+//! hunting across directories:
 //!
 //! 1. **Seated complete layer, page multiplies without a transient decode** —
 //!    affine or bfloat16 pages for any chunk, codebook pages for a single
@@ -25,6 +27,9 @@
 //!    (`forward_moe_mixed_decode_route_with_performance_attribution` in
 //!    `mixed_decode_execution.rs`, built on
 //!    `astro_expert_cache_plus_streamed_page_route.rs`).
+//!    Before either single-token outcome, missing experts are read from
+//!    storage straight into the layer's table when it can take them
+//!    (`direct_expert_fetch.rs`); the route is then outcome 5.
 //! 5. **Single-token miss, fully warm** — the astro expert cache hit serves the
 //!    whole routed set from RAM (`hot_expert_partial_page` in
 //!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.
@@ -79,46 +84,15 @@ impl Qwen3_5Model {
             &selected_indices,
             performance_attribution.is_enabled(),
         );
-        // A seated complete layer whose page multiplies without a transient
-        // decode (affine or bfloat16 pages for any chunk, codebook pages for a
-        // decode token with the fused kernel) is served straight from the
-        // table with the route remapped on-device. No router indices reach
-        // the host and no routed-subset copy is gathered, so the forward keeps
-        // one graphics-processor wait instead of one per layer; at 40 layers
-        // the per-layer route copy cost decode about 20 ms per token. The
-        // route still feeds demand learning, deferred to the forward's single
-        // completion evaluation. Codebook pages that would decode the whole
-        // table fall through to the host-side route and decode only their
-        // routed union.
-        let decode_tokens_multiply_packed_pages =
-            self.fused_jangtq2_gathered_projection_kernel.is_some();
         if should_use_loaded_model_mode
-            && token_count > 1
-            && let Some(handled) = self.dispatch_complete_layer_page_in_hand(
+            && let Some(handled) = self.dispatch_without_host_route(
+                hidden_states,
+                mixture_of_experts_weights,
                 expert_pager,
                 layer_index,
                 token_count,
-                hidden_states,
-                mixture_of_experts_weights,
                 &selected_indices,
                 &selected_scores,
-                should_use_compiled_elementwise_graphs,
-                performance_attribution,
-            )?
-        {
-            return Ok(handled);
-        }
-        if should_use_loaded_model_mode
-            && self.astro_expert_cache.is_some()
-            && let Some(handled) = self.dispatch_table_page_without_host_route(
-                expert_pager,
-                layer_index,
-                token_count,
-                decode_tokens_multiply_packed_pages,
-                &selected_indices,
-                &selected_scores,
-                mixture_of_experts_weights,
-                hidden_states,
                 should_use_compiled_elementwise_graphs,
                 performance_attribution,
             )?
@@ -146,7 +120,7 @@ impl Qwen3_5Model {
                 expert_pager,
                 layer_index,
                 token_count,
-                decode_tokens_multiply_packed_pages,
+                self.fused_jangtq2_gathered_projection_kernel.is_some(),
                 &selected_indices,
                 &selected_scores,
                 selected_expert_ids,
@@ -172,6 +146,68 @@ impl Qwen3_5Model {
             should_use_compiled_elementwise_graphs,
             paged_execution_mode,
             sorted_unique_expert_ids.as_deref(),
+            performance_attribution,
+        )
+    }
+
+    /// The ways that keep the route on the graphics processor, so the
+    /// forward does not stop at this layer. `Ok(None)` when neither applies
+    /// and the route has to reach the host.
+    ///
+    /// A seated complete layer whose page multiplies without a transient
+    /// decode (affine or bfloat16 pages for any chunk, codebook pages for a
+    /// decode token with the fused kernel) is served straight from the
+    /// table with the route remapped on-device. No router indices reach
+    /// the host and no routed-subset copy is gathered, so the forward keeps
+    /// one graphics-processor wait instead of one per layer; at 40 layers
+    /// the per-layer route copy cost decode about 20 ms per token. The
+    /// route still feeds demand learning, deferred to the forward's single
+    /// completion evaluation. Codebook pages that would decode the whole
+    /// table fall through to the host-side route and decode only their
+    /// routed union.
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_without_host_route(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        token_count: i32,
+        selected_indices: &MlxArray,
+        selected_scores: &MlxArray,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+        if token_count > 1
+            && let Some(handled) = self.dispatch_complete_layer_page_in_hand(
+                expert_pager,
+                layer_index,
+                token_count,
+                hidden_states,
+                mixture_of_experts_weights,
+                selected_indices,
+                selected_scores,
+                should_use_compiled_elementwise_graphs,
+                performance_attribution,
+            )?
+        {
+            return Ok(Some(handled));
+        }
+        // A measurement that prices a route stop sends every layer on to the
+        // host, held whole or not.
+        if self.astro_expert_cache.is_none() || self.brings_every_route_to_the_host.get() {
+            return Ok(None);
+        }
+        self.dispatch_table_page_without_host_route(
+            expert_pager,
+            layer_index,
+            token_count,
+            self.fused_jangtq2_gathered_projection_kernel.is_some(),
+            selected_indices,
+            selected_scores,
+            mixture_of_experts_weights,
+            hidden_states,
+            should_use_compiled_elementwise_graphs,
             performance_attribution,
         )
     }
@@ -422,122 +458,6 @@ impl Qwen3_5Model {
             &packed_manifest,
             selected_indices,
             &complete_expert_ids,
-            selected_scores,
-            should_use_compiled_elementwise_graphs,
-            performance_attribution,
-        )
-    }
-
-    /// Serves a table miss: multi-token chunks stream the chunk's routed-expert
-    /// union; decode tokens classify warm-table coverage first (mixed, hot
-    /// `astro_expert_cache` hit, or cold stream).
-    #[allow(clippy::too_many_arguments)]
-    fn dispatch_miss_route(
-        &self,
-        expert_pager: &Qwen3_5ExpertPager,
-        layer_index: usize,
-        expert_capacity: usize,
-        token_count: i32,
-        selected_indices: &MlxArray,
-        selected_scores: &MlxArray,
-        selected_expert_ids: &[usize],
-        routed_expert_ids: &[usize],
-        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
-        hidden_states: &MlxArray,
-        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
-        should_use_compiled_elementwise_graphs: bool,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        performance_attribution.record_counter(
-            PerformanceCounter::RetainedRouteAssignmentMissCount,
-            u64::try_from(selected_expert_ids.len()).unwrap_or(u64::MAX),
-        );
-        let (packed_weights, packed_manifest) = if token_count > 1 {
-            // Multi-token chunks stream the chunk's routed-expert
-            // union, not the complete layer: the union is bounded
-            // by chunk tokens × experts per token, which for every
-            // chunk smaller than expert_capacity ÷ experts per
-            // token is a fraction of the complete layer's read and
-            // decode work. The union page stays operation-local
-            // (warm tables fill from decode tokens), and the
-            // forward admission reserves the same union bound
-            // (issue #1422).
-            self.stream_operation_local_routed_experts(
-                expert_pager,
-                layer_index,
-                token_count,
-                routed_expert_ids,
-                paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
-                performance_attribution,
-            )?
-        } else {
-            // Issue #373: classify warm-table coverage before
-            // dispatch. A fully warm route serves from retained
-            // RAM; a mixed route splits between the retained
-            // rows and a storage read of only the missing
-            // experts; a fully cold route streams the whole
-            // routed set. Classifying first keeps each of those
-            // costs measurable and picks the dispatch.
-            let route_coverage = self.record_decode_route_coverage(
-                layer_index,
-                routed_expert_ids,
-                performance_attribution,
-            );
-            if !route_coverage.retained_expert_ids.is_empty()
-                && !route_coverage.missing_expert_ids.is_empty()
-            {
-                // Mixed serving: serve the covered assignments from
-                // retained RAM and stream only the missing experts.
-                return self.forward_moe_mixed_decode_route_with_performance_attribution(
-                    hidden_states,
-                    mixture_of_experts_weights,
-                    expert_pager,
-                    layer_index,
-                    selected_indices,
-                    selected_scores,
-                    selected_expert_ids,
-                    &route_coverage,
-                    expert_capacity,
-                    paged_execution_mode,
-                    should_use_compiled_elementwise_graphs,
-                    performance_attribution,
-                );
-            }
-            if let Some((astro_expert_cache_weights, astro_expert_cache_manifest)) = self
-                .hot_expert_partial_page(
-                    layer_index,
-                    expert_capacity,
-                    routed_expert_ids,
-                    performance_attribution,
-                )
-            {
-                // astro expert cache hit: the warm table covers every
-                // routed expert of this token, so the routed set is
-                // served from retained RAM with no storage read
-                // (issue #372).
-                (astro_expert_cache_weights, astro_expert_cache_manifest)
-            } else {
-                self.stream_operation_local_routed_experts(
-                    expert_pager,
-                    layer_index,
-                    token_count,
-                    routed_expert_ids,
-                    paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
-                    performance_attribution,
-                )?
-            }
-        };
-        // The streamed page covers exactly the routed union, so
-        // the gather remap uses the routed expert ids in both the
-        // multi-token and decode paths. Complete-table full hits
-        // returned earlier with their own complete id set.
-        self.forward_moe_paged_with_performance_attribution(
-            hidden_states,
-            mixture_of_experts_weights,
-            &packed_weights,
-            &packed_manifest,
-            selected_indices,
-            routed_expert_ids,
             selected_scores,
             should_use_compiled_elementwise_graphs,
             performance_attribution,

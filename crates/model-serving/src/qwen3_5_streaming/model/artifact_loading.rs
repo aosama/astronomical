@@ -19,6 +19,7 @@ use crate::{ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution, Perfo
 
 use super::Qwen3_5Model;
 use super::Qwen3_5ModelBase;
+use super::direct_expert_fetch::DirectExpertFetching;
 use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
@@ -167,9 +168,11 @@ impl Qwen3_5Model {
                 key_normalization_scale_weight,
                 layer_additions: RefCell::new(None),
             },
+            direct_expert_fetching: DirectExpertFetching::open(expert_pager.as_ref()),
             expert_pager,
             dense_layer_streamer,
             astro_expert_cache,
+            brings_every_route_to_the_host: std::cell::Cell::new(false),
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
             prompt_expert_pages_in_hand: Default::default(),

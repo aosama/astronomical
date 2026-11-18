@@ -72,3 +72,29 @@ fn should_ignore_a_second_peer_install() {
     assert_eq!(first_peer_metrics.snapshot().read_call_count, 1);
     assert_eq!(second_peer_metrics.snapshot().read_call_count, 0);
 }
+
+#[test]
+fn should_add_a_batch_read_elsewhere_to_itself_and_its_peer() {
+    let session_metrics = Arc::new(PositionalFileReadMetrics::default());
+    let request_metrics = PositionalFileReadMetrics::default();
+    request_metrics.install_peer_read_metrics(Arc::clone(&session_metrics));
+    request_metrics.record_completed_batch(10, 4_096, std::time::Duration::from_micros(800));
+    request_metrics.record_completed_batch(2, 1_024, std::time::Duration::from_micros(300));
+    for snapshot in [request_metrics.snapshot(), session_metrics.snapshot()] {
+        assert_eq!(snapshot.read_call_count, 12);
+        assert_eq!(snapshot.read_byte_count, 5_120);
+        assert_eq!(snapshot.total_read_elapsed_nanoseconds, 1_100_000);
+        assert_eq!(snapshot.maximum_read_elapsed_nanoseconds, 800_000);
+        assert_eq!(snapshot.read_failure_count, 0);
+    }
+}
+
+#[test]
+fn should_record_an_empty_batch_as_nothing_read() {
+    let read_metrics = PositionalFileReadMetrics::default();
+    read_metrics.record_completed_batch(0, 0, std::time::Duration::ZERO);
+    let snapshot = read_metrics.snapshot();
+    assert_eq!(snapshot.read_call_count, 0);
+    assert_eq!(snapshot.read_byte_count, 0);
+    assert_eq!(snapshot.total_read_elapsed_nanoseconds, 0);
+}

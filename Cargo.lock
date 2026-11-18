@@ -46,6 +46,7 @@ dependencies = [
  "astronomical-daemon",
  "astronomical-decision-contract",
  "astronomical-decision-training",
+ "astronomical-expert-record-reader",
  "astronomical-inference-worker",
  "astronomical-ipc-protocol",
  "astronomical-lowercase-hex",
@@ -227,6 +228,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-expert-record-reader"
+version = "0.2.117"
+dependencies = [
+ "cc",
+ "libc",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "astronomical-inference-worker"
 version = "0.2.117"
 dependencies = [
@@ -310,6 +321,7 @@ dependencies = [
  "astronomical-decision-training",
  "astronomical-english-phonemes",
  "astronomical-expert-atlas",
+ "astronomical-expert-record-reader",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
  "astronomical-lowercase-hex",

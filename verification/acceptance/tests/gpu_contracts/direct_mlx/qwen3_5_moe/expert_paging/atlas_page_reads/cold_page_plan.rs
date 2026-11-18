@@ -97,11 +97,15 @@ pub(super) fn cold_stock_expert_ids_by_layer(
 }
 
 /// The `layer_count` model layers with the most cold experts, ascending.
+/// A layer with no cold expert is never chosen: its list is empty either
+/// because the `macos_file_cache` holds all of it or because the caller
+/// emptied it for having another record shape, and choosing it on a tie
+/// built an atlas of mismatched layers that failed far from the cause.
 pub(super) fn coldest_layer_indexes(
     cold_expert_ids_by_layer: &[Vec<usize>],
     layer_count: usize,
 ) -> Vec<usize> {
-    let mut layer_indexes_by_coldness: Vec<usize> = (0..cold_expert_ids_by_layer.len()).collect();
+    let mut layer_indexes_by_coldness = layer_indexes_with_cold_experts(cold_expert_ids_by_layer);
     layer_indexes_by_coldness.sort_by_key(|&layer_index| {
         (
             std::cmp::Reverse(cold_expert_ids_by_layer[layer_index].len()),
@@ -114,6 +118,22 @@ pub(super) fn coldest_layer_indexes(
         .collect();
     chosen_layer_indexes.sort_unstable();
     chosen_layer_indexes
+}
+
+/// The layers that still have an expert outside the `macos_file_cache`.
+fn layer_indexes_with_cold_experts(cold_expert_ids_by_layer: &[Vec<usize>]) -> Vec<usize> {
+    let mut layer_indexes = Vec::new();
+    for (layer_index, cold_expert_ids) in cold_expert_ids_by_layer.iter().enumerate() {
+        if !cold_expert_ids.is_empty() {
+            layer_indexes.push(layer_index);
+        }
+    }
+    assert!(
+        !layer_indexes.is_empty(),
+        "the macos_file_cache holds every expert page of the model, so there is nothing cold to read; \
+         run a cold probe on this model first (cargo measure-cold-decode-residency-attribution) to evict them"
+    );
+    layer_indexes
 }
 
 /// Disjoint pages of cold experts, interleaved across the atlas layers.

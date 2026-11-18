@@ -21,6 +21,7 @@ mod decode_astro_expert_cache_policy;
 mod demand_history;
 mod demand_phase;
 mod demand_recording;
+mod direct_fetch;
 mod flush;
 mod insert;
 mod insert_planning;
@@ -49,6 +50,9 @@ mod table_query_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod slot_writes_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod direct_fetch_tests;
 
 /// Warm-table coverage of one decode token's routed experts.
 #[derive(Debug, Eq, PartialEq)]
