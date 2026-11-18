@@ -36,7 +36,7 @@ pub struct Qwen3_5StreamingModel {
     /// Reads a reply token's missing experts from storage straight into the
     /// tables of the `astro_expert_cache`, and counts how often it could.
     pub(crate) direct_expert_fetching:
-        crate::qwen3_5_streaming::model::in_place_expert_fetch::DirectExpertFetching,
+        crate::qwen3_5_streaming::model::direct_expert_fetch::DirectExpertFetching,
     /// On only while a measurement prices a route stop: every layer then
     /// copies its route to the host even when its table holds the layer whole.
     pub(crate) brings_every_route_to_the_host: std::cell::Cell<bool>,

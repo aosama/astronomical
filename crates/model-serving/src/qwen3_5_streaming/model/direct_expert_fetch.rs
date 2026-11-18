@@ -1,7 +1,7 @@
 //! Serves a reply token's missing experts by reading them straight into the
 //! layer's table, when the table can take them.
 //!
-//! This is the model's side of `astro_expert_cache::in_place_fetch`: it
+//! This is the model's side of `astro_expert_cache::direct_fetch`: it
 //! decides whether the fetch applies to this layer and this token, hands the
 //! `astro_expert_cache` the reader and the layer's file layout, and records
 //! what was read. When it does not apply the caller serves the token the
@@ -65,8 +65,9 @@ impl Qwen3_5Model {
     /// returns `true` when the whole route can now be served from it.
     ///
     /// `false` leaves the token to the copying path: no reader, a layer the
-    /// reply's plan keeps nothing new on, no table yet, or no room for every
-    /// missing expert without evicting one this token uses.
+    /// reply's plan keeps nothing new on or whose tables have no slots, no
+    /// table yet, or no room for every missing expert without evicting one
+    /// this token uses.
     pub(super) fn fetch_decode_misses_into_table(
         &self,
         expert_pager: &Qwen3_5ExpertPager,

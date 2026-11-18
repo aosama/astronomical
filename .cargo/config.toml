@@ -594,8 +594,10 @@ measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomi
 # `drafter` folder first). Append --configuration PATH with model_directory
 # set to the target's folder (and throughput_history_path to keep the durable
 # history untouched). Run it once more on the same model without a drafter
-# for the plain side of the A/B; the decode rate says which path ran. About
-# two minutes.
+# for the plain side of the A/B; the decode rate says which path ran. Set
+# `paging_experiment.maximum_mlx_memory_gigabytes` in the configuration to
+# serve under a limit below the model's size, which measures the worker while
+# the model streams from storage. About two minutes.
 measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter dflash2_draft_tree --ignored"
 # The DFlash2 drafter against z-lab's own MLX reference: a tiny random
 # drafter run through dflash/model_mlx.py for two rounds (fixture and its

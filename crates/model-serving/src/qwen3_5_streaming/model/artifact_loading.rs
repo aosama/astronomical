@@ -19,7 +19,7 @@ use crate::{ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution, Perfo
 
 use super::Qwen3_5Model;
 use super::Qwen3_5ModelBase;
-use super::in_place_expert_fetch::DirectExpertFetching;
+use super::direct_expert_fetch::DirectExpertFetching;
 use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,

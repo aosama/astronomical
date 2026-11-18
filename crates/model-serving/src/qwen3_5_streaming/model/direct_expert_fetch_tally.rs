@@ -18,8 +18,8 @@ use std::time::Duration;
 pub(crate) enum DirectExpertFetchOutcome {
     /// Read from storage straight into the table.
     FetchedIntoTable,
-    /// The reply's plan keeps nothing on this layer, so it has no table to
-    /// read into.
+    /// The reply's plan keeps nothing on this layer, or tables have no
+    /// slots at all, so there is no table to read into.
     LayerKeepsNothing,
     /// The layer may keep experts, but its table could not take them: it
     /// does not exist yet, cannot grow or evict enough, or holds experts in

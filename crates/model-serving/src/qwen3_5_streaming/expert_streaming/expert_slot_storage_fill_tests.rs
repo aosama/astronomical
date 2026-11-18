@@ -16,12 +16,12 @@ use crate::expert_paging::{
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 
-const EXPERT_COUNT: usize = 4;
-const TABLE_SLOT_COUNT: usize = 3;
+pub(super) const EXPERT_COUNT: usize = 4;
+pub(super) const TABLE_SLOT_COUNT: usize = 3;
 /// uint32 words one expert holds in a weight, and in its scales or biases.
 const WEIGHT_WORDS: usize = 2;
 const SCALE_WORDS: usize = 1;
-const TENSOR_NAMES: [(&str, &str, usize); 9] = [
+pub(super) const TENSOR_NAMES: [(&str, &str, usize); 9] = [
     ("gate_proj", "weight", WEIGHT_WORDS),
     ("gate_proj", "scales", SCALE_WORDS),
     ("gate_proj", "biases", SCALE_WORDS),
@@ -34,7 +34,7 @@ const TENSOR_NAMES: [(&str, &str, usize); 9] = [
 ];
 const RECORD_BYTES: usize = 3 * (WEIGHT_WORDS + 2 * SCALE_WORDS) * 4;
 
-fn test_runtime() -> MlxRuntime {
+pub(super) fn test_runtime() -> MlxRuntime {
     MlxRuntime::initialize(
         MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
             .expect("the test memory limits should be valid"),
@@ -44,14 +44,14 @@ fn test_runtime() -> MlxRuntime {
 
 /// The word every element of one tensor of one expert holds, so a slot read
 /// back names the tensor and the expert it came from.
-fn tagged_word(tensor_index: usize, expert_id: usize) -> u32 {
+pub(super) fn tagged_word(tensor_index: usize, expert_id: usize) -> u32 {
     (0xA000 + tensor_index * 0x100 + expert_id) as u32
 }
 
 /// Where each tensor's slice of expert 0 starts and how far apart
 /// consecutive experts' slices are, for the two file layouts.
 #[derive(Clone, Copy)]
-enum FileLayout {
+pub(super) enum FileLayout {
     /// An expert's nine slices back to back, one record per expert.
     RecordsTogether,
     /// Each tensor's experts back to back, tensor after tensor.
@@ -72,7 +72,7 @@ fn tensor_placement(layout: FileLayout, tensor_index: usize) -> (u64, usize) {
     }
 }
 
-fn write_expert_file(layout: FileLayout) -> tempfile::NamedTempFile {
+pub(super) fn write_expert_file(layout: FileLayout) -> tempfile::NamedTempFile {
     let mut file_bytes = vec![0_u8; RECORD_BYTES * EXPERT_COUNT];
     for (tensor_index, (_, _, word_count)) in TENSOR_NAMES.iter().enumerate() {
         let (first_expert_offset, expert_stride_bytes) = tensor_placement(layout, tensor_index);
@@ -91,7 +91,7 @@ fn write_expert_file(layout: FileLayout) -> tempfile::NamedTempFile {
     file
 }
 
-fn layer_plan(layout: FileLayout, expert_file: &Path) -> QuantizedExpertLayerPlan {
+pub(super) fn layer_plan(layout: FileLayout, expert_file: &Path) -> QuantizedExpertLayerPlan {
     let mut tensor_sources = Vec::with_capacity(TENSOR_NAMES.len());
     for (tensor_index, (projection_name, parameter_name, word_count)) in
         TENSOR_NAMES.iter().enumerate()
@@ -157,7 +157,7 @@ fn zeroed_table(runtime: &MlxRuntime) -> Qwen3_5PagedExpertWeights {
 }
 
 /// Every table array's words, in `TENSOR_NAMES` order.
-fn table_words(table: &Qwen3_5PagedExpertWeights) -> Vec<Vec<u32>> {
+pub(super) fn table_words(table: &Qwen3_5PagedExpertWeights) -> Vec<Vec<u32>> {
     let mut words_by_tensor = Vec::with_capacity(TENSOR_NAMES.len());
     for projection in [
         &table.gate_projection,
