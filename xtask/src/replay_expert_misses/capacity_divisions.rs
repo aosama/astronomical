@@ -236,3 +236,55 @@ pub(crate) fn starting_from_demand(
         ..replay_case.clone()
     }
 }
+
+/// `whole_layer_count` of the layers held whole when the reply began stay
+/// whole (pinned, so their routes never stop), the ones the prompt demanded
+/// most; every other layer gets an equal table from what is left. This is
+/// the trade between misses and route stops the engine has to make.
+pub(crate) fn whole_layers_then_equal_tables(
+    saved_replay_case: &SavedReplayCase,
+    whole_layer_count: usize,
+) -> ReplayCase {
+    let replay_case = &saved_replay_case.replay_case;
+    let experts_per_layer = usize::from(replay_case.routed_reply.experts_per_layer());
+    let mut whole_candidates = Vec::new();
+    for (layer_index, held_expert_ids) in replay_case
+        .held_expert_ids_by_layer_at_start
+        .iter()
+        .enumerate()
+    {
+        if held_expert_ids.len() >= experts_per_layer {
+            let prompt_demand: u64 = saved_replay_case
+                .prompt_demand_by_layer
+                .get(layer_index)
+                .map_or(0, |layer_demand| layer_demand.iter().sum());
+            whole_candidates.push((std::cmp::Reverse(prompt_demand), layer_index));
+        }
+    }
+    whole_candidates.sort_unstable();
+    let pinned_layer_indexes: Vec<usize> = whole_candidates
+        .into_iter()
+        .take(whole_layer_count)
+        .map(|(_, layer_index)| layer_index)
+        .collect();
+    let layer_count = replay_case.routed_reply.layer_count();
+    let table_layer_count = layer_count - pinned_layer_indexes.len();
+    let table_slot_count = capacity_in_experts(replay_case)
+        .saturating_sub(pinned_layer_indexes.len() * experts_per_layer)
+        .checked_div(table_layer_count)
+        .unwrap_or(0)
+        .min(experts_per_layer);
+    let mut layer_slot_limits = vec![table_slot_count; layer_count];
+    let mut held_expert_ids_by_layer = vec![Vec::new(); layer_count];
+    for &layer_index in &pinned_layer_indexes {
+        layer_slot_limits[layer_index] = experts_per_layer;
+        held_expert_ids_by_layer[layer_index]
+            .clone_from(&replay_case.held_expert_ids_by_layer_at_start[layer_index]);
+    }
+    ReplayCase {
+        held_expert_ids_by_layer_at_start: held_expert_ids_by_layer,
+        layer_slot_limits: Some(layer_slot_limits),
+        pinned_layer_indexes,
+        ..replay_case.clone()
+    }
+}

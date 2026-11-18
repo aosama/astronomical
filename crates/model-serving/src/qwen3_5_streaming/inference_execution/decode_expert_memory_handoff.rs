@@ -56,10 +56,14 @@ impl Qwen3_5EngineState {
         // The warm floor must survive seating, so seating is capped to the
         // budget the floor leaves free BEFORE any layer streams: otherwise
         // the handoff streams complete layers it immediately evicts below.
-        let complete_layer_indexes_to_seat = cap_complete_layer_seating_to_decode_warm_floor(
-            model,
-            &planned_complete_layer_indexes_to_seat,
-        );
+        let complete_layer_indexes_to_seat =
+            super::decode_whole_layer_keep::cap_seating_to_whole_layer_keep_count(
+                model,
+                &cap_complete_layer_seating_to_decode_warm_floor(
+                    model,
+                    &planned_complete_layer_indexes_to_seat,
+                ),
+            );
         match model.seat_complete_layers_before_decode(
             &complete_layer_indexes_to_seat,
             &mut active_request.performance_attribution,
@@ -100,6 +104,9 @@ impl Qwen3_5EngineState {
         // tables were sized; enforce the distributed floor first so the slot
         // count below sees room that can warm every unseated layer (issue
         // #373's mixed serving depends on nonzero tables to matter at all).
+        super::decode_whole_layer_keep::release_complete_layers_beyond_keep_count(
+            request_id, model,
+        );
         enforce_decode_warm_slot_floor(
             request_id,
             model,
@@ -226,18 +233,34 @@ fn budget_affordable_slot_count(
     usize::try_from(affordable_slots).unwrap_or(usize::MAX)
 }
 
-/// What the astro expert cache may still take in: the capacity the memory governor set
-/// for the reply phase, less what the astro expert cache already keeps.
+/// The room the warm tables share: the capacity the memory governor set for
+/// the reply phase, less the layers held whole.
 ///
-/// Every sizing decision in this file reads the room through this one
-/// function, so they agree.
+/// The warm tables' own experts are not subtracted. This is re-read after
+/// every reply step to size the tables, and subtracting what the tables
+/// already held made each re-size shrink them toward the floor as they
+/// filled: replies at half the model's size kept every table at 16 experts
+/// and left about 0.6 GB of the capacity unused (issue #2338). Every sizing
+/// decision in this file reads the room through this one function, so they
+/// agree.
 fn decode_warm_budget_bytes(
     model: &Qwen3_5Model,
-    expert_statistics: crate::AstroExpertCacheStatistics,
+    _expert_statistics: crate::AstroExpertCacheStatistics,
 ) -> u64 {
     model
         .kept_expert_capacity_bytes()
-        .saturating_sub(expert_statistics.resident_payload_byte_count)
+        .saturating_sub(held_whole_layer_payload_bytes(model))
+}
+
+/// Payload bytes of the layers the `astro_expert_cache` holds whole.
+fn held_whole_layer_payload_bytes(model: &Qwen3_5Model) -> u64 {
+    let mut held_whole_bytes = 0_u64;
+    for layer_residency in model.current_expert_layer_residencies() {
+        if layer_residency.class == crate::RetainedExpertPageClass::StableCompleteLayer {
+            held_whole_bytes = held_whole_bytes.saturating_add(layer_residency.payload_bytes);
+        }
+    }
+    held_whole_bytes
 }
 
 /// Evicts the coldest complete layers until the warm budget can seat the

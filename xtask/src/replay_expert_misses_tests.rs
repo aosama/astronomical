@@ -72,11 +72,12 @@ fn should_report_every_division_and_rule_for_each_saved_case() {
 
     let report_lines = replay_report(evidence_directory.path()).expect("the report runs");
 
-    // A header, today's engine, eight shared rules, three prompt-seeded
-    // weights, and three rules for each of the seven other divisions.
+    // A header, today's engine, eight shared rules, five whole-layer counts,
+    // three prompt-seeded weights, and three rules for each of the seven
+    // other divisions.
     assert_eq!(
         report_lines.len(),
-        1 + 1 + 8 + 3 + 7 * 3,
+        1 + 1 + 8 + 8 + 1 + 3 + 7 * 3,
         "{report_lines:#?}"
     );
     assert!(report_lines[0].contains("workload=small reply_tokens=3"));
@@ -199,4 +200,16 @@ fn should_add_earlier_replies_demand_when_asked() {
         super::capacity_divisions::starting_from_demand(&saved_case(Vec::new()), 1);
 
     assert!(started_from_both.held_expert_ids_by_layer_at_start[1].contains(&3));
+}
+
+#[test]
+fn should_pin_the_whole_layers_asked_for_and_share_the_rest_equally() {
+    let divided_case =
+        super::capacity_divisions::whole_layers_then_equal_tables(&saved_case(Vec::new()), 1);
+
+    // Layer 0 is the only layer held whole; it stays whole and pinned, and
+    // the other two share the four slots left equally.
+    assert_eq!(divided_case.pinned_layer_indexes, vec![0]);
+    assert_eq!(divided_case.layer_slot_limits, Some(vec![4, 2, 2]));
+    assert!(divided_case.held_expert_ids_by_layer_at_start[1].is_empty());
 }

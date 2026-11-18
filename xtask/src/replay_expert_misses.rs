@@ -33,6 +33,7 @@ mod capacity_divisions;
 use capacity_divisions::{
     divided_by_demand, divided_equally, divided_like_todays_engine, shared_pinning_whole_layers,
     starting_from_demand, starting_with_nothing, starting_with_the_most_used,
+    whole_layers_then_equal_tables,
 };
 
 /// Runs the report over `arguments[0]`, the evidence directory.
@@ -63,6 +64,13 @@ fn replay_report(evidence_directory: &Path) -> Result<Vec<String>, String> {
     }
     Ok(report_lines)
 }
+
+/// Read wait per miss at the 17.6 GB anchor with the `macos_file_cache`
+/// evicted: 22.0 ms over 70.7 misses per Shakespeare token.
+const MEASURED_MISS_MILLISECONDS: f64 = 0.31;
+/// One route copied to the host mid-forward, measured by
+/// `cargo measure-fetching-layer-stages` (issue #2329).
+const MEASURED_ROUTE_STOP_MILLISECONDS: f64 = 0.28;
 
 fn every_rule() -> Vec<Box<dyn KeepingRule>> {
     vec![
@@ -115,6 +123,20 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
             keeping_rule,
         ));
     }
+    for whole_layer_count in [0, 4, 8, 12, 16, 20, 24, 28] {
+        report_lines.push(report_replay(
+            workload_name,
+            &format!("whole_layers_{whole_layer_count}_then_equal_tables"),
+            &whole_layers_then_equal_tables(saved_replay_case, whole_layer_count),
+            Box::new(DecayedFrequency::new(32.0)),
+        ));
+    }
+    report_lines.push(report_replay(
+        workload_name,
+        "whole_layers_4_then_equal_tables",
+        &whole_layers_then_equal_tables(saved_replay_case, 4),
+        todays_engine_rule(),
+    ));
     for prior_weight in [2.0, 8.0, 32.0] {
         report_lines.push(report_replay(
             workload_name,
@@ -170,8 +192,11 @@ fn report_replay(
     mut keeping_rule: Box<dyn KeepingRule>,
 ) -> String {
     let replay_outcome = replay(replay_case, keeping_rule.as_mut());
+    let estimated_milliseconds_per_token = replay_outcome.misses_per_token()
+        * MEASURED_MISS_MILLISECONDS
+        + replay_outcome.partly_held_layers_per_token() * MEASURED_ROUTE_STOP_MILLISECONDS;
     format!(
-        "[replay-expert-misses] workload={workload_name} division={division_name} rule=\"{}\" misses_per_token={:.2} partly_held_layers_per_token={:.2}",
+        "[replay-expert-misses] workload={workload_name} division={division_name} rule=\"{}\" misses_per_token={:.2} partly_held_layers_per_token={:.2} estimated_expert_milliseconds_per_token={estimated_milliseconds_per_token:.1}",
         keeping_rule.name(),
         replay_outcome.misses_per_token(),
         replay_outcome.partly_held_layers_per_token(),
