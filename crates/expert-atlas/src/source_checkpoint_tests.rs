@@ -135,6 +135,26 @@ fn should_refuse_a_vision_tower_split_over_two_files() {
 }
 
 #[test]
+fn should_refuse_a_vision_file_outside_the_model_folder() {
+    for escaping_file_name in [
+        "../model-vision.safetensors",
+        "/tmp/model-vision.safetensors",
+    ] {
+        let shard_index = shard_index_of(&[
+            (
+                "language_model.model.embed_tokens.weight",
+                "model-00001.safetensors",
+            ),
+            ("vision_tower.merger.norm.bias", escaping_file_name),
+        ]);
+
+        let refusal = vision_sidecar_file_names(&shard_index, true)
+            .expect_err("the conversion must never move a file outside the model");
+        assert!(refusal.contains("outside the model folder"), "{refusal}");
+    }
+}
+
+#[test]
 fn should_refuse_a_language_tensor_inside_the_vision_bundle() {
     let shard_index = shard_index_of(&[
         (

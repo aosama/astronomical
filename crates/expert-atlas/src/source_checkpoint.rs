@@ -345,6 +345,7 @@ fn vision_sidecar_file_names(
 ) -> Result<BTreeSet<String>, String> {
     let tower_file_names = vision_tower_file_names(shard_index);
     refuse_a_split_vision_tower(&tower_file_names)?;
+    refuse_a_vision_file_outside_the_model(&tower_file_names)?;
     refuse_language_tensors_beside_the_tower(shard_index, &tower_file_names)?;
     if declares_vision_tower && tower_file_names.is_empty() {
         return Err(
@@ -376,6 +377,23 @@ fn refuse_a_split_vision_tower(tower_file_names: &BTreeSet<String>) -> Result<()
         tower_file_names.len(),
         listed_file_names.join(", ")
     ))
+}
+
+/// The conversion moves the tower's file by the name the index gives it, so
+/// a name must stay inside the model folder: no `..`, no absolute path.
+fn refuse_a_vision_file_outside_the_model(
+    tower_file_names: &BTreeSet<String>,
+) -> Result<(), String> {
+    for tower_file_name in tower_file_names {
+        for path_component in Path::new(tower_file_name).components() {
+            if !matches!(path_component, std::path::Component::Normal(_)) {
+                return Err(format!(
+                    "the index puts the vision tower in {tower_file_name}, which is outside the model folder"
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn refuse_language_tensors_beside_the_tower(
