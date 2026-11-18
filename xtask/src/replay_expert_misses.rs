@@ -33,7 +33,7 @@ mod capacity_divisions;
 use capacity_divisions::{
     divided_by_demand, divided_equally, divided_like_todays_engine, shared_pinning_whole_layers,
     starting_from_demand, starting_with_nothing, starting_with_the_most_used,
-    whole_layers_then_equal_tables,
+    whole_layers_then_equal_tables, whole_layers_then_tables_by_prompt_demand,
 };
 
 /// Runs the report over `arguments[0]`, the evidence directory.
@@ -108,13 +108,47 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
         replay_case.routed_reply.token_count(),
         replay_case.capacity_bytes as f64 / f64::from(1_u32 << 30),
     )];
+    report_lines.extend(report_engine_layout(saved_replay_case));
+    report_lines.extend(report_shared_rules(saved_replay_case));
+    report_lines.extend(report_whole_layer_sweeps(saved_replay_case));
+    report_lines.extend(report_other_divisions(saved_replay_case));
+    report_lines
+}
+
+/// Today's engine, and the engine's own layout under other rules.
+fn report_engine_layout(saved_replay_case: &SavedReplayCase) -> Vec<String> {
     let workload_name = &saved_replay_case.workload_name;
-    report_lines.push(report_replay(
+    let engine_division = divided_like_todays_engine(saved_replay_case);
+    let mut report_lines = vec![report_replay(
         workload_name,
         "todays_engine",
-        &divided_like_todays_engine(saved_replay_case),
+        &engine_division,
         todays_engine_rule(),
-    ));
+    )];
+    for keeping_rule in [
+        Box::new(DecayedFrequency::new(32.0)) as Box<dyn KeepingRule>,
+        Box::new(CappedReplacements::new(
+            Box::new(DecayedFrequency::new(32.0)),
+            2,
+        )),
+        Box::new(DecayedFrequency::new(8.0)),
+    ] {
+        report_lines.push(report_replay(
+            workload_name,
+            "engine_layout",
+            &engine_division,
+            keeping_rule,
+        ));
+    }
+    report_lines
+}
+
+/// Every rule with one capacity shared by all layers, and the prompt-seeded
+/// rule at three prior weights.
+fn report_shared_rules(saved_replay_case: &SavedReplayCase) -> Vec<String> {
+    let workload_name = &saved_replay_case.workload_name;
+    let replay_case = &saved_replay_case.replay_case;
+    let mut report_lines = Vec::new();
     for keeping_rule in every_rule() {
         report_lines.push(report_replay(
             workload_name,
@@ -123,20 +157,6 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
             keeping_rule,
         ));
     }
-    for whole_layer_count in [0, 4, 8, 12, 16, 20, 24, 28] {
-        report_lines.push(report_replay(
-            workload_name,
-            &format!("whole_layers_{whole_layer_count}_then_equal_tables"),
-            &whole_layers_then_equal_tables(saved_replay_case, whole_layer_count),
-            Box::new(DecayedFrequency::new(32.0)),
-        ));
-    }
-    report_lines.push(report_replay(
-        workload_name,
-        "whole_layers_4_then_equal_tables",
-        &whole_layers_then_equal_tables(saved_replay_case, 4),
-        todays_engine_rule(),
-    ));
     for prior_weight in [2.0, 8.0, 32.0] {
         report_lines.push(report_replay(
             workload_name,
@@ -149,6 +169,45 @@ fn report_saved_case(saved_replay_case: &SavedReplayCase) -> Vec<String> {
             )),
         ));
     }
+    report_lines
+}
+
+/// Whole layers kept against fair tables: the trade between misses and
+/// route stops.
+fn report_whole_layer_sweeps(saved_replay_case: &SavedReplayCase) -> Vec<String> {
+    let workload_name = &saved_replay_case.workload_name;
+    let mut report_lines = Vec::new();
+    for whole_layer_count in [0, 4, 8, 12, 16, 20, 24, 28] {
+        report_lines.push(report_replay(
+            workload_name,
+            &format!("whole_layers_{whole_layer_count}_then_equal_tables"),
+            &whole_layers_then_equal_tables(saved_replay_case, whole_layer_count),
+            Box::new(DecayedFrequency::new(32.0)),
+        ));
+    }
+    for whole_layer_count in [0, 4, 8] {
+        report_lines.push(report_replay(
+            workload_name,
+            &format!("whole_layers_{whole_layer_count}_then_tables_by_prompt_demand"),
+            &whole_layers_then_tables_by_prompt_demand(saved_replay_case, whole_layer_count),
+            Box::new(DecayedFrequency::new(32.0)),
+        ));
+    }
+    report_lines.push(report_replay(
+        workload_name,
+        "whole_layers_4_then_equal_tables",
+        &whole_layers_then_equal_tables(saved_replay_case, 4),
+        todays_engine_rule(),
+    ));
+    report_lines
+}
+
+/// The remaining divisions and starts, each under recency, decayed
+/// frequency and Belady.
+fn report_other_divisions(saved_replay_case: &SavedReplayCase) -> Vec<String> {
+    let workload_name = &saved_replay_case.workload_name;
+    let replay_case = &saved_replay_case.replay_case;
+    let mut report_lines = Vec::new();
     for division_name in [
         "shared_pinning_whole_layers",
         "divided_by_demand",

@@ -288,3 +288,61 @@ pub(crate) fn whole_layers_then_equal_tables(
         ..replay_case.clone()
     }
 }
+
+/// `whole_layer_count` layers kept whole as in `whole_layers_then_equal_tables`,
+/// and every other layer's table sized in proportion to how many of its
+/// experts cover nine tenths of its prompt demand: tables sized at the
+/// reply's start from evidence the engine already has.
+pub(crate) fn whole_layers_then_tables_by_prompt_demand(
+    saved_replay_case: &SavedReplayCase,
+    whole_layer_count: usize,
+) -> ReplayCase {
+    let equal_case = whole_layers_then_equal_tables(saved_replay_case, whole_layer_count);
+    let experts_per_layer = usize::from(equal_case.routed_reply.experts_per_layer());
+    let layer_count = equal_case.routed_reply.layer_count();
+    let mut demand_breadth_by_layer = vec![0_usize; layer_count];
+    for (layer_index, demand_breadth) in demand_breadth_by_layer.iter_mut().enumerate() {
+        if equal_case.pinned_layer_indexes.contains(&layer_index) {
+            continue;
+        }
+        *demand_breadth = saved_replay_case
+            .prompt_demand_by_layer
+            .get(layer_index)
+            .map_or(experts_per_layer, |layer_demand| {
+                experts_covering_most_demand(layer_demand)
+            })
+            .max(1);
+    }
+    let table_experts = capacity_in_experts(&equal_case)
+        .saturating_sub(equal_case.pinned_layer_indexes.len() * experts_per_layer);
+    let total_breadth: usize = demand_breadth_by_layer.iter().sum();
+    let mut layer_slot_limits = vec![experts_per_layer; layer_count];
+    for (layer_index, &demand_breadth) in demand_breadth_by_layer.iter().enumerate() {
+        if demand_breadth > 0 {
+            layer_slot_limits[layer_index] = (table_experts * demand_breadth)
+                .checked_div(total_breadth)
+                .unwrap_or(0)
+                .min(experts_per_layer);
+        }
+    }
+    ReplayCase {
+        layer_slot_limits: Some(layer_slot_limits),
+        ..equal_case
+    }
+}
+
+/// How many of a layer's experts, most demanded first, cover nine tenths of
+/// its demand.
+fn experts_covering_most_demand(layer_demand: &[u64]) -> usize {
+    let mut sorted_demand = layer_demand.to_vec();
+    sorted_demand.sort_unstable_by(|left, right| right.cmp(left));
+    let total_demand: u64 = sorted_demand.iter().sum();
+    let mut covered_demand = 0_u64;
+    for (covering_count, demand) in sorted_demand.into_iter().enumerate() {
+        if covered_demand * 10 >= total_demand * 9 {
+            return covering_count;
+        }
+        covered_demand += demand;
+    }
+    layer_demand.len()
+}
