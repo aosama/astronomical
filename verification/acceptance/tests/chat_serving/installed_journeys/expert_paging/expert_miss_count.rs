@@ -17,8 +17,9 @@
 //! not a measurement; the speed case serves the Shakespeare reply with
 //! attribution off and is the one to read tokens per second from.
 //!
-//! Run the recordings with `cargo measure-expert-misses` and the speed case
-//! with `cargo measure-expert-misses-speed`, each with `--configuration PATH`
+//! Run the recordings with `cargo measure-expert-misses` and the speed cases
+//! (the `macos_file_cache` evicted, then warm) with
+//! `cargo measure-expert-misses-speed`, each with `--configuration PATH`
 //! whose `model_directory`, `paging_experiment.maximum_mlx_memory_gigabytes`
 //! and optional `evidence_directory` set the case.
 
@@ -133,18 +134,47 @@ async fn should_count_expert_misses_and_decode_speed_without_attribution() {
     .await;
 }
 
-async fn run_case(measured_workload: MeasuredWorkload, request_attribution: RequestAttribution) {
+#[tokio::test]
+#[ignore = "serves a 10,000-token Shakespeare summary without attribution on an installed sparse model with a warm macOS file cache and counts its expert misses"]
+#[serial]
+async fn should_count_expert_misses_and_decode_speed_with_a_warm_macos_file_cache() {
     timeout(
         CASE_TIMEOUT,
-        count_expert_misses(measured_workload, request_attribution),
+        count_expert_misses_with(
+            MeasuredWorkload::ShakespeareSummary,
+            RequestAttribution::Disabled,
+            MacosFileCacheState::Warm,
+        ),
     )
     .await
     .expect("the expert miss case must finish within 120 seconds");
 }
 
-async fn count_expert_misses(
+/// Whether the model's files are kept out of the `macos_file_cache` while
+/// the case serves.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MacosFileCacheState {
+    Cold,
+    Warm,
+}
+
+async fn run_case(measured_workload: MeasuredWorkload, request_attribution: RequestAttribution) {
+    timeout(
+        CASE_TIMEOUT,
+        count_expert_misses_with(
+            measured_workload,
+            request_attribution,
+            MacosFileCacheState::Cold,
+        ),
+    )
+    .await
+    .expect("the expert miss case must finish within 120 seconds");
+}
+
+async fn count_expert_misses_with(
     measured_workload: MeasuredWorkload,
     request_attribution: RequestAttribution,
+    macos_file_cache_state: MacosFileCacheState,
 ) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let test_run_configuration = TestRunContext::current().configuration;
@@ -169,7 +199,12 @@ async fn count_expert_misses(
         paging_experiment.streaming_prompt_processing_chunk_tokens,
     );
     load_engine_with_progress(&mut engine, "expert_miss_model_load").await;
-    let cold_macos_file_cache = ColdMacosFileCache::start(&model_directory);
+    let cold_macos_file_cache = if macos_file_cache_state == MacosFileCacheState::Cold {
+        Some(ColdMacosFileCache::start(&model_directory))
+    } else {
+        None
+    };
+    eprintln!("[expert-misses] macos_file_cache={macos_file_cache_state:?}");
     let warmup_prompt_token_ids =
         crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
             &model_directory,
@@ -201,10 +236,12 @@ async fn count_expert_misses(
     )
     .await;
     report_measured_reply(measured_workload, request_attribution, &measured_reply);
-    eprintln!(
-        "[expert-misses] macos_file_cache_sweeps={}",
-        cold_macos_file_cache.finish()
-    );
+    if let Some(cold_macos_file_cache) = cold_macos_file_cache {
+        eprintln!(
+            "[expert-misses] macos_file_cache_sweeps={}",
+            cold_macos_file_cache.finish()
+        );
+    }
     if let (Some(recording), Some(evidence_directory)) = (
         engine
             .take_routed_reply_recording_for_tests()

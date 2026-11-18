@@ -717,14 +717,15 @@ measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --
 # token's route, and writes `<workload>.routes` plus `<workload>.case.json` to
 # `evidence_directory` for the replay lab; its speed is not a measurement.
 # `measure-expert-misses-speed` serves the Shakespeare reply with attribution
-# off and is the one to read decode tokens per second from. Pass
+# off, once with the macos_file_cache evicted and once warm, and is the one
+# to read decode tokens per second from. Pass
 # --configuration PATH whose `model_directory`, the MLX limit
 # (`paging_experiment.maximum_mlx_memory_gigabytes`, or
 # `maximum_mlx_memory_megabytes` for a finer one such as 18022 for 17.6 GB)
 # and optional `evidence_directory` set the case. Each case runs in about one
 # to two minutes.
 measure-expert-misses = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_while_recording"
-measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_and_decode_speed_without_attribution"
+measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_and_decode_speed"
 
 # The replay lab's report: every reply `measure-expert-misses` recorded under
 # EVIDENCE_DIRECTORY is served again, without a GPU, under each keeping rule
