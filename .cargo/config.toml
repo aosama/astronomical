@@ -651,12 +651,16 @@ measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomica
 # fetching layers. Same configuration and scratch space as the alias above.
 measure-fetching-layer-stages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_one_fetching_layer_stage_by_stage"
 # The native record reader filling table slots at each fetch size (1, 2, 4, 8
-# and 16 experts) from pages the macOS file cache does not hold: how a fetch's
+# and 16 experts) from pages the macos_file_cache does not hold: how a fetch's
 # time grows with its size separates what each request to storage costs from
 # what each byte costs. At the size a served fetch has it also times what
 # serving adds: slots scattered over the table, the cold probes' eviction
 # sweep, a millisecond of idleness before the fetch, and that idleness with
-# storage kept awake by another thread and by the reader itself at four paces. Same configuration and scratch space as above.
+# storage kept awake by another thread and by the reader itself at four paces.
+# It also times records that sit next to each other in the file, which prices
+# ordering records by co-use, and prints what keeping storage awake costs
+# (`[awake-cost]`: pages read a second and processor time, on and off). Same
+# configuration and scratch space as above.
 measure-expert-fetch-size = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_the_native_reader_at_each_fetch_size"
 
 # An Expert Atlas model (made by `astronomical models convert-atlas`) against

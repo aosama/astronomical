@@ -37,8 +37,11 @@ const RECORD_READER_HELPER_THREAD_COUNT: u32 = 14;
 /// (`cargo measure-expert-fetch-size`): 0.81 ms left alone, 0.68 ms with one
 /// 16 KiB page read every 100 microseconds, 0.76 ms every 250 and 0.80 ms
 /// every 500, so the drive goes quiet after roughly 100 to 200 microseconds.
-/// The cost is one thread, mostly asleep, and about 100 MB a second of reads
-/// while a reply is fetching.
+/// The cost, measured by the same alias over two seconds of fetches a
+/// millisecond apart: about 3,900 pages a second (61 MB a second, under one
+/// percent of what the reply's own fetches read) from one thread that mostly
+/// waits on the drive, with no measurable rise in processor time. Power was
+/// not measured.
 const STORAGE_AWAKE_READ_PAUSE: std::time::Duration = std::time::Duration::from_micros(100);
 
 /// How long after the last fetch the reader goes on keeping storage awake: a

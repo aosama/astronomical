@@ -107,7 +107,11 @@ struct astro_expert_record_reader {
     // thread reads or closes it; a batch that reads another file leaves a
     // new duplicate in `awake_next_file_descriptor` for the thread to adopt.
     // The thread can then read without holding the lock, which a batch needs
-    // for a moment on its way in.
+    // for a moment on its way in. Files are told apart by descriptor number:
+    // a caller that closes a file and opens another under the same number
+    // leaves the thread reading the first, which keeps storage just as awake
+    // (the drive is what matters, not the file) until a batch brings a
+    // different number.
     int awake_file_descriptor = -1;
     int awake_next_file_descriptor = -1;
     int awake_source_file_descriptor = -1;

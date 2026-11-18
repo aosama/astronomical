@@ -584,6 +584,9 @@ fn process_processor_seconds() -> f64 {
     let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
     // SAFETY: as above; the pointer is to a live, writable struct.
     unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) };
-    let seconds = |time: libc::timeval| time.tv_sec as f64 + time.tv_usec as f64 / 1e6;
-    seconds(usage.ru_utime) + seconds(usage.ru_stime)
+    timeval_seconds(usage.ru_utime) + timeval_seconds(usage.ru_stime)
+}
+
+fn timeval_seconds(time: libc::timeval) -> f64 {
+    time.tv_sec as f64 + f64::from(time.tv_usec) / 1e6
 }
