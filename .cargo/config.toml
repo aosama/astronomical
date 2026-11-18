@@ -673,6 +673,11 @@ measure-decode-residency-attribution = "run -p xtask -- test-run --package astro
 # cache for the whole run: what the reads cost on a Mac whose RAM is the
 # limit, rather than on a larger Mac that keeps the model in the macOS file cache.
 measure-cold-decode-residency-attribution = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_with_a_cold_file_cache"
+# The same two probes with a reply token's missing experts loaded as pages
+# and copied into their tables after the forward, the path serving used
+# before experts were read straight into the tables: the comparison.
+measure-decode-residency-attribution-copying = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_when_experts_are_copied_into_tables"
+measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_when_experts_are_copied_with_a_cold_file_cache"
 
 # Cold SSD-streaming prefill as production serves it: the in-process engine
 # with request attribution off (attribution synchronizes after every prefill

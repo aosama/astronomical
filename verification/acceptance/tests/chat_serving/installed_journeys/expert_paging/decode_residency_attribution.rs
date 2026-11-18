@@ -62,6 +62,16 @@ const MINIMUM_REPORTED_PREFILL_SECONDS: f64 = 0.05;
 /// probes rather than given more time.
 const DECODE_ATTRIBUTION_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// How a reply token's missing experts arrive.
+#[derive(Clone, Copy, Debug)]
+enum ExpertReadPath {
+    /// Read from storage straight into their tables: what serving does.
+    IntoTables,
+    /// Loaded as a page and copied into the tables after the forward: the
+    /// path serving used before, kept measurable as the comparison.
+    Copying,
+}
+
 /// Whether the model's weight files may stay in the `macos_file_cache`.
 #[derive(Clone, Copy, Debug)]
 enum MacosFileCacheCondition {
@@ -75,10 +85,34 @@ enum MacosFileCacheCondition {
 async fn should_attribute_decode_token_time_to_route_copies_and_storage_reads() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(MacosFileCacheCondition::Warm),
+        attribute_decode_token_time(MacosFileCacheCondition::Warm, ExpertReadPath::IntoTables),
     )
     .await
     .expect("the decode attribution probe must finish within 120 seconds");
+}
+
+#[tokio::test]
+#[ignore = "serves a 10,000-token Shakespeare request with missing experts loaded as pages and copied, and attributes each decode token's time"]
+#[serial]
+async fn should_attribute_decode_token_time_when_experts_are_copied_into_tables() {
+    timeout(
+        DECODE_ATTRIBUTION_TIMEOUT,
+        attribute_decode_token_time(MacosFileCacheCondition::Warm, ExpertReadPath::Copying),
+    )
+    .await
+    .expect("the copying decode attribution probe must finish within 120 seconds");
+}
+
+#[tokio::test]
+#[ignore = "serves a 10,000-token Shakespeare request with missing experts copied and the model's files kept out of the macOS file cache"]
+#[serial]
+async fn should_attribute_decode_token_time_when_experts_are_copied_with_a_cold_file_cache() {
+    timeout(
+        DECODE_ATTRIBUTION_TIMEOUT,
+        attribute_decode_token_time(MacosFileCacheCondition::Cold, ExpertReadPath::Copying),
+    )
+    .await
+    .expect("the cold copying decode attribution probe must finish within 120 seconds");
 }
 
 #[tokio::test]
@@ -87,13 +121,16 @@ async fn should_attribute_decode_token_time_to_route_copies_and_storage_reads() 
 async fn should_attribute_decode_token_time_with_a_cold_file_cache() {
     timeout(
         DECODE_ATTRIBUTION_TIMEOUT,
-        attribute_decode_token_time(MacosFileCacheCondition::Cold),
+        attribute_decode_token_time(MacosFileCacheCondition::Cold, ExpertReadPath::IntoTables),
     )
     .await
     .expect("the cold decode attribution probe must finish within 120 seconds");
 }
 
-async fn attribute_decode_token_time(macos_file_cache_condition: MacosFileCacheCondition) {
+async fn attribute_decode_token_time(
+    macos_file_cache_condition: MacosFileCacheCondition,
+    expert_read_path: ExpertReadPath,
+) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let test_run_configuration = TestRunContext::current().configuration;
     let model_directory = test_run_configuration
@@ -126,6 +163,14 @@ async fn attribute_decode_token_time(macos_file_cache_condition: MacosFileCacheC
         prefill_chunk_tokens,
     );
     load_engine_with_progress(&mut engine, "decode_attribution_model_load").await;
+    engine
+        .set_decode_misses_fetched_into_tables_for_tests(matches!(
+            expert_read_path,
+            ExpertReadPath::IntoTables
+        ))
+        .await
+        .expect("the engine takes the expert read path");
+    eprintln!("[decode-attribution] expert_read_path={expert_read_path:?}");
     // Started after loading: the resident bundle is copied into MLX memory at
     // load, so only reads made while serving should pay storage cost.
     let cold_macos_file_cache = matches!(macos_file_cache_condition, MacosFileCacheCondition::Cold)
