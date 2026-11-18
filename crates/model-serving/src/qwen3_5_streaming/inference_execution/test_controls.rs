@@ -17,6 +17,18 @@ impl Qwen3_5EngineState {
             .map(|loaded_model| loaded_model.expert_memory_mode())
     }
 
+    fn observed_expert_route_trace_for_tests(
+        &self,
+    ) -> Result<crate::ObservedExpertRouteTrace, InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot read expert routes before model load"))?;
+        loaded_model
+            .observed_expert_route_trace()
+            .map_err(InferenceEngineError::from)
+    }
+
     fn astro_expert_cache_statistics_for_tests(
         &self,
     ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
@@ -90,6 +102,25 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         expert_memory_mode_receiver.recv().map_err(|_| {
             fatal_engine_error("expert-memory mode owner operation returned no response")
         })
+    }
+
+    /// Returns the routes of the reply tokens observed so far (attribution
+    /// must be on) and each layer's bytes an expert.
+    #[doc(hidden)]
+    pub async fn observed_expert_route_trace_for_tests(
+        &self,
+    ) -> Result<crate::ObservedExpertRouteTrace, InferenceEngineError> {
+        let (route_trace_sender, route_trace_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let route_trace = qwen_inference_execution.observed_expert_route_trace_for_tests();
+            route_trace_sender
+                .send(route_trace)
+                .map_err(|_| fatal_engine_error("route trace receiver stopped unexpectedly"))
+        })
+        .await?;
+        route_trace_receiver
+            .recv()
+            .map_err(|_| fatal_engine_error("route trace owner operation returned no response"))?
     }
 
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.

@@ -607,6 +607,9 @@ pub use qwen3_5_streaming::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::astro_ssd_prompt_cache_capture::astro_ssd_prompt_cache_publication_advances_parent_chain;
 
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_streaming::ObservedExpertRouteTrace;
+
 pub use qwen3_5_streaming::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };

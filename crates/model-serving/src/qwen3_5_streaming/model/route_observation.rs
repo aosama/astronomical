@@ -189,3 +189,47 @@ impl Qwen3_5Model {
         Ok(Some(observed_route))
     }
 }
+
+/// The routes of the reply tokens the observation history still holds, with
+/// what one expert of each layer occupies: what a measurement needs to
+/// replay a reply against different ways of keeping experts in memory.
+#[derive(Clone, Debug, Default)]
+pub struct ObservedExpertRouteTrace {
+    /// One entry per observed reply token, oldest first; each holds the
+    /// experts every layer routed to (`None` for a layer not observed).
+    pub token_routes: Vec<ObservedExpertRoute>,
+    /// Bytes one expert of each layer occupies in the astro expert cache.
+    pub expert_bytes_by_layer: Vec<u64>,
+}
+
+impl Qwen3_5Model {
+    /// The observation history as a trace. Routes are captured only while
+    /// performance attribution is on, so a run without it gives no tokens.
+    pub(crate) fn observed_expert_route_trace(
+        &self,
+    ) -> Result<ObservedExpertRouteTrace, Qwen3_5ExecutionError> {
+        let mut token_routes = Vec::new();
+        for observation in self
+            .route_observation
+            .borrow_mut()
+            .observation_ring()
+            .observations()
+        {
+            token_routes.push(observation.token_route.clone());
+        }
+        let mut expert_bytes_by_layer = Vec::new();
+        if let Some(expert_pager) = self.expert_pager.as_ref() {
+            for layer_plan in expert_pager.layer_plans() {
+                expert_bytes_by_layer.push(
+                    crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
+                        layer_plan, 1,
+                    )?,
+                );
+            }
+        }
+        Ok(ObservedExpertRouteTrace {
+            token_routes,
+            expert_bytes_by_layer,
+        })
+    }
+}

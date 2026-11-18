@@ -206,6 +206,164 @@ pub(super) fn load_atlas_page_by_scatter_reads(
     }
 }
 
+/// Where each tensor of a page sits in a virtual payload laid out tensor by
+/// tensor (every expert's slice of the first tensor, then of the second, and
+/// so on), and the reads that fill it from the atlas's expert-major records.
+struct TensorMajorPage {
+    /// Each slot's first byte in the virtual payload, in slot order.
+    slot_virtual_offsets: Vec<u64>,
+    payload_byte_count: u64,
+    read_intervals: Vec<BoundedReadInterval>,
+}
+
+fn tensor_major_page(
+    atlas: &AtlasTestFile,
+    atlas_layer_position: usize,
+    expert_ids: &[usize],
+) -> TensorMajorPage {
+    let mut slot_virtual_offsets = Vec::with_capacity(atlas.slots.len());
+    let mut read_intervals = Vec::with_capacity(atlas.slots.len() * expert_ids.len());
+    let mut payload_byte_count = 0_u64;
+    for slot in &atlas.slots {
+        slot_virtual_offsets.push(payload_byte_count);
+        for &expert_id in expert_ids {
+            read_intervals.push(BoundedReadInterval {
+                virtual_payload_offset: payload_byte_count,
+                source_file_offset: atlas.record_offset(atlas_layer_position, expert_id)
+                    + slot.offset_in_record,
+                source_byte_count: slot.bytes_per_expert as usize,
+            });
+            payload_byte_count += slot.bytes_per_expert;
+        }
+    }
+    TensorMajorPage {
+        slot_virtual_offsets,
+        payload_byte_count,
+        read_intervals,
+    }
+}
+
+fn safetensors_header_bytes(header_document: &serde_json::Value) -> Vec<u8> {
+    let encoded_header = serde_json::to_vec(header_document).expect("the header serializes");
+    let mut header_bytes = Vec::with_capacity(8 + encoded_header.len());
+    header_bytes.extend_from_slice(&(encoded_header.len() as u64).to_le_bytes());
+    header_bytes.extend_from_slice(&encoded_header);
+    header_bytes
+}
+
+/// How serving reads an atlas page today: one MLX Load per tensor, each
+/// fetching its slice of every record, through the bounded reader.
+pub(super) fn load_atlas_page_as_nine_tensors(
+    runtime: &MlxRuntime,
+    atlas: &AtlasTestFile,
+    atlas_layer_position: usize,
+    expert_ids: &[usize],
+) -> TimedPage {
+    let page = tensor_major_page(atlas, atlas_layer_position, expert_ids);
+    let page_expert_count = expert_ids.len();
+    let mut header_document = serde_json::Map::new();
+    for (slot, slot_virtual_offset) in atlas.slots.iter().zip(&page.slot_virtual_offsets) {
+        let mut tensor_shape = vec![page_expert_count];
+        tensor_shape.extend(&slot.per_expert_shape);
+        header_document.insert(
+            slot.tensor_name_suffix.clone(),
+            serde_json::json!({
+                "dtype": slot.dtype.to_string(),
+                "shape": tensor_shape,
+                "data_offsets": [
+                    slot_virtual_offset,
+                    slot_virtual_offset + slot.bytes_per_expert * page_expert_count as u64
+                ],
+            }),
+        );
+    }
+    let started_at = Instant::now();
+    let atlas_page_load = runtime
+        .load_safetensors_from_bounded_ranges(
+            open_bypassing_macos_file_cache(&atlas.path),
+            safetensors_header_bytes(&serde_json::Value::Object(header_document)),
+            page.read_intervals,
+            page.payload_byte_count,
+            None,
+        )
+        .expect("the atlas page should load");
+    let mut tensors_by_suffix = HashMap::with_capacity(atlas.slots.len());
+    for slot in &atlas.slots {
+        let tensor = atlas_page_load
+            .tensor(&slot.tensor_name_suffix)
+            .expect("the atlas page holds every tensor");
+        tensors_by_suffix.insert(slot.tensor_name_suffix.clone(), tensor);
+    }
+    let array_references: Vec<&MlxArray> = tensors_by_suffix.values().collect();
+    runtime
+        .evaluate_arrays(&array_references)
+        .expect("the atlas tensors should materialize");
+    TimedPage {
+        page_load_elapsed: started_at.elapsed(),
+        tensors_by_suffix,
+    }
+}
+
+/// One MLX Load for the whole page, laid out tensor by tensor, and the nine
+/// tensors as views of it: each is a contiguous run of that one buffer, so
+/// MLX shares the buffer instead of copying (unlike the record split, whose
+/// slices stride across records).
+pub(super) fn load_atlas_page_as_views_of_one_load(
+    runtime: &MlxRuntime,
+    atlas: &AtlasTestFile,
+    atlas_layer_position: usize,
+    expert_ids: &[usize],
+) -> TimedPage {
+    let page = tensor_major_page(atlas, atlas_layer_position, expert_ids);
+    let page_expert_count = expert_ids.len();
+    let header_document = serde_json::json!({
+        ATLAS_PAGE_TENSOR_NAME: {
+            "dtype": "U8",
+            "shape": [page.payload_byte_count],
+            "data_offsets": [0, page.payload_byte_count],
+        }
+    });
+    let started_at = Instant::now();
+    let atlas_page_load = runtime
+        .load_safetensors_from_bounded_ranges(
+            open_bypassing_macos_file_cache(&atlas.path),
+            safetensors_header_bytes(&header_document),
+            page.read_intervals,
+            page.payload_byte_count,
+            None,
+        )
+        .expect("the atlas page should load");
+    let page_bytes = atlas_page_load
+        .tensor(ATLAS_PAGE_TENSOR_NAME)
+        .expect("the atlas page tensor exists");
+    let mut tensors_by_suffix = HashMap::with_capacity(atlas.slots.len());
+    for (slot, slot_virtual_offset) in atlas.slots.iter().zip(&page.slot_virtual_offsets) {
+        let slot_start = *slot_virtual_offset as i32;
+        let slot_end = slot_start + (slot.bytes_per_expert * page_expert_count as u64) as i32;
+        let slot_bytes = runtime
+            .slice(&page_bytes, &[slot_start], &[slot_end], &[1])
+            .expect("the slot slice should build");
+        let slot_values = runtime
+            .view(&slot_bytes, mlx_dtype(slot.dtype))
+            .expect("the slot view should build");
+        let slot_tensor = runtime
+            .reshape(
+                &slot_values,
+                &page_tensor_shape(page_expert_count as i32, &slot.per_expert_shape),
+            )
+            .expect("the slot reshape should build");
+        tensors_by_suffix.insert(slot.tensor_name_suffix.clone(), slot_tensor);
+    }
+    let array_references: Vec<&MlxArray> = tensors_by_suffix.values().collect();
+    runtime
+        .evaluate_arrays(&array_references)
+        .expect("the atlas views should materialize");
+    TimedPage {
+        page_load_elapsed: started_at.elapsed(),
+        tensors_by_suffix,
+    }
+}
+
 /// For each page expert, its nine destination slices (one per tensor), in
 /// record order. `chunks_exact_mut` proves the slices are disjoint.
 fn slot_destinations_by_page_expert<'buffers>(
