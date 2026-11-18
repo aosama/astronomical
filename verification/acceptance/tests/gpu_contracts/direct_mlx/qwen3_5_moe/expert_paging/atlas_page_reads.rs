@@ -29,12 +29,15 @@ use serial_test::serial;
 use super::large_sparse_moe_fixture::{
     StreamingProbeFixture, installed_large_sparse_moe_streaming_fixture, probe_runtime,
 };
-use atlas_conversion::{AtlasTestFile, write_atlas_test_file};
+use atlas_conversion::{
+    AtlasTestFile, layers_with_the_commonest_record_shape, write_atlas_test_file,
+};
 use cold_page_plan::{
     PlannedPage, ResidencyChecker, cold_stock_expert_ids_by_layer, coldest_layer_indexes,
     plan_cold_pages,
 };
 use page_read_shapes::{
+    load_atlas_page_as_nine_tensors, load_atlas_page_as_views_of_one_load,
     load_atlas_page_by_scatter_reads, load_atlas_page_split_on_gpu, load_atlas_records,
     load_stock_page,
 };
@@ -51,21 +54,27 @@ enum ColdReadShape {
     AtlasRecordsOnly,
     AtlasRecordsSplitOnGpu,
     AtlasScatterReads,
+    AtlasNineTensorLoad,
+    AtlasViewsOfOneLoad,
 }
 
-const COLD_READ_SHAPES: [ColdReadShape; 4] = [
+const COLD_READ_SHAPES: [ColdReadShape; 6] = [
     ColdReadShape::StockProductionLoad,
     ColdReadShape::AtlasRecordsOnly,
     ColdReadShape::AtlasRecordsSplitOnGpu,
     ColdReadShape::AtlasScatterReads,
+    ColdReadShape::AtlasNineTensorLoad,
+    ColdReadShape::AtlasViewsOfOneLoad,
 ];
 
-const REPORTED_SHAPE_NAMES: [&str; 5] = [
+const REPORTED_SHAPE_NAMES: [&str; 7] = [
     "StockProductionLoad",
     "StockProductionLoadWarm",
     "AtlasRecordsOnly",
     "AtlasRecordsSplitOnGpu",
     "AtlasScatterReads",
+    "AtlasNineTensorLoad",
+    "AtlasViewsOfOneLoad",
 ];
 
 #[test]
@@ -87,6 +96,19 @@ fn should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts() {
         fixture.config.expert_count() as usize,
         &mut residency_checker,
     );
+    let mut cold_expert_ids_by_layer = cold_expert_ids_by_layer;
+    let shares_commonest_record_shape =
+        layers_with_the_commonest_record_shape(&fixture, cold_expert_ids_by_layer.len());
+    for (layer_cold_expert_ids, shares_shape) in cold_expert_ids_by_layer
+        .iter_mut()
+        .zip(shares_commonest_record_shape)
+    {
+        if !shares_shape {
+            // Never chosen: the coldest layers are the ones with the most
+            // experts outside the macos_file_cache.
+            layer_cold_expert_ids.clear();
+        }
+    }
     let atlas_layer_indexes = coldest_layer_indexes(&cold_expert_ids_by_layer, ATLAS_LAYER_COUNT);
     let atlas_directory = tempfile::tempdir().expect("a scratch directory for the atlas");
     let atlas_path = atlas_directory.path().join("experts.atlas");
@@ -213,8 +235,8 @@ fn measure_one_page(
 ) -> Vec<(&'static str, Duration)> {
     let atlas_layer_position = planned_page.atlas_layer_position;
     let expert_ids = &planned_page.expert_ids;
-    match cold_read_shape {
-        ColdReadShape::StockProductionLoad => vec![
+    if matches!(cold_read_shape, ColdReadShape::StockProductionLoad) {
+        return vec![
             (
                 "StockProductionLoad",
                 load_stock_page(runtime, &planned_page.stock_manifest).page_load_elapsed,
@@ -223,21 +245,53 @@ fn measure_one_page(
                 "StockProductionLoadWarm",
                 load_stock_page(runtime, &planned_page.stock_manifest).page_load_elapsed,
             ),
-        ],
-        ColdReadShape::AtlasRecordsOnly => vec![(
+        ];
+    }
+    vec![time_atlas_shape(
+        runtime,
+        atlas,
+        atlas_layer_position,
+        expert_ids,
+        cold_read_shape,
+    )]
+}
+
+/// One atlas read shape's name and the time its page took.
+fn time_atlas_shape(
+    runtime: &MlxRuntime,
+    atlas: &AtlasTestFile,
+    atlas_layer_position: usize,
+    expert_ids: &[usize],
+    atlas_read_shape: ColdReadShape,
+) -> (&'static str, Duration) {
+    match atlas_read_shape {
+        ColdReadShape::StockProductionLoad => {
+            unreachable!("the stock shape is timed by its caller, warm and cold")
+        }
+        ColdReadShape::AtlasRecordsOnly => (
             "AtlasRecordsOnly",
             load_atlas_records(runtime, atlas, atlas_layer_position, expert_ids).page_load_elapsed,
-        )],
-        ColdReadShape::AtlasRecordsSplitOnGpu => vec![(
+        ),
+        ColdReadShape::AtlasRecordsSplitOnGpu => (
             "AtlasRecordsSplitOnGpu",
             load_atlas_page_split_on_gpu(runtime, atlas, atlas_layer_position, expert_ids)
                 .page_load_elapsed,
-        )],
-        ColdReadShape::AtlasScatterReads => vec![(
+        ),
+        ColdReadShape::AtlasScatterReads => (
             "AtlasScatterReads",
             load_atlas_page_by_scatter_reads(atlas, atlas_layer_position, expert_ids)
                 .page_load_elapsed,
-        )],
+        ),
+        ColdReadShape::AtlasNineTensorLoad => (
+            "AtlasNineTensorLoad",
+            load_atlas_page_as_nine_tensors(runtime, atlas, atlas_layer_position, expert_ids)
+                .page_load_elapsed,
+        ),
+        ColdReadShape::AtlasViewsOfOneLoad => (
+            "AtlasViewsOfOneLoad",
+            load_atlas_page_as_views_of_one_load(runtime, atlas, atlas_layer_position, expert_ids)
+                .page_load_elapsed,
+        ),
     }
 }
 
@@ -259,7 +313,26 @@ fn assert_atlas_tensors_match_stock(
     let scattered_tensors =
         load_atlas_page_by_scatter_reads(atlas, atlas_layer_position, &planned_page.expert_ids)
             .tensors_by_suffix;
-    for atlas_tensors in [&split_tensors, &scattered_tensors] {
+    let nine_tensor_load = load_atlas_page_as_nine_tensors(
+        runtime,
+        atlas,
+        atlas_layer_position,
+        &planned_page.expert_ids,
+    )
+    .tensors_by_suffix;
+    let views_of_one_load = load_atlas_page_as_views_of_one_load(
+        runtime,
+        atlas,
+        atlas_layer_position,
+        &planned_page.expert_ids,
+    )
+    .tensors_by_suffix;
+    for atlas_tensors in [
+        &split_tensors,
+        &scattered_tensors,
+        &nine_tensor_load,
+        &views_of_one_load,
+    ] {
         assert_same_tensors(runtime, &stock_tensors, atlas_tensors);
     }
 }

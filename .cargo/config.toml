@@ -626,8 +626,11 @@ measure-paged-prefill = "run -p xtask -- test-run --package astronomical-accepta
 
 # Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the
 # production stock-safetensors page load, the same page read again warm, and
-# three expert-major Atlas read shapes, with the Atlas bytes checked equal to
-# the stock bytes. It converts the 16 expert layers least present in the macOS file cache of the
+# five expert-major Atlas read shapes (records only, records split on the
+# graphics processor, scatter reads, one MLX Load per tensor as serving reads
+# an Atlas today, and one Load whose nine tensors are no-copy views), with the
+# Atlas bytes checked equal to the stock bytes. Layers whose experts differ in
+# shape from most (a mixed-precision model's) are left out of the temporary Atlas. It converts the 16 expert layers least present in the macOS file cache of the
 # installed large sparse MoE model into a temporary Atlas (about 13 GB of
 # scratch space, checked before writing), skips any page `mincore` finds in
 # the macOS file cache, and fails within its 120-second budget when too few
