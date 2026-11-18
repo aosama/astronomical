@@ -167,10 +167,14 @@ fn native_record_read(
     })
 }
 
+/// `ASTRO_EXPERT_RECORD_TRUNCATED` of the native header: negative, so a
+/// drive's own `EIO` is never mistaken for a file too short for the record.
+const RECORD_TRUNCATED_STATUS: i32 = -1;
+
 fn read_result(read_status: i32) -> Result<(), RecordReadError> {
     match read_status {
         0 => Ok(()),
-        libc::EIO => Err(RecordReadError::RecordTruncated),
+        RECORD_TRUNCATED_STATUS => Err(RecordReadError::RecordTruncated),
         errno => Err(RecordReadError::ReadFailed {
             errno,
             description: std::io::Error::from_raw_os_error(errno).to_string(),

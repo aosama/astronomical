@@ -51,9 +51,14 @@ void astro_expert_record_reader_keep_storage_awake(astro_expert_record_reader* r
 // created: what that upkeep costs, for whoever measures or reports it.
 uint64_t astro_expert_record_reader_awake_read_count(const astro_expert_record_reader* reader);
 
+// What a read returns when the file ended before its destinations were full.
+// Negative so no errno can take it: a drive's own EIO must not read as a file
+// too short to hold the record.
+#define ASTRO_EXPERT_RECORD_TRUNCATED (-1)
+
 // Runs every read of the batch and returns when all have finished: 0 when
-// every read filled every destination, otherwise the errno of the first read
-// to fail (EIO for a read that ended before its destinations were full).
+// every read filled every destination, otherwise the status of the first read
+// to fail (ASTRO_EXPERT_RECORD_TRUNCATED, or the errno storage gave).
 // Batches from different threads run one after another.
 int32_t astro_expert_record_reader_read(astro_expert_record_reader* reader,
                                         const astro_expert_record_read* reads,

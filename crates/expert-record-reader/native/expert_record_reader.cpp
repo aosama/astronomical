@@ -48,7 +48,8 @@ ssize_t destination_byte_count(const astro_expert_record_read& read) {
 
 // One record: 0, or the errno that stopped it. A regular file returns fewer
 // bytes than asked only at its end, so a short read means the file does not
-// hold the record and is reported as EIO instead of being retried.
+// hold the record and is reported as ASTRO_EXPERT_RECORD_TRUNCATED instead of
+// being retried.
 int32_t read_one_record(const astro_expert_record_read& read) {
     if (read.destination_count == 0) {
         // preadv rejects an empty destination list; a record with nothing to
@@ -65,7 +66,7 @@ int32_t read_one_record(const astro_expert_record_read& read) {
             }
             return errno;
         }
-        return read_byte_count == destination_byte_count(read) ? 0 : EIO;
+        return read_byte_count == destination_byte_count(read) ? 0 : ASTRO_EXPERT_RECORD_TRUNCATED;
     }
 }
 

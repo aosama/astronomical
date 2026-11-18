@@ -1,7 +1,10 @@
 use std::io::Write;
 use std::os::fd::AsFd;
 
-use super::{ExpertRecordReader, RecordRead, RecordReadError, open_for_direct_reads};
+use super::{
+    ExpertRecordReader, RECORD_TRUNCATED_STATUS, RecordRead, RecordReadError,
+    open_for_direct_reads, read_result,
+};
 
 const BLOCK_BYTES: usize = 4096;
 
@@ -177,6 +180,37 @@ fn should_report_a_record_the_file_does_not_hold() {
         reader.read(&mut record_reads),
         Err(RecordReadError::RecordTruncated)
     );
+}
+
+#[test]
+fn should_report_a_drive_input_output_error_apart_from_a_truncated_record() {
+    assert_eq!(
+        read_result(libc::EIO),
+        Err(RecordReadError::ReadFailed {
+            errno: libc::EIO,
+            description: std::io::Error::from_raw_os_error(libc::EIO).to_string(),
+        })
+    );
+}
+
+#[test]
+fn should_map_the_native_statuses_to_success_and_a_truncated_record() {
+    assert_eq!(read_result(0), Ok(()));
+    assert_eq!(
+        read_result(RECORD_TRUNCATED_STATUS),
+        Err(RecordReadError::RecordTruncated)
+    );
+}
+
+#[test]
+fn should_report_an_unexpected_native_status_as_a_failed_read() {
+    assert!(matches!(
+        read_result(i32::MIN),
+        Err(RecordReadError::ReadFailed {
+            errno: i32::MIN,
+            ..
+        })
+    ));
 }
 
 #[test]
