@@ -4,33 +4,41 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.117</title>
-            <pubDate>Tue, 17 Nov 2026 20:16:00 -0500</pubDate>
-            <sparkle:version>2385</sparkle:version>
-            <sparkle:shortVersionString>0.2.117</sparkle:shortVersionString>
+            <title>0.2.118</title>
+            <pubDate>Wed, 18 Nov 2026 08:08:36 -0500</pubDate>
+            <sparkle:version>2391</sparkle:version>
+            <sparkle:shortVersionString>0.2.118</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Fixed
+            <description sparkle:format="markdown"><![CDATA[## Faster streaming from the SSD
 
-- **Screenshots from your coding tools now reach the model.** Agent apps such as GitHub Copilot hand a tool's screenshot back to the model inside the tool's result. Astronomical used to refuse that on the Responses endpoint ("function_call_output is unsupported") and quietly drop the picture on Chat Completions. Now the model sees it, on every endpoint, so a vision model can look at the page your agent just captured. In GitHub Copilot, tick "Supports image input" for the model in Settings → Model providers.
-- A clearer error when an image in a request names a stored file or has no image in it.
+When a mixture-of-experts model is bigger than the memory you give it, Astronomical reads the experts each word needs from the SSD while it writes. This release reads them with a new native reader, straight into the memory the graphics processor works from, with no second copy and no detour through the macOS file cache.
 
-## Under the hood
+- Ornith 1.5 35B-A3B 4-bit as an Expert Atlas, 10 GB memory limit, nothing held in the macOS file cache: 22.9 tokens a second, up from 14.7.
+- The same model at 20 GB: 19.7 ms a token, down from 26.1.
+- Held whole in memory: as fast as before.
+- Replies are word for word the same as before.
 
-- Test comments brought up to date with the code.
+## New in the catalog
+
+- **Ornith-1.5-35B-A3B-MLX-8bit-vision as an Astro Atlas.** The same weights as the 8-bit vision build, stored so each expert is read from the SSD in one step. With a 10 GB limit it writes 16.7 tokens a second against 12.1 for the regular build.
+
+## Also
+
+- `astronomical models convert-atlas` now converts vision models made with `astronomical vision add`, whose vision tower sits in its own `model-vision.safetensors`.
+- Astro's skills each have one consistent icon, and the home cards use the graphite palette.
+- A failing drive is now reported as a drive error, not as a model file that is too short.
 
 ## Compatibility
 
-- Apple silicon Macs with macOS 14 or later.
-- Your settings, models and conversations carry over unchanged.
-- A model that only reads text still declines images, now including images a tool returns.
+Your settings, conversations and downloaded models carry over unchanged. Expert Atlas models made by earlier releases keep working.
 
-Astronomical is signed with a Developer ID, notarized by Apple, and delivered as a signed Sparkle update.
+Astronomical 0.2.118 is signed with a Developer ID, notarized by Apple, and delivered through the direct download and the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.117/Astronomical-0.2.117-macOS-arm64.dmg" length="24651222" type="application/octet-stream" sparkle:edSignature="6J7Pc5tKhu9ayRVNVsZqwMatJMaxHYS+lv430u+FwDb6YuO0fulaqhhR8ASSRo+xxFXHOgPpyZ5V06L3zsRZCA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.118/Astronomical-0.2.118-macOS-arm64.dmg" length="24663022" type="application/octet-stream" sparkle:edSignature="Kxyika0FwXSX4ZSp22wHt7ogQBUTiKw7t8m/t2tO1zGewbbmBcO3+wtPX98JJtRqUwuGa0SWWkkWvLNihqp+AA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Fme4igwFUbmNtohGwU23Y5k4QePD4Za3nfKSgEYwt1Ux5kHb1yGQJlmVUrQl/rbz5PBxonWCECXNqaLRD/BtCA==
-length: 2241
+edSignature: iLnLAR2zH/uSBApoxvZEN9fABtgrfYk3/nVEg1LNwP0/rFPdTPsQ+Lfuo86nvR213dlZ65utrriIsfBlVBrtDQ==
+length: 2812
 -->
