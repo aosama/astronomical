@@ -314,23 +314,26 @@ fn should_replace_a_staging_directory_left_by_an_interrupted_conversion() {
     AtlasManifest::read_from_directory(&output_directory).expect("the manifest validates");
 }
 
-/// An OptiQ-style vision tower: its own indexed file under `optiq/`.
-fn add_vision_sidecar(model_directory: &Path) -> Vec<u8> {
+/// A vision tower in its own indexed file, `vision_file_name` under the
+/// model folder: OptiQ writes `optiq/optiq_vision.safetensors`,
+/// `astronomical vision add` writes `model-vision.safetensors`.
+fn add_vision_sidecar(model_directory: &Path, vision_file_name: &str) -> Vec<u8> {
     let vision_tensor = (
         "vision_tower.blocks.0.attn.proj.bias".to_owned(),
         "U8".to_owned(),
         vec![32],
         synthetic_tensor_bytes(250, 32),
     );
-    std::fs::create_dir_all(model_directory.join("optiq")).expect("sidecar directory");
-    let sidecar_path = model_directory.join("optiq/optiq_vision.safetensors");
+    let sidecar_path = model_directory.join(vision_file_name);
+    std::fs::create_dir_all(sidecar_path.parent().expect("a parent folder"))
+        .expect("sidecar directory");
     write_safetensors_shard(&sidecar_path, &[&vision_tensor]);
     let index_path = model_directory.join("model.safetensors.index.json");
     let mut index_document: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&index_path).expect("index reads"))
             .expect("index parses");
     index_document["weight_map"][&vision_tensor.0] =
-        serde_json::Value::String("optiq/optiq_vision.safetensors".to_owned());
+        serde_json::Value::String(vision_file_name.to_owned());
     std::fs::write(
         &index_path,
         serde_json::to_vec(&index_document).expect("index"),
@@ -345,7 +348,7 @@ fn should_carry_a_vision_sidecar_unchanged_and_keep_it_out_of_the_resident_bundl
     let source_directory = scratch_directory.path().join("example/model");
     let output_directory = scratch_directory.path().join("example/converted");
     write_synthetic_model(&source_directory);
-    let sidecar_bytes = add_vision_sidecar(&source_directory);
+    let sidecar_bytes = add_vision_sidecar(&source_directory, "optiq/optiq_vision.safetensors");
 
     let conversion_summary =
         convert(&source_directory, &output_directory).expect("the conversion succeeds");
@@ -366,6 +369,33 @@ fn should_carry_a_vision_sidecar_unchanged_and_keep_it_out_of_the_resident_bundl
         std::fs::read(output_directory.join("optiq/optiq_vision.safetensors"))
             .expect("the sidecar travels with the Atlas"),
         sidecar_bytes
+    );
+}
+
+#[test]
+fn should_move_a_vision_tower_from_its_own_file_to_the_vision_bundle_unchanged() {
+    let scratch_directory = tempfile::tempdir().expect("scratch");
+    let source_directory = scratch_directory.path().join("example/model");
+    let output_directory = scratch_directory.path().join("example/converted");
+    write_synthetic_model(&source_directory);
+    let sidecar_bytes = add_vision_sidecar(&source_directory, "model-vision.safetensors");
+
+    let conversion_summary =
+        convert(&source_directory, &output_directory).expect("the conversion succeeds");
+
+    assert_eq!(conversion_summary.resident_tensor_count, 3);
+    assert_eq!(
+        std::fs::read(output_directory.join("optiq/optiq_vision.safetensors"))
+            .expect("the tower lands where serving looks for it"),
+        sidecar_bytes
+    );
+    assert!(
+        !output_directory.join("model-vision.safetensors").exists(),
+        "the tower must not travel twice"
+    );
+    assert!(
+        source_directory.join("model-vision.safetensors").is_file(),
+        "the source is never changed"
     );
 }
 
