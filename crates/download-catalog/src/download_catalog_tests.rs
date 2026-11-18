@@ -517,31 +517,49 @@ fn should_ship_the_plain_four_bit_qwen3_8_27b_as_a_vision_chat_model() {
     assert!(selection.includes("chat_template.jinja"));
 }
 
-/// The OptiQ DFlash2 package is the plain OptiQ 35B-A3B with its DFlash2
-/// drafter in a `drafter` folder, which the engine pairs with the model it
-/// sits inside. The download must therefore keep that folder, and the size the
-/// disk check reserves must count the drafter on top of its plain twin. When the
-/// drafter cannot load (no M5 GPU, or a memory limit with no room for it) the
-/// model decodes exactly like its twin, so it streams from the same memory floor.
+/// A DFlash2 package is a plain catalog model with its DFlash2 drafter in a
+/// `drafter` folder, which the engine pairs with the model it sits inside. The
+/// download must therefore keep that folder, and the size the disk check
+/// reserves must count the drafter on top of its plain twin. When the drafter
+/// cannot load (no M5 GPU, or a memory limit with no room for it) the model
+/// decodes exactly like its twin, so it streams from the same memory floor.
 #[test]
 fn should_ship_the_optiq_dflash2_package_with_its_bundled_drafter() {
+    assert_dflash2_package_matches_its_plain_twin(DFlash2PackageExpectation {
+        package_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit",
+        plain_twin_huggingface_id: "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
+        pinned_revision: "28c5203a83fa7bc39b3363b870273c23f6bcf04e",
+        vision_tower_path: "optiq/optiq_vision.safetensors",
+    });
+}
+
+#[test]
+fn should_ship_the_8bit_vision_dflash2_package_with_its_bundled_drafter() {
+    assert_dflash2_package_matches_its_plain_twin(DFlash2PackageExpectation {
+        package_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision-DFLASH2",
+        plain_twin_huggingface_id: "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision",
+        pinned_revision: "73cb28bdf5ad151ddddefdfd5e4635117e1fbef7",
+        vision_tower_path: "model-vision.safetensors",
+    });
+}
+
+struct DFlash2PackageExpectation {
+    package_huggingface_id: &'static str,
+    plain_twin_huggingface_id: &'static str,
+    pinned_revision: &'static str,
+    vision_tower_path: &'static str,
+}
+
+fn assert_dflash2_package_matches_its_plain_twin(expectation: DFlash2PackageExpectation) {
+    const DRAFTER_WEIGHTS_BYTES: u64 = 1_052_513_488;
     let download_catalog =
         DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
-    let package_entry = shipped_entry(
-        &download_catalog,
-        "ahmedihamdy/Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit",
-    );
-    let plain_twin_entry = shipped_entry(
-        &download_catalog,
-        "mlx-community/Ornith-1.5-35B-A3B-OptiQ-4bit",
-    );
+    let package_entry = shipped_entry(&download_catalog, expectation.package_huggingface_id);
+    let plain_twin_entry = shipped_entry(&download_catalog, expectation.plain_twin_huggingface_id);
 
     assert_eq!(package_entry.role(), plain_twin_entry.role());
     assert_eq!(package_entry.family().as_str(), "qwen3_5");
-    assert_eq!(
-        package_entry.revision(),
-        "28c5203a83fa7bc39b3363b870273c23f6bcf04e"
-    );
+    assert_eq!(package_entry.revision(), expectation.pinned_revision);
     assert!(!package_entry.experimental() && !package_entry.get_started());
     assert_eq!(
         package_entry.capabilities(),
@@ -550,8 +568,7 @@ fn should_ship_the_optiq_dflash2_package_with_its_bundled_drafter() {
     let selection = package_entry.download_path_selection();
     assert!(selection.includes("drafter/model.safetensors"));
     assert!(selection.includes("drafter/config.json"));
-    assert!(selection.includes("optiq/optiq_vision.safetensors"));
-    const DRAFTER_WEIGHTS_BYTES: u64 = 1_052_513_488;
+    assert!(selection.includes(expectation.vision_tower_path));
     assert!(
         package_entry.approximate_size_bytes()
             >= plain_twin_entry.approximate_size_bytes() + DRAFTER_WEIGHTS_BYTES

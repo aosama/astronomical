@@ -232,6 +232,26 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision-DFLASH2",
+            "revision": "73cb28bdf5ad151ddddefdfd5e4635117e1fbef7",
+            "summary": "The large Ornith with its original vision and a draft model built in, for M5 Macs with room to spare.",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 38794182535,
+            "approximate_memory_bytes": 40122545356,
+            "minimum_memory_bytes": 4484842240,
+            "role": "chat",
+            "public": true,
+            "description": "The same model as Ornith-1.5-35B-A3B-MLX-8bit-vision, with a small draft model packed in. On an M5 Mac with room for the whole model, the draft model guesses the next few words and the large model checks them all in one step, so answers can arrive sooner and every word is still the large model's own choice. On other Macs, or with less memory, it runs just like the 8-bit vision build.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 8-bit (affine, group 64), bf16 vision, DFlash2 draft model",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "black-forest-labs/FLUX.2-klein-4B",
             "revision": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
             "summary": "Turns a written description into a picture.",
