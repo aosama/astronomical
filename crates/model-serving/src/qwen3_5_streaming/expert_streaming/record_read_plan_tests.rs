@@ -53,8 +53,8 @@ fn should_read_two_experts_records_as_two_reads_when_another_record_lies_between
 }
 
 #[test]
-fn should_cut_a_long_run_where_its_second_half_begins() {
-    // Six quarter-megabyte slices back to back: 1.5 MB, cut after the third.
+fn should_cut_a_long_run_into_parts_of_at_least_half_a_megabyte() {
+    // Six quarter-megabyte slices back to back: 1.5 MB, three parts of two.
     let mut slices = Vec::new();
     for slice_position in 0..6 {
         slices.push(slice(
@@ -65,12 +65,12 @@ fn should_cut_a_long_run_where_its_second_half_begins() {
     }
     assert_eq!(
         plan_record_reads(&slices),
-        vec![vec![0, 1, 2], vec![3, 4, 5]]
+        vec![vec![0, 1], vec![2, 3], vec![4, 5]]
     );
 }
 
 #[test]
-fn should_leave_a_run_shorter_than_a_megabyte_whole() {
+fn should_leave_a_run_of_one_part_whole() {
     let slices = [
         slice(0, 0, QUARTER_MEGABYTE),
         slice(0, QUARTER_MEGABYTE as u64, QUARTER_MEGABYTE),
@@ -85,15 +85,35 @@ fn should_leave_one_long_slice_whole_because_a_destination_cannot_be_cut() {
 }
 
 #[test]
-fn should_cut_at_a_slice_boundary_when_one_slice_passes_the_middle() {
-    // A small slice then a large one: the middle falls inside the large
-    // slice, so the cut comes before it.
+fn should_keep_a_sliver_with_the_part_before_it() {
+    // A small slice, a large one and a small tail: a cut after the large
+    // slice would leave a quarter-megabyte read of its own.
     let slices = [
         slice(0, 0, QUARTER_MEGABYTE),
         slice(0, QUARTER_MEGABYTE as u64, 6 * QUARTER_MEGABYTE),
         slice(0, 7 * QUARTER_MEGABYTE as u64, QUARTER_MEGABYTE),
     ];
-    assert_eq!(plan_record_reads(&slices), vec![vec![0, 1], vec![2]]);
+    assert_eq!(plan_record_reads(&slices), vec![vec![0, 1, 2]]);
+}
+
+#[test]
+fn should_cut_an_experts_record_into_one_part_for_each_large_tensor() {
+    // A weight of half a megabyte followed by small scales and biases,
+    // three times over, as a 4-bit expert's record is laid out.
+    let half_megabyte = 2 * QUARTER_MEGABYTE;
+    let small = 32 * 1024;
+    let mut slices = Vec::new();
+    let mut file_offset = 0_u64;
+    for _ in 0..3 {
+        for byte_count in [half_megabyte, small, small] {
+            slices.push(slice(0, file_offset, byte_count));
+            file_offset += byte_count as u64;
+        }
+    }
+    assert_eq!(
+        plan_record_reads(&slices),
+        vec![vec![0], vec![1, 2, 3], vec![4, 5, 6, 7, 8]]
+    );
 }
 
 #[test]

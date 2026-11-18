@@ -17,16 +17,14 @@ pub(crate) struct StorageSlice {
     pub(crate) byte_count: usize,
 }
 
-/// Reads longer than this are cut in two, so two requests reach storage at
-/// once. Measured on a five-expert fetch read from storage, 1.7 MB records
-/// took 0.88 ms whole and 0.81 ms as halves
-/// (`cargo measure-fetching-layer-stages`).
-const HALVED_READ_MINIMUM_BYTES: usize = 1 << 20;
+/// The least a part of a cut read holds. A record longer than twice this is
+/// read as several overlapping requests instead of one, so storage works on
+/// it from more than one place at once.
+const READ_PART_MINIMUM_BYTES: usize = 512 * 1024;
 
 /// Groups `slices` into reads: each group is a run of slice indexes whose
 /// slices follow one another in the same file with no gap, in file order.
-/// A run of two or more slices longer than `HALVED_READ_MINIMUM_BYTES` is cut
-/// where its second half begins.
+/// A long run is cut into parts of at least `READ_PART_MINIMUM_BYTES`.
 pub(crate) fn plan_record_reads(slices: &[StorageSlice]) -> Vec<Vec<usize>> {
     let mut slice_indexes_in_file_order: Vec<usize> = (0..slices.len()).collect();
     slice_indexes_in_file_order.sort_by_key(|&slice_index| {
@@ -54,38 +52,43 @@ pub(crate) fn plan_record_reads(slices: &[StorageSlice]) -> Vec<Vec<usize>> {
             contiguous_runs.push(vec![slice_index]);
         }
     }
-    let mut planned_reads = Vec::with_capacity(contiguous_runs.len() * 2);
+    let mut planned_reads = Vec::with_capacity(contiguous_runs.len() * 3);
     for contiguous_run in contiguous_runs {
-        let (first_half, second_half) = halves_of_a_long_run(slices, contiguous_run);
-        planned_reads.push(first_half);
-        if !second_half.is_empty() {
-            planned_reads.push(second_half);
-        }
+        cut_a_long_run_into_parts(slices, contiguous_run, &mut planned_reads);
     }
     planned_reads
 }
 
-/// Cuts a long run at the first slice that starts at or past its middle; a
-/// short run, or one slice, comes back whole with an empty second half.
-fn halves_of_a_long_run(slices: &[StorageSlice], run: Vec<usize>) -> (Vec<usize>, Vec<usize>) {
-    let mut run_byte_count = 0_usize;
+/// Appends `run` to `planned_reads`, cut wherever a part has reached
+/// `READ_PART_MINIMUM_BYTES` and at least that much is still to come, so no
+/// part is a sliver. A cut falls only between slices: a destination cannot
+/// be split.
+fn cut_a_long_run_into_parts(
+    slices: &[StorageSlice],
+    run: Vec<usize>,
+    planned_reads: &mut Vec<Vec<usize>>,
+) {
+    let mut bytes_still_to_come = 0_usize;
     for &slice_index in &run {
-        run_byte_count += slices[slice_index].byte_count;
+        bytes_still_to_come += slices[slice_index].byte_count;
     }
-    if run.len() < 2 || run_byte_count < HALVED_READ_MINIMUM_BYTES {
-        return (run, Vec::new());
-    }
-    let mut bytes_before_slice = 0_usize;
-    for (run_position, &slice_index) in run.iter().enumerate() {
-        if run_position > 0 && bytes_before_slice * 2 >= run_byte_count {
-            let second_half = run[run_position..].to_vec();
-            let mut first_half = run;
-            first_half.truncate(run_position);
-            return (first_half, second_half);
+    let mut part = Vec::new();
+    let mut part_byte_count = 0_usize;
+    for slice_index in run {
+        let slice_byte_count = slices[slice_index].byte_count;
+        part.push(slice_index);
+        part_byte_count += slice_byte_count;
+        bytes_still_to_come -= slice_byte_count;
+        if part_byte_count >= READ_PART_MINIMUM_BYTES
+            && bytes_still_to_come >= READ_PART_MINIMUM_BYTES
+        {
+            planned_reads.push(std::mem::take(&mut part));
+            part_byte_count = 0;
         }
-        bytes_before_slice += slices[slice_index].byte_count;
     }
-    (run, Vec::new())
+    if !part.is_empty() {
+        planned_reads.push(part);
+    }
 }
 
 #[cfg(test)]

@@ -24,9 +24,11 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 
 /// Helper threads of the record reader. A reply token's fetch on one layer
-/// is about five experts read as ten half-records; with the calling thread
-/// that is one thread for each (`cargo measure-fetching-layer-stages`).
-const RECORD_READER_HELPER_THREAD_COUNT: u32 = 9;
+/// is about five experts, each read as three overlapping parts; with the
+/// calling thread that is one thread for each. Measured on the 4-bit 35B-A3B
+/// under a 10 GB limit, a reply token took 45.6 ms this way against 46.4 ms
+/// with two parts and ten threads.
+const RECORD_READER_HELPER_THREAD_COUNT: u32 = 14;
 
 /// Reads experts from a model's files into the storage of its tables.
 pub(crate) struct ExpertSlotStorageFiller {
