@@ -18,6 +18,8 @@ mod macos_file_cache_bypassing_io;
 mod page_read_shapes;
 mod page_timing_report;
 mod progress_report;
+mod stop_cost;
+mod table_reads;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -208,18 +210,14 @@ fn should_time_one_fetching_layer_stage_by_stage() {
         FETCHING_LAYER_EXPERT_COUNT,
     );
     // The first planned page proves bytes read in place are the stock bytes.
-    fetching_layer_stages::assert_tables_read_in_place_match_stock(
-        &runtime,
-        &atlas,
-        &planned_pages[0],
-    );
+    table_reads::assert_tables_read_in_place_match_stock(&runtime, &atlas, &planned_pages[0]);
     let mut samples = fetching_layer_stages::measure_cold_stages(
         &runtime,
         &atlas,
         &planned_pages[1..],
         &mut residency_checker,
     );
-    let stop_chain_milliseconds = fetching_layer_stages::measure_stop_cost(&runtime);
+    let stop_chain_milliseconds = stop_cost::measure_stop_cost(&runtime);
     fetching_layer_stages::report_stages(
         &mut samples,
         stop_chain_milliseconds,

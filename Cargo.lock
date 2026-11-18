@@ -46,6 +46,7 @@ dependencies = [
  "astronomical-daemon",
  "astronomical-decision-contract",
  "astronomical-decision-training",
+ "astronomical-expert-record-reader",
  "astronomical-inference-worker",
  "astronomical-ipc-protocol",
  "astronomical-lowercase-hex",
@@ -222,6 +223,16 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "astronomical-expert-record-reader"
+version = "0.2.117"
+dependencies = [
+ "cc",
+ "libc",
  "tempfile",
  "thiserror",
 ]
