@@ -252,7 +252,8 @@ pub use memory::{
     RetainedExpertPageClass, RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements,
     RotatingAdmissionError, StreamingEngineRequirement, StreamingStartupResidencyFacts,
     VISIBLE_ANSWER_RESERVE_TOKENS, bounded_output_reservation_token_count,
-    classify_expert_memory_mode, decode_warm_floor_eviction_indexes,
+    classify_expert_memory_mode, complete_layers_beyond_keep_count,
+    decode_warm_floor_eviction_indexes, decode_whole_layer_keep_count,
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
     floor_raise_limit_bytes, floor_raised_ceiling_bytes,
     geometry_safe_minimum_mlx_memory_ceiling_bytes, hot_expert_warm_slot_count,
@@ -267,6 +268,8 @@ pub use memory::{
     should_promote_demoted_streaming_engine_to_resident, should_seed_partial_layer_on_prefill_read,
 };
 
+#[cfg(feature = "direct-mlx")]
+pub use memory::SessionExpertRouteSample;
 #[cfg(feature = "direct-mlx")]
 pub use memory::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 
@@ -601,7 +604,8 @@ pub use qwen3_5_streaming::{
 pub use qwen3_5_streaming::{
     DirectExpertFetchCounts, LayerProbeShape, Qwen3_5StreamingEngine, Qwen3_5StreamingModel,
     Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
-    Qwen3_5StreamingTargetForwardOutput, safe_minimum_mlx_memory_ceiling_bytes,
+    Qwen3_5StreamingTargetForwardOutput, RoutedReplyRecording,
+    safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 #[cfg(feature = "direct-mlx")]

@@ -3,7 +3,9 @@
 //! Entering the reply phase is one event for the memory governor: a reply
 //! step needs far fewer MLX working buffers than a prompt step, so the expert
 //! astro expert cache's capacity rises (issue #2221). This file then fills that capacity:
-//! whole layers the plan chose, and hot-expert slots on the layers left.
+//! whole layers the plan chose, no more than the reply's whole-layer keep
+//! count allows (`decode_whole_layer_keep`, issue #2338), and hot-expert
+//! slots on the layers left, sized from the room the whole layers leave.
 //! Filling is best-effort because missing routes remain correct through
 //! operation-local streaming.
 
@@ -56,10 +58,14 @@ impl Qwen3_5EngineState {
         // The warm floor must survive seating, so seating is capped to the
         // budget the floor leaves free BEFORE any layer streams: otherwise
         // the handoff streams complete layers it immediately evicts below.
-        let complete_layer_indexes_to_seat = cap_complete_layer_seating_to_decode_warm_floor(
-            model,
-            &planned_complete_layer_indexes_to_seat,
-        );
+        let complete_layer_indexes_to_seat =
+            super::decode_whole_layer_keep::cap_seating_to_whole_layer_keep_count(
+                model,
+                &cap_complete_layer_seating_to_decode_warm_floor(
+                    model,
+                    &planned_complete_layer_indexes_to_seat,
+                ),
+            );
         match model.seat_complete_layers_before_decode(
             &complete_layer_indexes_to_seat,
             &mut active_request.performance_attribution,
@@ -100,13 +106,15 @@ impl Qwen3_5EngineState {
         // tables were sized; enforce the distributed floor first so the slot
         // count below sees room that can warm every unseated layer (issue
         // #373's mixed serving depends on nonzero tables to matter at all).
+        super::decode_whole_layer_keep::release_complete_layers_beyond_keep_count(
+            request_id, model,
+        );
         enforce_decode_warm_slot_floor(
             request_id,
             model,
             usize::try_from(model.config.experts_per_token()).unwrap_or(1),
         );
-        let hot_expert_warm_slot_count =
-            decode_warm_slot_count(model, model.astro_expert_cache_statistics());
+        let hot_expert_warm_slot_count = decode_warm_slot_count(model);
         model.set_hot_expert_warm_slot_count(hot_expert_warm_slot_count);
         tracing::info!(
             request_id = request_id.value(),
@@ -129,11 +137,8 @@ impl Qwen3_5EngineState {
 /// This runs at the reply's start and after every reply step, so the tables
 /// follow the capacity as the governor's reply-step measurement settles
 /// (issue #512).
-pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
-    model: &Qwen3_5Model,
-    expert_statistics: crate::AstroExpertCacheStatistics,
-) -> usize {
-    let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
+pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(model: &Qwen3_5Model) -> usize {
+    let warm_budget_bytes = decode_warm_budget_bytes(model);
     let Some(layer_geometry) = decode_warm_layer_geometry(model) else {
         return 0;
     };
@@ -163,21 +168,24 @@ struct DecodeWarmLayerGeometry {
     sparse_layer_count: usize,
 }
 
-/// Reads the first sparse layer plan's expert capacity, per-expert payload
-/// bytes, and the pager's sparse layer count.
+/// Reads the first sparse layer plan's expert capacity, one expert's payload
+/// bytes averaged over every sparse layer, and the pager's sparse layer
+/// count.
 ///
-/// `None` means no warm decision applies — no pager, no layer plans, or a
-/// first plan that cannot price one routed expert page — and every caller
+/// `None` means no warm decision applies — no pager, no layer plans, or no
+/// layer that can price its experts — and every caller
 /// treats that as "size to zero" rather than inventing a fallback geometry.
 fn decode_warm_layer_geometry(model: &Qwen3_5Model) -> Option<DecodeWarmLayerGeometry> {
     let expert_pager = model.expert_pager.as_ref()?;
     let first_layer_plan = expert_pager.layer_plans().first()?;
+    // Priced at the mean over every layer: a mixed-precision model's first
+    // layer can hold experts twice the size of the rest, and pricing by it
+    // left gigabytes of the capacity unused (issue #2338).
     let per_expert_payload_bytes =
-        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-            first_layer_plan,
-            1,
-        )
-        .ok()?;
+        super::decode_whole_layer_keep::mean_expert_payload_bytes(expert_pager);
+    if per_expert_payload_bytes == 0 {
+        return None;
+    }
     Some(DecodeWarmLayerGeometry {
         expert_capacity: first_layer_plan.expert_capacity,
         per_expert_payload_bytes,
@@ -226,18 +234,31 @@ fn budget_affordable_slot_count(
     usize::try_from(affordable_slots).unwrap_or(usize::MAX)
 }
 
-/// What the astro expert cache may still take in: the capacity the memory governor set
-/// for the reply phase, less what the astro expert cache already keeps.
+/// The room the warm tables share: the capacity the memory governor set for
+/// the reply phase, less the layers held whole.
 ///
-/// Every sizing decision in this file reads the room through this one
-/// function, so they agree.
-fn decode_warm_budget_bytes(
-    model: &Qwen3_5Model,
-    expert_statistics: crate::AstroExpertCacheStatistics,
-) -> u64 {
+/// The warm tables' own experts are not subtracted. This is re-read after
+/// every reply step to size the tables, and subtracting what the tables
+/// already held made each re-size shrink them toward the floor as they
+/// filled: replies at half the model's size kept every table at 16 experts
+/// and left about 0.6 GB of the capacity unused (issue #2338). Every sizing
+/// decision in this file reads the room through this one function, so they
+/// agree.
+fn decode_warm_budget_bytes(model: &Qwen3_5Model) -> u64 {
     model
         .kept_expert_capacity_bytes()
-        .saturating_sub(expert_statistics.resident_payload_byte_count)
+        .saturating_sub(held_whole_layer_payload_bytes(model))
+}
+
+/// Payload bytes of the layers the `astro_expert_cache` holds whole.
+fn held_whole_layer_payload_bytes(model: &Qwen3_5Model) -> u64 {
+    let mut held_whole_bytes = 0_u64;
+    for layer_residency in model.current_expert_layer_residencies() {
+        if layer_residency.class == crate::RetainedExpertPageClass::StableCompleteLayer {
+            held_whole_bytes = held_whole_bytes.saturating_add(layer_residency.payload_bytes);
+        }
+    }
+    held_whole_bytes
 }
 
 /// Evicts the coldest complete layers until the warm budget can seat the
@@ -267,8 +288,7 @@ fn enforce_decode_warm_slot_floor(
     {
         return;
     }
-    let expert_statistics = model.astro_expert_cache_statistics();
-    let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
+    let warm_budget_bytes = decode_warm_budget_bytes(model);
     let retained_topology_snapshot = match model.astro_expert_cache.as_ref() {
         Some(astro_expert_cache) => astro_expert_cache
             .borrow()
@@ -332,8 +352,7 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
                         .map_or(0, |geometry| geometry.expert_capacity),
                 )
             });
-    let expert_statistics = model.astro_expert_cache_statistics();
-    let warm_budget_bytes = decode_warm_budget_bytes(model, expert_statistics);
+    let warm_budget_bytes = decode_warm_budget_bytes(model);
     crate::memory::decode_seating::complete_layers_within_decode_warm_budget(
         &geometries,
         &current_residencies,

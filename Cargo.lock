@@ -302,6 +302,7 @@ dependencies = [
  "astronomical-ipc-protocol",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 
@@ -2941,6 +2942,7 @@ name = "xtask"
 version = "0.2.118"
 dependencies = [
  "astronomical-lowercase-hex",
+ "astronomical-memory-policy",
  "astronomical-native-identity",
  "astronomical-test-harness",
  "libc",

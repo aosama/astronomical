@@ -5,6 +5,8 @@ mod astro_ssd_prompt_cache_visual_identity;
 mod completed_forward_memory;
 /// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
 mod decode_expert_memory_handoff;
+/// How many layers a reply keeps whole, and giving up the rest.
+mod decode_whole_layer_keep;
 mod decoder_state_reuse;
 pub(crate) mod engine_request;
 pub(in crate::qwen3_5_streaming) mod forward_memory_baseline;

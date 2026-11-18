@@ -27,6 +27,26 @@ impl Qwen3_5EngineState {
         Ok(loaded_model.direct_expert_fetching.tally.take())
     }
 
+    fn session_expert_route_sample_for_tests(
+        &self,
+    ) -> Result<crate::SessionExpertRouteSample, InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot sample expert routes before load"))?;
+        Ok(loaded_model.session_expert_route_sample())
+    }
+
+    fn take_routed_reply_recording_for_tests(
+        &self,
+    ) -> Result<Option<crate::RoutedReplyRecording>, InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot take a reply recording before load"))?;
+        Ok(loaded_model.take_routed_reply_recording())
+    }
+
     fn set_every_route_brought_to_the_host_for_tests(
         &self,
         is_enabled: bool,
@@ -146,6 +166,45 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         counts_receiver
             .recv()
             .map_err(|_| fatal_engine_error("fetch counts owner operation returned no response"))?
+    }
+
+    /// The session's always-on expert counters now; a reply's own figures
+    /// are the change across it.
+    #[doc(hidden)]
+    pub async fn session_expert_route_sample_for_tests(
+        &self,
+    ) -> Result<crate::SessionExpertRouteSample, InferenceEngineError> {
+        let (sample_sender, sample_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let sample = qwen_inference_execution.session_expert_route_sample_for_tests();
+            sample_sender.send(sample).map_err(|_| {
+                fatal_engine_error("expert route sample receiver stopped unexpectedly")
+            })
+        })
+        .await?;
+        sample_receiver.recv().map_err(|_| {
+            fatal_engine_error("expert route sample owner operation returned no response")
+        })?
+    }
+
+    /// The routes of the last reply served with performance attribution on,
+    /// and what the `astro_expert_cache` held when it began; `None` when no
+    /// such reply was served since this was last called.
+    #[doc(hidden)]
+    pub async fn take_routed_reply_recording_for_tests(
+        &self,
+    ) -> Result<Option<crate::RoutedReplyRecording>, InferenceEngineError> {
+        let (recording_sender, recording_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let recording = qwen_inference_execution.take_routed_reply_recording_for_tests();
+            recording_sender
+                .send(recording)
+                .map_err(|_| fatal_engine_error("reply recording receiver stopped unexpectedly"))
+        })
+        .await?;
+        recording_receiver.recv().map_err(|_| {
+            fatal_engine_error("reply recording owner operation returned no response")
+        })?
     }
 
     /// Makes every layer copy its route to the host, even a layer held

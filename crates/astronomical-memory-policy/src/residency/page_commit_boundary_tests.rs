@@ -219,3 +219,134 @@ fn should_not_complete_an_empty_complete_or_unfunded_layer() {
         true, funded, 65, 0
     ));
 }
+
+mod decode_whole_layer_keep {
+    use crate::residency::{
+        CurrentExpertLayerResidency, DECODE_TABLE_TARGET_SLOT_COUNT, RetainedExpertPageClass,
+        complete_layers_beyond_keep_count, decode_whole_layer_keep_count,
+    };
+
+    const EXPERT_BYTES: u64 = 1_000;
+
+    fn capacity_of(expert_count: u64) -> u64 {
+        expert_count * EXPERT_BYTES
+    }
+
+    #[test]
+    fn should_keep_five_whole_layers_at_half_the_model_s_size() {
+        // The anchor: 4,672 experts of room, 40 layers of 256. Five whole
+        // layers leave 3,392 for 35 tables, 96 each; a sixth would leave 92.
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(4_672), EXPERT_BYTES, 256, 40),
+            5
+        );
+    }
+
+    #[test]
+    fn should_keep_more_whole_layers_as_the_capacity_grows() {
+        // Three quarters of the model: 7,350 experts of room.
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(7_350), EXPERT_BYTES, 256, 40),
+            21
+        );
+    }
+
+    #[test]
+    fn should_keep_every_layer_whole_when_the_whole_model_fits() {
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(256 * 40), EXPERT_BYTES, 256, 40),
+            40
+        );
+    }
+
+    #[test]
+    fn should_keep_no_layer_whole_when_the_tables_need_all_the_room() {
+        let just_below_one_whole_layer = (256 + DECODE_TABLE_TARGET_SLOT_COUNT * 39) as u64 - 1;
+        assert_eq!(
+            decode_whole_layer_keep_count(
+                capacity_of(just_below_one_whole_layer),
+                EXPERT_BYTES,
+                256,
+                40
+            ),
+            0
+        );
+        assert_eq!(decode_whole_layer_keep_count(0, EXPERT_BYTES, 256, 40), 0);
+    }
+
+    #[test]
+    fn should_keep_no_layer_whole_for_a_layer_without_size() {
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(5_000), 0, 256, 40),
+            0
+        );
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(5_000), EXPERT_BYTES, 0, 40),
+            0
+        );
+    }
+
+    #[test]
+    fn should_cap_the_table_target_at_a_small_layer_s_size() {
+        // Layers of 64 experts: a table's target is the whole layer, so the
+        // tables themselves fill whole and no layer needs keeping whole
+        // first; with one expert short of the model, none is.
+        assert_eq!(
+            decode_whole_layer_keep_count(capacity_of(64 * 10 - 1), EXPERT_BYTES, 64, 10),
+            0
+        );
+    }
+
+    fn residency(
+        layer_index: usize,
+        class: RetainedExpertPageClass,
+        covered_weighted_demand: u64,
+    ) -> CurrentExpertLayerResidency {
+        CurrentExpertLayerResidency {
+            layer_index,
+            class,
+            retained_expert_ids: Vec::new(),
+            payload_bytes: 0,
+            covered_weighted_demand,
+        }
+    }
+
+    #[test]
+    fn should_give_up_the_least_demanded_complete_layers_beyond_the_keep_count() {
+        let layer_residencies = [
+            residency(0, RetainedExpertPageClass::StableCompleteLayer, 50),
+            residency(1, RetainedExpertPageClass::StableCompleteLayer, 900),
+            residency(2, RetainedExpertPageClass::ElasticRoutedExperts, 1),
+            residency(3, RetainedExpertPageClass::StableCompleteLayer, 400),
+        ];
+
+        assert_eq!(
+            complete_layers_beyond_keep_count(&layer_residencies, 1),
+            vec![3, 0]
+        );
+    }
+
+    #[test]
+    fn should_give_up_nothing_when_the_keep_count_covers_every_complete_layer() {
+        let layer_residencies = [
+            residency(0, RetainedExpertPageClass::StableCompleteLayer, 5),
+            residency(1, RetainedExpertPageClass::ElasticRoutedExperts, 5),
+        ];
+
+        assert!(complete_layers_beyond_keep_count(&layer_residencies, 1).is_empty());
+        assert!(complete_layers_beyond_keep_count(&[], 0).is_empty());
+    }
+
+    #[test]
+    fn should_break_a_demand_tie_by_layer_order() {
+        let layer_residencies = [
+            residency(4, RetainedExpertPageClass::StableCompleteLayer, 7),
+            residency(2, RetainedExpertPageClass::StableCompleteLayer, 7),
+        ];
+
+        assert_eq!(
+            complete_layers_beyond_keep_count(&layer_residencies, 1),
+            vec![4]
+        );
+    }
+}

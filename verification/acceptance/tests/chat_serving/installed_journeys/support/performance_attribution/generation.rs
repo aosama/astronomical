@@ -10,26 +10,28 @@ use tokio::time::{MissedTickBehavior, interval};
 /// How a journey's request picks each token. Shared so a journey can ask another engine
 /// the same question with the same draws.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(usize)]
 pub(crate) enum GenerationSampling {
     /// Temperature 0: the top token, so a changed token means changed logits.
     Greedy,
     /// Temperature 1.0 with a fixed seed, like a default chat request. A seeded draw
     /// flips on logit changes far smaller than greedy ever sees.
     Seeded,
+    /// Temperature 0.7 with a fixed seed, the temperature people use for code.
+    SeededForCode,
 }
 
 impl GenerationSampling {
     pub(crate) const fn temperature_thousandths(self) -> u16 {
-        match self {
-            Self::Greedy => 0,
-            Self::Seeded => 1_000,
-        }
+        // In declaration order: greedy, seeded, seeded for code.
+        const TEMPERATURE_THOUSANDTHS_BY_SAMPLING: [u16; 3] = [0, 1_000, 700];
+        TEMPERATURE_THOUSANDTHS_BY_SAMPLING[self as usize]
     }
 
     pub(crate) const fn seed(self) -> Option<u64> {
         match self {
             Self::Greedy => None,
-            Self::Seeded => Some(1_234),
+            Self::Seeded | Self::SeededForCode => Some(1_234),
         }
     }
 }

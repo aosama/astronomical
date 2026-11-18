@@ -113,6 +113,13 @@ fn preserve_existing_expert_pages_for_generation(
 
 /// Layers whose complete page the generation leftover can fund after preservation.
 ///
+/// The engine's reply handoff caps what this plan keeps whole: replays of
+/// recorded replies with the `macos_file_cache` evicted (issue #2338) showed
+/// that once the other layers' tables drop below about 96 experts, their
+/// misses cost more than the route stops whole layers save, so the handoff
+/// keeps only as many whole as `decode_whole_layer_keep_count` allows. The
+/// reasoning below holds where reads are cheap.
+///
 /// Decode multiplies a complete layer in place on the device, but every
 /// incomplete layer forces a per-token route copy to the host plus SSD reads
 /// for its misses. Leaving the leftover entitlement idle below full fit is

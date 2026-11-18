@@ -25,6 +25,8 @@ pub use inference_execution::{
 #[cfg(feature = "direct-mlx")]
 pub use model::direct_expert_fetch_tally::DirectExpertFetchCounts;
 #[cfg(feature = "direct-mlx")]
+pub use model::routed_reply_recording::RoutedReplyRecording;
+#[cfg(feature = "direct-mlx")]
 pub use model::{
     LayerProbeShape, Qwen3_5Model as Qwen3_5StreamingModel,
     Qwen3_5TargetForwardOutput as Qwen3_5StreamingTargetForwardOutput,

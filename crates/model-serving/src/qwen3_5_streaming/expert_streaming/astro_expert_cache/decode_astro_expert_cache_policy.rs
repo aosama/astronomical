@@ -13,7 +13,12 @@ pub(super) const MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER: usize = 8;
 pub(super) const MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP: usize = 2;
 
 const PROBATIONARY_DECODE_STEP_WINDOW: u64 = 4;
-const RECENT_REUSE_SCORE_HALF_LIFE_DECODE_STEPS: u64 = 8;
+/// Replays of recorded replies under the reply layout of a few whole layers
+/// and fair tables (issue #2338) missed 8 to 13 percent fewer experts with a
+/// 32-step half-life than with the 8 steps this used to be: an expert a
+/// reply uses every few dozen tokens is worth keeping, and an 8-step memory
+/// forgot it between uses.
+const RECENT_REUSE_SCORE_HALF_LIFE_DECODE_STEPS: u64 = 32;
 const PROBATIONARY_PROMOTION_REUSE_SCORE: u64 = 2;
 const REUSE_SCORE_BUCKET_COUNT: u32 = u64::BITS;
 

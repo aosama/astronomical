@@ -91,6 +91,8 @@ mod route_id_materialization;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod route_observation;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod routed_reply_recording;
+#[cfg(feature = "direct-mlx")]
 mod seat_planned_complete_layers;
 pub(crate) mod streaming_model;
 mod system_wired_governance;

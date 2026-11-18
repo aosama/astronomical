@@ -460,6 +460,10 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # domains pass. A login-only no-reply address is refused because GitHub
 # credits it to whichever stranger owns that login.
 #
+# `cargo xtask replay-expert-misses EVIDENCE_DIRECTORY` (alias
+# `cargo replay-expert-misses`) replays the replies `measure-expert-misses`
+# recorded under each astro_expert_cache keeping rule; see that alias.
+#
 # `cargo xtask install-verification-tools [--prefix DIR]` installs the pinned
 # cargo-about and sccache prebuilts, SHA-256 verified, into DIR (default
 # `$CARGO_HOME/bin`), and skips any binary already reporting its pinned
@@ -699,6 +703,38 @@ measure-decode-residency-attribution-every-layer-stops = "run -p xtask -- test-r
 # before experts were read straight into the tables: the comparison.
 measure-decode-residency-attribution-copying = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_when_experts_are_copied_into_tables"
 measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_when_experts_are_copied_with_a_cold_file_cache"
+
+# Expert misses of the astro_expert_cache: how many routed experts a reply
+# token needed that were not held in memory, so each was read from storage.
+# Each case loads the sparse model under the configured MLX limit, keeps its
+# files out of the macos_file_cache, serves a 500/50 Shakespeare warmup and one
+# measured reply, and prints per reply token the misses, hits, megabytes read
+# and read wait from the engine's always-on counters
+# (`[expert-misses] workload=...`), with progress and an ETA while it serves.
+# `measure-expert-misses` runs three recorded workloads (a 10,000-token
+# Shakespeare summary at temperature 1.0, a code review at 0.7, a multi-turn
+# chat at 1.0) with attribution on, which makes the engine keep each decode
+# token's route, and writes `<workload>.routes` plus `<workload>.case.json` to
+# `evidence_directory` for the replay lab; its speed is not a measurement.
+# `measure-expert-misses-speed` serves the Shakespeare reply with attribution
+# off, once with the macos_file_cache evicted and once warm, and is the one
+# to read decode tokens per second from. Pass
+# --configuration PATH whose `model_directory`, the MLX limit
+# (`paging_experiment.maximum_mlx_memory_gigabytes`, or
+# `maximum_mlx_memory_megabytes` for a finer one such as 18022 for 17.6 GB)
+# and optional `evidence_directory` set the case. Each case runs in about one
+# to two minutes.
+measure-expert-misses = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_while_recording"
+measure-expert-misses-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_count_expert_misses_and_decode_speed"
+
+# The replay lab's report: every reply `measure-expert-misses` recorded under
+# EVIDENCE_DIRECTORY is served again, without a GPU, under each keeping rule
+# (least recently and least frequently used, decayed frequency, frequency
+# admission, and Belady's MIN, the bound no rule can beat), with the
+# astro_expert_cache capacity shared across layers and divided by layer as the
+# engine held it when the reply began. Prints misses per reply token per rule
+# and progress with an ETA; runs in seconds.
+replay-expert-misses = "run -p xtask --release -- replay-expert-misses"
 
 # Cold SSD-streaming prefill as production serves it: the in-process engine
 # with request attribution off (attribution synchronizes after every prefill
