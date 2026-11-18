@@ -1,5 +1,7 @@
-//! Gate 2 baseline: where one draft-and-verify round's time goes on the real
-//! 27B pair, beside a plain one-token decode step, at a short context.
+//! Gate 2 baseline: where one draft-and-verify round's time goes on a real
+//! target and its DFlash2 drafter (the 27B pair unless the test run
+//! configures another target), beside a plain one-token decode step, at a
+//! short context.
 //!
 //! Each stage is evaluated on its own so its time can be read; that costs a
 //! GPU synchronization per stage, so the stages sum to a little more than a
@@ -43,7 +45,7 @@ struct StageTimes {
 }
 
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-round-cost"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-round-cost"]
 #[serial]
 fn should_measure_where_a_drafted_round_spends_its_time_on_the_27b() {
     let pair = load_pair();

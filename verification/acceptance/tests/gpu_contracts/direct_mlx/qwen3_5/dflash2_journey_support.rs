@@ -1,4 +1,4 @@
-//! Small helpers for the DFlash2 journeys on the real 27B pair.
+//! Small helpers for the DFlash2 journeys on a real target and drafter pair.
 
 use std::path::PathBuf;
 

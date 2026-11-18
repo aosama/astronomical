@@ -196,7 +196,7 @@ async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files(
 }
 
 // A block can vanish between lookup and open after filesystem cleanup. The raw store load stays
-// fail-closed, while request planning must classify the missing block as an astro SSD prompt cache miss and continue
+// fail-closed, while request planning must classify the missing block as an `astro_ssd_prompt_cache` miss and continue
 // with ordinary prompt processing.
 
 #[tokio::test]

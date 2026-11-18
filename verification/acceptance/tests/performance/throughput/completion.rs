@@ -128,7 +128,7 @@ pub(crate) async fn drive_completion(
             temperature_thousandths: Some(temperature_thousandths),
             top_p_thousandths: None,
             repetition_penalty_thousandths: None,
-            // Repeatable token routes keep baseline and candidate decode astro expert cache policies comparable.
+            // Repeatable token routes keep baseline and candidate decode `astro_expert_cache` policies comparable.
             seed: Some(PERFORMANCE_THROUGHPUT_SAMPLING_SEED),
             thinking_budget: None,
         },

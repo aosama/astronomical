@@ -63,7 +63,7 @@ fn assert_throughput_measurements_exist(reports: &InteractionReports) {
     }
 }
 
-/// The append request's astro SSD prompt cache reuse contract: it consumed tokens restored from it,
+/// The append request's `astro_ssd_prompt_cache` reuse contract: it consumed tokens restored from it,
 /// reported its first-output and first-decode timings, prepared without eager
 /// expert reads on both the record and the attribution, streamed a multi-chunk
 /// suffix after the restored prefix, and preserved useful expert topology.
@@ -203,7 +203,7 @@ fn assert_decode_retained_routed_experts(
     );
 }
 
-/// Verifies memory bounds, astro SSD prompt cache reuse, truthful topology, and attribution.
+/// Verifies memory bounds, `astro_ssd_prompt_cache` reuse, truthful topology, and attribution.
 pub(super) fn assert_reported_interaction(
     reports: &InteractionReports,
     cold_outcome: &ObservedRequestOutcome,

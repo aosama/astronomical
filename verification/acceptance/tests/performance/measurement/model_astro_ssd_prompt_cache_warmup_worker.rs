@@ -220,7 +220,7 @@ pub(super) fn astro_ssd_prompt_cache_disk_usage(
 
 /// Reads one safetensors file's JSON header metadata without touching the payload.
 ///
-/// The persistent astro SSD prompt cache writer stamps `block_token_count` into every
+/// The persistent `astro_ssd_prompt_cache` writer stamps `block_token_count` into every
 /// state file's metadata (the same bounded header the startup scan validates),
 /// so eight length bytes plus the JSON header are enough to classify a saved
 /// artifact as a complete block or a partial tail.
@@ -343,7 +343,7 @@ async fn measure_worker_summarization(
                 max_output_tokens: astro_ssd_prompt_cache_warmup_case.maximum_output_tokens,
                 // Greedy decoding keeps the cold and warm passes deterministic,
                 // which is what the generated-output equality assertion proves:
-                // astro SSD prompt cache restoration must preserve the exact cold-pass output.
+                // `astro_ssd_prompt_cache` restoration must preserve the exact cold-pass output.
                 temperature_thousandths: Some(0),
                 top_p_thousandths: None,
                 repetition_penalty_thousandths: None,

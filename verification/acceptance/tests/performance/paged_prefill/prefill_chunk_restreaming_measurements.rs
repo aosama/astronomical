@@ -16,9 +16,9 @@
 //! request stayed under the ceiling.
 //!
 //! Requested and physical bytes are reported separately on purpose: at a
-//! high ceiling the few cold layers stay in the macOS file cache,
+//! high ceiling the few cold layers stay in the `macos_file_cache`,
 //! so re-streaming costs almost no SSD traffic, and a chunk-size win there is
-//! the macOS file cache warmth artifact that once misled the default chunk choice.
+//! the `macos_file_cache` warmth artifact that once misled the default chunk choice.
 
 use std::{fs, path::Path};
 

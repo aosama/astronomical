@@ -5,7 +5,7 @@
 //! One cell is one model under an MLX limit small enough that the model has
 //! to stream from storage. Each cell runs the standard serving journey — a
 //! short warmup, then about 10,000 prompt tokens and 500 reply tokens of the
-//! Romeo and Juliet fixture — with the astro SSD prompt cache off,
+//! Romeo and Juliet fixture — with the `astro_ssd_prompt_cache` off,
 //! performance attribution off and the product's default prompt chunk, so a
 //! row describes what a person running the app gets.
 //!

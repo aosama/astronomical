@@ -3,7 +3,7 @@
 //!
 //! The method mirrors the Ornith-35B throughput journey: one warmup
 //! completion absorbs the model load and first-use just-in-time kernel
-//! compilation, then completions restored from the astro SSD prompt cache over the identical prompt feed
+//! compilation, then completions restored from the `astro_ssd_prompt_cache` over the identical prompt feed
 //! the medians. Rates are server-attributed, never client wall clock — the
 //! daemon folds every request's prefill and decode rates into rolling
 //! averages, and differencing two `/v1/status` snapshots that bracket

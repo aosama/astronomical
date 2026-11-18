@@ -144,7 +144,7 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
         );
         let worker_home = tempfile::tempdir()
             .expect("the multi-chunk resident worker home should be created");
-        // The astro SSD prompt cache stops a terminal chunk one token short,
+        // The `astro_ssd_prompt_cache` stops a terminal chunk one token short,
         // so the short request leaves a one-token prefill observation. That
         // observation once extrapolated to a 2,048-token chunk as a ~23 GB
         // phantom transient and demoted a fitting request to SSD streaming.
@@ -287,7 +287,7 @@ async fn should_restore_astro_ssd_prompt_cache_prefix_after_an_invisible_residen
         // The seed request has to be served in memory, so the limit holds
         // one prompt chunk's MLX working buffers too. Without it the seed request
         // itself moves to the streaming engine and nothing is saved in the
-        // astro SSD prompt cache for the retry to restore.
+        // `astro_ssd_prompt_cache` for the retry to restore.
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
             .saturating_add(astro_ssd_prompt_cache_seed_context_bytes)

@@ -41,7 +41,7 @@ const SPECULATIVE_PROMPT_TOKEN_COUNT: usize = 256;
 /// Enough output tokens that several rounds must run, cheaply.
 const SPECULATIVE_OUTPUT_TOKEN_COUNT: u64 = 64;
 /// Headroom the resident ceiling buys for the draft's weights (~0.8 GB) and
-/// its astro decoder state cache, beyond the target's own residency.
+/// its `astro_decoder_state_cache`, beyond the target's own residency.
 const DRAFT_RESIDENCY_HEADROOM_BYTES: u64 = 2_000_000_000;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -171,7 +171,7 @@ fn write_speculative_acceptance_config(
             "model_directories": [acceptance_model_scan_root(model_directory)],
             "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_least(speculative_memory_ceiling_bytes),
         },
-        // The astro SSD prompt cache stays enabled to match the control journey's working
+        // The `astro_ssd_prompt_cache` stays enabled to match the control journey's working
         // attribution path; admitted speculative sessions bypass it in both
         // directions regardless (decided at session admission).
         "ssd_prompt_cache": {"enabled": true},

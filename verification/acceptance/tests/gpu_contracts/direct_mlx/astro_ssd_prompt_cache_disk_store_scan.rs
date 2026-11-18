@@ -1,4 +1,4 @@
-//! Integration filesystem-only tests for persistent astro SSD prompt cache disk-store
+//! Integration filesystem-only tests for persistent `astro_ssd_prompt_cache` disk-store
 //! startup scan: invalid-file deletion and quota enforcement.
 //!
 //! These tests exercise `AstroSsdPromptCacheDiskStore::open()` and quota
@@ -431,7 +431,7 @@ fn should_delete_cross_model_stale_writer_temp_below_global_quota() {
 
 /// REGRESSION: a valid-hash-named but invalid-content `.safetensors` file
 /// under a one-byte quota must be deleted during `open()` so that
-/// astro SSD prompt cache bytes cannot silently escape accounting.
+/// `astro_ssd_prompt_cache` bytes cannot silently escape accounting.
 #[test]
 fn should_delete_invalid_content_safetensors_file_under_one_byte_quota() {
     let astro_ssd_prompt_cache_directory =
@@ -467,7 +467,7 @@ fn should_delete_invalid_content_safetensors_file_under_one_byte_quota() {
     );
 }
 
-/// When `open()` encounters an astro SSD prompt cache `.safetensors` file that cannot be
+/// When `open()` encounters an `astro_ssd_prompt_cache` `.safetensors` file that cannot be
 /// deleted (permission denied on the parent directory), it must return
 /// `RemoveAstroSsdPromptCacheFile` rather than silently leaving the file untracked.
 #[test]

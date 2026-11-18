@@ -12,7 +12,7 @@ use crate::openai_rest::E2E_TIMEOUT;
 use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest;
 
-// This suite is the user-facing acceptance boundary for astro SSD prompt cache pressure behavior: a client sends
+// This suite is the user-facing acceptance boundary for `astro_ssd_prompt_cache` pressure behavior: a client sends
 // a long OpenAI Chat request, the real worker publishes reusable state, and the next identical
 // request restores it. Direct-MLX coverage below the worker is retained separately for allocator
 // arithmetic; this test protects the complete server-to-client journey.
@@ -60,7 +60,7 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     );
     // Build a textual request instead of injecting token IDs: only the public REST tokenizer
     // may define the actual user journey. The local tokenizer is used solely to size a stable
-    // Romeo-and-Juliet fixture near the astro SSD prompt cache boundary before it is sent as ordinary text.
+    // Romeo-and-Juliet fixture near the `astro_ssd_prompt_cache` boundary before it is sent as ordinary text.
     let prepared_romeo_and_juliet_prompt = prepare_astro_ssd_prompt_cache_romeo_and_juliet_prompt(
         &model_directory,
         astro_ssd_prompt_cache_restored_token_count,
@@ -126,7 +126,7 @@ async fn run_astro_ssd_prompt_cache_memory_rest_journey(
     );
 
     // Warm request: the same messages and model identity must recover the cold request prefix.
-    // astro SSD prompt cache counters, rather than timing, are the durable proof because machines differ widely.
+    // `astro_ssd_prompt_cache` counters, rather than timing, are the durable proof because machines differ widely.
     eprintln!("{acceptance_log_prefix} status=progress phase=warm_request");
     let warm_response = if let Some(expected_warm_request_expert_memory_mode) =
         expected_warm_request_expert_memory_mode

@@ -1,8 +1,8 @@
-//! Astro SSD prompt cache acceptance journeys over the resident sparse MoE role.
+//! `astro_ssd_prompt_cache` acceptance journeys over the resident sparse MoE role.
 //!
 //! Every journey in this binary runs the resident sparse MoE role
-//! (`resident_sparse_moe`) because it measures astro SSD prompt cache behaviour, not expert
-//! paging: the surfaces under test (astro SSD prompt cache disabled, astro SSD prompt cache miss memory, restore
+//! (`resident_sparse_moe`) because it measures `astro_ssd_prompt_cache` behaviour, not expert
+//! paging: the surfaces under test (`astro_ssd_prompt_cache` disabled, `astro_ssd_prompt_cache` miss memory, restore
 //! peak, parity, block reporting, partial tail reuse, startup cleanup
 //! attribution, and the vision journeys) are identical in resident mode. The
 //! whole binary takes about three minutes. The journeys are `#[ignore]`d
@@ -180,7 +180,7 @@ async fn should_restore_exact_astro_ssd_prompt_cache_parity_for_one_selected_lar
             // tokens (measured 2026-10-10), and the currently installed
             // revision measures 52 (measured 2026-10-31) — so a percentage
             // near the requested length would assert the pinned model's
-            // phrasing instead of astro SSD prompt cache behaviour. The exact-parity assert
+            // phrasing instead of `astro_ssd_prompt_cache` behaviour. The exact-parity assert
             // below is the contract; this floor only rejects degeneration.
             "the representative acceptance produced only {} of approximately {} requested output tokens",
             acceptance_outcome.cold_generated_token_ids.len(),
@@ -204,7 +204,7 @@ async fn run_astro_ssd_prompt_cache_parity_acceptance(
     let astro_ssd_prompt_cache_directory =
         tempfile::tempdir().expect("the test should create an astro SSD prompt cache directory");
 
-    // First run: cold prefill, should populate the astro SSD prompt cache.
+    // First run: cold prefill, should populate the `astro_ssd_prompt_cache`.
     // The exact storage contract now depends on bound affine dtypes. Read block
     // geometry from the loaded engine rather than reconstructing a config-only
     // contract that could disagree with production serialization.
@@ -239,8 +239,8 @@ async fn run_astro_ssd_prompt_cache_parity_acceptance(
         minimum_expected_sequence_state_block_count,
     )
     .await;
-    // Second run: same prompt, same loaded engine, same astro SSD prompt cache directory. The
-    // prompt is longer than one persistent astro SSD prompt cache block, so the second start
+    // Second run: same prompt, same loaded engine, same `astro_ssd_prompt_cache` directory. The
+    // prompt is longer than one persistent `astro_ssd_prompt_cache` block, so the second start
     // must report a hit without paying another full model load in this proof.
     let second_request_id = RequestId::new(2_002);
     let second_generation_start = qwen3_5_engine
@@ -365,7 +365,7 @@ async fn astro_ssd_prompt_cache_eligible_prompt_token_count_for_block_multiplier
 }
 
 async fn astro_ssd_prompt_cache_block_token_count(qwen3_5_engine: &Qwen3_5ResidentEngine) -> usize {
-    // Stats are emitted from the engine-owned, load-derived astro SSD prompt cache contract and
+    // Stats are emitted from the engine-owned, load-derived `astro_ssd_prompt_cache` contract and
     // therefore share the exact geometry used by lookup and publication.
     let astro_ssd_prompt_cache_stats = qwen3_5_engine
         .collect_astro_ssd_prompt_cache_stats()

@@ -1,13 +1,13 @@
-//! Routed-expert page reads through MLX from the SSD, not the macOS file cache:
+//! Routed-expert page reads through MLX from the SSD, not the `macos_file_cache`:
 //! stock safetensors against the expert-major Atlas layout, at the lowest
 //! MLX boundary (load + materialize), with no model math, engine or REST in
 //! the way.
 //!
-//! Every measured page is absent from the macOS file cache (checked with `mincore` just before it is
+//! Every measured page is absent from the `macos_file_cache` (checked with `mincore` just before it is
 //! read) and is measured under exactly one read shape, because a stock read
-//! warms the macOS file cache for every later read of the same bytes. The one
+//! warms the `macos_file_cache` for every later read of the same bytes. The one
 //! deliberate exception is the warm stock shape: the same stock page read
-//! again at once, which is what a page the macOS file cache still holds costs.
+//! again at once, which is what a page the `macos_file_cache` still holds costs.
 //!
 //! Run it with `cargo measure-cold-expert-page-reads` (see `.cargo/config.toml`).
 
@@ -204,7 +204,7 @@ fn measure_pages(
 }
 
 /// The page under its cold shape; a stock page is then read once more while
-/// the macOS file cache holds it, which is the warm stock shape.
+/// the `macos_file_cache` holds it, which is the warm stock shape.
 fn measure_one_page(
     runtime: &MlxRuntime,
     atlas: &AtlasTestFile,

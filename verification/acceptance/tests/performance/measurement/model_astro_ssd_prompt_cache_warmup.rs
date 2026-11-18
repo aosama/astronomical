@@ -210,7 +210,7 @@ fn assert_astro_ssd_prompt_cache_warmup(
     );
     // Only the tail remainder of the prompt may stay unrestored; anything
     // larger means lookup stopped early and silently discarded blocks that
-    // the configured astro SSD prompt cache size still admits.
+    // the configured `astro_ssd_prompt_cache` size still admits.
     assert!(
         warm_prompt_token_count_left_for_prefill <= astro_ssd_prompt_cache_block_token_count,
         "the warm request must leave at most one block of prompt work unrestored:\

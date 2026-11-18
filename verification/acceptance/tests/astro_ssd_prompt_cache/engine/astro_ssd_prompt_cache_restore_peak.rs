@@ -50,7 +50,7 @@ async fn should_restore_a_long_ornith_prefix_with_one_block_of_workspace() {
 async fn run_astro_ssd_prompt_cache_restore_peak_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let journey_started_at = tokio::time::Instant::now();
-    // This journey measures the astro SSD prompt cache restore peak, not SSD streaming:
+    // This journey measures the `astro_ssd_prompt_cache` restore peak, not SSD streaming:
     // the resident sparse MoE role keeps the whole artifact wired so the peak
     // measurement is not confounded by expert paging.
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
@@ -249,7 +249,7 @@ fn greedy_romeo_and_juliet_request(
 
 /// Drives one generate-to-token phase while attributing wall time to every
 /// engine event, because a stalled journey must show whether the cost sits
-/// inside a single forward, between prefill chunks, or in astro SSD prompt cache publication.
+/// inside a single forward, between prefill chunks, or in `astro_ssd_prompt_cache` publication.
 /// The ten-second memory ticker answers the paired question of whether the GPU
 /// is wired and computing while no event arrives.
 async fn generate_token_ids_with_event_timing(

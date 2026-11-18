@@ -1,4 +1,4 @@
-//! Storage-transition cells of the pinned astro SSD prompt cache interaction matrix.
+//! Storage-transition cells of the pinned `astro_ssd_prompt_cache` interaction matrix.
 //!
 //! Each ignored serial test names its storage transition: `LiveReuse`,
 //! `WorkerRestart`, or `DeletedWhileLive`. Select exactly one full test name
@@ -192,7 +192,7 @@ async fn run_greedy_request(
         .start_generation(
             // `new` samples at temperature 1.0 with no seed, so two runs would compare two
             // random draws. Greedy makes the token a function of the logits alone, so a
-            // changed token means the restored astro SSD prompt cache changed them.
+            // changed token means the restored `astro_ssd_prompt_cache` changed them.
             Qwen3_5InferenceRequest::new_sampling(
                 request_id,
                 prompt_token_ids.to_vec(),

@@ -170,8 +170,8 @@ async fn load_visual_acceptance_engine(
         Some(AstroSsdPromptCacheDiskStoreConfig::new(
             astro_ssd_prompt_cache_directory.to_path_buf(),
             astro_ssd_prompt_cache_directory.to_path_buf(),
-            // The journey shares the configured global astro SSD prompt cache quota with every
-            // other astro SSD prompt cache journey. A literal quota smaller than the
+            // The journey shares the configured global `astro_ssd_prompt_cache` quota with every
+            // other `astro_ssd_prompt_cache` journey. A literal quota smaller than the
             // full-context chain is not a tighter journey: at 2,048-token
             // blocks this model needs a 13,611,687,296-byte chain, so any
             // smaller literal fails contract resolution at engine load before

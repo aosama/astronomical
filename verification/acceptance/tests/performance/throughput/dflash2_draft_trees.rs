@@ -1,7 +1,7 @@
-//! Serving throughput of a dense Qwen 27B with its DFlash2 drafter installed
-//! beside it, over the daemon IPC boundary: the real worker finds the
-//! drafter in the model's own library, converts the target's projections
-//! into register order and decodes admitted sessions in draft-tree rounds.
+//! Serving throughput of a target with its DFlash2 drafter, over the daemon
+//! IPC boundary: the real worker finds the drafter, converts the target's
+//! projections into register order and decodes admitted sessions in
+//! draft-tree rounds.
 //!
 //! The cell follows AGENTS.md "Performance Instructions": a warmup of
 //! roughly 500 prompt tokens and 50 output tokens is discarded, then one
@@ -9,12 +9,16 @@
 //! and acquires 500 output tokens at temperature 1.0 with the
 //! `astro_ssd_prompt_cache` disabled.
 //!
-//! The target is located through the explicit test-run `model_directory`
-//! (its Hugging Face snapshot directory), never a hardcoded developer path;
-//! its drafter must sit in the same `huggingface_hub_cache`. Without a
-//! paired drafter the same journey measures plain decoding, which on the
-//! M5 Pro this was written on is about 13 tok/s against about 36 with
-//! draft trees, so the decode rate itself says which path ran.
+//! The target is located through the explicit test-run `model_directory`,
+//! never a hardcoded developer path. Its drafter is the one the engine's
+//! discovery pairs with it: the `drafter` folder inside the target's own
+//! folder, or a sibling model folder in the same `huggingface_hub_cache` or
+//! plain library. Without a paired drafter the same journey measures plain
+//! decoding, so running it on a target and on the same model without its
+//! drafter is the serving A/B. On the M5-family GPU these were measured on,
+//! the dense 27B decoded about 13 tok/s plain against about 36 with draft
+//! trees, and the Ornith 1.5 35B-A3B OptiQ 4-bit 67.7 against 81.3, so the
+//! decode rate itself says which path ran.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -43,7 +47,7 @@ fn target_directory() -> PathBuf {
 }
 
 #[test]
-#[ignore = "loads a real dense 27B and its DFlash2 drafter and measures serving throughput over IPC"]
+#[ignore = "loads a real target and its DFlash2 drafter and measures serving throughput over IPC"]
 #[serial]
 fn should_measure_dflash2_draft_tree_prompt_processing_and_decode_throughput() {
     let target_directory = target_directory();

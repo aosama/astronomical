@@ -20,7 +20,7 @@
 //! floor and one expert page while every layer is seated. Halving the
 //! re-streamed bytes with measured activation evidence did not make prefill
 //! faster (3.9 s against 4.0 s), because those layers are served from the
-//! macOS file cache while compute runs; see issue #1716 before changing residency
+//! `macos_file_cache` while compute runs; see issue #1716 before changing residency
 //! for speed.
 //!
 //! Prefer the smaller-model cell for timing comparisons: the 37 GiB cell can

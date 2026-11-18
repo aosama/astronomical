@@ -1,4 +1,4 @@
-//! Astro SSD prompt cache restore reconstruction strategy probe.
+//! `astro_ssd_prompt_cache` restore reconstruction strategy probe.
 //!
 //! Production (persistent_state_kv_restore.rs) assembles the restored
 //! full-attention KV with one `concatenate` per layer, O(restored tokens).
@@ -10,7 +10,7 @@
 //! tokens.
 //!
 //! The probe measures the replaced pattern against the production concat on
-//! identical data and scales total tokens at the real 2048-token astro SSD prompt cache block
+//! identical data and scales total tokens at the real 2048-token `astro_ssd_prompt_cache` block
 //! size so the super-linear cost stays visible next to the single-pass concat:
 //!   A "current-per-block" = per-block `slice_update` + per-block evaluate
 //!   B "batched-eval"      = per-block `slice_update` + one final evaluate

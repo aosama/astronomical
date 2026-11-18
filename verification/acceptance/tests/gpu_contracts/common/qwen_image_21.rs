@@ -15,7 +15,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 /// before releasing still has to fit, and the 1024×1024 decode's staged f32 activations are the
 /// peak below that. Two gigabytes covers both on any artifact revision.
 const ACTIVATION_HEADROOM_BYTES: usize = 2 * 1024 * 1024 * 1024;
-/// The MLX buffer cache stays small: journeys run once and release, so there is no reuse
+/// The `mlx_buffer_cache` stays small: journeys run once and release, so there is no reuse
 /// worth banking on, and the memory ceiling is the real limit.
 const MLX_BUFFER_CACHE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
@@ -41,7 +41,7 @@ pub(crate) fn journey_effective_ceiling_bytes() -> usize {
         + ACTIVATION_HEADROOM_BYTES
 }
 
-/// The MLX buffer cache limit every Qwen-Image-2.1 journey shares.
+/// The `mlx_buffer_cache` limit every Qwen-Image-2.1 journey shares.
 pub(crate) const JOURNEY_MLX_BUFFER_CACHE_LIMIT_BYTES: usize = MLX_BUFFER_CACHE_LIMIT_BYTES;
 
 /// Resolves the artifact root every Qwen-Image-2.1 journey shares.

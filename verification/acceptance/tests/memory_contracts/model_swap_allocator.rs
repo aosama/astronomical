@@ -417,7 +417,7 @@ fn assert_replacement_cleanup_order(replacement_model_loading_report: &Value) {
 
 /// Two generation-time cleanups are mandatory (after prompt prefill and at
 /// request finalization). A third is legitimate: `astro_ssd_prompt_cache` capture
-/// publication wipes the MLX buffer cache when active memory sits within the
+/// publication wipes the `mlx_buffer_cache` when active memory sits within the
 /// publication comfort headroom of the ceiling
 /// (qwen3_5_core/astro_ssd_prompt_cache_capture/block_capture.rs) — exactly this journey's
 /// tight-ceiling scenario — so the count is a floor, not an exact tally.

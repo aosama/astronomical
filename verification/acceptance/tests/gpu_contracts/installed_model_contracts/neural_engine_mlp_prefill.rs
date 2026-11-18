@@ -483,7 +483,7 @@ fn report_paired_prefill_speedup(
     );
 }
 
-/// The production loader with an astro Neural Engine program cache, prefill only: what a user gets
+/// The production loader with an `astro_neural_engine_program_cache`, prefill only: what a user gets
 /// from the second load of a model onwards.
 async fn compare_prefill_with_kept_programs() {
     let _gpu_exclusive = crate::common::direct_mlx_test_guard().await;

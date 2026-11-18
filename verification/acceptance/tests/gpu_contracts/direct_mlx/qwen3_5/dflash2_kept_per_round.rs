@@ -1,11 +1,13 @@
-//! Gate 1 of speculative decoding on the dense Qwen3.8 27B: how many tokens a
-//! verify round keeps with Astronomical's DFlash2 drafter on the real pair
-//! (`TensorFold/Qwen3.8-27B-MLX-4bit` and `z-lab/Qwen3.8-27B-DFlash2`).
+//! Gate 1 of speculative decoding: how many tokens a verify round keeps with
+//! Astronomical's DFlash2 drafter on a real pair. By default that is the
+//! dense Qwen3.8 27B (`TensorFold/Qwen3.8-27B-MLX-4bit` and
+//! `z-lab/Qwen3.8-27B-DFlash2`); a test run that configures a target with its
+//! own `drafter` folder measures that pair instead.
 //!
 //! Kept per round = tokens emitted / verify rounds, the bonus token included,
 //! as the drafter's model card defines it. z-lab's own reference loop kept
 //! 6.07 on the code prompt at temperature 0.7 and 3.00 on the chat prompt at
-//! 1.0 on this pair (single path, 256 tokens, thinking off), so the floors
+//! 1.0 on the 27B pair (single path, 256 tokens, thinking off), so the floors
 //! below sit about 10% under those. Greedy runs only as a labelled diagnostic.
 //! A third cell follows TensorFold's community benchmark, which sends the
 //! code prompt as a raw completion (its chat cell is the chat cell here), with
@@ -142,7 +144,7 @@ pub(crate) struct JourneyPair {
 }
 
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-kept-per-round"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-kept-per-round"]
 #[serial]
 fn should_keep_as_many_drafted_tokens_per_round_as_z_labs_reference() {
     let journey_started_at = Instant::now();

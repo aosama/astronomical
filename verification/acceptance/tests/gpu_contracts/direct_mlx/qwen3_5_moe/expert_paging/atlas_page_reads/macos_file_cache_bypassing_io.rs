@@ -1,12 +1,12 @@
-//! File reads that reach the SSD rather than the macOS file cache, the check
+//! File reads that reach the SSD rather than the `macos_file_cache`, the check
 //! that proves a range was not in it, and the scatter read the atlas uses.
 //!
 //! Measured on Apple Silicon with this probe's own reads: `F_NOCACHE` gives a
 //! direct read (one that bypasses the `macos_file_cache`) only when the file offset, the length and the
 //! destination are all 16 KiB aligned (the virtual-memory page size), and a
 //! repeated aligned read stays cold; an unaligned read is silently served
-//! through the macOS file cache and leaves the range in it. Stock safetensors tensors
-//! start at unaligned offsets, so a stock-layout read always warms the macOS file cache.
+//! through the `macos_file_cache` and leaves the range in it. Stock safetensors tensors
+//! start at unaligned offsets, so a stock-layout read always warms the `macos_file_cache`.
 
 use std::fs::{File, OpenOptions};
 use std::os::fd::AsRawFd;
@@ -122,7 +122,7 @@ impl PageAlignedSpan {
     }
 }
 
-/// Whether any virtual-memory page under the range is in the macOS file cache.
+/// Whether any virtual-memory page under the range is in the `macos_file_cache`.
 pub(super) fn any_vm_page_resident(file: &File, offset: u64, length: u64) -> bool {
     assert!(length > 0, "a residency check needs at least one byte");
     let mapping_start = offset / DIRECT_READ_ALIGNMENT_BYTES * DIRECT_READ_ALIGNMENT_BYTES;

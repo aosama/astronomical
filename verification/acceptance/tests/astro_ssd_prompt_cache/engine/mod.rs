@@ -1,11 +1,11 @@
-//! End-to-end astro SSD prompt cache tests that exercise the full astro SSD prompt cache pipeline.
+//! End-to-end `astro_ssd_prompt_cache` tests that exercise the full `astro_ssd_prompt_cache` pipeline.
 //!
 //! **These tests are intentionally slow**: they load Ornith and exercise the
-//! astro SSD prompt cache end-to-end, including cold prefill, astro SSD prompt cache save, and astro SSD prompt cache
+//! `astro_ssd_prompt_cache` end-to-end, including cold prefill, `astro_ssd_prompt_cache` save, and `astro_ssd_prompt_cache`
 //! restore. Each test has an internal 115-second timeout.
 //!
 //! Do **not** run these as part of the normal development loop. Use the dedicated
-//! astro SSD prompt cache acceptance journey:
+//! `astro_ssd_prompt_cache` acceptance journey:
 //!
 //! ```sh
 //! cargo xtask test-run --package astronomical-acceptance --test engine_astro_ssd_prompt_cache --features direct-mlx --release --configuration PATH --filter <full_test_name> --exact --ignored
