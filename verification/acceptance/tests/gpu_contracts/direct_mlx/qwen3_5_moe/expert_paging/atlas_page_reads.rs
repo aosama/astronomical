@@ -13,10 +13,13 @@
 
 mod atlas_conversion;
 mod cold_page_plan;
+mod fetching_layer_stages;
 mod macos_file_cache_bypassing_io;
 mod page_read_shapes;
 mod page_timing_report;
 mod progress_report;
+mod stop_cost;
+mod table_reads;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -29,12 +32,15 @@ use serial_test::serial;
 use super::large_sparse_moe_fixture::{
     StreamingProbeFixture, installed_large_sparse_moe_streaming_fixture, probe_runtime,
 };
-use atlas_conversion::{AtlasTestFile, write_atlas_test_file};
+use atlas_conversion::{
+    AtlasTestFile, layers_with_the_commonest_record_shape, write_atlas_test_file,
+};
 use cold_page_plan::{
     PlannedPage, ResidencyChecker, cold_stock_expert_ids_by_layer, coldest_layer_indexes,
     plan_cold_pages,
 };
 use page_read_shapes::{
+    load_atlas_page_as_nine_tensors, load_atlas_page_as_views_of_one_load,
     load_atlas_page_by_scatter_reads, load_atlas_page_split_on_gpu, load_atlas_records,
     load_stock_page,
 };
@@ -51,21 +57,27 @@ enum ColdReadShape {
     AtlasRecordsOnly,
     AtlasRecordsSplitOnGpu,
     AtlasScatterReads,
+    AtlasNineTensorLoad,
+    AtlasViewsOfOneLoad,
 }
 
-const COLD_READ_SHAPES: [ColdReadShape; 4] = [
+const COLD_READ_SHAPES: [ColdReadShape; 6] = [
     ColdReadShape::StockProductionLoad,
     ColdReadShape::AtlasRecordsOnly,
     ColdReadShape::AtlasRecordsSplitOnGpu,
     ColdReadShape::AtlasScatterReads,
+    ColdReadShape::AtlasNineTensorLoad,
+    ColdReadShape::AtlasViewsOfOneLoad,
 ];
 
-const REPORTED_SHAPE_NAMES: [&str; 5] = [
+const REPORTED_SHAPE_NAMES: [&str; 7] = [
     "StockProductionLoad",
     "StockProductionLoadWarm",
     "AtlasRecordsOnly",
     "AtlasRecordsSplitOnGpu",
     "AtlasScatterReads",
+    "AtlasNineTensorLoad",
+    "AtlasViewsOfOneLoad",
 ];
 
 #[test]
@@ -87,6 +99,19 @@ fn should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts() {
         fixture.config.expert_count() as usize,
         &mut residency_checker,
     );
+    let mut cold_expert_ids_by_layer = cold_expert_ids_by_layer;
+    let shares_commonest_record_shape =
+        layers_with_the_commonest_record_shape(&fixture, cold_expert_ids_by_layer.len());
+    for (layer_cold_expert_ids, shares_shape) in cold_expert_ids_by_layer
+        .iter_mut()
+        .zip(shares_commonest_record_shape)
+    {
+        if !shares_shape {
+            // Never chosen: the coldest layers are the ones with the most
+            // experts outside the macos_file_cache.
+            layer_cold_expert_ids.clear();
+        }
+    }
     let atlas_layer_indexes = coldest_layer_indexes(&cold_expert_ids_by_layer, ATLAS_LAYER_COUNT);
     let atlas_directory = tempfile::tempdir().expect("a scratch directory for the atlas");
     let atlas_path = atlas_directory.path().join("experts.atlas");
@@ -129,6 +154,194 @@ fn should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts() {
             "{} measured only {} pages",
             shape_timing.shape_name,
             shape_timing.page_milliseconds.len()
+        );
+    }
+    assert!(
+        probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,
+        "the probe exceeded its 120-second ceiling"
+    );
+}
+
+/// Experts a reply token misses on one layer at the anchor (the 4-bit
+/// 35B-A3B under a 10 GB limit): about 148 over 28 layers.
+const FETCHING_LAYER_EXPERT_COUNT: usize = 5;
+/// Layers on which a reply token fetches at the anchor.
+const FETCHING_LAYER_COUNT: usize = 28;
+
+/// A temporary atlas of the layers least present in the `macos_file_cache`,
+/// with what is needed to plan pages of it that are not in that memory.
+struct ColdAtlasProbe {
+    runtime: MlxRuntime,
+    layer_plans: Vec<QuantizedExpertLayerPlan>,
+    cold_expert_ids_by_layer: Vec<Vec<usize>>,
+    residency_checker: ResidencyChecker,
+    atlas: AtlasTestFile,
+    /// Removes the atlas when the probe ends.
+    _atlas_directory: tempfile::TempDir,
+}
+
+fn cold_atlas_probe() -> ColdAtlasProbe {
+    let fixture = installed_large_sparse_moe_streaming_fixture();
+    let runtime = probe_runtime();
+    let layer_plans = all_layer_plans(&fixture);
+    let mut residency_checker = ResidencyChecker::default();
+    let mut cold_expert_ids_by_layer = cold_stock_expert_ids_by_layer(
+        &layer_plans,
+        fixture.config.expert_count() as usize,
+        &mut residency_checker,
+    );
+    let shares_commonest_record_shape =
+        layers_with_the_commonest_record_shape(&fixture, cold_expert_ids_by_layer.len());
+    for (layer_cold_expert_ids, shares_shape) in cold_expert_ids_by_layer
+        .iter_mut()
+        .zip(shares_commonest_record_shape)
+    {
+        if !shares_shape {
+            layer_cold_expert_ids.clear();
+        }
+    }
+    let atlas_layer_indexes = coldest_layer_indexes(&cold_expert_ids_by_layer, ATLAS_LAYER_COUNT);
+    let atlas_directory = tempfile::tempdir().expect("a scratch directory for the atlas");
+    let atlas = write_atlas_test_file(
+        &fixture,
+        &atlas_layer_indexes,
+        &atlas_directory.path().join("experts.atlas"),
+    );
+    ColdAtlasProbe {
+        runtime,
+        layer_plans,
+        cold_expert_ids_by_layer,
+        residency_checker,
+        atlas,
+        _atlas_directory: atlas_directory,
+    }
+}
+
+#[test]
+#[ignore = "converts installed expert layers to an atlas and times one fetching layer stage by stage"]
+#[serial]
+fn should_time_one_fetching_layer_stage_by_stage() {
+    assert!(
+        !cfg!(debug_assertions),
+        "stage timings need an optimized build (--release)"
+    );
+    let probe_started_at = Instant::now();
+    let mut probe = cold_atlas_probe();
+    let planned_pages = plan_cold_pages(
+        &probe.layer_plans,
+        &probe.cold_expert_ids_by_layer,
+        &probe.atlas,
+        FETCHING_LAYER_EXPERT_COUNT,
+    );
+    // The first planned page proves bytes read in place are the stock bytes.
+    table_reads::assert_tables_read_in_place_match_stock(
+        &probe.runtime,
+        &probe.atlas,
+        &planned_pages[0],
+    );
+    let mut samples = fetching_layer_stages::measure_cold_stages(
+        &probe.runtime,
+        &probe.atlas,
+        &planned_pages[1..],
+        &mut probe.residency_checker,
+    );
+    let stop_chain_milliseconds = stop_cost::measure_stop_cost(&probe.runtime);
+    fetching_layer_stages::report_stages(
+        &mut samples,
+        stop_chain_milliseconds,
+        probe.atlas.record_byte_count * FETCHING_LAYER_EXPERT_COUNT as u64,
+        FETCHING_LAYER_COUNT,
+    );
+    assert!(
+        probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,
+        "the probe exceeded its 120-second ceiling"
+    );
+}
+
+/// Experts in one fetch, from one to a whole token's route on a layer and
+/// beyond: how a fetch's time grows with its size separates what each
+/// request to storage costs from what each byte costs.
+const FETCH_SIZE_SWEEP_EXPERT_COUNTS: [usize; 5] = [1, 2, 4, 8, 16];
+/// The swept size nearest a served fetch at the anchor (about 3.8 experts).
+const SERVED_FETCH_EXPERT_COUNT: usize = 4;
+
+#[test]
+#[ignore = "converts installed expert layers to an atlas and times the native reader at each fetch size"]
+#[serial]
+fn should_time_the_native_reader_at_each_fetch_size() {
+    assert!(
+        !cfg!(debug_assertions),
+        "fetch timings need an optimized build (--release)"
+    );
+    let probe_started_at = Instant::now();
+    let mut probe = cold_atlas_probe();
+    for fetch_expert_count in FETCH_SIZE_SWEEP_EXPERT_COUNTS {
+        let planned_pages = plan_cold_pages(
+            &probe.layer_plans,
+            &probe.cold_expert_ids_by_layer,
+            &probe.atlas,
+            fetch_expert_count,
+        );
+        table_reads::report_native_reader_fetch_time(
+            &probe.runtime,
+            &probe.atlas,
+            &planned_pages,
+            &mut probe.residency_checker,
+            table_reads::FetchCondition::NeighbouringSlots,
+        );
+        if fetch_expert_count != SERVED_FETCH_EXPERT_COUNT {
+            continue;
+        }
+        // At the size a served fetch has, the two things serving adds: slots
+        // spread over the table, and the sweep the cold probes run.
+        for fetch_condition in [
+            table_reads::FetchCondition::NeighbouringRecords,
+            table_reads::FetchCondition::ScatteredSlots,
+            table_reads::FetchCondition::DuringEvictionSweep,
+            table_reads::FetchCondition::AfterAnIdleMillisecond,
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithStorageKeptBusy,
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 0,
+            },
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 100,
+            },
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 250,
+            },
+            table_reads::FetchCondition::AfterAnIdleMillisecondWithReaderKeepingStorageAwake {
+                pause_microseconds: 500,
+            },
+        ] {
+            table_reads::report_native_reader_fetch_time(
+                &probe.runtime,
+                &probe.atlas,
+                &planned_pages,
+                &mut probe.residency_checker,
+                fetch_condition,
+            );
+        }
+    }
+    // What the awake reads cost, beside the same fetches without them.
+    let served_size_pages = plan_cold_pages(
+        &probe.layer_plans,
+        &probe.cold_expert_ids_by_layer,
+        &probe.atlas,
+        SERVED_FETCH_EXPERT_COUNT,
+    );
+    // Twice each, alternating, so a drift in what else the Mac is doing
+    // does not pass for a difference between the two.
+    for pause in [
+        None,
+        Some(Duration::from_micros(100)),
+        None,
+        Some(Duration::from_micros(100)),
+    ] {
+        table_reads::report_cost_of_keeping_storage_awake(
+            &probe.runtime,
+            &probe.atlas,
+            &served_size_pages[0],
+            pause,
         );
     }
     assert!(
@@ -213,8 +426,8 @@ fn measure_one_page(
 ) -> Vec<(&'static str, Duration)> {
     let atlas_layer_position = planned_page.atlas_layer_position;
     let expert_ids = &planned_page.expert_ids;
-    match cold_read_shape {
-        ColdReadShape::StockProductionLoad => vec![
+    if matches!(cold_read_shape, ColdReadShape::StockProductionLoad) {
+        return vec![
             (
                 "StockProductionLoad",
                 load_stock_page(runtime, &planned_page.stock_manifest).page_load_elapsed,
@@ -223,21 +436,53 @@ fn measure_one_page(
                 "StockProductionLoadWarm",
                 load_stock_page(runtime, &planned_page.stock_manifest).page_load_elapsed,
             ),
-        ],
-        ColdReadShape::AtlasRecordsOnly => vec![(
+        ];
+    }
+    vec![time_atlas_shape(
+        runtime,
+        atlas,
+        atlas_layer_position,
+        expert_ids,
+        cold_read_shape,
+    )]
+}
+
+/// One atlas read shape's name and the time its page took.
+fn time_atlas_shape(
+    runtime: &MlxRuntime,
+    atlas: &AtlasTestFile,
+    atlas_layer_position: usize,
+    expert_ids: &[usize],
+    atlas_read_shape: ColdReadShape,
+) -> (&'static str, Duration) {
+    match atlas_read_shape {
+        ColdReadShape::StockProductionLoad => {
+            unreachable!("the stock shape is timed by its caller, warm and cold")
+        }
+        ColdReadShape::AtlasRecordsOnly => (
             "AtlasRecordsOnly",
             load_atlas_records(runtime, atlas, atlas_layer_position, expert_ids).page_load_elapsed,
-        )],
-        ColdReadShape::AtlasRecordsSplitOnGpu => vec![(
+        ),
+        ColdReadShape::AtlasRecordsSplitOnGpu => (
             "AtlasRecordsSplitOnGpu",
             load_atlas_page_split_on_gpu(runtime, atlas, atlas_layer_position, expert_ids)
                 .page_load_elapsed,
-        )],
-        ColdReadShape::AtlasScatterReads => vec![(
+        ),
+        ColdReadShape::AtlasScatterReads => (
             "AtlasScatterReads",
             load_atlas_page_by_scatter_reads(atlas, atlas_layer_position, expert_ids)
                 .page_load_elapsed,
-        )],
+        ),
+        ColdReadShape::AtlasNineTensorLoad => (
+            "AtlasNineTensorLoad",
+            load_atlas_page_as_nine_tensors(runtime, atlas, atlas_layer_position, expert_ids)
+                .page_load_elapsed,
+        ),
+        ColdReadShape::AtlasViewsOfOneLoad => (
+            "AtlasViewsOfOneLoad",
+            load_atlas_page_as_views_of_one_load(runtime, atlas, atlas_layer_position, expert_ids)
+                .page_load_elapsed,
+        ),
     }
 }
 
@@ -259,7 +504,26 @@ fn assert_atlas_tensors_match_stock(
     let scattered_tensors =
         load_atlas_page_by_scatter_reads(atlas, atlas_layer_position, &planned_page.expert_ids)
             .tensors_by_suffix;
-    for atlas_tensors in [&split_tensors, &scattered_tensors] {
+    let nine_tensor_load = load_atlas_page_as_nine_tensors(
+        runtime,
+        atlas,
+        atlas_layer_position,
+        &planned_page.expert_ids,
+    )
+    .tensors_by_suffix;
+    let views_of_one_load = load_atlas_page_as_views_of_one_load(
+        runtime,
+        atlas,
+        atlas_layer_position,
+        &planned_page.expert_ids,
+    )
+    .tensors_by_suffix;
+    for atlas_tensors in [
+        &split_tensors,
+        &scattered_tensors,
+        &nine_tensor_load,
+        &views_of_one_load,
+    ] {
         assert_same_tensors(runtime, &stock_tensors, atlas_tensors);
     }
 }

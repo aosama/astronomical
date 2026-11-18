@@ -2,11 +2,13 @@
 //!
 //! # One token's journey through this dispatch
 //!
-//! This file and `host_routed_dispatch.rs` are the whole SSD-paging decision
-//! tree: outcome 1 keeps the route on the graphics processor and is decided
-//! here; outcomes 2 to 5 need the route on the host and are served there.
-//! Every outcome names the serving function it lands in, so a reader can
-//! trace any layer's forward from here without hunting across directories:
+//! This file, `host_routed_dispatch.rs` and `miss_route_dispatch.rs` are the
+//! whole SSD-paging decision tree: outcome 1 keeps the route on the graphics
+//! processor and is decided here; outcomes 2 to 5 need the route on the host
+//! and are served in `host_routed_dispatch.rs`, which hands a layer not held
+//! whole to `miss_route_dispatch.rs`. Every outcome names the serving
+//! function it lands in, so a reader can trace any layer's forward from here
+//! without hunting across directories:
 //!
 //! 1. **Seated complete layer, page multiplies without a transient decode** —
 //!    affine or bfloat16 pages for any chunk, codebook pages for a single
@@ -27,6 +29,9 @@
 //!    (`forward_moe_mixed_decode_route_with_performance_attribution` in
 //!    `mixed_decode_execution.rs`, built on
 //!    `astro_expert_cache_plus_streamed_page_route.rs`).
+//!    Before either single-token outcome, missing experts are read from
+//!    storage straight into the layer's table when it can take them
+//!    (`direct_expert_fetch.rs`); the route is then outcome 5.
 //! 5. **Single-token miss, fully warm** — the astro expert cache hit serves the
 //!    whole routed set from RAM (`hot_expert_partial_page` in
 //!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.
@@ -156,7 +161,9 @@ impl Qwen3_5Model {
                 .record_path(ExpertDispatchPath::CompletePageInHand);
             return Ok(Some(handled));
         }
-        if self.astro_expert_cache.is_none() {
+        // A measurement that prices a route stop sends every layer on to the
+        // host, held whole or not.
+        if self.astro_expert_cache.is_none() || self.brings_every_route_to_the_host.get() {
             return Ok(None);
         }
         let handled = self.dispatch_table_page_without_host_route(

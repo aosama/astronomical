@@ -19,6 +19,7 @@ use crate::{ModelMemoryFacts, ModelMemoryGeometry, PerformanceAttribution, Perfo
 
 use super::Qwen3_5Model;
 use super::Qwen3_5ModelBase;
+use super::direct_expert_fetch::DirectExpertFetching;
 use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
@@ -104,19 +105,16 @@ impl Qwen3_5Model {
             performance_attribution,
         )?;
         let (expert_pager, astro_expert_cache, sorted_expert_weighted_sum_kernel) =
-            match config.feed_forward_architecture() {
-                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
-                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
-                    &runtime,
-                    model_directory,
-                    &config,
-                    &shard_index,
-                    &tensor_inventory,
-                    expert_atlas.as_ref(),
-                    decode_astro_expert_cache_policy,
-                    performance_attribution,
-                )?,
-            };
+            streaming_expert_runtime_for_architecture(
+                &runtime,
+                model_directory,
+                &config,
+                &shard_index,
+                &tensor_inventory,
+                expert_atlas.as_ref(),
+                decode_astro_expert_cache_policy,
+                performance_attribution,
+            )?;
         let astro_decoder_state_cache_layout = measured_astro_decoder_state_cache_layout(
             &config,
             &chunking,
@@ -167,9 +165,11 @@ impl Qwen3_5Model {
                 key_normalization_scale_weight,
                 layer_additions: RefCell::new(None),
             },
+            direct_expert_fetching: DirectExpertFetching::open(expert_pager.as_ref()),
             expert_pager,
             dense_layer_streamer,
             astro_expert_cache,
+            brings_every_route_to_the_host: std::cell::Cell::new(false),
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
             prompt_expert_pages_in_hand: Default::default(),
@@ -318,9 +318,36 @@ type StreamingExpertRuntimeTrio = (
     Option<MlxMetalKernel>,
 );
 
-/// Builds the streaming expert runtime for a sparse model. Mirrors the MoE
-/// branch of the inlined loader, including the warm-table seeding from the
-/// persisted `.coli_usage`-analog history.
+/// The streaming expert runtime a model's feed-forward architecture needs:
+/// none for a dense model, `load_streaming_expert_runtime` for a sparse one.
+#[allow(clippy::too_many_arguments)]
+fn streaming_expert_runtime_for_architecture(
+    runtime: &MlxRuntime,
+    model_directory: &Path,
+    config: &crate::Qwen3_5Config,
+    shard_index: &super::Qwen3_5ShardIndex,
+    tensor_inventory: &crate::TensorInventory,
+    expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
+    decode_astro_expert_cache_policy: WorkerDecodeAstroExpertCachePolicy,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
+    match config.feed_forward_architecture() {
+        Qwen3_5FeedForwardArchitecture::Dense => Ok((None, None, None)),
+        Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
+            runtime,
+            model_directory,
+            config,
+            shard_index,
+            tensor_inventory,
+            expert_atlas,
+            decode_astro_expert_cache_policy,
+            performance_attribution,
+        ),
+    }
+}
+
+/// Builds the streaming expert runtime for a sparse model, including the
+/// warm-table seeding from the persisted `.coli_usage`-analog history.
 #[allow(clippy::too_many_arguments)]
 fn load_streaming_expert_runtime(
     runtime: &MlxRuntime,

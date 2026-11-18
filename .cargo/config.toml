@@ -608,8 +608,10 @@ measure-row-exact-tree-attention = "run -p xtask -- test-run --package astronomi
 # `drafter` folder first). Append --configuration PATH with model_directory
 # set to the target's folder (and throughput_history_path to keep the durable
 # history untouched). Run it once more on the same model without a drafter
-# for the plain side of the A/B; the decode rate says which path ran. About
-# two minutes.
+# for the plain side of the A/B; the decode rate says which path ran. Set
+# `paging_experiment.maximum_mlx_memory_gigabytes` in the configuration to
+# serve under a limit below the model's size, which measures the worker while
+# the model streams from storage. About two minutes.
 measure-dflash2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter dflash2_draft_tree --ignored"
 # The DFlash2 drafter against z-lab's own MLX reference: a tiny random
 # drafter run through dflash/model_mlx.py for two rounds (fixture and its
@@ -648,8 +650,11 @@ measure-paged-prefill = "run -p xtask -- test-run --package astronomical-accepta
 
 # Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the
 # production stock-safetensors page load, the same page read again warm, and
-# three expert-major Atlas read shapes, with the Atlas bytes checked equal to
-# the stock bytes. It converts the 16 expert layers least present in the macOS file cache of the
+# five expert-major Atlas read shapes (records only, records split on the
+# graphics processor, scatter reads, one MLX Load per tensor as serving reads
+# an Atlas today, and one Load whose nine tensors are no-copy views), with the
+# Atlas bytes checked equal to the stock bytes. Layers whose experts differ in
+# shape from most (a mixed-precision model's) are left out of the temporary Atlas. It converts the 16 expert layers least present in the macOS file cache of the
 # installed large sparse MoE model into a temporary Atlas (about 13 GB of
 # scratch space, checked before writing), skips any page `mincore` finds in
 # the macOS file cache, and fails within its 120-second budget when too few
@@ -657,6 +662,29 @@ measure-paged-prefill = "run -p xtask -- test-run --package astronomical-accepta
 # names the model when the Development configuration does not discover it;
 # the streaming-latency probes in the same file honour that override too.
 measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts"
+# One fetching layer's work stage by stage, each timed alone on pages the
+# macOS file cache does not hold (5 experts, what a reply token misses on a
+# layer of the 4-bit 35B-A3B under a 10 GB limit): today's read through MLX,
+# a read of our own with no MLX (one preadv per record into memory that
+# already exists), a graphics-processor pass over our bytes against MLX's,
+# the copy into table slots, a read straight into tables MLX owns (with
+# threads started for it and through the native record reader, whole and half
+# records), and what stopping the forward to bring a route to the host costs,
+# waiting inside MLX as serving does and polling for the route on a spinning core (`[stop-cost]`). Prints each as milliseconds a layer and a token over 28
+# fetching layers. Same configuration and scratch space as the alias above.
+measure-fetching-layer-stages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_one_fetching_layer_stage_by_stage"
+# The native record reader filling table slots at each fetch size (1, 2, 4, 8
+# and 16 experts) from pages the macos_file_cache does not hold: how a fetch's
+# time grows with its size separates what each request to storage costs from
+# what each byte costs. At the size a served fetch has it also times what
+# serving adds: slots scattered over the table, the cold probes' eviction
+# sweep, a millisecond of idleness before the fetch, and that idleness with
+# storage kept awake by another thread and by the reader itself at four paces.
+# It also times records that sit next to each other in the file, which prices
+# ordering records by co-use, and prints what keeping storage awake costs
+# (`[awake-cost]`: pages read a second and processor time, on and off). Same
+# configuration and scratch space as above.
+measure-expert-fetch-size = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_the_native_reader_at_each_fetch_size"
 
 # An Expert Atlas model (made by `astronomical models convert-atlas`) against
 # the stock checkpoint it came from: both validate, budget memory alike, and
@@ -665,6 +693,14 @@ measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomica
 # `model_directory` names the Atlas and `reference_artifact_path` its source.
 verify-atlas-model-pages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_load_identical_expert_tensors_from_an_atlas_and_its_stock_source"
 
+# A seeded reply is the same tokens whether its missing experts are read from
+# storage straight into their tables or loaded as a page and copied: serves
+# the 10,000-token Shakespeare request three times on one loaded model
+# (copying, direct, copying again) and asserts the first two replies are
+# equal. Each reply prints a fingerprint of its tokens: run it once on a stock
+# model and once on its Atlas, and equal fingerprints show the Atlas serves the
+# stock model's reply. Same configuration as the alias below.
+verify-direct-expert-read-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_write_the_same_reply_whether_experts_are_read_into_tables_or_copied"
 # Where a paged decode token's time goes: one 10,000-token Shakespeare request
 # (after a 500/50 warmup) through the attributed in-process engine, printing
 # per decode token the wall time, the per-layer route copies to the host and
@@ -676,6 +712,15 @@ measure-decode-residency-attribution = "run -p xtask -- test-run --package astro
 # cache for the whole run: what the reads cost on a Mac whose RAM is the
 # limit, rather than on a larger Mac that keeps the model in the macOS file cache.
 measure-cold-decode-residency-attribution = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_with_a_cold_file_cache"
+# The warm probe with a route stop at every layer, held whole or not. Under a
+# limit the model fits in, the stops are the only thing added, so the token
+# time less the plain probe's is what the stops cost inside the real forward.
+measure-decode-residency-attribution-every-layer-stops = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_with_a_route_stop_at_every_layer"
+# The same two probes with a reply token's missing experts loaded as pages
+# and copied into their tables after the forward, the path serving used
+# before experts were read straight into the tables: the comparison.
+measure-decode-residency-attribution-copying = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_when_experts_are_copied_into_tables"
+measure-cold-decode-residency-attribution-copying = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_when_experts_are_copied_with_a_cold_file_cache"
 
 # Cold SSD-streaming prefill as production serves it: the in-process engine
 # with request attribution off (attribution synchronizes after every prefill

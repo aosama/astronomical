@@ -12,9 +12,17 @@ pub mod expert_pager;
 #[cfg(feature = "direct-mlx")]
 mod expert_pager_construction;
 #[cfg(feature = "direct-mlx")]
+mod expert_slot_storage_fill;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod expert_slot_storage_fill_tests;
+#[cfg(feature = "direct-mlx")]
 mod expert_usage_history;
 #[cfg(feature = "direct-mlx")]
 mod paged_expert_weights;
+// Pure planning, built and unit-tested without the graphics-processor
+// runtime; only the direct-MLX slot filler calls it.
+#[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
+mod record_read_plan;
 #[cfg(feature = "direct-mlx")]
 mod retained_page_payload;
 pub mod route_observation;
@@ -32,5 +40,7 @@ pub(crate) use astro_expert_cache::AstroExpertCache;
 pub(crate) use astro_expert_cache::RoutedExpertCoverage;
 #[cfg(feature = "direct-mlx")]
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
+#[cfg(feature = "direct-mlx")]
+pub(crate) use expert_slot_storage_fill::ExpertSlotStorageFiller;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use retained_page_payload::retained_expert_layer_page_payload_bytes;

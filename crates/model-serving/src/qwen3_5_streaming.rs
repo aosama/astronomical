@@ -23,6 +23,8 @@ pub use inference_execution::{
     Qwen3_5StreamingPromptProcessingChunkSizerError, safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
+pub use model::direct_expert_fetch_tally::DirectExpertFetchCounts;
+#[cfg(feature = "direct-mlx")]
 pub use model::expert_dispatch_tally::ExpertDispatchCounts;
 #[cfg(feature = "direct-mlx")]
 pub use model::{

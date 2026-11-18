@@ -180,22 +180,23 @@ pub(super) fn assemble_planned_slots(
     planned_slots
 }
 
-/// Writes each incoming expert into its planned slot, tracking evictions and
-/// per-slot decode policy. Returns the written count and the slot
+/// Claims each incoming expert's planned slot, tracking evictions and
+/// per-slot decode policy, and copies its row there when the rows come from
+/// a page in memory. Returns each expert with its slot, and the slot
 /// replacement count for the caller's `astro_expert_cache`-wide counters.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn write_planned_experts(
     runtime: &MlxRuntime,
     layer_index: usize,
     table: &mut ExpertSlotTable,
-    streamed_weights: &Qwen3_5PagedExpertWeights,
+    row_source: PlannedRowSource<'_>,
     new_expert_rows: Vec<(usize, usize)>,
     planned_slots: Vec<usize>,
     historically_hot_expert_ids: &[usize],
     candidate_decode_step_epoch: Option<u64>,
-) -> Result<(usize, u64), MlxRuntimeError> {
+) -> Result<(Vec<(usize, usize)>, u64), MlxRuntimeError> {
     let mut planned_slot_iter = planned_slots.into_iter();
-    let mut written_expert_count = 0_usize;
+    let mut claimed_expert_slots = Vec::with_capacity(new_expert_rows.len());
     let mut slot_replacement_count = 0_u64;
     for (expert_row, expert_id) in new_expert_rows {
         let slot = planned_slot_iter
@@ -217,24 +218,15 @@ pub(super) fn write_planned_experts(
                 .payload_bytes
                 .saturating_add(table.per_expert_payload_bytes);
         }
-        let write_started_at = std::time::Instant::now();
-        write_expert_into_slot(
+        copy_row_when_the_page_is_in_memory(
             runtime,
+            layer_index,
             &mut table.weights,
-            streamed_weights,
+            row_source,
             expert_row,
+            expert_id,
             slot,
         )?;
-        let write_elapsed = write_started_at.elapsed();
-        if write_elapsed > std::time::Duration::from_millis(5) {
-            tracing::info!(
-                layer_index,
-                expert_id,
-                slot,
-                write_elapsed_millis = write_elapsed.as_millis(),
-                "slow write_expert_into_slot"
-            );
-        }
         table.expert_id_by_slot[slot] = Some(expert_id);
         table.slot_by_expert_id.insert(expert_id, slot);
         table.read_count_by_slot[slot] = 0;
@@ -247,9 +239,59 @@ pub(super) fn write_planned_experts(
         } else {
             table.decode_policy_by_slot[slot] = DecodeExpertSlotState::default();
         }
-        written_expert_count += 1;
+        claimed_expert_slots.push((expert_id, slot));
     }
-    Ok((written_expert_count, slot_replacement_count))
+    Ok((claimed_expert_slots, slot_replacement_count))
+}
+
+/// Copies one row of a page already in memory into its slot; a planned
+/// insert whose rows come from storage has nothing to copy here.
+fn copy_row_when_the_page_is_in_memory(
+    runtime: &MlxRuntime,
+    layer_index: usize,
+    table_weights: &mut Qwen3_5PagedExpertWeights,
+    row_source: PlannedRowSource<'_>,
+    expert_row: usize,
+    expert_id: usize,
+    slot: usize,
+) -> Result<(), MlxRuntimeError> {
+    let PlannedRowSource::StreamedPage(streamed_weights) = row_source else {
+        return Ok(());
+    };
+    let write_started_at = std::time::Instant::now();
+    write_expert_into_slot(runtime, table_weights, streamed_weights, expert_row, slot)?;
+    let write_elapsed = write_started_at.elapsed();
+    if write_elapsed > std::time::Duration::from_millis(5) {
+        tracing::info!(
+            layer_index,
+            expert_id,
+            slot,
+            write_elapsed_millis = write_elapsed.as_millis(),
+            "slow write_expert_into_slot"
+        );
+    }
+    Ok(())
+}
+
+/// The slots planned for the experts a table does not hold yet.
+pub(super) struct PlannedSlotInsert {
+    /// Each new expert's row in the incoming list, with its id.
+    pub(super) new_expert_rows: Vec<(usize, usize)>,
+    /// One slot per new expert, in the same order.
+    pub(super) planned_slots: Vec<usize>,
+    /// Whether planning replaced the table with a larger one, which is a
+    /// lazy copy until it is evaluated.
+    pub(super) table_grew: bool,
+}
+
+/// Where the rows of a planned insert come from.
+#[derive(Clone, Copy)]
+pub(super) enum PlannedRowSource<'page> {
+    /// A page already in memory: each row is copied into its slot here.
+    StreamedPage(&'page Qwen3_5PagedExpertWeights),
+    /// Storage: the slots are only claimed here, and the caller reads the
+    /// experts straight into them.
+    Storage,
 }
 
 pub(super) fn grow_table_within_budget(
