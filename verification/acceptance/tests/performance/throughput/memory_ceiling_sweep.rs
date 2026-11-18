@@ -314,6 +314,7 @@ fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
         attribution_enabled: true,
         prompt_chunking: throughput_support::PromptChunking::MeasurementLane,
         journey_timeout: MEMORY_CELL_SERVING_BUDGET,
+        explanatory_worker_log_markers: &[],
         model_directory: None,
         diagnostic_qwen3_5_engine_override:
             astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,

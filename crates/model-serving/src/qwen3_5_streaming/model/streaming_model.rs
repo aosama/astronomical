@@ -90,6 +90,10 @@ pub struct Qwen3_5StreamingModel {
     /// as long as the model is loaded; zero without one. They never page, so
     /// the memory governor counts them with the model's core weights.
     pub(crate) hosted_drafter_payload_bytes: Cell<u64>,
+    /// Which way each layer's expert feed-forward went and what waiting for
+    /// routes cost, for measurements that need the cause of a slow forward.
+    pub(crate) expert_dispatch_tally:
+        crate::qwen3_5_streaming::model::expert_dispatch_tally::ExpertDispatchTally,
 }
 
 impl std::ops::Deref for Qwen3_5StreamingModel {

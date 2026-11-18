@@ -83,7 +83,18 @@ impl Qwen3_5EngineState {
             active_request.first_decode_forward_elapsed_millis = Some(0);
         }
         let memory_baseline = self.begin_forward_memory_measurement()?;
+        let round_started_at = std::time::Instant::now();
         let round_outcome = self.verified_draft_round(active_request, bonus_token_id)?;
+        active_request
+            .engine_extension
+            .draft_request_state
+            .round_tally
+            .record_round(
+                // The round's last token is its own next pick, which the
+                // next round commits and counts as its anchor.
+                round_outcome.emitted_token_ids.len().saturating_sub(1),
+                round_started_at.elapsed(),
+            );
         let model = self
             .model
             .as_ref()

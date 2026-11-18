@@ -185,6 +185,7 @@ impl Qwen3_5Model {
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
             hosted_drafter_payload_bytes: std::cell::Cell::new(0),
+            expert_dispatch_tally: Default::default(),
         })
     }
 }

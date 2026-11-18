@@ -18,6 +18,12 @@ use crate::{MemoryPhase, ModelMemoryGeometry};
 /// multiplied and the one read ahead of it.
 const SPARSE_READING_STREAM_SLOT_COUNT: u64 = 2;
 
+/// Rows one draft round verifies on a model with experts: the anchor and
+/// the tree's nodes.
+const DRAFT_ROUND_ROW_COUNT: u64 =
+    crate::qwen3_5_core::draft_tree_decode::draft_tree_size::MIXTURE_OF_EXPERTS_NODE_BUDGET as u64
+        + 1;
+
 /// One completed forward's memory readings, in bytes.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct CompletedForwardMemoryReadings {
@@ -70,8 +76,37 @@ impl Qwen3_5Model {
                 dense_layer_streamer.layer_payload_bytes(),
                 dense_layer_streamer.streaming_slot_bytes(),
             ),
-            None => sparse_model_memory_shape(model_geometry),
+            None => self.sparse_model_memory_shape_with_hosted_drafter(model_geometry),
         }
+    }
+
+    /// A sparse model's shape, with the drafter it hosts counted in: the
+    /// drafter's weights stay in memory beside the core, and a draft round
+    /// reads the experts of every tree row in one reply step. Leaving either
+    /// out lets the plan keep about a gigabyte of experts more than fits,
+    /// and the first round then fails its expert admission.
+    fn sparse_model_memory_shape_with_hosted_drafter(
+        &self,
+        model_geometry: ModelMemoryGeometry,
+    ) -> ModelMemoryShape {
+        let hosted_drafter_payload_bytes = self.hosted_drafter_payload_bytes.get();
+        let model_shape = sparse_model_memory_shape(model_geometry);
+        if hosted_drafter_payload_bytes == 0 {
+            return model_shape;
+        }
+        model_shape
+            .with_companion_weight_bytes(hosted_drafter_payload_bytes)
+            .with_reply_rows_per_step(DRAFT_ROUND_ROW_COUNT)
+    }
+
+    /// Records the drafter the engine just hosted and opens the governor
+    /// again, so every capacity from here on is planned around it. Hosting
+    /// happens after the first opening because the drafter loads against the
+    /// finished target.
+    pub(crate) fn count_hosted_drafter(&self, hosted_drafter_payload_bytes: u64) {
+        self.hosted_drafter_payload_bytes
+            .set(hosted_drafter_payload_bytes);
+        self.open_memory_governor();
     }
 
     /// Opens the governor once loading has measured what it can, and gives

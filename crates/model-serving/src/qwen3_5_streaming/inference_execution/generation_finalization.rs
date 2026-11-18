@@ -142,6 +142,10 @@ impl Qwen3_5EngineState {
             .engine_extension
             .mlx_buffer_cache_reply_record;
         log_mlx_buffer_cache_over_the_reply(request_id.value(), mlx_buffer_cache_reply_record);
+        log_draft_rounds_over_the_reply(
+            request_id.value(),
+            &active_request.engine_extension.draft_request_state,
+        );
         let reply_memory_record = mlx_buffer_cache_reply_record.reply_memory_record(
             std::mem::take(&mut active_request.engine_extension.reply_expert_route_record),
         );
@@ -397,5 +401,27 @@ fn log_mlx_buffer_cache_over_the_reply(
         mean_mlx_buffer_cache_bytes = mlx_buffer_cache_reply_record.mean_bytes(),
         largest_mlx_buffer_cache_bytes = mlx_buffer_cache_reply_record.largest_bytes(),
         "the MLX buffer cache over the reply"
+    );
+}
+
+/// Writes what the reply's draft rounds added up to, when it ran any: the
+/// evidence of whether drafting paid for this model, memory and text.
+fn log_draft_rounds_over_the_reply(
+    request_id: u64,
+    draft_request_state: &crate::qwen3_5_core::draft_tree_decode::draft_request_state::DraftRequestState,
+) {
+    let round_tally = draft_request_state.round_tally;
+    if round_tally.round_count == 0 {
+        return;
+    }
+    tracing::info!(
+        request_id,
+        draft_round_count = round_tally.round_count,
+        draft_round_emitted_token_count = round_tally.emitted_token_count,
+        tokens_per_draft_round = round_tally.tokens_per_round().unwrap_or(0.0),
+        milliseconds_per_draft_round = round_tally.milliseconds_per_round().unwrap_or(0.0),
+        tokens_per_second_while_drafting = round_tally.tokens_per_second().unwrap_or(0.0),
+        was_drafting_at_the_end = draft_request_state.is_drafting(),
+        "draft rounds over the reply"
     );
 }

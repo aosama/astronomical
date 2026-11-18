@@ -4,6 +4,7 @@
 
 use std::collections::VecDeque;
 
+use super::draft_round_tally::DraftRoundTally;
 use super::draft_tree_round::DraftSession;
 
 /// A request's drafting state from its start to its last token.
@@ -16,6 +17,9 @@ pub(crate) struct DraftRequestState {
     /// which the next round's verify commits as its anchor.
     pub(crate) emission_queue: VecDeque<u32>,
     is_drafting: bool,
+    /// What the rounds run so far added up to; kept after drafting stops so
+    /// the reply's end can report it.
+    pub(crate) round_tally: DraftRoundTally,
 }
 
 impl DraftRequestState {
@@ -38,6 +42,7 @@ impl DraftRequestState {
             draft_session: is_admitted.then_some(DraftSession::new(keyed_seed)),
             emission_queue: VecDeque::new(),
             is_drafting: is_admitted,
+            round_tally: DraftRoundTally::default(),
         }
     }
 

@@ -54,9 +54,7 @@ impl Qwen3_5InferenceExecution {
         if self.speculative_draft_runtime.is_some() {
             let hosted_drafter_payload_bytes =
                 active_memory_bytes(model).saturating_sub(active_memory_bytes_before_drafter);
-            model
-                .hosted_drafter_payload_bytes
-                .set(hosted_drafter_payload_bytes);
+            model.count_hosted_drafter(hosted_drafter_payload_bytes);
             tracing::info!(
                 hosted_drafter_payload_bytes,
                 "the streaming engine hosts a DFlash2 drafter"

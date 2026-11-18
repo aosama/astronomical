@@ -14,6 +14,7 @@
 //! weights (`DraftTreeTarget`) and how a round's tokens reach its caller.
 
 pub(crate) mod draft_request_state;
+pub(crate) mod draft_round_tally;
 pub mod draft_tree_round;
 pub mod draft_tree_size;
 pub mod drafter_discovery;

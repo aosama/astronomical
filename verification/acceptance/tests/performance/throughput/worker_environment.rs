@@ -84,6 +84,7 @@ pub(crate) fn perf_worker_environment(
     model_id: &str,
     model_directory: &Path,
     attribution_enabled: bool,
+    should_log_at_info_level: bool,
     prompt_chunking: PromptChunking,
 ) -> (
     tempfile::TempDir,
@@ -115,14 +116,11 @@ pub(crate) fn perf_worker_environment(
         "persistent_prompt_cache_enabled": false,
     });
     apply_prompt_chunking(&mut configuration_document, prompt_chunking);
-    if diagnostics_enabled() || attribution_enabled {
-        // Attribution adds host synchronization to every forward and info
-        // logging adds I/O, so a diagnostic or evidence run explains where
-        // time goes but its throughput is distorted. Production-faithful
-        // measured runs leave both off.
-        configuration_document["logging"] = serde_json::json!({ "level": "info" });
-        configuration_document["performance_attribution_enabled"] = serde_json::Value::Bool(true);
-    }
+    apply_logging_and_attribution(
+        &mut configuration_document,
+        attribution_enabled,
+        should_log_at_info_level,
+    );
     fs::write(
         configuration_directory.join("config.json"),
         serde_json::to_vec_pretty(&configuration_document)
@@ -158,4 +156,25 @@ pub(crate) fn perf_worker_environment(
 /// time goes; their throughput is not production-faithful and is never recorded.
 pub(crate) fn diagnostics_enabled() -> bool {
     TestRunContext::current().configuration.diagnostics
+}
+
+/// Sets how much the worker logs and whether it attributes its time.
+fn apply_logging_and_attribution(
+    configuration_document: &mut serde_json::Value,
+    attribution_enabled: bool,
+    should_log_at_info_level: bool,
+) {
+    if diagnostics_enabled() || attribution_enabled {
+        // Attribution adds host synchronization to every forward and info
+        // logging adds I/O, so a diagnostic or evidence run explains where
+        // time goes but its throughput is distorted. Production-faithful
+        // measured runs leave both off.
+        configuration_document["logging"] = serde_json::json!({ "level": "info" });
+        configuration_document["performance_attribution_enabled"] = serde_json::Value::Bool(true);
+    } else if should_log_at_info_level {
+        // A journey that prints the worker's own account of a reply needs
+        // the handful of info lines a request writes; without attribution
+        // they cost a few file writes per request, not per token.
+        configuration_document["logging"] = serde_json::json!({ "level": "info" });
+    }
 }

@@ -429,6 +429,7 @@ async fn run_two_turn_streaming_journey(
         model_id,
         &model_directory,
         attribution_enabled,
+        false,
         throughput_support::PromptChunking::MeasurementLane,
     );
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =

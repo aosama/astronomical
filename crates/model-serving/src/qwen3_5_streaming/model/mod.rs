@@ -21,6 +21,7 @@ pub(crate) mod dense_layer_streamer;
 #[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod expert_dispatch_tally;
 pub(crate) mod expert_layer_mlx_working_buffer_probe;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
@@ -61,6 +62,7 @@ mod prefill_partial_layer_read_tests;
 #[cfg(feature = "direct-mlx")]
 mod prefill_partial_page;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod reply_expert_residency;
 mod request_expert_storage_read_tally;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::model_math::{
@@ -68,6 +70,7 @@ pub(crate) use crate::qwen3_5_core::model_math::{
 };
 #[cfg(feature = "direct-mlx")]
 mod forward;
+mod host_routed_dispatch;
 #[cfg(feature = "direct-mlx")]
 mod mixed_decode_execution;
 #[cfg(feature = "direct-mlx")]

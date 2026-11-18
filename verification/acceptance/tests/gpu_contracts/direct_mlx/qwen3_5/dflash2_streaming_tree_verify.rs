@@ -10,14 +10,20 @@
 //! compares the greedy continuation fed one token a step with the same tokens
 //! verified four rows a pass as a chain, on the configured target (the test
 //! run's `model_directory`, under its `paging_experiment` memory limit).
+//!
+//! A second measurement puts the model in the memory state the engine serves
+//! in and reads where a round's time goes beside a plain step's: the graph
+//! build, the evaluation, how many layers stopped the pass to bring their
+//! route to the host, how long those stops took, and what was read from
+//! storage. It asserts nothing.
 
 use std::time::Instant;
 
 use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
 use astronomical_model_serving::speculative_decoding::tree_rows::TreeRows;
 use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
-    RequestDecoderStateStack,
+    ExpertDispatchCounts, MemoryPhase, PerformanceAttribution, Qwen3_5ArtifactValidator,
+    Qwen3_5Config, Qwen3_5StreamingModel, Qwen3_5Tokenizer, RequestDecoderStateStack,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
@@ -36,7 +42,7 @@ struct StreamingTarget {
     prompt_token_ids: Vec<u32>,
 }
 
-fn load_streaming_target() -> StreamingTarget {
+fn load_streaming_target(prompt: &str) -> StreamingTarget {
     let test_run = astronomical_test_harness::test_run::TestRunContext::current();
     let target_directory = test_run.required_model_directory();
     let memory_limit_bytes = test_run
@@ -59,7 +65,7 @@ fn load_streaming_target() -> StreamingTarget {
     let tokenizer =
         Qwen3_5Tokenizer::from_validated_artifact(&artifact).expect("the tokenizer builds");
     let prompt_token_ids = tokenizer
-        .encode_prompt(PROMPT)
+        .encode_prompt(prompt)
         .expect("the prompt tokenizes");
     let mut model = Qwen3_5StreamingModel::load(
         runtime,
@@ -207,7 +213,7 @@ fn largest_difference(reference: &[f32], candidate: &[f32]) -> f32 {
 #[ignore = "loads a real target in the streaming model; run through cargo measure-dflash2-streaming-tree-verify"]
 #[serial]
 fn should_give_tree_rows_on_the_streaming_model_the_one_token_steps_picks() {
-    let target = load_streaming_target();
+    let target = load_streaming_target(PROMPT);
     let step_count = ROWS_PER_ROUND * ROUND_COUNT;
     // The first pass of each kind reads its experts from storage and compiles
     // its kernels; the second is the steady state a long reply runs in.
@@ -254,4 +260,251 @@ fn should_give_tree_rows_on_the_streaming_model_the_one_token_steps_picks() {
         agreeing_pick_count * 4 >= step_count * 3,
         "tree rows must reproduce most one-token picks: {agreeing_pick_count}/{step_count}"
     );
+}
+
+/// The Romeo and Juliet words the measured prompt is cut from.
+const LONG_PROMPT_SOURCE: &str =
+    include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
+/// About 500 tokens: enough for the reply's residency plan to have demand
+/// to plan from, read in one short pass.
+const STAGE_PROMPT_WORD_COUNT: usize = 350;
+const STAGE_ROUND_COUNT: usize = 48;
+/// Rounds before the measured ones: the first rounds of a reply read the
+/// experts its text needs and compile the tree kernels.
+const STAGE_WARM_UP_ROUND_COUNT: usize = 16;
+const BYTES_PER_MB: f64 = 1_048_576.0;
+
+/// Prints how far a measured loop is and when it should end, at most every
+/// five seconds.
+struct LoopProgress {
+    label: &'static str,
+    pass_count: usize,
+    started_at: Instant,
+    last_printed_at: Instant,
+}
+
+impl LoopProgress {
+    fn new(label: &'static str, pass_count: usize) -> Self {
+        Self {
+            label,
+            pass_count,
+            started_at: Instant::now(),
+            last_printed_at: Instant::now(),
+        }
+    }
+
+    fn passed(&mut self, completed_pass_count: usize) {
+        if self.last_printed_at.elapsed().as_secs() < 5 && completed_pass_count < self.pass_count {
+            return;
+        }
+        self.last_printed_at = Instant::now();
+        let elapsed_seconds = self.started_at.elapsed().as_secs_f64();
+        let remaining_seconds = elapsed_seconds / completed_pass_count as f64
+            * (self.pass_count - completed_pass_count) as f64;
+        eprintln!(
+            "[dflash2-streaming-stages] progress: {} {completed_pass_count}/{} ({}%), {elapsed_seconds:.0} s elapsed, about {remaining_seconds:.0} s left",
+            self.label,
+            self.pass_count,
+            completed_pass_count * 100 / self.pass_count,
+        );
+    }
+}
+
+/// What a run of plain steps or of rounds spent, summed over the measured ones.
+#[derive(Default)]
+struct StageTotals {
+    measured_count: usize,
+    graph_build_seconds: f64,
+    evaluation_seconds: f64,
+    commit_seconds: f64,
+    dispatch_counts: ExpertDispatchCounts,
+    storage_read_bytes: u64,
+}
+
+impl StageTotals {
+    fn add_dispatch_counts(&mut self, counts: ExpertDispatchCounts) {
+        let totals = &mut self.dispatch_counts;
+        totals.complete_page_in_hand_layer_count += counts.complete_page_in_hand_layer_count;
+        totals.table_without_host_route_layer_count += counts.table_without_host_route_layer_count;
+        totals.host_route_table_hit_layer_count += counts.host_route_table_hit_layer_count;
+        totals.host_route_table_miss_layer_count += counts.host_route_table_miss_layer_count;
+        totals.unhandled_layer_count += counts.unhandled_layer_count;
+        totals.host_route_wait_nanoseconds += counts.host_route_wait_nanoseconds;
+    }
+
+    fn print(&self, label: &str) {
+        let count = self.measured_count as f64;
+        let counts = &self.dispatch_counts;
+        eprintln!(
+            "[dflash2-streaming-stages] {label}: {:.1} ms (build {:.1}, evaluation {:.1}, commit {:.1}); of the build, {:.1} ms waiting for routes",
+            (self.graph_build_seconds + self.evaluation_seconds + self.commit_seconds) * 1e3
+                / count,
+            self.graph_build_seconds * 1e3 / count,
+            self.evaluation_seconds * 1e3 / count,
+            self.commit_seconds * 1e3 / count,
+            counts.host_route_wait_nanoseconds as f64 / 1e6 / count,
+        );
+        eprintln!(
+            "[dflash2-streaming-stages] {label}: layers a pass: {:.1} table without a wait, {:.1} route to host then table hit, {:.1} route to host then table miss, {:.1} page in hand, {:.1} other; {:.2} MB read from storage",
+            counts.table_without_host_route_layer_count as f64 / count,
+            counts.host_route_table_hit_layer_count as f64 / count,
+            counts.host_route_table_miss_layer_count as f64 / count,
+            counts.complete_page_in_hand_layer_count as f64 / count,
+            counts.unhandled_layer_count as f64 / count,
+            self.storage_read_bytes as f64 / BYTES_PER_MB / count,
+        );
+    }
+}
+
+fn enter_memory_phase(target: &StreamingTarget, phase: MemoryPhase, operation_token_count: usize) {
+    target
+        .model
+        .enter_memory_phase_for_tests(
+            phase,
+            target.prompt_token_ids.len() as u64,
+            operation_token_count as u64,
+            &mut PerformanceAttribution::disabled(),
+        )
+        .expect("the memory phase is entered as the engine enters it");
+}
+
+/// The prompt read and the reply's residency planned, as the engine does
+/// before a reply's first token.
+fn prefilled_as_the_engine_would(target: &StreamingTarget) -> (RequestDecoderStateStack, u32) {
+    let prefill_started_at = Instant::now();
+    enter_memory_phase(target, MemoryPhase::Prefill, target.prompt_token_ids.len());
+    let prefilled_state_and_pick = prefilled(target);
+    target.model.prepare_expert_residency_for_reply_for_tests();
+    eprintln!(
+        "[dflash2-streaming-stages] progress: prompt read and reply planned in {:.1} s",
+        prefill_started_at.elapsed().as_secs_f64()
+    );
+    prefilled_state_and_pick
+}
+
+/// Plain steps under the engine's memory state: the greedy tokens fed and
+/// what the measured steps spent.
+fn timed_plain_steps(target: &StreamingTarget, step_count: usize) -> (Vec<u32>, StageTotals) {
+    let (mut state, first_pick) = prefilled_as_the_engine_would(target);
+    let mut position = target.prompt_token_ids.len() as u32;
+    let mut tokens = vec![first_pick];
+    let mut totals = StageTotals::default();
+    let warm_up_step_count = STAGE_WARM_UP_ROUND_COUNT * ROWS_PER_ROUND;
+    let _ = target.model.take_expert_dispatch_counts();
+    let mut progress = LoopProgress::new("plain steps", step_count);
+    for step_index in 0..step_count {
+        let read_bytes_before = target.model.request_expert_storage_read_bytes();
+        let step_started_at = Instant::now();
+        let logits = target
+            .model
+            .forward_chunk(&tokens[step_index..=step_index], position, &mut state)
+            .expect("the one-token step runs");
+        let graph_build_seconds = step_started_at.elapsed().as_secs_f64();
+        tokens.push(
+            target
+                .model
+                .highest_logit_token_id(&logits)
+                .expect("the step has a highest token"),
+        );
+        let step_seconds = step_started_at.elapsed().as_secs_f64();
+        let dispatch_counts = target.model.take_expert_dispatch_counts();
+        if step_index >= warm_up_step_count {
+            totals.measured_count += 1;
+            totals.graph_build_seconds += graph_build_seconds;
+            totals.evaluation_seconds += step_seconds - graph_build_seconds;
+            totals.add_dispatch_counts(dispatch_counts);
+            totals.storage_read_bytes +=
+                target.model.request_expert_storage_read_bytes() - read_bytes_before;
+        }
+        position += 1;
+        progress.passed(step_index + 1);
+    }
+    tokens.truncate(step_count);
+    (tokens, totals)
+}
+
+/// One chain of `round_tokens` verified, evaluated and committed whole, as a
+/// round that keeps every row; the seconds its build, evaluation and commit took.
+fn timed_chain_round(
+    target: &StreamingTarget,
+    round_tokens: &[u32],
+    position: u32,
+    state: &mut RequestDecoderStateStack,
+) -> [f64; 3] {
+    let mut chain = DraftTree::default();
+    for (row_index, token_id) in round_tokens.iter().enumerate().skip(1) {
+        chain.token_ids.push(*token_id);
+        chain.parent_indices.push((row_index - 1).checked_sub(1));
+        chain.depths.push(row_index - 1);
+    }
+    let tree_rows = TreeRows::from_draft_tree(round_tokens[0], &chain);
+    let round_started_at = Instant::now();
+    let verification = target
+        .model
+        .verify_draft_tree(&tree_rows, position, state, &[])
+        .expect("the chain verifies on the streaming model");
+    let graph_build_seconds = round_started_at.elapsed().as_secs_f64();
+    let pass_is_valid = target
+        .model
+        .evaluate_draft_tree_pass(&[&verification.per_row_logits])
+        .expect("the pass evaluates");
+    assert!(
+        pass_is_valid,
+        "a pass built without assumptions is always usable"
+    );
+    let evaluated_seconds = round_started_at.elapsed().as_secs_f64();
+    let kept_rows: Vec<usize> = (0..round_tokens.len()).collect();
+    target
+        .model
+        .commit_draft_tree(state, verification, &kept_rows)
+        .expect("the chain commits");
+    [
+        graph_build_seconds,
+        evaluated_seconds - graph_build_seconds,
+        round_started_at.elapsed().as_secs_f64() - evaluated_seconds,
+    ]
+}
+
+/// The same tokens as chains of `ROWS_PER_ROUND` under the engine's memory
+/// state: what the measured rounds spent.
+fn timed_chain_rounds(target: &StreamingTarget, tokens: &[u32]) -> StageTotals {
+    let (mut state, _) = prefilled_as_the_engine_would(target);
+    let mut position = target.prompt_token_ids.len() as u32;
+    let mut totals = StageTotals::default();
+    let _ = target.model.take_expert_dispatch_counts();
+    let mut progress = LoopProgress::new("rounds", tokens.len().div_ceil(ROWS_PER_ROUND));
+    for (round_index, round_tokens) in tokens.chunks(ROWS_PER_ROUND).enumerate() {
+        let read_bytes_before = target.model.request_expert_storage_read_bytes();
+        let [graph_build_seconds, evaluation_seconds, commit_seconds] =
+            timed_chain_round(target, round_tokens, position, &mut state);
+        let dispatch_counts = target.model.take_expert_dispatch_counts();
+        if round_index >= STAGE_WARM_UP_ROUND_COUNT {
+            totals.measured_count += 1;
+            totals.graph_build_seconds += graph_build_seconds;
+            totals.evaluation_seconds += evaluation_seconds;
+            totals.commit_seconds += commit_seconds;
+            totals.add_dispatch_counts(dispatch_counts);
+            totals.storage_read_bytes +=
+                target.model.request_expert_storage_read_bytes() - read_bytes_before;
+        }
+        position += round_tokens.len() as u32;
+        progress.passed(round_index + 1);
+    }
+    totals
+}
+
+#[test]
+#[ignore = "loads a real target in the streaming model; run through cargo measure-dflash2-streaming-round-stages"]
+#[serial]
+fn should_measure_where_a_streaming_tree_round_spends_its_time() {
+    let long_prompt: Vec<&str> = LONG_PROMPT_SOURCE
+        .split_whitespace()
+        .take(STAGE_PROMPT_WORD_COUNT)
+        .collect();
+    let target = load_streaming_target(&long_prompt.join(" "));
+    let step_count = ROWS_PER_ROUND * STAGE_ROUND_COUNT;
+    let (tokens, plain_totals) = timed_plain_steps(&target, step_count);
+    let round_totals = timed_chain_rounds(&target, &tokens);
+    plain_totals.print("plain step");
+    round_totals.print(&format!("{ROWS_PER_ROUND}-row round"));
 }

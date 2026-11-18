@@ -31,8 +31,18 @@ use crate::speculative_decoding::tree_rows::TreeRows;
 /// are built lets the two overlap.
 const LAYERS_PER_ASYNCHRONOUS_START: usize = 4;
 
+/// Whether a tree pass's results can be used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TreePassOutcome {
+    /// Every row was computed from the weights it routed to.
+    Valid,
+    /// The pass assumed weights were in memory that were not: its results
+    /// are wrong and it must be run again without that assumption.
+    MustRunAgain,
+}
+
 /// A model a draft tree can be verified against: the shared base plus the
-/// one step each engine does its own way.
+/// steps each engine does its own way.
 pub(crate) trait DraftTreeTarget {
     /// The shared model the tree's attention, embedding and head run on.
     fn draft_tree_model_base(&self) -> &Qwen3_5ModelBase;
@@ -46,6 +56,29 @@ pub(crate) trait DraftTreeTarget {
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
     ) -> Result<MlxArray, Qwen3_5ExecutionError>;
+
+    /// Whether the next pass may assume every routed weight is in memory,
+    /// to be checked when the pass is evaluated. A model with every weight
+    /// in memory has nothing to assume.
+    fn starts_tree_pass_optimistically(&self) -> bool {
+        false
+    }
+
+    /// Tells the layers built from here on whether they run under that
+    /// assumption.
+    fn set_tree_pass_optimism(&self, _is_optimistic: bool) {}
+
+    /// Evaluates the pass through `evaluation_roots` and reports whether its
+    /// results can be used.
+    fn evaluate_tree_pass(
+        &self,
+        evaluation_roots: &[&MlxArray],
+    ) -> Result<TreePassOutcome, Qwen3_5ExecutionError> {
+        self.draft_tree_model_base()
+            .runtime
+            .evaluate_arrays(evaluation_roots)?;
+        Ok(TreePassOutcome::Valid)
+    }
 }
 
 /// One verified tree, held until the round decides which chain it keeps.

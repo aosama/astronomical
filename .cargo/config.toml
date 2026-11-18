@@ -582,6 +582,12 @@ measure-dflash2-row-exactness = "run -p xtask -- test-run --package astronomical
 # maximum_mlx_memory_gigabytes is the limit the model loads under, so a value
 # below the model's size measures real reads from storage. About a minute.
 measure-dflash2-streaming-tree-verify = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_streaming_tree_verify"
+# Where a draft round's time goes on the streaming model, in the memory state
+# the engine serves in: graph build, evaluation and commit of a 4-row round
+# beside a plain step, how many layers stopped the pass to bring their route
+# to the host and for how long, and what was read from storage. Same
+# configuration as the alias above; asserts nothing; about a minute.
+measure-dflash2-streaming-round-stages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_measure_where_a_streaming_tree_round_spends_its_time"
 # The rung below it: whether MLX's quantized matmul (4- and 8-bit, group 64,
 # at the 35B-A3B target's widths) and its attention kernel give a row the same
 # bits inside a window of 2, 4, 8 and 16 rows as alone. Random inputs, no
@@ -630,6 +636,14 @@ test-register-ordered-matmul = "run -p xtask -- test-run --package astronomical-
 # read rate; asserts nothing. Needs about 6 GB of free GPU memory and no
 # model; runs in about 15 seconds.
 measure-k-row-verify-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --filter k_row_verify_cost"
+# Speculative decoding on a model with experts: what each added row of a
+# draft round costs in the expert feed-forward. Times the 35B-A3B's real
+# expert shapes (8 of 256 experts a row) for 1 to 8 rows at 4-bit and 8-bit
+# through the gathered quantized projection both engines call, over 6 distinct
+# layers so every pass reads memory. Prints each row count's time over 40
+# layers, the cost of each added row and the read rate; asserts nothing.
+# Needs about 6 GB of free GPU memory and no model; about 20 seconds.
+measure-expert-row-cost = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,performance-measurement --test performance_measurement --release --ignored --filter expert_row_cost"
 measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
 # Routed-expert page reads from the SSD (not the macOS file cache) through MLX: the

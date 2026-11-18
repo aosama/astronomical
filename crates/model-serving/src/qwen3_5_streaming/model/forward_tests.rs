@@ -1,8 +1,8 @@
-//! Beside-source coverage for the pure paged-token-count unit of the MoE
-//! forward dispatch. The routing and paging units run under the serial engine
+//! Beside-source coverage for the pure units of the MoE forward dispatch:
+//! the paged token count and the distinct experts of a route. The routing and paging units run under the serial engine
 //! lane against real arrays.
 
-use super::paged_token_count;
+use super::{paged_token_count, sorted_unique_ids};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 
 #[test]
@@ -41,4 +41,20 @@ fn should_fall_back_to_index_zero_for_a_single_dimension_shape() {
         paged_token_count(&flat_shape).expect("a flat shape has one dimension"),
         768
     );
+}
+
+#[test]
+fn should_list_each_routed_expert_once_in_ascending_order() {
+    // Two rows of a draft round that share expert 7 and name 3 twice.
+    assert_eq!(sorted_unique_ids(&[9, 7, 3, 3, 7, 200]), vec![3, 7, 9, 200]);
+}
+
+#[test]
+fn should_keep_a_route_that_is_already_distinct_and_ascending() {
+    assert_eq!(sorted_unique_ids(&[0, 1, 255]), vec![0, 1, 255]);
+}
+
+#[test]
+fn should_list_no_expert_for_an_empty_route() {
+    assert!(sorted_unique_ids(&[]).is_empty());
 }

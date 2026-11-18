@@ -28,6 +28,9 @@ pub(crate) struct OptimisticServingHistory {
     /// many of them had to be run again.
     optimistic_token_count: Cell<u64>,
     rerun_token_count: Cell<u64>,
+    /// Expert bytes this request had read from storage when the draft tree
+    /// pass now running began.
+    storage_read_bytes_before_tree_pass: Cell<u64>,
 }
 
 impl Qwen3_5Model {
@@ -267,15 +270,61 @@ impl Qwen3_5Model {
     /// storage: misses come in runs while an astro expert cache warms, and serving optimistically
     /// through a run would pay for two forwards on every token of it.
     fn should_serve_optimistically(&self, token_count: i32) -> bool {
-        if token_count != 1
-            || !self
-                .optimistic_serving_history
-                .previous_token_was_served_from_memory
-                .get()
-        {
-            return false;
+        token_count == 1 && self.optimism_is_likely_to_pay()
+    }
+
+    /// Whether the step before this one read nothing from storage and some
+    /// layer is only partly held: the conditions under which assuming every
+    /// routed expert is in memory is usually right and saves a wait.
+    fn optimism_is_likely_to_pay(&self) -> bool {
+        self.optimistic_serving_history
+            .previous_token_was_served_from_memory
+            .get()
+            && self.has_a_partly_held_layer_and_no_empty_one()
+    }
+
+    /// Whether a draft tree's pass over its rows should start optimistically,
+    /// by the same evidence a reply token's does. A tree routes several rows
+    /// through every layer, so it meets an expert that is not in memory more
+    /// often than one token does; a pass that does is run again the exact way.
+    pub(super) fn should_start_tree_pass_optimistically(&self) -> bool {
+        self.optimism_is_likely_to_pay()
+    }
+
+    /// Marks the start or end of a tree pass built under optimism.
+    pub(super) fn set_tree_pass_optimism(&self, is_optimistic: bool) {
+        self.paged_forward_missing_route_collector
+            .set_optimistic(is_optimistic);
+        self.optimistic_serving_history
+            .storage_read_bytes_before_tree_pass
+            .set(
+                self.request_expert_storage_read_tally
+                    .expert_storage_read_byte_count(),
+            );
+    }
+
+    /// Evaluates a tree pass with its layers' route checks and demand
+    /// records, as a reply token's single evaluation does, and says whether
+    /// every routed expert was in memory.
+    pub(super) fn evaluate_tree_pass_resolving_expert_routes(
+        &self,
+        evaluation_roots: &[&MlxArray],
+    ) -> Result<PagedRouteValidationOutcome, Qwen3_5ExecutionError> {
+        let validation_outcome = self.evaluate_arrays_resolving_paged_routes(
+            evaluation_roots,
+            &mut PerformanceAttribution::disabled(),
+        )?;
+        let history = &self.optimistic_serving_history;
+        match validation_outcome {
+            PagedRouteValidationOutcome::CompleteHit => self
+                .remember_whether_the_token_read_from_storage(
+                    history.storage_read_bytes_before_tree_pass.get(),
+                ),
+            PagedRouteValidationOutcome::MissedExperts => history
+                .rerun_token_count
+                .set(history.rerun_token_count.get() + 1),
         }
-        self.has_a_partly_held_layer_and_no_empty_one()
+        Ok(validation_outcome)
     }
 
     /// Optimistic serving needs a table in every layer, and it only pays when some

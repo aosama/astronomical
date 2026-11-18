@@ -268,8 +268,35 @@ impl Qwen3_5EngineState {
         {
             return Ok(None);
         }
+        if draft_request_state.emission_queue.is_empty() && !self.reply_experts_are_all_in_memory()
+        {
+            // A round routes several rows through every layer, and rows of a
+            // tree seldom share experts, so on a layer held only in part a
+            // round reads about four times the experts a one-token step
+            // does and the layer's small table of recent experts covers few
+            // of them. Measured on the 35B-A3B after a 10,011-token prompt
+            // with one or two layers partly on storage: a round took 33 ms
+            // against 24 ms held whole (4-bit, 22 GB limit) and kept 2.04
+            // tokens, so drafting decoded 61 tok/s against 63 for one token a
+            // step; under 20 GB it was 45 against 53, and on the 8-bit 51
+            // against 53. Such a session decodes one token a step.
+            draft_request_state.stop_drafting();
+            tracing::info!(
+                request_id = request_id.value(),
+                suspension_reason = "experts_partly_on_storage",
+                "drafting stops for the session's remainder"
+            );
+            return Ok(None);
+        }
         self.advance_speculative_generation(request_id, active_request)
             .map(Some)
+    }
+
+    /// Whether the loaded model holds every expert layer whole right now.
+    fn reply_experts_are_all_in_memory(&self) -> bool {
+        self.model
+            .as_ref()
+            .is_some_and(|model| model.holds_every_expert_layer_whole())
     }
 
     /// Announces preparation the moment prompt work ends, then reconciles

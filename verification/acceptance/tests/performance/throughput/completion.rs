@@ -197,6 +197,24 @@ pub(crate) fn dump_worker_logging_directory(
     }
 }
 
+/// Prints every worker log line that contains one of `markers`, so a passing
+/// journey can show the few lines that explain its speed without the whole log.
+pub(crate) fn print_worker_log_lines_containing(logging_directory: &Path, markers: &[&str]) {
+    let Ok(entries) = fs::read_dir(logging_directory) else {
+        return;
+    };
+    for entry in entries.flatten().filter(|entry| entry.path().is_file()) {
+        let Ok(contents) = fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        for log_line in contents.lines() {
+            if markers.iter().any(|marker| log_line.contains(marker)) {
+                eprintln!("[performance-throughput] worker: {log_line}");
+            }
+        }
+    }
+}
+
 /// Waits for the worker to finish loading and release the model, so the warmup
 /// completion never races model loading and the measured run never starts on a
 /// cold worker.

@@ -42,8 +42,39 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// journey with room for a cold file read.
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// The worker's own account of the reply's drafting: whether a drafter was
+/// hosted, how the reply's experts were held, what the rounds added up to,
+/// and why drafting stopped if it did.
+const DRAFTING_WORKER_LOG_MARKERS: [&str; 4] = [
+    "hosts a DFlash2 drafter",
+    "expert retention prepared for the reply",
+    "drafting stops for the session's remainder",
+    "draft rounds over the reply",
+];
+
 fn target_directory() -> PathBuf {
     astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
+}
+
+/// The memory limit the worker serves under: the machine's default, or the
+/// test run's `paging_experiment.maximum_mlx_memory_gigabytes` when the run
+/// sets one other than that field's own default. A limit below the model's
+/// size is how drafting is measured while the model streams from storage.
+fn configured_memory_limit_bytes() -> Option<u64> {
+    let paging_experiment = astronomical_test_harness::test_run::TestRunContext::current()
+        .configuration
+        .paging_experiment;
+    if paging_experiment.maximum_mlx_memory_gigabytes
+        == astronomical_test_harness::test_run::PagingExperimentCase::default()
+            .maximum_mlx_memory_gigabytes
+    {
+        return None;
+    }
+    Some(
+        paging_experiment
+            .maximum_mlx_memory_bytes()
+            .expect("the configured memory limit is valid"),
+    )
 }
 
 #[test]
@@ -72,7 +103,9 @@ fn should_measure_dflash2_draft_tree_prompt_processing_and_decode_throughput() {
     let model_id: &'static str =
         Box::leak(throughput_support::discovered_model_id(&target_directory).into_boxed_str());
     journey.model_directory = Some(target_directory);
+    journey.maximum_mlx_memory_bytes = configured_memory_limit_bytes();
     journey.journey_timeout = JOURNEY_TIMEOUT;
+    journey.explanatory_worker_log_markers = &DRAFTING_WORKER_LOG_MARKERS;
     let measured_throughput = throughput_support::run_journey_with_timeout(model_id, journey);
     eprintln!(
         "[dflash2-serving] prompt_tokens={} generated_tokens={} prefill_tokens_per_second={:.1} decode_tokens_per_second={:.2}",

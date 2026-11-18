@@ -151,7 +151,8 @@ impl Qwen3_5EngineState {
             persistent_visual_embedding_model_contract;
         self.astro_ssd_prompt_cache = astro_ssd_prompt_cache;
         // Hosted before the payload below is read, so the drafter's bytes are
-        // in the figure the memory governor starts from.
+        // in the reported figure; hosting also reopens the memory governor
+        // with the drafter counted.
         let (mut model, mut model_loading_performance_attribution) =
             (model, model_loading_performance_attribution);
         self.host_speculative_draft_runtime(&mut model, &mut model_loading_performance_attribution);

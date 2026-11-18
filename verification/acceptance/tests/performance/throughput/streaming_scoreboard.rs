@@ -193,6 +193,7 @@ fn scoreboard_journey(limit_bytes: u64) -> ThroughputJourney {
         attribution_enabled: false,
         prompt_chunking: PromptChunking::ProductDefault,
         journey_timeout: SCOREBOARD_SERVING_BUDGET,
+        explanatory_worker_log_markers: &[],
         model_directory: None,
         diagnostic_qwen3_5_engine_override:
             astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
