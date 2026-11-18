@@ -31,7 +31,11 @@ pub(crate) struct ReplyStartSnapshot {
 pub struct RoutedReplyRecording {
     /// Experts in one sparse layer.
     pub experts_per_layer: usize,
-    /// For each reply token, for each layer, the experts it routed to.
+    /// For each reply token after the first, for each layer, the experts it
+    /// routed to. The first reply token comes out of the prompt's last step,
+    /// so a reply of `n` tokens records `n - 1` routes. The observation ring
+    /// keeps the newest 2,048 decode tokens, so a longer reply records only
+    /// its last 2,048.
     pub token_routes: Vec<Vec<Vec<u16>>>,
     /// For each layer, the experts the `astro_expert_cache` held when the
     /// reply's first token ran.

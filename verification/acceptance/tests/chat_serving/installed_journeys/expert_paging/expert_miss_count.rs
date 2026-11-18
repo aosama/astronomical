@@ -7,7 +7,9 @@
 //! keeps its files out of the `macos_file_cache` (`cold_macos_file_cache`),
 //! serves a 500/50 warmup and then one measured reply, and prints that reply's
 //! misses, hits, bytes read and read wait per token from the engine's
-//! always-on counters.
+//! always-on counters. Per-token figures divide by every reply token,
+//! including the first, which comes out of the prompt's last step and reads
+//! nothing; that understates them by one part in the reply's length.
 //!
 //! The recording cases serve the measured reply with performance attribution
 //! on, which is what makes the engine copy each decode token's route to the
@@ -249,6 +251,14 @@ async fn count_expert_misses_with(
             .expect("the engine hands over its reply recording"),
         test_run_configuration.evidence_directory,
     ) {
+        // The first reply token comes out of the prompt's last step, so the
+        // routes cover every token after it; anything else means the ring
+        // dropped routes and the replay would not stand for this reply.
+        assert_eq!(
+            recording.token_routes.len() + 1,
+            measured_reply.reply_token_count,
+            "the recording must hold one route per reply token after the first"
+        );
         save_recording(measured_workload, &recording, &evidence_directory);
     }
 }

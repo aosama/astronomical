@@ -247,6 +247,10 @@ fn should_publish_the_last_reply_memory_record_in_the_document() {
     replied_snapshot.last_reply_memory_record =
         Some(astronomical_ipc_protocol::ReplyMemoryRecord {
             storage_read_expert_counts_by_token: vec![12, 0, 3],
+            expert_hit_count: 945,
+            expert_miss_count: 15,
+            storage_read_bytes: 48_000_000,
+            storage_read_wait_nanoseconds: 4_500_000,
             mlx_buffer_cache_sampled_token_count: 3,
             mlx_buffer_cache_empty_token_count: 1,
             ..astronomical_ipc_protocol::ReplyMemoryRecord::default()
@@ -261,6 +265,22 @@ fn should_publish_the_last_reply_memory_record_in_the_document() {
     assert_eq!(
         document["last_reply"]["mlx_buffer_cache_empty_token_count"],
         serde_json::json!(1)
+    );
+    assert_eq!(
+        document["last_reply"]["expert_hit_count"],
+        serde_json::json!(945)
+    );
+    assert_eq!(
+        document["last_reply"]["expert_miss_count"],
+        serde_json::json!(15)
+    );
+    assert_eq!(
+        document["last_reply"]["storage_read_bytes"],
+        serde_json::json!(48_000_000)
+    );
+    assert_eq!(
+        document["last_reply"]["storage_read_wait_nanoseconds"],
+        serde_json::json!(4_500_000)
     );
 }
 
