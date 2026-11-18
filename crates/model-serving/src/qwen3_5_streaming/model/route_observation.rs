@@ -20,6 +20,7 @@ use crate::qwen3_5_streaming::expert_streaming::route_observation::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
+use crate::qwen3_5_streaming::model::routed_reply_recording::ReplyStartSnapshot;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
 /// Model-owned decode route capture: the lazy pending arrays for the token
@@ -31,6 +32,8 @@ use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 pub(crate) struct RouteObservationCollector {
     pending_layer_route_arrays: Vec<Option<MlxArray>>,
     observation_ring: RouteObservationRing,
+    /// Where the reply being recorded began (`routed_reply_recording`).
+    reply_start_snapshot: Option<ReplyStartSnapshot>,
 }
 
 impl RouteObservationCollector {
@@ -40,7 +43,47 @@ impl RouteObservationCollector {
             observation_ring: RouteObservationRing::new(
                 RouteObservationRing::DEFAULT_OBSERVATION_CAPACITY,
             ),
+            reply_start_snapshot: None,
         }
+    }
+
+    pub(crate) fn set_reply_start_snapshot(&mut self, reply_start_snapshot: ReplyStartSnapshot) {
+        self.reply_start_snapshot = Some(reply_start_snapshot);
+    }
+
+    pub(crate) fn take_reply_start_snapshot(&mut self) -> Option<ReplyStartSnapshot> {
+        self.reply_start_snapshot.take()
+    }
+
+    pub(crate) fn stored_observation_count(&self) -> u64 {
+        self.observation_ring.stored_observation_count()
+    }
+
+    /// The routes of the newest `token_count` observations, oldest first,
+    /// each widened to `layer_count` layers; a layer the observation missed
+    /// reads as no experts. Fewer come back when the ring holds fewer.
+    pub(crate) fn newest_token_routes(
+        &self,
+        token_count: usize,
+        layer_count: usize,
+    ) -> Vec<Vec<Vec<u16>>> {
+        let skipped_count = self
+            .observation_ring
+            .observation_count()
+            .saturating_sub(token_count);
+        let mut token_routes = Vec::with_capacity(token_count);
+        for observation in self.observation_ring.observations().skip(skipped_count) {
+            let mut layer_routes = vec![Vec::new(); layer_count];
+            for (layer_index, layer_route) in observation.token_route.iter().enumerate() {
+                if let (Some(layer_route), Some(recorded_route)) =
+                    (layer_route, layer_routes.get_mut(layer_index))
+                {
+                    recorded_route.clone_from(layer_route);
+                }
+            }
+            token_routes.push(layer_routes);
+        }
+        token_routes
     }
 
     pub(crate) fn retain_layer_route(&mut self, layer_index: usize, selected_indices: &MlxArray) {

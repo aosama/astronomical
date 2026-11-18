@@ -145,6 +145,7 @@ impl Qwen3_5EngineState {
         let reply_memory_record = mlx_buffer_cache_reply_record.reply_memory_record(
             std::mem::take(&mut active_request.engine_extension.reply_expert_route_record),
         );
+        log_astro_expert_cache_over_the_reply(request_id.value(), &reply_memory_record);
         // Drop pending tokens, decoder state, and all
         // request-local snapshot references before lifting the pressure ceiling.
         // Otherwise newly admitted pages could compete with memory that is only
@@ -382,6 +383,52 @@ use crate::MlxMemoryTelemetry;
 /// Says how full the `mlx_buffer_cache` was after each token of the reply.
 /// Tokens after which it was empty allocated every buffer afresh, which is
 /// what made replies at the top of the memory range a third as fast.
+/// One line per reply with how well the `astro_expert_cache` chose what to
+/// keep: per reply token, the routed experts it held, the ones it missed, the
+/// bytes those misses read and the time spent waiting on them. Always on, so a
+/// person's own logs show the figure without performance attribution.
+fn log_astro_expert_cache_over_the_reply(
+    request_id: u64,
+    reply_memory_record: &astronomical_ipc_protocol::ReplyMemoryRecord,
+) {
+    let reply_token_count = reply_memory_record
+        .storage_read_expert_counts_by_token
+        .len();
+    if reply_token_count == 0 || reply_memory_record.routed_expert_count_per_token == 0 {
+        return;
+    }
+    tracing::info!(
+        request_id,
+        reply_token_count,
+        expert_hits_per_token = format_args!(
+            "{:.2}",
+            per_reply_token(reply_token_count, reply_memory_record.expert_hit_count)
+        ),
+        expert_misses_per_token = format_args!(
+            "{:.2}",
+            per_reply_token(reply_token_count, reply_memory_record.expert_miss_count)
+        ),
+        storage_read_megabytes_per_token = format_args!(
+            "{:.2}",
+            per_reply_token(reply_token_count, reply_memory_record.storage_read_bytes)
+                / 1_048_576.0
+        ),
+        storage_read_wait_milliseconds_per_token = format_args!(
+            "{:.2}",
+            per_reply_token(
+                reply_token_count,
+                reply_memory_record.storage_read_wait_nanoseconds
+            ) / 1_000_000.0
+        ),
+        "the astro_expert_cache over the reply"
+    );
+}
+
+/// `total` shared out over the reply's tokens.
+fn per_reply_token(reply_token_count: usize, total: u64) -> f64 {
+    total as f64 / reply_token_count as f64
+}
+
 fn log_mlx_buffer_cache_over_the_reply(
     request_id: u64,
     mlx_buffer_cache_reply_record: crate::memory::mlx_buffer_cache_reply_record::MlxBufferCacheReplyRecord,

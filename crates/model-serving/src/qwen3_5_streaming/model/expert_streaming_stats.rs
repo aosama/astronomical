@@ -55,18 +55,16 @@ impl Qwen3_5Model {
         }
     }
 
-    /// Routed experts served from memory and read from storage since the
-    /// model loaded, in that order; zeros for a model that streams no
-    /// experts. A reply token's own routes are the difference across its
-    /// forward.
-    pub(crate) fn session_route_assignment_counts(&self) -> (u64, u64) {
-        self.expert_pager.as_ref().map_or((0, 0), |expert_pager| {
-            let session_counters = expert_pager.session_counter_snapshot();
-            (
-                session_counters.retained_route_assignment_count,
-                session_counters.storage_route_assignment_count,
-            )
-        })
+    /// The session's always-on expert counters now: routed experts found in
+    /// the `astro_expert_cache` and missed, and the bytes and wait time of
+    /// decode's storage reads. A reply token's own figures are the change
+    /// across its forward.
+    pub(crate) fn session_expert_route_sample(
+        &self,
+    ) -> crate::memory::reply_expert_route_record::SessionExpertRouteSample {
+        self.expert_pager
+            .as_ref()
+            .map_or_else(Default::default, session_expert_route_sample_of)
     }
 
     /// Composes the session snapshot; `None` when this model has no pager.
@@ -139,5 +137,19 @@ impl Qwen3_5Model {
             generated_token_count: 0,
             last_reply_memory_record: None,
         })
+    }
+}
+
+/// The pager's session counters as one sample.
+fn session_expert_route_sample_of(
+    expert_pager: &crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager,
+) -> crate::memory::reply_expert_route_record::SessionExpertRouteSample {
+    let session_counters = expert_pager.session_counter_snapshot();
+    crate::memory::reply_expert_route_record::SessionExpertRouteSample {
+        memory_served_expert_count: session_counters.retained_route_assignment_count,
+        storage_read_expert_count: session_counters.storage_route_assignment_count,
+        decode_storage_read_bytes: session_counters.mandatory_decode_source_bytes,
+        decode_storage_read_wait_nanoseconds: session_counters
+            .decode_source_read_elapsed_nanoseconds,
     }
 }

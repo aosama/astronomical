@@ -1,0 +1,118 @@
+//! A reply's routes, and what the `astro_expert_cache` held when it began,
+//! taken out of the engine so the reply can be replayed without a GPU.
+//!
+//! Routing depends only on the model and the text, never on memory, so one
+//! recorded reply can be replayed against any capacity and any keeping rule
+//! (`astronomical_memory_policy::astro_expert_cache_model`). Replaying the
+//! engine's own rule must reproduce the misses the engine counted, which needs
+//! the starting point too: the experts each layer held when the reply's first
+//! token ran, and the capacity the `astro_expert_cache` had.
+//!
+//! Recording runs only with performance attribution on, the same switch that
+//! makes the engine copy each decode token's route to the host. A reply served
+//! with attribution off takes no snapshot and copies nothing.
+
+use crate::qwen3_5_streaming::model::Qwen3_5Model;
+
+/// What the `astro_expert_cache` looked like when a reply's first token ran.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ReplyStartSnapshot {
+    held_expert_ids_by_layer: Vec<Vec<u16>>,
+    kept_expert_capacity_bytes: u64,
+    /// The observation ring's lifetime count when the reply began: every
+    /// observation stored after it belongs to this reply.
+    stored_observation_count_at_reply_start: u64,
+}
+
+/// One recorded reply, ready to replay.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct RoutedReplyRecording {
+    /// Experts in one sparse layer.
+    pub experts_per_layer: usize,
+    /// For each reply token, for each layer, the experts it routed to.
+    pub token_routes: Vec<Vec<Vec<u16>>>,
+    /// For each layer, the experts the `astro_expert_cache` held when the
+    /// reply's first token ran.
+    pub held_expert_ids_by_layer_at_reply_start: Vec<Vec<u16>>,
+    /// The `astro_expert_cache` capacity the reply was served under.
+    pub kept_expert_capacity_bytes: u64,
+    /// One expert's payload bytes in each layer.
+    pub expert_payload_bytes_by_layer: Vec<u64>,
+}
+
+impl Qwen3_5Model {
+    /// Takes the reply-start snapshot when this reply is being recorded.
+    pub(crate) fn note_reply_start_for_route_recording(&self, is_recording: bool) {
+        let (Some(astro_expert_cache), Some(expert_pager), true) = (
+            self.astro_expert_cache.as_ref(),
+            self.expert_pager.as_ref(),
+            is_recording,
+        ) else {
+            return;
+        };
+        let expert_capacity = expert_pager
+            .layer_plans()
+            .first()
+            .map_or(0, |layer_plan| layer_plan.expert_capacity);
+        let mut held_expert_ids_by_layer = vec![Vec::new(); expert_pager.layer_plans().len()];
+        for layer_residency in astro_expert_cache
+            .borrow()
+            .topology_snapshot(expert_capacity)
+        {
+            if let Some(held_expert_ids) =
+                held_expert_ids_by_layer.get_mut(layer_residency.layer_index)
+            {
+                *held_expert_ids = expert_ids_as_u16(&layer_residency.retained_expert_ids);
+            }
+        }
+        let mut route_observation = self.route_observation.borrow_mut();
+        let stored_observation_count_at_reply_start = route_observation.stored_observation_count();
+        route_observation.set_reply_start_snapshot(ReplyStartSnapshot {
+            held_expert_ids_by_layer,
+            kept_expert_capacity_bytes: self.kept_expert_capacity_bytes(),
+            stored_observation_count_at_reply_start,
+        });
+    }
+
+    /// The last recorded reply, or `None` when no reply was recorded since
+    /// the model loaded. Taking it clears the snapshot.
+    pub(crate) fn take_routed_reply_recording(&self) -> Option<RoutedReplyRecording> {
+        let expert_pager = self.expert_pager.as_ref()?;
+        let mut route_observation = self.route_observation.borrow_mut();
+        let reply_start = route_observation.take_reply_start_snapshot()?;
+        let reply_token_count = route_observation
+            .stored_observation_count()
+            .saturating_sub(reply_start.stored_observation_count_at_reply_start);
+        let token_routes = route_observation.newest_token_routes(
+            usize::try_from(reply_token_count).unwrap_or(usize::MAX),
+            expert_pager.layer_plans().len(),
+        );
+        let mut expert_payload_bytes_by_layer = Vec::new();
+        for layer_plan in expert_pager.layer_plans() {
+            expert_payload_bytes_by_layer.push(
+                crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
+                    layer_plan, 1,
+                )
+                .unwrap_or(0),
+            );
+        }
+        Some(RoutedReplyRecording {
+            experts_per_layer: expert_pager
+                .layer_plans()
+                .first()
+                .map_or(0, |layer_plan| layer_plan.expert_capacity),
+            token_routes,
+            held_expert_ids_by_layer_at_reply_start: reply_start.held_expert_ids_by_layer,
+            kept_expert_capacity_bytes: reply_start.kept_expert_capacity_bytes,
+            expert_payload_bytes_by_layer,
+        })
+    }
+}
+
+fn expert_ids_as_u16(expert_ids: &[usize]) -> Vec<u16> {
+    let mut held_expert_ids = Vec::with_capacity(expert_ids.len());
+    for &expert_id in expert_ids {
+        held_expert_ids.push(u16::try_from(expert_id).unwrap_or(u16::MAX));
+    }
+    held_expert_ids
+}

@@ -268,6 +268,8 @@ pub use memory::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use memory::SessionExpertRouteSample;
+#[cfg(feature = "direct-mlx")]
 pub use memory::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 
 #[cfg(feature = "direct-mlx")]
@@ -601,7 +603,8 @@ pub use qwen3_5_streaming::{
 pub use qwen3_5_streaming::{
     DirectExpertFetchCounts, LayerProbeShape, Qwen3_5StreamingEngine, Qwen3_5StreamingModel,
     Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
-    Qwen3_5StreamingTargetForwardOutput, safe_minimum_mlx_memory_ceiling_bytes,
+    Qwen3_5StreamingTargetForwardOutput, RoutedReplyRecording,
+    safe_minimum_mlx_memory_ceiling_bytes,
 };
 
 #[cfg(feature = "direct-mlx")]

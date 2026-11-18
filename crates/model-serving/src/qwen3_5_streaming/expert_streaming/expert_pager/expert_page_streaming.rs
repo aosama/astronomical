@@ -160,6 +160,15 @@ impl Qwen3_5ExpertPager {
         self.ensure_session_process_io_baseline();
         self.expert_read_metrics_for_streamed_page(performance_attribution)
             .record_completed_batch(read_count, byte_count, batch_elapsed);
+        // Only a reply token reads straight into a table, so these are decode
+        // reads; without this the session's decode bytes and wait left out
+        // every miss the direct path served.
+        let mut session_counters = self.session_counters.borrow_mut();
+        session_counters.record_mandatory_source_bytes(SessionStreamingPhase::Decode, byte_count);
+        session_counters.record_phase_source_read_elapsed(
+            SessionStreamingPhase::Decode,
+            u64::try_from(batch_elapsed.as_nanos()).unwrap_or(u64::MAX),
+        );
     }
 
     fn expert_read_metrics_for_streamed_page(

@@ -77,6 +77,8 @@ pub(crate) mod mlx_buffer_cache_reply_record;
 // tests own it without the graphics-processor runtime.
 #[cfg(any(feature = "direct-mlx", test))]
 pub(crate) mod reply_expert_route_record;
+#[cfg(feature = "direct-mlx")]
+pub use reply_expert_route_record::SessionExpertRouteSample;
 pub(crate) mod serving_phase;
 pub(crate) mod telemetry;
 mod utilization;
