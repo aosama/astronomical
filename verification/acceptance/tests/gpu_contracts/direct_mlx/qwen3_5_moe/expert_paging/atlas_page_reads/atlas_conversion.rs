@@ -65,6 +65,47 @@ struct ExpertBatchedTensorSource {
     per_expert_shape: Vec<usize>,
 }
 
+/// Which layers store their experts in the record shape most layers share.
+///
+/// The test atlas has one record layout for every layer it holds. A
+/// mixed-precision checkpoint gives some layers larger experts (the 4-bit
+/// OptiQ 35B-A3B does for its first four layers and its last), so those
+/// layers are left out of the atlas instead of failing the probe.
+pub(super) fn layers_with_the_commonest_record_shape(
+    fixture: &StreamingProbeFixture,
+    layer_count: usize,
+) -> Vec<bool> {
+    let mut record_shape_by_layer = Vec::with_capacity(layer_count);
+    for layer_index in 0..layer_count {
+        let mut record_shape = Vec::new();
+        for tensor_source in expert_batched_tensor_sources(fixture, layer_index) {
+            record_shape.push((
+                tensor_name_suffix(&tensor_source.tensor_name),
+                tensor_source.per_expert_shape,
+                tensor_source.bytes_per_expert,
+            ));
+        }
+        record_shape_by_layer.push(record_shape);
+    }
+    let mut commonest_layer_index = 0;
+    let mut commonest_layer_count = 0;
+    for (layer_index, record_shape) in record_shape_by_layer.iter().enumerate() {
+        let mut sharing_layer_count = 0;
+        for other_record_shape in &record_shape_by_layer {
+            sharing_layer_count += usize::from(other_record_shape == record_shape);
+        }
+        if sharing_layer_count > commonest_layer_count {
+            commonest_layer_index = layer_index;
+            commonest_layer_count = sharing_layer_count;
+        }
+    }
+    let mut shares_commonest_shape = Vec::with_capacity(layer_count);
+    for record_shape in &record_shape_by_layer {
+        shares_commonest_shape.push(record_shape == &record_shape_by_layer[commonest_layer_index]);
+    }
+    shares_commonest_shape
+}
+
 pub(super) fn write_atlas_test_file(
     fixture: &StreamingProbeFixture,
     layer_indexes: &[usize],

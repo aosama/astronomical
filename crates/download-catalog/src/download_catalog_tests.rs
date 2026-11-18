@@ -593,3 +593,48 @@ fn shipped_entry<'catalog>(
         .find(|catalog_entry| catalog_entry.huggingface_id() == huggingface_id)
         .unwrap_or_else(|| panic!("the shipped catalog should offer {huggingface_id}"))
 }
+
+/// The 8-bit vision Astro Atlas holds its source's weights unchanged, laid out
+/// for streaming experts from storage. It must therefore answer like its
+/// source (same role and capabilities), stream from the same memory floor,
+/// keep the source's working allowance on top of its own size, and download
+/// every file the Atlas is read from: the manifest, the resident weights, the
+/// vision tower and each layer's expert records.
+#[test]
+fn should_ship_the_eight_bit_vision_atlas_as_its_source_laid_out_for_streaming() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let atlas_entry = shipped_entry(
+        &download_catalog,
+        "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision-astro-atlas-streaming",
+    );
+    let source_entry = shipped_entry(
+        &download_catalog,
+        "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision",
+    );
+
+    assert_eq!(atlas_entry.role(), source_entry.role());
+    assert_eq!(atlas_entry.capabilities(), source_entry.capabilities());
+    assert_eq!(
+        atlas_entry.revision(),
+        "c6be440baef6467e8779eb6c3be542885033f733"
+    );
+    assert_eq!(
+        atlas_entry.minimum_memory_bytes(),
+        source_entry.minimum_memory_bytes()
+    );
+    assert_eq!(
+        atlas_entry.approximate_memory_bytes() - atlas_entry.approximate_size_bytes(),
+        source_entry.approximate_memory_bytes() - source_entry.approximate_size_bytes()
+    );
+    let selection = atlas_entry.download_path_selection();
+    for atlas_file in [
+        "manifest.json",
+        "resident.safetensors",
+        "optiq/optiq_vision.safetensors",
+        "experts/layer-000.atlas",
+        "experts/layer-039.atlas",
+    ] {
+        assert!(selection.includes(atlas_file), "{atlas_file}");
+    }
+}

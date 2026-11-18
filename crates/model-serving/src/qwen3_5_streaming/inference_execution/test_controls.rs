@@ -17,6 +17,43 @@ impl Qwen3_5EngineState {
             .map(|loaded_model| loaded_model.expert_memory_mode())
     }
 
+    fn take_direct_expert_fetch_counts_for_tests(
+        &self,
+    ) -> Result<crate::DirectExpertFetchCounts, InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot count expert fetches before load"))?;
+        Ok(loaded_model.direct_expert_fetching.tally.take())
+    }
+
+    fn set_every_route_brought_to_the_host_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot choose route stops before load"))?;
+        loaded_model.brings_every_route_to_the_host.set(is_enabled);
+        Ok(())
+    }
+
+    fn set_decode_misses_fetched_into_tables_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot choose the expert read path before load"))?;
+        loaded_model
+            .direct_expert_fetching
+            .is_enabled
+            .set(is_enabled);
+        Ok(())
+    }
+
     fn astro_expert_cache_statistics_for_tests(
         &self,
     ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
@@ -90,6 +127,51 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         expert_memory_mode_receiver.recv().map_err(|_| {
             fatal_engine_error("expert-memory mode owner operation returned no response")
         })
+    }
+
+    /// Which way each fetching layer's missing experts went since this was
+    /// last called, and why the direct way was refused when it was.
+    #[doc(hidden)]
+    pub async fn take_direct_expert_fetch_counts_for_tests(
+        &self,
+    ) -> Result<crate::DirectExpertFetchCounts, InferenceEngineError> {
+        let (counts_sender, counts_receiver) = std::sync::mpsc::sync_channel(1);
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            let counts = qwen_inference_execution.take_direct_expert_fetch_counts_for_tests();
+            counts_sender
+                .send(counts)
+                .map_err(|_| fatal_engine_error("fetch counts receiver stopped unexpectedly"))
+        })
+        .await?;
+        counts_receiver
+            .recv()
+            .map_err(|_| fatal_engine_error("fetch counts owner operation returned no response"))?
+    }
+
+    /// Makes every layer copy its route to the host, even a layer held
+    /// whole, so a measurement can price the stop on its own.
+    #[doc(hidden)]
+    pub async fn set_every_route_brought_to_the_host_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_every_route_brought_to_the_host_for_tests(is_enabled)
+        })
+        .await
+    }
+
+    /// Chooses how a reply token's missing experts arrive: read straight into
+    /// their tables (the default) or loaded as a page and copied afterwards.
+    #[doc(hidden)]
+    pub async fn set_decode_misses_fetched_into_tables_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_decode_misses_fetched_into_tables_for_tests(is_enabled)
+        })
+        .await
     }
 
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.
