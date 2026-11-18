@@ -79,6 +79,7 @@ import "./engineWatch.test";
 import "./settings.test";
 import "./conversationSkill.test";
 import "./skillMomentWords.test";
+import "./skillShelf.test";
 import "./astroMessageChrome.test";
 import "./astroConversation.test";
 import "./pictureModelGuidance.test";
