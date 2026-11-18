@@ -4,37 +4,33 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.116</title>
-            <pubDate>Tue, 17 Nov 2026 17:24:18 -0500</pubDate>
-            <sparkle:version>2381</sparkle:version>
-            <sparkle:shortVersionString>0.2.116</sparkle:shortVersionString>
+            <title>0.2.117</title>
+            <pubDate>Tue, 17 Nov 2026 20:16:00 -0500</pubDate>
+            <sparkle:version>2385</sparkle:version>
+            <sparkle:shortVersionString>0.2.117</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new
+            <description sparkle:format="markdown"><![CDATA[## Fixed
 
-- **Faster replies from the Ornith 1.5 35B-A3B model on M5 Macs.** When this model comes with its DFlash2 draft model, the draft model guesses a small tree of next words each round, and the large model checks all of them in one step. Replies decode about 1.28 times faster on short chat and about 1.24 times faster after a 10,000-token prompt. Every word is still the large model's own choice, sampled at your settings. From 2,048 tokens of conversation, a new M5 kernel reads the conversation once for the whole tree instead of once per guess, so long chats keep the gain.
-- **A new model in the catalog: `Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit`.** It is the OptiQ 4/8-bit Ornith 1.5 35B-A3B with its DFlash2 draft model packed inside, about 22.9 GB. Get it from Observatory's **Models** page, or run `astronomical models download Ornith-1.5-35B-A3B-OptiQ-DFLASH2-4bit`. On Macs without an M5 GPU it runs exactly like the plain OptiQ build.
-
-## Fixed
-
-- **The Tuning page's temperature now takes effect while requests keep arriving.** A change to temperature and the other request defaults used to wait for an idle engine, and could be refused while a client kept sending requests. It now applies to the next request, without restarting the engine.
+- **Screenshots from your coding tools now reach the model.** Agent apps such as GitHub Copilot hand a tool's screenshot back to the model inside the tool's result. Astronomical used to refuse that on the Responses endpoint ("function_call_output is unsupported") and quietly drop the picture on Chat Completions. Now the model sees it, on every endpoint, so a vision model can look at the page your agent just captured. In GitHub Copilot, tick "Supports image input" for the model in Settings → Model providers.
+- A clearer error when an image in a request names a stored file or has no image in it.
 
 ## Under the hood
 
-- Updated `crc32fast` to 1.5.5 and a CI action to its latest patch.
+- Test comments brought up to date with the code.
 
 ## Compatibility
 
 - Apple silicon Macs with macOS 14 or later.
 - Your settings, models and conversations carry over unchanged.
-- The faster drafting needs an M5-family GPU. Every other Mac runs every model as before.
+- A model that only reads text still declines images, now including images a tool returns.
 
 Astronomical is signed with a Developer ID, notarized by Apple, and delivered as a signed Sparkle update.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.116/Astronomical-0.2.116-macOS-arm64.dmg" length="24648261" type="application/octet-stream" sparkle:edSignature="fUdnw65xc+ZdewxA7+pFVE1S0fdCnTAl72FqKTotiJAUHafwfHLEqgiq0U81i9aTeghcchMSPbj1Mns58M+qBA=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.117/Astronomical-0.2.117-macOS-arm64.dmg" length="24651222" type="application/octet-stream" sparkle:edSignature="6J7Pc5tKhu9ayRVNVsZqwMatJMaxHYS+lv430u+FwDb6YuO0fulaqhhR8ASSRo+xxFXHOgPpyZ5V06L3zsRZCA=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: IN8BbVJR/nrMO2zf8Jd7qpdW1HsDmelCggZwoz+pl11lPKNDeISIsktQ2IB/wt5d2s+UkgbIr1A8y4C4Uks3Dg==
-length: 2909
+edSignature: Fme4igwFUbmNtohGwU23Y5k4QePD4Za3nfKSgEYwt1Ux5kHb1yGQJlmVUrQl/rbz5PBxonWCECXNqaLRD/BtCA==
+length: 2241
 -->
