@@ -13,6 +13,7 @@
 
 mod atlas_conversion;
 mod cold_page_plan;
+mod fetching_layer_stages;
 mod macos_file_cache_bypassing_io;
 mod page_read_shapes;
 mod page_timing_report;
@@ -153,6 +154,78 @@ fn should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts() {
             shape_timing.page_milliseconds.len()
         );
     }
+    assert!(
+        probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,
+        "the probe exceeded its 120-second ceiling"
+    );
+}
+
+/// Experts a reply token misses on one layer at the anchor (the 4-bit
+/// 35B-A3B under a 10 GB limit): about 148 over 28 layers.
+const FETCHING_LAYER_EXPERT_COUNT: usize = 5;
+/// Layers on which a reply token fetches at the anchor.
+const FETCHING_LAYER_COUNT: usize = 28;
+
+#[test]
+#[ignore = "converts installed expert layers to an atlas and times one fetching layer stage by stage"]
+#[serial]
+fn should_time_one_fetching_layer_stage_by_stage() {
+    assert!(
+        !cfg!(debug_assertions),
+        "stage timings need an optimized build (--release)"
+    );
+    let probe_started_at = Instant::now();
+    let fixture = installed_large_sparse_moe_streaming_fixture();
+    let runtime = probe_runtime();
+    let layer_plans = all_layer_plans(&fixture);
+    let mut residency_checker = ResidencyChecker::default();
+    let mut cold_expert_ids_by_layer = cold_stock_expert_ids_by_layer(
+        &layer_plans,
+        fixture.config.expert_count() as usize,
+        &mut residency_checker,
+    );
+    let shares_commonest_record_shape =
+        layers_with_the_commonest_record_shape(&fixture, cold_expert_ids_by_layer.len());
+    for (layer_cold_expert_ids, shares_shape) in cold_expert_ids_by_layer
+        .iter_mut()
+        .zip(shares_commonest_record_shape)
+    {
+        if !shares_shape {
+            layer_cold_expert_ids.clear();
+        }
+    }
+    let atlas_layer_indexes = coldest_layer_indexes(&cold_expert_ids_by_layer, ATLAS_LAYER_COUNT);
+    let atlas_directory = tempfile::tempdir().expect("a scratch directory for the atlas");
+    let atlas = write_atlas_test_file(
+        &fixture,
+        &atlas_layer_indexes,
+        &atlas_directory.path().join("experts.atlas"),
+    );
+    let planned_pages = plan_cold_pages(
+        &layer_plans,
+        &cold_expert_ids_by_layer,
+        &atlas,
+        FETCHING_LAYER_EXPERT_COUNT,
+    );
+    // The first planned page proves bytes read in place are the stock bytes.
+    fetching_layer_stages::assert_tables_read_in_place_match_stock(
+        &runtime,
+        &atlas,
+        &planned_pages[0],
+    );
+    let mut samples = fetching_layer_stages::measure_cold_stages(
+        &runtime,
+        &atlas,
+        &planned_pages[1..],
+        &mut residency_checker,
+    );
+    let stop_chain_milliseconds = fetching_layer_stages::measure_stop_cost(&runtime);
+    fetching_layer_stages::report_stages(
+        &mut samples,
+        stop_chain_milliseconds,
+        atlas.record_byte_count * FETCHING_LAYER_EXPERT_COUNT as u64,
+        FETCHING_LAYER_COUNT,
+    );
     assert!(
         probe_started_at.elapsed() <= PROBE_WALL_CLOCK_CEILING,
         "the probe exceeded its 120-second ceiling"

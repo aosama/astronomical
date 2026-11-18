@@ -404,7 +404,7 @@ fn wrap_tensor_buffers(
     tensors_by_suffix
 }
 
-fn page_tensor_shape(page_expert_count: i32, per_expert_shape: &[usize]) -> Vec<i32> {
+pub(super) fn page_tensor_shape(page_expert_count: i32, per_expert_shape: &[usize]) -> Vec<i32> {
     let mut tensor_shape = vec![page_expert_count];
     tensor_shape.extend(per_expert_shape.iter().map(|&dimension| dimension as i32));
     tensor_shape
@@ -427,7 +427,7 @@ fn atlas_page_header(page_expert_count: usize, record_stride: u64) -> Vec<u8> {
 
 /// The stored dtypes of quantized expert tensors. The serving crate keeps its
 /// own mapping private, so this probe states the few it meets.
-fn mlx_dtype(safetensors_dtype: SafetensorsDtype) -> MlxDtype {
+pub(super) fn mlx_dtype(safetensors_dtype: SafetensorsDtype) -> MlxDtype {
     match safetensors_dtype {
         SafetensorsDtype::Uint32 => MlxDtype::UInt32,
         SafetensorsDtype::BFloat16 => MlxDtype::BFloat16,

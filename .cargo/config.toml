@@ -638,6 +638,15 @@ measure-paged-prefill = "run -p xtask -- test-run --package astronomical-accepta
 # names the model when the Development configuration does not discover it;
 # the streaming-latency probes in the same file honour that override too.
 measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts"
+# One fetching layer's work stage by stage, each timed alone on pages the
+# macOS file cache does not hold (5 experts, what a reply token misses on a
+# layer of the 4-bit 35B-A3B under a 10 GB limit): today's read through MLX,
+# a read of our own with no MLX (one preadv per record into memory that
+# already exists), a graphics-processor pass over our bytes against MLX's,
+# the copy into table slots, and what stopping the forward to bring a route
+# to the host costs. Prints each as milliseconds a layer and a token over 28
+# fetching layers. Same configuration and scratch space as the alias above.
+measure-fetching-layer-stages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_one_fetching_layer_stage_by_stage"
 
 # An Expert Atlas model (made by `astronomical models convert-atlas`) against
 # the stock checkpoint it came from: both validate, budget memory alike, and
