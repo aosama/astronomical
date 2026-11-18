@@ -17,6 +17,20 @@ impl Qwen3_5EngineState {
             .map(|loaded_model| loaded_model.expert_memory_mode())
     }
 
+    fn set_decode_misses_fetched_into_tables_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        let loaded_model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("cannot choose the expert read path before load"))?;
+        loaded_model
+            .fetches_decode_misses_into_tables
+            .set(is_enabled);
+        Ok(())
+    }
+
     fn astro_expert_cache_statistics_for_tests(
         &self,
     ) -> Result<AstroExpertCacheStatistics, InferenceEngineError> {
@@ -90,6 +104,19 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         expert_memory_mode_receiver.recv().map_err(|_| {
             fatal_engine_error("expert-memory mode owner operation returned no response")
         })
+    }
+
+    /// Chooses how a reply token's missing experts arrive: read straight into
+    /// their tables (the default) or loaded as a page and copied afterwards.
+    #[doc(hidden)]
+    pub async fn set_decode_misses_fetched_into_tables_for_tests(
+        &self,
+        is_enabled: bool,
+    ) -> Result<(), InferenceEngineError> {
+        self.run_owner_test_operation(move |qwen_inference_execution| {
+            qwen_inference_execution.set_decode_misses_fetched_into_tables_for_tests(is_enabled)
+        })
+        .await
     }
 
     /// Returns mode-neutral expert ownership plus cumulative paging statistics.

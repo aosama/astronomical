@@ -167,9 +167,12 @@ impl Qwen3_5Model {
                 key_normalization_scale_weight,
                 layer_additions: RefCell::new(None),
             },
+            // Opened before the pager moves into the model below.
+            expert_slot_storage_filler: open_expert_slot_storage_filler(expert_pager.as_ref()),
             expert_pager,
             dense_layer_streamer,
             astro_expert_cache,
+            fetches_decode_misses_into_tables: std::cell::Cell::new(true),
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
             prompt_expert_pages_in_hand: Default::default(),
@@ -185,6 +188,27 @@ impl Qwen3_5Model {
             fused_jangtq2_gathered_projection_kernel: streaming_expert_budget
                 .fused_jangtq2_gathered_projection_kernel,
         })
+    }
+}
+
+/// The reader that fills table slots from storage, for a model that streams
+/// experts. Without it every missing expert is served the copying way, which
+/// is slower and still correct, so a failure to open it is logged, not fatal.
+fn open_expert_slot_storage_filler(
+    expert_pager: Option<&Qwen3_5ExpertPager>,
+) -> Option<crate::qwen3_5_streaming::expert_streaming::ExpertSlotStorageFiller> {
+    let expert_pager = expert_pager?;
+    match crate::qwen3_5_streaming::expert_streaming::ExpertSlotStorageFiller::open(
+        expert_pager.layer_plans(),
+    ) {
+        Ok(slot_filler) => Some(slot_filler),
+        Err(open_error) => {
+            tracing::warn!(
+                %open_error,
+                "experts will be copied into their tables: the direct reader did not open"
+            );
+            None
+        }
     }
 }
 

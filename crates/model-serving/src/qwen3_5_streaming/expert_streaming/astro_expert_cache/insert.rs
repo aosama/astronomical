@@ -28,8 +28,9 @@ use super::decode_astro_expert_cache_policy::{
 };
 use super::demand_history::HISTORICAL_HOT_DEMAND_COUNT;
 use super::insert_planning::{
-    assemble_planned_slots, grow_free_slots_within_budget, plan_evictable_slots,
-    plan_new_expert_rows, snapshot_insert_planning_inputs, write_planned_experts,
+    PlannedRowSource, PlannedSlotInsert, assemble_planned_slots, grow_free_slots_within_budget,
+    plan_evictable_slots, plan_new_expert_rows, snapshot_insert_planning_inputs,
+    write_planned_experts,
 };
 use super::slot_writes::{
     RetainedReferenceOk, create_warm_table_weights, materialize_and_detach_table_weights,
@@ -131,24 +132,82 @@ impl AstroExpertCache {
                 warm_slot_count,
             );
         }
+        let Some(PlannedSlotInsert {
+            new_expert_rows,
+            planned_slots,
+        }) = self.plan_slots_in_existing_table(
+            runtime,
+            layer_index,
+            expert_ids,
+            protected_expert_ids,
+            &layer_prefetched_unconsumed_expert_ids,
+            warm_slot_count,
+            candidate_decode_step_epoch,
+        )?
+        else {
+            return Ok(0);
+        };
+        let table = self
+            .tables_by_layer
+            .get_mut(layer_index)
+            .and_then(|table| table.as_mut())
+            .expect("slot table was just planned");
+        let (claimed_expert_slots, slot_replacement_count) = write_planned_experts(
+            runtime,
+            layer_index,
+            table,
+            PlannedRowSource::StreamedPage(streamed_weights),
+            new_expert_rows,
+            planned_slots,
+            &historically_hot_expert_ids,
+            candidate_decode_step_epoch,
+        )?;
+        // The fills left the table arrays with lazy graphs that pin this
+        // token's streamed page for the table's lifetime. Materialize the
+        // writes and strip the provenance so the page frees with the forward.
+        materialize_and_detach_table_weights(runtime, &table.weights)?;
+        let written_expert_count = claimed_expert_slots.len();
+        self.record_planned_insert_counters(
+            written_expert_count,
+            slot_replacement_count,
+            warm_slot_count,
+            candidate_decode_step_epoch,
+        );
+        Ok(written_expert_count)
+    }
+
+    /// Plans a slot for every expert of `expert_ids` the layer's table does
+    /// not hold yet: free slots first, then growth, then least-read victims.
+    /// `None` when nothing is new or the table cannot take them all. The
+    /// layer must already have a table.
+    ///
+    /// Planning up front keeps experts inserted together from evicting each
+    /// other: with equal (zero) read counts a pick-lowest-slot loop would let
+    /// the second insert evict the first. Victims also exclude slots holding
+    /// any incoming routed expert: such an expert is contained now, and an
+    /// eviction would demote it to a late surprise miss.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn plan_slots_in_existing_table(
+        &mut self,
+        runtime: &MlxRuntime,
+        layer_index: usize,
+        expert_ids: &[usize],
+        protected_expert_ids: &[usize],
+        layer_prefetched_unconsumed_expert_ids: &[usize],
+        warm_slot_count: usize,
+        candidate_decode_step_epoch: Option<u64>,
+    ) -> Result<Option<PlannedSlotInsert>, MlxRuntimeError> {
         let astro_expert_cache_ceiling_bytes = self.capacity_bytes;
         let table = self
             .tables_by_layer
             .get_mut(layer_index)
             .and_then(|table| table.as_mut())
-            .expect("slot table was just checked");
+            .expect("the caller checked the layer has a table");
         let mut resident_payload_bytes = self.resident_payload_bytes;
-        // Plan every slot before writing: free slots first, then growth, then
-        // least-read victims. Planning up front keeps experts inserted by the
-        // same flush from evicting each other — with equal (zero) read counts a
-        // naive pick-lowest-slot loop would let the second insert evict the
-        // first. Victims also exclude slots holding any incoming routed expert:
-        // such an expert is contained now, and an eviction would demote it to a
-        // late surprise miss that exhausts the plan.
         let new_expert_rows = plan_new_expert_rows(table, expert_ids, candidate_decode_step_epoch);
         let new_expert_count = new_expert_rows.len();
         if new_expert_count == 0 {
-            return Ok(0);
+            return Ok(None);
         }
         let mut free_slots: Vec<usize> = (0..table.slot_count())
             .filter(|slot| table.expert_id_by_slot[*slot].is_none())
@@ -167,36 +226,40 @@ impl AstroExpertCache {
             free_slots = grown_free_slots;
             if let Some(grown_resident_payload_bytes) = grown_resident_payload_bytes {
                 resident_payload_bytes = grown_resident_payload_bytes;
-                // The table tensor already grew, so the `astro_expert_cache`-wide accounting
-                // must move with it even if slot planning below gives up:
-                // undercounting here would let later can_admit checks overfill
-                // the ceiling.
-                self.resident_payload_bytes = resident_payload_bytes;
             }
         }
+        // The table tensor may have grown, so the `astro_expert_cache`-wide
+        // accounting moves with it even if slot planning below gives up:
+        // undercounting here would let later can_admit checks overfill the
+        // ceiling.
+        self.resident_payload_bytes = resident_payload_bytes;
         let evictable_slots = plan_evictable_slots(
             table,
             expert_ids,
             protected_expert_ids,
-            &layer_prefetched_unconsumed_expert_ids,
+            layer_prefetched_unconsumed_expert_ids,
             candidate_decode_step_epoch,
             free_slots.len(),
             new_expert_count,
         );
         if new_expert_count > free_slots.len() + evictable_slots.len() {
-            return Ok(0);
+            return Ok(None);
         }
         let planned_slots = assemble_planned_slots(&free_slots, &evictable_slots, new_expert_count);
-        let (written_expert_count, slot_replacement_count) = write_planned_experts(
-            runtime,
-            layer_index,
-            table,
-            streamed_weights,
+        Ok(Some(PlannedSlotInsert {
             new_expert_rows,
             planned_slots,
-            &historically_hot_expert_ids,
-            candidate_decode_step_epoch,
-        )?;
+        }))
+    }
+
+    /// Adds one planned insert to the `astro_expert_cache`-wide counters.
+    pub(super) fn record_planned_insert_counters(
+        &mut self,
+        written_expert_count: usize,
+        slot_replacement_count: u64,
+        warm_slot_count: usize,
+        candidate_decode_step_epoch: Option<u64>,
+    ) {
         if warm_slot_count > 0 {
             self.warm_expert_insert_count = self
                 .warm_expert_insert_count
@@ -210,12 +273,6 @@ impl AstroExpertCache {
                 .decode_slot_eviction_count
                 .saturating_add(slot_replacement_count);
         }
-        self.resident_payload_bytes = resident_payload_bytes;
-        // The fills left the table arrays with lazy graphs that pin this
-        // token's streamed page for the table's lifetime. Materialize the
-        // writes and strip the provenance so the page frees with the forward.
-        materialize_and_detach_table_weights(runtime, &table.weights)?;
-        Ok(written_expert_count)
     }
 
     /// Adopts the streamed page as the layer's first table, refusing only when

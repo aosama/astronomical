@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::os::fd::AsFd;
 
-use super::{ExpertRecordReader, RecordRead, RecordReadError};
+use super::{ExpertRecordReader, RecordRead, RecordReadError, open_for_direct_reads};
 
 const BLOCK_BYTES: usize = 4096;
 
@@ -228,4 +228,26 @@ fn should_refuse_an_offset_no_read_can_address() {
             destination_count: 1
         })
     );
+}
+
+#[test]
+fn should_read_the_same_bytes_through_a_descriptor_opened_for_direct_reads() {
+    let file = numbered_block_file(8);
+    let direct_file = open_for_direct_reads(file.path()).expect("the file opens for direct reads");
+    let reader = ExpertRecordReader::new(1).expect("the reader starts");
+    let mut destination = vec![0xFF_u8; BLOCK_BYTES];
+    let mut record_reads = vec![RecordRead {
+        file: direct_file.as_fd(),
+        file_offset: (5 * BLOCK_BYTES) as u64,
+        destinations: vec![destination.as_mut_slice()],
+    }];
+    reader.read(&mut record_reads).expect("the record reads");
+    drop(record_reads);
+    assert!(destination.iter().all(|byte| *byte == 5));
+}
+
+#[test]
+fn should_report_a_file_that_does_not_exist() {
+    let missing_path = std::path::Path::new("/nonexistent/astronomical/expert-records");
+    assert!(open_for_direct_reads(missing_path).is_err());
 }

@@ -656,6 +656,12 @@ measure-fetching-layer-stages = "run -p xtask -- test-run --package astronomical
 # `model_directory` names the Atlas and `reference_artifact_path` its source.
 verify-atlas-model-pages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_load_identical_expert_tensors_from_an_atlas_and_its_stock_source"
 
+# A seeded reply is the same tokens whether its missing experts are read from
+# storage straight into their tables or loaded as a page and copied: serves
+# the 10,000-token Shakespeare request three times on one loaded model
+# (copying, direct, copying again) and asserts the first two replies are
+# equal. Same configuration as the alias below.
+verify-direct-expert-read-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_write_the_same_reply_whether_experts_are_read_into_tables_or_copied"
 # Where a paged decode token's time goes: one 10,000-token Shakespeare request
 # (after a 500/50 warmup) through the attributed in-process engine, printing
 # per decode token the wall time, the per-layer route copies to the host and

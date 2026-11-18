@@ -2,6 +2,7 @@ mod cold_macos_file_cache;
 mod compact_prefill;
 mod decode_residency_attribution;
 mod decode_retention;
+mod direct_expert_read_parity;
 mod failed_span_redo;
 mod in_memory_ledger_reconciliation;
 mod no_replay;

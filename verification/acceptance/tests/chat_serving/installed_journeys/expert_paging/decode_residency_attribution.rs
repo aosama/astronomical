@@ -47,7 +47,7 @@ const WARMUP_OUTPUT_TOKEN_COUNT: u16 = 50;
 const MEASURED_PROMPT_TOKEN_COUNT: usize = 10_000;
 const MEASURED_OUTPUT_TOKEN_COUNT: u16 = 500;
 const WARMUP_REQUEST_ID: RequestId = RequestId::new(97_100);
-const MEASURED_REQUEST_ID: RequestId = RequestId::new(97_101);
+pub(super) const MEASURED_REQUEST_ID: RequestId = RequestId::new(97_101);
 const FOLLOW_UP_PROMPT_TOKEN_COUNT: usize = 64;
 const FOLLOW_UP_OUTPUT_TOKEN_COUNT: u16 = 300;
 const FOLLOW_UP_REQUEST_ID: RequestId = RequestId::new(97_102);
@@ -176,16 +176,16 @@ async fn attribute_decode_token_time(macos_file_cache_condition: MacosFileCacheC
 }
 
 /// One request the probe serves, in order.
-struct ProbeRequest {
-    request_id: RequestId,
-    prompt_token_ids: Vec<u32>,
-    output_token_count: u16,
-    phase_name: &'static str,
+pub(super) struct ProbeRequest {
+    pub(super) request_id: RequestId,
+    pub(super) prompt_token_ids: Vec<u32>,
+    pub(super) output_token_count: u16,
+    pub(super) phase_name: &'static str,
 }
 
 /// The warmup, the measured long request and the decode-dominated follow-up,
 /// each a Romeo and Juliet prompt of its own length.
-fn probe_requests(model_directory: &Path) -> Vec<ProbeRequest> {
+pub(super) fn probe_requests(model_directory: &Path) -> Vec<ProbeRequest> {
     let model_id = model_directory
         .file_name()
         .and_then(|name| name.to_str())

@@ -22,6 +22,7 @@ mod demand_history;
 mod demand_phase;
 mod demand_recording;
 mod flush;
+mod in_place_fetch;
 mod insert;
 mod insert_planning;
 mod previous_token_prefetch;

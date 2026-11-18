@@ -18,4 +18,4 @@
 #[allow(unsafe_code)]
 mod record_reader;
 
-pub use record_reader::{ExpertRecordReader, RecordRead, RecordReadError};
+pub use record_reader::{ExpertRecordReader, RecordRead, RecordReadError, open_for_direct_reads};

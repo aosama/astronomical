@@ -153,6 +153,27 @@ impl Drop for ExpertRecordReader {
     }
 }
 
+/// Opens `path` for reads that go straight to storage without passing
+/// through the `macos_file_cache`.
+///
+/// A model that streams experts does not fit in memory, so the memory the
+/// `macos_file_cache` would spend on a second copy of the bytes is memory the
+/// model needs. macOS reads directly only when the file offset, the length
+/// and the destination are all 16 KiB aligned; any other read on this
+/// descriptor quietly goes through the `macos_file_cache` and is still correct.
+pub fn open_for_direct_reads(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let file = std::fs::File::open(path)?;
+    #[cfg(target_os = "macos")]
+    {
+        // SAFETY: fcntl on a live descriptor with an integer argument.
+        let status = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_NOCACHE, 1) };
+        if status == -1 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(file)
+}
+
 #[cfg(test)]
 #[path = "record_reader_tests.rs"]
 mod tests;

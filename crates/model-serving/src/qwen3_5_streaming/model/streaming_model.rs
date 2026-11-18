@@ -33,6 +33,14 @@ pub struct Qwen3_5StreamingModel {
         Option<crate::qwen3_5_streaming::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer>,
     /// Individual routed experts retained within the paged-mode RAM ceiling.
     pub(crate) astro_expert_cache: Option<RefCell<AstroExpertCache>>,
+    /// Reads a reply token's missing experts from storage straight into the
+    /// tables of the `astro_expert_cache`; `None` for a model without
+    /// streamed experts, or when its files could not be opened for it.
+    pub(crate) expert_slot_storage_filler:
+        Option<crate::qwen3_5_streaming::expert_streaming::ExpertSlotStorageFiller>,
+    /// Off only while a measurement compares the copying path with the
+    /// direct one on the same loaded model.
+    pub(crate) fetches_decode_misses_into_tables: std::cell::Cell<bool>,
     /// Where each expert layer should end up for the reply being written;
     /// `None` while a prompt is read, when every layer may be kept whole.
     pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,

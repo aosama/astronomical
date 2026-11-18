@@ -321,6 +321,7 @@ dependencies = [
  "astronomical-decision-training",
  "astronomical-english-phonemes",
  "astronomical-expert-atlas",
+ "astronomical-expert-record-reader",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
  "astronomical-lowercase-hex",

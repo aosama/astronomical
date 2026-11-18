@@ -68,6 +68,8 @@ pub(crate) use crate::qwen3_5_core::model_math::{
 };
 #[cfg(feature = "direct-mlx")]
 mod forward;
+mod in_place_expert_fetch;
+mod miss_route_dispatch;
 #[cfg(feature = "direct-mlx")]
 mod mixed_decode_execution;
 #[cfg(feature = "direct-mlx")]
