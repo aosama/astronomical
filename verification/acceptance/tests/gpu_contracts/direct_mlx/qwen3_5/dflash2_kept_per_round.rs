@@ -224,6 +224,19 @@ fn pair_directories() -> (PathBuf, PathBuf, String) {
     }
 }
 
+/// The MLX limit the pair loads under: the default that fits both 4-bit
+/// pairs, or the test run's `paging_experiment.maximum_mlx_memory_gigabytes`
+/// when that is larger, which is how an 8-bit target (about 35 GiB) is
+/// measured resident.
+fn active_memory_limit_bytes() -> usize {
+    let configured_limit_bytes = astronomical_test_harness::test_run::TestRunContext::current()
+        .configuration
+        .paging_experiment
+        .maximum_mlx_memory_bytes()
+        .expect("the configured memory limit is valid");
+    ACTIVE_MEMORY_LIMIT_BYTES.max(usize::try_from(configured_limit_bytes).unwrap_or(usize::MAX))
+}
+
 pub(crate) fn load_pair() -> JourneyPair {
     let (target_directory, drafter_directory, target_model_id) = pair_directories();
     eprintln!(
@@ -232,7 +245,7 @@ pub(crate) fn load_pair() -> JourneyPair {
         drafter_directory.display()
     );
     let runtime = MlxRuntime::initialize(
-        MlxMemoryLimits::new(ACTIVE_MEMORY_LIMIT_BYTES, MLX_BUFFER_CACHE_LIMIT_BYTES)
+        MlxMemoryLimits::new(active_memory_limit_bytes(), MLX_BUFFER_CACHE_LIMIT_BYTES)
             .expect("memory limits are valid"),
     )
     .expect("the MLX runtime initializes");
@@ -436,7 +449,7 @@ fn run_round(
     let block = runtime
         .array_from_u32(&block_ids, &[1, configuration.block_size])
         .expect("the block builds");
-    let target: &dyn DFlash2DraftTarget = &pair.target;
+    let target: &dyn DFlash2DraftTarget = pair.target.as_dflash2_draft_target();
     let hidden = drafted_hidden_rows(
         runtime,
         &pair.drafter_weights,

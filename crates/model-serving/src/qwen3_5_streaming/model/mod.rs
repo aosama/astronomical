@@ -118,6 +118,7 @@ mod governed_leases;
 #[cfg(feature = "direct-mlx")]
 mod live_memory_limit;
 pub(crate) mod request_refusal;
+mod tree_verification_forward;
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]

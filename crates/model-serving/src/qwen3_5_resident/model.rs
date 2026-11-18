@@ -40,6 +40,8 @@ pub(crate) use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 #[cfg(feature = "direct-mlx")]
+pub use crate::qwen3_5_core::model::draft_tree_verification::Qwen3_5DraftTreeVerification;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
@@ -66,8 +68,6 @@ pub use forward_graph::Qwen3_5TargetForwardOutput;
 pub use resident_model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use resident_model::Qwen3_5ResidentModel as Qwen3_5Model;
-#[cfg(feature = "direct-mlx")]
-pub use tree_verification_forward::Qwen3_5DraftTreeVerification;
 pub use verification_forward::{
     Qwen3_5DraftedRowsVerification, Qwen3_5SpeculativeVerificationOutput, VerificationLogitsMode,
 };

@@ -15,7 +15,11 @@
 use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
-use crate::qwen3_5_resident::model::{Qwen3_5ExecutionError, Qwen3_5ResidentModel};
+use crate::qwen3_5_core::model::Qwen3_5ModelBase;
+use crate::qwen3_5_core::model::draft_tree_verification::{
+    DraftTreeTarget, commit_draft_tree, verify_draft_tree,
+};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::speculative_decoding::dflash2_drafter::{
     DFlash2DraftTarget, DraftTreeOptions, DrafterContextStates, KeyedNoise, best_first_draft_tree,
     draft_lattice, drafted_hidden_rows, tree_block_row_count,
@@ -55,7 +59,7 @@ impl DraftSession {
     /// tokens until the first round, for rows no drafter layer reads.
     pub fn append_tap_rows(
         &mut self,
-        model: &Qwen3_5ResidentModel,
+        model: &Qwen3_5ModelBase,
         context_row_limit: Option<i32>,
         layer_taps: &[MlxArray],
         first_position: i32,
@@ -90,7 +94,7 @@ impl DraftSession {
     /// produced them.
     pub fn evaluate_pending_tap_rows(
         &self,
-        model: &Qwen3_5ResidentModel,
+        model: &Qwen3_5ModelBase,
     ) -> Result<(), Qwen3_5ExecutionError> {
         if let Some(pending_tap_rows) = self.pending_tap_rows.as_ref() {
             model.runtime().evaluate_arrays(&[pending_tap_rows])?;
@@ -139,7 +143,7 @@ pub struct DraftTreeRoundOutcome {
 /// Runs one round and leaves `request_decoder_state` advanced over the
 /// bonus token and the kept drafts.
 pub fn run_draft_tree_round(
-    model: &Qwen3_5ResidentModel,
+    target: &impl DraftTreeTarget,
     request_decoder_state: &mut RequestDecoderStateStack,
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
@@ -150,9 +154,11 @@ pub fn run_draft_tree_round(
             description: "the context length exceeds the MLX int32 range",
         }
     })?;
+    let model = target.draft_tree_model_base();
     let tree_rows = drafted_tree_rows(model, draft_runtime, draft_session, round_request)?;
     let tap_layer_ids = &draft_runtime.drafter_configuration.target_tap_layer_ids;
-    let verification = model.verify_draft_tree(
+    let verification = verify_draft_tree(
+        target,
         &tree_rows,
         round_request.context_length_tokens,
         request_decoder_state,
@@ -186,7 +192,7 @@ pub fn run_draft_tree_round(
         &kept_taps,
         anchor_position,
     )?;
-    model.commit_draft_tree(request_decoder_state, verification, &kept.rows)?;
+    commit_draft_tree(model, request_decoder_state, verification, &kept.rows)?;
     Ok(DraftTreeRoundOutcome {
         emitted_token_ids,
         accepted_proposal_count: kept.rows.len() - 1,
@@ -198,7 +204,7 @@ pub fn run_draft_tree_round(
 /// Drafts one block from the bonus token and searches its lattice: the
 /// tree's rows, the bonus first.
 fn drafted_tree_rows(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     draft_runtime: &Qwen3_5SpeculativeDraftRuntime,
     draft_session: &mut DraftSession,
     round_request: &DraftTreeRoundRequest,
@@ -281,7 +287,7 @@ fn drafted_tree_rows(
 /// The target's pick after every row of `per_row_logits` [1, rows, V]: the
 /// argmax, or the keyed sample at the position after the row's own.
 fn target_picks(
-    model: &Qwen3_5ResidentModel,
+    model: &Qwen3_5ModelBase,
     per_row_logits: &MlxArray,
     row_positions: &[i32],
     target_token_choice: VerificationTokenChoice,

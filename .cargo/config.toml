@@ -574,6 +574,14 @@ measure-dflash2-tree-rounds = "run -p xtask -- test-run --package astronomical-a
 # PATH whose model_directory is a model folder holding its own drafter in a
 # `drafter` folder; without one they load the 27B pair. About a minute.
 measure-dflash2-row-exactness = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_row_exactness"
+# Ground truth for draft trees on the streaming model: the greedy continuation
+# fed one token a step against the same tokens verified four rows a pass as a
+# chain, with each row's largest logit difference and pick, then a plain
+# step's time beside a four-row round's. Needs --configuration PATH with
+# model_directory set to the target's folder; paging_experiment's
+# maximum_mlx_memory_gigabytes is the limit the model loads under, so a value
+# below the model's size measures real reads from storage. About a minute.
+measure-dflash2-streaming-tree-verify = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter dflash2_streaming_tree_verify"
 # The rung below it: whether MLX's quantized matmul (4- and 8-bit, group 64,
 # at the 35B-A3B target's widths) and its attention kernel give a row the same
 # bits inside a window of 2, 4, 8 and 16 rows as alone. Random inputs, no

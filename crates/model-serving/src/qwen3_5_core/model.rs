@@ -7,12 +7,16 @@ pub(crate) mod bound_weight_dtype_flow;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_attention;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod dflash2_draft_target;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod differentiable_attention;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod disk_embedding_rows;
 #[cfg(all(test, feature = "direct-mlx"))]
 #[path = "model/disk_embedding_rows_tests.rs"]
 mod disk_embedding_rows_tests;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod draft_tree_verification;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod embedding_row_reads;
 #[cfg(all(test, feature = "direct-mlx"))]
