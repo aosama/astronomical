@@ -523,12 +523,14 @@ impl LimitedLookaheadBelady {
     }
 
     fn priority_seen_from(&self, expert: ExpertKey, after_step: u64) -> (u64, u64) {
-        let lookahead_steps = (self.lookahead_tokens * self.layer_count) as u64;
+        // Saturating so a lookahead past the reply's end means the whole reply.
+        let lookahead_steps =
+            (self.lookahead_tokens as u64).saturating_mul(self.layer_count as u64);
         let (inverted_next_use, _) = self
             .belady_minimum
             .priority_for_next_use_after(expert, after_step);
         let next_use_step = u64::MAX - inverted_next_use;
-        if inverted_next_use > 0 && next_use_step <= after_step + lookahead_steps {
+        if inverted_next_use > 0 && next_use_step <= after_step.saturating_add(lookahead_steps) {
             // Seen ahead: above every unseen expert, sooner higher.
             (1, inverted_next_use)
         } else {

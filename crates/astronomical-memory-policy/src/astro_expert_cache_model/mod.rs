@@ -38,6 +38,8 @@ mod astro_expert_cache_tests;
 #[cfg(test)]
 mod expert_tables_tests;
 #[cfg(test)]
+mod rebalanced_replay_tests;
+#[cfg(test)]
 mod recorded_reply_replay_tests;
 #[cfg(test)]
 mod replay_case_file_tests;
