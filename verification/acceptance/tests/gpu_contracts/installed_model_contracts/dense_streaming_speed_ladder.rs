@@ -40,7 +40,7 @@ const PROMPT_WORD_COUNT: usize = 9000;
 /// Layers whose cold reads make the raw read rate.
 const RAW_READ_LAYER_COUNT: usize = 8;
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
-/// Long enough for the cold macOS file cache to sweep the layer just read.
+/// Long enough for the cold `macos_file_cache` to sweep the layer just read.
 const COLD_MACOS_FILE_CACHE_SETTLE: Duration = Duration::from_millis(500);
 
 #[tokio::test]

@@ -66,7 +66,7 @@ pub(super) async fn redo_cost_since(
     }
 }
 
-/// One failed span is one step over the limit, redone once, and the astro expert cache gives back
+/// One failed span is one step over the limit, redone once, and the `astro_expert_cache` gives back
 /// only the room the redo leased: at least four fifths of what it kept stays.
 pub(super) fn assert_one_span_was_redone_cheaply(redo_cost: &RedoCost, depth_name: &str) {
     assert_eq!(

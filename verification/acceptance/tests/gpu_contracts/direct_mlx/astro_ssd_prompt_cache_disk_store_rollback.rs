@@ -145,7 +145,7 @@ async fn should_not_touch_a_parent_boundary_when_a_child_fits_without_quota_pres
 
     // Parent retention is the normal case. The directory sentinel makes this a filesystem-level
     // regression: an accidental eager parent cleanup would fail here instead of quietly turning
-    // a reusable branch point into a missing astro SSD prompt cache snapshot.
+    // a reusable branch point into a missing `astro_ssd_prompt_cache` snapshot.
     assert!(
         save_result.is_ok(),
         "a fitting child must retain its parent: {save_result:?}"

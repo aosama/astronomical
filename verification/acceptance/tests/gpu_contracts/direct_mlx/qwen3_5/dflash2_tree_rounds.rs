@@ -1,8 +1,11 @@
-//! Gate 4 end to end on the real 27B pair: every round drafts TensorFold's
-//! tree, verifies all of it in one target pass, picks with the keyed sampler
-//! (or greedily), and commits the kept chain. Prints kept per round and the
-//! decode speed (prefill excluded) for TensorFold's code-completion and chat
-//! cells, where its engine measured 78.7 and 44.0 tok/s on this Mac.
+//! Gate 4 end to end on a real target and its DFlash2 drafter (the 27B pair
+//! unless the test run configures a target with its own `drafter` folder):
+//! every round drafts a tree, verifies all of it in one target pass, picks
+//! with the keyed sampler (or greedily), and commits the kept chain. Prints
+//! kept per round and the decode speed (prefill excluded) for TensorFold's
+//! code-completion and chat cells. On the 27B pair TensorFold's own engine
+//! measured 78.7 and 44.0 tok/s on those cells, on the Mac these journeys
+//! were first run on; compare against a TensorFold run on the Mac at hand.
 //!
 //! Each stage still waits for the GPU (the lattice and the picks are read
 //! back), so this is the speed a straightforward tree loop reaches, not a
@@ -37,7 +40,7 @@ const FIRST_COPY_ROWS: usize = 16;
 const MAXIMUM_COPY_ROWS: usize = 48;
 
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
     decode_cells_with_trees(&ORACLE_CELLS[..3], SAMPLED_SEED_COUNT);
@@ -47,7 +50,7 @@ fn should_decode_code_cells_with_draft_trees_verified_in_one_target_pass() {
 /// 90-second run measured 6 to 10 ms slower than the same rounds from a
 /// cool start, so each family of cells gets its own process.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
     // Sampled first: it is the cell compared with TensorFold's 44.0.
@@ -58,7 +61,7 @@ fn should_decode_chat_cells_with_draft_trees_verified_in_one_target_pass() {
 /// document question lands in, where few drafted tokens are kept a round
 /// and every verified row attends to the whole prompt.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_decode_prose_after_a_long_prompt_with_draft_trees() {
     let long_prompt: &'static str = Box::leak(

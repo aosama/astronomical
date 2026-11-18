@@ -67,7 +67,7 @@ const fn oracle_cell(
 }
 
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-oracle"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-oracle"]
 #[serial]
 fn should_measure_how_many_tokens_a_draft_tree_keeps_per_round_on_recorded_references() {
     let pair = load_pair();
@@ -501,7 +501,7 @@ const TENSORFOLD_GREEDY_CODE_COMPLETION: &str =
 /// they round a near-tie differently, so their round counts are not on the
 /// same text. Forcing TensorFold's text through this drafter and tree is.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-oracle"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-oracle"]
 #[serial]
 fn should_count_the_rounds_this_tree_needs_for_tensorfolds_own_greedy_text() {
     let pair = load_pair();

@@ -1,5 +1,5 @@
 //! User journey: a two-turn conversation whose second turn extends the first
-//! turn's prompt by fewer tokens than one astro SSD prompt cache block. The first turn's final
+//! turn's prompt by fewer tokens than one `astro_ssd_prompt_cache` block. The first turn's final
 //! partial block ("tail") must be restored on the second turn so the engine
 //! prefills only the newly added suffix instead of the tail tokens again.
 

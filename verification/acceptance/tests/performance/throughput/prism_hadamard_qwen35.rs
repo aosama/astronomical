@@ -5,13 +5,13 @@
 //! Tests": a warmup completion of roughly 500 prompt tokens and 50 output
 //! tokens is discarded, then one measured completion sends at least 10,000
 //! Romeo and Juliet prompt tokens and acquires 500 output tokens with the
-//! astro SSD prompt cache disabled and the prefill chunk fixed at 2,048
+//! `astro_ssd_prompt_cache` disabled and the prefill chunk fixed at 2,048
 //! tokens (both pinned by the worker configuration this driver builds).
 //!
 //! The pack is located through the explicit test-run `model_directory` (the Hugging
 //! Face snapshot directory), never a hardcoded developer path, and the
 //! worker discovers it through the snapshot's `models--` entry root. Discovery
-//! names a Hugging Face hub cache entry by the leaf of its decoded `org/repo` identity, so the
+//! names a `huggingface_hub_cache` entry by the leaf of its decoded `org/repo` identity, so the
 //! requested model id is derived from that directory name rather than typed.
 
 use std::path::PathBuf;
@@ -43,7 +43,7 @@ fn pack_directory() -> PathBuf {
 
 /// Measures the folded ternary pack's serving prompt-processing and decode
 /// throughput over IPC: after a short warmup, a >=10,000-token Romeo and
-/// Juliet input drives 500 output tokens with the astro SSD prompt cache disabled, and the
+/// Juliet input drives 500 output tokens with the `astro_ssd_prompt_cache` disabled, and the
 /// measured completion's server-attributed rates are persisted to the
 /// durable historical record.
 #[test]

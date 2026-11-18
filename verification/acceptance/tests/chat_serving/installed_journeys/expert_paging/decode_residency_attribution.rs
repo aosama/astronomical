@@ -9,7 +9,7 @@
 //! time, so a residency change can be judged by measured milliseconds rather
 //! than by hit rate alone.
 //!
-//! The warm variant leaves the macOS file cache alone, so on a Mac with more
+//! The warm variant leaves the `macos_file_cache` alone, so on a Mac with more
 //! RAM than the limit most expert reads come from memory. The cold variant
 //! keeps the model's weight files evicted for the whole run
 //! (`cold_macos_file_cache`), which is what the same reads cost on a Mac whose RAM
@@ -62,7 +62,7 @@ const MINIMUM_REPORTED_PREFILL_SECONDS: f64 = 0.05;
 /// probes rather than given more time.
 const DECODE_ATTRIBUTION_TIMEOUT: Duration = Duration::from_secs(120);
 
-/// Whether the model's weight files may stay in the macOS file cache.
+/// Whether the model's weight files may stay in the `macos_file_cache`.
 #[derive(Clone, Copy, Debug)]
 enum MacosFileCacheCondition {
     Warm,
@@ -301,7 +301,7 @@ fn print_follow_up_operation_breakdown(follow_up_report: &Value) {
         );
     }
     // Physical disk bytes against requested file bytes says whether the
-    // decode's expert reads came from the SSD or from the macOS file cache,
+    // decode's expert reads came from the SSD or from the `macos_file_cache`,
     // which a machine with RAM beyond the MLX limit fills with the model.
     eprintln!(
         "[decode-attribution] follow_up process_physical_disk_read_bytes_per_token={:.0}",

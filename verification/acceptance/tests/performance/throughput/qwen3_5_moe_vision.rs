@@ -19,11 +19,11 @@
 //! Tests": the ~500-token warmup completion (small image, ~50 output
 //! tokens) is discarded so first-use JIT kernel compilation — including the
 //! vision tower's — never inflates the measured prefill, the astro SSD
-//! astro SSD prompt cache is disabled, and the measured completion's server-attributed
+//! `astro_ssd_prompt_cache` is disabled, and the measured completion's server-attributed
 //! rates persist to the durable historical record under the "vision" journey
 //! kind, which delineates them from the text journey's lines in the same
 //! shared history log. The journey verifies measured token counts and zero
-//! astro SSD prompt cache reuse; both chunk sizes are fixed at 2,048 tokens and the memory
+//! `astro_ssd_prompt_cache` reuse; both chunk sizes are fixed at 2,048 tokens and the memory
 //! ceiling is capped at 36 GB.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU
@@ -79,7 +79,7 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// Measures the resident sparse-MoE model's VISION serving prompt-processing
 /// and decode throughput: after a short small-image warmup, a 9,216-visual-
 /// token image plus the Romeo and Juliet continuation drives 500 output
-/// tokens with the astro SSD prompt cache disabled, and the measured
+/// tokens with the `astro_ssd_prompt_cache` disabled, and the measured
 /// completion's server-attributed rates are persisted to the durable
 /// historical record under the "vision" journey kind.
 #[test]

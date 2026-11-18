@@ -182,7 +182,7 @@ pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::Discove
 }
 
 /// The Development configuration's model-directory roots. A journey whose
-/// model lives in a Hugging Face hub cache must configure these roots rather
+/// model lives in a `huggingface_hub_cache` must configure these roots rather
 /// than the snapshot directory: discovery names a model by its repository
 /// only when it scans from a root, and by the snapshot hash otherwise.
 #[allow(dead_code)]

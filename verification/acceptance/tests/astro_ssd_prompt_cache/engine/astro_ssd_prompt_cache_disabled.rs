@@ -30,7 +30,7 @@ async fn run_astro_ssd_prompt_cache_disabled_cold_prefill_acceptance() {
     let mut astro_ssd_prompt_cache_disabled_chunking_configuration =
         crate::common::standard_worker_chunking_configuration();
     // This value deliberately violates the model's persistent-state alignment. Execution with the
-    // astro SSD prompt cache disabled must never resolve or validate a storage contract that cannot be used.
+    // `astro_ssd_prompt_cache` disabled must never resolve or validate a storage contract that cannot be used.
     astro_ssd_prompt_cache_disabled_chunking_configuration.ssd_prompt_cache_block_tokens = Some(1);
     let mut qwen3_5_engine = Qwen3_5ResidentEngine::new_with_prompt_processing_chunk_sizer(
         validated_artifact,

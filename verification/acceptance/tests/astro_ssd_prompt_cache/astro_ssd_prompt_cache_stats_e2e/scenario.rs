@@ -2,7 +2,7 @@ use super::http_transport;
 use super::live_progress;
 use super::*;
 
-/// Parameterizes the E2E astro SSD prompt cache stats test so the same runner covers both the
+/// Parameterizes the E2E `astro_ssd_prompt_cache` stats test so the same runner covers both the
 /// representative Romeo and Juliet scenarios without duplicating logic.
 pub(super) struct AstroSsdPromptCacheStatsE2eCase {
     /// Short label used in all `eprintln!` log lines, e.g. `"2k"` or `"50k"`.
@@ -12,7 +12,7 @@ pub(super) struct AstroSsdPromptCacheStatsE2eCase {
     /// Word count of the prompt, for log labels only.
     prompt_word_count: usize,
     /// Maximum output tokens requested. Kept small so generation finishes fast;
-    /// the test cares about prefill and astro SSD prompt cache behavior, not generation quality.
+    /// the test cares about prefill and `astro_ssd_prompt_cache` behavior, not generation quality.
     maximum_output_tokens: u16,
     /// Wall-clock timeout for the entire test (model load + two requests).
     timeout: Duration,
@@ -133,7 +133,7 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
 
     live_progress::wait_until_ready(server_address, log_prefix).await;
 
-    // ── Phase 1: first request — should be an astro SSD prompt cache miss ──
+    // ── Phase 1: first request — should be an `astro_ssd_prompt_cache` miss ──
     let phase_one_started_at = Instant::now();
     eprintln!(
         "{log_prefix} phase 1: sending first {}K-word request (expecting astro SSD prompt cache miss)",
@@ -209,7 +209,7 @@ async fn run_astro_ssd_prompt_cache_stats_e2e(
         ),
     );
 
-    // ── Phase 2: same prompt — should be an astro SSD prompt cache hit ──
+    // ── Phase 2: same prompt — should be an `astro_ssd_prompt_cache` hit ──
     let phase_two_started_at = Instant::now();
     eprintln!(
         "{log_prefix} phase 2: sending the same {}K-word request (expecting astro SSD prompt cache hit)",

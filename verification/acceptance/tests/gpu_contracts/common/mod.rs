@@ -198,7 +198,7 @@ pub(crate) async fn sample_serving_acceptance_mlx_memory_limits() -> MlxMemoryLi
 /// MLX memory limits are process-global (one Metal device, one policy), and the serving
 /// invariant is one policy per process — the daemon restarts the worker instead of
 /// reconfiguring. Journeys that legitimately need a distinct policy (for example a cold
-/// MLX buffer cache) adopt the shared policy first and then transition through the production
+/// `mlx_buffer_cache`) adopt the shared policy first and then transition through the production
 /// live-transition seam (`update_memory_limits`), restoring it on both success and panic so
 /// later journeys in the same test process keep composing.
 #[cfg(feature = "direct-mlx")]

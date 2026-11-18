@@ -93,7 +93,7 @@ fn summarization_journey(
 
 /// Verifies the measured shape: a ~5,000-token Romeo and Juliet summarization
 /// that filled (within the standard 10 percent tolerance) its 300-token output
-/// cap, with zero astro SSD prompt cache reuse. The bounds are deliberately
+/// cap, with zero `astro_ssd_prompt_cache` reuse. The bounds are deliberately
 /// wider than the fixture's nominal token count because the tokenizer's exact
 /// count drifts with the instruction prefix.
 fn assert_summarization_measurement_shape(

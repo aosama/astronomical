@@ -1,15 +1,15 @@
-//! Keeps a model's weight files out of the macOS file cache while a probe
+//! Keeps a model's weight files out of the `macos_file_cache` while a probe
 //! serves, so expert reads cost what they cost on a Mac whose RAM is no
 //! larger than the MLX limit.
 //!
-//! A probe's MLX limit caps MLX's own memory, not the macOS file cache: on a Mac
-//! with more RAM than the limit, the macOS file cache holds most of the model and
+//! A probe's MLX limit caps MLX's own memory, not the `macos_file_cache`: on a Mac
+//! with more RAM than the limit, the `macos_file_cache` holds most of the model and
 //! "storage" reads come from memory (measured: 96% of decode expert bytes on
-//! a 48 GB Mac at a 16 GB limit). `msync(MS_INVALIDATE)` on a read-only
-//! shared mapping drops a file's clean pages from the macOS file cache (measured with `mincore`:
+//! a Mac with three times as much RAM as the limit). `msync(MS_INVALIDATE)` on a read-only
+//! shared mapping drops a file's clean pages from the `macos_file_cache` (measured with `mincore`:
 //! a 0.86 GB layer file went from fully resident to none in 7 ms), so a
-//! background thread that sweeps every weight file keeps the macOS file cache empty.
-//! This is the pessimistic end of a small Mac, which still keeps a little of the model in the macOS file cache.
+//! background thread that sweeps every weight file keeps the `macos_file_cache` empty.
+//! This is the pessimistic end of a small Mac, which still keeps a little of the model in the `macos_file_cache`.
 
 use std::fs::File;
 use std::os::fd::AsRawFd;
@@ -20,7 +20,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 /// Pause between sweeps: short enough that a re-read expert is rarely still
-/// back in the macOS file cache when decode asks for it again, long enough that the sweeps do not
+/// back in the `macos_file_cache` when decode asks for it again, long enough that the sweeps do not
 /// compete with the serving threads for a core.
 const SWEEP_PAUSE: Duration = Duration::from_millis(10);
 
@@ -98,7 +98,7 @@ impl Drop for MappedWeightFile {
 
 /// The running sweeper; `finish` stops it and returns its sweep count.
 /// Dropping it also stops it, so a journey that times out or panics never
-/// leaves the macOS file cache being evicted under the next serial test.
+/// leaves the `macos_file_cache` being evicted under the next serial test.
 pub(super) struct ColdMacosFileCache {
     should_stop: Arc<AtomicBool>,
     sweeping_thread: Option<JoinHandle<u64>>,

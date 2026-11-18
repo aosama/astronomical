@@ -8,7 +8,7 @@
 //! journey serves the same requests with attribution off, through the
 //! in-process engine, so the storage reads behind a production prefill can be
 //! examined directly. The model's weight files are kept out of the file
-//! macOS file cache (`cold_macos_file_cache`), as on a Mac whose RAM is the limit.
+//! `macos_file_cache` (`cold_macos_file_cache`), as on a Mac whose RAM is the limit.
 //!
 //! Run it with `cargo measure-unattributed-cold-prefill --configuration PATH`.
 

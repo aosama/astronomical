@@ -1,6 +1,7 @@
-//! Where a draft-tree round's time goes on the real 27B pair: each stage
-//! synced on its own, after a short and a long prompt, against a plain
-//! forward over as many rows, and by layer stage.
+//! Where a draft-tree round's time goes on a real target and its DFlash2
+//! drafter (the 27B pair unless the test run configures another target):
+//! each stage synced on its own, after a short and a long prompt, against a
+//! plain forward over as many rows, and by layer stage.
 //!
 //! These explain the decode speeds `dflash2_tree_rounds` reports; they
 //! assert nothing.
@@ -29,7 +30,7 @@ const BREAKDOWN_STAGES: [&str; 7] = [
 ];
 
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_measure_where_a_tree_round_spends_its_time() {
     let mut pair = load_pair();
@@ -53,7 +54,7 @@ const JOURNEY_PROMPT_WORD_COUNT: usize = 7_400;
 /// it; the 27B served a 10,011-token prompt at 35.7 tok/s against 46 on a
 /// short one, and this is where the difference shows.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_measure_where_a_tree_round_spends_its_time_after_a_long_prompt() {
     let mut pair = load_pair();
@@ -138,7 +139,7 @@ fn should_measure_where_a_small_tree_round_spends_its_time_after_a_journey_promp
 /// values): one row and sixteen rows, after a short and a long prompt. Each
 /// verify keeps only its anchor, so the context grows a token a round.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_separate_a_long_contexts_attention_work_from_copies_of_its_keys() {
     use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
@@ -351,7 +352,7 @@ const CHAIN_COMPARISON_ROUNDS: usize = 12;
 /// a chain-shaped 16-row tree against the plain 16-row forward, alternating
 /// in one process so drift hits both alike, each from a fresh prefill.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows() {
     use astronomical_model_serving::speculative_decoding::dflash2_drafter::DraftTree;
@@ -428,7 +429,7 @@ fn should_compare_a_chain_tree_verify_with_the_plain_forward_over_as_many_rows()
 /// projection ladder (`cargo measure-k-row-verify-cost`) and a whole pass.
 /// Every boundary is a GPU wait, so the stages sum to more than a fused pass.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
     use astronomical_model_serving::{
@@ -511,7 +512,7 @@ fn should_attribute_a_sixteen_row_forward_to_its_layer_stages() {
 /// after a short prompt and after one longer than the drafter's window:
 /// only then is the longer block a pure addition.
 #[test]
-#[ignore = "loads the real 27B and its DFlash2 drafter; run through cargo measure-dflash2-tree-rounds"]
+#[ignore = "loads a real target and its DFlash2 drafter (the 27B pair unless configured); run through cargo measure-dflash2-tree-rounds"]
 #[serial]
 fn should_leave_the_trained_rows_unchanged_when_the_block_is_longer() {
     use astronomical_model_serving::speculative_decoding::dflash2_drafter::{

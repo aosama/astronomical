@@ -150,7 +150,7 @@ pub(super) fn load_atlas_page_split_on_gpu(
 /// buffers, which MLX then wraps as Metal buffers.
 ///
 /// This is the shape the atlas exists for: one contiguous, direct SSD read
-/// per expert, no macOS file cache copy, no graphics-processor split. The buffers
+/// per expert, no `macos_file_cache` copy, no graphics-processor split. The buffers
 /// are `Vec<u8>` because `MlxArray::from_managed_buffer` takes ownership of a
 /// `Vec` and frees it with byte alignment, so a 16 KiB-aligned custom
 /// allocation could not be handed over; large `Vec` allocations come back

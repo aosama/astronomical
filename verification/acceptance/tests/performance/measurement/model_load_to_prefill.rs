@@ -6,7 +6,7 @@
 //! - Start: the instant the journey submits its `ChatGenerationCommand`. On an
 //!   idle worker that request triggers `SwapModel`, so this instant is the
 //!   observable start of model loading (weight binding, tokenizer, any
-//!   per-family startup work) plus tokenization and astro SSD prompt cache lookup.
+//!   per-family startup work) plus tokenization and `astro_ssd_prompt_cache` lookup.
 //! - End: the arrival of the first `PrefillProgress` stream event carrying
 //!   `processed_tokens == 0, elapsed_millis == 0`. The worker emits that event
 //!   from `PromptProcessingPhaseStarted` — a confirmed prompt phase is about to
@@ -14,7 +14,7 @@
 //!   exactly on "prefill starts" and excludes prefill execution entirely.
 //!
 //! Method: one real worker process in an isolated temporary home (no SSD
-//! astro SSD prompt cache, fixed 2,048-token prefill chunks per the repo standard), one
+//! `astro_ssd_prompt_cache`, fixed 2,048-token prefill chunks per the repo standard), one
 //! ~500-token Romeo and Juliet warmup-fixture request, and a one-field JSON
 //! report on stderr. The request runs to completion only so the journey can
 //! verify it succeeded; no other metric is collected. Laptop-only: it loads
@@ -40,7 +40,7 @@ use tokio::time::{Instant, MissedTickBehavior, interval, sleep, timeout};
 
 /// The whole journey (worker launch, idle-ready wait, one load-plus-request
 /// pass) must finish within this budget; it stays under the repo's 120-second
-/// test ceiling like the sibling astro SSD prompt cache warmup lane.
+/// test ceiling like the sibling `astro_ssd_prompt_cache` warmup lane.
 const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 
 /// The worker's launch handshake gets its own bounded wait, mirroring the

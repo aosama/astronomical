@@ -4,7 +4,7 @@
 //! graphics processor for the resident 35B sparse-MoE model. It runs one
 //! short excerpt warmup that absorbs the model load and first-use JIT kernel
 //! compilation, then one measured completion over the full Romeo and Juliet
-//! prompt against a cold astro SSD prompt cache, with performance attribution enabled in
+//! prompt against a cold `astro_ssd_prompt_cache`, with performance attribution enabled in
 //! the isolated home. The worker's per-layer prefill evaluation boundaries
 //! then attribute the prefill graphics-processor time to the linear-attention
 //! family, the full-attention family, and the feed-forward family, with the

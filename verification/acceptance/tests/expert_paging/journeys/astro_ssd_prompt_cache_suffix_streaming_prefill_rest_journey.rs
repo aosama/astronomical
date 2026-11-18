@@ -1,4 +1,4 @@
-//! Reproduces the interaction between append-only prefill over an astro SSD prompt cache prefix, expert
+//! Reproduces the interaction between append-only prefill over an `astro_ssd_prompt_cache` prefix, expert
 //! streaming, retained RAM topology, and the prefill-to-decode handoff.
 //!
 //! This permanent journey is intentionally verbose. It is the focused command a
@@ -129,7 +129,7 @@ async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     fs::remove_dir_all(&isolated_worker_home_path).ok();
     fs::create_dir_all(&isolated_worker_home_path)
         .expect("the persistent worker home should be created");
-    // Canonicalize so the astro SSD prompt cache validator sees no ../.. components.
+    // Canonicalize so the `astro_ssd_prompt_cache` validator sees no ../.. components.
     let isolated_worker_home_path = isolated_worker_home_path
         .canonicalize()
         .unwrap_or(isolated_worker_home_path);

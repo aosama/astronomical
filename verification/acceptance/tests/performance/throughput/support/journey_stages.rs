@@ -31,7 +31,7 @@ pub(super) fn remaining_journey_budget(cell_deadline: tokio::time::Instant) -> D
 }
 
 /// Applies the journey's worker-level overrides to the launch configuration:
-/// the per-cell MLX ceiling, the decode astro expert cache experiment arm, and the two
+/// the per-cell MLX ceiling, the decode `astro_expert_cache` experiment arm, and the two
 /// diagnostic Qwen3.5 engine knobs.
 pub(super) fn apply_journey_overrides(
     worker_startup_configuration: &mut WorkerStartupConfiguration,

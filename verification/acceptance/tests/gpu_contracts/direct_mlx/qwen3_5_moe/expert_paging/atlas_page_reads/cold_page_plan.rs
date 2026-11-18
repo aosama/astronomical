@@ -1,4 +1,4 @@
-//! Finds experts whose bytes are not in the macOS file cache and plans disjoint
+//! Finds experts whose bytes are not in the `macos_file_cache` and plans disjoint
 //! routed pages of them, so every measured read reaches the SSD.
 
 use std::collections::HashMap;
@@ -71,7 +71,7 @@ impl ResidencyChecker {
     }
 }
 
-/// For every model layer, the experts whose stock bytes are entirely absent from the macOS file cache.
+/// For every model layer, the experts whose stock bytes are entirely absent from the `macos_file_cache`.
 pub(super) fn cold_stock_expert_ids_by_layer(
     layer_plans: &[QuantizedExpertLayerPlan],
     expert_count: usize,

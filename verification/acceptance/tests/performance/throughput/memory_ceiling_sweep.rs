@@ -3,7 +3,7 @@
 //!
 //! Each ceiling cell runs ONE production-shaped journey under an explicitly
 //! configured MLX ceiling — the same >=10,000-token Romeo and Juliet input and
-//! 500-token output as the text lane, astro SSD prompt cache disabled —
+//! 500-token output as the text lane, `astro_ssd_prompt_cache` disabled —
 //! with performance attribution ON, and appends one durable history record
 //! whose `memory_cell` carries the residency and byte-traffic evidence.
 //! Every cell uses a 2,048-token prefill chunk. The 38 GB and 40 GB requested
@@ -26,7 +26,7 @@
 //! `--filter <full_test_name> --exact --ignored`. Set `sweep_cell_order` in the
 //! JSON configuration passed with `--configuration PATH` to the cell's position
 //! in the sweep; without a selection it defaults to 0. The recommended protocol brackets the sweep with a 32 GB
-//! reference cell and interleaves ceilings so macOS file cache warmth cannot
+//! reference cell and interleaves ceilings so `macos_file_cache` warmth cannot
 //! masquerade as a ceiling effect.
 
 use std::fs;

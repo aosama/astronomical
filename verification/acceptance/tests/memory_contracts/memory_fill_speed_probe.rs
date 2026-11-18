@@ -9,7 +9,7 @@
 //! layers, then writes freshly created pages into small tables, as a reply
 //! token reads experts and the engine writes newly read ones into a table.
 //!
-//! What it found on a 48 GB Mac: the limit MLX is given makes no
+//! What it found when it was written: the limit MLX is given makes no
 //! difference, and the step slows once the memory macOS has wired across
 //! the whole system passes the kernel's wire limit. The sweep test prints
 //! that total beside each fill.

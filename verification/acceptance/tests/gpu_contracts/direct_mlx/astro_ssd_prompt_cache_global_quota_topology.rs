@@ -1,6 +1,6 @@
 //! Global-quota acceptance tests for foreign namespaces and adversarial topology.
 //!
-//! The active store must safely account and evict astro SSD prompt cache artifacts belonging to
+//! The active store must safely account and evict `astro_ssd_prompt_cache` artifacts belonging to
 //! other models without interpreting matching hashes as shared ancestry.
 
 use std::{fs, path::Path, time::UNIX_EPOCH};
