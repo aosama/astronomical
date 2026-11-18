@@ -274,8 +274,8 @@ impl OpenAiResponseInput {
                         .map(OpenAiResponseInputItem::image_url_part_count)
                         .sum(),
                 )?;
-                // Inline media accumulates across every user message so the
-                // portable media budget is per request, not per message.
+                // Inline media accumulates across every user message and tool
+                // result so the portable media budget is per request, not per item.
                 let mut decoded_inline_media_bytes = 0usize;
                 let mut input_item_parts = Vec::with_capacity(input_items.len());
                 for input_item in input_items {
@@ -388,6 +388,7 @@ impl OpenAiResponseMessageInput {
 }
 
 impl OpenAiResponseMessageContent {
+    /// How many `input_image` parts this content holds; plain text holds none.
     fn image_part_count(&self) -> usize {
         match self {
             Self::Text(_) => 0,

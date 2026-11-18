@@ -208,8 +208,8 @@ impl OpenAiChatCompletionRequest {
             self.guided_grammar.as_deref(),
         )?;
         let thinking_controls = self.resolve_thinking_controls()?;
-        // Inline media accumulates across every user message so the portable
-        // media budget is per request, not per message. Each image was already
+        // Inline media accumulates across every user and tool message so the
+        // portable media budget is per request, not per message. Each image was already
         // size-checked individually during decode; this accumulation rejects a
         // request whose combined media exceeds the budget the mainstream
         // providers enforce on the whole request.

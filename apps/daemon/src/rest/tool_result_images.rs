@@ -8,8 +8,9 @@
 //! the run ends because the template renders consecutive tool messages as one
 //! turn, and an image message in the middle would split that turn. A short
 //! label says where they came from, so the model does not read them as a new
-//! question from the person. The Anthropic endpoint moves a `tool_result`
-//! block's images into the following user message the same way.
+//! question from the person. The Anthropic endpoint also moves a
+//! `tool_result` block's images into a following user message, but per result
+//! and without the label; one placement for all three endpoints is #2320.
 
 use astronomical_ipc_protocol::{ChatImageInput, ChatMessage};
 use astronomical_rest_contract::DecodedImageInput;

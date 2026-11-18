@@ -104,3 +104,16 @@ fn should_count_tool_message_images_toward_the_image_part_budget() {
         }
     ));
 }
+
+#[test]
+fn should_accept_tool_message_images_exactly_at_the_image_part_budget() {
+    let images_at_the_budget = vec![red_pixel_image_part(); MAX_IMAGE_PARTS_PER_REQUEST];
+    let request = request_with_tool_content(Value::Array(images_at_the_budget));
+
+    let request_parts = request.into_parts().expect("the budget itself is allowed");
+
+    assert!(matches!(
+        request_parts.messages.last(),
+        Some(OpenAiChatMessageParts::Tool { images, .. }) if images.len() == MAX_IMAGE_PARTS_PER_REQUEST
+    ));
+}
