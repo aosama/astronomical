@@ -5,7 +5,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use crate::flux2_klein::tensor_store::{Flux2KleinTensorStore, map_component_weight_files};
 use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 
-use astronomical_gpu_building_blocks::performance_attribution::{
+use astronomical_model_primitives::performance_attribution::{
     PerformanceAttribution, PerformanceOperation,
 };
 

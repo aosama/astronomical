@@ -49,8 +49,8 @@ pub mod speculative_decoding;
 use astronomical_artifact_validation as artifact_validation;
 use astronomical_artifact_validation::*;
 use astronomical_engine_core::*;
-use astronomical_gpu_building_blocks::*;
 use astronomical_memory_policy::safetensors;
+use astronomical_model_primitives::*;
 
 pub use mlx_inference_engine::MlxInferenceEngine;
 

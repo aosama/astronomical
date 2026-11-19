@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["astronomical-decision-models/direct-mlx", "astronomical-qwen35/direct-mlx", "astronomical-artifact-validation/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-runtime-integration"]
+direct-mlx = ["astronomical-decision-models/direct-mlx", "astronomical-qwen35/direct-mlx", "astronomical-artifact-validation/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-model-primitives/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-runtime-integration"]
 
 # The worker and the wiring between model families (issue #2340). Every crate
 # below is consumed one way; `cargo xtask check-architecture` holds each of
@@ -30,8 +30,8 @@ astronomical-qwen35 = { path = "../qwen35" }
 astronomical-decision-models = { path = "../decision-models" }
 # The image generation families and their worker seam.
 astronomical-image-generation = { path = "../image-generation" }
-# The GPU building blocks every family shares.
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
+# The model primitives every family shares.
+astronomical-model-primitives = { path = "../model-primitives" }
 # The text-to-speech families and their worker seam.
 astronomical-speech = { path = "../speech" }
 astronomical-config = { path = "../config" }
@@ -57,7 +57,7 @@ tracing.workspace = true
 # The OptiQ artifact round-trip integration test reads the quantizer's schemas.
 astronomical-quantization = { path = "../quantization" }
 astronomical-test-harness = { path = "../test-harness", features = ["test-fixtures"] }
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks", features = ["test-support"] }
+astronomical-model-primitives = { path = "../model-primitives", features = ["test-support"] }
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
 tempfile = "=3.27.0"

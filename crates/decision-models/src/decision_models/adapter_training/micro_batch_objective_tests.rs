@@ -7,7 +7,7 @@ use super::*;
 use crate::decision_models::adapter_training::loss_gradient::{TrainableLoss, loss_gradients};
 use crate::decision_models::training::gpu_math::GpuMath;
 use crate::decision_models::training::row_objective::HostRow;
-use astronomical_gpu_building_blocks::synthetic_weights_test_support::initialize_test_runtime;
+use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 /// Two questions in a batch three options wide: the first has two options
 /// and a one-hot target, the second three and a soft target.

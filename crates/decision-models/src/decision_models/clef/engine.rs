@@ -47,7 +47,7 @@ use crate::decision_models::training::training_session::{
     read_through_decide, start_session,
 };
 use crate::memory::telemetry::MlxMemoryTelemetry;
-use astronomical_gpu_building_blocks::forward_pass_memory::forward_pass_memory_telemetry;
+use astronomical_model_primitives::forward_pass_memory::forward_pass_memory_telemetry;
 
 /// The temperature a Clef logit is used at unless the folder's calibration
 /// names its kind: the reference applies none.

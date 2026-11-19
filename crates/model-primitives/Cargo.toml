@@ -1,5 +1,5 @@
 [package]
-name = "astronomical-gpu-building-blocks"
+name = "astronomical-model-primitives"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true

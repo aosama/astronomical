@@ -4,7 +4,7 @@
 use serial_test::serial;
 
 use super::*;
-use astronomical_gpu_building_blocks::synthetic_weights_test_support::{
+use astronomical_model_primitives::synthetic_weights_test_support::{
     initialize_test_runtime, shakespeare_values,
 };
 use astronomical_runtime_integration::MlxRuntime;

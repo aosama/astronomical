@@ -6,10 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 
-use astronomical_gpu_building_blocks::affine_quantization_scheme::{
+use astronomical_memory_policy::strict_json::DuplicateAwareJsonValue;
+use astronomical_model_primitives::affine_quantization_scheme::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE,
 };
-use astronomical_memory_policy::strict_json::DuplicateAwareJsonValue;
 
 use super::super::artifact::{Flux2KleinArtifactError, is_safe_weight_shard_path};
 

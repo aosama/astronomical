@@ -25,11 +25,11 @@ use crate::qwen_image_21::official_profile::{
 use crate::qwen_image_21::pipeline::QwenImage21Pipeline;
 use crate::qwen_image_21::render_contract::{QwenImage21RenderAdvance, QwenImage21RenderRequest};
 use crate::qwen_image_21::render_session::QwenImage21RenderSession;
-use astronomical_gpu_building_blocks::performance_attribution::{
+use astronomical_memory_policy::telemetry::MlxActiveMemoryBreakdown;
+use astronomical_model_primitives::performance_attribution::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
 };
-use astronomical_memory_policy::telemetry::MlxActiveMemoryBreakdown;
 
 use super::components::{
     QwenImage21ComponentLoad, QwenImage21EngineComponents, QwenImage21EngineRequest,

@@ -11,7 +11,7 @@ use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen_image_21::QwenImage21EngineError;
 use crate::qwen_image_21::rope::QwenImage21Rope;
-use astronomical_gpu_building_blocks::performance_attribution::{
+use astronomical_model_primitives::performance_attribution::{
     PerformanceAttribution, PerformanceOperation,
 };
 

@@ -15,7 +15,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21EngineError;
-use astronomical_gpu_building_blocks::affine_quantized_linear::{
+use astronomical_model_primitives::affine_quantized_linear::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AFFINE_QUANTIZED_VALUES_PER_WORD,
     AffineQuantizedLinear, AffineQuantizedLinearError,
 };

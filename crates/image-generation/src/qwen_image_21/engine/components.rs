@@ -7,9 +7,9 @@
 use astronomical_ipc_protocol::{ImageGenerationCapabilities, RequestId};
 
 use crate::qwen_image_21::render_contract::QwenImage21RenderAdvance;
-use astronomical_gpu_building_blocks::performance_attribution::PerformanceAttributionOutcome;
 use astronomical_memory_policy::telemetry::MlxMemoryLimitAdjustment;
 use astronomical_memory_policy::telemetry::MlxMemoryTelemetry;
+use astronomical_model_primitives::performance_attribution::PerformanceAttributionOutcome;
 
 /// Loaded identity supplied by either the native components or an scripted lifecycle fake.
 pub struct QwenImage21ComponentLoad {

@@ -187,9 +187,9 @@ dependencies = [
  "astronomical-decision-contract",
  "astronomical-decision-training",
  "astronomical-engine-core",
- "astronomical-gpu-building-blocks",
  "astronomical-ipc-protocol",
  "astronomical-memory-policy",
+ "astronomical-model-primitives",
  "astronomical-qwen35",
  "astronomical-runtime-integration",
  "mlx-bridge",
@@ -244,9 +244,9 @@ dependencies = [
 name = "astronomical-engine-core"
 version = "0.2.119"
 dependencies = [
- "astronomical-gpu-building-blocks",
  "astronomical-ipc-protocol",
  "astronomical-memory-policy",
+ "astronomical-model-primitives",
  "astronomical-runtime-integration",
  "libc",
  "mlx-bridge",
@@ -295,30 +295,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "astronomical-gpu-building-blocks"
-version = "0.2.119"
-dependencies = [
- "astronomical-decision-contract",
- "astronomical-memory-policy",
- "astronomical-runtime-integration",
- "libc",
- "mlx-bridge",
- "serde",
- "serde_json",
- "serial_test",
- "tempfile",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "astronomical-image-generation"
 version = "0.2.119"
 dependencies = [
  "astronomical-artifact-validation",
- "astronomical-gpu-building-blocks",
  "astronomical-ipc-protocol",
  "astronomical-memory-policy",
+ "astronomical-model-primitives",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
  "image",
@@ -410,6 +393,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-model-primitives"
+version = "0.2.119"
+dependencies = [
+ "astronomical-decision-contract",
+ "astronomical-memory-policy",
+ "astronomical-runtime-integration",
+ "libc",
+ "mlx-bridge",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "astronomical-model-serving"
 version = "0.2.119"
 dependencies = [
@@ -418,11 +418,11 @@ dependencies = [
  "astronomical-decision-contract",
  "astronomical-decision-models",
  "astronomical-engine-core",
- "astronomical-gpu-building-blocks",
  "astronomical-image-generation",
  "astronomical-ipc-protocol",
  "astronomical-lowercase-hex",
  "astronomical-memory-policy",
+ "astronomical-model-primitives",
  "astronomical-quantization",
  "astronomical-qwen35",
  "astronomical-runtime-integration",
@@ -513,12 +513,12 @@ dependencies = [
  "astronomical-engine-core",
  "astronomical-expert-atlas",
  "astronomical-expert-record-reader",
- "astronomical-gpu-building-blocks",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
  "astronomical-lowercase-hex",
  "astronomical-memory-policy",
  "astronomical-mlx-c-fork",
+ "astronomical-model-primitives",
  "astronomical-neural-engine",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
@@ -581,8 +581,8 @@ version = "0.2.119"
 dependencies = [
  "astronomical-config",
  "astronomical-english-phonemes",
- "astronomical-gpu-building-blocks",
  "astronomical-memory-policy",
+ "astronomical-model-primitives",
  "astronomical-runtime-integration",
  "astronomical-speech-contract",
  "mlx-bridge",

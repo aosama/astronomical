@@ -14,7 +14,7 @@ use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
     should_complete_partial_layer_on_prefill_read,
 };
-use astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase;
+use astronomical_model_primitives::serving_phase::SessionStreamingPhase;
 
 /// How one forward should execute one mixture-of-experts layer.
 pub enum ExpertPageDisposition {

@@ -8,7 +8,7 @@ use super::super::gpu_math::GpuMath;
 use super::super::gpu_test_support::ranked_task;
 use super::super::gpu_training::question_scores;
 use super::*;
-use astronomical_gpu_building_blocks::synthetic_weights_test_support::initialize_test_runtime;
+use astronomical_model_primitives::synthetic_weights_test_support::initialize_test_runtime;
 
 #[test]
 #[serial]

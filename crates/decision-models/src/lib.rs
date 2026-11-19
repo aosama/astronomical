@@ -23,10 +23,10 @@ pub mod modernbert;
 // The crates below these families, imported at the root so the families'
 // `crate::...` paths into them read as they did inside the serving crate.
 use astronomical_engine_core::*;
-// Only the direct-MLX families reach the building blocks and the Qwen
+// Only the direct-MLX families reach the model primitives and the Qwen
 // backbone through these.
 #[cfg(feature = "direct-mlx")]
-use astronomical_gpu_building_blocks::*;
+use astronomical_model_primitives::*;
 #[cfg(feature = "direct-mlx")]
 use astronomical_qwen35::*;
 

@@ -15,7 +15,7 @@ use astronomical_artifact_validation::{
     RawSafetensorsInventory, RequiredFileProfile, ValidatedRequiredFile, ValidatedWeightsFile,
     read_bounded_required_file_bytes, validate_required_file,
 };
-use astronomical_gpu_building_blocks::performance_attribution::{
+use astronomical_model_primitives::performance_attribution::{
     PerformanceAttribution, PerformanceOperation,
 };
 

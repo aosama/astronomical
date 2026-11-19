@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "astronomical-qwen35/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "astronomical-qwen35/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-model-primitives/direct-mlx"]
 
 # The decision and embedding models (issue #2340), above the Qwen 3.5 family
 # their Kev and Clef backbones come from. One-way edge: nothing here may depend
@@ -25,7 +25,7 @@ astronomical-decision-contract = { path = "../decision-contract" }
 # crates.
 astronomical-decision-training = { path = "../decision-training" }
 astronomical-engine-core = { path = "../engine-core" }
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
+astronomical-model-primitives = { path = "../model-primitives" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 astronomical-memory-policy = { path = "../memory-policy" }
 astronomical-qwen35 = { path = "../qwen35" }
@@ -37,7 +37,7 @@ thiserror.workspace = true
 tokenizers.workspace = true
 
 [dev-dependencies]
-astronomical-gpu-building-blocks = { path = "../gpu-building-blocks", features = ["test-support"] }
+astronomical-model-primitives = { path = "../model-primitives", features = ["test-support"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.
 serial_test.workspace = true
 tempfile = "=3.27.0"
