@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local models in OpenCode's picker | Astronomical Field Note R-003</title>
+    <meta name="description" content="The Astronomical plugin for OpenCode lists every chat model the app serves in OpenCode's model picker and keeps the list current. Installed from npm into a clean OpenCode 2.3.0, it listed the local models and answered a prompt.">
+    <meta name="theme-color" content="#141517">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="One command puts your local models in OpenCode's picker">
+    <meta property="og:description" content="opencode plugin add opencode-astronomical: every chat model Astronomical serves, listed live, with its real context window.">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="../../assets/apple-touch-icon.png">
+    <link rel="stylesheet" href="../../styles.css">
+    <link rel="stylesheet" href="../../report.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../index.html" aria-label="Astronomical home">
+        <img src="../../assets/mark.svg" alt="" width="32" height="32">
+        <span>astronomical</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="../../index.html#reports">Field notes</a>
+        <a href="../../local-api.html">Local API</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
+    </header>
+
+    <main id="main" class="report-page report-page-featured">
+      <header class="report-hero shell">
+        <div class="report-meta">
+          <span>Field note R-003</span>
+          <span>19 November 2026</span>
+          <span class="verdict verdict-verified"><i></i> Verified</span>
+        </div>
+        <p class="eyebrow">OpenCode · plugin</p>
+        <h1>One command puts your local models <em>in OpenCode's picker.</em></h1>
+        <p class="report-lead">The Astronomical plugin for OpenCode lists every chat model the app serves on this Mac, with each model's real context window, and keeps the list current as you add or remove models. Installed from npm into a clean OpenCode, it listed the local models and answered a prompt.</p>
+      </header>
+
+      <section class="report-stat-band report-stat-band-featured" aria-label="Measured results">
+        <div><strong>1</strong><span>install command</span></div>
+        <div><strong>8 of 8</strong><span>chat models listed</span></div>
+        <div><strong>30 s</strong><span>at most, to follow a model change</span></div>
+        <div><strong>0</strong><span>runtime dependencies</span></div>
+      </section>
+
+      <div class="report-body shell">
+        <aside class="report-toc" aria-label="Report contents">
+          <span>In this report</span>
+          <a href="#problem">The copy-paste problem</a>
+          <a href="#measured">Measured</a>
+          <a href="#sends">What it sends</a>
+          <a href="#limits">Limits</a>
+        </aside>
+
+        <article class="report-prose">
+          <section id="problem">
+            <p class="section-index">The copy-paste problem</p>
+            <h2>A model list pasted into a settings file goes stale.</h2>
+            <p>Without the plugin, OpenCode learns about local models from a configuration block: an address, and the identifier of each model typed in by hand. Download a new model and OpenCode does not know about it until the file is edited again, and the context window it assumes is a default, not the model's.</p>
+            <p>The plugin asks the running app which models it serves and registers them in OpenCode itself. Chat models appear in <code>/models</code> under <strong>Astronomical</strong>; picture, speech, embedding and decision models are left out, because OpenCode cannot talk to them.</p>
+            <pre class="doc-snippet" tabindex="0" aria-label="Command that installs the Astronomical plugin for OpenCode"><code>opencode plugin add opencode-astronomical</code></pre>
+          </section>
+
+          <section id="measured">
+            <p class="section-index">Measured</p>
+            <h2>Installed from npm, listed every chat model, answered.</h2>
+            <div class="request-sequence" aria-label="Install and use sequence">
+              <div class="request-block">
+                <span>Step 1</span>
+                <strong>Install from npm</strong>
+                <p><code>opencode plugin add opencode-astronomical</code> in a clean OpenCode 2.3.0 with no other configuration.</p>
+                <b>Installed</b>
+              </div>
+              <div class="sequence-arrow" aria-hidden="true">→</div>
+              <div class="request-block request-block-hit">
+                <span>Step 2</span>
+                <strong>List and ask</strong>
+                <p>OpenCode listed all 8 chat models the app served, and one of them answered a prompt.</p>
+                <b>8 of 8 listed</b>
+              </div>
+            </div>
+            <p>Each model arrives with the context window, reply limit, picture input, reasoning output and tool support the app reports, so OpenCode plans long sessions around the model's real capacity. The list refreshes every 30 seconds; a model added or removed in the app appears or disappears within half a minute, and if the app is not running the models are simply absent rather than shown out of date.</p>
+            <p>The plugin's 85 tests read the app's own model listing from a file that a Rust test holds to what the app serves, so a renamed field fails the build on whichever side has not followed.</p>
+          </section>
+
+          <section id="sends">
+            <p class="section-index">What it sends</p>
+            <h2>Nothing leaves the Mac.</h2>
+            <p>The plugin talks only to the app on this Mac, over loopback, to read the model list and the app's version. It writes one file, a log of what it did that never grows past 1 MB, in OpenCode's own state folder. The package is its TypeScript source, 22 files with no dependencies of its own, published with the repository's Apache-2.0 license.</p>
+            <div class="principle-callout"><span>Works with the launcher</span><p><code>astronomical launch opencode</code> still starts one session on one model without touching OpenCode's settings. Both use the provider name <code>astronomical</code>, so with both in play OpenCode lists each model once.</p></div>
+          </section>
+
+          <section id="limits">
+            <p class="section-index">Limits</p>
+            <h2>What this check does and does not show.</h2>
+            <p>The check ran on one Mac, against a build of the app from source rather than the published app, with OpenCode 2.3.0. The plugin needs OpenCode 2.3 or later. How fast a model answers depends on the model, its size, the memory you allow and whether it is already loaded; the first reply from a model that is not yet loaded can take a while, and the plugin allows ten minutes for it.</p>
+          </section>
+
+          <section class="share-card share-card-featured">
+            <span>Share the result</span>
+            <p>One command puts every model Astronomical runs on your Mac into OpenCode's model picker, with its real context window, kept current as you add or remove models. Nothing leaves the Mac.</p>
+            <a class="button button-dark" href="https://twitter.com/intent/tweet?text=One%20command%20puts%20every%20model%20Astronomical%20runs%20on%20your%20Mac%20into%20OpenCode%27s%20model%20picker%2C%20kept%20current.%20Nothing%20leaves%20the%20Mac.&url=https%3A%2F%2Fgetastronomical.com%2Freports%2Fopencode-plugin%2F">Post on X <span aria-hidden="true">↗</span></a>
+          </section>
+
+          <footer class="report-sources">
+            <h2>Sources and limits</h2>
+            <p>The plugin's source, its README and its tests are in the repository; the package is <code>opencode-astronomical</code> on npm. The install check used the published 0.1.0 package in an OpenCode configuration of its own.</p>
+            <a href="https://github.com/aosama/astronomical/tree/main/integrations/opencode">Inspect the plugin and its tests <span aria-hidden="true">↗</span></a>
+          </footer>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <a class="brand" href="../../index.html"><img src="../../assets/mark.svg" alt="" width="26" height="26"><span>astronomical</span></a>
+      <p>Local language, vision, and image serving for Apple silicon.</p>
+      <div><a href="../../index.html#reports">All field notes</a><a href="https://github.com/aosama/astronomical">GitHub</a></div>
+    </footer>
+  </body>
+</html>
