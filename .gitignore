@@ -128,3 +128,6 @@ apps/thin-talk/Sources/ThinTalkCanvas/Resources/web/bundle.js
 apps/thin-talk/Sources/ThinTalkCanvas/Resources/web/bundle.css
 apps/thin-talk/Sources/ThinTalkCanvas/Resources/web/export.js
 index.scip
+
+# Copied in from the repository root by scripts/copy-license.mjs while packing.
+integrations/opencode/LICENSE

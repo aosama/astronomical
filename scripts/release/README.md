@@ -12,6 +12,8 @@ Every release step is a typed `cargo xtask release <step>` command; ordinary dev
 - The individual steps are `cargo xtask release create-dmg`, `validate-dmg`, `validate-distribution-app`, `notarize-dmg [--timeout-seconds N]`, `install-stable`, `build-and-install-stable`, `app-store-pkg`, and `accept-sparkle-update` (the end-to-end Sparkle update acceptance, using the fixtures in `fixtures/`).
 - `cargo xtask release prepare-signed --tag vX.Y.Z [--notes-file PATH] [--output-directory PATH] [--publish]` is the convenience front door for the same publisher: it resolves the documented credential map (exactly one Developer ID identity, its Team ID, the Astronomical Notarization profile) and runs the publisher in the same process. It performs no artifact work itself.
 
+The OpenCode plugin is released apart from the app, to npm, from a tag of its own: see [opencode-plugin.md](opencode-plugin.md).
+
 Release commands may open Finder, mount disk images, access signing identities, submit notarization requests, or mutate GitHub release state. Review their arguments and prerequisites before execution.
 
 Release preparation automatically keeps macOS `caffeinate` active for the preparation process so an idle screen lock cannot make a valid Data Protection Keychain notarization profile appear missing. A deliberate manual lock can still deny profile access; unlock the Mac and retry if the command reports that the profile is inaccessible.

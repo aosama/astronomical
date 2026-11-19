@@ -1,0 +1,70 @@
+name: Publish the OpenCode plugin
+
+# Publishes integrations/opencode to npm when a maintainer pushes a tag named
+# opencode-plugin-vMAJOR.MINOR.PATCH. The procedure is in
+# scripts/release/opencode-plugin.md.
+#
+# npm trusted publishing: npm trusts this workflow file in this repository
+# through GitHub's OIDC token (id-token: write), so no npm token is stored in
+# the repository's secrets, and npm attaches a provenance statement that links
+# the published package to this run.
+#
+# It never creates a GitHub Release. The README, the website and the in-app
+# links follow releases/latest to the app's disk image, and
+# discord-release.yml announces every published release, so a plugin release
+# must stay a tag and an npm version only.
+on:
+  push:
+    tags:
+      - 'opencode-plugin-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-opencode-plugin-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Check and publish the OpenCode plugin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # A GitHub environment of its own, so the maintainer can require an
+    # approval before anything reaches npm, and npm's trusted publisher entry
+    # can name it.
+    environment: npm
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      # Full history: the release check refuses a tagged commit that is not
+      # on origin/main, which a shallow clone cannot answer.
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Provision the xtask binary
+        uses: ./.github/actions/provision-xtask
+      # Before anything else: the tag, package.json and CHANGELOG.md must name
+      # the same version, because an npm version can never be published twice,
+      # and the tagged commit must be on main, so only reviewed code ships.
+      - name: Check the tag against the package and its changelog
+        run: xtask opencode-plugin-release-check --require-on-main "$GITHUB_REF_NAME"
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+      - name: Install, check formatting and types, and test the plugin
+        working-directory: integrations/opencode
+        run: |
+          npm ci --no-audit --no-fund
+          npm run verify
+        timeout-minutes: 5
+      - name: Publish to npm with provenance
+        working-directory: integrations/opencode
+        run: npm publish --provenance --access public
+        timeout-minutes: 5

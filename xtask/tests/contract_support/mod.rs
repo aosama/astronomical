@@ -1,6 +1,7 @@
 //! Shared accessors for the workflow structural contract tests: typed
 //! navigation over the parsed `ci.yml`, the nightly
-//! `notices-freshness.yml` and `macos-packaging.yml` lanes, and composite-action YAML so each
+//! `notices-freshness.yml` and `macos-packaging.yml` lanes, the OpenCode plugin's
+//! npm publish workflow, and composite-action YAML so each
 //! contract test reads as the assertion it pins. Each contract binary uses a
 //! subset of this module, so unused members are expected per binary.
 #![allow(dead_code)]
@@ -49,6 +50,10 @@ pub(crate) fn notices_freshness_workflow_contract() -> Value {
 
 pub(crate) fn macos_packaging_workflow_contract() -> Value {
     parse_yaml_file(&repository_root().join(".github/workflows/macos-packaging.yml"))
+}
+
+pub(crate) fn opencode_plugin_publish_workflow_contract() -> Value {
+    parse_yaml_file(&repository_root().join(".github/workflows/publish-opencode-plugin.yml"))
 }
 
 /// Every workflow in the repository, by file name, for contracts that must
