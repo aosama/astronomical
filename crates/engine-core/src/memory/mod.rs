@@ -124,8 +124,7 @@ pub use memory_policy::residency::seated_complete_layer_count;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays
-// nameable here under the same feature gate, without widening the crate's
-// public surface.
+// nameable at this path under the same feature gate.
 #[cfg(feature = "direct-mlx")]
 pub use memory_policy::residency;
 pub use memory_policy::residency::{

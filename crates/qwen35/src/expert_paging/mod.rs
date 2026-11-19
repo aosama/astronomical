@@ -1,4 +1,4 @@
-//! Expert-storage owner in the serving crate: the quantized expert manifests
+//! Expert-storage owner in the Qwen 3.5 crate: the quantized expert manifests
 //! (which embed model-family configuration types), the bounded MLX reader,
 //! and the retained-expert ownership records stay beside the bindings and
 //! the families. The pure safetensors-header parsing (over

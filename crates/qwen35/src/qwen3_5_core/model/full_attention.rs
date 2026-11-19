@@ -81,7 +81,7 @@ pub fn qwen3_5_full_attention_step(
     attention_scale: f32,
     attention_kernel: Qwen3_5AttentionKernel,
 ) -> Result<MlxArray, MlxRuntimeError> {
-    // Fail early with a model-serving error if the tensors cannot represent the
+    // Fail early with an engine error if the tensors cannot represent the
     // matrix operations below. This is more informative than a native failure.
     let attention_shape = validate_full_attention_arguments(
         rotated_queries,
