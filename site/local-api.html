@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Local API | Astronomical</title>
     <meta name="description" content="Point a coding agent at Astronomical's OpenAI- and Anthropic-compatible loopback API: the OpenCode plugin, one launcher command for OpenCode, Codex, and Claude Code, the address and port for each channel, where the model identifier comes from, the credential field, and copy-paste configuration.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Connect a coding agent to Astronomical">
+    <meta property="og:description" content="Point a coding agent at Astronomical's OpenAI- and Anthropic-compatible loopback API: the OpenCode plugin, one launcher command for OpenCode, Codex, and Claude Code, the address and port for each channel, where the model identifier comes from, the credential field, and copy-paste configuration.">
+    <meta property="og:url" content="https://getastronomical.com/local-api.html">
+    <meta property="og:image" content="https://getastronomical.com/assets/astronomical-social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="theme-color" content="#141517">
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
@@ -14,14 +20,18 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
+      <!-- Shared by every page: edit xtask/src/site_layout/site_header_and_footer.rs, then run `cargo xtask site-layout`. -->
       <a class="brand" href="./index.html" aria-label="Astronomical home">
         <img src="./assets/mark.svg" alt="" width="32" height="32">
         <span>astronomical</span>
       </a>
       <nav class="site-nav" aria-label="Primary navigation">
-        <a href="./index.html">Home</a>
+        <a href="./models.html">Models</a>
+        <a href="./index.html#reports">Field notes</a>
+        <a href="./local-api.html" aria-current="page">Local API</a>
         <a href="./support.html">Support</a>
         <a href="./privacy.html">Privacy</a>
+        <a href="https://discord.gg/E8a5qmhRhr">Discord</a>
         <a href="https://github.com/aosama/astronomical">Source</a>
       </nav>
     </header>
@@ -129,20 +139,29 @@ claude</code></pre>
   -H 'Content-Type: application/json' \
   -d '{"model":"&lt;identifier from /v1/models&gt;","max_tokens":1024,"thinking":{"type":"disabled"},"messages":[{"role":"user","content":"Say hello in one short sentence."}]}'</code></pre>
           <p>A working endpoint answers with <code>"type": "message"</code>, the reply under <code>content</code>, and a <code>stop_reason</code>. <code>/v1/messages/count_tokens</code> takes the same conversation without <code>max_tokens</code> and answers <code>{"input_tokens": N}</code>, counted by the model's own tokenizer, so the number matches what the Messages request would read.</p>
-          <p>The served paths, in full: <code>/v1/chat/completions</code>, <code>/v1/responses</code>, <code>/v1/messages</code>, <code>/v1/messages/count_tokens</code>, <code>/v1/models</code>, <code>/v1/embeddings</code>, and <code>/v1/images/generations</code>.</p>
+          <p>The served paths, in full: <code>/v1/chat/completions</code>, <code>/v1/responses</code>, <code>/v1/messages</code>, <code>/v1/messages/count_tokens</code>, <code>/v1/models</code>, <code>/v1/embeddings</code>, <code>/v1/images/generations</code>, and <code>/v1/audio/speech</code>.</p>
 
-          <p class="doc-meta">Astronomical is open source under its repository license. Privacy policy: <a href="./privacy.html">privacy.html</a>.</p>
+          <p class="doc-meta">Astronomical is open source under its repository license.</p>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
+      <!-- Shared by every page: edit xtask/src/site_layout/site_header_and_footer.rs, then run `cargo xtask site-layout`. -->
       <a class="brand" href="./index.html">
         <img src="./assets/mark.svg" alt="" width="26" height="26">
         <span>astronomical</span>
       </a>
       <p>Local language, vision, and image models for Apple silicon.</p>
-      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./support.html">Support</a><a href="./index.html">Home</a><a href="https://discord.gg/E8a5qmhRhr">Discord</a></div>
+      <nav aria-label="Site links">
+        <a href="./models.html">Models</a>
+        <a href="./index.html#reports">Field notes</a>
+        <a href="./local-api.html">Local API</a>
+        <a href="./support.html">Support</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="https://discord.gg/E8a5qmhRhr">Discord</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
     </footer>
   </body>
 </html>

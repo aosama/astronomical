@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Support | Astronomical</title>
     <meta name="description" content="Support for Astronomical, a local model runner for Apple silicon with one memory ceiling. Get help, report bugs, and find answers to common questions.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Astronomical support">
+    <meta property="og:description" content="Support for Astronomical, a local model runner for Apple silicon with one memory ceiling. Get help, report bugs, and find answers to common questions.">
+    <meta property="og:url" content="https://getastronomical.com/support.html">
+    <meta property="og:image" content="https://getastronomical.com/assets/astronomical-social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="theme-color" content="#141517">
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
@@ -27,13 +33,18 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
+      <!-- Shared by every page: edit xtask/src/site_layout/site_header_and_footer.rs, then run `cargo xtask site-layout`. -->
       <a class="brand" href="./index.html" aria-label="Astronomical home">
         <img src="./assets/mark.svg" alt="" width="32" height="32">
         <span>astronomical</span>
       </a>
       <nav class="site-nav" aria-label="Primary navigation">
-        <a href="./index.html">Home</a>
+        <a href="./models.html">Models</a>
+        <a href="./index.html#reports">Field notes</a>
+        <a href="./local-api.html">Local API</a>
+        <a href="./support.html" aria-current="page">Support</a>
         <a href="./privacy.html">Privacy</a>
+        <a href="https://discord.gg/E8a5qmhRhr">Discord</a>
         <a href="https://github.com/aosama/astronomical">Source</a>
       </nav>
     </header>
@@ -90,17 +101,26 @@
                added here for App Review's support-contact check. Decision and
                address belong to the site owner; do not publish any address
                without explicit approval. -->
-          <p class="doc-meta">Astronomical is open source under its repository license. Privacy policy: <a href="./privacy.html">privacy.html</a>.</p>
+          <p class="doc-meta">Astronomical is open source under its repository license.</p>
         </div>
       </section>
     </main>
     <footer class="site-footer">
+      <!-- Shared by every page: edit xtask/src/site_layout/site_header_and_footer.rs, then run `cargo xtask site-layout`. -->
       <a class="brand" href="./index.html">
         <img src="./assets/mark.svg" alt="" width="26" height="26">
         <span>astronomical</span>
       </a>
       <p>Local language, vision, and image models for Apple silicon.</p>
-      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./privacy.html">Privacy</a><a href="./index.html">Home</a><a href="https://discord.gg/E8a5qmhRhr">Discord</a></div>
+      <nav aria-label="Site links">
+        <a href="./models.html">Models</a>
+        <a href="./index.html#reports">Field notes</a>
+        <a href="./local-api.html">Local API</a>
+        <a href="./support.html">Support</a>
+        <a href="./privacy.html">Privacy</a>
+        <a href="https://discord.gg/E8a5qmhRhr">Discord</a>
+        <a href="https://github.com/aosama/astronomical">Source</a>
+      </nav>
     </footer>
     <script src="./assets/release-feed.js"></script>
   </body>
