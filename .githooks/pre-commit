@@ -93,10 +93,10 @@ fi
 # only the direct-MLX engines use; that drift once broke the plain
 # `cargo test -p astronomical-model-serving` lane. Gated on staged paths of
 # either crate so other commits never pay the second feature world.
-if git diff --cached --name-only | grep -Eq '^crates/(model-serving|gpu-building-blocks|speech|artifact-validation|image-generation|engine-core)/'; then
+if git diff --cached --name-only | grep -Eq '^crates/(model-serving|gpu-building-blocks|speech|artifact-validation|image-generation|engine-core|qwen35)/'; then
     printf '%s\n' "[pre-commit] status=start check=model-serving-default-features root=${REPOSITORY_ROOT}"
     default_features_started_epoch_seconds="$(date +%s)"
-    if cargo clippy -p astronomical-gpu-building-blocks -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-model-serving --all-targets; then
+    if cargo clippy -p astronomical-gpu-building-blocks -p astronomical-speech -p astronomical-artifact-validation -p astronomical-image-generation -p astronomical-engine-core -p astronomical-qwen35 -p astronomical-model-serving --all-targets; then
         default_features_elapsed_seconds=$(( $(date +%s) - default_features_started_epoch_seconds ))
         printf '%s\n' "[pre-commit] status=success check=model-serving-default-features elapsed_seconds=${default_features_elapsed_seconds}"
     else

@@ -8,7 +8,7 @@ use serial_test::serial;
 use super::super::gpu_test_support::assert_all_close;
 use super::super::question_batch::OptionLayout;
 use super::*;
-use crate::synthetic_weights_test_support::initialize_test_runtime;
+use astronomical_gpu_building_blocks::synthetic_weights_test_support::initialize_test_runtime;
 
 #[test]
 #[serial]

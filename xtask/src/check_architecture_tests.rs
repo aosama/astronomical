@@ -36,6 +36,7 @@ fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-gpu-building-blocks",
@@ -66,6 +67,7 @@ fn should_detect_a_direct_family_to_serving_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-gpu-building-blocks",
@@ -107,6 +109,7 @@ fn should_detect_a_building_blocks_to_serving_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-gpu-building-blocks",
@@ -147,6 +150,7 @@ fn should_detect_a_speech_to_serving_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-gpu-building-blocks",
             vec!["mlx-bridge"],
@@ -194,6 +198,7 @@ fn should_detect_a_image_generation_to_serving_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-model-serving",
@@ -239,6 +244,7 @@ fn should_detect_a_artifact_validation_to_serving_dependency() {
         ),
         ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-model-serving",
             vec!["astronomical-artifact-validation"],
@@ -281,6 +287,7 @@ fn should_detect_an_engine_core_to_serving_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-engine-core",
             vec!["astronomical-model-serving"],
@@ -298,6 +305,48 @@ fn should_detect_an_engine_core_to_serving_dependency() {
     assert_eq!(
         violations[0].dependency_chain,
         vec!["astronomical-engine-core", "astronomical-model-serving"]
+    );
+}
+
+#[test]
+fn should_detect_a_qwen35_to_serving_dependency() {
+    // The serving crate's worker drives the Qwen 3.5 engines; an edge back
+    // would make the split circular.
+    let metadata_json_text = metadata_document_for(&[
+        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
+        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        (
+            "astronomical-gpu-building-blocks",
+            vec!["mlx-bridge"],
+            "normal",
+        ),
+        ("astronomical-speech", vec!["mlx-bridge"], "normal"),
+        (
+            "astronomical-image-generation",
+            vec!["mlx-bridge"],
+            "normal",
+        ),
+        ("astronomical-artifact-validation", Vec::new(), "normal"),
+        ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+        (
+            "astronomical-qwen35",
+            vec!["astronomical-model-serving"],
+            "normal",
+        ),
+        (
+            "astronomical-model-serving",
+            vec!["astronomical-qwen35"],
+            "normal",
+        ),
+    ]);
+    let violations = architecture_violations(&metadata_json_text).unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].rule_name, "qwen35-without-serving");
+    assert_eq!(
+        violations[0].dependency_chain,
+        vec!["astronomical-qwen35", "astronomical-model-serving"]
     );
 }
 
@@ -320,6 +369,7 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-gpu-building-blocks",
@@ -353,6 +403,7 @@ fn should_detect_a_direct_forbidden_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-gpu-building-blocks",
@@ -394,6 +445,7 @@ fn should_detect_a_transitive_forbidden_dependency() {
         ),
         ("astronomical-artifact-validation", Vec::new(), "normal"),
         ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+        ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
         ("astronomical-speech", vec!["mlx-bridge"], "normal"),
         (
             "astronomical-gpu-building-blocks",
@@ -433,6 +485,7 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
             ),
             ("astronomical-artifact-validation", Vec::new(), "normal"),
             ("astronomical-engine-core", vec!["mlx-bridge"], "normal"),
+            ("astronomical-qwen35", vec!["mlx-bridge"], "normal"),
             ("astronomical-speech", vec!["mlx-bridge"], "normal"),
             (
                 "astronomical-gpu-building-blocks",

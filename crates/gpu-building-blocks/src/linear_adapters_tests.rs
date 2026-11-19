@@ -4,7 +4,7 @@ use astronomical_decision_contract::decision_adapters_file::{DecisionAdapters, L
 use serial_test::serial;
 
 use super::*;
-use crate::mlx_test_runtime::initialize_test_runtime;
+use crate::synthetic_weights_test_support::initialize_test_runtime;
 
 /// One add-on of rank 1 on a layer from 2 inputs to 3 outputs.
 fn rank_one_adapter(up_values: Vec<f32>) -> DecisionAdapters {

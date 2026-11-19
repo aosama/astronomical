@@ -12,25 +12,26 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["astronomical-artifact-validation/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
+direct-mlx = ["astronomical-qwen35/direct-mlx", "astronomical-artifact-validation/direct-mlx", "astronomical-engine-core/direct-mlx", "astronomical-image-generation/direct-mlx", "astronomical-gpu-building-blocks/direct-mlx", "astronomical-speech/direct-mlx", "dep:astronomical-runtime-integration", "dep:mlx-bridge"]
 
+# The worker and the wiring between model families (issue #2340). Every crate
+# below is consumed one way; `cargo xtask check-architecture` holds each of
+# the split-out crates off this one.
 [dependencies]
-astronomical-expert-atlas = { path = "../expert-atlas" }
-# Model folder validation every family shares (issue #2340).
+# Model folder validation every family shares.
 astronomical-artifact-validation = { path = "../artifact-validation" }
 # The engine contract, MLX memory and the astro_decoder_state_cache, below the
-# families (issue #2340), one way.
+# families.
 astronomical-engine-core = { path = "../engine-core" }
-# The image generation families and their worker seam (issue #2340), one way.
+# The Qwen 3.5 family, which the decision models score on and the worker
+# serves.
+astronomical-qwen35 = { path = "../qwen35" }
+# The image generation families and their worker seam.
 astronomical-image-generation = { path = "../image-generation" }
-# The GPU building blocks every family shares (issue #2340). One-way edge:
-# the building-blocks crate never depends back on this crate, enforced by
-# `cargo xtask check-architecture`.
+# The GPU building blocks every family shares.
 astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
-# The text-to-speech families and their worker seam (issue #2340), one way:
-# the speech crate never depends back on this crate.
+# The text-to-speech families and their worker seam.
 astronomical-speech = { path = "../speech" }
-astronomical-expert-record-reader = { path = "../expert-record-reader" }
 astronomical-config = { path = "../config" }
 # The decision-model contract: typed questions, calibration, typed answers and
 # each family's prompt layout. It has no graphics-processor dependency; the
@@ -41,54 +42,27 @@ astronomical-decision-training = { path = "../decision-training" }
 # from the speech engines.
 astronomical-speech-contract = { path = "../speech-contract" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
-# Pure memory policy and expert-paging arithmetic (budget composition, page
-# admission peaks, residency planning, reclamation/recovery, serving ceiling).
-# It carries no MLX dependency and this edge is one way, so building or
-# testing the policy crate never pulls in the serving crate or its
-# graphics-processor tests; the MLX-facing owners in this crate depend on it.
-# The one-way direction is enforced by `cargo xtask check-architecture`.
+# Pure memory policy (budget composition, admission, residency planning,
+# serving ceiling), with no MLX dependency.
 astronomical-memory-policy = { path = "../astronomical-memory-policy" }
-# The jangtq2 weight family as its own crate (issue #1427): format contract,
-# codebook math, Hadamard rotation, Metal page decoder, fused gathered
-# projection kernel. The pure contract builds in the integration lane; this edge
-# is one way (the family never depends back on the serving crate, enforced by
-# `cargo xtask check-architecture`), and the Qwen3.5 streaming engine keeps
-# the serving integration (page loading, slot writes, dispatch) here.
-astronomical-jangtq2-qwen35 = { path = "../astronomical-jangtq2-qwen35" }
 astronomical-lowercase-hex = { path = "../lowercase-hex" }
-# The quantization crate's pure surface (probe trait, artifact schemas). Its
-# GPU world is never enabled from here: the Qwen3.5 sensitivity probe under
-# src/quantization_probe implements the trait with this crate's own engine
-# and MLX bindings, so the dependency direction stays quantization <-
-# model-serving and the quantization crate never learns about an engine.
-# Optional because only the direct-MLX probe uses it in production code;
-# the integration artifact round-trip test reaches it as a dev-dependency.
-astronomical-quantization = { path = "../quantization", optional = true }
-astronomical-neural-engine = { path = "../neural-engine", features = ["mlx-hand-off"], optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }
-astronomical-mlx-c-fork = { path = "../mlx-c-fork", optional = true }
 image.workspace = true
-libc.workspace = true
-regex-automata = "0.4"
 safetensors.workspace = true
-serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
 thiserror.workspace = true
 tokenizers.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+# The OptiQ artifact round-trip integration test reads the quantizer's schemas.
 astronomical-quantization = { path = "../quantization" }
 astronomical-test-harness = { path = "../test-harness", features = ["test-fixtures"] }
-libc.workspace = true
+astronomical-gpu-building-blocks = { path = "../gpu-building-blocks", features = ["test-support"] }
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
-# Serial across this crate's MLX-allocating test family is load-bearing:
-# the accounting tests sample the process-global MLX allocator, and
-# serial_test does not fence unannotated tests — the whole family must
-# serialize (see memory_behavior_tests.rs).
+# The GPU tests sample the process-global MLX allocator, so they serialize.
 serial_test.workspace = true
 tempfile = "=3.27.0"

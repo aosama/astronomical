@@ -1,0 +1,95 @@
+use astronomical_ipc_protocol::ExpertMemoryMode;
+
+use super::streaming_model::Qwen3_5StreamingModel;
+use crate::inference_engine::contract::ExpertResidencyTelemetry;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
+
+impl Qwen3_5StreamingModel {
+    /// Builds the residency claim from the reconciled breakdown of the same MLX
+    /// measurement. The retained astro expert cache counts adopted lazy pages —
+    /// layers seated for ownership before their arrays are materialized by the
+    /// layer-interval eval — so its bookkeeping payload exceeds the physically
+    /// resident bytes during the seat-to-first-eval window. The only truthful
+    /// resident-payload figure is therefore the measured attribution from the
+    /// snapshot this breakdown reconciles (issue #337).
+    #[must_use]
+    pub fn expert_residency_telemetry_for_breakdown(
+        &self,
+        mlx_memory_breakdown: &MlxActiveMemoryBreakdown,
+    ) -> ExpertResidencyTelemetry {
+        self.reconciled_expert_residency_telemetry(mlx_memory_breakdown)
+    }
+
+    fn reconciled_expert_residency_telemetry(
+        &self,
+        mlx_memory_breakdown: &MlxActiveMemoryBreakdown,
+    ) -> ExpertResidencyTelemetry {
+        let expert_statistics = self.astro_expert_cache_statistics();
+        let (total_layer_count, complete_expert_payload_byte_count, expert_capacity) =
+            match self.expert_pager.as_ref() {
+                Some(expert_pager) => {
+                    let total_layer_count = expert_pager.layer_count();
+                    let (complete_expert_payload_byte_count, expert_capacity) =
+                        super::expert_streaming_stats::expert_library_facts(expert_pager);
+                    (
+                        total_layer_count,
+                        complete_expert_payload_byte_count,
+                        expert_capacity,
+                    )
+                }
+                None => (0, 0, 0),
+            };
+        let layer_seating = match self.astro_expert_cache.as_ref() {
+            Some(astro_expert_cache) => {
+                let retained_expert_counts = astro_expert_cache.borrow().retained_expert_counts();
+                astronomical_ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(
+                    &retained_expert_counts,
+                )
+            }
+            None => astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+        };
+        ExpertResidencyTelemetry {
+            total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),
+            resident_expert_count: u32::try_from(expert_statistics.entry_count).unwrap_or(u32::MAX),
+            resident_expert_payload_bytes: mlx_memory_breakdown.expert_payload_bytes,
+            complete_expert_payload_byte_count,
+            expert_capacity,
+            layer_seating,
+            dense_layers: self.dense_layer_residency_report(),
+        }
+    }
+
+    /// Returns whether complete sparse experts are installed or demand-paged.
+    #[must_use]
+    pub fn expert_memory_mode(&self) -> ExpertMemoryMode {
+        let retained_paged_expert_payload_bytes =
+            self.astro_expert_cache
+                .as_ref()
+                .map_or(0, |astro_expert_cache| {
+                    astro_expert_cache
+                        .borrow()
+                        .statistics()
+                        .resident_payload_byte_count
+                });
+        crate::classify_expert_memory_mode(
+            false,
+            self.expert_pager.is_some(),
+            retained_paged_expert_payload_bytes,
+        )
+    }
+
+    /// Observed residency label for the active request: the load-time
+    /// ownership claim refined by the SSD expert bytes actually streamed
+    /// during the request. A Paged/Hybrid claim that has read zero bytes is
+    /// reported as Resident because the request experienced fully resident
+    /// experts, while a Resident claim that streamed reads downgrades to
+    /// Hybrid (issue #1533).
+    #[must_use]
+    pub fn observed_expert_memory_mode(&self) -> ExpertMemoryMode {
+        crate::observed_expert_memory_mode(
+            self.expert_memory_mode(),
+            self.request_expert_storage_read_tally
+                .expert_storage_read_byte_count(),
+        )
+    }
+}

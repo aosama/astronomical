@@ -6,7 +6,7 @@ use astronomical_decision_contract::decision_adapters_file::{
 use serial_test::serial;
 
 use super::*;
-use crate::synthetic_weights_test_support::{
+use astronomical_gpu_building_blocks::synthetic_weights_test_support::{
     SYNTHETIC_QUANTIZATION_GROUP_SIZE, SyntheticWeights, initialize_test_runtime,
     load_synthetic_weights,
 };

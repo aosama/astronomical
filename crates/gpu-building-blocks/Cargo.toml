@@ -13,6 +13,8 @@ workspace = true
 [features]
 default = []
 direct-mlx = ["dep:astronomical-decision-contract", "dep:astronomical-runtime-integration", "dep:mlx-bridge"]
+# The synthetic weight helpers for dependents' GPU tests (dev builds only).
+test-support = ["dep:tempfile"]
 
 # One-way edge: nothing here may depend on astronomical-model-serving or on a
 # model family; `cargo xtask check-architecture` fails the build if it does.
@@ -28,9 +30,11 @@ libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tempfile = { version = "=3.27.0", optional = true }
 
 [dev-dependencies]
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
 # The GPU tests sample the process-global MLX allocator, so they serialize.
 serial_test.workspace = true
+tempfile = "=3.27.0"
