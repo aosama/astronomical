@@ -1,0 +1,432 @@
+//! Bounded safetensors header reader that never allocates the entire weights file.
+//!
+//! The safetensors format is: 8-byte little-endian u64 header length, then the JSON
+//! header bytes, then the tensor payload data. This module reads only the length
+//! prefix and the bounded header, validates every tensor offset against the open
+//! file size, and returns parsed metadata without touching the multi-hundred-megabyte
+//! payload region.
+
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
+
+use super::safetensors_dtype::{
+    checked_safetensors_payload_bytes, dtype_bits_per_element, parse_safetensors_dtype,
+};
+use super::{ArtifactValidationError, TensorDtype, TensorProfile};
+use astronomical_memory_policy::safetensors::{
+    BoundedSafetensorsHeaderError, SafetensorsTensorView, read_bounded_safetensors_json_header,
+};
+
+pub(super) const MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES: u64 = 16 * 1024 * 1024;
+
+struct ArtifactSafetensorsHeader {
+    tensors: HashMap<String, SafetensorsTensorView>,
+    data_section_start_bytes: u64,
+}
+
+/// Parsed safetensors metadata extracted from a bounded header read.
+#[derive(Debug)]
+pub struct BoundedSafetensorsMetadata {
+    /// Total tensor payload bytes across all validated tensors.
+    pub total_payload_bytes: u64,
+}
+
+/// Parsed metadata returned by partial-profile safetensors validation.
+#[derive(Debug)]
+pub struct PartialProfileMetadata {
+    /// Total tensor payload bytes across all tensors in the shard.
+    pub total_payload_bytes: u64,
+}
+
+/// Validates a safetensors shard where some tensors have strict dtype/shape profiles
+/// and the remaining tensors are accepted by name only.
+///
+/// Qwen3.5-MoE uses exact dtype and shape profiles generated from its validated config.
+pub fn validate_bounded_safetensors_with_partial_profiles(
+    weights_file: &File,
+    file_size_bytes: u64,
+    weights_file_name: &str,
+    profiled_tensor_profiles: &[TensorProfile],
+    accepted_extra_tensor_names: &HashSet<&str>,
+) -> Result<PartialProfileMetadata, ArtifactValidationError> {
+    let required_tensor_names = profiled_tensor_profiles
+        .iter()
+        .map(|tensor_profile| tensor_profile.name.as_str())
+        .collect::<HashSet<_>>();
+    let bounded_metadata = validate_bounded_safetensors_internal(
+        weights_file,
+        file_size_bytes,
+        weights_file_name,
+        &required_tensor_names,
+        accepted_extra_tensor_names,
+        profiled_tensor_profiles,
+        &[],
+    )?;
+
+    Ok(PartialProfileMetadata {
+        total_payload_bytes: bounded_metadata.total_payload_bytes,
+    })
+}
+fn validate_bounded_safetensors_internal(
+    weights_file: &File,
+    file_size_bytes: u64,
+    weights_file_name: &str,
+    required_tensor_names: &HashSet<&str>,
+    accepted_extra_tensor_names: &HashSet<&str>,
+    required_tensor_profiles: &[TensorProfile],
+    recognized_tensor_profiles: &[TensorProfile],
+) -> Result<BoundedSafetensorsMetadata, ArtifactValidationError> {
+    let artifact_safetensors_header =
+        read_artifact_safetensors_header(weights_file, file_size_bytes, weights_file_name)?;
+    let tensor_acceptance_contract = TensorAcceptanceContract {
+        required_tensor_names,
+        accepted_extra_tensor_names,
+        required_tensor_profiles,
+        recognized_tensor_profiles,
+    };
+    let bounded_metadata = validate_all_tensors(
+        &tensor_acceptance_contract,
+        &artifact_safetensors_header.tensors,
+        artifact_safetensors_header.data_section_start_bytes,
+        file_size_bytes,
+        weights_file_name,
+    )?;
+    let actual_payload_bytes = file_size_bytes
+        .checked_sub(artifact_safetensors_header.data_section_start_bytes)
+        .ok_or(ArtifactValidationError::TruncatedSafetensorsFile {
+            file_name: weights_file_name.to_owned(),
+            expected_minimum_bytes: artifact_safetensors_header.data_section_start_bytes,
+            actual_file_size_bytes: file_size_bytes,
+        })?;
+    if bounded_metadata.total_payload_bytes != actual_payload_bytes {
+        return Err(ArtifactValidationError::SafetensorsPayloadLengthMismatch {
+            file_name: weights_file_name.to_owned(),
+            declared_payload_bytes: bounded_metadata.total_payload_bytes,
+            actual_payload_bytes,
+        });
+    }
+    Ok(bounded_metadata)
+}
+
+/// Validates that tensor data offsets are contiguous starting from zero and that
+/// each tensor's data range matches its declared shape and dtype byte size.
+fn validate_tensor_data_consistency(
+    safetensors_tensors: &HashMap<String, SafetensorsTensorView>,
+    weights_file_name: &str,
+) -> Result<(), ArtifactValidationError> {
+    let mut ordered_tensors: Vec<(&String, &SafetensorsTensorView)> =
+        safetensors_tensors.iter().collect();
+    ordered_tensors.sort_by_key(|(_, tensor_view)| tensor_view.data_start_offset());
+
+    let mut expected_start_offset: u64 = 0;
+    for (tensor_name, tensor_view) in &ordered_tensors {
+        if tensor_view.data_start_offset() != expected_start_offset {
+            return Err(ArtifactValidationError::SafetensorsInvalidDataOffsets {
+                file_name: weights_file_name.to_owned(),
+                tensor_name: (*tensor_name).clone(),
+                data_start_offset: tensor_view.data_start_offset(),
+                data_end_offset: tensor_view.data_end_offset(),
+            });
+        }
+        if tensor_view.data_end_offset() < tensor_view.data_start_offset() {
+            return Err(ArtifactValidationError::SafetensorsInvalidDataOffsets {
+                file_name: weights_file_name.to_owned(),
+                tensor_name: (*tensor_name).clone(),
+                data_start_offset: tensor_view.data_start_offset(),
+                data_end_offset: tensor_view.data_end_offset(),
+            });
+        }
+
+        let element_count = tensor_view
+            .shape
+            .iter()
+            .try_fold(1_u64, |product, dimension| {
+                let dimension = u64::try_from(*dimension)
+                    .map_err(|_| ArtifactValidationError::TensorPayloadSizeOverflow)?;
+                product
+                    .checked_mul(dimension)
+                    .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)
+            })?;
+        let bits_per_element =
+            dtype_bits_per_element(&tensor_view.dtype, weights_file_name, tensor_name)?;
+        let Some(expected_data_bytes) =
+            checked_safetensors_payload_bytes(element_count, bits_per_element)?
+        else {
+            return Err(ArtifactValidationError::SafetensorsInvalidDataOffsets {
+                file_name: weights_file_name.to_owned(),
+                tensor_name: (*tensor_name).clone(),
+                data_start_offset: tensor_view.data_start_offset(),
+                data_end_offset: tensor_view.data_end_offset(),
+            });
+        };
+        let actual_data_bytes = tensor_view
+            .data_end_offset()
+            .checked_sub(tensor_view.data_start_offset())
+            .ok_or_else(|| ArtifactValidationError::SafetensorsInvalidDataOffsets {
+                file_name: weights_file_name.to_owned(),
+                tensor_name: (*tensor_name).clone(),
+                data_start_offset: tensor_view.data_start_offset(),
+                data_end_offset: tensor_view.data_end_offset(),
+            })?;
+        if actual_data_bytes != expected_data_bytes {
+            return Err(ArtifactValidationError::SafetensorsInvalidDataOffsets {
+                file_name: weights_file_name.to_owned(),
+                tensor_name: (*tensor_name).clone(),
+                data_start_offset: tensor_view.data_start_offset(),
+                data_end_offset: tensor_view.data_end_offset(),
+            });
+        }
+
+        expected_start_offset = tensor_view.data_end_offset();
+    }
+    Ok(())
+}
+
+fn read_artifact_safetensors_header(
+    weights_file: &File,
+    file_size_bytes: u64,
+    weights_file_name: &str,
+) -> Result<ArtifactSafetensorsHeader, ArtifactValidationError> {
+    let bounded_safetensors_json_header = read_bounded_safetensors_json_header(
+        weights_file,
+        file_size_bytes,
+        MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES,
+    )
+    .map_err(|bounded_safetensors_header_error| {
+        artifact_safetensors_header_error(bounded_safetensors_header_error, weights_file_name)
+    })?;
+    if let Some(metadata_json_value) = bounded_safetensors_json_header.metadata_json_value {
+        serde_json::from_value::<HashMap<String, String>>(metadata_json_value).map_err(
+            |source| ArtifactValidationError::InvalidSafetensorsHeader {
+                file_name: weights_file_name.to_owned(),
+                source,
+            },
+        )?;
+    }
+    let mut tensors =
+        HashMap::with_capacity(bounded_safetensors_json_header.tensor_json_values.len());
+    for (tensor_name, tensor_json_value) in bounded_safetensors_json_header.tensor_json_values {
+        let tensor_view = serde_json::from_value(tensor_json_value).map_err(|source| {
+            ArtifactValidationError::InvalidSafetensorsHeader {
+                file_name: weights_file_name.to_owned(),
+                source,
+            }
+        })?;
+        tensors.insert(tensor_name, tensor_view);
+    }
+    Ok(ArtifactSafetensorsHeader {
+        tensors,
+        data_section_start_bytes: bounded_safetensors_json_header.data_section_start_bytes,
+    })
+}
+
+pub(super) fn artifact_safetensors_header_error(
+    bounded_safetensors_header_error: BoundedSafetensorsHeaderError,
+    weights_file_name: &str,
+) -> ArtifactValidationError {
+    match bounded_safetensors_header_error {
+        BoundedSafetensorsHeaderError::ReadLengthPrefix(source) => {
+            ArtifactValidationError::ReadSafetensorsLengthPrefix {
+                file_name: weights_file_name.to_owned(),
+                source,
+            }
+        }
+        BoundedSafetensorsHeaderError::HeaderLengthTooLarge {
+            header_length_bytes,
+            maximum_header_length_bytes,
+        } => ArtifactValidationError::SafetensorsHeaderLengthTooLarge {
+            file_name: weights_file_name.to_owned(),
+            header_length_bytes,
+            maximum_header_length_bytes,
+        },
+        BoundedSafetensorsHeaderError::HeaderBeyondFile {
+            header_end_offset_bytes,
+            file_size_bytes,
+        } => ArtifactValidationError::TruncatedSafetensorsFile {
+            file_name: weights_file_name.to_owned(),
+            expected_minimum_bytes: header_end_offset_bytes,
+            actual_file_size_bytes: file_size_bytes,
+        },
+        BoundedSafetensorsHeaderError::ReadHeader(source) => {
+            ArtifactValidationError::ReadSafetensorsHeader {
+                file_name: weights_file_name.to_owned(),
+                source,
+            }
+        }
+        BoundedSafetensorsHeaderError::InvalidHeaderJson(source) => {
+            ArtifactValidationError::InvalidSafetensorsHeader {
+                file_name: weights_file_name.to_owned(),
+                source,
+            }
+        }
+    }
+}
+
+/// The tensor-acceptance contract a shard must satisfy: which tensors are
+/// required, which extra names are tolerated, and the dtype/shape profiles for
+/// the strict and the merely-recognized sets. The four facets travel together
+/// through every validation entry point, so they travel as one value.
+struct TensorAcceptanceContract<'a> {
+    required_tensor_names: &'a HashSet<&'a str>,
+    accepted_extra_tensor_names: &'a HashSet<&'a str>,
+    required_tensor_profiles: &'a [TensorProfile],
+    recognized_tensor_profiles: &'a [TensorProfile],
+}
+
+fn validate_all_tensors(
+    tensor_acceptance_contract: &TensorAcceptanceContract<'_>,
+    safetensors_tensors: &HashMap<String, SafetensorsTensorView>,
+    data_section_start: u64,
+    file_size_bytes: u64,
+    weights_file_name: &str,
+) -> Result<BoundedSafetensorsMetadata, ArtifactValidationError> {
+    validate_tensor_data_consistency(safetensors_tensors, weights_file_name)?;
+
+    for (tensor_name, tensor_view) in safetensors_tensors {
+        if !tensor_acceptance_contract
+            .required_tensor_names
+            .contains(tensor_name.as_str())
+            && !tensor_acceptance_contract
+                .accepted_extra_tensor_names
+                .contains(tensor_name.as_str())
+        {
+            return Err(ArtifactValidationError::UnexpectedTensor {
+                tensor_name: tensor_name.clone(),
+            });
+        }
+        validate_tensor_offsets(
+            tensor_name,
+            tensor_view,
+            data_section_start,
+            file_size_bytes,
+            weights_file_name,
+        )?;
+    }
+
+    if let Some(missing_tensor_name) = tensor_acceptance_contract
+        .required_tensor_names
+        .iter()
+        .find(|tensor_name| !safetensors_tensors.contains_key(**tensor_name))
+    {
+        return Err(ArtifactValidationError::TensorMissing {
+            tensor_name: (*missing_tensor_name).to_owned(),
+            file_name: weights_file_name.to_owned(),
+        });
+    }
+
+    for tensor_profile in tensor_acceptance_contract.required_tensor_profiles {
+        let tensor_view = safetensors_tensors
+            .get(&tensor_profile.name)
+            .ok_or_else(|| ArtifactValidationError::TensorMissing {
+                tensor_name: tensor_profile.name.clone(),
+                file_name: weights_file_name.to_owned(),
+            })?;
+        validate_tensor_dtype(tensor_profile, tensor_view, weights_file_name)?;
+        validate_tensor_shape(tensor_profile, tensor_view)?;
+    }
+    for tensor_profile in tensor_acceptance_contract.recognized_tensor_profiles {
+        let Some(tensor_view) = safetensors_tensors.get(&tensor_profile.name) else {
+            continue;
+        };
+        validate_tensor_dtype(tensor_profile, tensor_view, weights_file_name)?;
+        validate_tensor_shape(tensor_profile, tensor_view)?;
+    }
+
+    let total_payload_bytes =
+        safetensors_tensors
+            .values()
+            .try_fold(0_u64, |total_payload_bytes, tensor_view| {
+                let tensor_data_bytes = tensor_view
+                    .data_end_offset()
+                    .checked_sub(tensor_view.data_start_offset())
+                    .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
+                total_payload_bytes
+                    .checked_add(tensor_data_bytes)
+                    .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)
+            })?;
+
+    Ok(BoundedSafetensorsMetadata {
+        total_payload_bytes,
+    })
+}
+
+fn validate_tensor_offsets(
+    tensor_name: &str,
+    tensor_view: &SafetensorsTensorView,
+    data_section_start: u64,
+    file_size_bytes: u64,
+    file_name: &str,
+) -> Result<(), ArtifactValidationError> {
+    if tensor_view.data_start_offset() > tensor_view.data_end_offset() {
+        return Err(ArtifactValidationError::SafetensorsInvalidDataOffsets {
+            file_name: file_name.to_owned(),
+            tensor_name: tensor_name.to_owned(),
+            data_start_offset: tensor_view.data_start_offset(),
+            data_end_offset: tensor_view.data_end_offset(),
+        });
+    }
+    let absolute_end_offset = data_section_start
+        .checked_add(tensor_view.data_end_offset())
+        .ok_or_else(|| ArtifactValidationError::SafetensorsOffsetBeyondFile {
+            file_name: file_name.to_owned(),
+            tensor_name: tensor_name.to_owned(),
+            data_end_offset: tensor_view.data_end_offset(),
+            file_size_bytes,
+        })?;
+    if absolute_end_offset > file_size_bytes {
+        return Err(ArtifactValidationError::SafetensorsOffsetBeyondFile {
+            file_name: file_name.to_owned(),
+            tensor_name: tensor_name.to_owned(),
+            data_end_offset: tensor_view.data_end_offset(),
+            file_size_bytes,
+        });
+    }
+    Ok(())
+}
+
+fn validate_tensor_dtype(
+    tensor_profile: &TensorProfile,
+    tensor_view: &SafetensorsTensorView,
+    file_name: &str,
+) -> Result<(), ArtifactValidationError> {
+    let tensor_dtype_matches_profile = match tensor_profile.dtype {
+        TensorDtype::AffineQuantizationFloat => {
+            matches!(tensor_view.dtype.as_str(), "F16" | "BF16" | "F32")
+        }
+        TensorDtype::ModelFloat => {
+            matches!(tensor_view.dtype.as_str(), "F16" | "BF16" | "F32")
+        }
+        TensorDtype::BFloat16 => tensor_view.dtype == "BF16",
+        TensorDtype::Float16 => tensor_view.dtype == "F16",
+        TensorDtype::Float32 => tensor_view.dtype == "F32",
+        TensorDtype::UInt32 => tensor_view.dtype == "U32",
+    };
+    if !tensor_dtype_matches_profile {
+        let actual_dtype =
+            parse_safetensors_dtype(&tensor_view.dtype, file_name, &tensor_profile.name)?;
+        return Err(ArtifactValidationError::TensorDtypeMismatch {
+            tensor_name: tensor_profile.name.clone(),
+            expected_dtype: tensor_profile.dtype,
+            actual_dtype,
+        });
+    }
+    Ok(())
+}
+
+fn validate_tensor_shape(
+    tensor_profile: &TensorProfile,
+    tensor_view: &SafetensorsTensorView,
+) -> Result<(), ArtifactValidationError> {
+    let shape_matches = tensor_view.shape == tensor_profile.shape
+        || tensor_profile
+            .equivalent_published_shapes
+            .contains(&tensor_view.shape);
+    if !shape_matches {
+        return Err(ArtifactValidationError::TensorShapeMismatch {
+            tensor_name: tensor_profile.name.clone(),
+            expected_shape: tensor_profile.shape.clone(),
+            actual_shape: tensor_view.shape.clone(),
+        });
+    }
+    Ok(())
+}

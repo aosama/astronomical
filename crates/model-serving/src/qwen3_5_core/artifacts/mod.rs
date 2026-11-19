@@ -1,6 +1,8 @@
 mod artifact;
 mod artifact_helpers;
 mod artifact_inventory;
+#[cfg(test)]
+mod artifact_public_reason_tests;
 pub(crate) mod atlas_artifact;
 pub(crate) mod atlas_expert_layer_plans;
 #[cfg(feature = "direct-mlx")]

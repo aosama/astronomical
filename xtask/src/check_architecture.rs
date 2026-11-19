@@ -71,6 +71,22 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "astronomical-model-serving",
         rationale: "the speech crate must build and test without pulling in the serving crate, which drives the speech engines through a one-way edge",
     },
+    // The image families (issue #2340), like speech, implement a seam the
+    // serving crate's worker drives.
+    ForbiddenDependencyRule {
+        rule_name: "image-generation-without-serving",
+        source_crate: "astronomical-image-generation",
+        forbidden_crate: "astronomical-model-serving",
+        rationale: "the image generation crate must build and test without pulling in the serving crate, which drives the image engines through a one-way edge",
+    },
+    // Artifact validation sits under every model family; an edge to the
+    // serving crate would make each family depend on the engine through it.
+    ForbiddenDependencyRule {
+        rule_name: "artifact-validation-without-serving",
+        source_crate: "astronomical-artifact-validation",
+        forbidden_crate: "astronomical-model-serving",
+        rationale: "artifact validation must build and test without pulling in the serving crate, because every model family depends on it",
+    },
 ];
 
 /// One detected violation with the offending dependency chain, source crate
