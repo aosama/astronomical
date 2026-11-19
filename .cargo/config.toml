@@ -483,6 +483,16 @@ test-quantization-mixture-of-experts = "run -p xtask -- test-run --package astro
 # page under site/ names a file that is not published with it (links that
 # leave the site are not fetched); the same CI job runs it.
 #
+# `cargo xtask model-loading-changed PREVIOUS_TAG` prints
+# `MODEL_LOADING_UNCHANGED=0` when nothing that loads models changed since
+# that tag and `=1` when something did, for the release skill's round trip
+# gate. The watched folders come from `cargo metadata`: every local crate the
+# inference worker reaches through normal or build dependencies, plus the
+# paths in xtask/src/model_loading_changed.rs that still change what a model
+# loads (the quantizer, the vision tower, the native build tool, the
+# third-party pins and patches, the registry), so a split or renamed crate
+# can never drop out of the gate. It lists every watched folder first.
+#
 # `cargo xtask install-verification-tools [--prefix DIR]` installs the pinned
 # cargo-about and sccache prebuilts, SHA-256 verified, into DIR (default
 # `$CARGO_HOME/bin`), and skips any binary already reporting its pinned
