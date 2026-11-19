@@ -1,8 +1,45 @@
 //! Raw Metal source for the fused jangtq2 gathered projection kernel.
 //!
 //! Split from the kernel owner and launch logic in the parent so each file
-//! stays inside the source-size budget; the source is a pure string constant
-//! consumed once by `FusedJangtq2GatheredProjectionKernel::new`.
+//! stays inside the source-size budget. The source is assembled from string
+//! constants, consumed once by `FusedJangtq2GatheredProjectionKernel::new`; the
+//! level table and the code unpacking come from `codebook_kernel_fragments`,
+//! shared with the page decoder.
+
+use crate::codebook_kernel_fragments::{CODE_UNPACK_SOURCE, LEVEL_TABLE_SOURCE};
+
+const FUSED_GATHERED_PROJECTION_KERNEL_SOURCE_OPENING: &str = r#"
+  const uint global_index = thread_position_in_grid.x;
+  const uint assignment_index = global_index / (uint)output_rows;
+  const uint output_row = global_index % (uint)output_rows;
+  const uint expert_index = (uint)expert_indices[assignment_index];
+  const uint hidden_row = shared_hidden_row ? 0u : assignment_index;
+  const size_t packed_row_base =
+      ((size_t)expert_index * (size_t)output_rows + (size_t)output_row) * (size_t)words_per_row;
+  const size_t hidden_row_base = (size_t)hidden_row * (size_t)input_width;
+
+"#;
+const FUSED_GATHERED_PROJECTION_KERNEL_SOURCE_BEFORE_UNPACK: &str = r#"
+
+  float dot = 0.0f;
+  constexpr int group_count = input_width / 32;
+  constexpr uint32_t code_mask = (1u << bits) - 1u;
+  for (int group_index = 0; group_index < group_count; ++group_index) {
+    uint32_t group_words[bits];
+    for (int word_index = 0; word_index < bits; ++word_index) {
+      group_words[word_index] = packed_weights[packed_row_base + group_index * bits + word_index];
+    }
+    const int element_base = group_index * 32;
+    for (int code_index = 0; code_index < 32; ++code_index) {
+"#;
+const FUSED_GATHERED_PROJECTION_KERNEL_SOURCE_CLOSING: &str = r#"
+      dot += level_table[code] * float(hidden[hidden_row_base + element_base + code_index]);
+    }
+  }
+  const float row_scale =
+      float(row_scales[(size_t)expert_index * (size_t)output_rows + (size_t)output_row]);
+  projected[global_index] = (OutputT)(dot * row_scale);
+"#;
 
 /// One thread per `(assignment, output row)` pair.
 ///
@@ -25,43 +62,13 @@
 /// * `shared_hidden_row` — true when every assignment multiplies the same
 ///   single activation row (one decode token), false when `hidden` carries one
 ///   row per assignment.
-pub(super) const FUSED_GATHERED_PROJECTION_KERNEL_SOURCE: &str = r#"
-  const uint global_index = thread_position_in_grid.x;
-  const uint assignment_index = global_index / (uint)output_rows;
-  const uint output_row = global_index % (uint)output_rows;
-  const uint expert_index = (uint)expert_indices[assignment_index];
-  const uint hidden_row = shared_hidden_row ? 0u : assignment_index;
-  const size_t packed_row_base =
-      ((size_t)expert_index * (size_t)output_rows + (size_t)output_row) * (size_t)words_per_row;
-  const size_t hidden_row_base = (size_t)hidden_row * (size_t)input_width;
-
-  float level_table[1 << bits];
-  for (int code = 0; code < (1 << bits); ++code) {
-    level_table[code] = float(codebook_levels[code]);
-  }
-
-  float dot = 0.0f;
-  constexpr int group_count = input_width / 32;
-  constexpr uint32_t code_mask = (1u << bits) - 1u;
-  for (int group_index = 0; group_index < group_count; ++group_index) {
-    uint32_t group_words[bits];
-    for (int word_index = 0; word_index < bits; ++word_index) {
-      group_words[word_index] = packed_weights[packed_row_base + group_index * bits + word_index];
-    }
-    const int element_base = group_index * 32;
-    for (int code_index = 0; code_index < 32; ++code_index) {
-      const int start_bit = code_index * bits;
-      const int word_index = start_bit >> 5;
-      const int bit_offset = start_bit & 31;
-      uint32_t spread_value = group_words[word_index] >> bit_offset;
-      if (bit_offset + bits > 32) {
-        spread_value |= group_words[word_index + 1] << (32 - bit_offset);
-      }
-      const uint32_t code = spread_value & code_mask;
-      dot += level_table[code] * float(hidden[hidden_row_base + element_base + code_index]);
-    }
-  }
-  const float row_scale =
-      float(row_scales[(size_t)expert_index * (size_t)output_rows + (size_t)output_row]);
-  projected[global_index] = (OutputT)(dot * row_scale);
-"#;
+pub(super) fn fused_gathered_projection_kernel_source() -> String {
+    [
+        FUSED_GATHERED_PROJECTION_KERNEL_SOURCE_OPENING,
+        LEVEL_TABLE_SOURCE,
+        FUSED_GATHERED_PROJECTION_KERNEL_SOURCE_BEFORE_UNPACK,
+        CODE_UNPACK_SOURCE,
+        FUSED_GATHERED_PROJECTION_KERNEL_SOURCE_CLOSING,
+    ]
+    .concat()
+}

@@ -19,16 +19,51 @@ use super::gated_delta_sequence_contract::{
     template_arguments, validate_gated_delta_sequence_shapes,
 };
 
-/// Inputs as the sequence kernel takes them, `[1, rows, ...]`, plus
-/// `row_chains` [rows, MAXIMUM_CHAIN] (each row's chain from the anchor to
-/// itself) and `chain_lengths` [rows]. Output `outputs` [1, rows, Hv, Dv].
-const GATED_DELTA_TREE_SOURCE: &str = r#"
+/// The thread layout both kernels share: 16 value rows a threadgroup, each
+/// spread over 8 lanes, with the value head on the grid's y axis. Built once
+/// here so the tree and replay kernels cannot drift apart (issue #2340); the
+/// bit-for-bit tree and replay tests prove the assembled kernels unchanged.
+const GATED_DELTA_THREAD_LAYOUT_SOURCE: &str = r#"
     constexpr int value_row_block_size = 16;
     auto thread_index = thread_position_in_threadgroup.x;
     auto value_head_index = threadgroup_position_in_grid.y;
     auto key_head_index = value_head_index / (Hv / Hk);
     auto value_row = threadgroup_position_in_grid.x * value_row_block_size + thread_index / 8;
     auto key_segment_index = thread_index % 8;
+"#;
+
+/// The first half of one row's gated-delta step, shared by both kernels:
+/// load the row's keys, decay the state, and reduce what the state remembers
+/// for the row's key across the 8 lanes. Expects `row`, `key_row`,
+/// `state_fragment` and the thread layout in scope; defines `current_keys`,
+/// `current_decay`, `current_update_rate`, `current_value`,
+/// `state_key_dot_partials` and `remembered_value`.
+const GATED_DELTA_DECAY_AND_REMEMBER_SOURCE: &str = r#"
+        float4 current_keys[4];
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            current_keys[fragment_index] = float4(*(const device vec<InT, 4>*)(
+                key_row + 4 * (key_segment_index + 8 * fragment_index)));
+        }
+        const float current_decay = decays[(size_t)row * Hv + value_head_index];
+        const float current_update_rate = update_rates[(size_t)row * Hv + value_head_index];
+        const float current_value =
+            float(values[((size_t)row * Hv + value_head_index) * Dv + value_row]);
+        float2 state_key_dot_partials = 0.0f;
+        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
+            state_fragment[fragment_index] *= current_decay;
+            state_key_dot_partials = fma(state_fragment[fragment_index].xy,
+                current_keys[fragment_index].xy, state_key_dot_partials);
+            state_key_dot_partials = fma(state_fragment[fragment_index].zw,
+                current_keys[fragment_index].zw, state_key_dot_partials);
+        }
+        float remembered_value = state_key_dot_partials.x + state_key_dot_partials.y;
+        remembered_value += simd_shuffle_xor(remembered_value, 4);
+        remembered_value += simd_shuffle_xor(remembered_value, 2);
+        remembered_value += simd_shuffle_xor(remembered_value, 1);
+"#;
+
+/// The tree kernel from its first row up to the shared step.
+const GATED_DELTA_TREE_SOURCE_BEFORE_STEP: &str = r#"
     const int tree_row_count = chain_lengths_shape[0];
 
     float4 starting_fragment[4];
@@ -58,27 +93,9 @@ const GATED_DELTA_TREE_SOURCE: &str = r#"
             const int row = row_chains[tree_row * MAXIMUM_CHAIN + chain_step];
             auto key_row = keys + ((size_t)row * Hk + key_head_index) * Dk;
             auto query_row = queries + ((size_t)row * Hk + key_head_index) * Dk;
-            float4 current_keys[4];
-            for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-                current_keys[fragment_index] = float4(*(const device vec<InT, 4>*)(
-                    key_row + 4 * (key_segment_index + 8 * fragment_index)));
-            }
-            const float current_decay = decays[(size_t)row * Hv + value_head_index];
-            const float current_update_rate = update_rates[(size_t)row * Hv + value_head_index];
-            const float current_value =
-                float(values[((size_t)row * Hv + value_head_index) * Dv + value_row]);
-            float2 state_key_dot_partials = 0.0f;
-            for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-                state_fragment[fragment_index] *= current_decay;
-                state_key_dot_partials = fma(state_fragment[fragment_index].xy,
-                    current_keys[fragment_index].xy, state_key_dot_partials);
-                state_key_dot_partials = fma(state_fragment[fragment_index].zw,
-                    current_keys[fragment_index].zw, state_key_dot_partials);
-            }
-            float remembered_value = state_key_dot_partials.x + state_key_dot_partials.y;
-            remembered_value += simd_shuffle_xor(remembered_value, 4);
-            remembered_value += simd_shuffle_xor(remembered_value, 2);
-            remembered_value += simd_shuffle_xor(remembered_value, 1);
+"#;
+/// The rest of the tree kernel's step, its query reduction and its output.
+const GATED_DELTA_TREE_SOURCE_AFTER_STEP: &str = r#"
             float4 current_queries[4];
             for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
                 current_queries[fragment_index] = float4(*(const device vec<InT, 4>*)(
@@ -111,18 +128,8 @@ const GATED_DELTA_TREE_SOURCE: &str = r#"
     }
 "#;
 
-/// Inputs as the tree kernel's, plus `kept_rows` [n] int32. Output
-/// `next_recurrent_state`: the starting state advanced over the kept rows in
-/// order, by the same step, so it equals the sequence kernel's final state
-/// over those rows without gathering them first (five gathers a layer, 240 a
-/// round on the 27B).
-const GATED_DELTA_REPLAY_SOURCE: &str = r#"
-    constexpr int value_row_block_size = 16;
-    auto thread_index = thread_position_in_threadgroup.x;
-    auto value_head_index = threadgroup_position_in_grid.y;
-    auto key_head_index = value_head_index / (Hv / Hk);
-    auto value_row = threadgroup_position_in_grid.x * value_row_block_size + thread_index / 8;
-    auto key_segment_index = thread_index % 8;
+/// The replay kernel from its state load up to the shared step.
+const GATED_DELTA_REPLAY_SOURCE_BEFORE_STEP: &str = r#"
     const int kept_row_count = kept_rows_shape[0];
     const size_t state_offset = ((size_t)value_head_index * Dv + value_row) * Dk;
 
@@ -137,27 +144,9 @@ const GATED_DELTA_REPLAY_SOURCE: &str = r#"
     for (int kept_index = 0; kept_index < kept_row_count; ++kept_index) {
         const int row = kept_rows[kept_index];
         auto key_row = keys + ((size_t)row * Hk + key_head_index) * Dk;
-        float4 current_keys[4];
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            current_keys[fragment_index] = float4(*(const device vec<InT, 4>*)(
-                key_row + 4 * (key_segment_index + 8 * fragment_index)));
-        }
-        const float current_decay = decays[(size_t)row * Hv + value_head_index];
-        const float current_update_rate = update_rates[(size_t)row * Hv + value_head_index];
-        const float current_value =
-            float(values[((size_t)row * Hv + value_head_index) * Dv + value_row]);
-        float2 state_key_dot_partials = 0.0f;
-        for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
-            state_fragment[fragment_index] *= current_decay;
-            state_key_dot_partials = fma(state_fragment[fragment_index].xy,
-                current_keys[fragment_index].xy, state_key_dot_partials);
-            state_key_dot_partials = fma(state_fragment[fragment_index].zw,
-                current_keys[fragment_index].zw, state_key_dot_partials);
-        }
-        float remembered_value = state_key_dot_partials.x + state_key_dot_partials.y;
-        remembered_value += simd_shuffle_xor(remembered_value, 4);
-        remembered_value += simd_shuffle_xor(remembered_value, 2);
-        remembered_value += simd_shuffle_xor(remembered_value, 1);
+"#;
+/// The rest of the replay kernel's step and its state write.
+const GATED_DELTA_REPLAY_SOURCE_AFTER_STEP: &str = r#"
         const float delta = (current_value - remembered_value) * current_update_rate;
         for (int fragment_index = 0; fragment_index < 4; ++fragment_index) {
             state_fragment[fragment_index] = fma(current_keys[fragment_index],
@@ -173,6 +162,40 @@ const GATED_DELTA_REPLAY_SOURCE: &str = r#"
     }
 "#;
 
+/// The tree kernel's source: the shared thread layout and row step around
+/// its ancestor-chain replay and query reduction.
+///
+/// Inputs as the sequence kernel takes them, `[1, rows, ...]`, plus
+/// `row_chains` [rows, MAXIMUM_CHAIN] (each row's chain from the anchor to
+/// itself) and `chain_lengths` [rows]. Output `outputs` [1, rows, Hv, Dv].
+fn gated_delta_tree_source() -> String {
+    [
+        GATED_DELTA_THREAD_LAYOUT_SOURCE,
+        GATED_DELTA_TREE_SOURCE_BEFORE_STEP,
+        GATED_DELTA_DECAY_AND_REMEMBER_SOURCE,
+        GATED_DELTA_TREE_SOURCE_AFTER_STEP,
+    ]
+    .concat()
+}
+
+/// The replay kernel's source: the shared thread layout and row step around
+/// its walk over the kept rows.
+///
+/// Inputs as the tree kernel's, plus `kept_rows` [n] int32. Output
+/// `next_recurrent_state`: the starting state advanced over the kept rows in
+/// order, by the same step, so it equals the sequence kernel's final state
+/// over those rows without gathering them first (five gathers a layer, 240 a
+/// round on the 27B).
+fn gated_delta_replay_source() -> String {
+    [
+        GATED_DELTA_THREAD_LAYOUT_SOURCE,
+        GATED_DELTA_REPLAY_SOURCE_BEFORE_STEP,
+        GATED_DELTA_DECAY_AND_REMEMBER_SOURCE,
+        GATED_DELTA_REPLAY_SOURCE_AFTER_STEP,
+    ]
+    .concat()
+}
+
 /// The replay kernel, declared once per model beside the tree kernel.
 pub fn qwen3_5_gated_delta_replay_kernel() -> Result<MlxMetalKernel, MlxRuntimeError> {
     Ok(MlxMetalKernel::new(
@@ -186,7 +209,7 @@ pub fn qwen3_5_gated_delta_replay_kernel() -> Result<MlxMetalKernel, MlxRuntimeE
             "kept_rows",
         ],
         &["next_recurrent_state"],
-        GATED_DELTA_REPLAY_SOURCE,
+        &gated_delta_replay_source(),
     )?)
 }
 
@@ -258,7 +281,7 @@ pub fn qwen3_5_gated_delta_tree_kernel() -> Result<MlxMetalKernel, MlxRuntimeErr
             "chain_lengths",
         ],
         &["outputs"],
-        GATED_DELTA_TREE_SOURCE,
+        &gated_delta_tree_source(),
     )?)
 }
 

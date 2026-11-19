@@ -254,7 +254,7 @@ impl PageDecodeKernel {
             "jangtq2_page_decode",
             &["packed_weights", "row_scales", "codebook_levels"],
             &["decoded"],
-            kernel_sources::PAGE_DECODE_KERNEL_SOURCE,
+            &kernel_sources::page_decode_kernel_source(),
         )
         .map_err(MlxRuntimeError::from)?;
         Ok(Self {

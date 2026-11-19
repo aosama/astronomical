@@ -86,7 +86,7 @@ impl FusedJangtq2GatheredProjectionKernel {
                 "codebook_levels",
             ],
             &["projected"],
-            kernel_sources::FUSED_GATHERED_PROJECTION_KERNEL_SOURCE,
+            &kernel_sources::fused_gathered_projection_kernel_source(),
         )
         .map_err(MlxRuntimeError::from)?;
         Ok(Self {
