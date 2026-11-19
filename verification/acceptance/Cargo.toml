@@ -118,7 +118,7 @@ astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-lowercase-hex = { path = "../../crates/lowercase-hex" }
-astronomical-memory-policy = { path = "../../crates/astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../../crates/memory-policy" }
 astronomical-neural-engine-research = { path = "../neural-engine" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
 astronomical-qwen35-quantization-probe = { path = "../../crates/qwen35-quantization-probe" }

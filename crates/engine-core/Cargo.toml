@@ -21,7 +21,7 @@ direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "astrono
 [dependencies]
 astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
-astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../memory-policy" }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }
 libc.workspace = true

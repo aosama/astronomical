@@ -20,7 +20,7 @@ direct-mlx = []
 # none of them; `cargo xtask check-architecture` enforces the serving edge.
 [dependencies]
 # Bounded safetensors header parsing and the strict-JSON duplicate guard.
-astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../memory-policy" }
 # Decodes Hugging Face snapshot folder names into model ids.
 astronomical-config = { path = "../config" }
 astronomical-lowercase-hex = { path = "../lowercase-hex" }

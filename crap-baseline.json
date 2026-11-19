@@ -26481,7 +26481,7 @@
       "crate": "astronomical-inference-worker"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/artifacts.rs",
+      "file": "crates/jangtq2-qwen35/src/artifacts.rs",
       "function": "tensor_inventory_for_module",
       "line": 94,
       "cyclomatic": 7.0,
@@ -26490,7 +26490,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "codebook_level_value",
       "line": 58,
       "cyclomatic": 4.0,
@@ -26499,7 +26499,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "codebook_levels",
       "line": 70,
       "cyclomatic": 2.0,
@@ -26508,7 +26508,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "codes_per_group",
       "line": 170,
       "cyclomatic": 1.0,
@@ -26517,7 +26517,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "cubic_parameters",
       "line": 45,
       "cyclomatic": 1.0,
@@ -26526,7 +26526,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "decoded_weight_page_shape",
       "line": 139,
       "cyclomatic": 9.0,
@@ -26535,7 +26535,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "is_supported_bit_width",
       "line": 38,
       "cyclomatic": 1.0,
@@ -26544,7 +26544,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "packed_word_count_for_input_width",
       "line": 127,
       "cyclomatic": 1.0,
@@ -26553,7 +26553,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/codebook.rs",
+      "file": "crates/jangtq2-qwen35/src/codebook.rs",
       "function": "unpack_codes_from_packed_row",
       "line": 96,
       "cyclomatic": 6.0,
@@ -26562,7 +26562,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/configuration.rs",
+      "file": "crates/jangtq2-qwen35/src/configuration.rs",
       "function": "Jangtq2CodebookRotation::from_wire_name",
       "line": 64,
       "cyclomatic": 4.0,
@@ -26571,7 +26571,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/configuration.rs",
+      "file": "crates/jangtq2-qwen35/src/configuration.rs",
       "function": "Jangtq2RmsNormConvention::from_wire_name",
       "line": 86,
       "cyclomatic": 4.0,
@@ -26580,7 +26580,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/configuration.rs",
+      "file": "crates/jangtq2-qwen35/src/configuration.rs",
       "function": "Jangtq2WeightOverrideEntry::deserialize",
       "line": 122,
       "cyclomatic": 12.0,
@@ -26589,7 +26589,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/configuration.rs",
+      "file": "crates/jangtq2-qwen35/src/configuration.rs",
       "function": "Jangtq2WeightOverrideEntry::is_native_floating_point",
       "line": 274,
       "cyclomatic": 1.0,
@@ -26598,7 +26598,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/configuration.rs",
+      "file": "crates/jangtq2-qwen35/src/configuration.rs",
       "function": "Jangtq2WeightOverrideEntry::validate",
       "line": 254,
       "cyclomatic": 4.0,
@@ -26607,7 +26607,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "FusedJangtq2GatheredProjectionKernel::apply",
       "line": 115,
       "cyclomatic": 6.0,
@@ -26616,7 +26616,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "FusedJangtq2GatheredProjectionKernel::codebook_level_table",
       "line": 188,
       "cyclomatic": 7.0,
@@ -26625,7 +26625,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "FusedJangtq2GatheredProjectionKernel::new",
       "line": 78,
       "cyclomatic": 2.0,
@@ -26634,7 +26634,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "decoded_input_width",
       "line": 346,
       "cyclomatic": 4.0,
@@ -26643,7 +26643,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "is_shared_activation_row",
       "line": 374,
       "cyclomatic": 6.0,
@@ -26652,7 +26652,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "packed_row_geometry",
       "line": 310,
       "cyclomatic": 5.0,
@@ -26661,7 +26661,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "projection_error",
       "line": 403,
       "cyclomatic": 1.0,
@@ -26670,7 +26670,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "validate_fused_projection_dtypes",
       "line": 260,
       "cyclomatic": 6.0,
@@ -26679,7 +26679,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection.rs",
       "function": "validate_fused_projection_inputs",
       "line": 220,
       "cyclomatic": 5.0,
@@ -26688,7 +26688,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection_tests.rs",
       "function": "refusal_text",
       "line": 25,
       "cyclomatic": 1.0,
@@ -26697,7 +26697,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/fused_gathered_projection_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/fused_gathered_projection_tests.rs",
       "function": "supported_dtypes",
       "line": 15,
       "cyclomatic": 1.0,
@@ -26706,7 +26706,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/golden_vector_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/golden_vector_tests.rs",
       "function": "golden_f32_list",
       "line": 22,
       "cyclomatic": 1.0,
@@ -26715,7 +26715,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/golden_vector_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/golden_vector_tests.rs",
       "function": "golden_f32_matrix",
       "line": 31,
       "cyclomatic": 1.0,
@@ -26724,7 +26724,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/golden_vector_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/golden_vector_tests.rs",
       "function": "golden_u32_list",
       "line": 47,
       "cyclomatic": 1.0,
@@ -26733,7 +26733,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/golden_vector_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/golden_vector_tests.rs",
       "function": "golden_u8_matrix",
       "line": 56,
       "cyclomatic": 1.0,
@@ -26742,7 +26742,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/golden_vector_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/golden_vector_tests.rs",
       "function": "golden_vectors",
       "line": 17,
       "cyclomatic": 1.0,
@@ -26751,7 +26751,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/golden_vector_tests.rs",
+      "file": "crates/jangtq2-qwen35/src/golden_vector_tests.rs",
       "function": "should_decode_reference_codes_with_reference_scales_for_bit_width",
       "line": 236,
       "cyclomatic": 3.0,
@@ -26760,7 +26760,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/hadamard32.rs",
+      "file": "crates/jangtq2-qwen35/src/hadamard32.rs",
       "function": "is_applicable_to_input_width",
       "line": 26,
       "cyclomatic": 1.0,
@@ -26769,7 +26769,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/hadamard32.rs",
+      "file": "crates/jangtq2-qwen35/src/hadamard32.rs",
       "function": "normalized_block_matrix",
       "line": 76,
       "cyclomatic": 4.0,
@@ -26778,7 +26778,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/hadamard32.rs",
+      "file": "crates/jangtq2-qwen35/src/hadamard32.rs",
       "function": "reference_transform_vector",
       "line": 41,
       "cyclomatic": 5.0,
@@ -26787,7 +26787,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "PageDecodeKernel::codebook_level_table",
       "line": 268,
       "cyclomatic": 7.0,
@@ -26796,7 +26796,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "PageDecodeKernel::new",
       "line": 252,
       "cyclomatic": 2.0,
@@ -26805,7 +26805,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "decode_error",
       "line": 344,
       "cyclomatic": 1.0,
@@ -26814,7 +26814,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "decode_expert_weight_rows",
       "line": 54,
       "cyclomatic": 20.0,
@@ -26823,7 +26823,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "launch_page_decode_kernel",
       "line": 203,
       "cyclomatic": 5.0,
@@ -26832,7 +26832,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "materialize_and_detach_jangtq2_array",
       "line": 288,
       "cyclomatic": 2.0,
@@ -26841,7 +26841,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "page_decode_template_arguments",
       "line": 173,
       "cyclomatic": 1.0,
@@ -26850,7 +26850,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "rotate_activations_hadamard32",
       "line": 305,
       "cyclomatic": 7.0,
@@ -26859,7 +26859,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/src/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/src/mlx_decode.rs",
       "function": "rotation_error",
       "line": 351,
       "cyclomatic": 1.0,
@@ -26868,7 +26868,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
       "function": "deterministic_packed_words",
       "line": 72,
       "cyclomatic": 1.0,
@@ -26877,7 +26877,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
       "function": "deterministic_row_scales",
       "line": 87,
       "cyclomatic": 1.0,
@@ -26886,7 +26886,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
       "function": "measure_decode_throughput",
       "line": 107,
       "cyclomatic": 4.0,
@@ -26895,7 +26895,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
       "function": "measure_fused_gathered_projection_throughput",
       "line": 365,
       "cyclomatic": 1.0,
@@ -26904,7 +26904,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
       "function": "median_duration_millis",
       "line": 96,
       "cyclomatic": 1.0,
@@ -26913,7 +26913,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/decode_throughput.rs",
       "function": "test_runtime",
       "line": 56,
       "cyclomatic": 1.0,
@@ -26922,7 +26922,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
       "function": "FusedProjectionFixture::reference_projection",
       "line": 125,
       "cyclomatic": 4.0,
@@ -26931,7 +26931,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
       "function": "assert_close",
       "line": 161,
       "cyclomatic": 2.0,
@@ -26940,7 +26940,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
       "function": "build_fixture",
       "line": 80,
       "cyclomatic": 1.0,
@@ -26949,7 +26949,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
       "function": "deterministic_activations",
       "line": 61,
       "cyclomatic": 1.0,
@@ -26958,7 +26958,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
       "function": "deterministic_packed_words",
       "line": 39,
       "cyclomatic": 1.0,
@@ -26967,7 +26967,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
       "function": "deterministic_row_scales",
       "line": 53,
       "cyclomatic": 1.0,
@@ -26976,7 +26976,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/fused_gathered_projection.rs",
       "function": "run_host_reference_contract",
       "line": 181,
       "cyclomatic": 2.0,
@@ -26985,7 +26985,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/mlx_decode.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/mlx_decode.rs",
       "function": "reference_golden_u32_values",
       "line": 15,
       "cyclomatic": 1.0,
@@ -26994,7 +26994,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "build_prefill_host_fixture",
       "line": 210,
       "cyclomatic": 1.0,
@@ -27003,7 +27003,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "compile_prefill_prototype_kernel",
       "line": 179,
       "cyclomatic": 1.0,
@@ -27012,7 +27012,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "gather_assignment_rows",
       "line": 252,
       "cyclomatic": 2.0,
@@ -27021,7 +27021,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "measure_prefill_gathered_dequant",
       "line": 100,
       "cyclomatic": 1.0,
@@ -27030,7 +27030,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "prepare_transposed_decoded_page",
       "line": 473,
       "cyclomatic": 1.0,
@@ -27039,7 +27039,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "report_prefill_measurement",
       "line": 593,
       "cyclomatic": 1.0,
@@ -27048,7 +27048,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "time_chunk_rotation",
       "line": 363,
       "cyclomatic": 3.0,
@@ -27057,7 +27057,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "time_expanded_rotation",
       "line": 427,
       "cyclomatic": 3.0,
@@ -27066,7 +27066,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "time_gather_matmul",
       "line": 490,
       "cyclomatic": 3.0,
@@ -27075,7 +27075,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "time_page_decode",
       "line": 447,
       "cyclomatic": 3.0,
@@ -27084,7 +27084,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "time_prototype_kernel",
       "line": 539,
       "cyclomatic": 3.0,
@@ -27093,7 +27093,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "upload_expanded_baseline_assignments",
       "line": 389,
       "cyclomatic": 1.0,
@@ -27102,7 +27102,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
       "function": "upload_prefill_fixture",
       "line": 280,
       "cyclomatic": 2.0,
@@ -27111,7 +27111,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
       "function": "deterministic_packed_words",
       "line": 18,
       "cyclomatic": 1.0,
@@ -27120,7 +27120,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
       "function": "deterministic_row_scales",
       "line": 33,
       "cyclomatic": 1.0,
@@ -27129,7 +27129,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
       "function": "deterministic_token_activations",
       "line": 44,
       "cyclomatic": 1.0,
@@ -27138,7 +27138,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
       "function": "deterministic_token_experts",
       "line": 57,
       "cyclomatic": 3.0,
@@ -27147,7 +27147,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
       "function": "expert_sorted_assignments",
       "line": 86,
       "cyclomatic": 5.0,
@@ -27156,7 +27156,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
       "function": "median_duration_millis",
       "line": 48,
       "cyclomatic": 1.0,
@@ -27165,7 +27165,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/fixtures.rs",
       "function": "prototype_runtime",
       "line": 8,
       "cyclomatic": 1.0,
@@ -27174,7 +27174,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/kernel.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/kernel.rs",
       "function": "launch_prefill_gathered_dequant",
       "line": 120,
       "cyclomatic": 2.0,
@@ -27183,7 +27183,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/parity.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/parity.rs",
       "function": "assert_exact_host_parity",
       "line": 60,
       "cyclomatic": 4.0,
@@ -27192,7 +27192,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/parity.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/parity.rs",
       "function": "gather_baseline_parity_errors",
       "line": 119,
       "cyclomatic": 2.0,
@@ -27201,7 +27201,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/parity.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant/parity.rs",
       "function": "read_exact_parity_output",
       "line": 17,
       "cyclomatic": 1.0,
@@ -27210,7 +27210,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/support.rs",
+      "file": "crates/jangtq2-qwen35/tests/direct_mlx/support.rs",
       "function": "contract_runtime",
       "line": 19,
       "cyclomatic": 1.0,
@@ -27219,7 +27219,7 @@
       "crate": "astronomical-jangtq2-qwen35"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/adaptive_ram_growth_guard_transient_reserve_tests.rs",
+      "file": "crates/memory-policy/src/adaptive_ram_growth_guard_transient_reserve_tests.rs",
       "function": "guard_after_the_short_prompt",
       "line": 48,
       "cyclomatic": 1.0,
@@ -27228,7 +27228,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/adaptive_ram_growth_guard_transient_reserve_tests.rs",
+      "file": "crates/memory-policy/src/adaptive_ram_growth_guard_transient_reserve_tests.rs",
       "function": "record_transient_window",
       "line": 32,
       "cyclomatic": 1.0,
@@ -27237,7 +27237,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/adaptive_ram_growth_guard_transient_reserve_tests.rs",
+      "file": "crates/memory-policy/src/adaptive_ram_growth_guard_transient_reserve_tests.rs",
       "function": "resident_prefill_context",
       "line": 23,
       "cyclomatic": 1.0,
@@ -27246,7 +27246,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/allocation.rs",
+      "file": "crates/memory-policy/src/admission/allocation.rs",
       "function": "AllocationAdmissionObservation::decide",
       "line": 39,
       "cyclomatic": 6.0,
@@ -27255,7 +27255,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/allocation.rs",
+      "file": "crates/memory-policy/src/admission/allocation.rs",
       "function": "AllocationAdmissionObservation::new",
       "line": 23,
       "cyclomatic": 1.0,
@@ -27264,7 +27264,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/allocation.rs",
+      "file": "crates/memory-policy/src/admission/allocation.rs",
       "function": "retained_expert_payload_capacity_bytes",
       "line": 86,
       "cyclomatic": 6.0,
@@ -27273,7 +27273,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/complete_residency.rs",
+      "file": "crates/memory-policy/src/admission/complete_residency.rs",
       "function": "CompleteResidencyRequirements::decide",
       "line": 33,
       "cyclomatic": 4.0,
@@ -27282,7 +27282,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "ContextAdmissionRequirements::decide",
       "line": 76,
       "cyclomatic": 4.0,
@@ -27291,7 +27291,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "ContextAdmissionRequirements::memory_equation",
       "line": 107,
       "cyclomatic": 1.0,
@@ -27300,7 +27300,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "ContextAdmissionRequirements::projected_active_memory_bytes",
       "line": 70,
       "cyclomatic": 2.0,
@@ -27309,7 +27309,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "bounded_output_reservation_token_count",
       "line": 31,
       "cyclomatic": 4.0,
@@ -27318,7 +27318,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "combined_persistent_growth_bytes",
       "line": 205,
       "cyclomatic": 1.0,
@@ -27327,7 +27327,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "persistent_context_restore_workspace_bytes",
       "line": 123,
       "cyclomatic": 1.0,
@@ -27336,7 +27336,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "request_context_temporary_workspace_bytes",
       "line": 160,
       "cyclomatic": 4.0,
@@ -27345,7 +27345,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "safe_minimum_active_memory_ceiling_bytes",
       "line": 214,
       "cyclomatic": 1.0,
@@ -27354,7 +27354,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "seated_complete_expert_request_peak_active_memory_bytes",
       "line": 136,
       "cyclomatic": 5.0,
@@ -27363,7 +27363,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context.rs",
+      "file": "crates/memory-policy/src/admission/context.rs",
       "function": "seated_complete_expert_request_temporary_workspace_bytes",
       "line": 193,
       "cyclomatic": 1.0,
@@ -27372,7 +27372,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/context_boundary_tests.rs",
+      "file": "crates/memory-policy/src/admission/context_boundary_tests.rs",
       "function": "requirements_for_current_state",
       "line": 16,
       "cyclomatic": 1.0,
@@ -27381,7 +27381,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/expert_memory_admission_tests.rs",
+      "file": "crates/memory-policy/src/admission/expert_memory_admission_tests.rs",
       "function": "paged_forward_projection",
       "line": 15,
       "cyclomatic": 1.0,
@@ -27390,7 +27390,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/retained_prefix.rs",
+      "file": "crates/memory-policy/src/admission/retained_prefix.rs",
       "function": "RetainedPrefixRetentionRequirements::decide",
       "line": 40,
       "cyclomatic": 4.0,
@@ -27399,7 +27399,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/rotating.rs",
+      "file": "crates/memory-policy/src/admission/rotating.rs",
       "function": "rotating_committed_token_count",
       "line": 49,
       "cyclomatic": 1.0,
@@ -27408,7 +27408,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/admission/rotating.rs",
+      "file": "crates/memory-policy/src/admission/rotating.rs",
       "function": "rotating_prefill_transient_token_count",
       "line": 22,
       "cyclomatic": 3.0,
@@ -27417,7 +27417,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthContext::decode",
       "line": 83,
       "cyclomatic": 1.0,
@@ -27426,7 +27426,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthContext::execution_profile",
       "line": 118,
       "cyclomatic": 1.0,
@@ -27435,7 +27435,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthContext::forward_token_count",
       "line": 103,
       "cyclomatic": 1.0,
@@ -27444,7 +27444,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthContext::memory_phase",
       "line": 97,
       "cyclomatic": 1.0,
@@ -27453,7 +27453,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthContext::prefill",
       "line": 66,
       "cyclomatic": 1.0,
@@ -27462,7 +27462,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthContext::with_execution_profile",
       "line": 109,
       "cyclomatic": 1.0,
@@ -27471,7 +27471,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::admission_transient_high_water_bytes",
       "line": 198,
       "cyclomatic": 1.0,
@@ -27480,7 +27480,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::admission_transient_reserve_for_context",
       "line": 247,
       "cyclomatic": 8.0,
@@ -27489,7 +27489,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::has_completed_growth_observation",
       "line": 158,
       "cyclomatic": 1.0,
@@ -27498,7 +27498,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::hot_expert_retention_ceiling_bytes",
       "line": 333,
       "cyclomatic": 2.0,
@@ -27507,7 +27507,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::new",
       "line": 134,
       "cyclomatic": 2.0,
@@ -27516,7 +27516,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::observed_transient_high_water_bytes",
       "line": 168,
       "cyclomatic": 1.0,
@@ -27525,7 +27525,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::observed_transient_high_water_bytes_for_context",
       "line": 183,
       "cyclomatic": 1.0,
@@ -27534,7 +27534,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::project_growth_for_context",
       "line": 378,
       "cyclomatic": 2.0,
@@ -27543,7 +27543,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::record_completed_growth_excluding_expert_page_stream",
       "line": 447,
       "cyclomatic": 2.0,
@@ -27552,7 +27552,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::record_completed_growth_for_context",
       "line": 413,
       "cyclomatic": 1.0,
@@ -27561,7 +27561,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth.rs",
       "function": "AdaptiveRamGrowthGuard::update_active_memory_ceiling_bytes",
       "line": 145,
       "cyclomatic": 2.0,
@@ -27570,7 +27570,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::active_memory_ceiling_bytes",
       "line": 84,
       "cyclomatic": 1.0,
@@ -27579,7 +27579,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::allowed_active_memory_bytes",
       "line": 89,
       "cyclomatic": 1.0,
@@ -27588,7 +27588,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::current_active_memory_bytes",
       "line": 34,
       "cyclomatic": 1.0,
@@ -27597,7 +27597,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::exact_persistent_growth_bytes",
       "line": 39,
       "cyclomatic": 1.0,
@@ -27606,7 +27606,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::exact_temporary_workspace_bytes",
       "line": 49,
       "cyclomatic": 1.0,
@@ -27615,7 +27615,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::expert_retention_reclamation_plan",
       "line": 104,
       "cyclomatic": 1.0,
@@ -27624,7 +27624,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::fits_stable_and_peak_limits",
       "line": 113,
       "cyclomatic": 1.0,
@@ -27633,7 +27633,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::fits_stable_limit",
       "line": 118,
       "cyclomatic": 1.0,
@@ -27642,7 +27642,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::forward_reserve_bytes",
       "line": 79,
       "cyclomatic": 1.0,
@@ -27651,7 +27651,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::from_memory_equation",
       "line": 19,
       "cyclomatic": 1.0,
@@ -27660,7 +27660,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::has_full_recovery_reserve",
       "line": 123,
       "cyclomatic": 1.0,
@@ -27669,7 +27669,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::memory_equation",
       "line": 24,
       "cyclomatic": 1.0,
@@ -27678,7 +27678,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::observed_transient_high_water_bytes",
       "line": 54,
       "cyclomatic": 1.0,
@@ -27687,7 +27687,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::operation_reclamation_required_bytes",
       "line": 94,
       "cyclomatic": 1.0,
@@ -27696,7 +27696,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::peak_projected_bytes",
       "line": 69,
       "cyclomatic": 1.0,
@@ -27705,7 +27705,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::recovery_projected_bytes",
       "line": 74,
       "cyclomatic": 1.0,
@@ -27714,7 +27714,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::recovery_reserve_shortfall_bytes",
       "line": 99,
       "cyclomatic": 1.0,
@@ -27723,7 +27723,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::routed_expert_page_reservation_bytes",
       "line": 44,
       "cyclomatic": 1.0,
@@ -27732,7 +27732,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::stable_projected_bytes",
       "line": 64,
       "cyclomatic": 1.0,
@@ -27741,7 +27741,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::transient_reserve_source",
       "line": 59,
       "cyclomatic": 1.0,
@@ -27750,7 +27750,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/adaptive_growth_projection.rs",
+      "file": "crates/memory-policy/src/budget/adaptive_growth_projection.rs",
       "function": "AdaptiveRamGrowthProjection::transient_workspace_reserve",
       "line": 29,
       "cyclomatic": 1.0,
@@ -27759,7 +27759,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/mlx_ram_budget_admission_workspace_tests.rs",
+      "file": "crates/memory-policy/src/budget/mlx_ram_budget_admission_workspace_tests.rs",
       "function": "production_failure_geometry",
       "line": 20,
       "cyclomatic": 1.0,
@@ -27768,7 +27768,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/mlx_ram_budget_ceiling_adjustment_tests.rs",
+      "file": "crates/memory-policy/src/budget/mlx_ram_budget_ceiling_adjustment_tests.rs",
       "function": "small_layer_geometry",
       "line": 13,
       "cyclomatic": 1.0,
@@ -27777,7 +27777,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/mlx_ram_budget_tests.rs",
+      "file": "crates/memory-policy/src/budget/mlx_ram_budget_tests.rs",
       "function": "fable_class_geometry",
       "line": 8,
       "cyclomatic": 1.0,
@@ -27786,7 +27786,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/mlx_ram_budget_tests.rs",
+      "file": "crates/memory-policy/src/budget/mlx_ram_budget_tests.rs",
       "function": "small_layer_geometry",
       "line": 27,
       "cyclomatic": 1.0,
@@ -27795,7 +27795,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/mlx_ram_budget_tests.rs",
+      "file": "crates/memory-policy/src/budget/mlx_ram_budget_tests.rs",
       "function": "unmeasured_prefill_activation_headroom_bytes",
       "line": 18,
       "cyclomatic": 1.0,
@@ -27804,7 +27804,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/prefill_stream_slot.rs",
+      "file": "crates/memory-policy/src/budget/prefill_stream_slot.rs",
       "function": "prefill_stream_slot_bytes_after_full_fit",
       "line": 21,
       "cyclomatic": 3.0,
@@ -27813,7 +27813,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::context_admission_workspace_snapshot",
       "line": 325,
       "cyclomatic": 1.0,
@@ -27822,7 +27822,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::context_window_reserve_bytes",
       "line": 220,
       "cyclomatic": 2.0,
@@ -27831,7 +27831,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::has_context_window_measurement",
       "line": 208,
       "cyclomatic": 1.0,
@@ -27840,7 +27840,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::mlx_active_memory_ceiling_bytes",
       "line": 198,
       "cyclomatic": 1.0,
@@ -27849,7 +27849,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::model_geometry",
       "line": 203,
       "cyclomatic": 1.0,
@@ -27858,7 +27858,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::new",
       "line": 129,
       "cyclomatic": 1.0,
@@ -27867,7 +27867,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::plan",
       "line": 366,
       "cyclomatic": 1.0,
@@ -27876,7 +27876,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::plan_holding_live_context_state",
       "line": 392,
       "cyclomatic": 6.0,
@@ -27885,7 +27885,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::prefill_complete_layer_stream_slot_bytes",
       "line": 122,
       "cyclomatic": 1.0,
@@ -27894,7 +27894,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::record_context_state_payload",
       "line": 250,
       "cyclomatic": 1.0,
@@ -27903,7 +27903,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::record_measurement",
       "line": 264,
       "cyclomatic": 4.0,
@@ -27912,7 +27912,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::retained_expert_budget_for_admitted_forward",
       "line": 461,
       "cyclomatic": 2.0,
@@ -27921,7 +27921,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::set_diagnostic_prefill_activation_floor_bytes",
       "line": 112,
       "cyclomatic": 1.0,
@@ -27930,7 +27930,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::set_prefill_complete_layer_stream_slot_bytes",
       "line": 107,
       "cyclomatic": 1.0,
@@ -27939,7 +27939,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::update_mlx_active_memory_ceiling_bytes",
       "line": 172,
       "cyclomatic": 3.0,
@@ -27948,7 +27948,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "MlxRamBudget::with_bootstrap_context_window_reserve_bytes",
       "line": 140,
       "cyclomatic": 2.0,
@@ -27957,7 +27957,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "context_token_bucket",
       "line": 480,
       "cyclomatic": 1.0,
@@ -27966,7 +27966,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "measured_non_expert_forward_growth_bytes",
       "line": 490,
       "cyclomatic": 1.0,
@@ -27975,7 +27975,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram.rs",
+      "file": "crates/memory-policy/src/budget/ram.rs",
       "function": "measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming",
       "line": 515,
       "cyclomatic": 2.0,
@@ -27984,7 +27984,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation.rs",
       "function": "MlxRamBudget::activation_headroom_bytes",
       "line": 77,
       "cyclomatic": 1.0,
@@ -27993,7 +27993,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation.rs",
       "function": "MlxRamBudget::adaptive_growth_unobserved_scope_transient_floor_bytes",
       "line": 45,
       "cyclomatic": 3.0,
@@ -28002,7 +28002,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation.rs",
       "function": "MlxRamBudget::learned_prefill_activation_headroom_bytes",
       "line": 155,
       "cyclomatic": 1.0,
@@ -28011,7 +28011,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation.rs",
       "function": "MlxRamBudget::phase_activation_headroom_bytes",
       "line": 92,
       "cyclomatic": 6.0,
@@ -28020,7 +28020,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation.rs",
       "function": "MlxRamBudget::prefill_activation_global_high_water_bytes",
       "line": 165,
       "cyclomatic": 1.0,
@@ -28029,7 +28029,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation_tests.rs",
       "function": "four_bit_resident_geometry",
       "line": 12,
       "cyclomatic": 1.0,
@@ -28038,7 +28038,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation_tests.rs",
       "function": "resident_prefill_context",
       "line": 31,
       "cyclomatic": 1.0,
@@ -28047,7 +28047,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_activation_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_activation_tests.rs",
       "function": "twenty_seven_gigabyte_budget",
       "line": 22,
       "cyclomatic": 1.0,
@@ -28056,7 +28056,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
       "function": "budget_with_geometry",
       "line": 23,
       "cyclomatic": 1.0,
@@ -28065,7 +28065,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
       "function": "budget_with_production_bootstrap_floor",
       "line": 49,
       "cyclomatic": 1.0,
@@ -28074,7 +28074,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
       "function": "geometry_with_sequence_state",
       "line": 13,
       "cyclomatic": 1.0,
@@ -28083,7 +28083,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
       "function": "measured_budget_with_fifty_megabyte_overhead",
       "line": 316,
       "cyclomatic": 1.0,
@@ -28092,7 +28092,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
       "function": "prefill_measurement_of_persistent_context",
       "line": 34,
       "cyclomatic": 1.0,
@@ -28101,7 +28101,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
+      "file": "crates/memory-policy/src/budget/ram_context_reserve_boundary_tests.rs",
       "function": "streaming_geometry",
       "line": 241,
       "cyclomatic": 1.0,
@@ -28110,7 +28110,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_geometry.rs",
+      "file": "crates/memory-policy/src/budget/ram_geometry.rs",
       "function": "MeasuredExpertLayerPayload::complete_payload_bytes",
       "line": 41,
       "cyclomatic": 1.0,
@@ -28119,7 +28119,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_geometry.rs",
+      "file": "crates/memory-policy/src/budget/ram_geometry.rs",
       "function": "MeasuredExpertLayerPayload::expert_capacity",
       "line": 46,
       "cyclomatic": 1.0,
@@ -28128,7 +28128,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_geometry.rs",
+      "file": "crates/memory-policy/src/budget/ram_geometry.rs",
       "function": "MeasuredExpertLayerPayload::new",
       "line": 33,
       "cyclomatic": 1.0,
@@ -28137,7 +28137,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_geometry.rs",
+      "file": "crates/memory-policy/src/budget/ram_geometry.rs",
       "function": "largest_routed_expert_page_bytes",
       "line": 103,
       "cyclomatic": 1.0,
@@ -28146,7 +28146,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/ram_geometry.rs",
+      "file": "crates/memory-policy/src/budget/ram_geometry.rs",
       "function": "mlx_ram_budget_model_geometry_from_measured_layer_facts",
       "line": 56,
       "cyclomatic": 5.0,
@@ -28155,7 +28155,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceObservation::forward_token_count",
       "line": 45,
       "cyclomatic": 1.0,
@@ -28164,7 +28164,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceObservation::high_water_bytes",
       "line": 40,
       "cyclomatic": 1.0,
@@ -28173,7 +28173,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceObservation::new",
       "line": 32,
       "cyclomatic": 1.0,
@@ -28182,7 +28182,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::analytic_floor",
       "line": 107,
       "cyclomatic": 1.0,
@@ -28191,7 +28191,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::exact_context",
       "line": 76,
       "cyclomatic": 1.0,
@@ -28200,7 +28200,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::forward_token_count",
       "line": 171,
       "cyclomatic": 1.0,
@@ -28209,7 +28209,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::global_maximum",
       "line": 133,
       "cyclomatic": 1.0,
@@ -28218,7 +28218,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::max_with_smaller_unscaled_observation",
       "line": 146,
       "cyclomatic": 4.0,
@@ -28227,7 +28227,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::reserve_bytes",
       "line": 160,
       "cyclomatic": 1.0,
@@ -28236,7 +28236,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::scaled_down_to",
       "line": 89,
       "cyclomatic": 2.0,
@@ -28245,7 +28245,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::source",
       "line": 165,
       "cyclomatic": 1.0,
@@ -28254,7 +28254,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "TransientWorkspaceReserve::without_learned_reserve",
       "line": 123,
       "cyclomatic": 1.0,
@@ -28263,7 +28263,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/budget/transient_workspace_reserve.rs",
+      "file": "crates/memory-policy/src/budget/transient_workspace_reserve.rs",
       "function": "scale_transient_to_token_count",
       "line": 178,
       "cyclomatic": 4.0,
@@ -28272,7 +28272,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/ceiling.rs",
+      "file": "crates/memory-policy/src/ceiling.rs",
       "function": "MemoryCeilingChangeRequirements::decide",
       "line": 33,
       "cyclomatic": 7.0,
@@ -28281,7 +28281,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "SafetensorsDtype::as_str",
       "line": 135,
       "cyclomatic": 15.0,
@@ -28290,7 +28290,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "SafetensorsDtype::byte_width",
       "line": 124,
       "cyclomatic": 5.0,
@@ -28299,7 +28299,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "SafetensorsDtype::fmt",
       "line": 116,
       "cyclomatic": 1.0,
@@ -28308,7 +28308,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "SafetensorsHeader::tensor_entry_for_name",
       "line": 168,
       "cyclomatic": 1.0,
@@ -28317,7 +28317,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "expert_safetensors_header_error",
       "line": 281,
       "cyclomatic": 5.0,
@@ -28326,7 +28326,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "parse_dtype",
       "line": 314,
       "cyclomatic": 16.0,
@@ -28335,7 +28335,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "parse_safetensors_header",
       "line": 180,
       "cyclomatic": 15.0,
@@ -28344,7 +28344,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "safetensors_header_length_as_usize",
       "line": 307,
       "cyclomatic": 3.0,
@@ -28353,7 +28353,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "validate_data_offsets",
       "line": 364,
       "cyclomatic": 8.0,
@@ -28362,7 +28362,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header.rs",
       "function": "validate_shape",
       "line": 334,
       "cyclomatic": 6.0,
@@ -28371,7 +28371,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header_tests.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header_tests.rs",
       "function": "ScratchSafetensorsFile::drop",
       "line": 16,
       "cyclomatic": 1.0,
@@ -28380,7 +28380,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header_tests.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header_tests.rs",
       "function": "scratch_directory",
       "line": 21,
       "cyclomatic": 1.0,
@@ -28389,7 +28389,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header_tests.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header_tests.rs",
       "function": "write_raw_bytes",
       "line": 45,
       "cyclomatic": 1.0,
@@ -28398,7 +28398,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/expert_paging/safetensors_header_tests.rs",
+      "file": "crates/memory-policy/src/expert_paging/safetensors_header_tests.rs",
       "function": "write_safetensors_file",
       "line": 30,
       "cyclomatic": 1.0,
@@ -28407,7 +28407,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission.rs",
+      "file": "crates/memory-policy/src/forward_admission.rs",
       "function": "PagedForwardAdmissionDecision::for_paged_forward",
       "line": 142,
       "cyclomatic": 7.0,
@@ -28416,7 +28416,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission.rs",
+      "file": "crates/memory-policy/src/forward_admission.rs",
       "function": "PagedForwardAdmissionDecision::is_admitted",
       "line": 177,
       "cyclomatic": 1.0,
@@ -28425,7 +28425,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission.rs",
+      "file": "crates/memory-policy/src/forward_admission.rs",
       "function": "PagedForwardAdmissionDecision::paged_log_label",
       "line": 190,
       "cyclomatic": 3.0,
@@ -28434,7 +28434,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission.rs",
+      "file": "crates/memory-policy/src/forward_admission.rs",
       "function": "ResidentForwardAdmissionDecision::for_resident_forward",
       "line": 63,
       "cyclomatic": 4.0,
@@ -28443,7 +28443,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission.rs",
+      "file": "crates/memory-policy/src/forward_admission.rs",
       "function": "ResidentForwardAdmissionDecision::is_admitted",
       "line": 96,
       "cyclomatic": 1.0,
@@ -28452,7 +28452,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission.rs",
+      "file": "crates/memory-policy/src/forward_admission.rs",
       "function": "ResidentForwardAdmissionDecision::rejection",
       "line": 105,
       "cyclomatic": 3.0,
@@ -28461,7 +28461,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission.rs",
+      "file": "crates/memory-policy/src/forward_admission.rs",
       "function": "ResidentForwardAdmissionDecision::resident_log_label",
       "line": 116,
       "cyclomatic": 3.0,
@@ -28470,7 +28470,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_admission_tests.rs",
+      "file": "crates/memory-policy/src/forward_admission_tests.rs",
       "function": "resident_prefill_projection",
       "line": 10,
       "cyclomatic": 1.0,
@@ -28479,7 +28479,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/geometry_floor.rs",
+      "file": "crates/memory-policy/src/geometry_floor.rs",
       "function": "geometry_safe_minimum_mlx_memory_ceiling_bytes",
       "line": 15,
       "cyclomatic": 1.0,
@@ -28488,7 +28488,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::active_memory_ceiling_bytes",
       "line": 129,
       "cyclomatic": 1.0,
@@ -28497,7 +28497,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::allowed_active_memory_bytes",
       "line": 135,
       "cyclomatic": 1.0,
@@ -28506,7 +28506,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::current_active_memory_bytes",
       "line": 89,
       "cyclomatic": 1.0,
@@ -28515,7 +28515,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::expert_retention_reclamation_plan",
       "line": 203,
       "cyclomatic": 1.0,
@@ -28524,7 +28524,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::explicit_temporary_workspace_bytes",
       "line": 104,
       "cyclomatic": 1.0,
@@ -28533,7 +28533,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::fits_request_memory_limit",
       "line": 175,
       "cyclomatic": 1.0,
@@ -28542,7 +28542,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::fits_stable_and_peak_limits",
       "line": 169,
       "cyclomatic": 2.0,
@@ -28551,7 +28551,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::fits_stable_limit",
       "line": 164,
       "cyclomatic": 1.0,
@@ -28560,7 +28560,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::for_request_admission",
       "line": 71,
       "cyclomatic": 1.0,
@@ -28569,7 +28569,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::forward_reserve_bytes",
       "line": 185,
       "cyclomatic": 1.0,
@@ -28578,7 +28578,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::has_full_recovery_reserve",
       "line": 180,
       "cyclomatic": 1.0,
@@ -28587,7 +28587,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::new",
       "line": 28,
       "cyclomatic": 6.0,
@@ -28596,7 +28596,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::operation_reclamation_required_bytes",
       "line": 191,
       "cyclomatic": 2.0,
@@ -28605,7 +28605,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::peak_projected_bytes",
       "line": 119,
       "cyclomatic": 1.0,
@@ -28614,7 +28614,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::peak_shortfall_bytes",
       "line": 146,
       "cyclomatic": 1.0,
@@ -28623,7 +28623,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::persistent_growth_bytes",
       "line": 94,
       "cyclomatic": 1.0,
@@ -28632,7 +28632,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::recovery_projected_bytes",
       "line": 124,
       "cyclomatic": 1.0,
@@ -28641,7 +28641,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::recovery_reserve_shortfall_bytes",
       "line": 158,
       "cyclomatic": 1.0,
@@ -28650,7 +28650,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::request_memory_shortfall_bytes",
       "line": 152,
       "cyclomatic": 1.0,
@@ -28659,7 +28659,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::routed_expert_page_reservation_bytes",
       "line": 99,
       "cyclomatic": 1.0,
@@ -28668,7 +28668,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::stable_projected_bytes",
       "line": 114,
       "cyclomatic": 1.0,
@@ -28677,7 +28677,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::stable_shortfall_bytes",
       "line": 140,
       "cyclomatic": 1.0,
@@ -28686,7 +28686,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/memory_equation.rs",
+      "file": "crates/memory-policy/src/memory_equation.rs",
       "function": "MemoryEquation::transient_workspace_reserve",
       "line": 109,
       "cyclomatic": 1.0,
@@ -28695,7 +28695,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_admission.rs",
+      "file": "crates/memory-policy/src/neural_engine_admission.rs",
       "function": "NeuralEnginePrefillMemoryRequirements::decide",
       "line": 33,
       "cyclomatic": 2.0,
@@ -28704,7 +28704,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_admission.rs",
+      "file": "crates/memory-policy/src/neural_engine_admission.rs",
       "function": "chunk_fits_beside_programs",
       "line": 50,
       "cyclomatic": 1.0,
@@ -28713,7 +28713,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_admission_tests.rs",
+      "file": "crates/memory-policy/src/neural_engine_admission_tests.rs",
       "function": "requirements",
       "line": 8,
       "cyclomatic": 1.0,
@@ -28722,7 +28722,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_program_memory_watch.rs",
+      "file": "crates/memory-policy/src/neural_engine_program_memory_watch.rs",
       "function": "ProgramMemoryWatch::new",
       "line": 27,
       "cyclomatic": 1.0,
@@ -28731,7 +28731,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_program_memory_watch.rs",
+      "file": "crates/memory-policy/src/neural_engine_program_memory_watch.rs",
       "function": "ProgramMemoryWatch::observe",
       "line": 46,
       "cyclomatic": 3.0,
@@ -28740,7 +28740,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_program_memory_watch.rs",
+      "file": "crates/memory-policy/src/neural_engine_program_memory_watch.rs",
       "function": "ProgramMemoryWatch::smallest_meaningful_rise_bytes",
       "line": 35,
       "cyclomatic": 2.0,
@@ -28749,7 +28749,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_program_memory_watch.rs",
+      "file": "crates/memory-policy/src/neural_engine_program_memory_watch.rs",
       "function": "ProgramMemoryWatch::wired_bytes",
       "line": 62,
       "cyclomatic": 2.0,
@@ -28758,7 +28758,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/neural_engine_program_memory_watch_tests.rs",
+      "file": "crates/memory-policy/src/neural_engine_program_memory_watch_tests.rs",
       "function": "at_milliseconds",
       "line": 8,
       "cyclomatic": 1.0,
@@ -28767,7 +28767,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/engine_placement.rs",
+      "file": "crates/memory-policy/src/placement/engine_placement.rs",
       "function": "EnginePlacement::demoted_total_context_token_count",
       "line": 93,
       "cyclomatic": 3.0,
@@ -28776,7 +28776,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/engine_placement.rs",
+      "file": "crates/memory-policy/src/placement/engine_placement.rs",
       "function": "EnginePlacement::demotion_cause",
       "line": 83,
       "cyclomatic": 3.0,
@@ -28785,7 +28785,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/engine_placement.rs",
+      "file": "crates/memory-policy/src/placement/engine_placement.rs",
       "function": "EnginePlacement::from_startup_complete_residency_decision",
       "line": 53,
       "cyclomatic": 4.0,
@@ -28794,7 +28794,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/engine_placement.rs",
+      "file": "crates/memory-policy/src/placement/engine_placement.rs",
       "function": "EnginePlacement::is_demoted_for_request",
       "line": 77,
       "cyclomatic": 1.0,
@@ -28803,7 +28803,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/engine_placement.rs",
+      "file": "crates/memory-policy/src/placement/engine_placement.rs",
       "function": "EnginePlacement::log_label",
       "line": 105,
       "cyclomatic": 5.0,
@@ -28812,7 +28812,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/engine_placement.rs",
+      "file": "crates/memory-policy/src/placement/engine_placement.rs",
       "function": "EnginePlacement::runs_resident_engine",
       "line": 68,
       "cyclomatic": 1.0,
@@ -28821,7 +28821,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/engine_placement_tests.rs",
+      "file": "crates/memory-policy/src/placement/engine_placement_tests.rs",
       "function": "startup_complete_residency_decision_for_ceiling",
       "line": 7,
       "cyclomatic": 1.0,
@@ -28830,7 +28830,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/placement/resident_promotion.rs",
+      "file": "crates/memory-policy/src/placement/resident_promotion.rs",
       "function": "should_promote_demoted_streaming_engine_to_resident",
       "line": 81,
       "cyclomatic": 6.0,
@@ -28839,7 +28839,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "ExpertReclamationPlan::can_satisfy_every_memory_boundary",
       "line": 234,
       "cyclomatic": 1.0,
@@ -28848,7 +28848,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "ExpertReclamationPlan::for_projected_memory",
       "line": 187,
       "cyclomatic": 1.0,
@@ -28857,7 +28857,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "ExpertReclamationPlan::reclamation_target_bytes",
       "line": 224,
       "cyclomatic": 1.0,
@@ -28866,7 +28866,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "ExpertReclamationPlan::required_reclamation_bytes",
       "line": 218,
       "cyclomatic": 1.0,
@@ -28875,7 +28875,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "ExpertReclamationPlan::unresolved_shortfall_bytes",
       "line": 229,
       "cyclomatic": 1.0,
@@ -28884,7 +28884,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "complete_residency_exceeds_ceiling_with_activation_headroom",
       "line": 60,
       "cyclomatic": 3.0,
@@ -28893,7 +28893,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "expert_reclamation_bytes_to_fit_fixed_forward",
       "line": 88,
       "cyclomatic": 1.0,
@@ -28902,7 +28902,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "fixed_forward_workspace_after_allocation_failure",
       "line": 108,
       "cyclomatic": 2.0,
@@ -28911,7 +28911,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "maximum_three",
       "line": 243,
       "cyclomatic": 3.0,
@@ -28920,7 +28920,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "minimum",
       "line": 239,
       "cyclomatic": 2.0,
@@ -28929,7 +28929,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "projected_active_memory_after_complete_expert_replacement",
       "line": 26,
       "cyclomatic": 2.0,
@@ -28938,7 +28938,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "required_complete_residency_activation_headroom_bytes",
       "line": 47,
       "cyclomatic": 2.0,
@@ -28947,7 +28947,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "should_retry_fixed_forward_after_expert_reclamation",
       "line": 132,
       "cyclomatic": 3.0,
@@ -28956,7 +28956,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation.rs",
+      "file": "crates/memory-policy/src/reclamation.rs",
       "function": "whole_table_reclamation_target_bytes",
       "line": 155,
       "cyclomatic": 5.0,
@@ -28965,7 +28965,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/reclamation_boundary_tests.rs",
+      "file": "crates/memory-policy/src/reclamation_boundary_tests.rs",
       "function": "paged_forward_projection",
       "line": 19,
       "cyclomatic": 1.0,
@@ -28974,7 +28974,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/recovery.rs",
+      "file": "crates/memory-policy/src/recovery.rs",
       "function": "ForwardRecoveryPolicy::fixed_workspace_bytes",
       "line": 22,
       "cyclomatic": 1.0,
@@ -28983,7 +28983,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/recovery.rs",
+      "file": "crates/memory-policy/src/recovery.rs",
       "function": "ForwardRecoveryPolicy::required_reclamation_bytes",
       "line": 37,
       "cyclomatic": 1.0,
@@ -28992,7 +28992,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/recovery.rs",
+      "file": "crates/memory-policy/src/recovery.rs",
       "function": "ForwardRecoveryPolicy::retry_is_authorized",
       "line": 52,
       "cyclomatic": 2.0,
@@ -29001,7 +29001,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/recovery.rs",
+      "file": "crates/memory-policy/src/recovery.rs",
       "function": "ForwardRecoveryRequirements::decide",
       "line": 109,
       "cyclomatic": 2.0,
@@ -29010,7 +29010,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/complete_headroom.rs",
+      "file": "crates/memory-policy/src/residency/complete_headroom.rs",
       "function": "CompleteResidencyHeadroomBoundary::from_model_geometry",
       "line": 22,
       "cyclomatic": 1.0,
@@ -29019,7 +29019,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/complete_headroom.rs",
+      "file": "crates/memory-policy/src/residency/complete_headroom.rs",
       "function": "CompleteResidencyHeadroomBoundary::paging_ceiling_bytes",
       "line": 41,
       "cyclomatic": 3.0,
@@ -29028,7 +29028,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/complete_residency_headroom_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/complete_residency_headroom_boundary_tests.rs",
       "function": "sparse_geometry",
       "line": 8,
       "cyclomatic": 1.0,
@@ -29037,7 +29037,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/decode_seating.rs",
+      "file": "crates/memory-policy/src/residency/decode_seating.rs",
       "function": "complete_layer_indexes_required_before_decode",
       "line": 15,
       "cyclomatic": 1.0,
@@ -29046,7 +29046,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/dense_layer_plan.rs",
+      "file": "crates/memory-policy/src/residency/dense_layer_plan.rs",
       "function": "DenseLayerResidencyRequirements::layer_byte_totals",
       "line": 100,
       "cyclomatic": 2.0,
@@ -29055,7 +29055,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/dense_layer_plan.rs",
+      "file": "crates/memory-policy/src/residency/dense_layer_plan.rs",
       "function": "DenseLayerResidencyRequirements::leading_layers_within",
       "line": 111,
       "cyclomatic": 2.0,
@@ -29064,7 +29064,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/dense_layer_plan.rs",
+      "file": "crates/memory-policy/src/residency/dense_layer_plan.rs",
       "function": "DenseLayerResidencyRequirements::plan",
       "line": 60,
       "cyclomatic": 4.0,
@@ -29073,7 +29073,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/dense_layer_plan_tests.rs",
+      "file": "crates/memory-policy/src/residency/dense_layer_plan_tests.rs",
       "function": "requirements_under",
       "line": 10,
       "cyclomatic": 1.0,
@@ -29082,7 +29082,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/expert_residency_policy_tests.rs",
+      "file": "crates/memory-policy/src/residency/expert_residency_policy_tests.rs",
       "function": "complete_layer_residency",
       "line": 158,
       "cyclomatic": 1.0,
@@ -29091,7 +29091,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/expert_residency_policy_tests.rs",
+      "file": "crates/memory-policy/src/residency/expert_residency_policy_tests.rs",
       "function": "uniform_geometry",
       "line": 15,
       "cyclomatic": 1.0,
@@ -29100,7 +29100,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay.rs",
       "function": "account_planned_layer_charges",
       "line": 177,
       "cyclomatic": 18.0,
@@ -29109,7 +29109,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay.rs",
       "function": "foundation_and_overlay_plan",
       "line": 38,
       "cyclomatic": 6.0,
@@ -29118,7 +29118,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay.rs",
       "function": "select_complete_layers_within_ceiling",
       "line": 103,
       "cyclomatic": 4.0,
@@ -29127,7 +29127,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay.rs",
       "function": "select_preserved_partial_layers",
       "line": 143,
       "cyclomatic": 3.0,
@@ -29136,7 +29136,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay_accounting_tests.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay_accounting_tests.rs",
       "function": "complete_layer_residency",
       "line": 23,
       "cyclomatic": 1.0,
@@ -29145,7 +29145,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay_accounting_tests.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay_accounting_tests.rs",
       "function": "partial_residency",
       "line": 33,
       "cyclomatic": 1.0,
@@ -29154,7 +29154,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay_accounting_tests.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay_accounting_tests.rs",
       "function": "uniform_geometry",
       "line": 11,
       "cyclomatic": 1.0,
@@ -29163,7 +29163,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay_tests.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay_tests.rs",
       "function": "complete_layer_residency",
       "line": 39,
       "cyclomatic": 1.0,
@@ -29172,7 +29172,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay_tests.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay_tests.rs",
       "function": "elastic_layer_residency",
       "line": 29,
       "cyclomatic": 1.0,
@@ -29181,7 +29181,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay_tests.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay_tests.rs",
       "function": "layer_facts",
       "line": 49,
       "cyclomatic": 1.0,
@@ -29190,7 +29190,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/foundation_overlay_tests.rs",
+      "file": "crates/memory-policy/src/residency/foundation_overlay_tests.rs",
       "function": "layered_geometry",
       "line": 13,
       "cyclomatic": 1.0,
@@ -29199,7 +29199,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/generation_full_fit_tests.rs",
+      "file": "crates/memory-policy/src/residency/generation_full_fit_tests.rs",
       "function": "mixed_precision_generation_fixture",
       "line": 91,
       "cyclomatic": 1.0,
@@ -29208,7 +29208,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/generation_full_fit_tests.rs",
+      "file": "crates/memory-policy/src/residency/generation_full_fit_tests.rs",
       "function": "partial_layer_fixture",
       "line": 9,
       "cyclomatic": 1.0,
@@ -29217,7 +29217,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/observed_mode.rs",
+      "file": "crates/memory-policy/src/residency/observed_mode.rs",
       "function": "observed_expert_memory_mode",
       "line": 25,
       "cyclomatic": 4.0,
@@ -29226,7 +29226,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/ownership_mode.rs",
+      "file": "crates/memory-policy/src/residency/ownership_mode.rs",
       "function": "classify_expert_memory_mode",
       "line": 11,
       "cyclomatic": 4.0,
@@ -29235,7 +29235,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "decode_warm_floor_eviction_indexes",
       "line": 182,
       "cyclomatic": 4.0,
@@ -29244,7 +29244,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "hot_expert_warm_slot_count",
       "line": 167,
       "cyclomatic": 1.0,
@@ -29253,7 +29253,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "minimum_decode_warm_slot_count",
       "line": 244,
       "cyclomatic": 2.0,
@@ -29262,7 +29262,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "should_commit_mandatory_complete_layer",
       "line": 20,
       "cyclomatic": 2.0,
@@ -29271,7 +29271,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "should_commit_mandatory_routed_page",
       "line": 43,
       "cyclomatic": 5.0,
@@ -29280,7 +29280,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "should_commit_multi_token_union_as_complete_layer",
       "line": 75,
       "cyclomatic": 5.0,
@@ -29289,7 +29289,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "should_complete_partial_layer_on_prefill_read",
       "line": 136,
       "cyclomatic": 5.0,
@@ -29298,7 +29298,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/page_commit.rs",
+      "file": "crates/memory-policy/src/residency/page_commit.rs",
       "function": "should_seed_partial_layer_on_prefill_read",
       "line": 101,
       "cyclomatic": 7.0,
@@ -29307,7 +29307,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/paged_prefill_seat_oversubscription_tests.rs",
+      "file": "crates/memory-policy/src/residency/paged_prefill_seat_oversubscription_tests.rs",
       "function": "incident_geometry",
       "line": 77,
       "cyclomatic": 1.0,
@@ -29316,7 +29316,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/phase_aware_expert_residency_tests.rs",
+      "file": "crates/memory-policy/src/residency/phase_aware_expert_residency_tests.rs",
       "function": "complete_residency",
       "line": 35,
       "cyclomatic": 1.0,
@@ -29325,7 +29325,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/phase_aware_expert_residency_tests.rs",
+      "file": "crates/memory-policy/src/residency/phase_aware_expert_residency_tests.rs",
       "function": "partial_residency",
       "line": 21,
       "cyclomatic": 1.0,
@@ -29334,7 +29334,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/phase_aware_expert_residency_tests.rs",
+      "file": "crates/memory-policy/src/residency/phase_aware_expert_residency_tests.rs",
       "function": "uniform_geometry",
       "line": 9,
       "cyclomatic": 1.0,
@@ -29343,7 +29343,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "compare_partial_coverage",
       "line": 311,
       "cyclomatic": 1.0,
@@ -29352,7 +29352,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "compare_preservation_priority",
       "line": 323,
       "cyclomatic": 1.0,
@@ -29361,7 +29361,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "complete_model_plan",
       "line": 77,
       "cyclomatic": 5.0,
@@ -29370,7 +29370,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "generation_completion_promotions",
       "line": 196,
       "cyclomatic": 10.0,
@@ -29379,7 +29379,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "low_budget_partial_plan",
       "line": 245,
       "cyclomatic": 4.0,
@@ -29388,7 +29388,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "plan_expert_residency",
       "line": 12,
       "cyclomatic": 9.0,
@@ -29397,7 +29397,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "preserve_existing_expert_pages_for_generation",
       "line": 113,
       "cyclomatic": 5.0,
@@ -29406,7 +29406,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner.rs",
+      "file": "crates/memory-policy/src/residency/planner.rs",
       "function": "release_order",
       "line": 334,
       "cyclomatic": 1.0,
@@ -29415,7 +29415,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/planner_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/planner_boundary_tests.rs",
       "function": "geometry",
       "line": 17,
       "cyclomatic": 1.0,
@@ -29424,7 +29424,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/promotion_on_raise.rs",
+      "file": "crates/memory-policy/src/residency/promotion_on_raise.rs",
       "function": "StreamingStartupResidencyFacts::complete_residency_admits_request_context",
       "line": 95,
       "cyclomatic": 1.0,
@@ -29433,7 +29433,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/promotion_on_raise.rs",
+      "file": "crates/memory-policy/src/residency/promotion_on_raise.rs",
       "function": "StreamingStartupResidencyFacts::for_dense_text_weights",
       "line": 37,
       "cyclomatic": 1.0,
@@ -29442,7 +29442,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/promotion_on_raise.rs",
+      "file": "crates/memory-policy/src/residency/promotion_on_raise.rs",
       "function": "StreamingStartupResidencyFacts::raised_ceiling_selects_complete_residency",
       "line": 76,
       "cyclomatic": 1.0,
@@ -29451,7 +29451,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/promotion_on_raise.rs",
+      "file": "crates/memory-policy/src/residency/promotion_on_raise.rs",
       "function": "StreamingStartupResidencyFacts::startup_complete_residency_decision",
       "line": 54,
       "cyclomatic": 1.0,
@@ -29460,7 +29460,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/release.rs",
+      "file": "crates/memory-policy/src/residency/release.rs",
       "function": "should_enact_planned_expert_release",
       "line": 13,
       "cyclomatic": 4.0,
@@ -29469,7 +29469,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "RequestExpertResidency::layer_role",
       "line": 53,
       "cyclomatic": 1.0,
@@ -29478,7 +29478,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "RequestExpertResidency::open_prefill",
       "line": 41,
       "cyclomatic": 3.0,
@@ -29487,7 +29487,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "RequestExpertResidency::pinned_complete_layer_indexes",
       "line": 58,
       "cyclomatic": 1.0,
@@ -29496,7 +29496,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "RequestExpertResidency::prefill_funding_state",
       "line": 193,
       "cyclomatic": 10.0,
@@ -29505,7 +29505,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "RequestExpertResidency::shrink_after_capacity_failure",
       "line": 75,
       "cyclomatic": 5.0,
@@ -29514,7 +29514,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "RequestExpertResidency::stabilize_prefill_plan",
       "line": 111,
       "cyclomatic": 3.0,
@@ -29523,7 +29523,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "currently_complete_layer_flags",
       "line": 254,
       "cyclomatic": 4.0,
@@ -29532,7 +29532,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "publish_request_stable_residency_plan",
       "line": 393,
       "cyclomatic": 5.0,
@@ -29541,7 +29541,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "retained_complete_layer_ceiling_after_prefill_budget_refresh",
       "line": 356,
       "cyclomatic": 2.0,
@@ -29550,7 +29550,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "retained_resident_ceiling_after_budget_refresh",
       "line": 377,
       "cyclomatic": 2.0,
@@ -29559,7 +29559,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "seated_complete_layer_count",
       "line": 338,
       "cyclomatic": 1.0,
@@ -29568,7 +29568,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan.rs",
+      "file": "crates/memory-policy/src/residency/request_plan.rs",
       "function": "stabilized_layer_target",
       "line": 289,
       "cyclomatic": 7.0,
@@ -29577,7 +29577,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/request_plan_boundary_tests.rs",
       "function": "candidate_plan",
       "line": 31,
       "cyclomatic": 1.0,
@@ -29586,7 +29586,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/request_plan_boundary_tests.rs",
       "function": "four_layer_candidate",
       "line": 482,
       "cyclomatic": 1.0,
@@ -29595,7 +29595,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/request_plan_boundary_tests.rs",
       "function": "streamed_target_count",
       "line": 240,
       "cyclomatic": 1.0,
@@ -29604,7 +29604,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/request_plan_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/request_plan_boundary_tests.rs",
       "function": "uniform_geometry",
       "line": 19,
       "cyclomatic": 1.0,
@@ -29613,7 +29613,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation.rs",
+      "file": "crates/memory-policy/src/residency/validation.rs",
       "function": "checked_sum",
       "line": 144,
       "cyclomatic": 1.0,
@@ -29622,7 +29622,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation.rs",
+      "file": "crates/memory-policy/src/residency/validation.rs",
       "function": "routed_floor_payload_bytes",
       "line": 132,
       "cyclomatic": 2.0,
@@ -29631,7 +29631,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation.rs",
+      "file": "crates/memory-policy/src/residency/validation.rs",
       "function": "validate_current_residency",
       "line": 80,
       "cyclomatic": 10.0,
@@ -29640,7 +29640,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation.rs",
+      "file": "crates/memory-policy/src/residency/validation.rs",
       "function": "validate_geometry",
       "line": 46,
       "cyclomatic": 9.0,
@@ -29649,7 +29649,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation.rs",
+      "file": "crates/memory-policy/src/residency/validation.rs",
       "function": "validate_inputs",
       "line": 8,
       "cyclomatic": 10.0,
@@ -29658,7 +29658,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/validation_boundary_tests.rs",
       "function": "complete_residency",
       "line": 23,
       "cyclomatic": 1.0,
@@ -29667,7 +29667,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/validation_boundary_tests.rs",
       "function": "plan_with",
       "line": 33,
       "cyclomatic": 1.0,
@@ -29676,7 +29676,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/residency/validation_boundary_tests.rs",
+      "file": "crates/memory-policy/src/residency/validation_boundary_tests.rs",
       "function": "valid_geometry",
       "line": 11,
       "cyclomatic": 1.0,
@@ -29685,7 +29685,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/safetensors/header.rs",
+      "file": "crates/memory-policy/src/safetensors/header.rs",
       "function": "SafetensorsTensorView::data_end_offset",
       "line": 87,
       "cyclomatic": 1.0,
@@ -29694,7 +29694,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/safetensors/header.rs",
+      "file": "crates/memory-policy/src/safetensors/header.rs",
       "function": "SafetensorsTensorView::data_start_offset",
       "line": 83,
       "cyclomatic": 1.0,
@@ -29703,7 +29703,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/safetensors/header.rs",
+      "file": "crates/memory-policy/src/safetensors/header.rs",
       "function": "UniqueSafetensorsHeaderEntries::deserialize",
       "line": 32,
       "cyclomatic": 1.0,
@@ -29712,7 +29712,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/safetensors/header.rs",
+      "file": "crates/memory-policy/src/safetensors/header.rs",
       "function": "UniqueSafetensorsHeaderEntriesVisitor::expecting",
       "line": 45,
       "cyclomatic": 1.0,
@@ -29721,7 +29721,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/safetensors/header.rs",
+      "file": "crates/memory-policy/src/safetensors/header.rs",
       "function": "UniqueSafetensorsHeaderEntriesVisitor::visit_map",
       "line": 49,
       "cyclomatic": 4.0,
@@ -29730,7 +29730,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/safetensors/header.rs",
+      "file": "crates/memory-policy/src/safetensors/header.rs",
       "function": "read_bounded_safetensors_json_header",
       "line": 109,
       "cyclomatic": 8.0,
@@ -29739,7 +29739,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/safetensors/header.rs",
+      "file": "crates/memory-policy/src/safetensors/header.rs",
       "function": "read_exact_at",
       "line": 161,
       "cyclomatic": 7.0,
@@ -29748,7 +29748,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/serving_ceiling.rs",
+      "file": "crates/memory-policy/src/serving_ceiling.rs",
       "function": "effective_mlx_memory_ceiling_after_wired_claim",
       "line": 64,
       "cyclomatic": 4.0,
@@ -29757,7 +29757,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/serving_ceiling.rs",
+      "file": "crates/memory-policy/src/serving_ceiling.rs",
       "function": "effective_mlx_memory_ceiling_bytes",
       "line": 29,
       "cyclomatic": 3.0,
@@ -29766,7 +29766,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/serving_ceiling.rs",
+      "file": "crates/memory-policy/src/serving_ceiling.rs",
       "function": "floor_raise_limit_bytes",
       "line": 118,
       "cyclomatic": 3.0,
@@ -29775,7 +29775,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/serving_ceiling.rs",
+      "file": "crates/memory-policy/src/serving_ceiling.rs",
       "function": "floor_raised_ceiling_bytes",
       "line": 146,
       "cyclomatic": 3.0,
@@ -29784,7 +29784,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/serving_ceiling.rs",
+      "file": "crates/memory-policy/src/serving_ceiling.rs",
       "function": "machine_ceiling_from_physical_ram_bytes",
       "line": 21,
       "cyclomatic": 1.0,
@@ -29793,7 +29793,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/serving_ceiling.rs",
+      "file": "crates/memory-policy/src/serving_ceiling.rs",
       "function": "plannable_wired_residency_bytes",
       "line": 102,
       "cyclomatic": 1.0,
@@ -29802,7 +29802,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValue::deserialize",
       "line": 14,
       "cyclomatic": 1.0,
@@ -29811,7 +29811,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::expecting",
       "line": 27,
       "cyclomatic": 1.0,
@@ -29820,7 +29820,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_bool",
       "line": 31,
       "cyclomatic": 1.0,
@@ -29829,7 +29829,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_f64",
       "line": 47,
       "cyclomatic": 2.0,
@@ -29838,7 +29838,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_i64",
       "line": 35,
       "cyclomatic": 1.0,
@@ -29847,7 +29847,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_map",
       "line": 89,
       "cyclomatic": 4.0,
@@ -29856,7 +29856,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_none",
       "line": 66,
       "cyclomatic": 1.0,
@@ -29865,7 +29865,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_seq",
       "line": 74,
       "cyclomatic": 3.0,
@@ -29874,7 +29874,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_str",
       "line": 56,
       "cyclomatic": 1.0,
@@ -29883,7 +29883,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_string",
       "line": 62,
       "cyclomatic": 1.0,
@@ -29892,7 +29892,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_u64",
       "line": 41,
       "cyclomatic": 1.0,
@@ -29901,7 +29901,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "DuplicateAwareJsonValueVisitor::visit_unit",
       "line": 70,
       "cyclomatic": 1.0,
@@ -29910,7 +29910,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json.rs",
+      "file": "crates/memory-policy/src/strict_json.rs",
       "function": "bounded_field_name",
       "line": 109,
       "cyclomatic": 1.0,
@@ -29919,7 +29919,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/strict_json_boundary_tests.rs",
+      "file": "crates/memory-policy/src/strict_json_boundary_tests.rs",
       "function": "parse",
       "line": 6,
       "cyclomatic": 1.0,
@@ -47469,7 +47469,7 @@
       "crate": "astronomical-engine-core"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxActiveMemoryBreakdown::reconcile",
       "line": 27,
       "cyclomatic": 1.0,
@@ -47478,7 +47478,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::mlx_buffer_cache_limit_bytes",
       "line": 161,
       "cyclomatic": 1.0,
@@ -47487,7 +47487,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::effective_mlx_memory_ceiling_bytes",
       "line": 155,
       "cyclomatic": 1.0,
@@ -47496,7 +47496,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::expert_memory_mode",
       "line": 171,
       "cyclomatic": 1.0,
@@ -47505,7 +47505,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::expert_residency_telemetry",
       "line": 182,
       "cyclomatic": 1.0,
@@ -47514,7 +47514,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::minimum_mlx_memory_ceiling_bytes",
       "line": 166,
       "cyclomatic": 1.0,
@@ -47523,7 +47523,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::mlx_memory_telemetry",
       "line": 176,
       "cyclomatic": 1.0,
@@ -47532,7 +47532,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::new",
       "line": 127,
       "cyclomatic": 1.0,
@@ -47541,7 +47541,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::with_expert_residency_telemetry",
       "line": 146,
       "cyclomatic": 1.0,
@@ -47550,7 +47550,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::expert_residency_telemetry",
       "line": 106,
       "cyclomatic": 1.0,
@@ -47559,7 +47559,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::new",
       "line": 69,
       "cyclomatic": 1.0,
@@ -47568,7 +47568,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::with_expert_residency_telemetry",
       "line": 97,
       "cyclomatic": 1.0,
@@ -47577,7 +47577,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
+      "file": "crates/memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::with_memory_ceiling_utilization",
       "line": 87,
       "cyclomatic": 1.0,
@@ -47586,7 +47586,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/utilization.rs",
+      "file": "crates/memory-policy/src/utilization.rs",
       "function": "MemoryCeilingUtilization::compose",
       "line": 77,
       "cyclomatic": 1.0,
@@ -47595,7 +47595,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/utilization.rs",
+      "file": "crates/memory-policy/src/utilization.rs",
       "function": "MemoryCeilingUtilization::is_fully_explained",
       "line": 150,
       "cyclomatic": 2.0,
@@ -47604,7 +47604,7 @@
       "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/utilization.rs",
+      "file": "crates/memory-policy/src/utilization.rs",
       "function": "MemoryCeilingUtilization::recoverable_share_of_unused_headroom",
       "line": 141,
       "cyclomatic": 2.0,
@@ -48279,7 +48279,7 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/astronomical-memory-policy/src/forward_pass_utilization.rs",
+      "file": "crates/memory-policy/src/forward_pass_utilization.rs",
       "function": "compose_modernbert_memory_ceiling_utilization",
       "line": 31,
       "cyclomatic": 1.0,

@@ -21,7 +21,7 @@ direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:ast
 # The speech request, failures and audio encoding every side shares.
 astronomical-speech-contract = { path = "../speech-contract" }
 # The MLX memory telemetry each speech step reports.
-astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../memory-policy" }
 # The rest serve only the direct-MLX engines.
 astronomical-config = { path = "../config", optional = true }
 astronomical-english-phonemes = { path = "../english-phonemes", optional = true }

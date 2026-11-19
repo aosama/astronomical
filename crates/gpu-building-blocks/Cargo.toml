@@ -23,7 +23,7 @@ test-support = ["dep:tempfile"]
 # adapters exist only with direct-mlx, so default builds never compile it.
 astronomical-decision-contract = { path = "../decision-contract", optional = true }
 # The MLX memory telemetry types the forward-pass report fills in.
-astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../memory-policy" }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-bridge = { workspace = true, optional = true }
 libc.workspace = true

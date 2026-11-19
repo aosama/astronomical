@@ -44,7 +44,7 @@ astronomical-speech-contract = { path = "../speech-contract" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 # Pure memory policy (budget composition, admission, residency planning,
 # serving ceiling), with no MLX dependency.
-astronomical-memory-policy = { path = "../astronomical-memory-policy" }
+astronomical-memory-policy = { path = "../memory-policy" }
 astronomical-lowercase-hex = { path = "../lowercase-hex" }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 image.workspace = true
