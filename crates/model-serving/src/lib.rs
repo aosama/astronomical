@@ -1,28 +1,29 @@
+//! The worker of Astronomical and the wiring between model families
+//! (issue #2340): `engine_backed_worker` turns worker commands into engine
+//! calls for every kind of model, and `model_family_runtime` chooses and
+//! loads the family a model folder belongs to.
+//!
+//! The families and everything they share live in crates below this one:
+//! the GPU building blocks, artifact validation, the engine core, the Qwen 3.5
+//! family, the decision and embedding models, image generation and speech.
+//! This crate re-exports each of their public surfaces whole, so the worker
+//! binaries and the acceptance tests reach every engine through one crate.
+
 // Unsafe is denied workspace-wide, and this crate has none of its own. The one
-// exception, the macOS accounting syscall behind performance attribution, moved
-// with that module into astronomical-gpu-building-blocks (issue #2340).
+// exception, the macOS accounting syscall behind performance attribution,
+// lives in astronomical-gpu-building-blocks.
 
 // Artifact validation is shared by every model family and lives in its own
 // crate (issue #2340); the alias keeps `crate::artifact_validation` paths.
 pub(crate) use astronomical_artifact_validation as artifact_validation;
 
-mod embedding_engine;
-
 mod engine_backed_worker;
 
 mod model_family_runtime;
 
-pub(crate) mod decision_engine;
-
 // Speech lives in its own crate (issue #2340); the aliases keep each
 // `crate::speech_*` path in this crate resolving.
 pub(crate) use astronomical_speech::speech_engine;
-
-#[cfg(feature = "direct-mlx")]
-pub(crate) mod decision_models;
-
-#[cfg(feature = "direct-mlx")]
-pub(crate) mod modernbert;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) use astronomical_speech::speech_models;
@@ -50,6 +51,11 @@ pub use astronomical_gpu_building_blocks::*;
 // modules included, is re-exported whole.
 pub use astronomical_qwen35::*;
 
+// The decision and embedding models (issue #2340): Laya, Kev, Clef,
+// ModernBERT and the decision and embedding seams the worker drives. Their
+// public surface, modules included, is re-exported whole.
+pub use astronomical_decision_models::*;
+
 #[doc(hidden)]
 pub use artifact_validation::validate_required_file_for_tests;
 
@@ -63,24 +69,6 @@ pub use artifact_validation::{
 
 pub use astronomical_ipc_protocol::ExpertMemoryMode;
 
-pub use decision_engine::{
-    DecisionEngine, DecisionEngineLoadResult, DecisionEngineOutput, DecisionTrainingStep,
-    DecisionUnavailableEngine,
-};
-
-#[cfg(feature = "direct-mlx")]
-pub use decision_models::clef::ClefDecisionEngine;
-#[cfg(feature = "direct-mlx")]
-pub use decision_models::kev::{KevDecisionEngine, KevRowLayout};
-#[cfg(feature = "direct-mlx")]
-pub use decision_models::laya::LayaDecisionEngine;
-#[cfg(feature = "direct-mlx")]
-pub use decision_models::recorded_training::RecordedTrainingEngine;
-
-pub use embedding_engine::{
-    EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, EmbeddingUnavailableEngine,
-};
-
 pub use engine_backed_worker::{
     EngineBackedWorker, ModelFactory, ModelFactoryRuntime, WorkerRuntimeError,
 };
@@ -92,9 +80,6 @@ pub use model_family_runtime::{
     ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceRequest,
     ModelFamilyRequestOutput,
 };
-
-#[cfg(feature = "direct-mlx")]
-pub use modernbert::{EncodedEmbeddingInput, ModernBertEmbeddingEngine, encode_embedding_input};
 
 #[cfg(feature = "direct-mlx")]
 pub use speech_models::kokoro::{KokoroSpeechEngine, KokoroSpeechTrace};

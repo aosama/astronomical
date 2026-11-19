@@ -179,6 +179,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-decision-models"
+version = "0.2.118"
+dependencies = [
+ "astronomical-decision-contract",
+ "astronomical-decision-training",
+ "astronomical-engine-core",
+ "astronomical-gpu-building-blocks",
+ "astronomical-ipc-protocol",
+ "astronomical-memory-policy",
+ "astronomical-qwen35",
+ "astronomical-runtime-integration",
+ "mlx-bridge",
+ "safetensors",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "tokenizers",
+]
+
+[[package]]
 name = "astronomical-decision-training"
 version = "0.2.118"
 dependencies = [
@@ -393,7 +414,7 @@ dependencies = [
  "astronomical-artifact-validation",
  "astronomical-config",
  "astronomical-decision-contract",
- "astronomical-decision-training",
+ "astronomical-decision-models",
  "astronomical-engine-core",
  "astronomical-gpu-building-blocks",
  "astronomical-image-generation",
@@ -407,13 +428,9 @@ dependencies = [
  "astronomical-speech-contract",
  "astronomical-test-harness",
  "image",
- "mlx-bridge",
- "safetensors",
  "serde_json",
- "serial_test",
  "tempfile",
  "thiserror",
- "tokenizers",
  "tokio",
  "tracing",
 ]
