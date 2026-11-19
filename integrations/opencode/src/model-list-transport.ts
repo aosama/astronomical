@@ -1,7 +1,7 @@
 // One GET of a channel's /v1/models, and nothing else: the transport knows
 // HTTP status, timeouts and JSON, not what a chat model is.
 
-import { describeError } from "./error-message.js";
+import { describeError } from "./error-message.ts";
 
 export type ModelListPayloadResult =
   | { readonly kind: "success"; readonly payload: unknown }

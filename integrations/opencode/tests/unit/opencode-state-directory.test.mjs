@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { resolveOpenCodeStateDirectory } from "../../dist/opencode-state-directory.js";
+import { resolveOpenCodeStateDirectory } from "../../src/opencode-state-directory.ts";
 
 describe("resolveOpenCodeStateDirectory", () => {
   it("should_use_XDG_STATE_HOME_when_it_is_set", () => {

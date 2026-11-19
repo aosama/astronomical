@@ -3,24 +3,26 @@
     "target": "ES2022",
     "module": "Node16",
     "moduleResolution": "node16",
-    "lib": ["ES2022"],
-    "declaration": true,
-    "declarationMap": true,
+    "lib": [
+      "ES2022"
+    ],
     "strict": true,
-    "noEmitOnError": true,
-    "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": false,
+    "noEmit": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -1,4 +1,4 @@
-// Where OpenCode keeps per-user state. The plugin's log and toggle file live
+// Where OpenCode keeps per-user state. The plugin's log lives
 // beside OpenCode's own files there, so removing OpenCode's state removes the
 // plugin's too.
 

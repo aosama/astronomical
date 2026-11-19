@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ProviderRefreshController } from "../../dist/provider-refresh-controller.js";
+import { ProviderRefreshController } from "../../src/provider-refresh-controller.ts";
 
 function readyState(modelIds) {
   return {

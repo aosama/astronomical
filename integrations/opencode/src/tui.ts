@@ -1,6 +1,8 @@
-// The terminal part of the plugin: adds /astronomical-status and
-// /astronomical-toggle to OpenCode's terminal. Each command lives in its own
-// module; this file only registers them.
+// The terminal part of the plugin: adds /astronomical-status to OpenCode's
+// terminal. The command lives in its own module; this file only registers it.
+//
+// There is no on/off command: OpenCode switches any plugin off with
+// "-astronomical" in the plugins list, which also stops the server part.
 
 import { Plugin } from "@opencode/plugin/tui";
 import type {
@@ -11,38 +13,26 @@ import {
   createAstronomicalAuditLogger,
   recordAuditEvent,
   type AstronomicalAuditLogger,
-} from "./audit-log.js";
+} from "./audit-log.ts";
 import {
   ASTRONOMICAL_PROVIDER_NAME,
   ASTRONOMICAL_STATUS_COMMAND_ID,
-  ASTRONOMICAL_TOGGLE_COMMAND_ID,
   ASTRONOMICAL_TUI_PLUGIN_ID,
-} from "./constants.js";
+} from "./constants.ts";
+import { parseAstronomicalPluginOptions } from "./plugin-options.ts";
 import {
   showAstronomicalStatus,
   type StatusCommandInput,
-} from "./status-command.js";
-import {
-  showAstronomicalToggle,
-  type ToggleCommandInput,
-} from "./toggle-command.js";
-import {
-  readAstronomicalPluginEnabled,
-  writeAstronomicalPluginEnabled,
-} from "./toggle-state.js";
+} from "./status-command.ts";
 
 export interface AstronomicalTuiPluginDependencies {
-  readonly env?: NodeJS.ProcessEnv;
   readonly fetchImpl?: typeof fetch;
-  readonly readEnabled?: () => Promise<boolean>;
-  readonly writeEnabled?: (isEnabled: boolean) => Promise<void>;
   readonly audit?: AstronomicalAuditLogger;
 }
 
 function commandLayer(
   context: TuiPluginContext,
   statusInput: StatusCommandInput,
-  toggleInput: ToggleCommandInput,
 ): KeymapLayer {
   return {
     mode: "global",
@@ -50,52 +40,33 @@ function commandLayer(
       {
         id: ASTRONOMICAL_STATUS_COMMAND_ID,
         title: `${ASTRONOMICAL_PROVIDER_NAME}: Status`,
-        description: "Check the active channel and available chat models",
+        description:
+          "Check which Astronomical instances answer and their chat models",
         group: ASTRONOMICAL_PROVIDER_NAME,
         palette: true,
         slash: { name: "astronomical-status" },
         run: (): Promise<void> => showAstronomicalStatus(context, statusInput),
       },
-      {
-        id: ASTRONOMICAL_TOGGLE_COMMAND_ID,
-        title: `${ASTRONOMICAL_PROVIDER_NAME}: Toggle`,
-        description: "Enable or disable the local provider",
-        group: ASTRONOMICAL_PROVIDER_NAME,
-        palette: true,
-        slash: { name: "astronomical-toggle" },
-        run: (): Promise<void> => showAstronomicalToggle(context, toggleInput),
-      },
     ],
   };
 }
 
-/** Creates the terminal plugin with injectable status and toggle collaborators. */
+/** Creates the terminal plugin with injectable network and audit collaborators. */
 export function createAstronomicalTuiPlugin(
   dependencies: AstronomicalTuiPluginDependencies = {},
 ): Plugin.Definition {
-  const environment: NodeJS.ProcessEnv = dependencies.env ?? process.env;
   const audit = dependencies.audit ?? createAstronomicalAuditLogger();
-  const statusInput: StatusCommandInput = {
-    environment,
-    fetchImpl: dependencies.fetchImpl ?? fetch,
-    audit,
-  };
-  const toggleInput: ToggleCommandInput = {
-    readEnabled:
-      dependencies.readEnabled ??
-      ((): Promise<boolean> => readAstronomicalPluginEnabled({ environment })),
-    writeEnabled:
-      dependencies.writeEnabled ??
-      ((isEnabled: boolean): Promise<void> =>
-        writeAstronomicalPluginEnabled(isEnabled, { environment })),
-    audit,
-  };
   return Plugin.define({
     id: ASTRONOMICAL_TUI_PLUGIN_ID,
     setup: async (context: TuiPluginContext): Promise<void> => {
+      const statusInput: StatusCommandInput = {
+        options: parseAstronomicalPluginOptions(context.options),
+        fetchImpl: dependencies.fetchImpl ?? fetch,
+        audit,
+      };
       await recordAuditEvent(audit, "setup-start", { entry: "terminal" });
       context.keymap.layer((): KeymapLayer =>
-        commandLayer(context, statusInput, toggleInput),
+        commandLayer(context, statusInput),
       );
     },
   });

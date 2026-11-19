@@ -3,23 +3,22 @@
   "version": "0.1.0",
   "description": "OpenCode plugin that lists the chat models of Astronomical, the local model runner for Apple silicon Macs, in OpenCode's model picker and keeps the list current while the app runs.",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./server": "./dist/index.js",
-    "./tui": "./dist/tui.js"
+    ".": "./src/index.ts",
+    "./server": "./src/index.ts",
+    "./tui": "./src/tui.ts"
   },
   "files": [
-    "dist"
+    "src",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test tests/unit/*.test.mjs tests/component/*.test.mjs",
+    "test": "node --test tests/unit/*.test.mjs tests/component/*.test.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.mjs\" \"*.md\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.mjs\" \"*.md\"",
-    "verify": "npm run format:check && npm test",
-    "prepublishOnly": "npm run build"
+    "verify": "npm run format:check && npm run typecheck && npm test",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "keywords": [
     "opencode",
@@ -40,16 +39,16 @@
     "directory": "integrations/opencode"
   },
   "devDependencies": {
-    "@opencode/plugin": "2.0.32",
+    "@opencode/plugin": "^2.3.2",
     "@types/node": "^22.0.0",
     "prettier": "^3.8.1",
     "solid-js": "^1.9.12",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
-    "@opencode/plugin": ">=2.0.32 <3"
+    "@opencode/plugin": ">=2.3.0 <3"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=23.6.0"
   }
 }

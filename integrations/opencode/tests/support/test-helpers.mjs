@@ -19,8 +19,8 @@ export const representativeModels = JSON.parse(
   readFileSync(MODEL_LIST_FIXTURE_URL, "utf8"),
 ).data;
 
-// A fetch stub returning the given catalogue (or any status) for any URL.
-export function catalogueFetch(models, status = 200) {
+// A fetch stub returning the given model list (or any status) for any URL.
+export function modelListFetch(models, status = 200) {
   return async () =>
     new Response(JSON.stringify({ object: "list", data: models }), { status });
 }
@@ -44,9 +44,9 @@ export const STABLE = "http://127.0.0.1:6732/v1";
 export const DEV = "http://127.0.0.1:6733/v1";
 
 // Channel descriptors shaped like resolveAstronomicalChannels output, so tests
-// exercise the catalogue the same way the server plugin does.
+// exercise the model list fetch the same way the server plugin does.
 export const STABLE_CHANNEL = { instance: "stable", baseUrl: STABLE };
-export const DEV_CHANNEL = { instance: "dev", baseUrl: DEV };
+export const DEV_CHANNEL = { instance: "development", baseUrl: DEV };
 
 // The audit logger writes to the real state file by default; tests inject this
 // no-op so a test run never appends to the user's audit trail.

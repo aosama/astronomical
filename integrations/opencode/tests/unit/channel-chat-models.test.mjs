@@ -1,51 +1,51 @@
-// Catalogue-loader tests: the chat-only capability filter, the fail-closed
+// Channel model list tests: the chat-only capability filter, the fail-closed
 // transport behavior, and the every-channel fan-in that replaced the old
 // first-answer-wins probing.
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { fetchChannelChatModels } from "../../dist/channel-chat-models.js";
+import { fetchChannelChatModels } from "../../src/channel-chat-models.ts";
 import {
   STABLE,
   DEV,
   STABLE_CHANNEL,
   DEV_CHANNEL,
-  catalogueFetch,
+  modelListFetch,
   perUrlFetch,
   representativeModels,
 } from "../support/test-helpers.mjs";
 
-describe("the catalogue keeps only chat-capable models", () => {
+describe("the model list keeps only chat-capable models", () => {
   it("should_keep_chat_and_vision_models_and_drop_image_generation_and_embeddings", async () => {
-    const catalogue = await fetchChannelChatModels({
+    const channelChatModels = await fetchChannelChatModels({
       channels: [STABLE_CHANNEL],
-      fetchImpl: catalogueFetch(representativeModels),
+      fetchImpl: modelListFetch(representativeModels),
     });
 
-    assert.ok(catalogue.kind === "success");
+    assert.ok(channelChatModels.kind === "success");
     assert.deepEqual(
-      catalogue.channels[0].models.map((model) => model.id),
+      channelChatModels.channels[0].models.map((model) => model.id),
       ["text-only-model", "vision-model"],
     );
   });
 
   it("should_serve_no_models_from_a_well_formed_response_that_is_not_the_expected_envelope", async () => {
     for (const body of [{}, { data: null }, { data: "text" }, []]) {
-      const catalogue = await fetchChannelChatModels({
+      const channelChatModels = await fetchChannelChatModels({
         channels: [STABLE_CHANNEL],
         fetchImpl: async () =>
           new Response(JSON.stringify(body), { status: 200 }),
       });
 
-      assert.ok(catalogue.kind === "success");
-      assert.equal(catalogue.channels.length, 1);
-      assert.deepEqual(catalogue.channels[0].models, []);
+      assert.ok(channelChatModels.kind === "success");
+      assert.equal(channelChatModels.channels.length, 1);
+      assert.deepEqual(channelChatModels.channels[0].models, []);
     }
   });
 });
 
-describe("the catalogue fails closed on every transport and payload problem", () => {
+describe("the model list fetch fails closed on every transport and payload problem", () => {
   it("should_report_a_server_error_as_unreachable_never_as_a_silent_empty_list", async () => {
     const result = await fetchChannelChatModels({
       channels: [STABLE_CHANNEL],
@@ -89,25 +89,25 @@ describe("the catalogue fails closed on every transport and payload problem", ()
   });
 });
 
-describe("the catalogue serves every answering channel, not just the first", () => {
-  it("should_return_both_catalogues_when_both_channels_answer", async () => {
+describe("the model list fetch serves every answering channel, not just the first", () => {
+  it("should_return_both_model_lists_when_both_channels_answer", async () => {
     // This is the regression test for the reported bug: with stable always
-    // running, first-answer-wins probing made the dev catalogue permanently
+    // running, first-answer-wins probing made the Development model list permanently
     // invisible.
     const diagnostics = [];
-    const catalogue = await fetchChannelChatModels({
+    const channelChatModels = await fetchChannelChatModels({
       channels: [STABLE_CHANNEL, DEV_CHANNEL],
-      fetchImpl: catalogueFetch(representativeModels),
+      fetchImpl: modelListFetch(representativeModels),
       onDiagnostic: (message) => diagnostics.push(message),
     });
 
-    assert.ok(catalogue.kind === "success");
+    assert.ok(channelChatModels.kind === "success");
     assert.deepEqual(
-      catalogue.channels.map((channel) => channel.instance),
-      ["stable", "dev"],
+      channelChatModels.channels.map((channel) => channel.instance),
+      ["stable", "development"],
     );
     assert.deepEqual(
-      catalogue.channels.map((channel) => channel.baseUrl),
+      channelChatModels.channels.map((channel) => channel.baseUrl),
       [STABLE, DEV],
     );
     assert.equal(diagnostics.length, 0);
@@ -115,21 +115,21 @@ describe("the catalogue serves every answering channel, not just the first", () 
 
   it("should_serve_only_dev_when_stable_is_down_and_explain_the_skip", async () => {
     const diagnostics = [];
-    const catalogue = await fetchChannelChatModels({
+    const channelChatModels = await fetchChannelChatModels({
       channels: [STABLE_CHANNEL, DEV_CHANNEL],
       fetchImpl: perUrlFetch({
         [STABLE]: () => {
           throw new Error("ECONNREFUSED");
         },
-        "*": catalogueFetch(representativeModels),
+        "*": modelListFetch(representativeModels),
       }),
       onDiagnostic: (message) => diagnostics.push(message),
     });
 
-    assert.ok(catalogue.kind === "success");
+    assert.ok(channelChatModels.kind === "success");
     assert.deepEqual(
-      catalogue.channels.map((channel) => channel.instance),
-      ["dev"],
+      channelChatModels.channels.map((channel) => channel.instance),
+      ["development"],
     );
     assert.equal(diagnostics.length, 1);
     assert.match(diagnostics[0], /skipped unreachable/);
@@ -138,7 +138,7 @@ describe("the catalogue serves every answering channel, not just the first", () 
 
   it("should_return_failure_and_a_diagnostic_when_no_channel_is_reachable", async () => {
     const diagnostics = [];
-    const catalogue = await fetchChannelChatModels({
+    const channelChatModels = await fetchChannelChatModels({
       channels: [STABLE_CHANNEL, DEV_CHANNEL],
       fetchImpl: async () => {
         throw new Error("ECONNREFUSED");
@@ -146,7 +146,7 @@ describe("the catalogue serves every answering channel, not just the first", () 
       onDiagnostic: (message) => diagnostics.push(message),
     });
 
-    assert.equal(catalogue.kind, "failure");
+    assert.equal(channelChatModels.kind, "failure");
     assert.equal(diagnostics.length, 1);
     assert.match(diagnostics[0], /no Astronomical channel is reachable/);
   });
@@ -155,21 +155,21 @@ describe("the catalogue serves every answering channel, not just the first", () 
     const onlyNonChatModels = representativeModels.filter(
       (model) => !model.supported_endpoints.includes("/v1/chat/completions"),
     );
-    const catalogue = await fetchChannelChatModels({
+    const channelChatModels = await fetchChannelChatModels({
       channels: [STABLE_CHANNEL, DEV_CHANNEL],
       fetchImpl: perUrlFetch({
-        [STABLE]: catalogueFetch(onlyNonChatModels),
-        [DEV]: catalogueFetch(representativeModels),
+        [STABLE]: modelListFetch(onlyNonChatModels),
+        [DEV]: modelListFetch(representativeModels),
       }),
     });
 
-    assert.ok(catalogue.kind === "success");
-    assert.equal(catalogue.channels.length, 2);
+    assert.ok(channelChatModels.kind === "success");
+    assert.equal(channelChatModels.channels.length, 2);
     assert.deepEqual(
-      catalogue.channels[0].models.map((model) => model.id),
+      channelChatModels.channels[0].models.map((model) => model.id),
       [],
     );
-    assert.equal(catalogue.channels[1].models.length, 2);
+    assert.equal(channelChatModels.channels[1].models.length, 2);
   });
 });
 
@@ -201,7 +201,7 @@ describe("every channel is probed at the same time", () => {
     assert.ok(result.kind === "success");
     assert.deepEqual(
       result.channels.map((channel) => channel.instance),
-      ["dev"],
+      ["development"],
     );
   });
 });

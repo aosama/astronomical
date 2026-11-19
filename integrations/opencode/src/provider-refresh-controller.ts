@@ -10,13 +10,13 @@
 
 import type { Plugin } from "@opencode/plugin";
 import type { ProviderEditor } from "@opencode/plugin/promise/provider";
-import { recordAuditEvent, type AstronomicalAuditLogger } from "./audit-log.js";
-import { describeError } from "./error-message.js";
-import type { AstronomicalProviderDefinition } from "./provider-definition.js";
+import { recordAuditEvent, type AstronomicalAuditLogger } from "./audit-log.ts";
+import { describeError } from "./error-message.ts";
+import type { AstronomicalProviderDefinition } from "./provider-definition.ts";
 import {
   describeProviderState,
   type ProviderRefreshState,
-} from "./provider-discovery.js";
+} from "./provider-discovery.ts";
 
 // Comparing serialized definitions is how the controller tells a real change
 // (a model added, a channel gone) from a refresh that found the same thing,
@@ -36,11 +36,22 @@ export class ProviderRefreshController {
   private isRefreshInProgress = false;
   private isDisposed = false;
 
+  // Plain fields, not constructor parameter properties: OpenCode and Node load
+  // these sources by stripping types, which cannot rewrite parameter
+  // properties into assignments.
+  private readonly context: Plugin.Context;
+  private readonly discover: () => Promise<ProviderRefreshState>;
+  private readonly audit: AstronomicalAuditLogger;
+
   constructor(
-    private readonly context: Plugin.Context,
-    private readonly discover: () => Promise<ProviderRefreshState>,
-    private readonly audit: AstronomicalAuditLogger,
-  ) {}
+    context: Plugin.Context,
+    discover: () => Promise<ProviderRefreshState>,
+    audit: AstronomicalAuditLogger,
+  ) {
+    this.context = context;
+    this.discover = discover;
+    this.audit = audit;
+  }
 
   /** Runs one discovery pass; overlapping and post-dispose calls are no-ops. */
   async refresh(): Promise<void> {
@@ -120,7 +131,7 @@ export class ProviderRefreshController {
   }
 
   // Recorded once per change of reason, so a channel that stays down does not
-  // write a line every refresh; switching the toggle off is not a diagnostic.
+  // write a line every refresh.
   private async recordStateWithoutProvider(
     previousState: ProviderRefreshState | undefined,
     nextState: ProviderRefreshState,
@@ -129,7 +140,7 @@ export class ProviderRefreshController {
     const detail = { reason: describeProviderState(nextState) };
     if (previousState === undefined) {
       await recordAuditEvent(this.audit, "setup-skipped", detail);
-    } else if (nextState.kind !== "disabled") {
+    } else {
       await recordAuditEvent(this.audit, "diagnostic", detail);
     }
   }

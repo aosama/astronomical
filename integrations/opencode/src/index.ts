@@ -8,14 +8,14 @@ import {
   createAstronomicalAuditLogger,
   recordAuditEvent,
   type AstronomicalAuditLogger,
-} from "./audit-log.js";
+} from "./audit-log.ts";
 import {
   ASTRONOMICAL_PLUGIN_ID,
   ASTRONOMICAL_PROVIDER_REFRESH_INTERVAL_MS,
-} from "./constants.js";
-import { discoverProviderState } from "./provider-discovery.js";
-import { ProviderRefreshController } from "./provider-refresh-controller.js";
-import { readAstronomicalPluginEnabled } from "./toggle-state.js";
+} from "./constants.ts";
+import { parseAstronomicalPluginOptions } from "./plugin-options.ts";
+import { discoverProviderState } from "./provider-discovery.ts";
+import { ProviderRefreshController } from "./provider-refresh-controller.ts";
 
 export type AstronomicalRefreshScheduler = (
   refresh: () => Promise<void>,
@@ -23,9 +23,7 @@ export type AstronomicalRefreshScheduler = (
 ) => () => void;
 
 export interface AstronomicalPluginDependencies {
-  readonly env?: NodeJS.ProcessEnv;
   readonly fetchImpl?: typeof fetch;
-  readonly readEnabled?: () => Promise<boolean>;
   readonly onDiagnostic?: (message: string) => void;
   readonly audit?: AstronomicalAuditLogger;
   readonly scheduleRefresh?: AstronomicalRefreshScheduler;
@@ -41,14 +39,10 @@ function scheduleProviderRefresh(
   return (): void => clearInterval(interval);
 }
 
-/** Creates the server plugin with injectable network, state and audit collaborators. */
+/** Creates the server plugin with injectable network, audit and timer collaborators. */
 export function createAstronomicalPlugin(
   dependencies: AstronomicalPluginDependencies = {},
 ): Plugin.Plugin {
-  const environment: NodeJS.ProcessEnv = dependencies.env ?? process.env;
-  const readEnabled =
-    dependencies.readEnabled ??
-    ((): Promise<boolean> => readAstronomicalPluginEnabled({ environment }));
   const audit = dependencies.audit ?? createAstronomicalAuditLogger();
   const scheduleRefresh =
     dependencies.scheduleRefresh ?? scheduleProviderRefresh;
@@ -56,14 +50,15 @@ export function createAstronomicalPlugin(
   return Plugin.define({
     id: ASTRONOMICAL_PLUGIN_ID,
     setup: async (context: Plugin.Context): Promise<() => void> => {
+      // A wrong option stops setup here, with a message naming the option.
+      const options = parseAstronomicalPluginOptions(context.options);
       await recordAuditEvent(audit, "setup-start", { entry: "server" });
       const controller = new ProviderRefreshController(
         context,
         () =>
           discoverProviderState({
-            environment,
+            options,
             fetchImpl: dependencies.fetchImpl,
-            readEnabled,
             onDiagnostic: dependencies.onDiagnostic,
           }),
         audit,

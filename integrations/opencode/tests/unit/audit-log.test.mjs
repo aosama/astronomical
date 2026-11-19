@@ -18,9 +18,9 @@ import {
   createAstronomicalAuditLogger,
   newestLinesWithin,
   resolveAstronomicalAuditLogPath,
-} from "../../dist/audit-log.js";
+} from "../../src/audit-log.ts";
 
-describe("the audit log records the V2 plugin lifecycle as JSONL", () => {
+describe("the audit log records the plugin lifecycle as JSONL", () => {
   it("appends one parseable entry per event, with detail fields merged in", async () => {
     const directory = await mkdtemp(join(tmpdir(), "astronomical-audit-"));
     const logPath = join(directory, "opencode", "astronomical-plugin.log");

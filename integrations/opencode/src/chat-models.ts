@@ -6,9 +6,9 @@
 import {
   parseAstronomicalModelRow,
   type AstronomicalModelRow,
-} from "./model-row.js";
-import { ASTRONOMICAL_CHAT_ENDPOINT } from "./constants.js";
-import { isRecord } from "./wire-values.js";
+} from "./model-row.ts";
+import { ASTRONOMICAL_CHAT_ENDPOINT } from "./constants.ts";
+import { isRecord } from "./wire-values.ts";
 
 /**
  * Matched exactly because the route name is a fixed wire value; a loose match

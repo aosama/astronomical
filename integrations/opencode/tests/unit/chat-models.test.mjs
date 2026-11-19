@@ -8,7 +8,7 @@ import {
   acceptsImageInput,
   selectChatModels,
   servesChatCompletions,
-} from "../../dist/chat-models.js";
+} from "../../src/chat-models.ts";
 import { representativeModels } from "../support/test-helpers.mjs";
 
 function parsedRow(overrides = {}) {
