@@ -11,3 +11,4 @@ First published version. Checked against OpenCode 2.3.0 with `@opencode/plugin` 
 - `/astronomical-status` shows which instances answer, their versions and their chat model counts.
 - Models are registered under the provider name `astronomical`, the same name `astronomical launch opencode` uses.
 - Talks only to the configured Astronomical address and writes one log file in OpenCode's state folder.
+- Declares `@opencode/plugin` (2.3 or later, below 3) and `effect` (4) as peer dependencies, which OpenCode supplies.

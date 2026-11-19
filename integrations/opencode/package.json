@@ -43,12 +43,14 @@
   "devDependencies": {
     "@opencode/plugin": "^2.3.2",
     "@types/node": "^22.0.0",
+    "effect": "4.1.0",
     "prettier": "^3.8.1",
     "solid-js": "^1.9.12",
     "typescript": "^5.7.0"
   },
   "peerDependencies": {
-    "@opencode/plugin": ">=2.3.0 <3"
+    "@opencode/plugin": ">=2.3.0 <3",
+    "effect": "^4.0.0"
   },
   "engines": {
     "node": ">=23.6.0"

@@ -82,7 +82,7 @@ npm test          # run the tests
 npm run verify    # formatting, types and tests
 ```
 
-`solid-js` is a development dependency only because OpenCode's terminal plugin SDK loads it; inside OpenCode the host supplies its own copy.
+`solid-js` is a development dependency only because OpenCode's terminal plugin SDK loads it; inside OpenCode the host supplies its own copy. `effect` is a peer dependency, as OpenCode's plugin packaging notes ask: OpenCode resolves every plugin's `effect` imports, including those of the SDK it loads for this plugin, to its own single copy, so the package never bundles a second one.
 
 The tests use stand-ins for OpenCode and for the app, so they need neither running. `tests/unit` covers single modules; `tests/component` runs the whole plugin against a stand-in OpenCode. Both read the app's model listing from `crates/rest-contract/fixtures/openai_model_list.json`, which a Rust test keeps identical to what the app serves.
 
