@@ -12,7 +12,6 @@ pub(crate) mod attention_mask;
 pub(crate) mod configuration;
 mod embedding_pooling;
 mod engine;
-pub(crate) mod memory_utilization;
 pub(crate) mod token_batch;
 mod tokenizer;
 pub(crate) mod trunk;

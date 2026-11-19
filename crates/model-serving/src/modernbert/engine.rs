@@ -21,7 +21,6 @@ use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::modernbert::artifact::ModernBertArtifact;
 use crate::modernbert::configuration::ModernBertConfiguration;
 use crate::modernbert::embedding_pooling;
-use crate::modernbert::memory_utilization;
 use crate::modernbert::tokenizer;
 use crate::modernbert::trunk::ModernBertTrunk;
 use crate::modernbert::weight_layout::ModernBertWeightLayout;
@@ -32,6 +31,7 @@ use crate::performance_attribution::{
 use crate::{
     EmbeddingEngine, EmbeddingEngineLoadResult, EmbeddingEngineOutput, MemoryCeilingUtilization,
 };
+use astronomical_memory_policy::forward_pass_utilization;
 
 /// Loaded ModernBERT runtime bound to one artifact directory.
 pub struct ModernBertEmbeddingEngine {
@@ -114,7 +114,7 @@ impl ModernBertEmbeddingEngine {
         peak_memory_bytes: u64,
     ) -> Option<MemoryCeilingUtilization> {
         Some(
-            memory_utilization::compose_modernbert_memory_ceiling_utilization(
+            forward_pass_utilization::compose_forward_pass_memory_ceiling_utilization(
                 self.effective_mlx_memory_ceiling_bytes as u64,
                 active_memory_bytes,
                 self.weights_payload_bytes,

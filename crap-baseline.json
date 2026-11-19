@@ -47469,148 +47469,148 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxActiveMemoryBreakdown::reconcile",
       "line": 27,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::mlx_buffer_cache_limit_bytes",
       "line": 161,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::effective_mlx_memory_ceiling_bytes",
       "line": 155,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::expert_memory_mode",
       "line": 171,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::expert_residency_telemetry",
       "line": 182,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::minimum_mlx_memory_ceiling_bytes",
       "line": 166,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::mlx_memory_telemetry",
       "line": 176,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::new",
       "line": 127,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryLimitAdjustment::with_expert_residency_telemetry",
       "line": 146,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::expert_residency_telemetry",
       "line": 106,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::new",
       "line": 69,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::with_expert_residency_telemetry",
       "line": 97,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/telemetry.rs",
+      "file": "crates/astronomical-memory-policy/src/telemetry.rs",
       "function": "MlxMemoryTelemetry::with_memory_ceiling_utilization",
       "line": 87,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/utilization.rs",
+      "file": "crates/astronomical-memory-policy/src/utilization.rs",
       "function": "MemoryCeilingUtilization::compose",
       "line": 77,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/utilization.rs",
+      "file": "crates/astronomical-memory-policy/src/utilization.rs",
       "function": "MemoryCeilingUtilization::is_fully_explained",
       "line": 150,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
-      "file": "crates/model-serving/src/memory/utilization.rs",
+      "file": "crates/astronomical-memory-policy/src/utilization.rs",
       "function": "MemoryCeilingUtilization::recoverable_share_of_unused_headroom",
       "line": 141,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
       "file": "crates/model-serving/src/model_family_runtime/image_engine.rs",
@@ -48279,13 +48279,13 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/modernbert/memory_utilization.rs",
+      "file": "crates/astronomical-memory-policy/src/forward_pass_utilization.rs",
       "function": "compose_modernbert_memory_ceiling_utilization",
       "line": 31,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-memory-policy"
     },
     {
       "file": "crates/model-serving/src/modernbert/tokenizer.rs",

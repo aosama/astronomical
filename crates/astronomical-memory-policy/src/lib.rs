@@ -55,12 +55,21 @@
 //!   plan validation.
 //! - `serving_ceiling` — resolution of the effective MLX memory ceiling from
 //!   configuration and the machine bound.
+//! - `telemetry` — what the MLX runtime measured, as plain values: active
+//!   memory with its reconciled owners (`MlxMemoryTelemetry`), live-limit
+//!   reports and sparse-expert ownership. These observe and decide nothing;
+//!   they live here (issue #2340) so engines in crates below the serving
+//!   crate, such as speech, can fill them in.
+//! - `utilization` — why part of the ceiling is unused
+//!   (`MemoryCeilingUtilization`), and `forward_pass_utilization`, that split
+//!   for engines whose requests keep nothing between them.
 
 pub mod admission;
 pub mod astro_expert_cache_model;
 pub mod ceiling;
 pub mod expert_paging;
 pub mod forward_admission;
+pub mod forward_pass_utilization;
 pub mod geometry_floor;
 pub mod ledger;
 pub mod model_memory;
@@ -73,6 +82,8 @@ pub mod residency;
 pub mod safetensors;
 pub mod serving_ceiling;
 pub mod strict_json;
+pub mod telemetry;
+pub mod utilization;
 pub mod vocabulary;
 
 pub use forward_admission::{
@@ -95,3 +106,5 @@ mod memory_policy_tests;
 mod serving_ceiling_tests;
 #[cfg(test)]
 mod strict_json_boundary_tests;
+#[cfg(test)]
+mod telemetry_tests;

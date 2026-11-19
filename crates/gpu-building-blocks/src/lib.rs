@@ -3,7 +3,8 @@
 //! Beside the kernels and layers (row-batched matmul, sparse experts, token
 //! sampling, attention math, quantized and add-on linear layers) it holds the
 //! small vocabulary they and the engine record with: performance attribution,
-//! the routed-expert values, the serving phase and the sampling seed. Those
+//! the routed-expert values, the serving phase and the sampling seed; and the
+//! memory report every forward-pass engine (decision, speech) publishes. Those
 //! are not GPU code; they live here because the blocks report through them,
 //! and putting them higher up would make the blocks depend on the engine.
 //!
@@ -23,6 +24,9 @@ pub mod affine_quantized_linear;
 pub mod affine_quantization_scheme;
 
 pub mod attention;
+
+#[cfg(feature = "direct-mlx")]
+pub mod forward_pass_memory;
 
 #[cfg(feature = "direct-mlx")]
 pub mod gpu_token_sampling;
