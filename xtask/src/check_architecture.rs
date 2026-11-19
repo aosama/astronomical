@@ -52,6 +52,16 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
         forbidden_crate: "astronomical-model-serving",
         rationale: "the jangtq2 family crate must build and test without pulling in the serving crate, which consumes the family through a one-way edge",
     },
+    // The GPU building blocks (issue #2340) sit under every model family. An
+    // edge back to the serving crate would let a shared kernel reach into one
+    // family and would rebuild the blocks on every family edit, which the
+    // split exists to stop.
+    ForbiddenDependencyRule {
+        rule_name: "building-blocks-without-serving",
+        source_crate: "astronomical-gpu-building-blocks",
+        forbidden_crate: "astronomical-model-serving",
+        rationale: "the GPU building-blocks crate must build and test without pulling in the serving crate, which consumes the blocks through a one-way edge",
+    },
 ];
 
 /// One detected violation with the offending dependency chain, source crate

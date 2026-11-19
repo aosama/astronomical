@@ -16,6 +16,8 @@ pub(crate) mod inventory;
 pub(crate) mod memory_admission;
 pub(crate) mod mlx_4bit_build;
 #[cfg(test)]
+mod performance_attribution_tests;
+#[cfg(test)]
 mod test_fixtures;
 // Image-lane utilization compose is called from the MLX component owner.
 // Without `direct-mlx` that owner is absent, so keep this module off the

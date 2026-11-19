@@ -73,3 +73,22 @@ pub enum InferenceEngineError {
         reason: String,
     },
 }
+
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "error_tests.rs"]
+mod error_tests;
+
+/// Token sampling sits below the engine and reports its own error; every
+/// sampling failure is fatal to the request, with the reason kept word for word.
+#[cfg(feature = "direct-mlx")]
+impl From<astronomical_gpu_building_blocks::gpu_token_sampling::TokenSamplingError>
+    for InferenceEngineError
+{
+    fn from(
+        sampling_error: astronomical_gpu_building_blocks::gpu_token_sampling::TokenSamplingError,
+    ) -> Self {
+        Self::Fatal {
+            reason: sampling_error.reason,
+        }
+    }
+}

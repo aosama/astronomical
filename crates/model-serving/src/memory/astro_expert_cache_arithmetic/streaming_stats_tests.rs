@@ -1,11 +1,11 @@
 //! Unit contract for session expert-streaming counters and derived views.
 
-use super::super::serving_phase::SessionStreamingPhase;
 use super::{
     ExpertStreamingSessionCounters, RouteCoverageClass, expert_layer_topology_from_residency,
     no_astro_expert_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
 };
 use crate::performance_attribution::StreamedPageSourcePlan;
+use astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase;
 use astronomical_memory_policy::residency::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 
 fn one_layer_residency(

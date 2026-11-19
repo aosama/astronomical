@@ -34,6 +34,6 @@ pub(crate) mod frozen_config_test_support;
 pub(crate) mod model;
 pub(crate) mod model_math;
 pub(crate) mod quantizations;
-pub(crate) mod route_observation;
+pub(crate) use astronomical_gpu_building_blocks::route_observation;
 pub(crate) mod text;
 pub(crate) mod vision;

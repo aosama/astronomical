@@ -12,10 +12,14 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
+direct-mlx = ["astronomical-gpu-building-blocks/direct-mlx", "dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-bridge", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-quantization/direct-mlx", "astronomical-jangtq2-qwen35/direct-mlx"]
 
 [dependencies]
 astronomical-expert-atlas = { path = "../expert-atlas" }
+# The GPU building blocks every family shares (issue #2340). One-way edge:
+# the building-blocks crate never depends back on this crate, enforced by
+# `cargo xtask check-architecture`.
+astronomical-gpu-building-blocks = { path = "../gpu-building-blocks" }
 astronomical-expert-record-reader = { path = "../expert-record-reader" }
 astronomical-config = { path = "../config" }
 # The decision-model contract: typed questions, calibration, typed answers and

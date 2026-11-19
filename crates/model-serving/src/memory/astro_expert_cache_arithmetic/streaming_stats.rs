@@ -12,8 +12,8 @@
 //! so the values describe the whole serving session of that model instance.
 
 use crate::inference_engine::contract::ExpertLayerTopology;
-use crate::memory::serving_phase::SessionStreamingPhase;
 use crate::performance_attribution::{PerformanceAttribution, StreamedPageSourcePlan};
+use astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase;
 
 /// Records one streamed page's source plan in both ledgers at once: the
 /// opt-in per-request attribution counters and the always-on observatory

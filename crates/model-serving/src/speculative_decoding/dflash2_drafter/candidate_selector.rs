@@ -113,10 +113,13 @@ pub(super) fn kept_candidate_ids(
     .map_err(top_k_failure)
 }
 
-fn top_k_failure(top_k_error: crate::InferenceEngineError) -> MlxRuntimeError {
+fn top_k_failure(
+    top_k_error: astronomical_gpu_building_blocks::gpu_token_sampling::TokenSamplingError,
+) -> MlxRuntimeError {
     MlxRuntimeError::RuntimeOperation {
         operation: "keep the drafter's candidates at each slot",
-        description: top_k_error.to_string(),
+        // Through the engine error so the text keeps its "fatal engine error" prefix.
+        description: crate::InferenceEngineError::from(top_k_error).to_string(),
     }
 }
 

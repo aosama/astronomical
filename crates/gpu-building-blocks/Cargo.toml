@@ -1,0 +1,34 @@
+[package]
+name = "astronomical-gpu-building-blocks"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+direct-mlx = ["dep:astronomical-decision-contract", "dep:astronomical-runtime-integration", "dep:mlx-bridge"]
+
+# One-way edge: nothing here may depend on astronomical-model-serving or on a
+# model family; `cargo xtask check-architecture` fails the build if it does.
+[dependencies]
+# The add-on weight file format the linear adapters read. Optional because the
+# adapters exist only with direct-mlx, so default builds never compile it.
+astronomical-decision-contract = { path = "../decision-contract", optional = true }
+astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+mlx-bridge = { workspace = true, optional = true }
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
+tokio = { workspace = true, features = ["test-util"] }
+# The GPU tests sample the process-global MLX allocator, so they serialize.
+serial_test.workspace = true

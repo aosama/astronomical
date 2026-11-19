@@ -1,5 +1,6 @@
 //! macOS-gated sampling contracts that touch real process state; the pure
-//! delta-math contracts live beside the owner in src/performance_attribution.
+//! delta-math contracts live beside the owner in
+//! crates/gpu-building-blocks/src/performance_attribution.
 
 use astronomical_model_serving::MacosProcessIoError;
 

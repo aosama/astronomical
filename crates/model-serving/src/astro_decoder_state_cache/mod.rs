@@ -22,6 +22,8 @@ mod storage_geometry;
 
 #[cfg(test)]
 mod astro_decoder_state_cache_tests;
+#[cfg(test)]
+mod rotating_admission_tests;
 
 #[cfg(feature = "direct-mlx")]
 pub use append_only_attention_state::{
