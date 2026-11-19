@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Local API | Astronomical</title>
-    <meta name="description" content="Point a coding agent at Astronomical's OpenAI- and Anthropic-compatible loopback API: one launcher command for OpenCode, Codex, and Claude Code, the address and port for each channel, where the model identifier comes from, the credential field, and copy-paste configuration.">
+    <meta name="description" content="Point a coding agent at Astronomical's OpenAI- and Anthropic-compatible loopback API: the OpenCode plugin, one launcher command for OpenCode, Codex, and Claude Code, the address and port for each channel, where the model identifier comes from, the credential field, and copy-paste configuration.">
     <meta name="theme-color" content="#141517">
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
@@ -63,7 +63,10 @@ astronomical launch claude</code></pre>
           <p>The endpoint performs no authorization check, so no credential is required and none can be wrong. Many clients nonetheless refuse to use a provider whose credential field is empty. Give them an inert placeholder such as <code>astronomical</code>: it is not a secret, it is never validated, and it never leaves this Mac.</p>
 
           <h2>opencode</h2>
-          <p>Save this to <code>~/.config/opencode/opencode.json</code>. OpenCode merges configuration sources, so an existing file only needs the <code>providers</code> entry added. Settings are taken from OpenCode 2's published configuration format, and the recipe below was run against the app before it was written down.</p>
+          <p>For everyday use, install the Astronomical plugin for OpenCode. It lists every chat model the running app serves in OpenCode's <code>/models</code> picker, with each model's real context window, and keeps the list current as you add or remove models, so there is no identifier to paste:</p>
+          <pre class="doc-snippet" tabindex="0" aria-label="Command that installs the Astronomical plugin for OpenCode"><code>opencode plugin add opencode-astronomical</code></pre>
+          <p>The plugin talks only to the app on this Mac. <code>/astronomical-status</code> in OpenCode shows whether the app is reachable and how many chat models it serves. Its settings and source are in the <a href="https://github.com/aosama/astronomical/tree/main/integrations/opencode">plugin's README</a>.</p>
+          <p>Without the plugin, save this to <code>~/.config/opencode/opencode.json</code>. OpenCode merges configuration sources, so an existing file only needs the <code>providers</code> entry added. Settings are taken from OpenCode 2's published configuration format, and the recipe below was run against the app before it was written down.</p>
           <pre class="doc-snippet" tabindex="0" aria-label="opencode configuration for the local Astronomical provider"><code>{
   "$schema": "https://opencode.ai/config.json",
   "providers": {

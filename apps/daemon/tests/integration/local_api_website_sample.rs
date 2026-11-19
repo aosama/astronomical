@@ -324,3 +324,94 @@ fn should_publish_provider_configuration_that_parses_once_the_identifier_is_past
         "the page should publish one opencode and one Pi provider configuration"
     );
 }
+
+const OPENCODE_PLUGIN_MANIFEST_RELATIVE_PATH: &str = "../../integrations/opencode/package.json";
+const OPENCODE_PLUGIN_INSTALL_COMMAND: &str = "opencode plugin add ";
+
+/// Pure: every package name the published text tells a reader to install with
+/// `opencode plugin add`, in page order.
+fn opencode_plugin_install_names(published_text: &str) -> Vec<String> {
+    let mut install_names = Vec::new();
+    for (command_start, _) in published_text.match_indices(OPENCODE_PLUGIN_INSTALL_COMMAND) {
+        let after_command =
+            &published_text[command_start + OPENCODE_PLUGIN_INSTALL_COMMAND.len()..];
+        let mut install_name = String::new();
+        for name_character in after_command.chars() {
+            if !(name_character.is_ascii_alphanumeric() || "-_@/.".contains(name_character)) {
+                break;
+            }
+            install_name.push(name_character);
+        }
+        // A name ending a sentence is followed by its full stop, which is not
+        // part of an npm name.
+        install_names.push(install_name.trim_end_matches('.').to_owned());
+    }
+    install_names
+}
+
+/// Every published place that tells a reader to install the plugin: the
+/// website pages, Observatory's Connect page, and the READMEs and docs a
+/// reader lands on from GitHub. The home page only mentions the plugin and
+/// links to the local API page, so it carries no install line to check.
+const OPENCODE_PLUGIN_INSTALL_PUBLICATIONS: [&str; 6] = [
+    "../../site/local-api.html",
+    "../../site/support.html",
+    "console/index.html",
+    "../../README.md",
+    "../../docs/how-it-works.md",
+    "../../integrations/opencode/README.md",
+];
+
+/// The page tells visitors which npm package to install; a name that drifts
+/// from the plugin's own manifest would install nothing, or someone else's
+/// package.
+#[test]
+fn should_publish_the_opencode_plugin_install_name_the_plugin_manifest_carries() {
+    let manifest_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(OPENCODE_PLUGIN_MANIFEST_RELATIVE_PATH);
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path).expect("the plugin manifest should be readable"),
+    )
+    .expect("the plugin manifest should be JSON");
+    let package_name = manifest["name"]
+        .as_str()
+        .expect("the plugin manifest should name its package");
+
+    for publication_relative_path in OPENCODE_PLUGIN_INSTALL_PUBLICATIONS {
+        let publication_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(publication_relative_path);
+        let publication_text =
+            std::fs::read_to_string(&publication_path).unwrap_or_else(|failure| {
+                panic!("{publication_relative_path} should be readable: {failure}")
+            });
+        let install_names = opencode_plugin_install_names(&publication_text);
+        assert!(
+            !install_names.is_empty(),
+            "{publication_relative_path} should tell OpenCode users how to install the plugin"
+        );
+        for install_name in install_names {
+            assert_eq!(
+                install_name, package_name,
+                "{publication_relative_path} names a package the plugin is not published as"
+            );
+        }
+    }
+}
+
+#[test]
+fn should_read_the_package_name_after_the_install_command() {
+    assert_eq!(
+        opencode_plugin_install_names("run opencode plugin add opencode-astronomical</code> now"),
+        vec!["opencode-astronomical".to_owned()]
+    );
+    assert_eq!(
+        opencode_plugin_install_names("opencode plugin add @scope/name@1.2.0\n"),
+        vec!["@scope/name@1.2.0".to_owned()]
+    );
+    assert_eq!(
+        opencode_plugin_install_names("then run opencode plugin add opencode-astronomical."),
+        vec!["opencode-astronomical".to_owned()],
+        "a full stop ending the sentence is not part of the name"
+    );
+    assert!(opencode_plugin_install_names("no install line here").is_empty());
+}
