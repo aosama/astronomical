@@ -79,6 +79,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-artifact-validation"
+version = "0.2.118"
+dependencies = [
+ "astronomical-config",
+ "astronomical-lowercase-hex",
+ "astronomical-memory-policy",
+ "libc",
+ "safetensors",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "astronomical-cli"
 version = "0.2.118"
 dependencies = [
@@ -254,6 +269,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-image-generation"
+version = "0.2.118"
+dependencies = [
+ "astronomical-artifact-validation",
+ "astronomical-gpu-building-blocks",
+ "astronomical-ipc-protocol",
+ "astronomical-memory-policy",
+ "astronomical-runtime-integration",
+ "astronomical-test-harness",
+ "image",
+ "mlx-bridge",
+ "safetensors",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "tokenizers",
+ "tracing",
+]
+
+[[package]]
 name = "astronomical-inference-worker"
 version = "0.2.118"
 dependencies = [
@@ -333,12 +370,14 @@ dependencies = [
 name = "astronomical-model-serving"
 version = "0.2.118"
 dependencies = [
+ "astronomical-artifact-validation",
  "astronomical-config",
  "astronomical-decision-contract",
  "astronomical-decision-training",
  "astronomical-expert-atlas",
  "astronomical-expert-record-reader",
  "astronomical-gpu-building-blocks",
+ "astronomical-image-generation",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
  "astronomical-lowercase-hex",
