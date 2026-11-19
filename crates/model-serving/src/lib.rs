@@ -1,20 +1,18 @@
-// Unsafe is denied workspace-wide. This crate previously carried a source-level
-
-// forbid; it was relaxed to the workspace deny for exactly one module —
-
-// performance_attribution::macos_process_io — whose macOS accounting syscall is
-
-// inseparable from the evidence types it produces (rationale lives there). Any
-
-// new unsafe elsewhere in this crate still fails the build.
+// Unsafe is denied workspace-wide, and this crate has none of its own. The one
+// exception, the macOS accounting syscall behind performance attribution, moved
+// with that module into astronomical-gpu-building-blocks (issue #2340).
 
 pub(crate) mod artifact_validation;
 
-pub(crate) mod affine_quantization_scheme;
+// The GPU building blocks every model family shares live in their own crate
+// (issue #2340), so a change to one family no longer rebuilds them and they
+// cannot reach back into a family. These aliases keep each `crate::<module>`
+// path in this crate resolving without touching its many consumers.
+pub(crate) use astronomical_gpu_building_blocks::affine_quantization_scheme;
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod affine_quantized_linear;
+pub(crate) use astronomical_gpu_building_blocks::affine_quantized_linear;
 
-mod attention;
+use astronomical_gpu_building_blocks::attention;
 
 mod astro_decoder_state_cache;
 
@@ -27,7 +25,7 @@ mod expert_paging;
 pub(crate) mod flux2_klein;
 
 #[cfg(feature = "direct-mlx")]
-mod gpu_token_sampling;
+use astronomical_gpu_building_blocks::gpu_token_sampling;
 
 pub(crate) mod image_generation_engine;
 
@@ -52,7 +50,7 @@ pub(crate) mod synthetic_weights_test_support;
 pub(crate) mod decision_models;
 
 #[cfg(feature = "direct-mlx")]
-pub(crate) mod linear_adapters;
+pub(crate) use astronomical_gpu_building_blocks::linear_adapters;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod modernbert;
@@ -60,7 +58,7 @@ pub(crate) mod modernbert;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod speech_models;
 
-pub(crate) mod performance_attribution;
+pub(crate) use astronomical_gpu_building_blocks::performance_attribution;
 
 pub(crate) mod astro_ssd_prompt_cache;
 
@@ -87,7 +85,6 @@ pub(crate) mod qwen3_5_core;
 pub mod quantization_probe;
 
 #[cfg(feature = "direct-mlx")]
-#[cfg(feature = "direct-mlx")]
 mod qwen3_5_resident;
 
 mod qwen3_5_streaming;
@@ -100,13 +97,13 @@ pub(crate) mod qwen_image_21;
 // the serving crate resolving without touching their many consumers.
 pub(crate) use astronomical_memory_policy::{safetensors, strict_json};
 
-pub mod row_batched_matmul;
+pub use astronomical_gpu_building_blocks::row_batched_matmul;
 
 pub mod speculative_decoding;
 
-mod sampling_seed;
+use astronomical_gpu_building_blocks::sampling_seed;
 
-mod sparse_experts;
+use astronomical_gpu_building_blocks::sparse_experts;
 
 #[cfg_attr(not(feature = "direct-mlx"), allow(dead_code))]
 mod structured_generation;
@@ -361,7 +358,6 @@ pub use crate::flux2_klein::scheduler::{
 };
 
 #[cfg(feature = "direct-mlx")]
-#[cfg(feature = "direct-mlx")]
 pub use crate::flux2_klein::transformer::execution::Flux2KleinTransformer;
 #[cfg(feature = "direct-mlx")]
 pub use flux2_klein::transformer::{
@@ -555,7 +551,9 @@ pub use qwen3_5_core::model_math::gdn_decode_prework_kernel::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::model_math::weights::Qwen3_5Weights;
 
-pub use qwen3_5_core::route_observation::{LayerRoutedExpertIds, ObservedExpertRoute};
+pub use astronomical_gpu_building_blocks::route_observation::{
+    LayerRoutedExpertIds, ObservedExpertRoute,
+};
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_core::text::qwen3_5_apply_repetition_penalty;

@@ -25,10 +25,16 @@ impl AstroExpertCache {
     /// The serving phase demand evidence is currently recorded for. This is
     /// engine state, exposed so the storage boundary files each expert read
     /// under the phase the engine is actually in (issue #1715).
-    pub(crate) fn current_serving_phase(&self) -> crate::memory::SessionStreamingPhase {
+    pub(crate) fn current_serving_phase(
+        &self,
+    ) -> astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase {
         match self.demand_phase {
-            ExpertDemandPhase::Prefill => crate::memory::SessionStreamingPhase::Prefill,
-            ExpertDemandPhase::Decode => crate::memory::SessionStreamingPhase::Decode,
+            ExpertDemandPhase::Prefill => {
+                astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase::Prefill
+            }
+            ExpertDemandPhase::Decode => {
+                astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase::Decode
+            }
         }
     }
 

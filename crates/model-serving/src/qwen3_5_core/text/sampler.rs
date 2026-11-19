@@ -55,6 +55,7 @@ pub(crate) fn build_qwen3_5_sampled_token(
         Some(top_k),
         random_state,
     )
+    .map_err(InferenceEngineError::from)
 }
 
 fn validate_sampling_arguments(

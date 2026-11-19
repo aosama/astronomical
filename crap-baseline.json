@@ -35148,94 +35148,94 @@
       "crate": "astronomical-mlx-c-fork"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear.rs",
       "function": "AffineQuantizedLinear::arrays",
       "line": 141,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear.rs",
       "function": "AffineQuantizedLinear::bind",
       "line": 61,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear.rs",
       "function": "AffineQuantizedLinear::forward",
       "line": 96,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear.rs",
       "function": "AffineQuantizedLinear::gather_dequantized_rows",
       "line": 123,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear.rs",
       "function": "AffineQuantizedLinearError::from",
       "line": 42,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear.rs",
       "function": "expect_shape",
       "line": 146,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear_tests.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear_tests.rs",
       "function": "float32_values",
       "line": 66,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear_tests.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear_tests.rs",
       "function": "initialize_test_runtime",
       "line": 20,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear_tests.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear_tests.rs",
       "function": "packed_projection",
       "line": 45,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/affine_quantized_linear_tests.rs",
+      "file": "crates/gpu-building-blocks/src/affine_quantized_linear_tests.rs",
       "function": "shakespeare_bf16",
       "line": 29,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
       "file": "crates/model-serving/src/artifact_validation/artifact_public_reason_tests.rs",
@@ -36057,34 +36057,34 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/attention/mlx_sliding_window_mask.rs",
+      "file": "crates/gpu-building-blocks/src/attention/mlx_sliding_window_mask.rs",
       "function": "build_causal_sliding_window_mask",
       "line": 9,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/mlx_sliding_window_mask.rs",
+      "file": "crates/gpu-building-blocks/src/attention/mlx_sliding_window_mask.rs",
       "function": "build_causal_sliding_window_mask_inner",
       "line": 33,
       "cyclomatic": 20.0,
       "coverage": null,
       "crap": 420.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/mlx_sliding_window_mask.rs",
+      "file": "crates/gpu-building-blocks/src/attention/mlx_sliding_window_mask.rs",
       "function": "mask_error",
       "line": 77,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/rotating_admission_tests.rs",
+      "file": "crates/model-serving/src/astro_decoder_state_cache/rotating_admission_tests.rs",
       "function": "rotating_layout",
       "line": 64,
       "cyclomatic": 1.0,
@@ -36093,103 +36093,103 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/attention/sliding_window_visibility.rs",
+      "file": "crates/gpu-building-blocks/src/attention/sliding_window_visibility.rs",
       "function": "sliding_window_position_is_visible",
       "line": 17,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/sliding_window_visibility.rs",
+      "file": "crates/gpu-building-blocks/src/attention/sliding_window_visibility.rs",
       "function": "sliding_window_visibility_table",
       "line": 30,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "YarnRopeFrequencyDenominators::frequency_denominators",
       "line": 18,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "compute_default_rope_frequency_denominators",
       "line": 51,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "compute_yarn_rope_frequency_denominators",
       "line": 70,
       "cyclomatic": 12.0,
       "coverage": null,
       "crap": 156.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "default_frequency_denominator",
       "line": 128,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "validate_rotary_dimension",
       "line": 177,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "validate_theta",
       "line": 193,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "yarn_correction_dimension",
       "line": 158,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "yarn_correction_range",
       "line": 132,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/attention/yarn_frequencies.rs",
+      "file": "crates/gpu-building-blocks/src/attention/yarn_frequencies.rs",
       "function": "yarn_linear_ramp",
       "line": 169,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
       "file": "crates/model-serving/src/astro_decoder_state_cache/append_only_attention_state.rs",
@@ -45831,175 +45831,175 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "add_token_logit_bias",
       "line": 555,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "apply_repetition_penalty",
       "line": 577,
       "cyclomatic": 19.0,
       "coverage": null,
       "crap": 380.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "apply_top_p_mask",
       "line": 407,
       "cyclomatic": 27.0,
       "coverage": null,
       "crap": 756.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "build_sampled_token",
       "line": 18,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "build_sampled_token_rows",
       "line": 47,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "build_sampled_token_rows_for_tests",
       "line": 80,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "masked_logits_after_top_k_and_top_p",
       "line": 153,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "masked_logits_rows_after_top_k_and_top_p",
       "line": 169,
       "cyclomatic": 12.0,
       "coverage": null,
       "crap": 156.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "reshape_to_coin_column",
       "line": 296,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sample_acceptance_coins",
       "line": 234,
       "cyclomatic": 14.0,
       "coverage": null,
       "crap": 210.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sample_acceptance_coins_for_tests",
       "line": 526,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sample_categorical_after_temperature",
       "line": 369,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sample_from_relative_probabilities",
       "line": 314,
       "cyclomatic": 14.0,
       "coverage": null,
       "crap": 210.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sample_from_relative_probabilities_for_tests",
       "line": 537,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sampled_tokens_for_logits",
       "line": 100,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sampling_failure",
       "line": 549,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "sampling_runtime_error",
       "line": 545,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "softmax_last_axis",
       "line": 389,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/gpu_token_sampling.rs",
+      "file": "crates/gpu-building-blocks/src/gpu_token_sampling.rs",
       "function": "validate_sampled_logits",
       "line": 133,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
       "file": "crates/model-serving/src/image_generation_engine.rs",
@@ -48342,670 +48342,670 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::advance_route_observation_chain",
       "line": 376,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::begin_operation_span",
       "line": 137,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::complete_operation_span",
       "line": 143,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::counter_value",
       "line": 388,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::disabled",
       "line": 83,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::enabled",
       "line": 91,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::expert_streaming_payload_byte_count",
       "line": 248,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::is_enabled",
       "line": 163,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::measure_operation",
       "line": 115,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::operation_measurement",
       "line": 215,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::positional_file_read_metrics",
       "line": 168,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::record_completed_operation",
       "line": 179,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::record_counter",
       "line": 225,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::record_decode_token_forward_elapsed",
       "line": 234,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::record_maximum_counter",
       "line": 271,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::record_operation_interval",
       "line": 193,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::record_previous_token_expert_route_reuse",
       "line": 280,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "PerformanceAttribution::record_snapshot_counter",
       "line": 263,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "unix_epoch_millis",
       "line": 401,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution.rs",
       "function": "usize_to_u64_saturating",
       "line": 397,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/catalog.rs",
       "function": "PerformanceOperation::contributes_to_attributed_elapsed",
       "line": 561,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/catalog.rs",
       "function": "PerformanceOperation::identifier",
       "line": 324,
       "cyclomatic": 142.0,
       "coverage": null,
       "crap": 20306.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/counter_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/counter_catalog.rs",
       "function": "PerformanceCounter::identifier",
       "line": 229,
       "cyclomatic": 76.0,
       "coverage": null,
       "crap": 5852.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/expert_streaming_source.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/expert_streaming_source.rs",
       "function": "ExpertStreamingSourceSummary::record_source_plan",
       "line": 51,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/expert_streaming_source.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/expert_streaming_source.rs",
       "function": "PerformanceAttribution::record_expert_streaming_source_plan",
       "line": 83,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/expert_streaming_source.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/expert_streaming_source.rs",
       "function": "expert_streaming_phase",
       "line": 136,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/expert_streaming_source.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/expert_streaming_source.rs",
       "function": "mandatory_source_payload_counter",
       "line": 144,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/expert_streaming_source.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/expert_streaming_source.rs",
       "function": "source_summary_phase_slot",
       "line": 154,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/expert_streaming_source.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/expert_streaming_source.rs",
       "function": "usize_to_u64_saturating",
       "line": 131,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/log.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/log.rs",
       "function": "PerformanceAttributionLog::disabled",
       "line": 20,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/log.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/log.rs",
       "function": "PerformanceAttributionLog::open",
       "line": 28,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/log.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/log.rs",
       "function": "PerformanceAttributionLog::open_writer",
       "line": 96,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/log.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/log.rs",
       "function": "PerformanceAttributionLog::record",
       "line": 42,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/log.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/log.rs",
       "function": "PerformanceAttributionLog::reopen_if_log_path_changed",
       "line": 67,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "MacosProcessIoDelta::physical_disk_read_bytes",
       "line": 94,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "MacosProcessIoDelta::physical_disk_written_bytes",
       "line": 99,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "MacosProcessIoSnapshot::delta_since",
       "line": 53,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "MacosProcessIoSnapshot::from_cumulative_bytes",
       "line": 28,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "MacosProcessIoSnapshot::physical_disk_read_bytes",
       "line": 39,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "MacosProcessIoSnapshot::physical_disk_written_bytes",
       "line": 44,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "sample_current_process_io",
       "line": 133,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "sample_process_io_for_platform",
       "line": 150,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "sample_process_io_for_platform",
       "line": 203,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "sample_process_io_for_process_id",
       "line": 143,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "sample_process_io_for_process_id_on_platform",
       "line": 161,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io.rs",
       "function": "sample_process_io_for_process_id_on_platform",
       "line": 208,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/macos_process_io/tests.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/macos_process_io/tests.rs",
       "function": "is_canary_byte",
       "line": 75,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "PerformanceOperationMeasurement::first_started_offset_nanoseconds",
       "line": 45,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "PerformanceOperationMeasurement::last_ended_offset_nanoseconds",
       "line": 50,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "PerformanceOperationMeasurement::maximum_elapsed_nanoseconds",
       "line": 40,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "PerformanceOperationMeasurement::minimum_elapsed_nanoseconds",
       "line": 35,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "PerformanceOperationMeasurement::occurrence_count",
       "line": 25,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "PerformanceOperationMeasurement::record",
       "line": 54,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "PerformanceOperationMeasurement::total_elapsed_nanoseconds",
       "line": 30,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/measurement_catalog.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/measurement_catalog.rs",
       "function": "duration_nanoseconds_saturating",
       "line": 74,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/performance_attribution_tests/expert_streaming_source.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/performance_attribution_tests/expert_streaming_source.rs",
       "function": "source_plan",
       "line": 8,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/performance_attribution_tests/measurement.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/performance_attribution_tests/measurement.rs",
       "function": "should_record_an_external_operation_interval_only_when_attribution_is_enabled",
       "line": 107,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/performance_attribution_tests/support.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/performance_attribution_tests/support.rs",
       "function": "generation_metadata",
       "line": 25,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/performance_attribution_tests/support.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/performance_attribution_tests/support.rs",
       "function": "model_loading_metadata",
       "line": 43,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/performance_attribution_tests/support.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/performance_attribution_tests/support.rs",
       "function": "serialize_generation_report",
       "line": 14,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/performance_attribution_tests/support.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/performance_attribution_tests/support.rs",
       "function": "serialize_model_loading_report",
       "line": 3,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "EnabledPerformanceAttribution::finish_common_report",
       "line": 391,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "PerformanceAttribution::finish_embeddings",
       "line": 318,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "PerformanceAttribution::finish_generation",
       "line": 217,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "PerformanceAttribution::finish_image_generation",
       "line": 275,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "PerformanceAttribution::finish_model_loading",
       "line": 190,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "add_counter_amount",
       "line": 576,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "counter_reports_from_values",
       "line": 511,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "duration_nanoseconds_saturating",
       "line": 585,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "finish_process_io_evidence",
       "line": 531,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "image_memory_snapshot",
       "line": 378,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "operation_reports_from_measurements",
       "line": 479,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "process_io_delta_between_samples",
       "line": 562,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/performance_attribution/report.rs",
+      "file": "crates/gpu-building-blocks/src/performance_attribution/report.rs",
       "function": "summarize_decode_token_forward_latency",
       "line": 343,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
       "file": "crates/model-serving/src/astro_ssd_prompt_cache/block_causal_input.rs",
@@ -77970,247 +77970,247 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/sampling_seed.rs",
+      "file": "crates/gpu-building-blocks/src/sampling_seed.rs",
       "function": "current_time_millis_since_unix_epoch",
       "line": 27,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sampling_seed.rs",
+      "file": "crates/gpu-building-blocks/src/sampling_seed.rs",
       "function": "resolve_sampling_seed",
       "line": 17,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_permutation.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_permutation.rs",
       "function": "invert_assignment_order",
       "line": 10,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort.rs",
       "function": "empty_sorted_assignments",
       "line": 141,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort.rs",
       "function": "geometry_error",
       "line": 158,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort.rs",
       "function": "restore_expert_assignment_order",
       "line": 104,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort.rs",
       "function": "sort_expert_assignments",
       "line": 25,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort.rs",
       "function": "sort_expert_assignments_inner",
       "line": 37,
       "cyclomatic": 22.0,
       "coverage": null,
       "crap": 506.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort_policy.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort_policy.rs",
       "function": "expert_assignment_order",
       "line": 60,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort_policy.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort_policy.rs",
       "function": "should_use_sorted_expert_reduction",
       "line": 42,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/assignment_sort_policy.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/assignment_sort_policy.rs",
       "function": "sorted_expert_assignment_order",
       "line": 73,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/error.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/error.rs",
       "function": "SparseExpertError::into_runtime_error",
       "line": 9,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/gathered_projection.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/gathered_projection.rs",
       "function": "ExpertAssignmentOrder::uses_sorted_indices",
       "line": 53,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/gathered_projection.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/gathered_projection.rs",
       "function": "ExpertAssignmentOrder::uses_sorted_indices_for_quantized_gather",
       "line": 63,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/gathered_projection.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/gathered_projection.rs",
       "function": "gather_affine_projection",
       "line": 192,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/gathered_projection.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/gathered_projection.rs",
       "function": "gather_dense_projection",
       "line": 170,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/gathered_projection.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/gathered_projection.rs",
       "function": "gather_expert_projection",
       "line": 107,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "empty_weighted_outputs",
       "line": 210,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "geometry_error",
       "line": 224,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "is_supported_expert_activation_dtype",
       "line": 196,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "is_supported_expert_score_dtype",
       "line": 203,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "router_weighted_expert_inputs",
       "line": 64,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "sorted_expert_weighted_sum",
       "line": 77,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "sorted_expert_weighted_sum_inner",
       "line": 124,
       "cyclomatic": 15.0,
       "coverage": null,
       "crap": 240.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "sorted_expert_weighted_sum_kernel",
       "line": 36,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "unsorted_expert_weighted_sum",
       "line": 48,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
-      "file": "crates/model-serving/src/sparse_experts/weighted_sum.rs",
+      "file": "crates/gpu-building-blocks/src/sparse_experts/weighted_sum.rs",
       "function": "unsorted_expert_weighted_sum_inner",
       "line": 96,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
-      "crate": "astronomical-model-serving"
+      "crate": "astronomical-gpu-building-blocks"
     },
     {
       "file": "crates/model-serving/src/structured_generation/json_prefix.rs",

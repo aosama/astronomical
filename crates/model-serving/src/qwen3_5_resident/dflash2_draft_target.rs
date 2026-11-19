@@ -51,6 +51,7 @@ impl Qwen3_5ResidentModel {
             top_p_thousandths,
             top_k,
         )
+        .map_err(InferenceEngineError::from)
     }
 }
 

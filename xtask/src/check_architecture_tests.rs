@@ -29,6 +29,11 @@ fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
         ("astronomical-memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        (
+            "astronomical-gpu-building-blocks",
+            vec!["mlx-bridge"],
+            "normal",
+        ),
         ("astronomical-model-serving", vec!["mlx-bridge"], "normal"),
         // The jangtq2 family crate clean of the serving crate: the one-way
         // edge the family-crate rule exists to hold.
@@ -46,6 +51,11 @@ fn should_detect_a_direct_family_to_serving_dependency() {
         ("astronomical-memory-policy", vec!["serde_json"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        (
+            "astronomical-gpu-building-blocks",
+            vec!["mlx-bridge"],
+            "normal",
+        ),
         (
             "astronomical-model-serving",
             vec!["mlx-bridge", "astronomical-jangtq2-qwen35"],
@@ -67,6 +77,38 @@ fn should_detect_a_direct_family_to_serving_dependency() {
 }
 
 #[test]
+fn should_detect_a_building_blocks_to_serving_dependency() {
+    // The building blocks sit under every family; an edge back to the
+    // serving crate would let a shared kernel reach into one family.
+    let metadata_json_text = metadata_document_for(&[
+        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
+        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        (
+            "astronomical-gpu-building-blocks",
+            vec!["mlx-bridge", "astronomical-model-serving"],
+            "normal",
+        ),
+        (
+            "astronomical-model-serving",
+            vec!["astronomical-gpu-building-blocks"],
+            "normal",
+        ),
+        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
+    ]);
+    let violations = architecture_violations(&metadata_json_text).unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].rule_name, "building-blocks-without-serving");
+    assert_eq!(
+        violations[0].dependency_chain,
+        vec![
+            "astronomical-gpu-building-blocks",
+            "astronomical-model-serving"
+        ]
+    );
+}
+
+#[test]
 fn should_detect_a_direct_forbidden_fork_dependency() {
     // The fork crate carries the same graphics-processor linkage as the
     // stock bridge, so the memory policy crate must stay free of it too.
@@ -78,6 +120,11 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
         ),
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        (
+            "astronomical-gpu-building-blocks",
+            vec!["mlx-bridge"],
+            "normal",
+        ),
         ("astronomical-model-serving", Vec::new(), "normal"),
         ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
     ]);
@@ -98,6 +145,11 @@ fn should_detect_a_direct_forbidden_dependency() {
         ("astronomical-memory-policy", vec!["mlx-bridge"], "normal"),
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        (
+            "astronomical-gpu-building-blocks",
+            vec!["mlx-bridge"],
+            "normal",
+        ),
         ("astronomical-model-serving", Vec::new(), "normal"),
         ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
     ]);
@@ -126,6 +178,11 @@ fn should_detect_a_transitive_forbidden_dependency() {
         ),
         ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        (
+            "astronomical-gpu-building-blocks",
+            vec!["mlx-bridge"],
+            "normal",
+        ),
         ("astronomical-model-serving", Vec::new(), "normal"),
         ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
     ]);
@@ -152,6 +209,11 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
             ),
             ("mlx-bridge", Vec::new(), "normal"),
             ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+            (
+                "astronomical-gpu-building-blocks",
+                vec!["mlx-bridge"],
+                "normal",
+            ),
             ("astronomical-model-serving", Vec::new(), "normal"),
             ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
         ]);

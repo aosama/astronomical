@@ -4,7 +4,6 @@ use super::prefill_partial_layer_read::{
     prefill_read_expert_ids, prefill_storage_read_scope, should_remember_prefill_completion_refusal,
 };
 use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
-use crate::memory::SessionStreamingPhase;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
@@ -15,6 +14,7 @@ use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
     should_complete_partial_layer_on_prefill_read,
 };
+use astronomical_gpu_building_blocks::serving_phase::SessionStreamingPhase;
 
 /// How one forward should execute one mixture-of-experts layer.
 pub(crate) enum ExpertPageDisposition {

@@ -72,7 +72,8 @@ pub(super) fn sample_token(
             top_p_thousandths,
             Some(top_k),
             &mut active_generation.random_state,
-        ),
+        )
+        .map_err(InferenceEngineError::from),
     }
 }
 

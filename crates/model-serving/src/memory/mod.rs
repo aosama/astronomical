@@ -79,7 +79,6 @@ pub(crate) mod mlx_buffer_cache_reply_record;
 pub(crate) mod reply_expert_route_record;
 #[cfg(feature = "direct-mlx")]
 pub use reply_expert_route_record::SessionExpertRouteSample;
-pub(crate) mod serving_phase;
 pub(crate) mod telemetry;
 mod utilization;
 
@@ -129,7 +128,6 @@ pub use astronomical_memory_policy::placement::{
 };
 pub use astronomical_memory_policy::reclamation::ExpertMemoryAdmissionError;
 pub use astronomical_memory_policy::residency::seated_complete_layer_count;
-pub use serving_phase::SessionStreamingPhase;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays

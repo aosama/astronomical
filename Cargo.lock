@@ -238,6 +238,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-gpu-building-blocks"
+version = "0.2.118"
+dependencies = [
+ "astronomical-decision-contract",
+ "astronomical-runtime-integration",
+ "libc",
+ "mlx-bridge",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "astronomical-inference-worker"
 version = "0.2.118"
 dependencies = [
@@ -323,6 +338,7 @@ dependencies = [
  "astronomical-english-phonemes",
  "astronomical-expert-atlas",
  "astronomical-expert-record-reader",
+ "astronomical-gpu-building-blocks",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
  "astronomical-lowercase-hex",
