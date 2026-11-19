@@ -7,8 +7,20 @@
 use std::path::Path;
 use std::process::Command;
 
+mod lane_inputs;
+
 use crate::verified_tree::{is_tree_already_verified, last_default_branch_run_commit};
 use crate::version_only_bump::{VersionBumpTexts, is_version_only_bump};
+use lane_inputs::{
+    any_catalog_check_input, any_notices_freshness_input, any_opencode_plugin_check_input,
+    any_swift_node_input, is_catalog_only_change, is_opencode_plugin_only_change,
+};
+pub use lane_inputs::{is_github_actions_cache_input_path, is_static_only_path};
+// The tests beside this module check these path rules directly.
+#[cfg(test)]
+pub use lane_inputs::{
+    is_notices_freshness_input_path, is_opencode_plugin_check_input_path, is_swift_node_input_path,
+};
 
 const ZERO_GIT_SHA: &str = "0000000000000000000000000000000000000000";
 
@@ -34,68 +46,6 @@ const NATIVE_INPUT_PATHSPECS: &[&str] = &[
     "third-party/patches",
     "rust-toolchain.toml",
 ];
-
-/// Paths whose change can alter the text `cargo xtask notices` generates:
-/// the resolved dependency graph, the pinned cargo-about, its configuration
-/// and template, and the committed artifact itself. Deliberately narrower
-/// than the digest inputs in `notices.rs`: workspace crates are `private`
-/// (ignored by about.toml), so their manifests and license files only move
-/// the generated text through `Cargo.lock`, and gating on every manifest edit
-/// would pay a harvest for workspace version bumps that cannot change it.
-const NOTICES_FRESHNESS_INPUT_PATHS: &[&str] = &[
-    "Cargo.lock",
-    "third-party/tool-pins/Cargo.toml",
-    "third-party/about.toml",
-    "third-party/rust-dependency-notices.hbs",
-    "third-party/RUST_DEPENDENCY_NOTICES",
-    "third-party/RUST_DEPENDENCY_NOTICES.digest",
-];
-
-/// Paths whose change gives a default-branch run something to publish: the
-/// `sccache`, native download and SwiftPM entries of the `github_actions_cache`
-/// are keyed on these, and pull requests can only restore what the default
-/// branch saved. Code-only merges saved nothing in every default-branch run
-/// measured, so only these still need that run. The workflow and the
-/// `astronomical-cache` action join them because they define the
-/// `github_actions_cache` keys. What the xtask binary saved in the
-/// `github_actions_cache` is keyed on stays out on purpose: those paths alone touched 11 of
-/// 60 merges, each a full run of about 12 job-minutes, while a missed binary costs about
-/// 9 seconds to rebuild until the next full run saves it.
-const GITHUB_ACTIONS_CACHE_INPUT_PATH_PREFIXES: &[&str] = &[
-    "Cargo.lock",
-    "rust-toolchain.toml",
-    "third-party/tool-pins/",
-    "third-party/native-dependency-manifest.cmake",
-    "third-party/pins/",
-    ".github/workflows/ci.yml",
-    ".github/actions/",
-    "apps/astronomical-menu/",
-    "apps/thin-talk/",
-];
-
-/// Everything the Swift and Node lane builds or reads. It compiles no Rust and reads
-/// nothing else, so a change outside these cannot change what the lane reports.
-const SWIFT_NODE_INPUT_PATH_PREFIXES: &[&str] = &[
-    "apps/astronomical-menu/",
-    "apps/thin-talk/",
-    "apps/daemon/console/",
-    "scripts/internal/",
-    "scripts/ci/",
-    "site/schemas/",
-    ".node-version",
-    ".github/workflows/ci.yml",
-    ".github/actions/",
-];
-
-/// The release catalog's data file. The engine compiles it in, so it is not
-/// static content; but a change to it can only change what the catalog crate
-/// parses, which the catalog lane checks on Linux in about a minute, so on its
-/// own (with only static content beside it) it needs none of the macOS lanes.
-const CATALOG_DATA_PATH: &str = "registry/download_catalog.json";
-
-/// Everything the catalog lane builds and tests: the catalog data and the
-/// crate that parses it. A change to either opens the lane.
-const CATALOG_CHECK_INPUT_PATH_PREFIXES: &[&str] = &[CATALOG_DATA_PATH, "crates/download-catalog/"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiEvent {
@@ -123,39 +73,9 @@ pub struct ChangeScopeVerdict {
     pub swift_node_required: bool,
     pub notices_inputs_changed: bool,
     pub catalog_check_required: bool,
+    pub opencode_plugin_check_required: bool,
     pub classification: String,
     pub changed_file_count: usize,
-}
-
-/// Classifies one page/site artifact change as static-only. POSIX `case`
-/// pattern semantics: `*` spans `/`, so `site/*` covers nested paths.
-pub fn is_static_only_path(changed_path: &str) -> bool {
-    is_published_content_path(changed_path) || is_repository_housekeeping_path(changed_path)
-}
-
-fn is_published_content_path(changed_path: &str) -> bool {
-    changed_path.starts_with("site/")
-        || changed_path.ends_with(".md")
-        || changed_path.starts_with(".github/assets/")
-        || changed_path == ".github/workflows/pages.yml"
-}
-
-/// None of these reach a build or a test: a fresh checkout has nothing to ignore.
-fn is_repository_housekeeping_path(changed_path: &str) -> bool {
-    changed_path == ".github/dependabot.yml"
-        || changed_path == ".gitignore"
-        || changed_path.ends_with("/.gitignore")
-}
-
-/// True when a change to this path gives a default-branch run an entry of the
-/// `github_actions_cache` to save.
-pub fn is_github_actions_cache_input_path(changed_path: &str) -> bool {
-    for github_actions_cache_input_prefix in GITHUB_ACTIONS_CACHE_INPUT_PATH_PREFIXES {
-        if changed_path.starts_with(github_actions_cache_input_prefix) {
-            return true;
-        }
-    }
-    false
 }
 
 /// Whether a default-branch push could skip the macOS lanes if its exact tree
@@ -191,91 +111,31 @@ pub fn verdict_for_verified_tree(verdict: ChangeScopeVerdict) -> ChangeScopeVerd
     }
 }
 
-/// True when the changed path can make the committed dependency notices
-/// stale, so the pull request must prove them fresh before it merges.
-pub fn is_notices_freshness_input_path(changed_path: &str) -> bool {
-    NOTICES_FRESHNESS_INPUT_PATHS.contains(&changed_path)
-}
-
-/// True when a change to this path can change what the catalog lane checks.
-pub fn is_catalog_check_input_path(changed_path: &str) -> bool {
-    for catalog_check_input_prefix in CATALOG_CHECK_INPUT_PATH_PREFIXES {
-        if changed_path.starts_with(catalog_check_input_prefix) {
-            return true;
-        }
-    }
-    false
+/// What one change set is, apart from which lanes it opens; it decides the
+/// classification name and whether the macOS lanes run.
+struct ChangeShape {
+    code_changed: bool,
+    is_catalog_only: bool,
+    is_opencode_plugin_only: bool,
+    is_version_only_bump: bool,
+    native_inputs_changed: bool,
 }
 
 /// The name the classification log gives a change, most specific first.
-fn classification_name(
-    code_changed: bool,
-    is_catalog_only: bool,
-    is_version_only_bump: bool,
-    native_inputs_changed: bool,
-) -> &'static str {
-    if !code_changed {
+fn classification_name(change_shape: &ChangeShape) -> &'static str {
+    if !change_shape.code_changed {
         "static_only"
-    } else if is_catalog_only {
+    } else if change_shape.is_catalog_only {
         "catalog_only"
-    } else if is_version_only_bump {
+    } else if change_shape.is_opencode_plugin_only {
+        "opencode_plugin_only"
+    } else if change_shape.is_version_only_bump {
         "version_only_bump"
-    } else if native_inputs_changed {
+    } else if change_shape.native_inputs_changed {
         "native_inputs"
     } else {
         "code_or_build"
     }
-}
-
-fn any_catalog_check_input(changed_paths: &[String]) -> bool {
-    for changed_path in changed_paths {
-        if is_catalog_check_input_path(changed_path) {
-            return true;
-        }
-    }
-    false
-}
-
-/// True when a change touches only the catalog data and static content, so
-/// the catalog lane alone proves it.
-fn is_catalog_only_change(changed_paths: &[String]) -> bool {
-    let mut touches_catalog_data = false;
-    for changed_path in changed_paths {
-        if changed_path == CATALOG_DATA_PATH {
-            touches_catalog_data = true;
-        } else if !is_static_only_path(changed_path) {
-            return false;
-        }
-    }
-    touches_catalog_data
-}
-
-/// True when a change to this path can change what the Swift and Node lane checks.
-pub fn is_swift_node_input_path(changed_path: &str) -> bool {
-    for swift_node_input_prefix in SWIFT_NODE_INPUT_PATH_PREFIXES {
-        if changed_path.starts_with(swift_node_input_prefix) {
-            return true;
-        }
-    }
-    false
-}
-
-fn any_swift_node_input(changed_paths: &[String]) -> bool {
-    for changed_path in changed_paths {
-        if is_swift_node_input_path(changed_path) {
-            return true;
-        }
-    }
-    false
-}
-
-fn any_notices_freshness_input(changed_paths: &[String]) -> bool {
-    for changed_path in changed_paths {
-        if is_notices_freshness_input_path(changed_path) {
-            return true;
-        }
-    }
-    false
 }
 
 /// The pure verdict: identical inputs give identical outputs, no environment
@@ -300,6 +160,7 @@ pub fn classify_change_scope(
             swift_node_required: true,
             notices_inputs_changed: true,
             catalog_check_required: true,
+            opencode_plugin_check_required: true,
             classification: "manual_run".to_owned(),
             changed_file_count: 0,
         },
@@ -330,25 +191,28 @@ fn classify_changed_paths(
     native_inputs_changed: bool,
     is_version_only_bump: bool,
 ) -> ChangeScopeVerdict {
-    let code_changed = changed_paths
-        .iter()
-        .any(|changed_path| !is_static_only_path(changed_path));
-    let is_catalog_only = is_catalog_only_change(changed_paths);
-    let needs_macos_lanes = code_changed && !is_version_only_bump && !is_catalog_only;
-    let classification = classification_name(
-        code_changed,
-        is_catalog_only,
+    let change_shape = ChangeShape {
+        code_changed: changed_paths
+            .iter()
+            .any(|changed_path| !is_static_only_path(changed_path)),
+        is_catalog_only: is_catalog_only_change(changed_paths),
+        is_opencode_plugin_only: is_opencode_plugin_only_change(changed_paths),
         is_version_only_bump,
         native_inputs_changed,
-    );
+    };
+    let needs_macos_lanes = change_shape.code_changed
+        && !change_shape.is_version_only_bump
+        && !change_shape.is_catalog_only
+        && !change_shape.is_opencode_plugin_only;
     ChangeScopeVerdict {
-        code_changed,
+        code_changed: change_shape.code_changed,
         native_inputs_changed,
         macos_verification_required: needs_macos_lanes,
         swift_node_required: needs_macos_lanes && any_swift_node_input(changed_paths),
         notices_inputs_changed: any_notices_freshness_input(changed_paths),
         catalog_check_required: any_catalog_check_input(changed_paths),
-        classification: classification.to_owned(),
+        opencode_plugin_check_required: any_opencode_plugin_check_input(changed_paths),
+        classification: classification_name(&change_shape).to_owned(),
         changed_file_count: changed_paths.len(),
     }
 }
@@ -365,6 +229,7 @@ pub(crate) fn fail_safe_verdict() -> ChangeScopeVerdict {
         swift_node_required: true,
         notices_inputs_changed: true,
         catalog_check_required: true,
+        opencode_plugin_check_required: true,
         classification: "unknown_history".to_owned(),
         changed_file_count: 0,
     }
@@ -637,8 +502,14 @@ fn publish_verdict(
         verdict.catalog_check_required
     )
     .unwrap();
+    writeln!(
+        github_output,
+        "opencode_plugin_check_required={}",
+        verdict.opencode_plugin_check_required
+    )
+    .unwrap();
     eprintln!(
-        "[ci-change-scope] status=complete event={event_name} classification={} changed_files={} code_changed={} native_inputs_changed={} macos_verification_required={} notices_inputs_changed={} catalog_check_required={} elapsed_seconds={}",
+        "[ci-change-scope] status=complete event={event_name} classification={} changed_files={} code_changed={} native_inputs_changed={} macos_verification_required={} notices_inputs_changed={} catalog_check_required={} opencode_plugin_check_required={} elapsed_seconds={}",
         verdict.classification,
         verdict.changed_file_count,
         verdict.code_changed,
@@ -646,6 +517,7 @@ fn publish_verdict(
         verdict.macos_verification_required,
         verdict.notices_inputs_changed,
         verdict.catalog_check_required,
+        verdict.opencode_plugin_check_required,
         started_at.elapsed().as_secs()
     );
 }

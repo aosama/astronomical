@@ -62,6 +62,7 @@ jobs:
       macos_verification_required: ${{ steps.classify.outputs.macos_verification_required }}
       notices_inputs_changed: ${{ steps.classify.outputs.notices_inputs_changed }}
       catalog_check_required: ${{ steps.classify.outputs.catalog_check_required }}
+      opencode_plugin_check_required: ${{ steps.classify.outputs.opencode_plugin_check_required }}
       swift_node_required: ${{ steps.classify.outputs.swift_node_required }}
       head_tree_id: ${{ steps.head-tree.outputs.tree_id }}
     steps:
@@ -944,6 +945,37 @@ jobs:
         run: cargo test --locked -p astronomical-download-catalog
         timeout-minutes: 8
 
+  # The OpenCode plugin, on Linux. It is a standalone npm package that
+  # compiles no Rust, so a change inside it alone is classified
+  # opencode_plugin_only and skips the macOS lanes. Its tests read the shared
+  # /v1/models sample in crates/rest-contract/fixtures, which a rest-contract
+  # test holds to what the app serializes, so a renamed field fails here
+  # until the plugin follows.
+  opencode-plugin:
+    name: OpenCode plugin
+    needs: detect-changes
+    if: ${{ always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.opencode_plugin_check_required == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: integrations/opencode/package-lock.json
+      - name: Install, check formatting, build and test the plugin
+        working-directory: integrations/opencode
+        run: |
+          npm ci --no-audit --no-fund
+          npm run verify
+        timeout-minutes: 4
+
   # Committed dependency notices freshness, before merge. A dependency bump
   # rewrites Cargo.lock; without this lane a bot pull request that never ran
   # `cargo xtask notices` merged green and the nightly notices-freshness
@@ -1296,14 +1328,16 @@ jobs:
   # Skip legitimacy: the macOS lanes legitimately skip when the
   # classifier marked macOS verification not required (site-only changes, a
   # version-only bump proven from the file contents, or a default-branch push
-  # whose exact tree already passed them with no `github_actions_cache` entry to publish), the Swift and
-  # Node lane also when nothing it reads changed, and the
-  # notices-freshness lane when no notices input changed; the
-  # verdict accepts a skip only under that classifier decision, so a lane
-  # skipped for any other reason fails the gate.
+  # whose exact tree already passed them with no `github_actions_cache` entry to
+  # publish, a catalog-only change, or an OpenCode plugin-only change), the
+  # Swift and Node lane also when nothing it reads changed, the
+  # notices-freshness lane when no notices input changed, the catalog lane when
+  # no catalog input changed, and the OpenCode plugin lane when no plugin input
+  # changed; the verdict accepts a skip only under that classifier decision, so
+  # a lane skipped for any other reason fails the gate.
   verdict:
     name: CI verdict
-    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, neural-engine, swift-node, static, config-contracts, notices-freshness, catalog-check]
+    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, neural-engine, swift-node, static, config-contracts, notices-freshness, catalog-check, opencode-plugin]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -1331,6 +1365,8 @@ jobs:
           notices_freshness_result="${{ needs.notices-freshness.result }}"
           catalog_check_required="${{ needs.detect-changes.outputs.catalog_check_required }}"
           catalog_check_result="${{ needs.catalog-check.result }}"
+          opencode_plugin_check_required="${{ needs.detect-changes.outputs.opencode_plugin_check_required }}"
+          opencode_plugin_result="${{ needs.opencode-plugin.result }}"
           [ "$classification_result" = "success" ] \
             || fail "classification-result=$classification_result"
           macos_lanes_may_skip=false
@@ -1385,6 +1421,16 @@ jobs:
               printf '[ci-verdict] lane=catalog-check result=skipped classification=catalog-inputs-unchanged\n'
               ;;
             *) fail "lane=catalog-check result=$catalog_check_result" ;;
+          esac
+          case "$opencode_plugin_result" in
+            success) printf '[ci-verdict] lane=opencode-plugin result=success\n' ;;
+            skipped)
+              if [ "$opencode_plugin_check_required" = "true" ]; then
+                fail "lane=opencode-plugin skipped while classification requires a plugin check"
+              fi
+              printf '[ci-verdict] lane=opencode-plugin result=skipped classification=opencode-plugin-inputs-unchanged\n'
+              ;;
+            *) fail "lane=opencode-plugin result=$opencode_plugin_result" ;;
           esac
           printf '[ci-verdict] status=pass\n'
 

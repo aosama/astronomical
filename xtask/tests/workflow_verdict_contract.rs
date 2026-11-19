@@ -17,7 +17,7 @@ use contract_support::{
 /// macOS build job, the four per-tier test lanes it feeds, the Neural Engine
 /// crate lane, the second macOS contract job, and the three ubuntu lanes. A
 /// lane removed from this list escapes the merge gate entirely.
-const EXPECTED_VERDICT_LANES: [&str; 12] = [
+const EXPECTED_VERDICT_LANES: [&str; 13] = [
     "detect-changes",
     "rust-core",
     "unit-tests",
@@ -30,6 +30,7 @@ const EXPECTED_VERDICT_LANES: [&str; 12] = [
     "config-contracts",
     "notices-freshness",
     "catalog-check",
+    "opencode-plugin",
 ];
 
 #[test]
@@ -104,6 +105,11 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
         verdict_text.contains("needs.detect-changes.outputs.catalog_check_required")
             && verdict_text.contains("skipped while classification requires a catalog check"),
         "the catalog-check lane may skip without the classifier's consent"
+    );
+    assert!(
+        verdict_text.contains("needs.detect-changes.outputs.opencode_plugin_check_required")
+            && verdict_text.contains("skipped while classification requires a plugin check"),
+        "the opencode-plugin lane may skip without the classifier's consent"
     );
     for lane in ["static", "config-contracts"] {
         assert!(
@@ -352,13 +358,9 @@ fn verdict_script_decides_every_scenario_correctly() {
             .replace(
                 "${{ needs.notices-freshness.result }}",
                 scenario.notices_freshness,
-            )
-            // These scenarios change no catalog input, so the catalog lane skips.
-            .replace(
-                "${{ needs.detect-changes.outputs.catalog_check_required }}",
-                "false",
-            )
-            .replace("${{ needs.catalog-check.result }}", "skipped");
+            );
+        // These scenarios change no catalog or plugin input, so those lanes skip.
+        scenario_script = with_untouched_linux_lanes_skipped(scenario_script);
         for lane in MACOS_GATED_LANES {
             let lane_result = scenario
                 .macos_lane_results
@@ -423,17 +425,8 @@ fn verdict_passes_with_swift_lane(swift_node_required: &str, swift_node_result: 
         .replace("${{ needs.detect-changes.result }}", "success")
         .replace("${{ needs.static.result }}", "success")
         .replace("${{ needs.config-contracts.result }}", "success")
-        .replace(
-            "${{ needs.detect-changes.outputs.notices_inputs_changed }}",
-            "false",
-        )
-        .replace("${{ needs.notices-freshness.result }}", "skipped")
-        .replace(
-            "${{ needs.detect-changes.outputs.catalog_check_required }}",
-            "false",
-        )
-        .replace("${{ needs.catalog-check.result }}", "skipped")
         .replace("${{ needs.swift-node.result }}", swift_node_result);
+    script = with_untouched_linux_lanes_skipped(script);
     for lane in MACOS_GATED_LANES {
         script = script.replace(&format!("${{{{ needs.{lane}.result }}}}"), "success");
     }
@@ -462,12 +455,52 @@ fn should_still_fail_a_swift_lane_that_ran_and_failed_whether_or_not_it_was_requ
     assert!(verdict_passes_with_swift_lane("true", "success"));
 }
 
+/// Marks every Linux lane whose inputs a scenario leaves untouched as skipped
+/// with the classifier's consent. A placeholder the caller already filled is
+/// gone from the script, so this only fills what the caller left.
+fn with_untouched_linux_lanes_skipped(script: String) -> String {
+    script
+        .replace(
+            "${{ needs.detect-changes.outputs.notices_inputs_changed }}",
+            "false",
+        )
+        .replace("${{ needs.notices-freshness.result }}", "skipped")
+        .replace(
+            "${{ needs.detect-changes.outputs.catalog_check_required }}",
+            "false",
+        )
+        .replace("${{ needs.catalog-check.result }}", "skipped")
+        .replace(
+            "${{ needs.detect-changes.outputs.opencode_plugin_check_required }}",
+            "false",
+        )
+        .replace("${{ needs.opencode-plugin.result }}", "skipped")
+}
+
+/// One Linux lane the classifier opens on its own: the classifier output that
+/// requires it and the job whose result the verdict reads.
+struct LinuxLane {
+    required_output: &'static str,
+    job: &'static str,
+}
+
+const CATALOG_LANE: LinuxLane = LinuxLane {
+    required_output: "catalog_check_required",
+    job: "catalog-check",
+};
+
+const OPENCODE_PLUGIN_LANE: LinuxLane = LinuxLane {
+    required_output: "opencode_plugin_check_required",
+    job: "opencode-plugin",
+};
+
 /// The verdict for a run where the macOS lanes ran (or skipped when not
-/// required) and the catalog lane reported `catalog_check_result`.
-fn verdict_passes_with_catalog_lane(
+/// required) and one Linux lane, required or not, reported `lane_result`.
+fn verdict_passes_with_linux_lane(
+    linux_lane: &LinuxLane,
     macos_verification_required: &str,
-    catalog_check_required: &str,
-    catalog_check_result: &str,
+    lane_required: &str,
+    lane_result: &str,
 ) -> bool {
     let workflow = workflow_contract();
     let verdict_steps = steps_of(required_job(&workflow, "verdict"), "verdict");
@@ -493,15 +526,17 @@ fn verdict_passes_with_catalog_lane(
         .replace("${{ needs.static.result }}", "success")
         .replace("${{ needs.config-contracts.result }}", "success")
         .replace(
-            "${{ needs.detect-changes.outputs.notices_inputs_changed }}",
-            "false",
+            &format!(
+                "${{{{ needs.detect-changes.outputs.{} }}}}",
+                linux_lane.required_output
+            ),
+            lane_required,
         )
-        .replace("${{ needs.notices-freshness.result }}", "skipped")
         .replace(
-            "${{ needs.detect-changes.outputs.catalog_check_required }}",
-            catalog_check_required,
-        )
-        .replace("${{ needs.catalog-check.result }}", catalog_check_result);
+            &format!("${{{{ needs.{}.result }}}}", linux_lane.job),
+            lane_result,
+        );
+    script = with_untouched_linux_lanes_skipped(script);
     for lane in MACOS_GATED_LANES {
         script = script.replace(
             &format!("${{{{ needs.{lane}.result }}}}"),
@@ -521,18 +556,30 @@ fn verdict_passes_with_catalog_lane(
 
 #[test]
 fn should_pass_a_catalog_only_change_on_the_catalog_lane_alone() {
-    assert!(verdict_passes_with_catalog_lane("false", "true", "success"));
+    assert!(verdict_passes_with_linux_lane(
+        &CATALOG_LANE,
+        "false",
+        "true",
+        "success"
+    ));
 }
 
 #[test]
 fn should_fail_a_catalog_change_whose_catalog_lane_skipped_failed_or_was_cancelled() {
-    assert!(!verdict_passes_with_catalog_lane(
-        "false", "true", "skipped"
+    assert!(!verdict_passes_with_linux_lane(
+        &CATALOG_LANE,
+        "false",
+        "true",
+        "skipped"
     ));
-    assert!(!verdict_passes_with_catalog_lane(
-        "false", "true", "failure"
+    assert!(!verdict_passes_with_linux_lane(
+        &CATALOG_LANE,
+        "false",
+        "true",
+        "failure"
     ));
-    assert!(!verdict_passes_with_catalog_lane(
+    assert!(!verdict_passes_with_linux_lane(
+        &CATALOG_LANE,
         "true",
         "true",
         "cancelled"
@@ -541,6 +588,64 @@ fn should_fail_a_catalog_change_whose_catalog_lane_skipped_failed_or_was_cancell
 
 #[test]
 fn should_accept_a_skipped_catalog_lane_only_when_no_catalog_input_changed() {
-    assert!(verdict_passes_with_catalog_lane("true", "false", "skipped"));
-    assert!(verdict_passes_with_catalog_lane("true", "true", "success"));
+    assert!(verdict_passes_with_linux_lane(
+        &CATALOG_LANE,
+        "true",
+        "false",
+        "skipped"
+    ));
+    assert!(verdict_passes_with_linux_lane(
+        &CATALOG_LANE,
+        "true",
+        "true",
+        "success"
+    ));
+}
+
+#[test]
+fn should_pass_a_plugin_only_change_on_the_plugin_lane_alone() {
+    assert!(verdict_passes_with_linux_lane(
+        &OPENCODE_PLUGIN_LANE,
+        "false",
+        "true",
+        "success"
+    ));
+}
+
+#[test]
+fn should_fail_a_plugin_change_whose_plugin_lane_skipped_failed_or_was_cancelled() {
+    assert!(!verdict_passes_with_linux_lane(
+        &OPENCODE_PLUGIN_LANE,
+        "false",
+        "true",
+        "skipped"
+    ));
+    assert!(!verdict_passes_with_linux_lane(
+        &OPENCODE_PLUGIN_LANE,
+        "false",
+        "true",
+        "failure"
+    ));
+    assert!(!verdict_passes_with_linux_lane(
+        &OPENCODE_PLUGIN_LANE,
+        "true",
+        "true",
+        "cancelled"
+    ));
+}
+
+#[test]
+fn should_accept_a_skipped_plugin_lane_only_when_no_plugin_input_changed() {
+    assert!(verdict_passes_with_linux_lane(
+        &OPENCODE_PLUGIN_LANE,
+        "true",
+        "false",
+        "skipped"
+    ));
+    assert!(!verdict_passes_with_linux_lane(
+        &OPENCODE_PLUGIN_LANE,
+        "true",
+        "false",
+        "failure"
+    ));
 }

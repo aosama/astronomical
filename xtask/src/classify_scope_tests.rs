@@ -1,7 +1,7 @@
 use crate::classify_scope::{
     CiEvent, classify_change_scope, is_github_actions_cache_input_path,
-    is_notices_freshness_input_path, is_static_only_path, is_swift_node_input_path,
-    may_reuse_verified_tree, verdict_for_verified_tree,
+    is_notices_freshness_input_path, is_opencode_plugin_check_input_path, is_static_only_path,
+    is_swift_node_input_path, may_reuse_verified_tree, verdict_for_verified_tree,
 };
 
 fn verdict_for(
@@ -509,4 +509,126 @@ fn should_open_the_catalog_lane_on_a_manual_run() {
     let verdict = classify_change_scope(CiEvent::WorkflowDispatch, &[], false, false);
 
     assert!(verdict.catalog_check_required);
+}
+
+// Positive: a change inside the plugin alone is proven by the Linux plugin
+// lane, so it starts none of the macOS lanes.
+#[test]
+fn should_check_a_plugin_edit_alone_in_the_plugin_lane_without_the_macos_lanes() {
+    let verdict = pull_request_verdict(&[
+        "integrations/opencode/src/index.ts",
+        "integrations/opencode/package-lock.json",
+    ]);
+
+    assert_eq!(verdict.classification, "opencode_plugin_only");
+    assert!(verdict.code_changed);
+    assert!(verdict.opencode_plugin_check_required);
+    assert!(!verdict.macos_verification_required);
+    assert!(!verdict.swift_node_required);
+    assert!(!verdict.catalog_check_required);
+}
+
+// Boundary: static content beside a plugin edit keeps it plugin-only.
+#[test]
+fn should_keep_a_plugin_edit_with_static_content_beside_it_plugin_only() {
+    let verdict =
+        pull_request_verdict(&["integrations/opencode/src/tui.ts", "site/local-api.html"]);
+
+    assert_eq!(verdict.classification, "opencode_plugin_only");
+    assert!(!verdict.macos_verification_required);
+}
+
+// Boundary: the plugin's README is static content, yet Prettier checks it, so
+// it still opens the plugin lane.
+#[test]
+fn should_open_the_plugin_lane_for_a_plugin_readme_edit_that_is_static_content() {
+    let verdict = pull_request_verdict(&["integrations/opencode/README.md"]);
+
+    assert_eq!(verdict.classification, "static_only");
+    assert!(verdict.opencode_plugin_check_required);
+}
+
+// Positive: the shared model list is read by both sides, so it opens the
+// plugin lane and, as a rest-contract input, every macOS lane too.
+#[test]
+fn should_open_the_plugin_lane_and_the_macos_lanes_for_the_shared_model_list() {
+    let verdict = pull_request_verdict(&["crates/rest-contract/fixtures/openai_model_list.json"]);
+
+    assert_eq!(verdict.classification, "code_or_build");
+    assert!(verdict.opencode_plugin_check_required);
+    assert!(verdict.macos_verification_required);
+}
+
+// Positive: the shared Node pin and the CI workflow are plugin lane inputs.
+#[test]
+fn should_open_the_plugin_lane_when_the_node_pin_or_the_ci_workflow_changes() {
+    assert!(pull_request_verdict(&[".node-version"]).opencode_plugin_check_required);
+    assert!(pull_request_verdict(&[".github/workflows/ci.yml"]).opencode_plugin_check_required);
+}
+
+// Negative: a plugin edit beside Rust code runs every lane.
+#[test]
+fn should_run_every_lane_when_a_plugin_edit_comes_with_code() {
+    let verdict = pull_request_verdict(&[
+        "integrations/opencode/src/index.ts",
+        "apps/astronomical-cli/src/verbs/launch/opencode_config.rs",
+    ]);
+
+    assert_eq!(verdict.classification, "code_or_build");
+    assert!(verdict.macos_verification_required);
+    assert!(verdict.opencode_plugin_check_required);
+}
+
+// Negative: unrelated code and static content leave the plugin lane closed,
+// including a path that only shares the plugin directory's name as a prefix.
+#[test]
+fn should_not_open_the_plugin_lane_for_unrelated_changes() {
+    assert!(!pull_request_verdict(&["README.md"]).opencode_plugin_check_required);
+    assert!(!pull_request_verdict(&["crates/config/src/lib.rs"]).opencode_plugin_check_required);
+    let neighbor_verdict = pull_request_verdict(&["integrations/opencode-other/index.ts"]);
+    assert!(!neighbor_verdict.opencode_plugin_check_required);
+    assert!(neighbor_verdict.macos_verification_required);
+}
+
+// Positive: a manual run and an unknown history open the plugin lane.
+#[test]
+fn should_open_the_plugin_lane_on_a_manual_run() {
+    let verdict = classify_change_scope(CiEvent::WorkflowDispatch, &[], false, false);
+
+    assert!(verdict.opencode_plugin_check_required);
+    assert!(crate::classify_scope::fail_safe_verdict().opencode_plugin_check_required);
+}
+
+// Positive: a plugin-only merge to the default branch also skips the macOS
+// lanes, including the Swift lane a full default-branch run keeps.
+#[test]
+fn should_skip_the_macos_lanes_on_a_push_that_changes_only_the_plugin() {
+    let plugin_paths = paths(&["integrations/opencode/src/constants.ts"]);
+    let verdict = classify_change_scope(CiEvent::Push, &plugin_paths, false, false);
+
+    assert_eq!(verdict.classification, "opencode_plugin_only");
+    assert!(!verdict.macos_verification_required);
+    assert!(!verdict.swift_node_required);
+    assert!(verdict.opencode_plugin_check_required);
+}
+
+// Positive, negative and boundary: the plugin lane's input paths by prefix.
+#[test]
+fn should_name_the_plugin_lane_inputs_by_their_paths() {
+    assert!(is_opencode_plugin_check_input_path(
+        "integrations/opencode/tests/unit/x.test.mjs"
+    ));
+    assert!(is_opencode_plugin_check_input_path(
+        "crates/rest-contract/fixtures/openai_model_list.json"
+    ));
+    assert!(is_opencode_plugin_check_input_path(".node-version"));
+    assert!(!is_opencode_plugin_check_input_path(
+        "integrations/opencode"
+    ));
+    assert!(!is_opencode_plugin_check_input_path(
+        "crates/rest-contract/src/lib.rs"
+    ));
+    assert!(!is_opencode_plugin_check_input_path(
+        ".github/workflows/pages.yml"
+    ));
 }
